@@ -100,6 +100,13 @@ test("prefab C# error recovery hints use current tools run forms", async () => {
   assert.match(source, /tools run prefab\.hierarchy/, "child errors should still route to prefab.hierarchy when hierarchy inspection is needed");
 });
 
+test("prefab.unpack proves the unpacked object through a fresh instance id", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/prefab/unpack.cs", import.meta.url), "utf8");
+  assert.match(source, /var gameObjectId = gameObject\.GetInstanceID\(\);[\s\S]*ctx\.CommitEffect\(\)/);
+  assert.match(source, /var observed = EditorUtility\.InstanceIDToObject\(gameObjectId\) as GameObject/);
+  assert.match(source, /observed == null \|\| PrefabUtility\.IsPartOfPrefabInstance\(observed\)/);
+});
+
 test("prefab bridge spec forwards structured --input fields", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/prefab.js", import.meta.url), "utf8");
   assert.match(spec, /stringField\(flags, "addChild"\)/, "bridge should forward structured addChild");

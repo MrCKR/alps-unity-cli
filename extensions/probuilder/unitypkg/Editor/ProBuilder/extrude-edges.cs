@@ -63,18 +63,27 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("extrude-edges", "No ProBuilderMesh component on target.");
 
-            var distance = (float)(request.Distance ?? 0.5);
+            var distance = ProBuilderOperationProof.CheckedFloat(request.Distance ?? 0.5, "distance");
             var asGroup = request.AsGroup ?? true;
-            int[] edgeIndices = request.EdgeIndices?.Select(i => (int)i).ToArray();
-            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = (int)e.A, b = (int)e.B }).ToArray();
+            int[] edgeIndices = request.EdgeIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "edgeIndices")).ToArray();
+            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(e.A, "edges.a"), b = ProBuilderOperationProof.CheckedInt(e.B, "edges.b") }).ToArray();
 
             if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
                 throw ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for extrude-edges.");
 
+            if (Mathf.Approximately(distance, 0f)) throw ProBuilderErrors.SchemaInvalid("distance must not be zero.");
+            var edgeArray = ProBuilderOperationProof.ValidateEdges(mesh, edgeIndices, edgePairs);
+            var before = ProBuilderOperationProof.Capture(mesh, edges: edgeArray);
+            if (before == null) throw ProBuilderErrors.OperationFailed("extrude-edges", "Requested edge geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Extrude Edges");
             var edgeCount = ProBuilderReflection.ExtrudeEdgesBySelection(mesh, edgeIndices, edgePairs, distance, asGroup);
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, edges: edgeArray);
+            if (!ProBuilderOperationProof.HasTopologyExpansion(before, after))
+                throw ProBuilderErrors.OperationFailed("extrude-edges", "Requested edge extrude did not produce readable topology.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { ModifiedEdgeCount = edgeCount });
         }

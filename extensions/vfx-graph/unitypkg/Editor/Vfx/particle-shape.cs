@@ -66,8 +66,14 @@ namespace UnityCli
                     "Pass a GameObject name / hierarchy path with a ParticleSystem component.");
             }
 
-            var shape = particleSystem.shape;
+            VfxToolSupport.RequireFinite(request.Radius, "radius", 0); VfxToolSupport.RequireFinite(request.Angle, "angle"); VfxToolSupport.RequireFinite(request.Arc, "arc", 0, 360); VfxToolSupport.RequireFinite(request.Length, "length", 0); VfxToolSupport.RequireFinite(request.BoxX, "boxX", 0); VfxToolSupport.RequireFinite(request.BoxY, "boxY", 0); VfxToolSupport.RequireFinite(request.BoxZ, "boxZ", 0);
+            if (!string.IsNullOrWhiteSpace(request.ShapeType)) VfxToolSupport.ParseEnum<ParticleSystemShapeType>(request.ShapeType, "E_PARTICLE_SHAPE_TYPE_INVALID", "Use a valid ParticleSystemShapeType value.");
+            VfxToolSupport.RequireMutation(request.Enabled.HasValue || !string.IsNullOrWhiteSpace(request.ShapeType) || request.Radius.HasValue || request.Angle.HasValue || request.Arc.HasValue || request.Length.HasValue || request.BoxX.HasValue || request.BoxY.HasValue || request.BoxZ.HasValue || request.RandomDirection.HasValue, "vfx.particle-shape");
+            var gameObjectId = particleSystem.gameObject.GetInstanceID();
             var effects = new List<VfxPlannedEffect>();
+            ctx.CommitEffect();
+            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-shape");
+            var shape = particleSystem.shape;
             if (request.Enabled.HasValue)
             {
                 shape.enabled = request.Enabled.Value;
@@ -120,21 +126,23 @@ namespace UnityCli
                 effects.Add(VfxToolSupport.Effect("vfx.particle-shape", "randomDirection", VfxToolSupport.Bool(shape.randomDirection)));
             }
 
-            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
-            VfxToolSupport.MarkSceneDirty(particleSystem.gameObject);
+            var observed = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-shape");
+            VfxToolSupport.VerifyParticleShapeFields(observed, request.Enabled, request.ShapeType, request.Radius, request.Angle, request.Arc, request.Length, request.BoxX, request.BoxY, request.BoxZ, request.RandomDirection);
+            UnityCliSceneMutation.MarkSceneObjectDirty(observed);
+            VfxToolSupport.MarkSceneDirty(observed.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
+                Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
                 Shape = new VfxParticleShapeInfo
                 {
-                    Enabled = shape.enabled,
-                    ShapeType = shape.shapeType.ToString(),
-                    Radius = shape.radius,
-                    Angle = shape.angle,
-                    Arc = shape.arc,
-                    Length = shape.length,
-                    Box = new Vector3Data(shape.scale),
-                    RandomDirection = shape.randomDirection
+                    Enabled = observed.shape.enabled,
+                    ShapeType = observed.shape.shapeType.ToString(),
+                    Radius = observed.shape.radius,
+                    Angle = observed.shape.angle,
+                    Arc = observed.shape.arc,
+                    Length = observed.shape.length,
+                    Box = new Vector3Data(observed.shape.scale),
+                    RandomDirection = observed.shape.randomDirection
                 },
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath

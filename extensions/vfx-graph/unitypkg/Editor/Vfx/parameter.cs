@@ -46,7 +46,7 @@ namespace UnityCli
         {
             Name = "vfx.parameter",
             Summary = "Set an exposed VisualEffect parameter by explicit scalar, vector, color, texture, or mesh input.",
-            Description = "Set an exposed VisualEffect parameter on a target component using an explicit type. Use numberValue, intValue, boolValue, assetPath, or the vector/color axis fields that match the requested type. This tool reflects the package API at runtime and does not require compile-time VFX references.",
+            Description = "Set an exposed VisualEffect parameter on a target component using an explicit type, then require matching Has*/Get* APIs to verify its typed readback. Use numberValue, intValue, boolValue, assetPath, or the vector/color axis fields that match the requested type. This tool reflects the package API at runtime and does not require compile-time VFX references.",
             Group = "vfx",
             Version = "1.0.0",
             DestructiveHint = false,
@@ -77,38 +77,62 @@ namespace UnityCli
                     "Use vfx.effect.add or choose a target with VisualEffect.");
             }
 
+            if (string.IsNullOrWhiteSpace(request.Name)) throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_NAME_REQUIRED", "VFX parameter name is required.", "Pass a non-empty exposed parameter name.");
             var parameterType = (request.Type ?? "float").Trim().ToLowerInvariant();
+            if (parameterType != "float" && parameterType != "int" && parameterType != "bool" && parameterType != "vector2" && parameterType != "vector3" && parameterType != "vector4" && parameterType != "color" && parameterType != "texture" && parameterType != "mesh") throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_TYPE_UNSUPPORTED", "Unsupported VFX parameter type: " + parameterType, "Use float, int, bool, vector2, vector3, vector4, color, texture, or mesh.");
+            VfxToolSupport.RequireFinite(request.NumberValue, "numberValue"); VfxToolSupport.RequireFinite(request.X, "x"); VfxToolSupport.RequireFinite(request.Y, "y"); VfxToolSupport.RequireFinite(request.Z, "z"); VfxToolSupport.RequireFinite(request.W, "w"); VfxToolSupport.RequireFinite(request.R, "r", 0, 1); VfxToolSupport.RequireFinite(request.G, "g", 0, 1); VfxToolSupport.RequireFinite(request.B, "b", 0, 1); VfxToolSupport.RequireFinite(request.A, "a", 0, 1);
+            PrepareParameterApi(visualEffectType, component, parameterType, request.Name);
+            if ((parameterType == "texture" || parameterType == "mesh") && !string.IsNullOrWhiteSpace(request.AssetPath) && AssetDatabase.LoadAssetAtPath(AssetToolSupport.NormalizeAssetPath(request.AssetPath), parameterType == "texture" ? typeof(Texture) : typeof(Mesh)) == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_ASSET_NOT_FOUND", "Parameter asset not found: " + request.AssetPath, "Pass an existing compatible asset path.");
+            var gameObjectId = gameObject.GetInstanceID();
             var effects = new List<VfxPlannedEffect>();
             try
             {
+                ctx.CommitEffect();
+                var observedObject = VfxToolSupport.FindGameObjectByTarget(gameObjectId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                component = observedObject == null ? null : observedObject.GetComponent(visualEffectType);
+                if (component == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.parameter target/component disappeared after commit.", "Retry after checking the target still exists.");
                 switch (parameterType)
                 {
                     case "float":
-                        Invoke(visualEffectType, component, "SetFloat", new[] { typeof(string), typeof(float) }, request.Name, (float)(request.NumberValue ?? 0d));
+                        var floatValue = (float)(request.NumberValue ?? 0d);
+                        Invoke(visualEffectType, component, "SetFloat", new[] { typeof(string), typeof(float) }, request.Name, floatValue);
+                        Verify(visualEffectType, component, "Float", request.Name, floatValue);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, VfxToolSupport.Number(request.NumberValue ?? 0d)));
                         break;
                     case "int":
-                        Invoke(visualEffectType, component, "SetInt", new[] { typeof(string), typeof(int) }, request.Name, request.IntValue ?? 0);
+                        var intValue = request.IntValue ?? 0;
+                        Invoke(visualEffectType, component, "SetInt", new[] { typeof(string), typeof(int) }, request.Name, intValue);
+                        Verify(visualEffectType, component, "Int", request.Name, intValue);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, (request.IntValue ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture)));
                         break;
                     case "bool":
-                        Invoke(visualEffectType, component, "SetBool", new[] { typeof(string), typeof(bool) }, request.Name, request.BoolValue ?? false);
+                        var boolValue = request.BoolValue ?? false;
+                        Invoke(visualEffectType, component, "SetBool", new[] { typeof(string), typeof(bool) }, request.Name, boolValue);
+                        Verify(visualEffectType, component, "Bool", request.Name, boolValue);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, VfxToolSupport.Bool(request.BoolValue ?? false)));
                         break;
                     case "vector2":
-                        Invoke(visualEffectType, component, "SetVector2", new[] { typeof(string), typeof(Vector2) }, request.Name, new Vector2((float)(request.X ?? 0d), (float)(request.Y ?? 0d)));
+                        var vector2Value = new Vector2((float)(request.X ?? 0d), (float)(request.Y ?? 0d));
+                        Invoke(visualEffectType, component, "SetVector2", new[] { typeof(string), typeof(Vector2) }, request.Name, vector2Value);
+                        Verify(visualEffectType, component, "Vector2", request.Name, vector2Value);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, "vector2"));
                         break;
                     case "vector3":
-                        Invoke(visualEffectType, component, "SetVector3", new[] { typeof(string), typeof(Vector3) }, request.Name, new Vector3((float)(request.X ?? 0d), (float)(request.Y ?? 0d), (float)(request.Z ?? 0d)));
+                        var vector3Value = new Vector3((float)(request.X ?? 0d), (float)(request.Y ?? 0d), (float)(request.Z ?? 0d));
+                        Invoke(visualEffectType, component, "SetVector3", new[] { typeof(string), typeof(Vector3) }, request.Name, vector3Value);
+                        Verify(visualEffectType, component, "Vector3", request.Name, vector3Value);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, "vector3"));
                         break;
                     case "vector4":
-                        Invoke(visualEffectType, component, "SetVector4", new[] { typeof(string), typeof(Vector4) }, request.Name, new Vector4((float)(request.X ?? 0d), (float)(request.Y ?? 0d), (float)(request.Z ?? 0d), (float)(request.W ?? 0d)));
+                        var vector4Value = new Vector4((float)(request.X ?? 0d), (float)(request.Y ?? 0d), (float)(request.Z ?? 0d), (float)(request.W ?? 0d));
+                        Invoke(visualEffectType, component, "SetVector4", new[] { typeof(string), typeof(Vector4) }, request.Name, vector4Value);
+                        Verify(visualEffectType, component, "Vector4", request.Name, vector4Value);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, "vector4"));
                         break;
                     case "color":
-                        Invoke(visualEffectType, component, "SetVector4", new[] { typeof(string), typeof(Vector4) }, request.Name, (Vector4)new Color((float)(request.R ?? 0d), (float)(request.G ?? 0d), (float)(request.B ?? 0d), (float)(request.A ?? 1d)));
+                        var colorValue = (Vector4)new Color((float)(request.R ?? 0d), (float)(request.G ?? 0d), (float)(request.B ?? 0d), (float)(request.A ?? 1d));
+                        Invoke(visualEffectType, component, "SetVector4", new[] { typeof(string), typeof(Vector4) }, request.Name, colorValue);
+                        Verify(visualEffectType, component, "Vector4", request.Name, colorValue);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, "color"));
                         break;
                     case "texture":
@@ -118,6 +142,7 @@ namespace UnityCli
                             throw new UnityCliBridge.BridgeCommandException("E_VFX_TEXTURE_NOT_FOUND", "Texture not found: " + request.AssetPath, "Pass a valid Assets/ texture path.");
                         }
                         Invoke(visualEffectType, component, "SetTexture", new[] { typeof(string), typeof(Texture) }, request.Name, texture);
+                        Verify(visualEffectType, component, "Texture", request.Name, texture);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, request.AssetPath ?? "null"));
                         break;
                     case "mesh":
@@ -127,6 +152,7 @@ namespace UnityCli
                             throw new UnityCliBridge.BridgeCommandException("E_VFX_MESH_NOT_FOUND", "Mesh not found: " + request.AssetPath, "Pass a valid Assets/ mesh path.");
                         }
                         Invoke(visualEffectType, component, "SetMesh", new[] { typeof(string), typeof(Mesh) }, request.Name, mesh);
+                        Verify(visualEffectType, component, "Mesh", request.Name, mesh);
                         effects.Add(VfxToolSupport.Effect("vfx.parameter", request.Name, request.AssetPath ?? "null"));
                         break;
                     default:
@@ -145,10 +171,10 @@ namespace UnityCli
             }
 
             UnityCliSceneMutation.MarkSceneObjectDirty(component);
-            VfxToolSupport.MarkSceneDirty(gameObject);
+            VfxToolSupport.MarkSceneDirty(component.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
+                Target = GameObjectToolSupport.BuildGameObjectRef(component.gameObject),
                 ParameterName = request.Name,
                 ParameterType = parameterType,
                 PlannedEffects = effects,
@@ -156,13 +182,39 @@ namespace UnityCli
             });
         }
 
+        private static void PrepareParameterApi(Type owner, Component component, string parameterType, string name)
+        {
+            var suffix = parameterType == "color" ? "Vector4" : char.ToUpperInvariant(parameterType[0]) + parameterType.Substring(1);
+            var valueType = parameterType == "float" ? typeof(float) : parameterType == "int" ? typeof(int) : parameterType == "bool" ? typeof(bool) : parameterType == "vector2" ? typeof(Vector2) : parameterType == "vector3" ? typeof(Vector3) : typeof(Vector4);
+            if (parameterType == "texture") valueType = typeof(Texture);
+            if (parameterType == "mesh") valueType = typeof(Mesh);
+            var set = owner.GetMethod("Set" + suffix, new[] { typeof(string), valueType });
+            var has = owner.GetMethod("Has" + suffix, new[] { typeof(string) });
+            var get = owner.GetMethod("Get" + suffix, new[] { typeof(string) });
+            if (set == null || has == null || get == null || get.ReturnType != valueType || has.ReturnType != typeof(bool)) throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_API_UNSUPPORTED", "VisualEffect typed parameter API is unavailable for " + parameterType + ".", "Check the installed Visual Effect Graph package version.");
+            if (!(bool)has.Invoke(component, new object[] { name })) throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_NOT_EXPOSED", "VisualEffect parameter is not exposed: " + name, "Expose a parameter with the requested name and type in the VFX Graph.");
+        }
+
         private static void Invoke(Type owner, Component component, string methodName, System.Type[] signature, params object[] args)
         {
             var method = owner.GetMethod(methodName, signature);
-            if (method != null)
-            {
-                method.Invoke(component, args);
-            }
+            if (method == null)
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_API_UNSUPPORTED", "VisualEffect method is unavailable: " + methodName, "Check the installed Visual Effect Graph package version.");
+            method.Invoke(component, args);
+        }
+
+        // 每种参数都必须存在对应 Has*/Get* API，并且读回值与写入的强类型值一致。
+        private static void Verify(Type owner, Component component, string typeName, string name, object expected)
+        {
+            var has = owner.GetMethod("Has" + typeName, new[] { typeof(string) });
+            var get = owner.GetMethod("Get" + typeName, new[] { typeof(string) });
+            if (has == null || get == null)
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_API_UNSUPPORTED", "VisualEffect readback API is unavailable for " + typeName + ".", "Check the installed Visual Effect Graph package version.");
+            if (!(bool)has.Invoke(component, new object[] { name }))
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_NOT_EXPOSED", "VisualEffect parameter is not exposed: " + name, "Expose a parameter with the requested name and type in the VFX Graph.");
+            var actual = get.Invoke(component, new object[] { name });
+            if (!Equals(actual, expected))
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_PARAMETER_VERIFY_FAILED", "VisualEffect parameter did not retain the requested value: " + name, "Check the parameter type and value in the VFX Graph.");
         }
     }
 }

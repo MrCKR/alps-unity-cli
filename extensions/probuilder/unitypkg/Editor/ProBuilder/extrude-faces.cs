@@ -57,11 +57,17 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("extrude-faces", "No ProBuilderMesh component on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
-            var distance = (float)(request.Distance ?? 0.5);
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).ToArray();
+            var distance = ProBuilderOperationProof.CheckedFloat(request.Distance ?? 0.5, "distance");
             var method = request.Method ?? "vertex";
 
+            if (Mathf.Approximately(distance, 0f)) throw ProBuilderErrors.SchemaInvalid("distance must not be zero.");
+            var requestedFaceIndices = faceIndices ?? Enumerable.Range(0, ProBuilderReflection.GetFaceCount(mesh)).ToArray();
+            ProBuilderOperationProof.ValidateFaceIndices(mesh, requestedFaceIndices);
+            var before = ProBuilderOperationProof.Capture(mesh, faceIndices: requestedFaceIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("extrude-faces", "Requested face geometry is not readable.");
             var beforeVertexCount = ProBuilderReflection.GetVertexCount(mesh);
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Extrude Faces");
 
             var faces = faceIndices != null && faceIndices.Length > 0
@@ -74,9 +80,11 @@ namespace UnityCli.ProBuilder
                 throw ProBuilderErrors.OperationFailed("extrude-faces", "ProBuilder 5.x ExtrudeElements.Extrude failed.");
             ProBuilderReflection.RefreshMesh(mesh);
 
-            var afterVertexCount = ProBuilderReflection.GetVertexCount(mesh);
-            if (beforeVertexCount < 0 || afterVertexCount <= beforeVertexCount)
-                throw ProBuilderErrors.OperationFailed("extrude-faces", "Extrude completed without increasing vertex count.");
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var afterVertexCount = ProBuilderReflection.GetVertexCount(freshMesh);
+            var after = ProBuilderOperationProof.Capture(freshMesh, faceIndices: requestedFaceIndices);
+            if (!ProBuilderOperationProof.HasInsertedVertices(before, after) || beforeVertexCount < 0 || afterVertexCount <= beforeVertexCount)
+                throw ProBuilderErrors.OperationFailed("extrude-faces", "Extrude did not produce readable requested mesh geometry.");
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result

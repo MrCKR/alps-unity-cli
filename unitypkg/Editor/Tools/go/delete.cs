@@ -65,6 +65,7 @@ namespace UnityCli
                 });
             }
             var scene = gameObject.scene;
+            ctx.CommitEffect();
             UnityCliSceneMutation.DestroyObject(gameObject);
             if (gameObject != null)
             {

@@ -79,14 +79,16 @@ namespace UnityCli
             }
             propertyChanges.AddRange(GameObjectToolSupport.BuildComponentPropertyChanges(component.GetType(), request.Properties));
 
+            ctx.CommitEffect();
             UnityCliSceneMutation.RecordObject(component, "component.set");
             GameObjectToolSupport.ApplyComponentPropertyChanges(component, propertyChanges);
             UnityCliSceneMutation.MarkSceneObjectDirty(component);
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            var observedComponent = ComponentAddTool.VerifyComponentReadback(gameObject.GetInstanceID(), component.GetInstanceID(), component.GetType(), propertyChanges);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
-                Component = GameObjectToolSupport.BuildComponentSummary(component),
+                Component = GameObjectToolSupport.BuildComponentSummary(observedComponent),
                 Property = request.Property,
                 ComponentIndex = request.ComponentIndex.HasValue ? request.ComponentIndex.Value.ToString(CultureInfo.InvariantCulture) : null,
                 ChangedProperties = ComponentAddTool.BuildChangedProperties(propertyChanges),

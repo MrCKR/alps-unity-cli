@@ -4,10 +4,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createServer } from "node:http";
 import test from "node:test";
-import { execute } from "../src/cli.js";
+import { execute as executeCli } from "../src/cli.js";
+import { withInvocationOrigin } from "../src/invocation-origin.js";
 import { JobRunner } from "../src/job-runner.js";
 import { JobStore } from "../src/job-store.js";
-import { writeInstances, type UnityInstance } from "../src/instances.js";
+import { clearProjectIdentityCache } from "../src/project-identity.js";
+import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v2.js";
 import type { BridgeRequest } from "../src/bridge/index.js";
 import type { CliResult } from "../src/types.js";
 
@@ -21,6 +23,11 @@ function dataOf(result: CliResult): unknown {
 function errorOf(result: CliResult) {
   assert.ok(!result.ok);
   return result.error;
+}
+
+/** 本文件验证 frozen batch/deferred Runtime Code 实现；普通 direct 拒绝由 invocation-origin contract tests 覆盖。 */
+function execute(argv: string[], runtime: Parameters<typeof executeCli>[1]): Promise<CliResult> {
+  return withInvocationOrigin("batch-frozen", () => executeCli(argv, runtime));
 }
 
 const editorUrl = new URL("../../unitypkg/Editor/", import.meta.url);
@@ -50,9 +57,49 @@ async function makeRuntime() {
 
 async function makeUnityProject(root: string): Promise<string> {
   const project = join(root, "Project");
-  await mkdir(join(project, "Packages"), { recursive: true });
+  await createUnityProject(project);
   await writeFile(join(project, "Packages", "manifest.json"), JSON.stringify({ dependencies: {} }, null, 2), "utf8");
+  clearProjectIdentityCache();
   return project;
+}
+
+/** 为注入 transport 的测试保留真实 strict identity selection 边界。 */
+async function registerReadyInstance(dataDir: string, projectPath: string): Promise<{ instanceId: string; close: () => Promise<void> }> {
+  const identity = registryIdentity(projectPath);
+  let session = await makeRegistrySession("http://127.0.0.1:1");
+  const server = createServer((request, response) => {
+    if (request.method !== "GET" || request.url !== "/health") {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ ok: true, requestId: "", data: {
+      version: 2,
+      instanceId: identity.instanceId,
+      canonicalProjectPath: identity.canonicalProjectPath,
+      canonicalizationVersion: 1,
+      editorSessionId: session.editorSessionId,
+      listenerId: session.listener.listenerId,
+      actualPort: address.port,
+      buildStamp: session.buildStamp,
+    } }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const endpoint = `http://127.0.0.1:${address.port}`;
+  session = await makeRegistrySession(endpoint, {
+    editorSessionId: session.editorSessionId,
+    listener: { ...session.listener, endpoint: { ...session.listener.endpoint, actualPort: address.port, preferredPort: address.port, url: endpoint } },
+  });
+  await writeRegistry(dataDir, makeRegistry(identity, [session]));
+  return {
+    instanceId: identity.instanceId,
+    close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
+  };
 }
 
 async function makeFakeUnity(dataDir: string, body: string): Promise<string> {
@@ -68,30 +115,34 @@ async function makeFakeUnity(dataDir: string, body: string): Promise<string> {
   return path;
 }
 
-test("code exec --file forwards live bridge payload with source hash and artifact manifest", async () => {
+test("frozen code exec --file forwards bridge payload with source hash and artifact manifest", async () => {
   const runtime = await makeRuntime();
+  const project = await makeUnityProject(runtime.dataDir);
+  const selection = await registerReadyInstance(runtime.dataDir, project);
   const sourcePath = join(runtime.dataDir, "hello.csx");
   const artifactDir = join(runtime.dataDir, "artifacts", "manual");
   await writeFile(sourcePath, "Console.WriteLine(\"hi\"); return 7;\n", "utf8");
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["tools", "run", "code.exec", "--input", JSON.stringify({ file: sourcePath, args: { name: "UnityCli" }, artifactDir }), "--yes"], {
+  const result = await execute(["tools", "run", "code.exec", "--input", JSON.stringify({ file: sourcePath, args: { name: "UnityCli" }, artifactDir }), "--instance", selection.instanceId, "--yes"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true as const, requestId: payload.requestId, data: { compile: { ok: true, diagnostics: [] }, runtime: { ok: true, returnValue: 7, stdout: "hi\n", stderr: "" } } };
+      return { ok: true as const, requestId: payload.requestId, data: { execution: { exitState: "completed" }, compile: { ok: true, diagnostics: [] }, runtime: { ok: true, returnValue: 7, stdout: "hi\n", stderr: "" } } };
     }
   });
 
   assert.ok(result.ok);
+  await selection.close();
   assert.match(requests[0].requestId, /^req_/);
   assert.equal(requests[0].command, "code.exec");
-  assert.equal(requests[0].security?.confirmed, true);
-  assert.equal(requests[0].security?.toolName, "code.exec");
+  assert.equal(requests[0].execution.securityProof?.confirmed, true);
+  assert.equal(requests[0].execution.securityProof?.toolName, "code.exec");
   assert.equal(requests[0].input!.sourceKind, "file");
   assert.equal(requests[0].input!.sourcePath, sourcePath);
   assert.equal(requests[0].input!.channel, "live");
-  assert.equal(requests[0].execution?.timeoutMs, 60000);
+  const deadlineMs = Date.parse(requests[0].execution.absoluteDeadlineUtc);
+  assert.ok(deadlineMs > Date.now() && deadlineMs <= Date.now() + 60_000);
   assert.match(String(requests[0].input!.sourceSha256), /^[a-f0-9]{64}$/);
   const manifest = JSON.parse(await readFile(join(artifactDir, "manifest.json"), "utf8")) as { requestId: string; jobId: string | null; command: string; artifact: Array<{ kind: string; path: string; relativePath: string; sha256: string; sizeBytes: number }>; artifacts: Array<{ kind: string; path: string; relativePath: string; sha256: string; sizeBytes: number }>; source: { kind: string; sha256: string } };
   assert.equal(manifest.command, "code.exec");
@@ -107,42 +158,35 @@ test("code exec --file forwards live bridge payload with source hash and artifac
   assert.deepEqual(manifest.artifacts, manifest.artifact);
 });
 
-test("code exec forwards the bridge endpoint execution flag outside business input", async () => {
+test("code exec rejects the removed public bridge endpoint bypass", async () => {
   const runtime = await makeRuntime();
-  let received: BridgeRequest | undefined;
-  const server = createServer((request, response) => {
-    let body = "";
-    request.setEncoding("utf8");
-    request.on("data", (chunk) => { body += chunk; });
-    request.on("end", () => {
-      received = JSON.parse(body) as BridgeRequest;
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true, requestId: received.requestId, data: { status: "completed" } }));
-    });
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  assert.ok(address && typeof address === "object");
-  const endpoint = `http://127.0.0.1:${address.port}`;
-
-  try {
-    const result = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--bridge-endpoint", endpoint, "--yes"], runtime);
-    assert.ok(result.ok);
-    assert.equal(received?.command, "code.exec");
-    assert.equal(received?.security?.confirmed, true);
-  } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-  }
+  const result = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--bridge-endpoint", "http://127.0.0.1:47392", "--yes"], runtime);
+  assert.ok(!result.ok);
+  assert.equal(result.error.code, "E_OBSOLETE_OPTION");
 });
 
-test("code exec resolves the selected instance when no explicit bridge endpoint is passed", async () => {
+test("frozen code exec resolves strict v2 instance identity without leaking endpoint", async () => {
   const runtime = await makeRuntime();
+  await createUnityProject(runtime.dataDir);
+  clearProjectIdentityCache();
+  const identity = registryIdentity(runtime.dataDir);
   let received: BridgeRequest | undefined;
+  let session = await makeRegistrySession("http://127.0.0.1:1");
   const server = createServer((request, response) => {
     if (request.method === "GET" && request.url === "/health") {
-      const expectedTargetId = request.headers["x-unity-cli-expected-target-id"];
+      const address = server.address();
+      assert.ok(address && typeof address === "object");
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true, requestId: "", data: { bridge: "unity_cli", target: { id: expectedTargetId } } }));
+      response.end(JSON.stringify({ ok: true, requestId: "", data: {
+        version: 2,
+        instanceId: identity.instanceId,
+        canonicalProjectPath: identity.canonicalProjectPath,
+        canonicalizationVersion: 1,
+        editorSessionId: session.editorSessionId,
+        listenerId: session.listener.listenerId,
+        actualPort: address.port,
+        buildStamp: session.buildStamp,
+      } }));
       return;
     }
     let body = "";
@@ -150,48 +194,43 @@ test("code exec resolves the selected instance when no explicit bridge endpoint 
     request.on("data", (chunk) => { body += chunk; });
     request.on("end", () => {
       received = JSON.parse(body) as BridgeRequest;
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true, requestId: received.requestId, data: { status: "completed" } }));
+      response.writeHead(200, {
+        "content-type": "application/json",
+        "x-unity-cli-instance-id": identity.instanceId,
+        "x-unity-cli-editor-session-id": session.editorSessionId,
+        "x-unity-cli-listener-id": session.listener.listenerId,
+        "x-unity-cli-listener-generation": String(session.listener.generation),
+      });
+      response.end(JSON.stringify({ ok: true, requestId: received.requestId, data: { execution: { exitState: "completed" }, compile: { ok: true, diagnostics: [] }, runtime: { ok: true, returnValue: 1, stdout: "", stderr: "" } } }));
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   assert.ok(address && typeof address === "object");
   const endpoint = `http://127.0.0.1:${address.port}`;
-  const now = new Date().toISOString();
-  const instance: UnityInstance = {
-    instanceId: "inst_code_exec",
-    projectPath: runtime.dataDir,
-    projectHash: "code-exec-project",
-    bridgeEndpoint: endpoint,
-    status: "healthy",
-    registeredAt: now,
-    lastHeartbeatAt: now
-  };
-  await writeInstances(runtime.dataDir, [instance]);
+  session = await makeRegistrySession(endpoint, { editorSessionId: session.editorSessionId, listener: { ...session.listener, endpoint: { ...session.listener.endpoint, actualPort: address.port, preferredPort: address.port, url: endpoint } } });
+  await writeRegistry(runtime.dataDir, makeRegistry(identity, [session]));
 
   try {
-    const result = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--instance", instance.instanceId, "--yes"], runtime);
+    const result = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--instance", identity.instanceId, "--yes"], runtime);
     assert.ok(result.ok);
     assert.equal(received?.command, "code.exec");
-    assert.equal(received?.security?.confirmed, true);
-    assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, endpoint);
+    assert.equal(received?.execution.securityProof?.confirmed, true);
+    assert.doesNotMatch(JSON.stringify(result.data), /bridgeEndpoint|listenerId|actualPort/);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });
 
-test("code exec maps live timeout and busy bridge responses to structured envelopes", async () => {
+test("frozen code exec maps busy bridge responses to structured envelopes", async () => {
   const runtime = await makeRuntime();
-  const running = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--timeout-ms", "1000", "--yes"], {
+  const project = await makeUnityProject(runtime.dataDir);
+  const selection = await registerReadyInstance(runtime.dataDir, project);
+  const intermediate = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--timeout-ms", "1000", "--instance", selection.instanceId, "--yes"], {
     ...runtime,
-    bridgeExecute: async (payload) => ({
-      ok: true,
-      requestId: payload.requestId,
-      data: { status: "running", requestId: "req_bridge", sideEffectSemantics: "started-before-http-timeout", logPath: "Logs/UnityCliBridge.log" }
-    })
+    bridgeExecute: async (payload) => ({ ok: true, requestId: payload.requestId, data: { status: "running" } })
   });
-  const busy = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--timeout-ms", "2000", "--yes"], {
+  const busy = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--timeout-ms", "2000", "--instance", selection.instanceId, "--yes"], {
     ...runtime,
     bridgeExecute: async (payload) => ({
       ok: false,
@@ -205,15 +244,8 @@ test("code exec maps live timeout and busy bridge responses to structured envelo
     })
   });
 
-  assert.ok(!running.ok);
-  assert.equal(running.error?.code, "E_EXECUTION_TIMEOUT");
-  assert.equal((running.error?.details as { command: string }).command, "code.exec");
-  assert.equal((running.error?.details as { channel: string }).channel, "live");
-  assert.equal((running.error?.details as { timeoutMs: number }).timeoutMs, 1000);
-  assert.equal((running.error?.details as { logPath: string }).logPath, "Logs/UnityCliBridge.log");
-  assert.deepEqual((running.error?.details as { audit: { command: string; channel: string; timeoutMs: number } }).audit, { requestId: running.requestId, command: "code.exec", channel: "live", timeoutMs: 1000 });
-  assert.deepEqual((running.error?.details as { logs: { bridge: string } }).logs, { bridge: "Logs/UnityCliBridge.log" });
-  assert.match(running.error?.nextActions?.join("\n") ?? "", /UnityCliBridge\.log/);
+  assert.ok(!intermediate.ok);
+  assert.equal(intermediate.error?.code, "E_TOOL_COMPLETION_PROOF_INVALID");
   assert.ok(!busy.ok);
   assert.equal(busy.error?.code, "E_UNITY_BUSY");
   assert.equal((busy.error?.details as { requestId: string }).requestId, busy.requestId);
@@ -222,11 +254,14 @@ test("code exec maps live timeout and busy bridge responses to structured envelo
   assert.equal((busy.error?.details as { timeoutMs: number }).timeoutMs, 2000);
   assert.deepEqual((busy.error?.details as { audit: { command: string; channel: string; timeoutMs: number } }).audit, { requestId: busy.requestId, command: "code.exec", channel: "live", timeoutMs: 2000 });
   assert.deepEqual((busy.error?.details as { logs: { bridge: string } }).logs, { bridge: "Unity project Logs/UnityCliBridge.log" });
+  await selection.close();
 });
 
-test("code exec preserves compile diagnostics from bridge errors", async () => {
+test("frozen code exec preserves compile diagnostics from bridge errors", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["tools", "run", "code.exec", "--code", "return missing;", "--yes"], {
+  const project = await makeUnityProject(runtime.dataDir);
+  const selection = await registerReadyInstance(runtime.dataDir, project);
+  const result = await execute(["tools", "run", "code.exec", "--code", "return missing;", "--instance", selection.instanceId, "--yes"], {
     ...runtime,
     bridgeExecute: async (payload) => ({
       ok: false,
@@ -248,6 +283,7 @@ test("code exec preserves compile diagnostics from bridge errors", async () => {
   assert.deepEqual(result.error?.nextActions, ["Fix compiler diagnostics and rerun code exec."]);
   assert.equal(result.error?.transient, false);
   assert.equal(result.error?.retryAfterMs, 0);
+  await selection.close();
 });
 
 test("code exec validates source selection, args json, channel and refs", async () => {
@@ -381,6 +417,7 @@ test("Runtime Code source exposes diagnostics from its current Infrastructure fi
   const codeExec = await readFile(new URL("../../unitypkg/Editor/Infrastructure/CodeExecSupport.cs", import.meta.url), "utf8");
   const bridge = await readFile(new URL("../../unitypkg/Editor/UnityCliBridge.cs", import.meta.url), "utf8");
   const packageRefresh = await readFile(new URL("../../unitypkg/Editor/Infrastructure/UnityCliPackageRefresh.cs", import.meta.url), "utf8");
+  const protocolRequest = await readFile(new URL("../../unitypkg/Editor/Infrastructure/UnityCliProtocolRequest.cs", import.meta.url), "utf8");
   const batch = await readFile(new URL("../../unitypkg/Editor/UnityCliBatch.cs", import.meta.url), "utf8");
 
   assert.match(codeExec, /using System\.Linq/);
@@ -397,7 +434,9 @@ test("Runtime Code source exposes diagnostics from its current Infrastructure fi
   assert.match(codeExec, /unityVersion/);
   assert.match(codeExec, /bridgeVersion/);
   assert.match(codeExec, /initiator/);
-  assert.match(codeExec, /request\.Execution == null \? null : request\.Execution\.TimeoutMs/);
+  assert.doesNotMatch(codeExec, /Execution\.TimeoutMs/);
+  assert.match(protocolRequest, /Execution\.AbsoluteDeadlineUtc/);
+  assert.match(protocolRequest, /TryDeadlineRemainingMs/);
   assert.match(codeExec, /CompilerDiagnostics\(/);
   assert.match(codeExec, /ValidateCodeReferences/);
   assert.match(codeExec, /Runtime Code reference was not found/);

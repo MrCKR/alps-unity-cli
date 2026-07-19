@@ -33,6 +33,7 @@ export interface ContextDescriptor {
   inputSchema: Record<string, unknown>;
   outputSchema: Record<string, unknown>;
   examples: ContextExample[];
+  descriptorFingerprint?: string;
   cliCommand: string;
   supportStatus?: string;
   requiresPackages?: string[];

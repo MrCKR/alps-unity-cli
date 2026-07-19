@@ -71,12 +71,17 @@ namespace UnityCli
                     targets.Add(component);
                 }
                 var removed = new List<ComponentSummary>();
+                ctx.CommitEffect();
                 foreach (var component in targets)
                 {
                     removed.Add(GameObjectToolSupport.BuildComponentSummary(component));
                     UnityCliSceneMutation.DestroyObject(component);
                 }
                 UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+                var observedTarget = EditorUtility.InstanceIDToObject(gameObject.GetInstanceID()) as GameObject;
+                foreach (var removedComponent in targets)
+                    if (observedTarget == null || observedTarget.GetComponent(removedComponent.GetType()) != null)
+                        throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_STATE_MISMATCH", "Removed component remained on the target after independent readback.", "Inspect the target GameObject and retry after the Editor is idle.");
                 var effects = new List<GameObjectPlannedEffect>();
                 foreach (var name in request.Components)
                 {
@@ -94,8 +99,13 @@ namespace UnityCli
             }
             EnsureNotTransform(singleComponent, componentName);
             var singleRemoved = GameObjectToolSupport.BuildComponentSummary(singleComponent);
+            var removedId = singleComponent.GetInstanceID();
+            ctx.CommitEffect();
             UnityCliSceneMutation.DestroyObject(singleComponent);
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            var observedSingleTarget = EditorUtility.InstanceIDToObject(gameObject.GetInstanceID()) as GameObject;
+            if (EditorUtility.InstanceIDToObject(removedId) != null || observedSingleTarget == null || observedSingleTarget.GetComponent(componentName) != null)
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_STATE_MISMATCH", "Removed component remained on the target after independent readback.", "Inspect the target GameObject and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = targetRef,

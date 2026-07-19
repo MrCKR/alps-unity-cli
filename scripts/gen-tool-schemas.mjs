@@ -11,6 +11,7 @@ const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT = resolve(process.argv[2] ?? SCRIPT_ROOT);
 const TOOLS_DIR = join(ROOT, "src", "tools");
 const CONTEXTS_DIR = join(ROOT, "src", "contexts");
+const EDITOR_STATE_STABLE_SCHEMA = join(ROOT, "contracts", "stable-session", "editor-state.schema.json");
 
 function collectTsFiles(dir, files = []) {
   if (!existsSync(dir)) return files;
@@ -134,6 +135,21 @@ class SchemaBuilder {
     return symbol?.getName() === "ReadonlyArray";
   }
 
+  // 公开字符串约束与 TypeScript property 同位声明，避免 generator 内出现 capability 特例。
+  applyPropertyConstraints(schema, declaration, type, path) {
+    for (const tag of ts.getJSDocTags(declaration)) {
+      if (tag.tagName.text !== "minLength") continue;
+      const raw = typeof tag.comment === "string" ? tag.comment.trim() : "";
+      const value = Number(raw);
+      if (!Number.isSafeInteger(value) || value < 0 || schema.type !== "string") {
+        this.fail(type, path, "@minLength requires a non-negative integer on a string property");
+        return schema;
+      }
+      schema = { ...schema, minLength: value };
+    }
+    return schema;
+  }
+
   unionSchema(type, path, allowUndefined) {
     const members = [];
     for (const member of type.types) {
@@ -208,7 +224,8 @@ class SchemaBuilder {
       }
       const optional = Boolean(property.flags & ts.SymbolFlags.Optional);
       const propertyType = this.checker.getTypeOfSymbolAtLocation(property, declaration);
-      properties[property.getName()] = this.typeSchema(propertyType, `${path}.${property.getName()}`, optional);
+      const propertyPath = `${path}.${property.getName()}`;
+      properties[property.getName()] = this.applyPropertyConstraints(this.typeSchema(propertyType, propertyPath, optional), declaration, propertyType, propertyPath);
       if (!optional) required.push(property.getName());
     }
     const stringIndex = this.checker.getIndexTypeOfType(type, ts.IndexKind.String);
@@ -244,7 +261,21 @@ class SchemaBuilder {
   }
 }
 
-function buildInjections(program, directory, functionName, kind, names, errors) {
+function normalizeSchema(value, key) {
+  if (value === true && key === "value") return { "x-unityCliAnyJson": true };
+  if (Array.isArray(value)) return value.map((item) => normalizeSchema(item));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort(compareText).map((childKey) => [childKey, normalizeSchema(value[childKey], childKey)]));
+}
+
+function loadEditorStateOutputSchema() {
+  if (!existsSync(EDITOR_STATE_STABLE_SCHEMA)) throw new Error(`stable editor.state schema not found: ${EDITOR_STATE_STABLE_SCHEMA}`);
+  const schema = JSON.parse(readFileSync(EDITOR_STATE_STABLE_SCHEMA, "utf8"));
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) throw new Error("stable editor.state schema must be a JSON object");
+  return normalizeSchema(schema);
+}
+
+function buildInjections(program, directory, functionName, kind, names, errors, stableEditorStateOutputSchema) {
   const checker = program.getTypeChecker();
   const definitions = collectTsFiles(directory).flatMap((fileName) => {
     const sourceFile = program.getSourceFile(fileName);
@@ -267,7 +298,14 @@ function buildInjections(program, directory, functionName, kind, names, errors) 
     const requestName = checker.typeToString(requestType, undefined, ts.TypeFormatFlags.NoTruncation);
     const resultName = checker.typeToString(resultType, undefined, ts.TypeFormatFlags.NoTruncation);
     const inputSchema = new SchemaBuilder(checker, definition, requestName, errors).build(requestType);
-    const outputSchema = new SchemaBuilder(checker, definition, resultName, errors).build(resultType);
+    // editor.state 的公开契约由 stable schema 独占，避免 TS 推导弱化 integer、format 等语义。
+    let outputSchema;
+    if (kind === "Context" && definition.name === "editor.state") {
+      if (!stableEditorStateOutputSchema) throw new Error(`stable editor.state schema not found: ${EDITOR_STATE_STABLE_SCHEMA}`);
+      outputSchema = stableEditorStateOutputSchema;
+    } else {
+      outputSchema = new SchemaBuilder(checker, definition, resultName, errors).build(resultType);
+    }
     injections.push({ name: definition.name, inputSchema, outputSchema });
   }
   return injections.sort((a, b) => compareText(a.name, b.name));
@@ -287,8 +325,9 @@ function generate() {
   const program = loadProgram();
   const errors = [];
   const names = new Map();
-  const tools = buildInjections(program, TOOLS_DIR, "defineTool", "Tool", names, errors);
-  const contexts = buildInjections(program, CONTEXTS_DIR, "defineContext", "Context", names, errors);
+  const stableEditorStateOutputSchema = existsSync(EDITOR_STATE_STABLE_SCHEMA) ? loadEditorStateOutputSchema() : undefined;
+  const tools = buildInjections(program, TOOLS_DIR, "defineTool", "Tool", names, errors, stableEditorStateOutputSchema);
+  const contexts = buildInjections(program, CONTEXTS_DIR, "defineContext", "Context", names, errors, stableEditorStateOutputSchema);
   if (errors.length > 0) throw new Error(`schema generation failed with ${errors.length} error(s):\n${errors.map((error) => `- ${error}`).join("\n")}`);
   writeModule(TOOLS_DIR, "Tool", tools);
   writeModule(CONTEXTS_DIR, "Context", contexts);

@@ -1,6 +1,6 @@
 import { getBoolean, getString } from "./args.js";
 import type { BridgeRuntime } from "./bridge/index.js";
-import { builtinContextDescriptors, loadContextCatalog, parseLiveDescriptor, type ContextCatalogRuntime } from "./contexts/catalog.js";
+import { loadContextCatalog, parseLiveDescriptor, type ContextCatalogRuntime } from "./contexts/catalog.js";
 import type { ContextDescriptor } from "./contexts/types.js";
 import type { CliResult } from "./types.js";
 
@@ -16,11 +16,7 @@ export function shouldDiscoverContexts(flags: Record<string, string | boolean>, 
   return getBoolean(flags, "include-custom") ||
     runtime.projectContexts !== undefined ||
     runtime.bridgeExecute !== undefined ||
-    typeof getString(flags, "bridge-endpoint") === "string" ||
-    typeof getString(flags, "target") === "string" ||
-    typeof getString(flags, "instance") === "string" ||
-    typeof runtime.bridgeEndpoint === "string" ||
-    typeof process.env.UNITY_CLI_BRIDGE_ENDPOINT === "string";
+    typeof getString(flags, "instance") === "string";
 }
 
 /** 返回诊断所需计数，descriptor 真源与校验只有 catalog 一套。 */
@@ -35,8 +31,7 @@ export async function discoverProjectContexts(
   }
   const catalog = await loadContextCatalog(flags, runtime, requestId, { requireLive: options.requireBridge });
   if (catalog.ok === false) return catalog;
-  const localNames = new Set(builtinContextDescriptors().map((context) => context.name));
-  const contexts = catalog.contexts.filter((context) => !localNames.has(context.name));
+  const contexts = catalog.liveContexts;
   return {
     ok: true,
     contexts,

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 
@@ -64,9 +65,13 @@ namespace UnityCli
                 content = ShaderToolSupport.DefaultShaderContent(request.Name, path);
             }
 
+            ctx.CommitEffect();
             AssetToolSupport.WriteTextAsset(path, content, overwrite);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            if (!File.Exists(AssetToolSupport.AssetFullPath(path)) || File.ReadAllText(AssetToolSupport.AssetFullPath(path)) != content)
+                throw new UnityCliBridge.BridgeCommandException("E_SHADER_CREATE_STATE_MISMATCH", "Fresh shader bytes did not match the requested content: " + path, "Check file permissions and retry.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Shader = ShaderToolSupport.BuildShaderInfo(path, AssetDatabase.LoadAssetAtPath<Shader>(path), false),

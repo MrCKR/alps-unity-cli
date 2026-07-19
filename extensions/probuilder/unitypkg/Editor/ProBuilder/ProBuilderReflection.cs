@@ -1213,6 +1213,203 @@ namespace UnityCli.ProBuilder
             catch (Exception) { return null; }
         }
 
+        /// <summary>读取实际顶点颜色，供 set-face-color 的逐面读回使用。</summary>
+        public static IList<Color> GetColors(object mesh)
+        {
+            try { return ProBuilderMeshType.Value?.GetProperty("colors")?.GetValue(mesh) as IList<Color>; }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>读取 ProBuilder 材质槽，供 set-face-material 的逐面读回使用。</summary>
+        public static IList<Material> GetMaterials(object mesh)
+        {
+            try { return ProBuilderMeshType.Value?.GetProperty("materials")?.GetValue(mesh) as IList<Material>; }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>读取 Face 实际顶点索引。</summary>
+        public static IList<int> GetFaceIndexes(object face)
+        {
+            try { return FaceType.Value?.GetProperty("indexes")?.GetValue(face) as IList<int>; }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>读取 Face 实际材质槽索引。</summary>
+        public static int GetFaceMaterialIndex(object face)
+        {
+            try { return FaceType.Value?.GetProperty("material")?.GetValue(face) is int index ? index : -1; }
+            catch (Exception) { return -1; }
+        }
+
+        /// <summary>逐字段比对 Face.AutoUnwrapSettings，避免 UV 操作仅刷新网格即报告成功。</summary>
+        public static bool FaceUvMatches(object face, float? scale, float? offsetU, float? offsetV, float? rotation, bool flipU, bool flipV)
+        {
+            try
+            {
+                var uv = FaceType.Value?.GetProperty("uv")?.GetValue(face);
+                if (uv == null) return false;
+                var type = uv.GetType();
+                var actualScale = ReadMember(type, uv, "scale") as Vector2?;
+                var actualOffset = ReadMember(type, uv, "offset") as Vector2?;
+                return (!scale.HasValue || (actualScale.HasValue && Mathf.Approximately(actualScale.Value.x, scale.Value) && Mathf.Approximately(actualScale.Value.y, scale.Value)))
+                    && (!offsetU.HasValue || (actualOffset.HasValue && Mathf.Approximately(actualOffset.Value.x, offsetU.Value)))
+                    && (!offsetV.HasValue || (actualOffset.HasValue && Mathf.Approximately(actualOffset.Value.y, offsetV.Value)))
+                    && (!rotation.HasValue || (ReadMember(type, uv, "rotation") is float value && Mathf.Approximately(value, rotation.Value)))
+                    && ReadMember(type, uv, "flipU") is bool actualFlipU && actualFlipU == flipU
+                    && ReadMember(type, uv, "flipV") is bool actualFlipV && actualFlipV == flipV;
+            }
+            catch (Exception) { return false; }
+        }
+
+        /// <summary>验证多边形顶面法线与请求的 points/flipNormals 一致。</summary>
+        public static bool HasPolygonNormalOrientation(object mesh, IList<Vector3> points, bool flipNormals)
+        {
+            var faces = GetAllFaces(mesh);
+            if (faces == null || faces.Length == 0 || points == null || points.Count < 3) return false;
+            var expected = Vector3.Cross(points[1] - points[0], points[2] - points[0]).normalized;
+            if (flipNormals) expected = -expected;
+            return faces.Cast<object>().Any(face => Vector3.Dot(ComputeFaceNormal(mesh, face), expected) > 0.5f);
+        }
+
+        private static object ReadMember(Type type, object value, string name)
+        {
+            return (object)type.GetField(name)?.GetValue(value) ?? type.GetProperty(name)?.GetValue(value);
+        }
+
+        /// <summary>用于完成证明的 ProBuilder 实际状态快照；不使用操作 API 的返回值。</summary>
+        public sealed class MeshStateSnapshot
+        {
+            public string Positions { get; internal set; }
+            public string Faces { get; internal set; }
+            public string Edges { get; internal set; }
+            public string SharedVertices { get; internal set; }
+            public string Materials { get; internal set; }
+            public string Uvs { get; internal set; }
+            public string Colors { get; internal set; }
+            public string SmoothingGroups { get; internal set; }
+            public Vector3 Position { get; internal set; }
+            public Quaternion Rotation { get; internal set; }
+            public Vector3 Scale { get; internal set; }
+        }
+
+        /// <summary>从刷新后的 ProBuilderMesh 和 Transform 构造可比较的实际状态。</summary>
+        public static MeshStateSnapshot CaptureMeshState(object mesh, GameObject go)
+        {
+            if (mesh == null || go == null) return null;
+            try
+            {
+                var meshType = ProBuilderMeshType.Value;
+                var snapshot = new MeshStateSnapshot
+                {
+                    Positions = DescribeEnumerable(meshType?.GetProperty("positions")?.GetValue(mesh)),
+                    Faces = DescribeFaceProperty(mesh, "indexes"),
+                    Edges = string.Join(";", CollectUniqueEdges(mesh).Select(edge => GetEdgeVertexA(edge) + ":" + GetEdgeVertexB(edge))),
+                    SharedVertices = DescribeEnumerable(meshType?.GetProperty("sharedVertices")?.GetValue(mesh)),
+                    Materials = DescribeEnumerable(meshType?.GetProperty("materials")?.GetValue(mesh)),
+                    Colors = DescribeEnumerable(meshType?.GetProperty("colors")?.GetValue(mesh)),
+                    Uvs = DescribeFaceProperty(mesh, "uv"),
+                    SmoothingGroups = DescribeFaceProperty(mesh, "smoothingGroup"),
+                    Position = go.transform.position,
+                    Rotation = go.transform.rotation,
+                    Scale = go.transform.localScale
+                };
+                return snapshot;
+            }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>确认 effect 后的实际网格或 transform 状态发生变化，无法读取时一律失败。</summary>
+        public static bool HasObservedMutation(MeshStateSnapshot before, MeshStateSnapshot after)
+        {
+            if (before == null || after == null) return false;
+            return before.Positions != after.Positions || before.Faces != after.Faces || before.Edges != after.Edges
+                || before.SharedVertices != after.SharedVertices || before.Materials != after.Materials
+                || before.Uvs != after.Uvs || before.Colors != after.Colors || before.SmoothingGroups != after.SmoothingGroups
+                || before.Position != after.Position || before.Rotation != after.Rotation || before.Scale != after.Scale;
+        }
+
+        /// <summary>验证请求指定的面已实际写入目标平滑组，而非仅依赖操作返回值。</summary>
+        public static bool HasSmoothingGroup(object mesh, int[] faceIndices, int smoothingGroup)
+        {
+            var faces = GetFacesByIndices(mesh, faceIndices);
+            var property = FaceType.Value?.GetProperty("smoothingGroup");
+            if (faces == null || property == null) return false;
+            try { return faces.Cast<object>().All(face => property.GetValue(face) is int value && value == smoothingGroup); }
+            catch (Exception) { return false; }
+        }
+
+        /// <summary>用于创建、转换和多对象合并的对象存在性与变换状态快照。</summary>
+        public sealed class ObjectStateSnapshot
+        {
+            public bool Exists { get; internal set; }
+            public int InstanceId { get; internal set; }
+            public string Name { get; internal set; }
+            public Vector3 Position { get; internal set; }
+            public Quaternion Rotation { get; internal set; }
+            public Vector3 Scale { get; internal set; }
+            public bool HasProBuilderMesh { get; internal set; }
+        }
+
+        /// <summary>捕获对象可见状态；null 表示 effect 前对象不存在。</summary>
+        public static ObjectStateSnapshot CaptureObjectState(GameObject go)
+        {
+            if (go == null) return new ObjectStateSnapshot();
+            return new ObjectStateSnapshot
+            {
+                Exists = true,
+                InstanceId = go.GetInstanceID(),
+                Name = go.name,
+                Position = go.transform.position,
+                Rotation = go.transform.rotation,
+                Scale = go.transform.localScale,
+                HasProBuilderMesh = HasProBuilderMesh(go)
+            };
+        }
+
+        /// <summary>比较对象读回状态，确保创建、转换或重命名未被 API 返回值掩盖。</summary>
+        public static bool HasObservedObjectMutation(ObjectStateSnapshot before, ObjectStateSnapshot after)
+        {
+            if (before == null || after == null) return false;
+            return before.Exists != after.Exists || before.InstanceId != after.InstanceId || before.Name != after.Name
+                || before.Position != after.Position || before.Rotation != after.Rotation || before.Scale != after.Scale
+                || before.HasProBuilderMesh != after.HasProBuilderMesh;
+        }
+
+        /// <summary>验证新建或转换后的对象确实包含可读取的 ProBuilder 几何。</summary>
+        public static bool HasReadableGeometry(object mesh)
+        {
+            return mesh is Component component && GetFaceCount(mesh) > 0 && GetVertexCount(mesh) > 0 && CaptureMeshState(mesh, component.gameObject) != null;
+        }
+
+        /// <summary>把反射读取到的集合转为稳定字符串，用于同次调用中的前后状态比较。</summary>
+        private static string DescribeFaceProperty(object mesh, string property)
+        {
+            var faces = GetAllFaces(mesh);
+            var member = FaceType.Value?.GetProperty(property);
+            if (faces == null || member == null) return null;
+            return string.Join(";", faces.Cast<object>().Select(face => DescribeEnumerable(member.GetValue(face)) ?? Convert.ToString(member.GetValue(face), CultureInfo.InvariantCulture)));
+        }
+
+        private static string DescribeEnumerable(object value)
+        {
+            if (!(value is System.Collections.IEnumerable values)) return DescribeValue(value);
+            return string.Join(",", values.Cast<object>().Select(DescribeValue));
+        }
+
+        /// <summary>展开嵌套共享顶点集合和 AutoUnwrapSettings 的公开字段，避免对象类型名掩盖状态变化。</summary>
+        private static string DescribeValue(object value)
+        {
+            if (value == null) return null;
+            if (value is System.Collections.IEnumerable values && !(value is string))
+                return "[" + string.Join(",", values.Cast<object>().Select(DescribeValue)) + "]";
+            var type = value.GetType();
+            if (type.IsPrimitive || value is string || value is decimal || value is Vector2 || value is Vector3 || value is Vector4 || value is Color || value is Quaternion)
+                return Convert.ToString(value, CultureInfo.InvariantCulture);
+            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
+            if (fields.Length == 0) return Convert.ToString(value, CultureInfo.InvariantCulture);
+            return "{" + string.Join(",", fields.OrderBy(field => field.Name).Select(field => field.Name + "=" + DescribeValue(field.GetValue(value)))) + "}";
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────
 
         private static Type FindType(string fullName)

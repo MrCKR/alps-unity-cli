@@ -21,38 +21,42 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Create a matrix graph", Input = new Request { Path = "Assets/VFX/UnityCliCreatedExplosion.vfx" } } }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.graph.create");
             var path = VfxToolSupport.RequireVfxGraphPath(request.Path);
             var graphType = VfxToolSupport.RequireVfxAssetType();
+            VfxToolSupport.PrepareVfxGraphFactory();
             var existing = AssetDatabase.LoadAssetAtPath(path, graphType);
             if (existing != null && request.Overwrite != true)
                 throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_EXISTS", "VFX Graph already exists: " + path, "Pass overwrite=true or choose a different Assets/*.vfx path.");
 
             var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.graph.create", Path = path } };
-            if (context.DryRun)
+            if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Graph = new VfxGraphInfo { Path = path, Name = Path.GetFileNameWithoutExtension(path), Type = graphType.Name },
                     DryRun = true,
                     PlannedEffects = effects,
-                    LogPath = context.LogPath
+                    LogPath = ctx.LogPath
                 });
             }
 
+            ctx.CommitEffect();
             AssetToolSupport.CreateAssetDirectory(path);
             if (existing != null) AssetDatabase.DeleteAsset(path);
-            var created = VfxToolSupport.CreateVfxGraphAsset(path, graphType);
-            if (created == null)
-                throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_CREATE_FAILED", "VFX Graph asset creation did not produce a readable VisualEffectAsset: " + path, "Check Unity Console and UnityCliBridge.log for package authoring API errors.");
+            VfxToolSupport.CreateVfxGraphAsset(path, graphType);
             AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            var created = AssetDatabase.LoadAssetAtPath(path, graphType);
+            if (created == null || !graphType.IsInstanceOfType(created))
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_CREATE_FAILED", "VFX Graph asset creation did not produce a readable VisualEffectAsset: " + path, "Check Unity Console and UnityCliBridge.log for package authoring API errors.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Graph = VfxToolSupport.BuildGraphInfo(path, created),
                 PlannedEffects = effects,
-                LogPath = context.LogPath
+                LogPath = ctx.LogPath
             });
         }
     }

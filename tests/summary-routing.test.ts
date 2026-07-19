@@ -23,7 +23,7 @@ function assertRouteSummary(name: string, summary: string): void {
   }
 }
 
-test("offline tools group summaries are route-specific for TS-local groups", async () => {
+test("offline tools group summaries cover TS-local and packaged static groups", async () => {
   const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
   assert.ok(result.ok);
 
@@ -37,7 +37,8 @@ test("offline tools group summaries are route-specific for TS-local groups", asy
   assert.match(groups.get("docs") ?? "", /offline|documentation/i);
   assert.match(groups.get("tools") ?? "", /describe|search|group/i);
   assert.match(groups.get("package") ?? "", /package/i);
-  assert.equal(groups.has("scene"), false, "scene should require live discovery");
+  assertRouteSummary("group scene", groups.get("scene") ?? "");
+  assertRouteSummary("group probuilder", groups.get("probuilder") ?? "");
 });
 
 test("live-discovered C# and extension groups still get route summaries through tools group", async () => {

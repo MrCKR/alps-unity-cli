@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, open, readdir, readFile, rename, rm, stat, writeFile, type FileHandle } from "node:fs/promises";
+import { copyFile, mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readInstalledUnityPackages } from "./project-resolver.js";
@@ -60,7 +60,14 @@ export interface ExtensionStatusCheck {
 const packageName = "com.unity_cli";
 const manifestFileName = "unity_cli.extensions.manifest.json";
 const manifestLockTimeoutMs = 15_000;
-const manifestLockStaleMs = 60_000;
+const processStartIdentity = new Date(Date.now() - Math.floor(process.uptime() * 1_000)).toISOString();
+
+let afterProjectionCopyForTest: (() => Promise<void>) | undefined;
+
+/** 仅测试使用：在 source projection 复制后强制制造交错。 */
+export function setAfterProjectionCopyForTest(hook: (() => Promise<void>) | undefined): void {
+  afterProjectionCopyForTest = hook;
+}
 
 /** 返回 extension 源码目录。 */
 export function extensionSourceRoot(extensionId: ExtensionId): string {
@@ -82,19 +89,28 @@ export function extensionInstallManifestPath(projectPath: string): string {
   return join(resolve(projectPath), "Packages", packageName, manifestFileName);
 }
 
-/** 读取 extension 安装 manifest；缺失或损坏时返回空 manifest。 */
+/** 读取 extension 安装 manifest；仅缺失文件代表空状态，损坏状态必须阻断变更。 */
 export async function readExtensionInstallManifest(projectPath: string): Promise<ExtensionInstallManifest> {
+  const path = extensionInstallManifestPath(projectPath);
+  let content: string;
   try {
-    const parsed = JSON.parse(stripBom(await readFile(extensionInstallManifestPath(projectPath), "utf8"))) as Partial<ExtensionInstallManifest>;
-    if (parsed.version !== 1 || !Array.isArray(parsed.extensions)) {
-      return emptyManifest();
+    content = await readFile(path, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyManifest();
+    throw error;
+  }
+  try {
+    const parsed = JSON.parse(stripBom(content)) as Partial<ExtensionInstallManifest>;
+    if (parsed.version !== 1 || !Array.isArray(parsed.extensions) || !parsed.extensions.every(isInstalledEntry)) {
+      throw invalidInstallManifest(projectPath, "Expected version 1 and valid extension entries.");
     }
-    return {
-      version: 1,
-      extensions: parsed.extensions.filter(isInstalledEntry)
-    };
-  } catch {
-    return emptyManifest();
+    if (new Set(parsed.extensions.map((entry) => entry.extensionId)).size !== parsed.extensions.length) {
+      throw invalidInstallManifest(projectPath, "Extension entries must have unique extensionId values.");
+    }
+    return { version: 1, extensions: parsed.extensions };
+  } catch (error) {
+    if (error instanceof ExtensionInstallerError) throw error;
+    throw invalidInstallManifest(projectPath, "The file is not valid JSON.");
   }
 }
 
@@ -106,6 +122,7 @@ export async function writeExtensionInstallManifest(projectPath: string, manifes
   try {
     await writeFile(temporaryPath, `${JSON.stringify({ version: 1, extensions: manifest.extensions.sort((a, b) => a.extensionId.localeCompare(b.extensionId)) }, null, 2)}\n`, "utf8");
     await rename(temporaryPath, manifestPath);
+    await readExtensionInstallManifest(projectPath);
   } finally {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
   }
@@ -156,40 +173,70 @@ export async function installExtensionBundleUnchecked(
 
   return withExtensionManifestLock(projectPath, async () => {
     const targetRoot = extensionInstallRoot(projectPath, manifest.id);
+    const stagingRoot = `${targetRoot}.staging-${process.pid}-${randomUUID()}`;
+    const previousRoot = `${targetRoot}.previous-${process.pid}-${randomUUID()}`;
     const installManifest = await readExtensionInstallManifest(projectPath);
     const previous = installManifest.extensions.find((entry) => entry.extensionId === manifest.id);
-    if (previous) {
-      await removeManagedFiles(targetRoot, previous.files);
+    const hadTarget = existsSync(targetRoot);
+    try {
+      await rm(stagingRoot, { recursive: true, force: true });
+      if (hadTarget) await copyRecursive(targetRoot, stagingRoot, targetRoot, []);
+      if (previous) await removeManagedFiles(stagingRoot, previous.files);
+      const installIncludes = extensionUnityInstallIncludes(manifest);
+      const sourceHashBeforeCopy = await hashBundleProjection(sourceRoot, installIncludes);
+      const copiedFiles = await copyBundleProjection(sourceRoot, stagingRoot, installIncludes);
+      await afterProjectionCopyForTest?.();
+      const sourceHashAfterCopy = await hashBundleProjection(sourceRoot, installIncludes);
+      const stagingHash = await hashManagedProjection(stagingRoot, copiedFiles);
+      // source 前后与 staging 必须是同一投影；不发布任何混合 source 的 target。
+      if (sourceHashBeforeCopy !== sourceHashAfterCopy || sourceHashBeforeCopy !== stagingHash) {
+        throw new ExtensionInstallerError("E_EXTENSION_SOURCE_SNAPSHOT_STALE", `Extension source changed while creating its projection: ${manifest.id}`, ["Retry the extension install after source changes have completed."]);
+      }
+      const sourceHash = stagingHash;
+      if (hadTarget) await rename(targetRoot, previousRoot);
+      await rename(stagingRoot, targetRoot);
+      await rm(previousRoot, { recursive: true, force: true });
+
+      const entry: InstalledExtensionManifestEntry = {
+        extensionId: manifest.id,
+        version: manifest.version,
+        installedAt: new Date().toISOString(),
+        sourceHash,
+        files: copiedFiles,
+        requiresUnityPackages: manifest.unityPackages.map((pkg) => pkg.packageId),
+        copyRoot: "extension-directory",
+        layout: "directory",
+        installMode: "copy-if-package-present"
+      };
+
+      installManifest.extensions = installManifest.extensions.filter((item) => item.extensionId !== manifest.id);
+      installManifest.extensions.push(entry);
+      await writeExtensionInstallManifest(projectPath, installManifest);
+      const projection = await checkManagedFiles(targetRoot, copiedFiles);
+      if (projection.missingFiles.length > 0 || projection.changedFiles.length > 0) {
+        throw new ExtensionInstallerError("E_EXTENSION_TARGET_PROJECTION_INVALID", `Installed extension projection could not be verified: ${manifest.id}`, ["Inspect the target extension directory and retry the install."]);
+      }
+      const freshManifest = await readExtensionInstallManifest(projectPath);
+      if (!freshManifest.extensions.some((item) => item.extensionId === manifest.id && item.sourceHash === sourceHash)) {
+        throw new ExtensionInstallerError("E_EXTENSION_INSTALL_MANIFEST_INVALID", "Extension install manifest readback did not contain the installed projection.", ["Inspect Packages/com.unity_cli/unity_cli.extensions.manifest.json before retrying."]);
+      }
+
+      return {
+        extensionId: manifest.id,
+        status: installedStatus,
+        projectPath: resolve(projectPath),
+        targetRoot,
+        fileCount: copiedFiles.length,
+        sourceHash,
+        files: copiedFiles
+      };
+    } catch (error) {
+      if (hadTarget && !existsSync(targetRoot) && existsSync(previousRoot)) await rename(previousRoot, targetRoot).catch(() => undefined);
+      throw error;
+    } finally {
+      await rm(stagingRoot, { recursive: true, force: true }).catch(() => undefined);
     }
 
-    const installIncludes = extensionUnityInstallIncludes(manifest);
-    const copiedFiles = await copyBundleProjection(sourceRoot, targetRoot, installIncludes);
-    const sourceHash = await hashBundleProjection(sourceRoot, installIncludes);
-    const entry: InstalledExtensionManifestEntry = {
-      extensionId: manifest.id,
-      version: manifest.version,
-      installedAt: new Date().toISOString(),
-      sourceHash,
-      files: copiedFiles,
-      requiresUnityPackages: manifest.unityPackages.map((pkg) => pkg.packageId),
-      copyRoot: "extension-directory",
-      layout: "directory",
-      installMode: "copy-if-package-present"
-    };
-
-    installManifest.extensions = installManifest.extensions.filter((item) => item.extensionId !== manifest.id);
-    installManifest.extensions.push(entry);
-    await writeExtensionInstallManifest(projectPath, installManifest);
-
-    return {
-      extensionId: manifest.id,
-      status: installedStatus,
-      projectPath: resolve(projectPath),
-      targetRoot,
-      fileCount: copiedFiles.length,
-      sourceHash,
-      files: copiedFiles
-    };
   });
 }
 
@@ -205,6 +252,10 @@ export async function removeExtensionBundle(projectPath: string, extensionId: Ex
     const targetRoot = extensionInstallRoot(projectPath, extensionId);
     await removeManagedFiles(targetRoot, entry.files);
     await removeEmptyDirectories(targetRoot);
+    const remaining = await checkManagedFiles(targetRoot, entry.files);
+    if (remaining.missingFiles.length !== entry.files.length) {
+      throw new ExtensionInstallerError("E_EXTENSION_REMOVE_INCOMPLETE", `One or more managed files remain for extension: ${extensionId}`, ["Resolve filesystem permissions or locks, then inspect the extension target directory."]);
+    }
 
     installManifest.extensions = installManifest.extensions.filter((item) => item.extensionId !== extensionId);
     await writeExtensionInstallManifest(projectPath, installManifest);
@@ -269,48 +320,97 @@ export async function readExtensionPhysicalStates(projectPath: string): Promise<
   return new Map((await checkExtensionBundles(projectPath)).map((check) => [check.extensionId, check]));
 }
 
-/** 跨进程序列化同一项目的 extension 文件与 manifest 变更，防止并发 lost update。 */
+/** 跨进程序列化同一项目的 extension 文件与 manifest 变更；活 owner 与损坏锁一律不按时间抢占。 */
 async function withExtensionManifestLock<T>(projectPath: string, action: () => Promise<T>): Promise<T> {
   const lockPath = `${extensionInstallManifestPath(projectPath)}.lock`;
   const deadline = Date.now() + manifestLockTimeoutMs;
   await mkdir(dirname(lockPath), { recursive: true });
 
   while (true) {
-    let handle: FileHandle | undefined;
+    const token = randomUUID();
+    const owner = { token, pid: process.pid, processStartIdentity, acquiredAt: new Date().toISOString(), heartbeatAt: new Date().toISOString() };
     try {
-      handle = await open(lockPath, "wx");
-      await handle.writeFile(`${JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() })}\n`, "utf8");
+      const handle = await open(lockPath, "wx");
+      await handle.writeFile(`${JSON.stringify(owner)}\n`, "utf8");
+      await handle.close();
       try {
         return await action();
       } finally {
-        await handle.close();
-        await rm(lockPath, { force: true });
+        const current = await readLockRecord(lockPath);
+        if (current?.owner.token === token) await rm(lockPath, { force: true });
       }
     } catch (error) {
-      if (handle) await handle.close().catch(() => undefined);
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "EEXIST") throw error;
-
-      try {
-        const lockStat = await stat(lockPath);
-        if (Date.now() - lockStat.mtimeMs > manifestLockStaleMs) {
-          await rm(lockPath, { force: true });
-          continue;
-        }
-      } catch (statError) {
-        if ((statError as NodeJS.ErrnoException).code !== "ENOENT") throw statError;
+      const observed = await readLockRecord(lockPath);
+      if (observed && !isProcessAlive(observed.owner.pid)) {
+        await recoverExitedLock(lockPath, observed);
         continue;
       }
-
       if (Date.now() >= deadline) {
-        throw new ExtensionInstallerError(
-          "E_EXTENSION_INSTALL_LOCK_TIMEOUT",
-          `Timed out waiting for extension install lock: ${lockPath}`,
-          ["Wait for the other extension install/remove process to finish, then retry."]
-        );
+        throw new ExtensionInstallerError("E_EXTENSION_INSTALL_LOCK_TIMEOUT", `Timed out waiting for extension install lock: ${lockPath}`, ["Wait for the other extension install/remove process to finish, then retry."]);
       }
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
     }
+  }
+}
+
+interface LockOwner { token: string; pid: number; processStartIdentity: string; acquiredAt: string; heartbeatAt: string; }
+interface LockRecord { raw: string; fingerprint: string; owner: LockOwner; }
+
+async function readLockRecord(path: string): Promise<LockRecord | undefined> {
+  try {
+    const raw = await readFile(path, "utf8");
+    const value = JSON.parse(raw) as Partial<LockOwner>;
+    if (typeof value.token !== "string" || !value.token || !Number.isInteger(value.pid) || (value.pid as number) <= 0
+      || typeof value.processStartIdentity !== "string" || !value.processStartIdentity
+      || typeof value.acquiredAt !== "string" || typeof value.heartbeatAt !== "string") return undefined;
+    return { raw, fingerprint: createHash("sha256").update(raw).digest("hex"), owner: value as LockOwner };
+  } catch {
+    return undefined;
+  }
+}
+
+/** 以独占 rename 将已退出 owner 隔离到唯一 claim；绝不对原 lock 路径执行盲删。 */
+async function recoverExitedLock(lockPath: string, observed: LockRecord): Promise<void> {
+  const recoveryToken = randomUUID();
+  const claimPath = `${lockPath}.recovery-${observed.fingerprint}`;
+  try {
+    const claim = await open(claimPath, "wx");
+    await claim.writeFile(`${JSON.stringify({ recoveryToken, pid: process.pid, processStartIdentity, lockFingerprint: observed.fingerprint, lockToken: observed.owner.token })}\n`, "utf8");
+    await claim.close();
+  } catch (error) {
+    // 已有 claim 表示另一个恢复者正在独占处理同一 fingerprint；保留原 lock，等待其完成。
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return;
+    throw error;
+  }
+  try {
+    const reread = await readLockRecord(lockPath);
+    if (!reread || reread.fingerprint !== observed.fingerprint || reread.owner.token !== observed.owner.token || isProcessAlive(reread.owner.pid)) return;
+    const isolatedPath = `${lockPath}.recovered-${recoveryToken}`;
+    try {
+      await rename(lockPath, isolatedPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    const isolated = await readLockRecord(isolatedPath);
+    if (!isolated || isolated.fingerprint !== observed.fingerprint || isolated.owner.token !== observed.owner.token || isProcessAlive(isolated.owner.pid)) {
+      // 隔离内容异常时保留文件供人工检查，避免删除任何可能的 owner。
+      return;
+    }
+    await rm(isolatedPath, { force: true });
+  } finally {
+    await rm(claimPath, { force: true }).catch(() => undefined);
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 }
 
@@ -327,7 +427,7 @@ async function copyBundleProjection(sourceRoot: string, targetRoot: string, incl
       const dest = join(targetRoot, targetRelativeRoot);
       await mkdir(dirname(dest), { recursive: true });
       await copyFile(sourcePath, dest);
-      files.push({ path: normalizePath(targetRelativeRoot), sha256: await hashFile(sourcePath) });
+      files.push({ path: normalizePath(targetRelativeRoot), sha256: await hashFile(dest) });
     }
   }
   return files.sort((a, b) => a.path.localeCompare(b.path));
@@ -346,19 +446,14 @@ async function copyRecursive(sourcePath: string, targetRoot: string, sourceRoot:
     } else if (entry.isFile()) {
       await mkdir(dirname(dest), { recursive: true });
       await copyFile(src, dest);
-      files.push({ path: rel, sha256: await hashFile(src) });
+      files.push({ path: rel, sha256: await hashFile(dest) });
     }
   }
 }
 
 async function removeManagedFiles(targetRoot: string, files: ManagedExtensionFile[]): Promise<void> {
   for (const file of files) {
-    const safePath = safeManagedPath(targetRoot, file.path);
-    try {
-      await rm(safePath, { force: true });
-    } catch {
-      // 删除失败不应扩散到用户文件；doctor 会报告残留状态。
-    }
+    await rm(safeManagedPath(targetRoot, file.path), { force: true });
   }
 }
 
@@ -422,38 +517,45 @@ async function removeEmptyDirectories(root: string): Promise<void> {
   }
 }
 
-async function hashBundleProjection(sourceRoot: string, includes: string[]): Promise<string> {
+async function hashManagedProjection(root: string, files: ManagedExtensionFile[]): Promise<string> {
   const hash = createHash("sha256");
-  for (const includePath of includes.map(normalizePath).sort()) {
-    const sourcePath = safeSourcePath(sourceRoot, includePath);
-    if (!existsSync(sourcePath)) continue;
-    const sourceInfo = await stat(sourcePath);
-    const targetRelativeRoot = projectionTargetRoot(includePath);
-    if (sourceInfo.isDirectory()) {
-      hash.update(`projection-dir:${targetRelativeRoot}/\n`);
-      await hashDirectoryInto(hash, sourcePath, sourcePath, targetRelativeRoot);
-    } else if (sourceInfo.isFile()) {
-      hash.update(`projection-file:${targetRelativeRoot}\n`);
-      hash.update(await readFile(sourcePath));
-      hash.update("\n");
-    }
+  for (const file of files) {
+    hash.update(`file:${file.path}\n`);
+    hash.update(await readFile(safeManagedPath(root, file.path)));
+    hash.update("\n");
   }
   return hash.digest("hex");
 }
 
-async function hashDirectoryInto(hash: ReturnType<typeof createHash>, dir: string, root: string, targetPrefix = ""): Promise<void> {
-  const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name);
-    const sourceRelative = normalizePath(relative(root, fullPath));
-    const rel = normalizePath(targetPrefix ? `${targetPrefix}/${sourceRelative}` : sourceRelative);
+async function hashBundleProjection(sourceRoot: string, includes: string[]): Promise<string> {
+  const files: Array<{ path: string; sourcePath: string }> = [];
+  for (const includePath of includes.map(normalizePath).sort()) {
+    const sourcePath = safeSourcePath(sourceRoot, includePath);
+    if (!existsSync(sourcePath)) continue;
+    const targetRelativeRoot = projectionTargetRoot(includePath);
+    if ((await stat(sourcePath)).isDirectory()) {
+      await collectProjectionFiles(sourcePath, sourcePath, targetRelativeRoot, files);
+    } else {
+      files.push({ path: targetRelativeRoot, sourcePath });
+    }
+  }
+  const hash = createHash("sha256");
+  for (const file of files.sort((left, right) => left.path.localeCompare(right.path))) {
+    hash.update(`file:${file.path}\n`);
+    hash.update(await readFile(file.sourcePath));
+    hash.update("\n");
+  }
+  return hash.digest("hex");
+}
+
+async function collectProjectionFiles(dir: string, root: string, targetPrefix: string, files: Array<{ path: string; sourcePath: string }>): Promise<void> {
+  for (const entry of (await readdir(dir, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))) {
+    const sourcePath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      hash.update(`dir:${rel}/\n`);
-      await hashDirectoryInto(hash, fullPath, root, targetPrefix);
+      await collectProjectionFiles(sourcePath, root, targetPrefix, files);
     } else if (entry.isFile()) {
-      hash.update(`file:${rel}\n`);
-      hash.update(await readFile(fullPath));
-      hash.update("\n");
+      const relativePath = normalizePath(relative(root, sourcePath));
+      files.push({ path: normalizePath(targetPrefix ? `${targetPrefix}/${relativePath}` : relativePath), sourcePath });
     }
   }
 }
@@ -541,9 +643,34 @@ function emptyManifest(): ExtensionInstallManifest {
   return { version: 1, extensions: [] };
 }
 
+function invalidInstallManifest(projectPath: string, reason: string): ExtensionInstallerError {
+  return new ExtensionInstallerError(
+    "E_EXTENSION_INSTALL_MANIFEST_INVALID",
+    `Extension install manifest is invalid: ${reason}`,
+    [`Repair or remove ${extensionInstallManifestPath(projectPath)} only after inspecting its contents.`]
+  );
+}
+
 function isInstalledEntry(value: unknown): value is InstalledExtensionManifestEntry {
   const entry = value as Partial<InstalledExtensionManifestEntry>;
-  return typeof entry?.extensionId === "string" && typeof entry.version === "string" && Array.isArray(entry.files);
+  return typeof entry?.extensionId === "string" && entry.extensionId.length > 0
+    && typeof entry.version === "string" && entry.version.length > 0
+    && typeof entry.installedAt === "string" && !Number.isNaN(Date.parse(entry.installedAt))
+    && typeof entry.sourceHash === "string" && /^[a-f0-9]{64}$/i.test(entry.sourceHash)
+    && Array.isArray(entry.files) && entry.files.every((file) => isManagedExtensionFile(file))
+    && Array.isArray(entry.requiresUnityPackages) && entry.requiresUnityPackages.every((pkg) => typeof pkg === "string" && pkg.length > 0)
+    && entry.copyRoot === "extension-directory" && entry.layout === "directory" && entry.installMode === "copy-if-package-present";
+}
+
+function isManagedExtensionFile(value: unknown): value is ManagedExtensionFile {
+  const file = value as Partial<ManagedExtensionFile>;
+  return typeof file?.path === "string" && file.path.length > 0 && isSafeRelativePath(file.path)
+    && typeof file.sha256 === "string" && /^[a-f0-9]{64}$/i.test(file.sha256);
+}
+
+function isSafeRelativePath(path: string): boolean {
+  const normalized = normalizePath(path);
+  return !normalized.startsWith("../") && normalized !== ".." && !normalized.includes("/../") && !normalized.startsWith("/");
 }
 
 export class ExtensionInstallerError extends Error {

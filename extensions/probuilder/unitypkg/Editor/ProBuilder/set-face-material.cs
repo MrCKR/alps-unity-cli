@@ -64,19 +64,24 @@ namespace UnityCli.ProBuilder
             if (material == null)
                 throw ProBuilderErrors.OperationFailed("set-face-material", "Material not found at path: " + materialPath);
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).ToArray();
             var faces = faceIndices != null && faceIndices.Length > 0
                 ? ProBuilderReflection.GetFacesByIndices(mesh, faceIndices)
                 : ProBuilderReflection.GetAllFaces(mesh);
             if (faces == null || faces.Length == 0)
                 throw ProBuilderErrors.OperationFailed("set-face-material", "No faces found on target.");
 
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Set Face Material");
             if (!ProBuilderReflection.SetFaceMaterial(mesh, faces, material))
                 throw ProBuilderErrors.OperationFailed("set-face-material", "ProBuilder 5.x ProBuilderMesh.SetMaterial failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.RequestedFacesUseMaterial(freshMesh, faceIndices ?? Enumerable.Range(0, faces.Length).ToArray(), material))
+                throw ProBuilderErrors.OperationFailed("set-face-material", "Every requested face did not retain the requested material.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { AssignedFaceCount = faces.Length });
         }

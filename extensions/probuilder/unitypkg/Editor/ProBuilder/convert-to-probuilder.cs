@@ -53,20 +53,30 @@ namespace UnityCli.ProBuilder
             var existingMesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (existingMesh != null)
                 throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "Target already has a ProBuilderMesh component.");
-
+            var sourceGeometry = ProBuilderRequestProof.CaptureSourceMeshGeometry(go.GetComponent<MeshFilter>());
+            if (sourceGeometry == null)
+                throw ProBuilderErrors.SchemaInvalid("Target requires a MeshFilter with readable vertices and complete triangle indices.");
+            var targetId = go.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Convert to ProBuilder");
 
             var pbMesh = ProBuilderReflection.ConvertToProBuilderMesh(go);
             if (pbMesh == null)
                 throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "ProBuilder 5.x MeshImporter failed.");
 
-            var vertexCount = ProBuilderReflection.GetVertexCount(pbMesh);
-            var faceCount = ProBuilderReflection.GetFaceCount(pbMesh);
-            if (vertexCount < 1 || faceCount < 1)
+            if (ProBuilderReflection.GetVertexCount(pbMesh) < 1 || ProBuilderReflection.GetFaceCount(pbMesh) < 1)
                 throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "Imported ProBuilderMesh contains no geometry.");
 
             ProBuilderReflection.RefreshMesh(pbMesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(targetId);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.ConvertedGeometryMatchesSource(freshMesh, sourceGeometry))
+                throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "Conversion did not preserve the source MeshFilter vertices and triangles as readable ProBuilder geometry.");
+            var vertexCount = ProBuilderReflection.GetVertexCount(freshMesh);
+            var faceCount = ProBuilderReflection.GetFaceCount(freshMesh);
+            if (vertexCount < 1 || faceCount < 1)
+                throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "Converted ProBuilder geometry is not readable after refresh.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

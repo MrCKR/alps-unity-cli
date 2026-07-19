@@ -54,7 +54,7 @@ unity_cli tools run <tool> --input <json>
 
 unity_cli context list/describe/read
 
-unity_cli target current/set/clear/alias
+unity_cli target alias list/set/unset
 unity_cli instances list/prune
 unity_cli jobs status/logs/describe/cancel
 unity_cli batch run/schema
@@ -205,10 +205,10 @@ npm link
   "ok": false,
   "requestId": "req-xxx",
   "error": {
-    "code": "E_TARGET_AMBIGUOUS",
+    "code": "E_INSTANCE_CONFLICT",
     "message": "...",
     "transient": false,
-    "nextActions": ["Run unity_cli instances list to discover targets."],
+    "nextActions": ["Close duplicate Editor sessions for the selected project."],
     "retryAfterMs": 0
   }
 }
@@ -266,7 +266,7 @@ unity_cli tools run <tool-name> --input-file params.json
 unity_cli tools run <tool-name> --stdin
 ```
 
-Bridge-backed 工具会在 Unity 主线程执行。Unity 处于 compile/import/build、Play Mode 切换或 domain reload 时，先执行 `unity_cli tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。Bridge listener 会在 domain reload 后自动重连，`editor.state` 的 `bridge` heartbeat/build stamp 是公开恢复信号。
+Bridge-backed 工具会在 Unity 主线程执行。CLI 的 session supervisor 在一个不可变 deadline 内透明等待 compile、import、domain reload 和 listener restart，并在恢复后的 validated generation 上继续同一个逻辑请求。直接调用只返回已证明的业务终态或结构化失败；观察当前进度和 blocker 使用 `unity_cli context read editor.state --input '{}'`，该 Context 在固定预算内立即返回，不等待状态变化。
 
 ### 场景与截图
 
@@ -454,15 +454,14 @@ unity_cli tools run component.set --target <go> --type <component> --property <n
 ### 编辑器控制
 
 ```powershell
-unity_cli tools run editor.state
+unity_cli context read editor.state --input '{}'
 unity_cli tools run editor.play --timeout-ms 7000
 unity_cli tools run editor.pause
 unity_cli tools run editor.stop --timeout-ms 7000
 unity_cli tools run editor.menu <menu-path>
 unity_cli tools run editor.console --count 50
-unity_cli tools run editor.compile --input '{"refresh":true,"waitReady":true}'
-unity_cli tools run editor.refresh --compile --wait
-unity_cli tools run editor.compile-diagnostics --input '{"waitTimeoutMs":45000,"count":100}'
+unity_cli tools run editor.compile --input '{"refresh":true,"includeWarnings":true}' --timeout-ms 120000
+unity_cli tools run editor.refresh --input '{"compile":true}' --wait
 unity_cli tools run editor.launch-dialog.dismiss --input '{"pid":<unity-pid>,"timeoutMs":5000}'
 ```
 
@@ -539,11 +538,8 @@ Batch step 可用 `input` 字段传结构化 JSON，CLI 会安全转成 `--input
 unity_cli instances list
 unity_cli instances prune --yes
 
-unity_cli target current
-# target set 持久化可变的全局默认值；显式 --instance 时不要调用
-unity_cli target set <id|alias>
-unity_cli target clear
-unity_cli target alias set <instanceId> <alias>
+# target 只管理 canonical project identity 的别名
+unity_cli target alias set <projectPath|instanceId> <alias>
 unity_cli target alias unset <alias>
 unity_cli target alias list
 ```
@@ -690,15 +686,16 @@ Bridge 生命周期：
 - `E_VFX_PACKAGE_MISSING`, `E_VFX_GRAPH_NOT_FOUND`
 
 **Editor:**
-- `tools run editor.state` returns playMode, pause, busy, activeScene and Prefab Stage status
-- `tools run editor.play`, `tools run editor.pause` and `tools run editor.stop` control Editor PlayMode
+- `context read editor.state --input '{}'` immediately observes compile/import/build/PlayMode/Prefab Stage, progress, blockers and freshness without waiting or side effects
+- `tools run editor.play`, `tools run editor.pause` and `tools run editor.stop` control Editor PlayMode and return only stable observed terminal state
 - `tools run editor.menu --input '{"path":"<path>"}'` executes a Unity Editor menu item
 - `tools run console.get --input '{"count":<n>}'` returns recent Unity Console entries
-- `E_UNITY_BUSY`, `E_PLAYMODE_TIMEOUT`, `E_MENU_NOT_FOUND`, `E_MENU_TIMEOUT`
+- `E_UNITY_BUSY`, `E_UNITY_TRANSITION_TIMEOUT`, `E_MENU_NOT_FOUND`, `E_MENU_COMPLETION_UNSUPPORTED`
 
-**Bridge HTTP timeout & side-effect safety:**
-- If a request times out at the HTTP layer while the command is still queued, the bridge cancels that queued work before execution and returns `E_UNITY_BUSY` with no side effects applied
-- If a request times out at the HTTP layer but the command has already started, it returns a success envelope with `status: "running"`, `sideEffectSemantics: "started-before-http-timeout"`, the original `requestId` and `logPath`
+**稳定会话与终态安全：**
+- mutation 在首个真实 effect 前持久化 effect barrier；effect 前超时可返回确定失败
+- effect 后只有 durable business proof 才能成功；proof 缺失时返回 `E_REQUEST_OUTCOME_UNKNOWN`，并禁止 blind replay
+- HTTP acknowledgement、queued/started/running 状态、listener generation 和 journal 元数据不会成为公开成功结果
 
 **Runtime validation disclaimer:**
 - C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG/JPG artifacts, Prefab Stage open/save/close, Prefab dirty conflicts, nested/variant Prefab summaries, Material asset creation, Renderer/UI Graphic assignment, Material property writes, GraphicsSettings/QualitySettings persistence, render pipeline asset resolution, Physics/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation/binding summaries, Animator state/play/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows + Unity Editor validation

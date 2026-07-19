@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { resolvePackageChanges } from "../../cli-commands/package.js";
 import { installPackage, parsePackageSpec, validatePackageName } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface PackageInstallRequest {
   name: string;
@@ -10,7 +11,7 @@ export interface PackageInstallRequest {
   unity?: string;
 }
 
-export interface PackageInstallObject {}
+export interface PackageInstallObject { [key: string]: AnyJson; }
 
 export interface PackageInstallResult {
   action?: string;
@@ -18,8 +19,7 @@ export interface PackageInstallResult {
   projectPath?: string;
   manifestPath?: string;
   installedVersion?: string;
-  previousVersion?: string;
-  changed?: boolean;
+  dependencyInstalled?: boolean;
   status?: string;
   resolve?: string;
   liveRefresh?: PackageInstallObject;
@@ -47,20 +47,24 @@ export interface PackageInstallResult {
 async function runPackageInstall(request: PackageInstallRequest, context: ToolContext): Promise<PackageInstallResult> {
   const projectPath = resolve(request.project ?? context.projectPath);
   const spec = parsePackageSpec(validatePackageName(request.name), request.version);
+  const prepared = await installPackage(projectPath, spec, { dryRun: true });
+  if (context.execution.dryRun) return { action: "install", package: spec.name, projectPath, ...prepared };
+  await context.commitEffect?.();
   const installed = await installPackage(projectPath, spec);
+  const resolveRequestId = context.localJournalActive ? `${context.requestId}_package_install_resolve` : context.requestId;
   return resolvePackageChanges("install", {
     projectPath,
     unity: request.unity,
     wait: context.execution.wait,
     waitTimeoutMs: context.execution.waitTimeoutMs,
     timeoutMs: context.execution.timeoutMs,
+    absoluteDeadlineMs: context.absoluteDeadlineMs,
     job: context.execution.job
   }, {
     dataDir: context.dataDir ?? context.projectPath,
     runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute,
-    bridgeEndpoint: context.bridgeEndpoint
-  }, context.requestId, { action: "install", package: spec.name, ...installed }) as Promise<PackageInstallResult>;
+    bridgeExecute: context.bridgeExecute
+  }, resolveRequestId, { action: "install", package: spec.name, ...installed }) as Promise<PackageInstallResult>;
 }
 
 export default defineTool<PackageInstallRequest, PackageInstallResult>({

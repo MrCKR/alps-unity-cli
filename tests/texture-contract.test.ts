@@ -111,3 +111,16 @@ test("texture C# implements sprite slices and texture-specific delete", async ()
   assert.match(source, /AssetDatabase\.DeleteAsset/);
   assert.match(source, /ImageConversion\.LoadImage[\s\S]*SetPixel/);
 });
+
+test("texture delete and generate return only observed disk and AssetDatabase state", async () => {
+  const deleteSource = await readFile(new URL("../unitypkg/Editor/Tools/texture/delete.cs", import.meta.url), "utf8");
+  const generateSource = await readFile(new URL("../unitypkg/Editor/Tools/texture/generate.cs", import.meta.url), "utf8");
+
+  assert.match(deleteSource, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*AssetPathToGUID\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.match(deleteSource, /E_TEXTURE_DELETE_PROOF_MISSING/);
+  assert.match(generateSource, /bytes == null \|\| bytes\.Length == 0/);
+  assert.match(generateSource, /File\.Exists\(fullPath\) \|\| new FileInfo\(fullPath\)\.Length <= 0/);
+  assert.match(generateSource, /AssetDatabase\.ImportAsset\(path,[\s\S]*LoadAssetAtPath<Texture2D>\(path\)/);
+  assert.match(generateSource, /Width = importedTexture\.width[\s\S]*Height = importedTexture\.height[\s\S]*SizeBytes = sizeBytes/);
+  assert.match(generateSource, /E_TEXTURE_GENERATE_FAILED/);
+});

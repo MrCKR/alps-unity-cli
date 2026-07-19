@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { bridgeCommandRegistry } from "../bridge/index.js";
 import { builtinToolMetadata, allRegisteredToolMetadata } from "../tools/metadata/index.js";
-import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts, validateExtensionManifestContracts } from "./command-contract.js";
+import { PRIVATE_BRIDGE_COMMANDS, commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts, validateExtensionManifestContracts } from "./command-contract.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../extensions/.generated-registry-data.js";
 import { registerBuiltinExtensionContributions } from "../extensions/contribution-loader.js";
 import { extractCSharpRegisteredCommandsFromSource } from "./csharp-command-extractor.js";
@@ -23,13 +23,18 @@ const requiredCsharpCommands = contracts
   .map((entry) => entry.bridgeCommand)
   .sort();
 
-assertSameSet(requiredCsharpCommands, csharpCommands, "C# BridgeCommandRegistry");
+const publicCsharpCommands = csharpCommands.filter((command) => !PRIVATE_BRIDGE_COMMANDS.has(command));
+assertSameSet(requiredCsharpCommands, publicCsharpCommands, "C# BridgeCommandRegistry");
+for (const command of PRIVATE_BRIDGE_COMMANDS) {
+  if (contracts.some((entry) => entry.bridgeCommand === command)) throw new Error(`Private Bridge command leaked into the public contract: ${command}`);
+}
 
 console.log(JSON.stringify({
   ok: true,
   contractCommands: contracts.length,
   bridgeRegistryCommands: new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size,
   csharpRegisteredCommands: csharpCommands.length,
+  privateBridgeCommands: [...PRIVATE_BRIDGE_COMMANDS].sort(),
   metadataTools: allRegisteredToolMetadata().length
 }, null, 2));
 

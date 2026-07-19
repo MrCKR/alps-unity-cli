@@ -54,57 +54,38 @@ namespace UnityCli.Cinemachine
             var gameObject = CinemachineToolSupport.ResolveRequiredTarget(request.Target, "cinemachine aim requires --target <go>.");
             var camera = CinemachineToolSupport.RequireCameraComponent(gameObject);
             var effects = new List<CinemachinePlannedEffect>();
-
             if (string.IsNullOrWhiteSpace(request.Aim) && string.IsNullOrWhiteSpace(request.Property))
-            {
-                throw new UnityCliBridge.BridgeCommandException(
-                    "E_CINEMACHINE_AIM_INPUT_REQUIRED",
-                    "cinemachine.aim requires aim or property/value.",
-                    "Pass aim to swap the stage component, or property and value to configure the existing Aim component.");
-            }
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_AIM_INPUT_REQUIRED", "cinemachine.aim requires aim or property/value.", "Pass aim to swap the stage component, or property and value to configure the existing Aim component.");
+            if (string.IsNullOrWhiteSpace(request.Property) != string.IsNullOrWhiteSpace(request.Value))
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_COMPONENT_PROPERTY_REQUIRED", "Configuring an Aim component requires both property and value.", "Pass property and value together.");
 
+            var existing = CinemachineToolSupport.GetPipelineComponent(camera, "Aim");
+            var aimType = string.IsNullOrWhiteSpace(request.Aim) ? existing?.GetType() : CinemachineToolSupport.RequireComponentType(request.Aim, "Aim");
+            if (aimType == null)
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_AIM_COMPONENT_NOT_FOUND", "No Aim pipeline component is installed on target: " + GameObjectToolSupport.HierarchyPath(gameObject), "Provide aim to install an Aim component before configuring properties.");
+            CinemachineToolSupport.RequirePipelineComponentStage(aimType, "Aim");
+            var memberPlan = string.IsNullOrWhiteSpace(request.Property) ? null : CinemachineToolSupport.PrepareComponentMember(aimType, request.Property, request.Value);
+
+            ctx.CommitEffect();
             if (!string.IsNullOrWhiteSpace(request.Aim))
             {
-                var aimType = CinemachineToolSupport.RequireComponentType(request.Aim, "Aim");
                 CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Aim", aimType);
-                effects.Add(new CinemachinePlannedEffect
-                {
-                    Type = "cinemachine.aim",
-                    Target = GameObjectToolSupport.HierarchyPath(gameObject),
-                    AimType = request.Aim
-                });
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.aim", Target = GameObjectToolSupport.HierarchyPath(gameObject), AimType = aimType.Name });
             }
-
-            if (!string.IsNullOrWhiteSpace(request.Property) || !string.IsNullOrWhiteSpace(request.Value))
+            var applied = CinemachineToolSupport.GetPipelineComponent(camera, "Aim");
+            if (memberPlan != null)
             {
-                if (string.IsNullOrWhiteSpace(request.Property) || string.IsNullOrWhiteSpace(request.Value))
-                {
-                    throw new UnityCliBridge.BridgeCommandException(
-                        "E_CINEMACHINE_COMPONENT_PROPERTY_REQUIRED",
-                        "Configuring an Aim component requires both property and value.",
-                        "Pass property and value together.");
-                }
-
-                var aimComponent = CinemachineToolSupport.GetPipelineComponent(camera, "Aim");
-                if (aimComponent == null)
-                {
-                    throw new UnityCliBridge.BridgeCommandException(
-                        "E_CINEMACHINE_AIM_COMPONENT_NOT_FOUND",
-                        "No Aim pipeline component is installed on target: " + GameObjectToolSupport.HierarchyPath(gameObject),
-                        "Provide aim to install an Aim component before configuring properties.");
-                }
-                CinemachineToolSupport.ConfigurePipelineComponent(aimComponent, request.Property, request.Value);
-                effects.Add(new CinemachinePlannedEffect
-                {
-                    Type = "cinemachine.aim",
-                    Target = GameObjectToolSupport.HierarchyPath(gameObject),
-                    Field = request.Property,
-                    Value = request.Value,
-                    AimType = aimComponent.GetType().Name
-                });
+                CinemachineToolSupport.ApplyComponentMember(applied, memberPlan);
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.aim", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = request.Property, Value = request.Value, AimType = aimType.Name });
             }
 
-            CinemachineToolSupport.MarkDirty(gameObject);
+            var observedObject = CinemachineToolSupport.ResolveRequiredTarget(gameObject.GetInstanceID().ToString(), "Cinemachine Aim target could not be resolved after mutation.");
+            var observedCamera = CinemachineToolSupport.RequireCameraComponent(observedObject);
+            var observedAim = CinemachineToolSupport.GetPipelineComponent(observedCamera, "Aim");
+            if (observedAim == null || observedAim.GetType() != aimType)
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_AIM_VERIFY_FAILED", "Cinemachine Aim component did not retain the requested type.", "Inspect the virtual camera before retrying.");
+            if (memberPlan != null) CinemachineToolSupport.VerifyComponentMember(observedAim, memberPlan, "E_CINEMACHINE_AIM_VERIFY_FAILED");
+            CinemachineToolSupport.MarkDirty(observedObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),

@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -55,13 +56,16 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("delete-faces", "No ProBuilderMesh component on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).Distinct().ToArray();
             if (faceIndices == null || faceIndices.Length == 0)
                 throw ProBuilderErrors.SchemaInvalid("faceIndices is required for probuilder.delete-faces.");
             if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
                 throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
+            var before = ProBuilderOperationProof.Capture(mesh, faceIndices: faceIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("delete-faces", "Requested face geometry is not readable.");
             var beforeFaceCount = ProBuilderReflection.GetFaceCount(mesh);
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Delete Faces");
 
             if (!ProBuilderReflection.DeleteFaces(mesh, faceIndices))
@@ -69,9 +73,11 @@ namespace UnityCli.ProBuilder
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var afterFaceCount = ProBuilderReflection.GetFaceCount(mesh);
-            if (beforeFaceCount < 0 || afterFaceCount != beforeFaceCount - faceIndices.Length)
-                throw ProBuilderErrors.OperationFailed("delete-faces", "Face count did not decrease by the requested unique face count.");
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var afterFaceCount = ProBuilderReflection.GetFaceCount(freshMesh);
+            var after = ProBuilderOperationProof.Capture(freshMesh, faceIndices: Enumerable.Range(0, Math.Max(0, afterFaceCount)).ToArray());
+            if (!ProBuilderOperationProof.HasRemovedRequestedFaces(before, after) || beforeFaceCount < 0 || afterFaceCount != beforeFaceCount - faceIndices.Length)
+                throw ProBuilderErrors.OperationFailed("delete-faces", "Requested faces were not removed from readable mesh topology.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

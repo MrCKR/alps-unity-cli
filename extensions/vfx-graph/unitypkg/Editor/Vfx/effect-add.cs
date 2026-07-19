@@ -23,24 +23,33 @@ namespace UnityCli
             }
         };
 
-        public System.Threading.Tasks.ValueTask<VfxEffectActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public System.Threading.Tasks.ValueTask<VfxEffectActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.effect.add");
             var effectType = VfxToolSupport.RequireVisualEffectType();
+            if (!string.IsNullOrWhiteSpace(request.Graph)) VfxActionToolSupport.PrepareGraphAssignment(effectType);
             var gameObject = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "vfx.effect.add requires target.");
             var effect = gameObject.GetComponent(effectType);
+            if (!string.IsNullOrWhiteSpace(request.Graph) && AssetDatabase.LoadAssetAtPath(VfxToolSupport.RequireVfxGraphPath(request.Graph), VfxToolSupport.RequireVfxAssetType()) == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + request.Graph, "Pass an existing Assets/*.vfx path.");
+            var gameObjectId = gameObject.GetInstanceID();
+            ctx.CommitEffect();
+            var observedObject = VfxToolSupport.FindGameObjectByTarget(gameObjectId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (observedObject == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.effect.add target disappeared after commit.", "Retry after checking the target still exists.");
+            effect = observedObject.GetComponent(effectType);
             var added = effect == null;
-            if (added) effect = gameObject.AddComponent(effectType);
-            if (!string.IsNullOrWhiteSpace(request.Graph)) VfxActionToolSupport.AssignGraph(effect, request.Graph);
+            if (added) effect = observedObject.AddComponent(effectType);
+            if (!string.IsNullOrWhiteSpace(request.Graph)) { VfxActionToolSupport.AssignGraph(effect, request.Graph); VfxActionToolSupport.VerifyAssignedGraph(effect, request.Graph); }
+            effect = observedObject.GetComponent(effectType);
+            if (effect == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_STATE_UNOBSERVABLE", "VisualEffect component add could not be read back.", "Retry after checking the target.");
             UnityCliSceneMutation.MarkSceneObjectDirty(effect);
-            VfxToolSupport.MarkSceneDirty(gameObject);
+            VfxToolSupport.MarkSceneDirty(observedObject);
             return new System.Threading.Tasks.ValueTask<VfxEffectActionResult>(new VfxEffectActionResult
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
+                Target = GameObjectToolSupport.BuildGameObjectRef(observedObject),
                 Action = added ? "added" : "already-present",
                 Effect = VfxToolSupport.BuildEffectInfo(effect),
                 PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Graph = request.Graph } },
-                LogPath = context.LogPath
+                LogPath = ctx.LogPath
             });
         }
     }

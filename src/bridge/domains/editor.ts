@@ -3,7 +3,6 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const editorBridgeSpecs: BridgeCommandSpec[] = [
   { group: "editor", command: "console", bridgeCommand: "project-tool.run", toolName: "editor.console", buildArgs: editorArgs },
-  { group: "editor", command: "state", bridgeCommand: "project-tool.run", toolName: "editor.state", buildArgs: editorArgs },
   { group: "editor", command: "play", bridgeCommand: "project-tool.run", toolName: "editor.play", buildArgs: editorArgs },
   { group: "editor", command: "pause", bridgeCommand: "project-tool.run", toolName: "editor.pause", buildArgs: editorArgs },
   { group: "editor", command: "stop", bridgeCommand: "project-tool.run", toolName: "editor.stop", buildArgs: editorArgs },
@@ -11,7 +10,6 @@ export const editorBridgeSpecs: BridgeCommandSpec[] = [
   { group: "editor", command: "redo", bridgeCommand: "project-tool.run", toolName: "editor.redo", buildArgs: editorArgs },
   { group: "editor", command: "resolution", bridgeCommand: "project-tool.run", toolName: "editor.resolution", buildArgs: editorArgs, destructiveHint: true },
   { group: "editor", command: "menu", bridgeCommand: "project-tool.run", toolName: "editor.menu", buildArgs: editorArgs, destructiveHint: true },
-  { group: "editor", command: "compile", bridgeCommand: "project-tool.run", toolName: "editor.compile", buildArgs: editorCompileArgs, supportsDryRun: true },
   { group: "editor", command: "selection-set", bridgeCommand: "project-tool.run", toolName: "editor.selection.set", buildArgs: selectionSetArgs, supportsDryRun: true },
   { group: "editor", command: "active-tool-set", bridgeCommand: "project-tool.run", toolName: "editor.active-tool.set", buildArgs: activeToolSetArgs },
   { group: "project", command: "tag-add", bridgeCommand: "project-tool.run", toolName: "project.tag.add", buildArgs: projectTagArgs, destructiveHint: true },
@@ -46,9 +44,6 @@ function editorArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
   if (command === "editor.console") {
     return compactArgs({ ...queryArgs(flags), type: stringFlag(flags, "type"), count: numberFlag(flags, "count") ?? numberFlag(flags, "limit"), clear: boolFlag(flags, "clear") });
   }
-  if (command === "editor.state") {
-    return compactArgs({ ...queryArgs(flags) });
-  }
   if (command === "editor.play" || command === "editor.pause" || command === "editor.stop" || command === "editor.undo" || command === "editor.redo") {
     return compactArgs({ ...queryArgs(flags), timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") });
   }
@@ -66,15 +61,6 @@ function projectLayerArgs({ flags, positionalTarget }: Parameters<BridgeCommandS
   return compactArgs({ name: positionalTarget ?? stringFlag(flags, "name") ?? stringField(flags, "name"), index: numberFlag(flags, "index") ?? numberField(flags, "index") });
 }
 
-function editorCompileArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  const structured = structuredInput(flags);
-  return compactArgs({
-    refresh: boolFlag(flags, "refresh") ?? structured.refresh,
-    waitReady: boolFlag(flags, "wait-ready") ?? structured.waitReady,
-    timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") ?? structured.timeoutMs,
-    dryRun: boolFlag(flags, "dry-run") ?? structured.dryRun
-  });
-}
 
 function selectionSetArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({ instanceId: numberFlag(flags, "instance-id"), target: positionalTarget ?? stringFlag(flags, "target"), path: stringFlag(flags, "path"), dryRun: boolFlag(flags, "dry-run") });

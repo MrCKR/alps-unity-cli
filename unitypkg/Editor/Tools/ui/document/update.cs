@@ -20,10 +20,16 @@ namespace UnityCli
             if (r.Content == null) throw new UnityCliBridge.BridgeCommandException("E_UI_DOCUMENT_CONTENT_REQUIRED", "ui.document.update requires content.", "Pass --content or structured input content.");
             var dryRun = ctx.DryRun;
             if (dryRun) return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.document.update", DryRun = true, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.document.update", Uxml = path } } });
-            File.WriteAllText(SceneToolSupport.AssetFullPath(path), r.Content, System.Text.Encoding.UTF8);
+            var fullPath = SceneToolSupport.AssetFullPath(path);
+            if (!File.Exists(fullPath)) throw new UnityCliBridge.BridgeCommandException("E_UI_UXML_NOT_FOUND", "VisualTreeAsset not found: " + path, "Pass an existing Assets/*.uxml path.");
+            ctx.CommitEffect();
+            File.WriteAllText(fullPath, r.Content, System.Text.Encoding.UTF8);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.document.update", DryRun = false, Document = new UiDocumentAssetInfo { Path = path, Exists = true }, SizeBytes = System.Text.Encoding.UTF8.GetByteCount(r.Content), PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.document.update", Uxml = path } } });
+            var observedContent = File.ReadAllText(fullPath, System.Text.Encoding.UTF8);
+            var observedAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(path);
+            if (observedAsset == null || observedContent != r.Content) throw new UnityCliBridge.BridgeCommandException("E_UI_DOCUMENT_READBACK_FAILED", "Updated UXML could not be verified: " + path, "Check Unity Console for UXML import errors.");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.document.update", DryRun = false, Document = new UiDocumentAssetInfo { Path = AssetDatabase.GetAssetPath(observedAsset), Name = observedAsset.name, Exists = File.Exists(fullPath) }, SizeBytes = new FileInfo(fullPath).Length, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.document.update", Uxml = path } } });
         }
     }
 }

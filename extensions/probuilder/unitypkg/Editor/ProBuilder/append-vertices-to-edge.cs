@@ -66,18 +66,20 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "No ProBuilderMesh on target.");
 
-            var count = (int)(request.Count ?? 1);
-            int[] edgeIndices = request.EdgeIndices?.Select(i => (int)i).ToArray();
-            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = (int)e.A, b = (int)e.B }).ToArray();
+            var count = ProBuilderOperationProof.CheckedInt(request.Count ?? 1, "count");
+            int[] edgeIndices = request.EdgeIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "edgeIndices")).ToArray();
+            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(e.A, "edges.a"), b = ProBuilderOperationProof.CheckedInt(e.B, "edges.b") }).ToArray();
 
             if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
                 throw ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for append-vertices-to-edge.");
 
+            if (count < 1)
+                throw ProBuilderErrors.SchemaInvalid("count must be at least 1.");
+            var edgeArray = ProBuilderOperationProof.ValidateEdges(mesh, edgeIndices, edgePairs);
+            var before = ProBuilderOperationProof.Capture(mesh, edges: edgeArray);
+            if (before == null) throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "Requested edge geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Append Vertices");
-
-            var edgeArray = ProBuilderReflection.ResolveEdges(mesh, edgeIndices, edgePairs);
-            if (edgeArray == null || edgeArray.Length == 0)
-                throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "Could not resolve edges from input.");
 
             var appended = ProBuilderReflection.AppendVerticesToEdge(mesh, edgeArray, count);
             if (!appended)
@@ -85,6 +87,10 @@ namespace UnityCli.ProBuilder
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, edges: edgeArray);
+            if (!ProBuilderOperationProof.HasInsertedVertices(before, after))
+                throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "Requested edge append did not add readable vertices.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { InsertedCount = count * edgeArray.Length });
         }

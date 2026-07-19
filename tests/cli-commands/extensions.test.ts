@@ -24,7 +24,7 @@ function dataOf(result: CliResult): unknown {
 // ── Test runtime ────────────────────────────────────────────────────────────
 
 const emptyRuntime = {
-  dataDir: process.cwd(),
+  dataDir: join(tmpdir(), `unity-cli-ext-journal-${process.pid}`),
   store: {} as never,
   runner: {} as never
 };
@@ -32,6 +32,9 @@ const emptyRuntime = {
 async function makeProjectDir(installedPackages: Record<string, string> = {}, enabledExtensions: string[] = []): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "unity-cli-ext-cmd-"));
   await mkdir(join(dir, "Packages"), { recursive: true });
+  await mkdir(join(dir, "Assets"), { recursive: true });
+  await mkdir(join(dir, "ProjectSettings"), { recursive: true });
+  await writeFile(join(dir, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 2022.3.0f1\n");
 
   // Write manifest.json with installed packages
   await writeFile(
@@ -144,11 +147,39 @@ test("extensions install enables an extension and writes state", async () => {
   }
 });
 
+test("extensions install rejects a malformed Unity manifest before the effect barrier", async () => {
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  try {
+    await writeFile(join(project, "Packages", "manifest.json"), JSON.stringify({ dependencies: [] }));
+    const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
+    assert.ok(!result.ok);
+    assert.equal(result.error?.code, "MANIFEST_INVALID");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("concurrent extension installs retain both enabled states", async () => {
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  try {
+    const [probuilder, vfx] = await Promise.all([
+      handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, `${requestId}_concurrent_a`),
+      handleExtensionsCommand("install", ["vfx-graph"], { project }, emptyRuntime, `${requestId}_concurrent_b`)
+    ]);
+    assert.ok(probuilder.ok);
+    assert.ok(vfx.ok);
+    const enabled = await readInstalledExtensions(project);
+    assert.deepEqual([...enabled].sort(), ["probuilder", "vfx-graph"]);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("extensions install on already-installed returns already_installed", async () => {
   const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
   try {
     await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
-    const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
+    const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, `${requestId}_second`);
     assert.ok(result.ok);
     const data = result.data as { status: string };
     assert.equal(data.status, "already_installed");
@@ -235,13 +266,36 @@ test("extensions install with missing Unity dep fails without copying bundle", a
   }
 });
 
+test("extensions install preserves structured journal timeout error metadata", async () => {
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  try {
+    const { resolveProjectIdentity } = await import("../../src/project-identity.js");
+    const identity = resolveProjectIdentity(project);
+    const requestDir = join(emptyRuntime.dataDir, "requests", identity.instanceId);
+    await mkdir(requestDir, { recursive: true });
+    const lockPath = join(requestDir, ".instance-resource.lock");
+    await writeFile(lockPath, JSON.stringify({ pid: process.pid, token: "live-owner" }));
+    const result = await handleExtensionsCommand("install", ["probuilder"], { project, "timeout-ms": "50" }, emptyRuntime, `${requestId}_structured_timeout`);
+    assert.ok(!result.ok);
+    assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
+    assert.deepEqual(result.error.nextActions, ["Wait for the current local operation to finish, then submit a new request."]);
+    assert.equal((result.error.details as { lockPath: string }).lockPath, lockPath);
+    assert.match((result.error.details as { absoluteDeadlineUtc: string }).absoluteDeadlineUtc, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(result.error.transient, false);
+    assert.equal(result.error.retryAfterMs, 0);
+    await rm(lockPath, { force: true });
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 // ── extensions remove ──────────────────────────────────────────────────────
 
 test("extensions remove disables an installed extension", async () => {
   const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
   try {
     await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
-    const result = await handleExtensionsCommand("remove", ["probuilder"], { project }, emptyRuntime, requestId);
+    const result = await handleExtensionsCommand("remove", ["probuilder"], { project }, emptyRuntime, `${requestId}_remove`);
     assert.ok(result.ok);
     const data = result.data as { status: string; extensionId: string };
     assert.equal(data.status, "removed");
@@ -412,16 +466,12 @@ test("writeInstalledExtensions creates nested directories", async () => {
   }
 });
 
-test("readInstalledExtensions handles malformed state file as empty", async () => {
+test("readInstalledExtensions fails closed for malformed state", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-ext-store-"));
   try {
     await mkdir(join(project, "Packages", "com.unity_cli"), { recursive: true });
-    await writeFile(
-      join(project, "Packages", "com.unity_cli", "extensions.json"),
-      "not valid json"
-    );
-    const enabled = await readInstalledExtensions(project);
-    assert.equal(enabled.size, 0);
+    await writeFile(join(project, "Packages", "com.unity_cli", "extensions.json"), "not valid json");
+    await assert.rejects(() => readInstalledExtensions(project), { code: "E_EXTENSION_STATE_INVALID" });
   } finally {
     await rm(project, { recursive: true, force: true });
   }

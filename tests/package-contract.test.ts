@@ -40,7 +40,7 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   assert.ok(install.sideEffects?.includes("manifest-change"));
   assert.match(install.description, /explicit version/);
   assert.match(install.description, /downgrade/);
-  assert.match(JSON.stringify(install.outputSchema), /changed/);
+  assert.match(JSON.stringify(install.outputSchema), /dependencyInstalled/);
   assert.match(JSON.stringify(install.examples), /3\.0\.7/);
 
   const remove = findToolByName("package.remove")!;

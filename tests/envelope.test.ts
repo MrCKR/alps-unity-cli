@@ -1,12 +1,11 @@
 /**
- * Tests for the unified envelope module (output.ts) and envelope/retry module (envelope.ts).
+ * Tests for the unified public envelope module (output.ts).
  * Covers:
  * - Envelope serialization/deserialization (success and error)
  * - Error code taxonomy validation
  * - Transient error detection and retryAfterMs
  * - Duration tracking
  * - Timeout clamping
- * - Retry mechanism (withRetry)
  */
 
 import { describe, it } from "node:test";
@@ -25,12 +24,6 @@ import {
   type CliError,
   type CliResult,
 } from "../src/output.js";
-import {
-  withRetry,
-  isTransientError,
-  transientRetryInfo,
-} from "../src/envelope.js";
-
 // ─── Request ID ───
 
 describe("createRequestId", () => {
@@ -219,12 +212,10 @@ describe("ERROR_CODES taxonomy", () => {
     }
   });
 
-  it("includes target/runtime error codes", () => {
-    assert.equal(ERROR_CODES.E_TARGET_BUSY, "E_TARGET_BUSY");
+  it("includes runtime error codes", () => {
     assert.equal(ERROR_CODES.E_RUNTIME_SESSION_STALE, "E_RUNTIME_SESSION_STALE");
     assert.equal(ERROR_CODES.E_RUNTIME_NOT_READY, "E_RUNTIME_NOT_READY");
     assert.equal(ERROR_CODES.E_RUNTIME_TIMEOUT, "E_RUNTIME_TIMEOUT");
-    assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_TARGET_BUSY), false);
     assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_SESSION_STALE), false);
     assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_NOT_READY), true);
   });
@@ -334,163 +325,6 @@ describe("envelope serialization round-trip", () => {
   });
 });
 
-// ─── Retry Mechanism ───
-
-describe("withRetry", () => {
-  it("returns result immediately on success (no retry)", async () => {
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      return success("req_1", { ok: true });
-    }, { maxRetries: 3 });
-    assert.equal(calls, 1);
-    assert.ok(result.ok);
-  });
-
-  it("returns result immediately on non-transient error (no retry)", async () => {
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      return failure("req_1", "UNKNOWN_COMMAND", "Bad command.");
-    }, { maxRetries: 3 });
-    assert.equal(calls, 1);
-    assert.ok(!result.ok);
-    assert.equal(result.error?.code, "UNKNOWN_COMMAND");
-  });
-
-  it("retries on transient error and succeeds on second attempt", async () => {
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      if (calls === 1) {
-        return failure("req_1", "E_UNITY_COMPILING", "Unity is compiling.", ["Wait and retry."]);
-      }
-      return success("req_1", { status: "healthy" });
-    }, { maxRetries: 3 });
-    assert.equal(calls, 2);
-    assert.ok(result.ok);
-  });
-
-  it("retries transient errors up to maxRetries then returns last error", async () => {
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      return failure("req_1", "E_UNITY_COMPILING", "Still compiling.");
-    }, { maxRetries: 2 });
-    assert.equal(calls, 3); // 1 initial + 2 retries
-    assert.ok(!result.ok);
-    assert.equal(result.error?.code, "E_UNITY_COMPILING");
-  });
-
-  it("honors retry_budget_ms and stops retrying when exhausted", async () => {
-    let calls = 0;
-    const startMs = Date.now();
-    const result = await withRetry(async () => {
-      calls += 1;
-      return failure("req_1", "E_UNITY_COMPILING", "Still compiling.");
-    }, { maxRetries: 10, retryBudgetMs: 100 });
-    // Should stop after budget is exhausted (at least 1 attempt, no more than a few retries)
-    assert.ok(calls <= 5, `Too many calls: ${calls}`);
-    assert.ok(!result.ok);
-  });
-
-  it("invokes onRetry callback before each retry", async () => {
-    const retryLog: Array<{ attempt: number; code: string; retryAfterMs: number }> = [];
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      if (calls <= 2) {
-        return failure("req_1", "E_UNITY_COMPILING", "Compiling.");
-      }
-      return success("req_1", { status: "healthy" });
-    }, {
-      maxRetries: 5,
-      onRetry: (attempt: number, error: CliResult, retryAfterMs: number) => {
-        if (!error.ok) {
-          retryLog.push({ attempt, code: error.error.code, retryAfterMs });
-        }
-      },
-    });
-    assert.ok(result.ok);
-    assert.equal(retryLog.length, 2);
-    assert.equal(retryLog[0].code, "E_UNITY_COMPILING");
-    assert.equal(retryLog[0].attempt, 1);
-    assert.equal(retryLog[1].attempt, 2);
-  });
-
-  it("does not retry E_EXECUTION_TIMEOUT (non-transient)", async () => {
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      return failure("req_1", "E_EXECUTION_TIMEOUT", "Timed out.");
-    }, { maxRetries: 3 });
-    assert.equal(calls, 1);
-    assert.ok(!result.ok);
-    assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
-  });
-});
-
-// ─── Transient Retry Info ───
-
-describe("transientRetryInfo", () => {
-  it("returns isTransient=true for transient error results", () => {
-    const result = failure("req_1", "E_UNITY_COMPILING", "Compiling.");
-    const info = transientRetryInfo(result);
-    assert.equal(info.isTransient, true);
-    if (info.isTransient) {
-      assert.equal(info.code, "E_UNITY_COMPILING");
-      assert.equal(info.retryAfterMs, 5000);
-    }
-  });
-
-  it("returns isTransient=false for success results", () => {
-    const result = success("req_1", { ok: true });
-    const info = transientRetryInfo(result);
-    assert.equal(info.isTransient, false);
-  });
-
-  it("returns isTransient=false for non-transient error results", () => {
-    const result = failure("req_1", "UNKNOWN_COMMAND", "Bad command.");
-    const info = transientRetryInfo(result);
-    assert.equal(info.isTransient, false);
-  });
-
-  it("uses retryAfterMs from error if present", () => {
-    const error: CliError = {
-      code: "E_UNITY_COMPILING",
-      message: "Compiling.",
-      nextActions: [],
-      transient: true,
-      retryAfterMs: 8000,
-    };
-    const result: CliResult = { ok: false, requestId: "req_1", error };
-    const info = transientRetryInfo(result);
-    assert.equal(info.isTransient, true);
-    if (info.isTransient) {
-      assert.equal(info.retryAfterMs, 8000);
-    }
-  });
-});
-
-// ─── isTransientError ───
-
-describe("isTransientError", () => {
-  it("returns true for all known transient codes", () => {
-    assert.equal(isTransientError("E_UNITY_BUSY"), true);
-    assert.equal(isTransientError("E_UNITY_COMPILING"), true);
-    assert.equal(isTransientError("E_UNITY_IMPORTING"), true);
-    assert.equal(isTransientError("E_UNITY_DOMAIN_RELOAD"), true);
-    assert.equal(isTransientError("E_UNITY_PLAY_MODE"), true);
-  });
-
-  it("returns false for non-transient codes", () => {
-    assert.equal(isTransientError("UNKNOWN_COMMAND"), false);
-    assert.equal(isTransientError("E_EXECUTION_TIMEOUT"), false);
-    assert.equal(isTransientError("BRIDGE_CONNECTION_FAILED"), false);
-    assert.equal(isTransientError("JOB_NOT_FOUND"), false);
-  });
-});
-
 // ─── DEFAULT_RETRY_AFTER_MS ───
 
 describe("DEFAULT_RETRY_AFTER_MS", () => {
@@ -517,19 +351,6 @@ describe("E_RUNTIME_NOT_READY is transient with retryAfterMs=3000", () => {
     assert.equal(result.error?.code, "E_RUNTIME_NOT_READY");
   });
 
-  it("E_RUNTIME_NOT_READY is retried by withRetry", async () => {
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      if (calls === 1) {
-        return failure("req_1", "E_RUNTIME_NOT_READY", "Runtime not ready.");
-      }
-      return success("req_1", { status: "ready" });
-    }, { maxRetries: 3 });
-    assert.equal(calls, 2);
-    assert.ok(result.ok);
-  });
-
   it("DEFAULT_RETRY_AFTER_MS has E_RUNTIME_NOT_READY=3000", () => {
     assert.equal(DEFAULT_RETRY_AFTER_MS[ERROR_CODES.E_RUNTIME_NOT_READY], 3000);
   });
@@ -549,16 +370,6 @@ describe("E_RUNTIME_TIMEOUT is non-transient", () => {
     assert.equal(result.error?.code, "E_RUNTIME_TIMEOUT");
   });
 
-  it("E_RUNTIME_TIMEOUT is not retried by withRetry", async () => {
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      return failure("req_1", "E_RUNTIME_TIMEOUT", "Timed out.");
-    }, { maxRetries: 3 });
-    assert.equal(calls, 1);
-    assert.ok(!result.ok);
-    assert.equal(result.error?.code, "E_RUNTIME_TIMEOUT");
-  });
 });
 
 describe("E_RUNTIME_TOOL_TARGET_MISMATCH is non-transient", () => {
@@ -575,14 +386,4 @@ describe("E_RUNTIME_TOOL_TARGET_MISMATCH is non-transient", () => {
     assert.equal(result.error?.code, "E_RUNTIME_TOOL_TARGET_MISMATCH");
   });
 
-  it("E_RUNTIME_TOOL_TARGET_MISMATCH is not retried by withRetry", async () => {
-    let calls = 0;
-    const result = await withRetry(async () => {
-      calls += 1;
-      return failure("req_1", "E_RUNTIME_TOOL_TARGET_MISMATCH", "Target mismatch.");
-    }, { maxRetries: 3 });
-    assert.equal(calls, 1);
-    assert.ok(!result.ok);
-    assert.equal(result.error?.code, "E_RUNTIME_TOOL_TARGET_MISMATCH");
-  });
 });

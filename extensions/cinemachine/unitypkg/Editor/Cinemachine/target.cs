@@ -52,42 +52,32 @@ namespace UnityCli.Cinemachine
             var gameObject = CinemachineToolSupport.ResolveRequiredTarget(request.Target, "Cinemachine target requires --target <go>.");
             var camera = CinemachineToolSupport.RequireCameraComponent(gameObject);
             var effects = new List<CinemachinePlannedEffect>();
-
-            if (!string.IsNullOrWhiteSpace(request.Follow))
+            var follow = string.IsNullOrWhiteSpace(request.Follow) ? null : CinemachineToolSupport.ResolveRequiredTarget(request.Follow, "Pass an existing GameObject name or path.");
+            var lookAt = string.IsNullOrWhiteSpace(request.LookAt) ? null : CinemachineToolSupport.ResolveRequiredTarget(request.LookAt, "Pass an existing GameObject name or path.");
+            if (follow == null && lookAt == null) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_TARGET_INPUT_REQUIRED", "cinemachine.target requires follow or lookAt.", "Pass at least one target field.");
+            var followPlan = follow == null ? null : CinemachineToolSupport.PrepareComponentObjectMember(camera.GetType(), "Follow", follow.transform, "E_CINEMACHINE_FOLLOW_NOT_WRITABLE");
+            var lookAtPlan = lookAt == null ? null : CinemachineToolSupport.PrepareComponentObjectMember(camera.GetType(), "LookAt", lookAt.transform, "E_CINEMACHINE_LOOKAT_NOT_WRITABLE");
+            ctx.CommitEffect();
+            if (follow != null)
             {
-                var follow = CinemachineToolSupport.ResolveRequiredTarget(request.Follow, "Pass an existing GameObject name or path.");
-                CinemachineToolSupport.SetFollowTarget(camera, follow.transform);
-                effects.Add(new CinemachinePlannedEffect
-                {
-                    Type = "cinemachine.target",
-                    Target = GameObjectToolSupport.HierarchyPath(gameObject),
-                    Field = "follow",
-                    Value = follow.name
-                });
+                CinemachineToolSupport.ApplyComponentMember(camera, followPlan);
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.target", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = "follow", Value = follow.name });
             }
-
-            if (!string.IsNullOrWhiteSpace(request.LookAt))
+            if (lookAt != null)
             {
-                var lookAt = CinemachineToolSupport.ResolveRequiredTarget(request.LookAt, "Pass an existing GameObject name or path.");
-                CinemachineToolSupport.SetLookAtTarget(camera, lookAt.transform);
-                effects.Add(new CinemachinePlannedEffect
-                {
-                    Type = "cinemachine.target",
-                    Target = GameObjectToolSupport.HierarchyPath(gameObject),
-                    Field = "lookAt",
-                    Value = lookAt.name
-                });
+                CinemachineToolSupport.ApplyComponentMember(camera, lookAtPlan);
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.target", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = "lookAt", Value = lookAt.name });
             }
-
-            if (effects.Count > 0)
-            {
-                CinemachineToolSupport.MarkDirty(gameObject);
-            }
+            var observedObject = CinemachineToolSupport.ResolveRequiredTarget(gameObject.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture), "Cinemachine camera could not be resolved.");
+            var observed = CinemachineToolSupport.RequireCameraComponent(observedObject);
+            if (followPlan != null) CinemachineToolSupport.VerifyComponentMember(observed, followPlan, "E_CINEMACHINE_TARGET_VERIFY_FAILED");
+            if (lookAtPlan != null) CinemachineToolSupport.VerifyComponentMember(observed, lookAtPlan, "E_CINEMACHINE_TARGET_VERIFY_FAILED");
+            CinemachineToolSupport.MarkDirty(observedObject);
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
-                Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
+                Object = CinemachineToolSupport.BuildObjectInfo(observedObject),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
             });

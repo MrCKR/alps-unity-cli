@@ -67,6 +67,17 @@ namespace UnityCli
             if (!string.IsNullOrEmpty(layerValue)) ParseLayer(layerValue);
         }
 
+        /// <summary>Reject values Unity cannot represent as finite single-precision transform components.</summary>
+        public static void ValidateTransformMutationValues(params double?[] values)
+        {
+            foreach (var value in values)
+            {
+                if (!value.HasValue) continue;
+                if (double.IsNaN(value.Value) || double.IsInfinity(value.Value) || value.Value < -float.MaxValue || value.Value > float.MaxValue)
+                    throw new UnityCliBridge.BridgeCommandException("E_TRANSFORM_VALUE_INVALID", "Transform values must be finite and representable as Unity floats.", "Pass finite values between -3.402823e38 and 3.402823e38.");
+            }
+        }
+
         /// <summary>将名称/active/tag/layer/绝对变换应用到 GameObject。未提供的字段保持原值。</summary>
         public static void ApplyGameObjectMutations(GameObject gameObject, string newName, bool? active, string tagValue, string layerValue,
             double? x, double? y, double? z, double? rotationX, double? rotationY, double? rotationZ, double? scaleX, double? scaleY, double? scaleZ)
@@ -224,7 +235,7 @@ namespace UnityCli
         public static float ParseFloat(string rawValue, string property)
         {
             float parsed;
-            if (float.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)) return parsed;
+            if (float.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) && !float.IsNaN(parsed) && !float.IsInfinity(parsed)) return parsed;
             throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_VALUE_INVALID", "Expected numeric value for " + property + " but got: " + rawValue, "Pass a JSON number or numeric string.");
         }
 
@@ -238,7 +249,11 @@ namespace UnityCli
         public static int ParseLayer(string value)
         {
             int parsed;
-            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)) return parsed;
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed))
+            {
+                if (parsed >= 0 && parsed <= 31) return parsed;
+                throw new UnityCliBridge.BridgeCommandException("E_LAYER_NOT_FOUND", "Layer index must be between 0 and 31: " + value, "Pass a numeric layer index from 0 through 31 or a configured Unity layer name.");
+            }
             var layer = LayerMask.NameToLayer(value);
             if (layer < 0)
             {

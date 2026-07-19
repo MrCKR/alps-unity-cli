@@ -19,7 +19,7 @@ import { getString, getBoolean } from "./args.js";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { readInstances, type UnityInstance } from "./instances.js";
+import { instanceSelectionFailure, obsoleteLocalStatePaths, readInstances, selectInstanceForFlags, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { builtinToolMetadata, filterToolsByGroup } from "./tools/metadata/index.js";
 import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
@@ -53,24 +53,32 @@ export async function handleDoctorCommand(
   const instanceCheck = await checkInstanceRegistry(runtime.dataDir);
   checks.push(instanceCheck);
 
-  // Check 2: Healthy instances
-  let healthyInstances: UnityInstance[] = [];
+  // Check 2: Reduced v2 instance states
+  let readyInstances: UnityInstance[] = [];
   if (instanceCheck.status !== "fail") {
     const instances = await readInstances(runtime.dataDir);
-    healthyInstances = instances.filter((i) => i.status === "healthy" || i.status === "ready");
-    checks.push(checkHealthyInstances(instances, healthyInstances));
+    readyInstances = instances.filter((instance) => instance.status === "ready");
+    checks.push(checkReadyInstances(instances, readyInstances));
   } else {
-    checks.push({ name: "healthy_instances", status: "warn", message: "Skipped: instance registry not available." });
+    checks.push({ name: "ready_instances", status: "warn", message: "Skipped: instance registry not available." });
   }
 
-  // Check 3: Bridge connectivity
-  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
-  if (healthyInstances.length > 0 && !endpoint) {
-    checks.push(await checkBridgeConnectivity(healthyInstances[0].bridgeEndpoint, requestId, runtime));
-  } else if (endpoint) {
-    checks.push(await checkBridgeConnectivity(endpoint, requestId, runtime));
-  } else {
-    checks.push({ name: "bridge_connectivity", status: "warn", message: "No bridge endpoint available. Open Unity or pass --bridge-endpoint." });
+  // Check 3: Bridge connectivity follows the same strict --instance/CWD selector as business calls.
+  let bridgeReachable = false;
+  try {
+    const selection = await selectInstanceForFlags(flags, runtime.dataDir);
+    const bridgeCheck = await checkBridgeConnectivity(selection.instance.instanceId, requestId, runtime);
+    checks.push(bridgeCheck);
+    bridgeReachable = bridgeCheck.status === "pass";
+  } catch (error) {
+    const selectionFailure = instanceSelectionFailure(requestId, error);
+    const selectionError = selectionFailure && !selectionFailure.ok ? selectionFailure.error : undefined;
+    checks.push({
+      name: "bridge_connectivity",
+      status: "warn",
+      message: selectionError?.message ?? "No Unity project identity can be selected from --instance or CWD.",
+      details: selectionError ? { code: selectionError.code, details: selectionError.details } : undefined,
+    });
   }
 
   // Check 4: Data directory
@@ -79,8 +87,9 @@ export async function handleDoctorCommand(
   // Check 5: Job store
   checks.push(await checkJobStore(runtime.dataDir));
 
-  // Check 6: Configuration integrity
-  checks.push(await checkConfigIntegrity(healthyInstances));
+  // Check 6: Configuration integrity and obsolete local state
+  checks.push(await checkConfigIntegrity(readyInstances));
+  checks.push(await checkObsoleteLocalState(runtime.dataDir));
 
   const fingerprintCheck = checkBridgeFingerprintStatus(checks);
   if (fingerprintCheck) {
@@ -93,16 +102,16 @@ export async function handleDoctorCommand(
   }
 
   // Unified CLI/tools discovery surface
-  checks.push(await checkUnifiedDiscovery(flags, runtime, requestId));
+  checks.push(await checkUnifiedDiscovery(flags, runtime, requestId, bridgeReachable));
 
   // Extension package availability and ProBuilder-specific diagnostics.
   checks.push(await checkExtensionAvailability(flags));
   checks.push(await checkProBuilderExtension(flags));
 
   // Built-in and project Context discovery diagnostics.
-  checks.push(await checkContextDiscovery(flags, runtime));
+  checks.push(await checkContextDiscovery(flags, runtime, bridgeReachable));
   checks.push(checkExtensionRegistry());
-  checks.push(await checkProjectContextDiscovery(flags, runtime, requestId));
+  checks.push(await checkProjectContextDiscovery(flags, runtime, requestId, bridgeReachable));
 
   // Custom context fingerprint diagnostics.
   const contextFingerprintCheck = checkContextFingerprintStatus(checks);
@@ -152,57 +161,60 @@ async function checkInstanceRegistry(dataDir: string): Promise<DoctorCheck> {
   }
 }
 
-function checkHealthyInstances(instances: UnityInstance[], healthy: UnityInstance[]): DoctorCheck {
-  const stale = instances.filter((i) => i.status === "stale");
-  if (healthy.length === 0 && stale.length > 0) {
+function checkReadyInstances(instances: UnityInstance[], ready: UnityInstance[]): DoctorCheck {
+  const conflicts = instances.filter((instance) => instance.status === "conflict");
+  const blocked = instances.filter((instance) => instance.status === "blocked");
+  if (conflicts.length > 0) {
     return {
-      name: "healthy_instances",
+      name: "ready_instances",
       status: "fail",
-      message: `All ${stale.length} registered instance(s) are stale. Unity may be closed.`,
-      details: { healthyCount: 0, staleCount: stale.length }
+      message: `${conflicts.length} project identity conflict(s) block live dispatch.`,
+      details: { readyCount: ready.length, conflictCount: conflicts.length, blockedCount: blocked.length }
     };
   }
-  if (healthy.length === 0) {
+  if (ready.length === 0) {
     return {
-      name: "healthy_instances",
+      name: "ready_instances",
       status: "warn",
-      message: "No healthy instances found.",
-      details: { healthyCount: 0, staleCount: 0 }
+      message: "No ready Unity Editor session found.",
+      details: {
+        readyCount: 0,
+        transitioningCount: instances.filter((instance) => instance.status === "transitioning").length,
+        blockedCount: blocked.length,
+        offlineCount: instances.filter((instance) => instance.status === "offline").length,
+      }
     };
   }
   return {
-    name: "healthy_instances",
+    name: "ready_instances",
     status: "pass",
-    message: `${healthy.length} ready instance(s) found.`,
+    message: `${ready.length} ready instance(s) found.`,
     details: {
-      healthyCount: healthy.length,
-      staleCount: stale.length,
-      instances: healthy.map((i) => ({
-        instanceId: i.instanceId,
-        projectPath: i.projectPath,
-        bridgeEndpoint: i.bridgeEndpoint,
-        lastHeartbeatAt: i.lastHeartbeatAt ?? i.lastSeenAt
+      readyCount: ready.length,
+      instances: ready.map((instance) => ({
+        instanceId: instance.instanceId,
+        canonicalProjectPath: instance.canonicalProjectPath,
+        editorSessionId: instance.editorSessionId,
+        lastHeartbeatAt: instance.lastHeartbeatAt,
       }))
     }
   };
 }
 
 async function checkBridgeConnectivity(
-  endpoint: string | undefined,
+  instanceId: string,
   requestId: string,
   runtime: BridgeRuntime
 ): Promise<DoctorCheck> {
-  if (!endpoint) {
-    return { name: "bridge_connectivity", status: "warn", message: "No bridge endpoint configured." };
-  }
-
   try {
     const result = await executeBridgePayload(
       requestId,
       "project-tool.run",
       { name: "diagnose.preflight", input: {} },
-      { "bridge-endpoint": endpoint },
-      runtime
+      { instance: instanceId, "timeout-ms": "1000" },
+      runtime,
+      undefined,
+      { mode: "observeNow", mutation: false, defaultTimeoutMs: 1_000 }
     );
 
     if (result.ok) {
@@ -214,23 +226,23 @@ async function checkBridgeConnectivity(
       return {
         name: "bridge_connectivity",
         status: "pass",
-        message: `Bridge reachable at ${endpoint}.`,
-        details: { endpoint, bridgeResponse }
+        message: `Bridge identity is reachable for ${instanceId}.`,
+        details: { instanceId, bridgeResponse }
       };
     }
 
     return {
       name: "bridge_connectivity",
       status: "fail",
-      message: `Bridge at ${endpoint} returned error: ${result.error?.code ?? "unknown"} — ${result.error?.message ?? "no message"}`,
-      details: { endpoint, errorCode: result.error?.code, errorMessage: result.error?.message }
+      message: `Bridge for ${instanceId} returned error: ${result.error?.code ?? "unknown"} — ${result.error?.message ?? "no message"}`,
+      details: { instanceId, errorCode: result.error?.code, errorMessage: result.error?.message }
     };
   } catch (error) {
     return {
       name: "bridge_connectivity",
       status: "fail",
-      message: `Cannot reach bridge at ${endpoint}: ${error instanceof Error ? error.message : String(error)}`,
-      details: { endpoint, error: error instanceof Error ? error.message : String(error) }
+      message: `Cannot reach bridge for ${instanceId}: ${error instanceof Error ? error.message : String(error)}`,
+      details: { instanceId, error: error instanceof Error ? error.message : String(error) }
     };
   }
 }
@@ -364,16 +376,21 @@ async function checkJobStore(dataDir: string): Promise<DoctorCheck> {
   }
 }
 
-async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string): Promise<DoctorCheck> {
+async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string, bridgeReachable: boolean): Promise<DoctorCheck> {
   const builtinCount = builtinToolMetadata().length;
-  const includeCustom = shouldDiscoverProjectTools(flags, runtime);
+  const includeCustom = runtime.projectTools !== undefined || (bridgeReachable && shouldDiscoverProjectTools(flags, runtime));
   const discovery = includeCustom ? await discoverProjectTools(flags, runtime, `${requestId}_project_tools`) : { ok: true as const, tools: [], mode: "skipped" as const };
   if (!discovery.ok) {
     return {
       name: "unified_tool_discovery",
-      status: "warn",
-      message: `Built-in tool metadata is available (${builtinCount}), but custom tool discovery failed: ${discovery.error?.code ?? "unknown"}.`,
-      details: { builtinCount, projectTools: { status: "error", code: discovery.error?.code, message: discovery.error?.message } }
+      status: "pass",
+      message: `Static tool metadata remains available (${builtinCount}); live project-defined discovery is currently unavailable.`,
+      details: {
+        builtinCount,
+        projectToolCount: 0,
+        projectDiscoveryMode: "unavailable",
+        projectTools: { status: "error", code: discovery.error?.code, message: discovery.error?.message },
+      }
     };
   }
 
@@ -385,8 +402,8 @@ async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, ru
   };
 }
 
-async function checkProjectContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string): Promise<DoctorCheck> {
-  const includeCustom = await shouldLoadLiveContextCatalog(flags, runtime);
+async function checkProjectContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string, bridgeReachable: boolean): Promise<DoctorCheck> {
+  const includeCustom = runtime.projectContexts !== undefined || (bridgeReachable && await shouldLoadLiveContextCatalog(flags, runtime));
   if (!includeCustom) {
     return {
       name: "project_context_discovery",
@@ -474,22 +491,15 @@ function checkContextFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | und
   };
 }
 
-async function checkConfigIntegrity(healthyInstances: UnityInstance[]): Promise<DoctorCheck> {
+async function checkConfigIntegrity(readyInstances: UnityInstance[]): Promise<DoctorCheck> {
   const issues: string[] = [];
 
-  for (const instance of healthyInstances) {
-    if (!instance.bridgeEndpoint) {
-      issues.push(`Instance ${instance.instanceId}: missing bridgeEndpoint.`);
-    }
-    if (!instance.projectPath) {
-      issues.push(`Instance ${instance.instanceId}: missing projectPath.`);
-    }
-    if (!instance.projectHash) {
-      issues.push(`Instance ${instance.instanceId}: missing projectHash.`);
-    }
-    if (!instance.lastHeartbeatAt && !instance.lastSeenAt) {
-      issues.push(`Instance ${instance.instanceId}: missing lastSeenAt.`);
-    }
+  for (const instance of readyInstances) {
+    if (instance.canonicalizationVersion !== 1) issues.push(`Instance ${instance.instanceId}: unsupported canonicalizationVersion.`);
+    if (!/^unity-[0-9a-f]{64}$/.test(instance.instanceId)) issues.push(`Instance ${instance.instanceId}: invalid deterministic instanceId.`);
+    if (!instance.canonicalProjectPath) issues.push(`Instance ${instance.instanceId}: missing canonicalProjectPath.`);
+    if (!instance.editorSessionId) issues.push(`Instance ${instance.instanceId}: missing editorSessionId.`);
+    if (!instance.lastHeartbeatAt) issues.push(`Instance ${instance.instanceId}: missing lastHeartbeatAt.`);
   }
 
   if (issues.length > 0) {
@@ -504,11 +514,24 @@ async function checkConfigIntegrity(healthyInstances: UnityInstance[]): Promise<
   return {
     name: "config_integrity",
     status: "pass",
-    message: healthyInstances.length > 0
-      ? `${healthyInstances.length} instance(s) passed configuration integrity checks.`
-      : "No instances to check.",
-    details: { checkedInstances: healthyInstances.length }
+    message: readyInstances.length > 0
+      ? `${readyInstances.length} instance(s) passed v2 identity checks.`
+      : "No ready instances to check.",
+    details: { checkedInstances: readyInstances.length }
   };
+}
+
+/** 旧 active-target/alias/aggregate 文件只报告，不解析、不迁移。 */
+async function checkObsoleteLocalState(dataDir: string): Promise<DoctorCheck> {
+  const paths = await obsoleteLocalStatePaths(dataDir);
+  return paths.length === 0
+    ? { name: "obsolete_local_state", status: "pass", message: "No obsolete target or registry state files found." }
+    : {
+        name: "obsolete_local_state",
+        status: "fail",
+        message: "E_OBSOLETE_LOCAL_STATE: obsolete active-target or registry files require manual deletion.",
+        details: { code: "E_OBSOLETE_LOCAL_STATE", paths },
+      };
 }
 
 async function checkExtensionAvailability(flags: Record<string, string | boolean>): Promise<DoctorCheck> {
@@ -590,10 +613,10 @@ async function checkExtensionAvailability(flags: Record<string, string | boolean
   };
 }
 
-async function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime): Promise<DoctorCheck> {
+async function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, bridgeReachable: boolean): Promise<DoctorCheck> {
   const contexts = builtinContextDescriptors();
   const localCount = contexts.length;
-  const liveDiscoveryEnabled = await shouldLoadLiveContextCatalog(flags, runtime);
+  const liveDiscoveryEnabled = runtime.projectContexts !== undefined || (bridgeReachable && await shouldLoadLiveContextCatalog(flags, runtime));
   if (localCount === 0) {
     return {
       name: "context_discovery",
@@ -768,15 +791,13 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
             suggestions.push("Run unity_cli init --project <path> to set up the bridge.");
           }
           break;
-        case "healthy_instances":
-          if (check.status === "fail") {
-            suggestions.push("Reopen the Unity Editor for the target project.");
-            suggestions.push("Run unity_cli instances prune --yes to remove stale entries.");
-          }
+        case "ready_instances":
+          suggestions.push("Reopen the Unity Editor for the exact canonical project path if no session is active.");
+          suggestions.push("Run unity_cli instances list to inspect transitioning, blocked, offline, or conflicting claims.");
           break;
         case "bridge_connectivity":
-          suggestions.push("Ensure Unity Editor is running with the Unity CLI Bridge package.");
-          suggestions.push("Check --bridge-endpoint or UNITY_CLI_BRIDGE_ENDPOINT.");
+          suggestions.push("Ensure Unity Editor is running with the Unity CLI Bridge package for the selected --instance or CWD project.");
+          suggestions.push("Run unity_cli instances list to inspect identity, session, blocker, and transition state.");
           break;
         case "project_tool_fingerprint":
           suggestions.push("Inspect unity_cli doctor fingerprint details, then review project tool descriptor/handler code changes.");
@@ -795,7 +816,10 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Run any unity_cli command to auto-create the data directory.");
           break;
         case "config_integrity":
-          suggestions.push("Re-initialize the instance by restarting Unity Editor.");
+          suggestions.push("Re-initialize the canonical registry claim by restarting Unity Editor.");
+          break;
+        case "obsolete_local_state":
+          suggestions.push("Delete only the reported obsolete config.json, aliases.json, or aggregate instances.json files after auditing them.");
           break;
         case "unified_tool_discovery":
           suggestions.push("Run unity_cli tools group to see tool groups.");

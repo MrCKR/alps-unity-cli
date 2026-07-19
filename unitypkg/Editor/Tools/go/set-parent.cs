@@ -60,6 +60,10 @@ namespace UnityCli
             var parentName = request.Parent;
             var worldPositionStays = request.WorldPositionStays ?? true;
             var newParent = string.IsNullOrEmpty(parentName) ? null : GameObjectToolSupport.ResolveUniqueTarget(parentName, "Parent GameObject is required.").transform;
+            if (newParent == gameObject.transform || (newParent != null && newParent.IsChildOf(gameObject.transform)))
+                throw new UnityCliBridge.BridgeCommandException("E_GO_PARENT_CYCLE", "A GameObject cannot be parented to itself or one of its descendants.", "Choose a parent outside the target hierarchy.");
+            var targetId = gameObject.GetInstanceID();
+            var parentId = newParent == null ? 0 : newParent.GetInstanceID();
             if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
@@ -71,12 +75,17 @@ namespace UnityCli
                     PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.set-parent", Parent = parentName ?? "<root>" } }
                 });
             }
+            ctx.CommitEffect();
             UnityCliSceneMutation.SetParent(gameObject.transform, newParent, "go.set-parent", worldPositionStays);
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            var observed = EditorUtility.InstanceIDToObject(targetId) as GameObject;
+            var observedParent = parentId == 0 ? null : EditorUtility.InstanceIDToObject(parentId) as Transform;
+            if (observed == null || observed.transform.parent != observedParent)
+                throw new UnityCliBridge.BridgeCommandException("E_GO_SET_PARENT_STATE_MISMATCH", "GameObject hierarchy did not match the requested parent after write.", "Inspect the hierarchy and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "go.set-parent",
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
+                Target = GameObjectToolSupport.BuildGameObjectRef(observed),
                 Parent = parentName ?? "<root>",
                 WorldPositionStays = worldPositionStays,
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.set-parent" } }

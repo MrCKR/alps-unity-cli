@@ -67,13 +67,19 @@ namespace UnityCli
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
                 });
             }
+            var gameObjectId = gameObject.GetInstanceID();
+            ctx.CommitEffect();
             PrefabUtility.UnpackPrefabInstance(gameObject, PrefabUnpackMode.OutermostRoot, InteractionMode.AutomatedAction);
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            // 解包后只接受由 immutable ID 重新解析的对象状态。
+            var observed = EditorUtility.InstanceIDToObject(gameObjectId) as GameObject;
+            if (observed == null || PrefabUtility.IsPartOfPrefabInstance(observed))
+                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_UNPACK_STATE_MISMATCH", "Prefab instance remained linked after unpack.", "Inspect the scene object and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "prefab.unpack",
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
-                PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
+                Target = GameObjectToolSupport.BuildGameObjectRef(observed),
+                PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(observed) } }
             });
         }
     }

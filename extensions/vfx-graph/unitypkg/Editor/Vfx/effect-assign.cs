@@ -18,17 +18,27 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Assign the matrix graph", Input = new Request { Target = "Effects/Emitter", Graph = "Assets/VFX/Explosion.vfx" } } }
         };
 
-        public System.Threading.Tasks.ValueTask<VfxEffectActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public System.Threading.Tasks.ValueTask<VfxEffectActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.effect.assign");
-            VfxActionToolSupport.AssignGraph(effect, request.Graph);
+            VfxActionToolSupport.PrepareGraphAssignment(effect.GetType());
+            var graphPath = VfxToolSupport.RequireVfxGraphPath(request.Graph);
+            if (UnityEditor.AssetDatabase.LoadAssetAtPath(graphPath, VfxToolSupport.RequireVfxAssetType()) == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + request.Graph, "Pass an existing Assets/*.vfx path.");
+            var gameObjectId = effect.gameObject.GetInstanceID();
+            var effectType = effect.GetType();
+            ctx.CommitEffect();
+            var observedObject = VfxToolSupport.FindGameObjectByTarget(gameObjectId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            effect = observedObject == null ? null : observedObject.GetComponent(effectType);
+            if (effect == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.effect.assign target/component disappeared after commit.", "Retry after checking the target still exists.");
+            VfxActionToolSupport.AssignGraph(effect, graphPath);
+            VfxActionToolSupport.VerifyAssignedGraph(effect, graphPath);
             return new System.Threading.Tasks.ValueTask<VfxEffectActionResult>(new VfxEffectActionResult
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(effect.gameObject),
                 Action = "assigned",
                 Effect = VfxToolSupport.BuildEffectInfo(effect),
                 PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.assign", Target = request.Target, Graph = request.Graph } },
-                LogPath = context.LogPath
+                LogPath = ctx.LogPath
             });
         }
     }

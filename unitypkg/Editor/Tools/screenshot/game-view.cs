@@ -43,6 +43,7 @@ namespace UnityCli
             var outputPath = ScreenshotToolSupport.ResolveScreenshotOutputPath(request.Path);
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
+            ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
             var width = Math.Max(1, request.Width ?? 1280);
             var height = Math.Max(1, request.Height ?? 720);
@@ -51,36 +52,37 @@ namespace UnityCli
             var rt = new RenderTexture(width, height, 24);
             var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
             byte[] bytes;
+            var previousActive = RenderTexture.active;
             try
             {
-                var prev = RenderTexture.active;
                 RenderTexture.active = rt;
                 var cameras = Camera.allCamerasCount > 0 ? Camera.allCameras : new Camera[0];
                 foreach (var cam in cameras)
                 {
                     if (!cam.gameObject.activeInHierarchy) continue;
                     var prevTarget = cam.targetTexture;
-                    cam.targetTexture = rt;
-                    cam.Render();
-                    cam.targetTexture = prevTarget;
+                    try { cam.targetTexture = rt; cam.Render(); }
+                    finally { cam.targetTexture = prevTarget; }
                 }
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
-                RenderTexture.active = prev;
                 bytes = format == "jpg" ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
                 ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes);
             }
             finally
             {
+                RenderTexture.active = previousActive;
                 UnityEngine.Object.DestroyImmediate(texture);
                 rt.Release();
                 UnityEngine.Object.DestroyImmediate(rt);
             }
 
+            var artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, format);
             var result = new Result
             {
                 ScreenshotPath = outputPath, ArtifactPath = outputPath, Format = format,
-                Width = width, Height = height, Quality = 95, Source = "game-view", Target = "Camera.main/allCameras"
+                Width = width, Height = height, Quality = 95, Source = "game-view", Target = "Camera.main/allCameras",
+                SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256
             };
             ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
             return new System.Threading.Tasks.ValueTask<Result>(result);

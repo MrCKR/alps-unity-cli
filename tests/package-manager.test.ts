@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { ensurePackageBridge, checkPackageBridge, deployPackageSource, restoreDeployedPackage } from "../src/package-manager.js";
+import { ensurePackageBridge, checkPackageBridge, deployPackageSource, preparePackageBridgeInstall, restoreDeployedPackage } from "../src/package-manager.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -54,6 +54,14 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", a
   // No file: dependency in manifest
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.unity_cli"], undefined);
+});
+
+test("ensurePackageBridge rejects a source-hash-stale init plan before target writes", async () => {
+  const project = await makeUnityProject();
+  const plan = await preparePackageBridgeInstall(project);
+  plan.sourceHash = "0".repeat(64);
+  await assert.rejects(() => ensurePackageBridge(project, plan), { code: "INIT_PLAN_STALE" });
+  await assert.rejects(() => stat(plan.bridgePath), { code: "ENOENT" });
 });
 
 test("ensurePackageBridge skips copy when version and hash match existing install", async () => {

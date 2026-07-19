@@ -45,7 +45,9 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
+            ValidateRequest(request);
             var target = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "physics.rigidbody requires --target.");
+            var targetId = target.GetInstanceID();
             var rigidbody = target.GetComponent<Rigidbody>();
             if (request.Validate)
             {
@@ -60,6 +62,18 @@ namespace UnityCli
                     NextActions = rigidbody != null ? new List<string>() : new List<string> { "No Rigidbody is attached; run physics.rigidbody without validate=true to add and configure one." }
                 });
             }
+            var hasSetter = request.Mass.HasValue || request.Drag.HasValue || request.AngularDrag.HasValue || request.UseGravity.HasValue || request.IsKinematic.HasValue;
+            if (rigidbody != null && !hasSetter)
+            {
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
+                {
+                    Target = new GameObjectTargetRef { Id = target.GetInstanceID(), Name = target.name, Path = GameObjectToolSupport.HierarchyPath(target) },
+                    HasRigidbody = true,
+                    Rigidbody = PhysicsToolSupport.BuildRigidbodyInfo(rigidbody),
+                    PlannedEffects = new List<PhysicsPlannedEffect>()
+                });
+            }
+            ctx.CommitEffect();
             if (rigidbody == null) rigidbody = UnityCliSceneMutation.AddComponent<Rigidbody>(target);
             if (request.Mass.HasValue) rigidbody.mass = request.Mass.Value;
             if (request.Drag.HasValue) rigidbody.drag = request.Drag.Value;
@@ -67,13 +81,41 @@ namespace UnityCli
             if (request.UseGravity.HasValue) rigidbody.useGravity = request.UseGravity.Value;
             if (request.IsKinematic.HasValue) rigidbody.isKinematic = request.IsKinematic.Value;
             UnityCliSceneMutation.MarkSceneDirty(target.scene);
+            var observedTarget = EditorUtility.InstanceIDToObject(targetId) as GameObject;
+            var observedRigidbody = observedTarget == null ? null : observedTarget.GetComponent<Rigidbody>();
+            if (observedRigidbody == null ||
+                (request.Mass.HasValue && !Mathf.Approximately(observedRigidbody.mass, request.Mass.Value)) ||
+                (request.Drag.HasValue && !Mathf.Approximately(observedRigidbody.drag, request.Drag.Value)) ||
+                (request.AngularDrag.HasValue && !Mathf.Approximately(observedRigidbody.angularDrag, request.AngularDrag.Value)) ||
+                (request.UseGravity.HasValue && observedRigidbody.useGravity != request.UseGravity.Value) ||
+                (request.IsKinematic.HasValue && observedRigidbody.isKinematic != request.IsKinematic.Value))
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_RIGIDBODY_STATE_MISMATCH", "Rigidbody state did not match the requested values.", "Inspect the Rigidbody component and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = new GameObjectTargetRef { Id = target.GetInstanceID(), Name = target.name, Path = GameObjectToolSupport.HierarchyPath(target) },
-                HasRigidbody = true,
-                Rigidbody = PhysicsToolSupport.BuildRigidbodyInfo(rigidbody),
-                PlannedEffects = new List<PhysicsPlannedEffect> { new PhysicsPlannedEffect { Type = "physics.rigidbody", Target = GameObjectToolSupport.HierarchyPath(target) } }
+                Target = new GameObjectTargetRef { Id = observedTarget.GetInstanceID(), Name = observedTarget.name, Path = GameObjectToolSupport.HierarchyPath(observedTarget) },
+                HasRigidbody = observedRigidbody != null,
+                Rigidbody = PhysicsToolSupport.BuildRigidbodyInfo(observedRigidbody),
+                PlannedEffects = new List<PhysicsPlannedEffect> { new PhysicsPlannedEffect { Type = "physics.rigidbody", Target = GameObjectToolSupport.HierarchyPath(observedTarget) } }
             });
+        }
+
+        /// <summary>在 effect barrier 前校验全部数值，避免 Unity setter 截断或拒绝请求。</summary>
+        private static void ValidateRequest(Request request)
+        {
+            RequireFinite(request.Mass, "mass");
+            RequireFinite(request.Drag, "drag");
+            RequireFinite(request.AngularDrag, "angularDrag");
+            if (request.Mass.HasValue && request.Mass.Value <= 0f)
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_RIGIDBODY_INPUT_INVALID", "mass must be greater than zero.", "Pass a finite positive mass.");
+            if ((request.Drag.HasValue && request.Drag.Value < 0f) || (request.AngularDrag.HasValue && request.AngularDrag.Value < 0f))
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_RIGIDBODY_INPUT_INVALID", "drag and angularDrag must be non-negative.", "Pass finite non-negative drag values.");
+        }
+
+        // 可选 float 必须能作为有限 Unity 数值使用。
+        private static void RequireFinite(float? value, string field)
+        {
+            if (value.HasValue && (float.IsNaN(value.Value) || float.IsInfinity(value.Value)))
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_RIGIDBODY_INPUT_INVALID", field + " must be finite.", "Pass a finite numeric value for " + field + ".");
         }
     }
 }

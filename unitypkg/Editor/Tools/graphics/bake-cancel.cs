@@ -11,12 +11,16 @@ namespace UnityCli
     {
         public sealed class Request { }
         public sealed class Result { public bool Baking { get; set; } public bool Cancelled { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.bake-cancel", Summary = "Cancel a running lightmap bake.", Description = "Cancel Lightmapping if running. Returns cancelled=true if a bake was in progress.", Group = "graphics", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Cancel bake", Input = new Request { } } } };
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public ToolDescriptor Describe() => new() { Name = "graphics.bake-cancel", Summary = "Cancel a running lightmap bake.", Description = "Cancel the active Lightmapping job if one is running. Returns cancelled=true only when a bake was in progress.", Group = "graphics", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "lightmapping-bake-cancel" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Cancel bake", Input = new Request { } } } };
+        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var wasRunning = Lightmapping.isRunning;
+            ctx.CommitEffect();
             if (wasRunning) Lightmapping.Cancel();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Baking = Lightmapping.isRunning, Cancelled = wasRunning, PlannedEffects = new List<GraphicsPlannedEffect> { new GraphicsPlannedEffect { Type = "graphics.bake-cancel", Property = "bake", Value = "cancelled" } } });
+            var observed = await ctx.Wait.UntilStable(() => !Lightmapping.isRunning, System.TimeSpan.FromMilliseconds(ctx.TimeoutMs), ct: ct);
+            if (!observed) throw new UnityCliBridge.BridgeCommandException("E_BAKE_CANCEL_TIMEOUT", "Lightmapping did not leave the baking state before timeout.", "Wait for the current bake to finish or inspect Unity Console before retrying.");
+            var baking = Lightmapping.isRunning;
+            return new Result { Baking = baking, Cancelled = wasRunning, PlannedEffects = new List<GraphicsPlannedEffect> { new GraphicsPlannedEffect { Type = "graphics.bake-cancel", Property = "bake", Value = "cancelled" } } };
         }
     }
 }

@@ -1,4 +1,4 @@
-import { realpath, readFile, writeFile, readdir, stat, mkdir, copyFile, rm } from "node:fs/promises";
+import { realpath, readFile, readdir, stat, mkdir, copyFile, rename, rm, open } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join, relative, resolve, win32, dirname, posix, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,16 @@ export interface UnityManifest {
   scopedRegistries?: ScopedRegistry[];
   registry?: string;
   [key: string]: unknown;
+}
+
+/** 严格读取 Unity Packages/manifest.json；调用方不得把损坏的依赖声明当作空状态。 */
+export async function readUnityManifestDependencies(projectPath: string): Promise<Record<string, string>> {
+  const manifest = await readManifest(packagePaths(projectPath).manifestPath, false);
+  if (!isPlainObject(manifest) || !isPlainObject(manifest.dependencies)
+    || !Object.values(manifest.dependencies).every((value) => typeof value === "string")) {
+    throw new PackageManagerError("MANIFEST_INVALID", `Unity manifest requires an object root with a string-valued dependencies object: ${packagePaths(projectPath).manifestPath}`);
+  }
+  return { ...manifest.dependencies };
 }
 
 export interface UnityLock {
@@ -69,6 +79,10 @@ export interface PackageDependent {
 
 export interface RemovePackageOptions {
   force?: boolean;
+  dryRun?: boolean;
+}
+
+export interface ManifestMutationOptions {
   dryRun?: boolean;
 }
 
@@ -183,7 +197,7 @@ export async function packageInfo(projectPath: string, name: string): Promise<Pa
   return (await readSnapshot(projectPath)).packages.find((entry) => entry.name === name);
 }
 
-export async function installPackage(projectPath: string, spec: PackageSpec): Promise<{ manifestPath: string; previousVersion?: string; installedVersion: string; changed: boolean }> {
+export async function installPackage(projectPath: string, spec: PackageSpec, options: ManifestMutationOptions = {}): Promise<{ manifestPath: string; installedVersion: string; dependencyInstalled?: true; dryRun?: true; plannedEffects?: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
   if (!spec.version) {
@@ -200,12 +214,18 @@ export async function installPackage(projectPath: string, spec: PackageSpec): Pr
       "Run tools run package.info --input '{\"name\":\"<package>\"}' to inspect the current requested and locked versions."
     ]);
   }
+  if (options.dryRun) return { manifestPath: paths.manifestPath, installedVersion: spec.version, dryRun: true, plannedEffects: [{ type: "package.install", package: spec.name, version: spec.version, previousVersion }] };
   manifest.dependencies[spec.name] = spec.version;
   await writeManifest(paths.manifestPath, manifest);
-  return { manifestPath: paths.manifestPath, previousVersion, installedVersion: spec.version, changed: previousVersion !== spec.version };
+  const readback = await readManifest(paths.manifestPath, false);
+  const installedVersion = readback.dependencies?.[spec.name];
+  if (installedVersion !== spec.version) {
+    throw manifestReadbackMismatch(paths.manifestPath, `dependency ${spec.name} was not written with the requested version`);
+  }
+  return { manifestPath: paths.manifestPath, installedVersion, dependencyInstalled: true };
 }
 
-export async function removePackage(projectPath: string, name: string, options: RemovePackageOptions = {}): Promise<{ manifestPath: string; removedVersion: string; dependents: PackageDependent[]; forced: boolean; dryRun: boolean; blocked: boolean; plannedEffects: Array<Record<string, unknown>> }> {
+export async function removePackage(projectPath: string, name: string, options: RemovePackageOptions = {}): Promise<{ manifestPath: string; removedVersion?: string; dependencyRemoved?: true; dependents: PackageDependent[]; forced: boolean; dryRun: boolean; blocked: boolean; plannedEffects?: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
   const lock = await readLock(paths.lockPath);
@@ -225,45 +245,64 @@ export async function removePackage(projectPath: string, name: string, options: 
   if (!options.dryRun) {
     delete manifest.dependencies?.[name];
     await writeManifest(paths.manifestPath, manifest);
+    const readback = await readManifest(paths.manifestPath, false);
+    if (readback.dependencies && Object.prototype.hasOwnProperty.call(readback.dependencies, name)) {
+      throw manifestReadbackMismatch(paths.manifestPath, `dependency ${name} is still declared`);
+    }
+    return { manifestPath: paths.manifestPath, dependencyRemoved: true, dependents, forced: options.force === true, dryRun: false, blocked: false };
   }
-  return { manifestPath: paths.manifestPath, removedVersion, dependents, forced: options.force === true, dryRun: options.dryRun === true, blocked, plannedEffects };
+  return { manifestPath: paths.manifestPath, removedVersion, dependents, forced: options.force === true, dryRun: true, blocked, plannedEffects };
 }
 
-export async function setRegistry(projectPath: string, url: string): Promise<{ manifestPath: string; registry: string }> {
+export async function setRegistry(projectPath: string, url: string, options: ManifestMutationOptions = {}): Promise<{ manifestPath: string; registry: string; dryRun?: true; plannedEffects?: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
+  if (options.dryRun) return { manifestPath: paths.manifestPath, registry: url, dryRun: true, plannedEffects: [{ type: "package.registry.set", registry: url, previousRegistry: manifest.registry }] };
   manifest.registry = url;
   await writeManifest(paths.manifestPath, manifest);
-  return { manifestPath: paths.manifestPath, registry: url };
+  const readback = await readManifest(paths.manifestPath, false);
+  if (readback.registry !== url) {
+    throw manifestReadbackMismatch(paths.manifestPath, "primary registry does not match the written value");
+  }
+  return { manifestPath: paths.manifestPath, registry: readback.registry };
 }
 
-export async function clearRegistry(projectPath: string): Promise<{ manifestPath: string; previousRegistry?: string }> {
+export async function clearRegistry(projectPath: string, options: ManifestMutationOptions = {}): Promise<{ manifestPath: string; registryCleared?: true; dryRun?: true; plannedEffects?: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
-  const previousRegistry = typeof manifest.registry === "string" ? manifest.registry : undefined;
+  if (options.dryRun) return { manifestPath: paths.manifestPath, dryRun: true, plannedEffects: [{ type: "package.registry.clear", registry: manifest.registry }] };
   delete manifest.registry;
   await writeManifest(paths.manifestPath, manifest);
-  return { manifestPath: paths.manifestPath, previousRegistry };
+  const readback = await readManifest(paths.manifestPath, false);
+  if (typeof readback.registry === "string") {
+    throw manifestReadbackMismatch(paths.manifestPath, "primary registry is still declared");
+  }
+  return { manifestPath: paths.manifestPath, registryCleared: true };
 }
 
-export async function addScopedRegistry(projectPath: string, registry: ScopedRegistry): Promise<{ manifestPath: string; registry: ScopedRegistry; replaced: boolean }> {
+export async function addScopedRegistry(projectPath: string, registry: ScopedRegistry, options: ManifestMutationOptions = {}): Promise<{ manifestPath: string; registry: ScopedRegistry; dryRun?: true; plannedEffects?: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
   const index = registries.findIndex((existing) => existing.name === registry.name);
   const normalized = { name: registry.name, url: registry.url, scopes: uniqueScopes(registry.scopes) };
-  const replaced = index >= 0;
-  if (replaced) {
+  if (options.dryRun) return { manifestPath: paths.manifestPath, registry: normalized, dryRun: true, plannedEffects: [{ type: "package.scoped-registry.add", ...normalized }] };
+  if (index >= 0) {
     registries[index] = normalized;
   } else {
     registries.push(normalized);
   }
   manifest.scopedRegistries = registries;
   await writeManifest(paths.manifestPath, manifest);
-  return { manifestPath: paths.manifestPath, registry: normalized, replaced };
+  const readback = await readManifest(paths.manifestPath, false);
+  const persisted = normalizeScopedRegistries(readback.scopedRegistries).find((entry) => entry.name === normalized.name);
+  if (!persisted || persisted.url !== normalized.url || !sameScopes(persisted.scopes, normalized.scopes)) {
+    throw manifestReadbackMismatch(paths.manifestPath, `scoped registry ${normalized.name} does not match the written value`);
+  }
+  return { manifestPath: paths.manifestPath, registry: persisted };
 }
 
-export async function removeScopedRegistry(projectPath: string, name: string, options: RemoveScopedRegistryOptions = {}): Promise<{ manifestPath: string; removed: ScopedRegistry; matchedPackages: string[]; forced: boolean; dryRun: boolean; blocked: boolean; plannedEffects: Array<Record<string, unknown>> }> {
+export async function removeScopedRegistry(projectPath: string, name: string, options: RemoveScopedRegistryOptions = {}): Promise<{ manifestPath: string; removed?: ScopedRegistry; registryRemoved?: true; matchedPackages: string[]; forced: boolean; dryRun: boolean; blocked: boolean; plannedEffects?: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
@@ -285,8 +324,13 @@ export async function removeScopedRegistry(projectPath: string, name: string, op
     registries.splice(index, 1);
     manifest.scopedRegistries = registries;
     await writeManifest(paths.manifestPath, manifest);
+    const readback = await readManifest(paths.manifestPath, false);
+    if (normalizeScopedRegistries(readback.scopedRegistries).some((entry) => entry.name === name)) {
+      throw manifestReadbackMismatch(paths.manifestPath, `scoped registry ${name} is still declared`);
+    }
+    return { manifestPath: paths.manifestPath, registryRemoved: true, matchedPackages, forced: options.force === true, dryRun: false, blocked: false };
   }
-  return { manifestPath: paths.manifestPath, removed, matchedPackages, forced: options.force === true, dryRun: options.dryRun === true, blocked, plannedEffects };
+  return { manifestPath: paths.manifestPath, removed, matchedPackages, forced: options.force === true, dryRun: true, blocked, plannedEffects };
 }
 
 export interface UnityCliInstallMetadata {
@@ -297,6 +341,17 @@ export interface UnityCliInstallMetadata {
   installMode: "copy";
   installTime: string;
   cliCompatibilityRange: string;
+}
+
+export interface UnityCliPackageInstallPlan {
+  manifestPath: string;
+  bridgePath: string;
+  dependencyName: string;
+  packageVersion: string;
+  sourceHash: string;
+  projectHash: string;
+  installMetadataPath: string;
+  fileManifestPath: string;
 }
 
 export interface UnityCliPackageInstall {
@@ -313,19 +368,45 @@ export interface UnityCliPackageInstall {
   fileManifestPath: string;
 }
 
-export async function ensurePackageBridge(projectPath: string): Promise<UnityCliPackageInstall> {
+/** 在任何 init filesystem effect 前冻结 Bridge 源、目标与哈希。 */
+export async function preparePackageBridgeInstall(projectPath: string): Promise<UnityCliPackageInstallPlan> {
   const paths = packagePaths(projectPath);
   const sourcePath = packageSourcePath();
   const packageManifest = await readPackageManifest(sourcePath);
   const projectHash = await hashProjectPath(paths.projectPath);
   const sourceHash = await hashSourcePath(sourcePath);
-  const targetPath = join(paths.projectPath, "Packages", bridgePackageName);
-  const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
-  const fileManifestPath = join(targetPath, fileManifestFileName);
+  const bridgePath = join(paths.projectPath, "Packages", bridgePackageName);
+  return {
+    manifestPath: paths.manifestPath,
+    bridgePath,
+    dependencyName: bridgePackageName,
+    packageVersion: packageManifest.version,
+    sourceHash,
+    projectHash,
+    installMetadataPath: join(paths.projectPath, "Packages", installMetadataFileName),
+    fileManifestPath: join(bridgePath, fileManifestFileName),
+  };
+}
 
+export async function ensurePackageBridge(projectPath: string, prepared?: UnityCliPackageInstallPlan): Promise<UnityCliPackageInstall> {
+  const paths = packagePaths(projectPath);
+  const sourcePath = packageSourcePath();
+  const plan = prepared ?? await preparePackageBridgeInstall(paths.projectPath);
+  const packageManifest = await readPackageManifest(sourcePath);
+  // init plan 的 sourceHash 是 effect 前冻结证据；任何目标写入前必须重新散列并严格匹配。
+  const freshSourceHash = await hashSourcePath(sourcePath);
+  if (plan.sourceHash !== freshSourceHash || plan.packageVersion !== packageManifest.version) {
+    throw new PackageManagerError("INIT_PLAN_STALE", "Bridge package source changed after init prevalidation.", ["Submit init again so it can build a fresh transaction plan."]);
+  }
+  const projectHash = plan.projectHash;
+  const sourceHash = freshSourceHash;
+  const targetPath = plan.bridgePath;
+  const installMetadataPath = plan.installMetadataPath;
+  const fileManifestPath = plan.fileManifestPath;
   // Check existing installation: skip if same version & hash
   const existing = await readExistingInstallMetadata(installMetadataPath).catch(() => undefined);
-  if (existing && existing.packageVersion === packageManifest.version && existing.sourceHash === sourceHash && existing.projectHash === projectHash) {
+  if (existing && existing.packageVersion === packageManifest.version && existing.sourceHash === sourceHash && existing.projectHash === projectHash
+    && await managedPackageFilesMatch(sourcePath, targetPath, fileManifestPath)) {
     return {
       manifestPath: paths.manifestPath,
       bridgePath: targetPath,
@@ -341,14 +422,28 @@ export async function ensurePackageBridge(projectPath: string): Promise<UnityCli
     };
   }
 
-  // Remove stale managed files before copying
-  await removeStaleManagedFiles(targetPath, fileManifestPath);
-
-  // Copy source to target, tracking managed files
-  const managedFiles = await copyPackageContents(sourcePath, targetPath);
-
-  // Write file manifest (tracks which files we manage so we don't delete user files on update)
-  await writeFileManifest(fileManifestPath, managedFiles);
+  // 完整投影先写入同级 staging 目录，再以 rename 发布；不会暴露半复制的 Bridge 包。
+  const stagingPath = `${targetPath}.staging-${process.pid}-${Date.now()}`;
+  const backupPath = `${targetPath}.previous-${process.pid}-${Date.now()}`;
+  const targetExists = await directoryExists(targetPath);
+  try {
+    await rm(stagingPath, { recursive: true, force: true });
+    if (targetExists) await copyDirRecursive(targetPath, stagingPath, targetPath, []);
+    await removeStaleManagedFiles(stagingPath, fileManifestPath);
+    const managedFiles = await copyPackageContents(sourcePath, stagingPath);
+    await writeFileManifest(join(stagingPath, fileManifestFileName), managedFiles);
+    if (targetExists) await rename(targetPath, backupPath);
+    await rename(stagingPath, targetPath);
+    await rm(backupPath, { recursive: true, force: true });
+  } catch (error) {
+    // 发布未完成时保留原目标；已跨 effect barrier 的 init 会报告 outcome unknown。
+    if (targetExists && !(await directoryExists(targetPath)) && await directoryExists(backupPath)) {
+      await rename(backupPath, targetPath).catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    await rm(stagingPath, { recursive: true, force: true }).catch(() => undefined);
+  }
 
   const installTime = new Date().toISOString();
   await writeInstallMetadata(installMetadataPath, {
@@ -361,6 +456,17 @@ export async function ensurePackageBridge(projectPath: string): Promise<UnityCli
     cliCompatibilityRange
   });
 
+  // 发布后的证明必须重新读取目标 metadata 和 file manifest，不能复用写前计划或内存对象。
+  const observedMetadata = await readInstallMetadata(installMetadataPath);
+  if (observedMetadata.packageName !== bridgePackageName
+    || observedMetadata.packageVersion !== packageManifest.version
+    || observedMetadata.sourceHash !== sourceHash
+    || observedMetadata.projectHash !== projectHash
+    || observedMetadata.installTime !== installTime
+    || !await managedPackageFilesMatch(sourcePath, targetPath, fileManifestPath)) {
+    throw new PackageManagerError("INIT_CHECK_FAILED", "Bridge package installation could not be proven from fresh filesystem readback.", ["Inspect Packages/com.unity_cli and run init again."]);
+  }
+
   return {
     manifestPath: paths.manifestPath,
     bridgePath: targetPath,
@@ -369,7 +475,7 @@ export async function ensurePackageBridge(projectPath: string): Promise<UnityCli
     sourceHash,
     projectHash,
     installMode: "copy",
-    installTime,
+    installTime: observedMetadata.installTime,
     cliCompatibilityRange,
     installMetadataPath,
     fileManifestPath
@@ -405,6 +511,9 @@ export async function checkPackageBridge(projectPath: string): Promise<UnityCliP
 
   if (installMetadata.cliCompatibilityRange !== cliCompatibilityRange) {
     throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} CLI compatibility range has changed.`, ["Run unity_cli init --project <path> to refresh install metadata."]);
+  }
+  if (!await managedPackageFilesMatch(sourcePath, targetPath, fileManifestPath)) {
+    throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} managed file projection hash does not match the bundled source.`, ["Run unity_cli init --project <path> to restore the bundled package projection."]);
   }
 
   return {
@@ -443,6 +552,9 @@ export async function removePackageBridge(projectPath: string, options: RemovePa
   if (!options.dryRun) {
     await rm(targetPath, { recursive: true, force: true });
     await rm(installMetadataPath, { force: true });
+    if (await pathExists(targetPath) || await pathExists(installMetadataPath)) {
+      throw new PackageManagerError("BRIDGE_PACKAGE_REMOVE_READBACK_FAILED", "Bridge package files still exist after removal.", ["Inspect Packages/com.unity_cli and the install metadata before retrying; do not remove blindly."]);
+    }
   }
 
   return {
@@ -485,6 +597,7 @@ export async function deployPackageSource(projectPath: string, sourcePath: strin
   const metadataPath = deploymentMetadataPath(paths.projectPath);
   const existingTarget = await directoryExists(targetPath);
   const existingManifest = existingTarget ? await readAnyPackageManifest(targetPath).catch(() => undefined) : undefined;
+  const existingTargetHash = existingTarget ? await hashSourcePath(targetPath) : undefined;
   const currentRecord = (await readDeploymentMetadata(metadataPath))[packageName];
   if (currentRecord !== undefined) {
     assertDeploymentRecordSafe(paths.projectPath, packageName, currentRecord);
@@ -520,6 +633,19 @@ export async function deployPackageSource(projectPath: string, sourcePath: strin
       deployedAt: new Date().toISOString()
     };
     await writeDeploymentMetadata(metadataPath, metadata);
+
+    // 从目标目录、备份和 metadata 重新读取，证明本次请求的完整文件系统终态。
+    const observedManifest = await readAnyPackageManifest(targetPath).catch(() => undefined);
+    const observedHash = await hashSourcePath(targetPath).catch(() => undefined);
+    const observedFileCount = await countPackageFiles(targetPath).catch(() => -1);
+    const observedRecord = (await readDeploymentMetadata(metadataPath))[packageName];
+    const backupHash = existingTarget && !repeatedDeployment && backupPath ? await hashSourcePath(backupPath).catch(() => undefined) : undefined;
+    if (!observedManifest || observedManifest.name !== packageName || observedManifest.version !== sourceManifest.version
+      || observedHash !== sourceHash || observedFileCount !== copiedFileCount
+      || !observedRecord || observedRecord.targetPath !== targetPath || observedRecord.sourceHash !== sourceHash
+      || (existingTarget && !repeatedDeployment && backupHash !== existingTargetHash)) {
+      throw new PackageManagerError("PACKAGE_DEPLOY_READBACK_FAILED", `Deployed package did not retain the requested filesystem state: ${packageName}.`, ["Inspect the target package directory and deployment metadata before retrying; do not redeploy blindly."]);
+    }
   }
 
   return {
@@ -564,6 +690,7 @@ export async function restoreDeployedPackage(projectPath: string, packageName: s
 
   const backupExists = record.backupPath ? await directoryExists(record.backupPath) : false;
   const backupFileCount = backupExists && record.backupPath ? await countPackageFiles(record.backupPath) : 0;
+  const backupHash = backupExists && record.backupPath ? await hashSourcePath(record.backupPath) : undefined;
   const plannedEffects: Array<Record<string, unknown>> = [];
   if (backupExists && record.backupPath) {
     plannedEffects.push({ type: "package.restore.backup", package: packageName, from: record.backupPath, to: record.targetPath, fileCount: backupFileCount });
@@ -580,6 +707,18 @@ export async function restoreDeployedPackage(projectPath: string, packageName: s
     }
     delete metadata[packageName];
     await writeDeploymentMetadata(metadataPath, metadata);
+
+    // restore 成功必须由目标目录与 metadata 的 fresh readback 同时证明。
+    const observedMetadata = await readDeploymentMetadata(metadataPath);
+    const targetExists = await directoryExists(record.targetPath);
+    const observedTargetHash = targetExists ? await hashSourcePath(record.targetPath).catch(() => undefined) : undefined;
+    const observedTargetCount = targetExists ? await countPackageFiles(record.targetPath).catch(() => -1) : 0;
+    const backupStillExists = record.backupPath ? await directoryExists(record.backupPath) : false;
+    if (observedMetadata[packageName]
+      || (backupExists && (!targetExists || observedTargetHash !== backupHash || observedTargetCount !== backupFileCount || backupStillExists))
+      || (!backupExists && targetExists)) {
+      throw new PackageManagerError("PACKAGE_RESTORE_READBACK_FAILED", `Restored package did not retain the requested filesystem state: ${packageName}.`, ["Inspect the target package directory and deployment metadata before retrying; do not restore blindly."]);
+    }
   }
 
   return {
@@ -748,7 +887,7 @@ async function hashProjectPath(projectPath: string): Promise<string> {
 }
 
 async function writeInstallMetadata(path: string, metadata: UnityCliInstallMetadata): Promise<void> {
-  await writeFile(path, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  await atomicWriteFile(path, `${JSON.stringify(metadata, null, 2)}\n`);
 }
 
 async function readExistingInstallMetadata(path: string): Promise<UnityCliInstallMetadata> {
@@ -858,9 +997,24 @@ async function readManagedFileList(fileManifestPath: string): Promise<string[]> 
   }
 }
 
+/** 使用安装 manifest 中的受管路径逐一哈希，排除 Unity 生成的 .meta 等非投影文件。 */
+async function managedPackageFilesMatch(sourcePath: string, targetPath: string, fileManifestPath: string): Promise<boolean> {
+  const files = await readManagedFileList(fileManifestPath);
+  if (files.length === 0) return false;
+  for (const file of files) {
+    try {
+      const [source, target] = await Promise.all([readFile(join(sourcePath, file)), readFile(join(targetPath, file))]);
+      if (!source.equals(target)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function writeFileManifest(path: string, files: string[]): Promise<void> {
   const manifest: FileManifest = { version: 1, files };
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await atomicWriteFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 interface PackageDeploymentMetadata {
@@ -935,9 +1089,17 @@ async function readDeploymentMetadata(path: string): Promise<Record<string, Pack
 }
 
 async function writeDeploymentMetadata(path: string, deployments: Record<string, PackageDeploymentRecord>): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
   const metadata: PackageDeploymentMetadata = { version: 1, deployments };
-  await writeFile(path, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  await atomicWriteFile(path, `${JSON.stringify(metadata, null, 2)}\n`);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function directoryExists(path: string): Promise<boolean> {
@@ -988,7 +1150,12 @@ function assertDeploySourceOutsideProjectPackages(sourcePath: string, projectPat
 
 async function readManifest(path: string, allowMissing: boolean): Promise<UnityManifest> {
   try {
-    return JSON.parse(stripJsonBom(await readFile(path, "utf8"))) as UnityManifest;
+    const manifest = JSON.parse(stripJsonBom(await readFile(path, "utf8"))) as unknown;
+    if (!isPlainObject(manifest) || !isPlainObject(manifest.dependencies)
+      || !Object.values(manifest.dependencies).every((value) => typeof value === "string")) {
+      throw new PackageManagerError("MANIFEST_INVALID", `Unity manifest requires an object root with a string-valued dependencies object: ${path}`);
+    }
+    return manifest as UnityManifest;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "ENOENT") {
@@ -999,6 +1166,10 @@ async function readManifest(path: string, allowMissing: boolean): Promise<UnityM
     }
     throw error;
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function readLock(path: string): Promise<UnityLock> {
@@ -1017,7 +1188,32 @@ async function readLock(path: string): Promise<UnityLock> {
 }
 
 async function writeManifest(path: string, manifest: UnityManifest): Promise<void> {
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await atomicWriteFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+/** 同目录临时文件 + fsync + rename，避免读者观察到截断的 JSON 元数据。 */
+async function atomicWriteFile(path: string, content: string): Promise<void> {
+  const temporaryPath = join(dirname(path), `.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`);
+  await mkdir(dirname(path), { recursive: true });
+  const handle = await open(temporaryPath, "wx", 0o600);
+  try {
+    await handle.writeFile(content, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  try {
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
+}
+
+/** manifest 写入后必须以磁盘重读结果确认，避免把请求或写前对象误报为终态。 */
+function manifestReadbackMismatch(manifestPath: string, detail: string): PackageManagerError {
+  return new PackageManagerError("MANIFEST_READBACK_MISMATCH", `Manifest write could not be verified: ${detail}.`, [
+    "Inspect Packages/manifest.json and retry after resolving concurrent manifest writes."
+  ]);
 }
 
 function stripJsonBom(value: string): string {
@@ -1092,6 +1288,10 @@ function normalizeScopedRegistries(scopedRegistries: unknown): ScopedRegistry[] 
 
 function uniqueScopes(scopes: string[]): string[] {
   return [...new Set(scopes.map((scope) => scope.trim()).filter(Boolean))];
+}
+
+function sameScopes(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((scope, index) => scope === right[index]);
 }
 
 function normalizeRelativePath(path: string): string {

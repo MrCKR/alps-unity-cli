@@ -40,6 +40,7 @@ namespace UnityCli
             Version = "1.0.0",
             DestructiveHint = false,
             SupportsDryRun = true,
+            SideEffects = new[] { "scene-modify" },
             Target = "editor",
             PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000,
@@ -50,6 +51,7 @@ namespace UnityCli
             }
         };
 
+        // 移动对象后读取场景标识，确保返回的是已生效的场景归属。
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             SceneToolSupport.EnsureEditorNotBusy("scene.move-object");
@@ -103,12 +105,20 @@ namespace UnityCli
                 });
             }
             var fromScene = go.scene.path;
+            var gameObjectId = go.GetInstanceID();
+            ctx.CommitEffect();
             SceneManager.MoveGameObjectToScene(go, destScene);
+            // Resolve the same object afresh; the call itself is not completion proof.
+            var observed = EditorUtility.InstanceIDToObject(gameObjectId) as GameObject;
+            var observedScenePath = observed == null ? null : observed.scene.path;
+            var observedSceneHandle = observed == null ? 0 : observed.scene.handle;
+            if (observedScenePath != destScene.path || observedSceneHandle != destScene.handle)
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_MOVE_STATE_MISMATCH", "GameObject did not move to the requested destination scene.", "Inspect the object scene and destination scene load state before retrying.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = go.name,
+                Target = observed.name,
                 FromScene = fromScene,
-                ToScene = destScenePath,
+                ToScene = observedScenePath,
                 Moved = true
             });
         }

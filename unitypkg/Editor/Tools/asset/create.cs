@@ -51,17 +51,28 @@ namespace UnityCli
             var path = AssetToolSupport.RequireAssetPath(request.Path);
             var type = request.Type ?? "file";
             var overwrite = request.Overwrite ?? false;
+            if (!string.Equals(type, "file", StringComparison.OrdinalIgnoreCase) && !string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase) && !string.Equals(type, "directory", StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_TYPE_INVALID", "asset.create type must be file or folder.", "Pass type=file or type=folder.");
             // 无扩展名或显式 folder 类型视为目录创建
             if (string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(type, "directory", StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrEmpty(Path.GetExtension(path)))
             {
+                if (AssetToolSupport.AssetExists(path))
+                    throw new UnityCliBridge.BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Asset already exists: " + path, "Choose another Assets/* folder path.");
+                ctx.CommitEffect();
                 AssetToolSupport.CreateAssetFolder(path);
+                if (!AssetDatabase.IsValidFolder(path)) throw new UnityCliBridge.BridgeCommandException("E_ASSET_CREATE_STATE_MISMATCH", "Created folder could not be reloaded: " + path, "Inspect the AssetDatabase and retry.");
             }
             else
             {
+                if (AssetToolSupport.AssetExists(path) && !overwrite)
+                    throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Output already exists: " + path, "Pass --overwrite or choose a different asset path.");
+                ctx.CommitEffect();
                 AssetToolSupport.WriteTextAsset(path, request.Content ?? string.Empty, overwrite);
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                if (!File.Exists(AssetToolSupport.AssetFullPath(path)) || File.ReadAllText(AssetToolSupport.AssetFullPath(path)) != (request.Content ?? string.Empty))
+                    throw new UnityCliBridge.BridgeCommandException("E_ASSET_CREATE_STATE_MISMATCH", "Fresh asset bytes did not match the requested content: " + path, "Check file permissions and retry.");
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

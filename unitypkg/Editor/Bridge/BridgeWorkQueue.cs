@@ -30,6 +30,7 @@ namespace UnityCli
     {
         private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
         private static readonly HashSet<BridgeWorkItem> RunningWork = new HashSet<BridgeWorkItem>();
+        private static readonly Dictionary<string, BridgeWorkItem> ActiveRequestWork = new Dictionary<string, BridgeWorkItem>(StringComparer.Ordinal);
         private const int MaxWorkStartsPerTick = 16;
 
         private static void CancelQueuedWork()
@@ -45,11 +46,12 @@ namespace UnityCli
                 item.CancelBeforeStart();
                 item.Response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                     item.Request.RequestId,
-                    "E_EXECUTION_CANCELLED",
-                    "Bridge request was cancelled because Unity is reloading or quitting.",
-                    nextActions: new[] { "Restart or wait for Unity, then retry the request." },
-                    transient: true));
-                item.Completed.Set();
+                    "E_UNITY_DOMAIN_RELOAD",
+                    "Unity reloaded before the queued request began any effect.",
+                    nextActions: new[] { "Keep the same root requestId and immutable request bytes while the session supervisor rebinds." },
+                    transient: true,
+                    retryAfterMs: 1000));
+                CompleteWorkItem(item);
             }
         }
 
@@ -62,12 +64,13 @@ namespace UnityCli
             cachedIsPlayingOrWillChangePlaymode = EditorApplication.isPlayingOrWillChangePlaymode;
             cachedIsPlaying = EditorApplication.isPlaying;
             cachedIsBuilding = BuildPipeline.isBuildingPlayer;
+            cachedIsPlayModeChanging = IsPlayModeChanging();
             UnityCliWaitScheduler.EnsureMainThreadSynchronizationContext();
             UnityCliWaitScheduler.Tick();
 
             if (started && EditorApplication.timeSinceStartup >= nextHeartbeatAt)
             {
-                RegisterInstance("healthy");
+                RegisterInstance("ready");
                 nextHeartbeatAt = EditorApplication.timeSinceStartup + 2.0;
             }
             var startedThisTick = 0;
@@ -78,7 +81,11 @@ namespace UnityCli
                 lock (QueueLock)
                 {
                     if (WorkQueue.Count == 0) return;
+                    item = WorkQueue.Peek();
+                    var mutation = CoordinatedRequestIsMutation(item.Request);
+                    if (mutation && RunningWork.Any(running => running.IsMutation)) return;
                     item = WorkQueue.Dequeue();
+                    item.IsMutation = mutation;
                     queueDepth = WorkQueue.Count;
                 }
                 WriteLog("bridge_request_dequeued requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
@@ -91,7 +98,7 @@ namespace UnityCli
                         "E_BRIDGE_REQUEST_EXPIRED",
                         "Bridge request expired before Unity started executing it.",
                         nextActions: new[] { "Retry after Unity is no longer busy." }));
-                    item.Completed.Set();
+                    CompleteWorkItem(item);
                     continue;
                 }
 
@@ -106,8 +113,7 @@ namespace UnityCli
             try
             {
                 WriteLog("bridge_request_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
-                item.Response = await Execute(item.Request, item.Token);
-                item.Token.ThrowIfCancellationRequested();
+                item.Response = await ExecuteCoordinatedRequest(item.Request, item.RawRequestBytes, item.TryAcceptJournal, item.Token);
                 WriteLog("bridge_request_finished requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " ok=" + Bool(item.Response != null && item.Response.Contains("\"ok\":true")));
             }
             catch (BridgeCommandException exception)
@@ -118,10 +124,9 @@ namespace UnityCli
             {
                 item.Response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                     item.Request.RequestId,
-                    item.ClientDisconnected ? "E_CLIENT_DISCONNECTED" : "E_EXECUTION_TIMEOUT",
-                    item.ClientDisconnected ? "Bridge request was cancelled because the HTTP client disconnected." : "Bridge request execution was cancelled or timed out.",
-                    nextActions: new[] { item.ClientDisconnected ? "Reconnect and submit a new request; the cancelled request cannot be resumed." : "Retry with a larger execution.timeoutMs after Unity is responsive." },
-                    transient: true));
+                    "E_EXECUTION_TIMEOUT",
+                    "Bridge request execution was cancelled because the immutable deadline elapsed or the Unity session ended.",
+                    nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." }));
             }
             catch (Exception exception)
             {
@@ -133,7 +138,43 @@ namespace UnityCli
             }
             finally
             {
-                lock (QueueLock) RunningWork.Remove(item);
+                CompleteWorkItem(item);
+            }
+        }
+
+        /// <summary>同 root request 的并发 redelivery 只附着一个 work item；不同 bytes 立即 fail closed。</summary>
+        private static BridgeWorkItem EnqueueOrAttach(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, out bool created, out int queueDepth)
+        {
+            var digest = ComputeRequestDigest(rawRequestBytes, request.InstanceId);
+            lock (QueueLock)
+            {
+                BridgeWorkItem existing;
+                if (ActiveRequestWork.TryGetValue(request.RequestId, out existing))
+                {
+                    if (!string.Equals(existing.RequestDigest, digest, StringComparison.Ordinal))
+                        throw new BridgeCommandException("E_REQUEST_ID_REUSED", "requestId is already bound to different request bytes.", "Generate a new requestId before retrying this command.");
+                    created = false;
+                    queueDepth = WorkQueue.Count;
+                    return existing;
+                }
+                var item = new BridgeWorkItem(request, rawRequestBytes, digest);
+                ActiveRequestWork.Add(request.RequestId, item);
+                WorkQueue.Enqueue(item);
+                created = true;
+                queueDepth = WorkQueue.Count;
+                return item;
+            }
+        }
+
+        /// <summary>完成信号与 active-request map 在同一锁内更新，attach 不会观察到半完成 item。</summary>
+        private static void CompleteWorkItem(BridgeWorkItem item)
+        {
+            lock (QueueLock)
+            {
+                RunningWork.Remove(item);
+                BridgeWorkItem current;
+                if (ActiveRequestWork.TryGetValue(item.Request.RequestId, out current) && object.ReferenceEquals(current, item))
+                    ActiveRequestWork.Remove(item.Request.RequestId);
                 item.Completed.Set();
             }
         }
@@ -143,21 +184,32 @@ namespace UnityCli
             private readonly object StateLock = new object();
             private bool cancelled;
             private bool started;
+            private bool journalAccepted;
+            private bool journalAcceptanceCancelled;
             private readonly CancellationTokenSource cancellation;
 
-            public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, CancellationToken clientAbort = default)
+            public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest)
             {
                 Request = request;
-                cancellation = CreateExecutionLifetime(request, clientAbort);
+                RawRequestBytes = rawRequestBytes;
+                RequestDigest = requestDigest;
+                cancellation = CreateExecutionLifetime(request);
             }
 
             public UnityCli.Protocol.BridgeRequest Request { get; private set; }
+            public byte[] RawRequestBytes { get; private set; }
+            public string RequestDigest { get; private set; }
             public CancellationToken Token { get { return cancellation.Token; } }
             public ManualResetEventSlim Started { get; private set; } = new ManualResetEventSlim(false);
             public ManualResetEventSlim Completed { get; private set; } = new ManualResetEventSlim(false);
-            public string Response { get; set; }
+            private string response;
+            public string Response
+            {
+                get { lock (StateLock) return response; }
+                set { lock (StateLock) response = value; }
+            }
             public bool TimedOut { get; private set; }
-            public bool ClientDisconnected { get; private set; }
+            public bool IsMutation { get; set; }
 
             public bool TryStart()
             {
@@ -168,8 +220,11 @@ namespace UnityCli
                         return false;
                     }
                     started = true;
-                    var timeoutMs = Request == null || Request.Execution == null ? null : Request.Execution.TimeoutMs;
-                    if (timeoutMs.HasValue && timeoutMs.Value > 0) cancellation.CancelAfter(TimeSpan.FromMilliseconds(Math.Min(timeoutMs.Value, int.MaxValue)));
+                    int remainingMs;
+                    if (Request != null && Request.TryDeadlineRemainingMs(out remainingMs))
+                        cancellation.CancelAfter(TimeSpan.FromMilliseconds(remainingMs));
+                    else
+                        cancellation.Cancel();
                     Started.Set();
                     return true;
                 }
@@ -189,35 +244,35 @@ namespace UnityCli
                 }
             }
 
-            public void Cancel()
+            /// <summary>仅在 journal mutex 内调用，使 acceptance 与 durable record 创建保持同一裁决顺序。</summary>
+            public bool TryAcceptJournal()
             {
-                TimedOut = true;
-                cancellation.Cancel();
-            }
-
-            public void CancelClientDisconnected()
-            {
-                var completedBeforeStart = false;
                 lock (StateLock)
                 {
-                    if (ClientDisconnected) return;
-                    ClientDisconnected = true;
-                    if (!started)
-                    {
-                        cancelled = true;
-                        completedBeforeStart = true;
-                    }
+                    if (journalAcceptanceCancelled) return false;
+                    journalAccepted = true;
+                    return true;
                 }
-                cancellation.Cancel();
-                if (completedBeforeStart)
+            }
+
+            /// <summary>HTTP timeout 仅能取消尚未被 coordinator 接受的 mutation。</summary>
+            public bool CancelBeforeJournalAcceptance()
+            {
+                lock (StateLock)
                 {
-                    Response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                        Request.RequestId,
-                        "E_CLIENT_DISCONNECTED",
-                        "Bridge request was cancelled before execution because the HTTP client disconnected.",
-                        nextActions: new[] { "Reconnect and submit a new request; no Unity side effects were applied." },
-                        transient: true));
-                    Completed.Set();
+                    if (journalAccepted) return false;
+                    journalAcceptanceCancelled = true;
+                    cancellation.Cancel();
+                    return true;
+                }
+            }
+
+            public void Cancel()
+            {
+                lock (StateLock)
+                {
+                    TimedOut = true;
+                    cancellation.Cancel();
                 }
             }
 

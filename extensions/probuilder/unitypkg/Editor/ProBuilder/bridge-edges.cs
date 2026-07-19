@@ -62,16 +62,25 @@ namespace UnityCli.ProBuilder
 
             if (request.EdgeA == null || request.EdgeB == null)
                 throw ProBuilderErrors.SchemaInvalid("edgeA and edgeB parameters are required (as {a, b} vertex index pairs).");
-
+            var edgeA = new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(request.EdgeA.A, "edgeA.a"), b = ProBuilderOperationProof.CheckedInt(request.EdgeA.B, "edgeA.b") };
+            var edgeB = new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(request.EdgeB.A, "edgeB.a"), b = ProBuilderOperationProof.CheckedInt(request.EdgeB.B, "edgeB.b") };
+            var edgeArray = ProBuilderOperationProof.ValidateEdges(mesh, null, new[] { edgeA, edgeB });
+            var before = ProBuilderOperationProof.Capture(mesh, edges: edgeArray);
+            if (before == null) throw ProBuilderErrors.OperationFailed("bridge-edges", "Requested edge geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Bridge Edges");
-            var bridged = ProBuilderReflection.BridgeEdges(mesh, (int)request.EdgeA.A, (int)request.EdgeA.B, (int)request.EdgeB.A, (int)request.EdgeB.B, request.AllowNonManifold);
+            var bridged = ProBuilderReflection.BridgeEdges(mesh, edgeA.a, edgeA.b, edgeB.a, edgeB.b, request.AllowNonManifold);
             if (!bridged)
                 throw ProBuilderErrors.OperationFailed("bridge-edges", "AppendElements.Bridge method not found or failed in ProBuilder assembly.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, edges: edgeArray);
+            if (!ProBuilderOperationProof.HasTopologyExpansion(before, after))
+                throw ProBuilderErrors.OperationFailed("bridge-edges", "Requested edges did not produce readable bridge topology.");
 
-            var newFaceCount = ProBuilderReflection.GetFaceCount(mesh);
+            var newFaceCount = ProBuilderReflection.GetFaceCount(freshMesh);
             return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceCount = newFaceCount });
         }
     }

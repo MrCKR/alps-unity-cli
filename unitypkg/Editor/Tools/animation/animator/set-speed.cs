@@ -18,10 +18,15 @@ namespace UnityCli
             var animator = go.GetComponent<Animator>();
             if (animator == null) throw new UnityCliBridge.BridgeCommandException("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + GameObjectToolSupport.HierarchyPath(go), "Add an Animator component or choose another target.");
             var speed = r.Speed ?? 1f;
+            ctx.CommitEffect();
             UnityCliSceneMutation.RecordObject(animator, "Set Animator Speed");
             animator.speed = speed;
             UnityCliSceneMutation.MarkSceneObjectDirty(animator);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Speed = speed, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-speed", Target = GameObjectToolSupport.HierarchyPath(go), Value = speed.ToString(System.Globalization.CultureInfo.InvariantCulture) } } });
+            var observedTarget = EditorUtility.InstanceIDToObject(go.GetInstanceID()) as GameObject;
+            var observedAnimator = observedTarget == null ? null : observedTarget.GetComponent<Animator>();
+            var observedSpeed = observedAnimator == null ? 0f : observedAnimator.speed;
+            if (observedAnimator == null || !Mathf.Approximately(observedSpeed, speed)) throw AnimationToolSupport.StateMismatch("E_ANIMATOR_SPEED_STATE_MISMATCH", "Animator speed");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Speed = observedSpeed, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-speed", Target = GameObjectToolSupport.HierarchyPath(go), Value = observedSpeed.ToString(System.Globalization.CultureInfo.InvariantCulture) } } });
         }
     }
 }

@@ -32,16 +32,17 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 
 项目工具（`IUnityCliTool<TReq,TRes>` C# 实现）通过 Bridge 运行时发现。不同项目注册不同工具。`tools group list custom --include-custom` 对实例 A 可能显示 `sample.echo`，对实例 B 可能显示 `acme.custom-builder`。
 
-项目工具发现需要可达的 Bridge。无 Bridge 连接时，只能发现内置工具。
+项目工具发现需要可验证的 live Bridge generation。无 live Bridge 时，CLI 仍提供 packaged built-in/Extension static catalog；项目自定义能力只能来自带 identity/freshness 的已验证 snapshot，否则返回结构化 unavailable。
 
 ### 3. Bridge 可达性
 
-| Bridge 状态 | 可用工具 |
-|-------------|---------|
-| 可达（`/health` OK） | 所有内置 + 项目工具（`--include-custom`） |
-| 不可达 | 仅 `offline` / `cli-only` 工具 |
-| 过期（心跳超时） | 无 Bridge 命令；返回 `E_TARGET_STALE` |
-| 不可用（`/health` 失败） | 无 Bridge 命令；返回 `E_TARGET_UNREACHABLE` |
+| Instance 状态 | 发现与执行 |
+|---------------|------------|
+| `ready` | static catalog + 当前 validated generation 的 live/project custom descriptors；可执行 Bridge Tool |
+| `transitioning` | static catalog 立即可用；直接调用由 supervisor 在 absolute deadline 内等待恢复 |
+| `blocked` | static catalog 立即可用；`editor.state` 返回 blocker，普通调用返回结构化 blocked error |
+| `offline` | static catalog 与 TS-local 能力可用；live project custom discovery 不伪造结果 |
+| `conflict` | static catalog 可用；Bridge 调用返回 `E_INSTANCE_CONFLICT` |
 
 离线/CLI-only 能力不受 Bridge 状态影响：
 - `tools run package.list` / `package.info` / `package.search` / `package.install` / `package.remove` / `package.deploy` / `package.restore` / `package.bridge-remove`
@@ -49,7 +50,7 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 - `tools run docs.get` / `docs.search` / `reflect.type` / `reflect.member` / `reflect.search`
 - `jobs status` / `jobs logs` / `jobs cancel`
 - `init --check`, `doctor`, `instances list` / `instances prune`
-- `target current` / `target set` / `target clear` / `target alias`
+- `target alias list` / `target alias set` / `target alias unset`
 
 ### 4. 编辑器状态（PlayMode）与 Runtime 工具可用性
 
@@ -62,12 +63,12 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 
 使 runtime 工具可用的步骤：
 1. `tools run editor.play` 进入 Play Mode
-2. `tools run editor.state` 确认 `playMode: playing`
+2. `context read editor.state --input '{}'` 确认 `state.playMode` 的已知值为 `play`
 3. 重试 runtime 工具
 
 ### 5. Domain Reload
 
-Unity domain reload 期间（如脚本编译后），Bridge 标记目标为过期并停止服务请求。CLI 返回 `E_UNITY_COMPILING` 或 `E_UNITY_BUSY`。reload 完成后，Bridge 使用更新后的能力重新注册。
+Unity domain reload 期间，registry 将 project identity 归约为 `transitioning`，listener generation 可以变化。session supervisor 在同一 logical request 和 absolute deadline 内重新绑定已验证 generation；可恢复 reload 不作为直接调用的最终错误暴露。deadline 耗尽时返回该 completion contract 固定的 timeout 或 outcome-unknown 结果。
 
 ### 6. 工具目录 Fingerprint
 
@@ -75,11 +76,11 @@ Unity domain reload 期间（如脚本编译后），Bridge 标记目标为过�
 
 ## AI Agent 处理方式
 
-1. **先解析目标。** 执行任何工具前先 `instances list`，然后在 discovery、describe 和执行命令上显式传 `--instance`；只有明确需要持久化全局默认值时才使用 `target set`
+1. **先解析项目身份。** 执行任何工具前先 `instances list`，然后在 discovery、describe 和执行命令上显式传 `--instance`；也可以从目标 Unity 项目 CWD 调用
 2. **执行前先 describe。** descriptor 显示 `supportStatus`、`target`、`availabilityScope`、`playModeSupport`
-3. **优雅处理错误。** Package-not-found、Bridge-unreachable 和 `E_RUNTIME_NOT_READY` 包含 `nextActions`
-4. **状态变化后重新发现。** 安装包或 domain reload 后，重新 `tools group list custom --include-custom`
-5. **检查 `editor.state`** 再调用 PlayMode 敏感工具。`target: "runtime"` 需先进入 Play Mode
+3. **按结构化终态处理。** Package-not-found、instance conflict、blocker、timeout、outcome unknown 和 `E_RUNTIME_NOT_READY` 都包含 `nextActions`
+4. **能力变化后重新发现。** 安装包或 descriptor fingerprint 改变后，重新 `tools group list custom --include-custom`
+5. **需要即时状态时读取 Context。** 使用 `context read editor.state --input '{}'`；`target: "runtime"` 的 Tool 需先进入 Play Mode
 
 ## 交叉引用
 

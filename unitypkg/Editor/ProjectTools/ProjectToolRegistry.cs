@@ -152,6 +152,7 @@ namespace UnityCli
                 throw new InvalidOperationException("Tool descriptor is incomplete: " + type.FullName + ".");
 
             RegisteredTool definition;
+            var ownership = registryOwnership.Resolve(type);
             try
             {
                 var factory = typeof(UnityCliBridge).GetMethod("CreateRegisteredTool", BindingFlags.Static | BindingFlags.NonPublic)
@@ -161,6 +162,11 @@ namespace UnityCli
             catch (Exception exception)
             {
                 var diagnostics = ExceptionChain(exception);
+                if (string.Equals(ownership, "project", StringComparison.Ordinal) && diagnostics.Contains("E_TOOL_COMPLETION_CONTRACT_REQUIRED"))
+                {
+                    WriteLog("custom_tool_registration_rejected type=" + type.FullName + " error=" + diagnostics);
+                    return;
+                }
                 WriteLog("custom_tool_registration_failed type=" + type.FullName + " error=" + diagnostics);
                 throw new InvalidOperationException("Tool registration failed: " + type.FullName + ": " + diagnostics, exception);
             }
@@ -182,6 +188,8 @@ namespace UnityCli
         private static RegisteredTool CreateRegisteredTool<TReq, TRes>(object instance, ToolDescriptor descriptor, Assembly assembly, Type implementationType)
         {
             var tool = (IUnityCliTool<TReq, TRes>)instance;
+            var source = registryOwnership.Resolve(implementationType);
+            var completion = ResolveToolCompletionContract(descriptor, source);
             return new RegisteredTool
             {
                 Name = descriptor.Name,
@@ -189,7 +197,7 @@ namespace UnityCli
                 Description = descriptor.Description,
                 Group = string.IsNullOrEmpty(descriptor.Group) ? "custom" : descriptor.Group,
                 Descriptor = descriptor,
-                Source = registryOwnership.Resolve(implementationType),
+                Source = source,
                 Version = string.IsNullOrEmpty(descriptor.Version) ? "1.0.0" : descriptor.Version,
                 InputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
                 OutputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
@@ -216,8 +224,60 @@ namespace UnityCli
                 ExpectedFingerprint = descriptor.Fingerprint,
                 RequestType = typeof(TReq),
                 ResultType = typeof(TRes),
+                CompletionContract = completion,
                 InvokeAsync = async (request, context, cancellationToken) => (object)await tool.ExecuteAsync((TReq)request, context, cancellationToken)
             };
+        }
+
+        /// <summary>built-in/Extension 只信任生成 registry；自定义 Tool 必须提供完整机器契约。</summary>
+        private static UnityCliToolCompletionContract ResolveToolCompletionContract(ToolDescriptor descriptor, string source)
+        {
+            UnityCliToolCompletionContract generated;
+            if (UnityCliToolCompletionRegistry.TryGet(descriptor.Name, out generated))
+            {
+                var generatedExtension = generated.DescriptorOwner.StartsWith("extension:", StringComparison.Ordinal);
+                if ((generatedExtension && !string.Equals(source, "extension", StringComparison.Ordinal))
+                    || (!generatedExtension && !string.Equals(generated.DescriptorOwner, source, StringComparison.Ordinal)))
+                    throw new InvalidOperationException("Completion contract owner mismatch for " + descriptor.Name + ".");
+                var descriptorMutation = descriptor.DestructiveHint
+                    || descriptor.SupportsDryRun
+                    || (descriptor.SideEffects != null && descriptor.SideEffects.Length > 0)
+                    || string.Equals(descriptor.PlayModeSupport, "session-affecting", StringComparison.Ordinal);
+                if (generated.Mutation != descriptorMutation)
+                    throw new InvalidOperationException("Completion contract mutation classification mismatch for " + descriptor.Name + ".");
+                return generated;
+            }
+
+            var custom = descriptor.Completion;
+            if (custom == null)
+                throw new InvalidOperationException("E_TOOL_COMPLETION_CONTRACT_REQUIRED: custom Tool " + descriptor.Name + " must declare completion semantics.");
+            var allowedClasses = new HashSet<string>(new[] { "atomic", "observed-state", "resumable", "external" }, StringComparer.Ordinal);
+            if (!allowedClasses.Contains(custom.ExecutionClass)
+                || string.IsNullOrWhiteSpace(custom.CompletionPredicate)
+                || string.IsNullOrWhiteSpace(custom.ProofSource)
+                || string.IsNullOrWhiteSpace(custom.ReloadPolicy)
+                || string.IsNullOrWhiteSpace(custom.TimeoutError)
+                || string.IsNullOrWhiteSpace(custom.OutcomeUnknownPolicy)
+                || string.IsNullOrWhiteSpace(custom.CompletionDriverId)
+                || !IsRegisteredCompletionDriver(custom.ExecutionClass, custom.CompletionDriverId))
+                throw new InvalidOperationException("E_TOOL_COMPLETION_CONTRACT_REQUIRED: custom Tool " + descriptor.Name + " has an incomplete or unregistered completion contract.");
+            var mutation = descriptor.DestructiveHint
+                || descriptor.SupportsDryRun
+                || (descriptor.SideEffects != null && descriptor.SideEffects.Length > 0)
+                || string.Equals(descriptor.PlayModeSupport, "session-affecting", StringComparison.Ordinal);
+            return new UnityCliToolCompletionContract(
+                descriptor.Name, "project", "direct-terminal", custom.ExecutionClass, custom.CompletionPredicate,
+                custom.ProofSource, custom.ReloadPolicy, custom.TimeoutError, custom.OutcomeUnknownPolicy,
+                "allowed", "ordinary", custom.CompletionDriverId, mutation ? "required" : "none", mutation);
+        }
+
+        /// <summary>operation coordinator 在主线程解析自定义 Tool 的真实 contract。</summary>
+        private static UnityCliToolCompletionContract ResolveRegisteredCustomToolCompletionContract(string toolName)
+        {
+            if (string.IsNullOrWhiteSpace(toolName)) return null;
+            DiscoverProjectTools();
+            RegisteredTool definition;
+            return ProjectTools.TryGetValue(toolName, out definition) ? definition.CompletionContract : null;
         }
 
         private static string ProjectToolGroupFromName(string name)
@@ -242,6 +302,7 @@ namespace UnityCli
             public string Name { get; set; }
             [UnityCliAnyJson] public object Input { get; set; }
             public string FingerprintMode { get; set; }
+            public string ExpectedDescriptorFingerprint { get; set; }
             public string ArtifactDir { get; set; }
             public string ProjectPath { get; set; }
         }
@@ -259,6 +320,15 @@ namespace UnityCli
             var definition = ProjectTools[name];
             // 门禁前刷新 live handler+descriptor 指纹，旧 discovery proof 在 domain reload/descriptor 变化后必须失效。
             var fingerprintCheck = RefreshProjectToolFingerprint(definition, args.FingerprintMode);
+            if (!string.IsNullOrEmpty(args.ExpectedDescriptorFingerprint)
+                && !string.Equals(args.ExpectedDescriptorFingerprint, definition.Fingerprint, StringComparison.Ordinal))
+            {
+                throw new BridgeCommandException(
+                    "E_TOOL_DESCRIPTOR_CHANGED",
+                    "The Tool descriptor changed after discovery: " + name,
+                    new Dictionary<string, object> { { "toolName", name }, { "expectedFingerprint", args.ExpectedDescriptorFingerprint }, { "actualFingerprint", definition.Fingerprint } },
+                    new[] { "Run tools describe again against the selected Unity generation before constructing a new request." });
+            }
             var dryRun = request.Execution != null && request.Execution.DryRun == true;
             if (definition.DestructiveHint
                 && !(dryRun && definition.SupportsDryRun)
@@ -327,6 +397,7 @@ namespace UnityCli
                 {
                     toolTimeout.CancelAfter(timeoutMs);
                     parsedInput = UnityCliSerializer.Deserialize(inputJson, definition.RequestType);
+                    var effectPreparation = PrepareToolEffect(request, definition.CompletionContract, parsedInput);
                     result = await definition.InvokeAsync(parsedInput, new UnityCliProjectToolContext
                     {
                         RequestId = request.RequestId,
@@ -334,6 +405,10 @@ namespace UnityCli
                         ArtifactDir = artifactDir,
                         LogPath = LogPath(),
                         DryRun = dryRun,
+                        ProofOnly = IsProofRecoveryRequest(request.RequestId),
+                        ProofContinuation = effectPreparation == null ? null : effectPreparation.Value,
+                        CommitEffectAction = () => CommitToolEffect(request, definition.CompletionContract, effectPreparation),
+                        ListenerGeneration = CurrentListenerGeneration(),
                         TimeoutMs = timeoutMs,
                         Wait = CreateWaiter(request.RequestId, name),
                         CancellationToken = toolTimeout.Token
@@ -351,7 +426,13 @@ namespace UnityCli
                 var inner = exception.InnerException ?? exception;
                 var innerBce = inner as BridgeCommandException;
                 if (innerBce != null) throw innerBce;
+                if (inner is OperationCanceledException)
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed before the Tool reached its terminal proof.", "Inspect editor.state before submitting a new request.");
                 throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
+            }
+            catch (OperationCanceledException)
+            {
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed before the Tool reached its terminal proof.", "Inspect editor.state before submitting a new request.");
             }
             catch (Exception exception)
             {
@@ -359,7 +440,17 @@ namespace UnityCli
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            return CompleteProjectToolSuccess(request, definition, artifactDir, parsedInput, timeoutMs, startedAt, result);
+            var outputJson = UnityCliSerializer.Serialize(result);
+            var outputError = ValidateTypedInput(definition.ResultType, outputJson);
+            if (outputError != null)
+                throw new BridgeCommandException(
+                    "E_TOOL_COMPLETION_PROOF_INVALID",
+                    "Tool result failed its derived output schema at " + outputError.Path + ".",
+                    new Dictionary<string, object> { { "toolName", definition.Name }, { "path", outputError.Path }, { "expected", outputError.Expected }, { "actual", outputError.Actual } },
+                    new[] { "Fix the Tool result DTO or completion driver before retrying." });
+            var terminalData = CompleteProjectToolSuccess(request, definition, artifactDir, parsedInput, timeoutMs, startedAt, result);
+            RecordToolCompletionEvidence(request, definition, result, terminalData);
+            return terminalData;
         }
 
         private static Dictionary<string, object> ProjectToolDescriptorData(RegisteredTool definition)
@@ -377,7 +468,21 @@ namespace UnityCli
                 { "defaultTimeoutMs", definition.DefaultTimeoutMs }, { "maxTimeoutMs", definition.MaxTimeoutMs }, { "supportsJob", definition.SupportsJob },
                 { "artifactKinds", definition.ArtifactKinds }, { "handler", runtimeTarget ? "bridge-runtime" : "bridge" },
                 { "supportStatus", runtimeTarget ? "live-bridge-runtime" : "live-bridge" }, { "cliCommand", "tools run " + definition.Name },
+                { "completionContract", CompletionContractData(definition.CompletionContract) },
                 { "fingerprint", ProjectToolFingerprintData(definition) }
+            };
+        }
+
+        private static Dictionary<string, object> CompletionContractData(UnityCliToolCompletionContract contract)
+        {
+            return new Dictionary<string, object>
+            {
+                { "executionClass", contract.ExecutionClass }, { "completionPredicate", contract.CompletionPredicate },
+                { "proofSource", contract.ProofSource }, { "reloadPolicy", contract.ReloadPolicy },
+                { "timeoutError", contract.TimeoutError }, { "outcomeUnknownPolicy", contract.OutcomeUnknownPolicy },
+                { "directInvocationPolicy", contract.DirectInvocationPolicy }, { "frozenDeliveryPolicy", contract.FrozenDeliveryPolicy },
+                { "completionDriverId", contract.CompletionDriverId }, { "journalPolicy", contract.JournalPolicy },
+                { "mutation", contract.Mutation }
             };
         }
 

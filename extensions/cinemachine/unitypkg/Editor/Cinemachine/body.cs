@@ -54,57 +54,38 @@ namespace UnityCli.Cinemachine
             var gameObject = CinemachineToolSupport.ResolveRequiredTarget(request.Target, "cinemachine body requires --target <go>.");
             var camera = CinemachineToolSupport.RequireCameraComponent(gameObject);
             var effects = new List<CinemachinePlannedEffect>();
-
             if (string.IsNullOrWhiteSpace(request.Body) && string.IsNullOrWhiteSpace(request.Property))
-            {
-                throw new UnityCliBridge.BridgeCommandException(
-                    "E_CINEMACHINE_BODY_INPUT_REQUIRED",
-                    "cinemachine.body requires body or property/value.",
-                    "Pass body to swap the stage component, or property and value to configure the existing Body component.");
-            }
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_BODY_INPUT_REQUIRED", "cinemachine.body requires body or property/value.", "Pass body to swap the stage component, or property and value to configure the existing Body component.");
+            if (string.IsNullOrWhiteSpace(request.Property) != string.IsNullOrWhiteSpace(request.Value))
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_COMPONENT_PROPERTY_REQUIRED", "Configuring a Body component requires both property and value.", "Pass property and value together.");
 
+            var existing = CinemachineToolSupport.GetPipelineComponent(camera, "Body");
+            var bodyType = string.IsNullOrWhiteSpace(request.Body) ? existing?.GetType() : CinemachineToolSupport.RequireComponentType(request.Body, "Body");
+            if (bodyType == null)
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_BODY_COMPONENT_NOT_FOUND", "No Body pipeline component is installed on target: " + GameObjectToolSupport.HierarchyPath(gameObject), "Provide body to install a Body component before configuring properties.");
+            CinemachineToolSupport.RequirePipelineComponentStage(bodyType, "Body");
+            var memberPlan = string.IsNullOrWhiteSpace(request.Property) ? null : CinemachineToolSupport.PrepareComponentMember(bodyType, request.Property, request.Value);
+
+            ctx.CommitEffect();
             if (!string.IsNullOrWhiteSpace(request.Body))
             {
-                var bodyType = CinemachineToolSupport.RequireComponentType(request.Body, "Body");
                 CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Body", bodyType);
-                effects.Add(new CinemachinePlannedEffect
-                {
-                    Type = "cinemachine.body",
-                    Target = GameObjectToolSupport.HierarchyPath(gameObject),
-                    BodyType = request.Body
-                });
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.body", Target = GameObjectToolSupport.HierarchyPath(gameObject), BodyType = bodyType.Name });
             }
-
-            if (!string.IsNullOrWhiteSpace(request.Property) || !string.IsNullOrWhiteSpace(request.Value))
+            var applied = CinemachineToolSupport.GetPipelineComponent(camera, "Body");
+            if (memberPlan != null)
             {
-                if (string.IsNullOrWhiteSpace(request.Property) || string.IsNullOrWhiteSpace(request.Value))
-                {
-                    throw new UnityCliBridge.BridgeCommandException(
-                        "E_CINEMACHINE_COMPONENT_PROPERTY_REQUIRED",
-                        "Configuring a Body component requires both property and value.",
-                        "Pass property and value together.");
-                }
-
-                var bodyComponent = CinemachineToolSupport.GetPipelineComponent(camera, "Body");
-                if (bodyComponent == null)
-                {
-                    throw new UnityCliBridge.BridgeCommandException(
-                        "E_CINEMACHINE_BODY_COMPONENT_NOT_FOUND",
-                        "No Body pipeline component is installed on target: " + GameObjectToolSupport.HierarchyPath(gameObject),
-                        "Provide body to install a Body component before configuring properties.");
-                }
-                CinemachineToolSupport.ConfigurePipelineComponent(bodyComponent, request.Property, request.Value);
-                effects.Add(new CinemachinePlannedEffect
-                {
-                    Type = "cinemachine.body",
-                    Target = GameObjectToolSupport.HierarchyPath(gameObject),
-                    Field = request.Property,
-                    Value = request.Value,
-                    BodyType = bodyComponent.GetType().Name
-                });
+                CinemachineToolSupport.ApplyComponentMember(applied, memberPlan);
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.body", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = request.Property, Value = request.Value, BodyType = bodyType.Name });
             }
 
-            CinemachineToolSupport.MarkDirty(gameObject);
+            var observedObject = CinemachineToolSupport.ResolveRequiredTarget(gameObject.GetInstanceID().ToString(), "Cinemachine Body target could not be resolved after mutation.");
+            var observedCamera = CinemachineToolSupport.RequireCameraComponent(observedObject);
+            var observedBody = CinemachineToolSupport.GetPipelineComponent(observedCamera, "Body");
+            if (observedBody == null || observedBody.GetType() != bodyType)
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_BODY_VERIFY_FAILED", "Cinemachine Body component did not retain the requested type.", "Inspect the virtual camera before retrying.");
+            if (memberPlan != null) CinemachineToolSupport.VerifyComponentMember(observedBody, memberPlan, "E_CINEMACHINE_BODY_VERIFY_FAILED");
+            CinemachineToolSupport.MarkDirty(observedObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),

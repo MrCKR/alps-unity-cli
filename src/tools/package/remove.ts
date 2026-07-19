@@ -1,7 +1,8 @@
 import { resolve } from "node:path";
 import { resolvePackageChanges } from "../../cli-commands/package.js";
-import { removePackage, validatePackageName } from "../../package-manager.js";
+import { PackageManagerError, removePackage, validatePackageName } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface PackageRemoveRequest {
   name: string;
@@ -24,13 +25,14 @@ export interface PackageRemovePlannedEffect {
   blocked?: boolean;
 }
 
-export interface PackageRemoveObject {}
+export interface PackageRemoveObject { [key: string]: AnyJson; }
 
 export interface PackageRemoveResult {
   action?: string;
   package?: string;
   projectPath?: string;
   manifestPath?: string;
+  dependencyRemoved?: boolean;
   removedVersion?: string;
   dependents?: PackageRemoveDependent[];
   forced?: boolean;
@@ -64,8 +66,8 @@ export interface PackageRemoveResult {
 async function runPackageRemove(request: PackageRemoveRequest, context: ToolContext): Promise<PackageRemoveResult> {
   const projectPath = resolve(request.project ?? context.projectPath);
   const name = validatePackageName(request.name);
-  const removal = await removePackage(projectPath, name, { force: request.force === true, dryRun: context.execution.dryRun === true });
-  if (removal.dryRun) {
+  const removal = await removePackage(projectPath, name, { force: request.force === true, dryRun: true });
+  if (context.execution.dryRun) {
     return {
       action: "remove",
       package: name,
@@ -74,20 +76,26 @@ async function runPackageRemove(request: PackageRemoveRequest, context: ToolCont
       status: removal.blocked ? "blocked" : "dry_run"
     };
   }
+  if (removal.blocked) {
+    throw new PackageManagerError("PACKAGE_DEPENDENTS_BLOCKED", `Package ${name} is required by: ${removal.dependents.map((entry) => entry.name).join(", ")}.`, ["Remove dependent packages first, or pass force=true only when the dependency break is intentional."]);
+  }
 
+  await context.commitEffect?.();
+  const committedRemoval = await removePackage(projectPath, name, { force: request.force === true });
+  const resolveRequestId = context.localJournalActive ? `${context.requestId}_package_remove_resolve` : context.requestId;
   return resolvePackageChanges("remove", {
     projectPath,
     unity: request.unity,
     wait: context.execution.wait,
     waitTimeoutMs: context.execution.waitTimeoutMs,
     timeoutMs: context.execution.timeoutMs,
+    absoluteDeadlineMs: context.absoluteDeadlineMs,
     job: context.execution.job
   }, {
     dataDir: context.dataDir ?? context.projectPath,
     runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute,
-    bridgeEndpoint: context.bridgeEndpoint
-  }, context.requestId, { action: "remove", package: name, ...removal }) as Promise<PackageRemoveResult>;
+    bridgeExecute: context.bridgeExecute
+  }, resolveRequestId, { action: "remove", package: name, ...committedRemoval }) as Promise<PackageRemoveResult>;
 }
 
 export default defineTool<PackageRemoveRequest, PackageRemoveResult>({

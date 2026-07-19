@@ -18,10 +18,15 @@ namespace UnityCli
             var animator = go.GetComponent<Animator>();
             if (animator == null) throw new UnityCliBridge.BridgeCommandException("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + GameObjectToolSupport.HierarchyPath(go), "Add an Animator component or choose another target.");
             var enabled = r.Value ?? true;
+            ctx.CommitEffect();
             UnityCliSceneMutation.RecordObject(animator, "Set Animator Enabled");
             animator.enabled = enabled;
             UnityCliSceneMutation.MarkSceneObjectDirty(animator);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Enabled = enabled, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-enabled", Target = GameObjectToolSupport.HierarchyPath(go), Value = enabled.ToString().ToLowerInvariant() } } });
+            var observedTarget = EditorUtility.InstanceIDToObject(go.GetInstanceID()) as GameObject;
+            var observedAnimator = observedTarget == null ? null : observedTarget.GetComponent<Animator>();
+            var observedEnabled = observedAnimator != null && observedAnimator.enabled;
+            if (observedAnimator == null || observedEnabled != enabled) throw AnimationToolSupport.StateMismatch("E_ANIMATOR_ENABLED_STATE_MISMATCH", "Animator enabled state");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Enabled = observedEnabled, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-enabled", Target = GameObjectToolSupport.HierarchyPath(go), Value = observedEnabled.ToString().ToLowerInvariant() } } });
         }
     }
 }

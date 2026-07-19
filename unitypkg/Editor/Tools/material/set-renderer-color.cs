@@ -67,6 +67,17 @@ namespace UnityCli
             }
             var color = MaterialToolSupport.ParseColor(colorValue);
             var slot = request.Slot;
+            if (string.IsNullOrEmpty(propertyName) || float.IsNaN(color.r) || float.IsNaN(color.g) || float.IsNaN(color.b) || float.IsNaN(color.a) || float.IsInfinity(color.r) || float.IsInfinity(color.g) || float.IsInfinity(color.b) || float.IsInfinity(color.a))
+                throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_COLOR_INVALID", "Property and color must be finite valid values.", "Pass a non-empty property and finite RGBA color.");
+            var materials = renderer.sharedMaterials;
+            if (slot.HasValue && (slot.Value < 0 || slot.Value >= materials.Length))
+                throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_SLOT_INVALID", "Renderer material slot is out of range: " + slot.Value, "Pass a slot from 0 through " + (materials.Length - 1) + ".");
+            var materialIndex = slot ?? 0;
+            if (materials.Length == 0 || materials[materialIndex] == null || !materials[materialIndex].HasProperty(propertyName))
+                throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_PROPERTY_NOT_FOUND", "Renderer material does not expose color property: " + propertyName, "Pass a color property supported by the selected material slot.");
+            var propertyId = Shader.PropertyToID(propertyName);
+            var rendererId = renderer.GetInstanceID();
+            var targetId = gameObject.GetInstanceID();
             if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
@@ -81,10 +92,19 @@ namespace UnityCli
             }
             var block = new MaterialPropertyBlock();
             if (slot.HasValue) renderer.GetPropertyBlock(block, slot.Value); else renderer.GetPropertyBlock(block);
-            block.SetColor(propertyName, color);
+            ctx.CommitEffect();
+            block.SetColor(propertyId, color);
             if (slot.HasValue) renderer.SetPropertyBlock(block, slot.Value); else renderer.SetPropertyBlock(block);
             UnityCliSceneMutation.MarkSceneObjectDirty(renderer);
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            var observedTarget = EditorUtility.InstanceIDToObject(targetId) as GameObject;
+            var observedRenderer = EditorUtility.InstanceIDToObject(rendererId) as Renderer;
+            var observedBlock = new MaterialPropertyBlock();
+            if (observedRenderer == null || observedTarget == null) throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_RENDERER_COLOR_STATE_MISMATCH", "Renderer disappeared before color readback.", "Retry after the Editor is idle.");
+            if (slot.HasValue) observedRenderer.GetPropertyBlock(observedBlock, slot.Value); else observedRenderer.GetPropertyBlock(observedBlock);
+            var observedColor = observedBlock.GetColor(propertyId);
+            if (!Mathf.Approximately(observedColor.r, color.r) || !Mathf.Approximately(observedColor.g, color.g) || !Mathf.Approximately(observedColor.b, color.b) || !Mathf.Approximately(observedColor.a, color.a))
+                throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_RENDERER_COLOR_STATE_MISMATCH", "Renderer color did not match the requested property value.", "Inspect the Renderer property block and retry.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "material.set-renderer-color",

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using UnityEditor;
 using UnityEngine;
 
@@ -45,11 +46,30 @@ namespace UnityCli
             catch (Exception exception) { throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to create screenshot output directory: " + exception.Message); }
         }
 
-        /// <summary>写入截图字节到文件。</summary>
-        public static void WriteScreenshotBytes(string outputPath, byte[] bytes)
+        /// <summary>写入截图后重新读取字节、校验格式并返回稳定 artifact proof。</summary>
+        public static ScreenshotArtifactProof WriteScreenshotBytes(string outputPath, byte[] bytes)
         {
+            if (bytes == null || bytes.Length == 0)
+                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_ARTIFACT_EMPTY", "Screenshot encoder produced no image data.", "Check the camera and render settings, then retry the screenshot.");
             try { File.WriteAllBytes(outputPath, bytes); }
             catch (Exception exception) { throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to write screenshot output: " + exception.Message); }
+            return VerifyScreenshotArtifact(outputPath, Path.GetExtension(outputPath).TrimStart('.'));
+        }
+
+        /// <summary>artifact proof 必须来自落盘后的 fresh readback，不能只检查 Exists。</summary>
+        public static ScreenshotArtifactProof VerifyScreenshotArtifact(string outputPath, string format)
+        {
+            if (!File.Exists(outputPath))
+                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_ARTIFACT_MISSING", "Screenshot artifact was not written: " + outputPath, "Check the output path and available disk space, then retry the screenshot.");
+            var bytes = File.ReadAllBytes(outputPath);
+            var normalized = NormalizeFormat(format, outputPath);
+            var valid = normalized == "png"
+                ? bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4e && bytes[3] == 0x47 && bytes[4] == 0x0d && bytes[5] == 0x0a && bytes[6] == 0x1a && bytes[7] == 0x0a
+                : bytes.Length >= 3 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff;
+            if (!valid)
+                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_ARTIFACT_INVALID", "Screenshot artifact is empty or does not match its requested format: " + outputPath, "Use a .png or .jpg output path and retry the capture.");
+            using (var sha = SHA256.Create())
+                return new ScreenshotArtifactProof { Path = outputPath, SizeBytes = bytes.LongLength, Sha256 = string.Concat(Array.ConvertAll(sha.ComputeHash(bytes), value => value.ToString("x2"))), Format = normalized };
         }
 
         /// <summary>推断图片格式:显式 format > 路径扩展名 > png;仅接受 png/jpg。</summary>
@@ -70,10 +90,12 @@ namespace UnityCli
         {
             var previousTarget = camera.targetTexture;
             var previousActive = RenderTexture.active;
-            var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
-            var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+            RenderTexture rt = null;
+            Texture2D texture = null;
             try
             {
+                rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+                texture = new Texture2D(width, height, TextureFormat.RGB24, false);
                 camera.targetTexture = rt;
                 camera.Render();
                 RenderTexture.active = rt;
@@ -85,8 +107,7 @@ namespace UnityCli
             {
                 RenderTexture.active = previousActive;
                 camera.targetTexture = previousTarget;
-                rt.Release();
-                UnityEngine.Object.DestroyImmediate(rt);
+                if (rt != null) { rt.Release(); UnityEngine.Object.DestroyImmediate(rt); }
             }
         }
 
@@ -153,6 +174,8 @@ namespace UnityCli
         public long? ImageWidth { get; set; }
         public long? ImageHeight { get; set; }
         public string ImageMimeType { get; set; }
+        public long SizeBytes { get; set; }
+        public string Sha256 { get; set; }
     }
 
     /// <summary>screenshot 域 artifact 条目 DTO(orbit/surround 多图输出)。</summary>
@@ -163,6 +186,16 @@ namespace UnityCli
         public string Camera { get; set; }
         public long Width { get; set; }
         public long Height { get; set; }
+        public string Format { get; set; }
+        public long SizeBytes { get; set; }
+        public string Sha256 { get; set; }
+    }
+
+    public sealed class ScreenshotArtifactProof
+    {
+        public string Path { get; set; }
+        public long SizeBytes { get; set; }
+        public string Sha256 { get; set; }
         public string Format { get; set; }
     }
 }

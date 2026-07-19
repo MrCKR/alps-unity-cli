@@ -31,10 +31,7 @@ export interface RuntimeCodeRequest {
   job?: boolean;
   wait?: boolean;
   waitTimeoutMs?: number;
-  bridgeEndpoint?: string;
-  target?: string;
   instance?: string;
-  retry?: number;
   dryRun?: boolean;
 }
 
@@ -110,13 +107,10 @@ export async function executeRuntimeCode(request: RuntimeCodeRequest, runtime: R
 
   if (channel.value === "live" && !request.job) {
     const result = await executeBridgePayload(requestId, "code.exec", payload, {
-      "bridge-endpoint": request.bridgeEndpoint ?? runtime.bridgeEndpoint ?? "",
       instance: request.instance ?? "",
-      target: request.target ?? "",
       "timeout-ms": String(timeoutMs),
-      retry: request.retry === undefined ? "0" : String(request.retry),
       __destructiveConfirmed: true
-    }, runtime);
+    }, runtime, undefined, { mode: "execute", mutation: true, defaultTimeoutMs: timeoutMs });
     if (!result.ok) throwCliFailure(result);
     return (result.data ?? {}) as Record<string, unknown>;
   }

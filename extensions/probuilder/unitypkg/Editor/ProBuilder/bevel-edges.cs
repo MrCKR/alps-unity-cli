@@ -62,13 +62,24 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("bevel-edges", "No ProBuilderMesh on target.");
 
-            var amount = (float)(request.Amount ?? 0.1);
-            int[] edgeIndices = request.EdgeIndices?.Select(i => (int)i).ToArray();
-            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = (int)e.A, b = (int)e.B }).ToArray();
+            var amount = ProBuilderOperationProof.CheckedFloat(request.Amount ?? 0.1, "amount");
+            if (amount <= 0)
+                throw ProBuilderErrors.SchemaInvalid("amount must be greater than 0 so bevel completion has observable topology.");
+            int[] edgeIndices = request.EdgeIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "edgeIndices")).ToArray();
+            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(e.A, "edges.a"), b = ProBuilderOperationProof.CheckedInt(e.B, "edges.b") }).ToArray();
 
             if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
                 throw ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for bevel-edges.");
 
+            var edgeArray = ProBuilderOperationProof.ValidateEdges(mesh, edgeIndices, edgePairs);
+            var before = ProBuilderOperationProof.Capture(mesh, edges: edgeArray);
+            if (before == null) throw ProBuilderErrors.OperationFailed("bevel-edges", "Requested edge geometry is not readable.");
+            var beforeVertexCount = ProBuilderReflection.GetVertexCount(mesh);
+            var beforeFaceCount = ProBuilderReflection.GetFaceCount(mesh);
+            var beforeEdgeCount = ProBuilderReflection.GetEdgeCount(mesh);
+            if (beforeVertexCount < 0 || beforeFaceCount < 0 || beforeEdgeCount < 0)
+                throw ProBuilderErrors.OperationFailed("bevel-edges", "Mesh topology is not readable before bevel.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Bevel Edges");
             var modifiedEdgeCount = ProBuilderReflection.BevelEdges(mesh, edgeIndices, edgePairs, amount);
             if (modifiedEdgeCount == 0)
@@ -76,6 +87,16 @@ namespace UnityCli.ProBuilder
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+
+            // API 返回的数量不是完成证明；倒角后必须从刷新的实际拓扑确认变更。
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, edges: edgeArray);
+            var afterVertexCount = ProBuilderReflection.GetVertexCount(freshMesh);
+            var afterFaceCount = ProBuilderReflection.GetFaceCount(freshMesh);
+            var afterEdgeCount = ProBuilderReflection.GetEdgeCount(freshMesh);
+            if (!ProBuilderOperationProof.HasTopologyExpansion(before, after) || afterVertexCount < 0 || afterFaceCount < 0 || afterEdgeCount < 0
+                || (afterVertexCount == beforeVertexCount && afterFaceCount == beforeFaceCount && afterEdgeCount == beforeEdgeCount))
+                throw ProBuilderErrors.OperationFailed("bevel-edges", "Bevel did not produce observable mesh topology changes.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { ModifiedEdgeCount = modifiedEdgeCount });
         }

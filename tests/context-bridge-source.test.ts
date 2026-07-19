@@ -10,7 +10,7 @@ const interfaceUrl = new URL("ProjectTools/IUnityCliTool.cs", editorUrl);
 
 const expectedContexts = [
   "project.info", "project.tags", "project.layers",
-  "editor.state", "editor.selection", "editor.windows", "editor.active-tool", "editor.tool-states", "editor.menu-items",
+  "editor.selection", "editor.windows", "editor.active-tool", "editor.tool-states", "editor.menu-items",
   "prefab.stage", "prefab.info", "prefab.hierarchy",
   "scene.opened", "scene.cameras", "scene.gameobject", "scene.gameobject.components", "scene.gameobject.component",
   "scene.volumes", "scene.renderer-features", "scene.rendering-stats",
@@ -33,7 +33,7 @@ test("context routes are non-mutating and context.read uses the typed registry p
   assert.match(registry, /await definition\.ReadAsync\(typedInput,[\s\S]*cancellationToken\)/);
 });
 
-test("all built-in contexts are self-contained typed IUnityCliContext implementations", async () => {
+test("all Unity-owned built-in contexts are self-contained typed IUnityCliContext implementations", async () => {
   const sources = await readContextSources();
   const combined = sources.map(({ source }) => source).join("\n");
 

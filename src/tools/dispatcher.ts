@@ -16,17 +16,23 @@ import type { JobRunner } from "../job-runner.js";
 import type { JobStore } from "../job-store.js";
 import { failure, success } from "../output.js";
 import { PackageManagerError } from "../package-manager.js";
+import { ProjectIdentityError, resolveProjectIdentity } from "../project-identity.js";
+import { InstanceRegistryError, currentInstanceProjectPath, resolveInstanceJournalIdentity } from "../instances.js";
+import { currentInvocationOrigin } from "../invocation-origin.js";
+import { executeWithLocalRequestJournal } from "../local-request-journal.js";
+import { defaultDataDir } from "../platform.js";
 import type { ContextCatalogRuntime } from "../contexts/catalog.js";
-import type { ProjectToolRuntime } from "../project-tool-discovery.js";
+import { discoverProjectTools, discoverRuntimeTools, type ProjectToolRuntime } from "../project-tool-discovery.js";
 import type { ContextDescriptor } from "../project-context-discovery.js";
 import { confirmDestructiveExecution } from "../security.js";
 import { validateSchema } from "../schema/validator.js";
 import type { CliResult } from "../types.js";
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../extension-availability.js";
 import { resolveCatalogTool } from "./catalog.js";
+import { generatedToolCompletionContract, type GeneratedToolCompletionContract } from "./.generated-completion-registry.js";
 import { findDefineTool, type ToolContext } from "./define.js";
 import { StructuredToolError } from "./errors.js";
-import { EXTENSION_GROUPS, findToolByName, type ToolMetadata } from "./metadata/index.js";
+import { EXTENSION_GROUPS, findToolByName, toolIsMutation, type ToolMetadata } from "./metadata/index.js";
 
 export type ToolsRuntime = ProjectToolRuntime & ContextCatalogRuntime & Partial<BridgeRuntime> & Partial<BuiltinDocsRuntime> & {
   dataDir?: string;
@@ -48,15 +54,34 @@ export async function dispatchTool(
   requestId: string,
   seed: Record<string, unknown> = {}
 ): Promise<CliResult> {
+  const dispatchStartedAtMs = Date.now();
   if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unity_cli tools group to see tool groups."]);
+  const executionFlagError = validateExecutionTimeoutFlags(flags, requestId);
+  if (executionFlagError) return executionFlagError;
 
   const parsed = await parseTypedInput(flags, requestId);
   if (!parsed.ok) return parsed.error;
+  const invocationContract = generatedToolCompletionContract(name);
+  const frozenDelivery = currentInvocationOrigin() === "batch-frozen" && invocationContract?.frozenDeliveryPolicy === "preserved";
+  const dryRun = getBoolean(flags, "dry-run");
+  const channel = typeof parsed.input.channel === "string" ? parsed.input.channel : getString(flags, "channel");
+  const deferredDelivery = getBoolean(flags, "job") || channel === "batchmode";
+  if (!dryRun && !frozenDelivery && invocationContract?.directInvocationPolicy === "prohibited-unprovable") {
+    return failure(requestId, "E_DIRECT_BUSINESS_PROOF_UNAVAILABLE", `${name} cannot prove arbitrary Unity side effects for direct delivery.`, [
+      "Use a dedicated Tool with a registered business-state readback predicate."
+    ], { toolName: name, delivery: "direct", directInvocationPolicy: invocationContract.directInvocationPolicy });
+  }
+  if (!dryRun && !frozenDelivery && invocationContract?.directInvocationPolicy === "deferred-only" && !deferredDelivery) {
+    return failure(requestId, "E_DIRECT_BUSINESS_PROOF_UNAVAILABLE", `${name} requires deferred delivery because live direct execution cannot independently prove arbitrary Unity side effects.`, [
+      "Use --job or channel=batchmode to retain the frozen deferred execution path.",
+      "Use a dedicated direct Tool when the operation needs a terminal business readback."
+    ], { toolName: name, delivery: "direct", directInvocationPolicy: invocationContract.directInvocationPolicy });
+  }
   const mergedFlags = mergeInputFlags(parsed.input, flags);
   const localTool = findToolByName(name);
   if (localTool) {
     const input = requestFromInput(localTool, { ...parsed.input, ...seed }, mergedFlags, positionalTarget);
-    return dispatchResolvedTool(localTool, input, mergedFlags, runtime, requestId);
+    return dispatchResolvedTool(localTool, input, mergedFlags, runtime, requestId, dispatchStartedAtMs);
   }
 
   const coreSpec = bridgeCommandRegistry.specs().find((spec) => (spec.toolName === name || spec.bridgeCommand === name) && !EXTENSION_GROUPS.has(spec.group) && spec.internal !== true);
@@ -69,7 +94,7 @@ export async function dispatchTool(
   if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <keyword> to find related tools."]);
 
   const input = requestFromInput(tool, { ...parsed.input, ...seed }, mergedFlags, positionalTarget);
-  return dispatchResolvedTool(tool, input, mergedFlags, runtime, requestId);
+  return dispatchResolvedTool(tool, input, mergedFlags, runtime, requestId, dispatchStartedAtMs);
 }
 
 async function dispatchResolvedTool(
@@ -77,27 +102,51 @@ async function dispatchResolvedTool(
   input: Record<string, unknown>,
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
-  requestId: string
+  requestId: string,
+  dispatchStartedAtMs: number,
 ): Promise<CliResult> {
+  const definition = findDefineTool(tool.name);
+  let executionTool = tool;
+  const offlineUiRead = tool.name === "ui.document.info" && typeof input.path === "string";
+  if (!definition && !offlineUiRead) {
+    const runtimeTarget = tool.target === "runtime" || (tool.target === "both" && getBoolean(flags, "runtime"));
+    const discovered = runtimeTarget
+      ? await discoverRuntimeTools(flags, runtime, requestId, { requireBridge: true })
+      : await discoverProjectTools(flags, runtime, requestId, { requireBridge: true });
+    if (discovered.ok === false) return discovered;
+    const current = discovered.tools.find((candidate) => candidate.name === tool.name);
+    if (!current) return failure(requestId, "E_TOOL_UNAVAILABLE", `Tool ${tool.name} is not registered in the selected Unity generation.`, [
+      "Run unity_cli tools describe against the installed CLI package to inspect its static requirements.",
+      "Use a Unity version and installed Extension set that registers this Tool."
+    ], { toolName: tool.name, selectedTarget: runtimeTarget ? "runtime" : "editor" });
+    executionTool = current;
+  }
+  const completion = generatedToolCompletionContract(executionTool.name) ?? executionTool.completionContract;
+  if (!completion) return failure(requestId, "E_TOOL_COMPLETION_CONTRACT_REQUIRED", `Tool ${executionTool.name} has no explicit completion contract.`, [
+    "Declare execution class, completion predicate, proof source, reload policy, timeout error, and outcome-unknown policy before registering this Tool."
+  ], { toolName: executionTool.name });
+  const descriptorMutation = toolIsMutation(executionTool);
+  if (completion.mutation !== descriptorMutation) return failure(requestId, "E_TOOL_COMPLETION_CONTRACT_MISMATCH", `Tool ${executionTool.name} completion contract disagrees with its descriptor mutation signals.`, [
+    `Run unity_cli tools describe ${executionTool.name} and fix the descriptor or completion contract before execution.`
+  ], { toolName: executionTool.name, contractMutation: completion.mutation, descriptorMutation });
   const availabilityFlags = await extensionAvailabilityFlags(flags, runtime);
-  const availability = await checkToolExtensionAvailability(tool, availabilityFlags);
-  if (!availability.available) return failure(requestId, availability.errorCode, availability.message, availability.nextActions, { extensionId: availability.extensionId, missingPackageIds: availability.availabilityResult?.missingPackageIds ?? tool.requiresPackages ?? [] });
-  const schemaErrors = validateSchema(tool.inputSchema, input);
-  if (schemaErrors.length > 0) return failure(requestId, "E_SCHEMA_INVALID", `Input schema validation failed at ${schemaErrors[0].path}.`, [`Run unity_cli tools describe ${tool.name} to inspect inputSchema.`], {
+  const availability = await checkToolExtensionAvailability(executionTool, availabilityFlags);
+  if (!availability.available) return failure(requestId, availability.errorCode, availability.message, availability.nextActions, { extensionId: availability.extensionId, missingPackageIds: availability.availabilityResult?.missingPackageIds ?? executionTool.requiresPackages ?? [] });
+  const schemaErrors = validateSchema(executionTool.inputSchema, input);
+  if (schemaErrors.length > 0) return failure(requestId, "E_SCHEMA_INVALID", `Input schema validation failed at ${schemaErrors[0].path}.`, [`Run unity_cli tools describe ${executionTool.name} to inspect inputSchema.`], {
     path: schemaErrors[0].path,
     expected: schemaErrors[0].expected,
     actual: schemaErrors[0].actual,
     errors: schemaErrors
   });
-  const manifestAction = tool.sideEffects?.includes("manifest-change") === true ? String(input.action) : undefined;
+  const manifestAction = executionTool.sideEffects?.includes("manifest-change") === true ? String(input.action) : undefined;
   const manifestWrite = manifestAction !== undefined && ["set", "clear", "add", "remove"].includes(manifestAction);
   const readOnlyManifestAction = manifestAction === "get" || manifestAction === "list";
   // 启动作业不会降低风险：构建、测试、Package resolve 等会立即产生持久副作用，必须尊重 descriptor。
-  const destructiveHint = manifestWrite || (tool.destructiveHint && !readOnlyManifestAction);
-  const confirmation = await confirmDestructiveExecution(flags, { command: tool.name, summary: tool.summary, destructiveHint, supportsDryRun: tool.supportsDryRun, requestId });
+  const destructiveHint = manifestWrite || (executionTool.destructiveHint && !readOnlyManifestAction);
+  const confirmation = await confirmDestructiveExecution(flags, { command: executionTool.name, summary: executionTool.summary, destructiveHint, supportsDryRun: executionTool.supportsDryRun, requestId });
   if (confirmation) return confirmation;
-  const definition = findDefineTool(tool.name);
-  return definition ? executeDefinition(tool, definition, input, flags, runtime, requestId) : executeLiveTool(tool, input, flags, runtime, requestId);
+  return definition ? executeDefinition(executionTool, completion, definition, input, flags, runtime, requestId, dispatchStartedAtMs) : executeLiveTool(executionTool, input, flags, runtime, requestId);
 }
 
 /** 已有 core bridge spec 使用统一参数构造与安全门禁，不进入 live custom wrapper。 */
@@ -138,23 +187,48 @@ async function executeCoreBridgeSpec(
     }
     return startBridgeCommandJob(requestId, name, spec.bridgeCommand, args, flags, runtime as BridgeJobRuntime, spec);
   }
-  return executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, security);
+  return executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, security, {
+    mode: "execute",
+    mutation: true,
+  });
 }
 
 async function executeDefinition(
   tool: ToolMetadata,
+  completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
   definition: NonNullable<ReturnType<typeof findDefineTool>>,
   input: Record<string, unknown>,
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
-  requestId: string
+  requestId: string,
+  dispatchStartedAtMs: number,
 ): Promise<CliResult> {
-  try {
-    const projectPath = typeof input.project === "string" ? input.project : process.cwd();
-    const data = await definition.execute(input, {
+  let projectPath = typeof input.project === "string" ? input.project : process.cwd();
+  let journalIdentity: { instanceId: string; canonicalProjectPath: string } | undefined;
+  if (tool.name === "build.cancel" && runtime.store) {
+    const jobId = [input.jobId, input.id, input.job].find((value): value is string => typeof value === "string" && value.length > 0);
+    if (jobId) {
+      const job = await runtime.store.get(jobId);
+      if (job?.projectPath) projectPath = job.projectPath;
+    }
+  }
+  const execution = executionFromFlags(flags);
+  const absoluteDeadlineMs = dispatchStartedAtMs + Math.max(1, execution.timeoutMs ?? tool.timeoutMs ?? 30_000);
+  const frozenDelivery = (currentInvocationOrigin() === "batch-frozen" && completion.frozenDeliveryPolicy === "preserved")
+    || getBoolean(flags, "job")
+    || completion.directInvocationPolicy === "deferred-only"
+    || definition.handler === "job"
+    || ("deliveryMode" in completion && completion.deliveryMode === "job-deferred");
+  // editor.compile 的 completion journal 由 Bridge root request 持有；TS 只轮询其 terminal。
+  const bridgeRootJournal = tool.name === "editor.compile";
+  const requiresLocalJournal = completion.mutation && completion.journalPolicy === "required" && !execution.dryRun && !frozenDelivery && !bridgeRootJournal;
+  const run = async (commitEffect: () => Promise<void>): Promise<CliResult> => {
+    try {
+      const data = await definition.execute(input, {
       requestId,
       projectPath,
-      execution: executionFromFlags(flags),
+      absoluteDeadlineMs,
+      execution,
       dataDir: runtime.dataDir,
       artifactDir: typeof input.artifactDir === "string" ? input.artifactDir : runtime.dataDir ?? projectPath,
       logPath: typeof input.logPath === "string" ? input.logPath : undefined,
@@ -162,18 +236,230 @@ async function executeDefinition(
       projectTools: runtime.projectTools,
       projectContexts: runtime.projectContexts as ContextDescriptor[] | undefined,
       bridgeExecute: runtime.bridgeExecute,
-      bridgeEndpoint: runtime.bridgeEndpoint,
       fetch: runtime.fetch,
       jobStore: runtime.store,
-      jobRunner: runtime.runner
+      jobRunner: runtime.runner,
+      commitEffect,
+      localJournalActive: requiresLocalJournal
     });
-    return success(requestId, data);
+    if (!tool.outputSchema) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} has no output schema for terminal proof.`, [
+      `Regenerate the Tool schema and completion registry for ${tool.name}.`
+    ]);
+    let normalizedData: unknown;
+    try {
+      normalizedData = JSON.parse(JSON.stringify(data));
+    } catch (error) {
+      throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} result is not JSON serializable.`, [
+        "Return only values allowed by the public output schema."
+      ], { toolName: tool.name, reason: error instanceof Error ? error.message : String(error) });
+    }
+    const outputErrors = validateSchema(tool.outputSchema, normalizedData);
+    if (outputErrors.length > 0) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} result failed output schema validation at ${outputErrors[0].path}.`, [
+      "Fix the Tool result or completion driver before retrying."
+    ], { toolName: tool.name, errors: outputErrors });
+    validateLocalCompletionProof(tool.name, completion, normalizedData, getBoolean(flags, "job"));
+    return success(requestId, normalizedData);
   } catch (error) {
     if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
     if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details,
       error.transient === undefined ? undefined : { transient: error.transient, retryAfterMs: error.retryAfterMs });
-    return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [`Run unity_cli tools describe ${tool.name} for input requirements and examples.`]);
+      return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [`Run unity_cli tools describe ${tool.name} for input requirements and examples.`]);
+    }
+  };
+
+  if (!requiresLocalJournal) return run(async () => undefined);
+  try {
+    // --instance 必须在 journal acceptance 前绑定 registry v2 identity，绝不能由调用 CWD 代替。
+    if (tool.name === "editor.launch-dialog.dismiss") {
+      const selectedProjectPath = await currentInstanceProjectPath(flags, runtime.dataDir ?? defaultDataDir());
+      const identity = resolveProjectIdentity(selectedProjectPath ?? projectPath);
+      journalIdentity = { instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath };
+    } else {
+      journalIdentity = await resolveInstanceJournalIdentity(flags, runtime.dataDir ?? defaultDataDir());
+      if (!journalIdentity) {
+        const identity = resolveProjectIdentity(projectPath);
+        journalIdentity = { instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath };
+      }
+    }
+    projectPath = journalIdentity.canonicalProjectPath;
+    return await executeWithLocalRequestJournal({
+      requestId,
+      toolName: tool.name,
+      input,
+      projectPath,
+      identity: journalIdentity,
+      dataDir: runtime.dataDir ?? defaultDataDir(),
+      absoluteDeadlineMs,
+      executionClass: completion.executionClass,
+      completionDriverId: completion.completionDriverId,
+    }, run);
+  } catch (error) {
+    if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
+    if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);
+    if (error instanceof InstanceRegistryError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    return failure(requestId, "E_REQUEST_JOURNAL_IO", error instanceof Error ? error.message : String(error), [
+      "Verify the Unity CLI data directory is writable before retrying."
+    ], { toolName: tool.name });
   }
+}
+
+/** TS Tool 的 terminal proof 与 C# driver 使用同一 execution-class 约束。 */
+export function validateLocalCompletionProof(
+  toolName: string,
+  completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
+  result: unknown,
+  jobMode: boolean,
+): void {
+  if (jobMode || isDeferredJobRecord(result) || ("deliveryMode" in completion && completion.deliveryMode === "job-deferred")) return;
+  if (completion.executionClass === "atomic" && completion.mutation === false) return;
+  const preview = objectRecord(result);
+  if (preview?.dryRun === true || preview?.status === "dry_run") return;
+  if (containsIntermediateCompletionState(result)) {
+    throw invalidCompletionProof(toolName, completion, "returned an intermediate accepted/requested/queued/started/triggered/running state");
+  }
+  const failedStatus = findFailedCompletionStatus(result);
+  if (failedStatus) {
+    throw invalidCompletionProof(toolName, completion, `returned failed terminal status ${failedStatus}`);
+  }
+  const toolSpecificProof = validateKnownLocalTerminal(toolName, completion, result);
+  if (completion.executionClass === "atomic") return;
+  if (!toolSpecificProof) {
+    throw invalidCompletionProof(toolName, completion, `has no registered Tool-specific ${completion.executionClass} validator`);
+  }
+}
+
+/** TS local/hybrid Tool 只接受工具专属业务断言，禁止把通用字段名当成 proof。 */
+function validateKnownLocalTerminal(
+  toolName: string,
+  completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
+  result: unknown,
+): boolean {
+  const record = objectRecord(result);
+  if (!record) return false;
+  const liveRefresh = objectRecord(record.liveRefresh);
+  if (toolName === "package.deploy") {
+    if (record.status === "dry_run") return true;
+    if (record.status !== "deployed" || !nonEmptyString(record.targetPath) || !nonEmptyString(record.sourceHash) || typeof record.copiedFileCount !== "number") throw invalidCompletionProof(toolName, completion, "did not prove the deployed package artifact");
+    if (liveRefresh && liveRefresh.status !== "completed" && liveRefresh.status !== "skipped") throw invalidCompletionProof(toolName, completion, "did not reach a terminal package refresh state");
+    return true;
+  }
+  if (toolName === "package.restore") {
+    if (record.status === "dry_run") return true;
+    if (record.status !== "restored" || !nonEmptyString(record.targetPath) || typeof record.copiedFileCount !== "number") throw invalidCompletionProof(toolName, completion, "did not prove the restored package artifact");
+    if (liveRefresh && liveRefresh.status !== "completed" && liveRefresh.status !== "skipped") throw invalidCompletionProof(toolName, completion, "did not reach a terminal package refresh state");
+    return true;
+  }
+  if (toolName === "package.registry.set") {
+    if (!nonEmptyString(record.manifestPath) || !nonEmptyString(record.registry)) throw invalidCompletionProof(toolName, completion, "did not prove the manifest registry readback");
+    return true;
+  }
+  if (toolName === "package.registry.clear") {
+    if (!nonEmptyString(record.manifestPath) || record.registryCleared !== true) throw invalidCompletionProof(toolName, completion, "did not prove the cleared manifest registry readback");
+    return true;
+  }
+  if (toolName === "package.scoped-registry.add") {
+    const registry = objectRecord(record.registry);
+    if (!nonEmptyString(record.manifestPath) || !registry || !nonEmptyString(registry.name) || !nonEmptyString(registry.url) || !Array.isArray(registry.scopes) || registry.scopes.some((scope) => !nonEmptyString(scope))) throw invalidCompletionProof(toolName, completion, "did not prove the scoped registry manifest readback");
+    return true;
+  }
+  if (toolName === "package.scoped-registry.remove") {
+    if (record.dryRun !== true && (!nonEmptyString(record.manifestPath) || record.registryRemoved !== true)) throw invalidCompletionProof(toolName, completion, "did not prove the removed scoped registry readback");
+    return true;
+  }
+  if (toolName === "package.install") {
+    if (record.action !== "install" || !nonEmptyString(record.manifestPath) || !nonEmptyString(record.installedVersion) || record.dependencyInstalled !== true) throw invalidCompletionProof(toolName, completion, "did not prove the manifest installation readback");
+    return true;
+  }
+  if (toolName === "package.remove") {
+    if (record.dryRun !== true && record.status !== "dry_run" && (record.action !== "remove" || !nonEmptyString(record.manifestPath) || record.dependencyRemoved !== true)) throw invalidCompletionProof(toolName, completion, "did not prove the manifest removal readback");
+    return true;
+  }
+  if (toolName === "package.resolve") {
+    if (record.resolve !== "live_bridge_refresh" || liveRefresh?.status !== "completed") throw invalidCompletionProof(toolName, completion, "did not prove terminal Unity package resolution");
+    return true;
+  }
+  if (toolName === "package.bridge-remove") {
+    if (record.action !== "bridge-remove" || !nonEmptyString(record.bridgePath) || !nonEmptyString(record.installMetadataPath)) throw invalidCompletionProof(toolName, completion, "did not prove the Bridge package removal target");
+    return true;
+  }
+  if (toolName === "code.exec") {
+    const execution = objectRecord(record.execution);
+    const compile = objectRecord(record.compile);
+    const runtime = objectRecord(record.runtime);
+    if (execution?.exitState !== "completed" || compile?.ok !== true || runtime?.ok !== true) throw invalidCompletionProof(toolName, completion, "did not return a completed frozen Runtime Code terminal");
+    return true;
+  }
+  if (toolName === "editor.compile") {
+    if (record.dryRun === true) return true;
+    const compile = objectRecord(record.compile);
+    const status = compile?.status;
+    if (compile?.completed !== true || compile.errorCount !== 0 || (status !== undefined && status !== "clean" && status !== "warnings")) throw invalidCompletionProof(toolName, completion, "did not prove a clean or warnings-only compile terminal");
+    return true;
+  }
+  if (toolName === "editor.launch-dialog.dismiss") {
+    if (!["dismissed", "not_found", "dry_run"].includes(String(record.status))) throw invalidCompletionProof(toolName, completion, "did not return an allowed dialog observation terminal");
+    return true;
+  }
+  return false;
+}
+
+function invalidCompletionProof(
+  toolName: string,
+  completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
+  reason: string,
+): StructuredToolError {
+  return new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${toolName} ${reason}.`, [
+    "Wait for the business terminal and return its stable readback."
+  ], { toolName, completionDriverId: completion.completionDriverId });
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function nonEmptyString(value: unknown): boolean {
+  return typeof value === "string" && value.length > 0;
+}
+
+function isDeferredJobRecord(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.jobId === "string"
+    && typeof record.kind === "string"
+    && typeof record.status === "string";
+}
+
+function containsIntermediateCompletionState(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsIntermediateCompletionState);
+  if (!value || typeof value !== "object") return false;
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (key.toLowerCase() === "status" && typeof nested === "string" && ["accepted", "requested", "queued", "started", "triggered", "running", "in_progress"].includes(nested.toLowerCase())) return true;
+    if (["accepted", "requested", "queued", "started", "triggered"].includes(key.toLowerCase()) && nested !== undefined && nested !== null && nested !== false && nested !== "") return true;
+    if (containsIntermediateCompletionState(nested)) return true;
+  }
+  return false;
+}
+
+/** 任何嵌套 operation 的失败终态都会使整个直接调用失败，顶层成功字段不能覆盖它。 */
+function findFailedCompletionStatus(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const failed = findFailedCompletionStatus(item);
+      if (failed) return failed;
+    }
+    return undefined;
+  }
+  if (!value || typeof value !== "object") return undefined;
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (key.toLowerCase() === "status" && typeof nested === "string"
+      && ["failed", "error", "timeout", "wait_timeout", "compile_errors", "console_errors", "blocked", "cancelled", "canceled", "aborted", "outcome_unknown", "unsupported"].includes(nested.toLowerCase())) {
+      return nested;
+    }
+    const failed = findFailedCompletionStatus(nested);
+    if (failed) return failed;
+  }
+  return undefined;
 }
 
 async function executeLiveTool(
@@ -197,7 +483,12 @@ async function executeLiveTool(
     return failure(requestId, "E_TOOL_JOB_UNSUPPORTED", `Live catalog tool does not declare a batch job bridge route: ${tool.name}.`, [`Run unity_cli tools describe ${tool.name} and check cancellation.`]);
   }
   // live descriptor 已完成 schema 校验，wrapper 必须直接承载该 typed input；不得再用旧 spec 从 execution flags 重建业务字段。
-  return executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, runtime, security);
+  const mutation = toolIsMutation(tool);
+  return executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, runtime, security, {
+    mode: "execute",
+    mutation,
+    defaultTimeoutMs: tool.timeoutMs,
+  });
 }
 
 async function parseTypedInput(flags: Record<string, string | boolean>, requestId: string): Promise<ParsedInput> {
@@ -270,6 +561,21 @@ function mergeInputFlags(input: Record<string, unknown>, flags: Record<string, s
   return withStructuredInput(merged, input);
 }
 
+/** execution timeout 是命令控制面；非法值必须在任何 selector、journal 或 effect 前失败。 */
+function validateExecutionTimeoutFlags(flags: Record<string, string | boolean>, requestId: string): CliResult | undefined {
+  for (const name of ["timeout-ms", "wait-timeout-ms"] as const) {
+    const raw = flags[name];
+    if (raw === undefined) continue;
+    const value = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN;
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      return failure(requestId, "E_SCHEMA_INVALID", `--${name} must be a positive integer.`, [
+        `Pass --${name} with a positive integer number of milliseconds.`
+      ], { path: `$.execution.${name === "timeout-ms" ? "timeoutMs" : "waitTimeoutMs"}`, expected: "positive integer", actual: raw });
+    }
+  }
+  return undefined;
+}
+
 function executionFromFlags(flags: Record<string, string | boolean>): ToolContext["execution"] {
   const number = (name: string): number | undefined => typeof flags[name] === "string" && Number.isFinite(Number(flags[name])) ? Number(flags[name]) : undefined;
   return {
@@ -277,8 +583,7 @@ function executionFromFlags(flags: Record<string, string | boolean>): ToolContex
     ...(getBoolean(flags, "job") ? { job: true } : {}),
     ...(getBoolean(flags, "wait") ? { wait: true } : {}),
     ...(number("timeout-ms") !== undefined ? { timeoutMs: number("timeout-ms") } : {}),
-    ...(number("wait-timeout-ms") !== undefined ? { waitTimeoutMs: number("wait-timeout-ms") } : {}),
-    ...(number("retry") !== undefined ? { retry: number("retry") } : {})
+    ...(number("wait-timeout-ms") !== undefined ? { waitTimeoutMs: number("wait-timeout-ms") } : {})
   };
 }
 

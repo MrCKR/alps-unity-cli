@@ -21,19 +21,22 @@ test("TS context metadata has one authoritative plural source", async () => {
   assert.equal(await exists("src/contexts/dispatcher.ts"), true, "plural Context dispatcher must exist");
 });
 
-test("local builtin context descriptors expose TS-owned contexts", () => {
+test("offline context catalog merges TS-owned and packaged C# descriptors", () => {
   const contexts = builtinContextDescriptors();
-  assert.deepEqual(contexts.map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
-  assert.deepEqual(defineContextMetadata().map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
+  assert.equal(contexts.length, 25);
+  assert.ok(contexts.some((context) => context.name === "editor.state" && context.source === "built-in"));
+  assert.ok(contexts.some((context) => context.name === "probuilder.scene" && context.source === "extension"));
+  assert.deepEqual(defineContextMetadata().map((context) => context.name).sort(), ["editor.state", "tools.custom", "tools.groups"]);
+  assert.equal(findBuiltinContextByName("editor.state")?.supportStatus, "hybrid");
 });
 
-test("TS-owned context descriptors keep public descriptor hygiene", () => {
+test("offline context descriptors keep public descriptor hygiene", () => {
   const forbidden = ["title", "kind", "resourceUri", "destructiveHint", "bridgeCommand"];
   for (const ctx of builtinContextDescriptors()) {
     assert.ok(ctx.name, "name required");
     assert.ok(ctx.summary, `${ctx.name} summary required`);
     assert.ok(ctx.description, `${ctx.name} description required`);
-    assert.equal(ctx.source, "built-in", `${ctx.name} source must be built-in`);
+    assert.ok(ctx.source === "built-in" || ctx.source === "extension", `${ctx.name} source must be static`);
     assert.ok(ctx.inputSchema, `${ctx.name} inputSchema required`);
     assert.ok(ctx.outputSchema, `${ctx.name} outputSchema required`);
     assert.ok(ctx.examples?.length, `${ctx.name} must expose at least one example`);
@@ -62,11 +65,11 @@ test("tools.groups remains offline and tools.custom remains live bridge backed",
   assert.ok((toolsCustom.outputSchema.properties as Record<string, unknown>).tools, "tools.custom must expose tools array");
 });
 
-test("local context categories, filtering, and search reflect TS-owned contexts only", () => {
-  assert.deepEqual(builtinContextCategories(), ["tools"]);
+test("offline context categories, filtering, and search include packaged C# metadata", () => {
+  assert.deepEqual(builtinContextCategories(), ["editor", "instances", "prefab", "probuilder", "project", "scene", "tests", "tools"]);
   assert.deepEqual(filterContextsByCategory("tools").map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
-  assert.deepEqual(filterContextsByCategory("scene"), []);
-  assert.equal(findBuiltinContextByName("scene.cameras"), undefined);
+  assert.ok(filterContextsByCategory("scene").some((context) => context.name === "scene.cameras"));
+  assert.equal(findBuiltinContextByName("scene.cameras")?.source, "built-in");
   assert.ok(searchContexts("custom").some((context) => context.name === "tools.custom"));
-  assert.equal(searchContexts("camera").length, 0, "TS static metadata contains only local contexts");
+  assert.ok(searchContexts("camera").some((context) => context.name === "scene.cameras"));
 });

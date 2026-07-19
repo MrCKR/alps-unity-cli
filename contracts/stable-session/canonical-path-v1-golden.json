@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "canonicalProjectPath": "c:\\workspace\\game",
+      "displayProjectPath": "C:\\Workspace\\Game",
+      "identityHash": "e43b51ba074c6f57a71ad29057fbab83fbad18cee55e9a7f5b7a46d394129510",
+      "instanceId": "unity-e43b51ba074c6f57a71ad29057fbab83fbad18cee55e9a7f5b7a46d394129510"
+    },
+    {
+      "canonicalProjectPath": "d:\\projects\\unity sample",
+      "displayProjectPath": "D:\\Projects\\Unity Sample",
+      "identityHash": "88ab3b12b5e5a60af3b4047aa11ff53ef64a5fac2a9426f6098ae261933c4616",
+      "instanceId": "unity-88ab3b12b5e5a60af3b4047aa11ff53ef64a5fac2a9426f6098ae261933c4616"
+    },
+    {
+      "canonicalProjectPath": "c:\\users\\developer\\project",
+      "displayProjectPath": "C:\\Users\\Developer\\Project",
+      "identityHash": "81c7409e164a24f082474cd1d7a12fc19a116965d71348049589d146a2baca00",
+      "instanceId": "unity-81c7409e164a24f082474cd1d7a12fc19a116965d71348049589d146a2baca00"
+    }
+  ]
+}

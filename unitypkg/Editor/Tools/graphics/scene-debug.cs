@@ -2,31 +2,35 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-
 namespace UnityCli
 {
-    /// <summary>graphics.scene-debug — 设置 SceneView 着色/绘制模式。</summary>
     public class GraphicsSceneDebugTool : IUnityCliTool<GraphicsSceneDebugTool.Request, GraphicsSceneDebugTool.Result>
     {
         public sealed class Request { public string ShadingMode { get; set; } public string DrawMode { get; set; } }
         public sealed class Result { public bool SceneViewAvailable { get; set; } public string CurrentDrawMode { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.scene-debug", Summary = "Set the SceneView shading or draw mode for debugging.", Description = "Set the last active SceneView's camera mode. shadingMode (Unity 6 ShadingMode) or drawMode (DrawCameraMode enum).", Group = "graphics", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set wireframe mode", Input = new Request { DrawMode = "Wireframe" } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.scene-debug", Summary = "Set the SceneView shading or draw mode for debugging.", Description = "Change the current Editor SceneView camera mode.", Group = "graphics", Version = "1.0.0", SideEffects = new[] { "scene-view-state" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Show SceneView wireframe", Input = new Request { DrawMode = "Wireframe" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var effects = new List<GraphicsPlannedEffect>();
-            if (!string.IsNullOrEmpty(r.ShadingMode) && SceneView.lastActiveSceneView != null)
-            {
+            var view = SceneView.lastActiveSceneView;
+            if (view == null) return new System.Threading.Tasks.ValueTask<Result>(new Result { SceneViewAvailable = false, PlannedEffects = new List<GraphicsPlannedEffect>() });
+            DrawCameraMode? shading = string.IsNullOrEmpty(r.ShadingMode) ? (DrawCameraMode?)null : GraphicsToolSupport.ParseEnum<DrawCameraMode>(r.ShadingMode, "shadingMode");
+            DrawCameraMode? draw = string.IsNullOrEmpty(r.DrawMode) ? (DrawCameraMode?)null : GraphicsToolSupport.ParseEnum<DrawCameraMode>(r.DrawMode, "drawMode");
+            if (!shading.HasValue && !draw.HasValue) return new System.Threading.Tasks.ValueTask<Result>(new Result { SceneViewAvailable = true, CurrentDrawMode = view.cameraMode.name, PlannedEffects = new List<GraphicsPlannedEffect>() });
+            var expected = draw ?? shading.Value;
 #if UNITY_2023_2_OR_NEWER
-                if (System.Enum.TryParse<SceneView.ShadingMode>(r.ShadingMode, true, out var sm)) { SceneView.lastActiveSceneView.SetSceneViewMode(sm, true); effects.Add(new GraphicsPlannedEffect { Type = "graphics.scene-debug", Property = "shadingMode", Value = r.ShadingMode }); }
+            ctx.CommitEffect();
+            view.cameraMode = SceneView.GetBuiltinCameraMode(expected);
 #else
-                if (System.Enum.TryParse<DrawCameraMode>(r.ShadingMode, true, out var dm)) { SceneView.lastActiveSceneView.cameraMode = SceneView.GetBuiltinCameraMode(dm); effects.Add(new GraphicsPlannedEffect { Type = "graphics.scene-debug", Property = "shadingMode", Value = r.ShadingMode }); }
+            ctx.CommitEffect();
+            view.cameraMode = SceneView.GetBuiltinCameraMode(expected);
 #endif
-            }
-            if (!string.IsNullOrEmpty(r.DrawMode) && SceneView.lastActiveSceneView != null)
-            {
-                if (System.Enum.TryParse<DrawCameraMode>(r.DrawMode, true, out var parsed)) { SceneView.lastActiveSceneView.cameraMode = SceneView.GetBuiltinCameraMode(parsed); effects.Add(new GraphicsPlannedEffect { Type = "graphics.scene-debug", Property = "drawMode", Value = r.DrawMode }); }
-            }
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { SceneViewAvailable = SceneView.lastActiveSceneView != null, CurrentDrawMode = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.cameraMode.name : null, PlannedEffects = effects });
+            view.Repaint();
+            var observed = SceneView.lastActiveSceneView;
+            if (observed == null || observed.cameraMode.drawMode != expected) throw new UnityCliBridge.BridgeCommandException("E_SCENE_DEBUG_STATE_MISMATCH", "SceneView draw mode readback did not match the request.", "Retry when a SceneView is active.");
+            var effects = new List<GraphicsPlannedEffect>();
+            if (shading.HasValue) effects.Add(new GraphicsPlannedEffect { Type = "graphics.scene-debug", Property = "shadingMode", Value = shading.Value.ToString() });
+            if (draw.HasValue) effects.Add(new GraphicsPlannedEffect { Type = "graphics.scene-debug", Property = "drawMode", Value = draw.Value.ToString() });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { SceneViewAvailable = true, CurrentDrawMode = observed.cameraMode.name, PlannedEffects = effects });
         }
     }
 }

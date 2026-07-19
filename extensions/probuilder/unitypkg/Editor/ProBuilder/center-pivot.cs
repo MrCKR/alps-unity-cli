@@ -1,4 +1,6 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -60,19 +62,35 @@ namespace UnityCli.ProBuilder
             if (mesh == null) throw ProBuilderErrors.OperationFailed("center-pivot", "No ProBuilderMesh on target.");
 
             var oldPivot = go.transform.position;
-            Undo.RecordObject(go.transform, "ProBuilder Center Pivot");
-
             var renderer = go.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                var center = renderer.bounds.center;
-                go.transform.position = center;
-            }
+            if (renderer == null)
+                throw ProBuilderErrors.OperationFailed("center-pivot", "Target has no Renderer to determine bounds center.");
+            var expectedPivot = renderer.bounds.center;
+            if (float.IsNaN(expectedPivot.x) || float.IsInfinity(expectedPivot.x) || float.IsNaN(expectedPivot.y) || float.IsInfinity(expectedPivot.y) || float.IsNaN(expectedPivot.z) || float.IsInfinity(expectedPivot.z))
+                throw ProBuilderErrors.SchemaInvalid("Target bounds center must be finite.");
+            var positionsProperty = ProBuilderReflection.GetProBuilderMeshType()?.GetProperty("positions", BindingFlags.Instance | BindingFlags.Public);
+            var localPositions = positionsProperty?.GetValue(mesh) as IList<Vector3>;
+            if (localPositions == null || !positionsProperty.CanWrite)
+                throw ProBuilderErrors.OperationFailed("center-pivot", "ProBuilder positions are not readable and writable for world-geometry preservation.");
+            var worldPositions = new List<Vector3>(localPositions.Count);
+            foreach (var position in localPositions) worldPositions.Add(go.transform.TransformPoint(position));
 
+            ctx.CommitEffect();
+            Undo.RecordObject(go.transform, "ProBuilder Center Pivot");
+            Undo.RecordObject(go, "ProBuilder Center Pivot Geometry");
+            go.transform.position = expectedPivot;
+            var recenteredLocalPositions = new List<Vector3>(worldPositions.Count);
+            foreach (var worldPosition in worldPositions) recenteredLocalPositions.Add(go.transform.InverseTransformPoint(worldPosition));
+            positionsProperty.SetValue(mesh, recenteredLocalPositions);
+            ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var newPivot = go.transform.position;
             var offset = newPivot - oldPivot;
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.CenteredPivotPreservesWorldGeometry(freshGo, freshMesh, expectedPivot, worldPositions))
+                throw ProBuilderErrors.OperationFailed("center-pivot", "Pivot was not centered while preserving every readable world-space vertex.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

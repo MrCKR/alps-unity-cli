@@ -56,6 +56,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_EXISTS", "Component already exists on target: " + componentName, "Use component.set or component.modify to update existing component properties.");
             }
             var propertyChanges = GameObjectToolSupport.BuildComponentPropertyChanges(type, request.Properties);
+            ctx.CommitEffect();
             var component = UnityCliSceneMutation.AddComponent(gameObject, type);
             if (component == null || !type.IsInstanceOfType(component))
             {
@@ -64,10 +65,11 @@ namespace UnityCli
             }
             GameObjectToolSupport.ApplyComponentPropertyChanges(component, propertyChanges);
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            var observedComponent = VerifyComponentReadback(gameObject.GetInstanceID(), component.GetInstanceID(), type, propertyChanges);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
-                Component = GameObjectToolSupport.BuildComponentSummary(component),
+                Component = GameObjectToolSupport.BuildComponentSummary(observedComponent),
                 ChangedProperties = BuildChangedProperties(propertyChanges),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = component.GetType().Name } }
             });
@@ -99,6 +101,27 @@ namespace UnityCli
                 result.Add(new ChangedProperty { Name = change.Name, Type = change.ValueType.Name, Value = change.InputValue });
             }
             return result;
+        }
+
+        /// <summary>effect 后重新解析目标与组件，并逐个比较已经转换的 typed value。</summary>
+        internal static Component VerifyComponentReadback(int targetId, int componentId, System.Type type, List<ComponentPropertyChange> changes)
+        {
+            var observedTarget = EditorUtility.InstanceIDToObject(targetId) as GameObject;
+            Component observedComponent = null;
+            if (observedTarget != null)
+                foreach (var candidate in observedTarget.GetComponents(type))
+                    if (candidate != null && candidate.GetInstanceID() == componentId) { observedComponent = candidate; break; }
+            if (observedComponent == null)
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_STATE_MISMATCH", "Component target/type did not match after independent readback.", "Inspect the target GameObject and retry after the Editor is idle.");
+            var serialized = new SerializedObject(observedComponent);
+            serialized.Update();
+            foreach (var change in changes ?? new List<ComponentPropertyChange>())
+            {
+                var actual = change.Property != null ? change.Property.GetValue(observedComponent, null) : change.Field.GetValue(observedComponent);
+                if (!object.Equals(actual, change.Value))
+                    throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_STATE_MISMATCH", "Component member '" + change.Name + "' did not match the requested converted value after readback.", "Inspect the component member and retry after the Editor is idle.");
+            }
+            return observedComponent;
         }
     }
 }

@@ -18,8 +18,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "profiler.deep", Summary = "Read or toggle Unity Deep Profiling at runtime (must be stopped to change).",
-            Description = "Read or toggle Unity Deep Profiling. Pass enabled=true/false to change; omit to read. Toggling requires the Profiler to be stopped.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Description = "Read or toggle Unity Deep Profiling. Pass enabled=true/false to change Profiler session state; omit enabled for a read. Toggling requires the Profiler to be stopped.",
+            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read deep profiling state", Input = new Request { } } }
         };
@@ -36,7 +36,7 @@ namespace UnityCli
                     "Run tools run profiler.stop first, then set deep profiling, then profiler.start again.");
             }
             var applied = previous;
-            if (hasEnabled) { ProfilerToolSupport.SetProfilerDeepProfiling(request.Enabled.Value); applied = request.Enabled.Value; }
+            if (hasEnabled) { ctx.CommitEffect(); ProfilerToolSupport.SetProfilerDeepProfiling(request.Enabled.Value); applied = request.Enabled.Value; }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "profiler.deep", DeepProfiling = applied, Previous = previous,

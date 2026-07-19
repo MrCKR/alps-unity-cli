@@ -238,6 +238,7 @@ namespace UnityCli
                 var type = TypeSchemaGenerator.ResolveType(typeName);
                 if (type == null) throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Type not found: " + typeName, "Pass a full type name.");
                 var method = ResolveCallMethod(type, methodName, argsValue, parameterTypes, bindings);
+                RequireSynchronousResult(method);
                 var paramList = method.GetParameters();
                 var args = ResolveCallArguments(argsValue, paramList);
                 object instance = null;
@@ -254,6 +255,8 @@ namespace UnityCli
                 try
                 {
                     var result = method.Invoke(instance, args);
+                    if (result is System.Threading.Tasks.Task || result is IEnumerator || result is AsyncOperation || result is CustomYieldInstruction)
+                        throw new BridgeCommandException("E_METHOD_COMPLETION_UNPROVABLE", "The method returned an asynchronous/yield operation that has no registered terminal proof.", "Use a dedicated Tool with an explicit completion predicate.");
                     audit["ok"] = true;
                     audit["result"] = BuildCallResult(result);
                     audit["parameters"] = paramList.Select((parameter, index) => (object)new Dictionary<string, object> { { "name", parameter.Name }, { "value", BuildCallResult(args[index]) } }).ToList();
@@ -261,19 +264,41 @@ namespace UnityCli
                 catch (TargetInvocationException tie)
                 {
                     var inner = tie.InnerException ?? tie;
-                    audit["ok"] = false;
-                    audit["error"] = inner.Message;
-                    audit["errorType"] = inner.GetType().FullName;
-                    audit["stackTrace"] = inner.StackTrace;
+                    throw new BridgeCommandException(
+                        "E_METHOD_INVOCATION_FAILED",
+                        inner.GetType().Name + ": " + inner.Message,
+                        new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", method.Name }, { "errorType", inner.GetType().FullName } },
+                        new[] { "Inspect the method contract and arguments before submitting a new request." });
                 }
+                catch (BridgeCommandException) { throw; }
                 catch (Exception exception)
                 {
-                    audit["ok"] = false;
-                    audit["error"] = exception.Message;
-                    audit["errorType"] = exception.GetType().FullName;
+                    throw new BridgeCommandException(
+                        "E_METHOD_INVOCATION_FAILED",
+                        exception.GetType().Name + ": " + exception.Message,
+                        new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", method.Name }, { "errorType", exception.GetType().FullName } },
+                        new[] { "Inspect the method contract and arguments before submitting a new request." });
                 }
                 audit["logPath"] = LogPath();
                 return audit;
+            }
+
+            /// <summary>通用 reflection Tool 只允许同步、非 void 返回；其余必须由专用 completion driver 承担。</summary>
+            private static void RequireSynchronousResult(MethodInfo method)
+            {
+                var returnType = method.ReturnType;
+                var fullName = returnType.FullName ?? string.Empty;
+                if (returnType == typeof(void)
+                    || typeof(System.Threading.Tasks.Task).IsAssignableFrom(returnType)
+                    || fullName == "System.Threading.Tasks.ValueTask"
+                    || fullName.StartsWith("System.Threading.Tasks.ValueTask`", StringComparison.Ordinal)
+                    || typeof(IEnumerator).IsAssignableFrom(returnType)
+                    || typeof(AsyncOperation).IsAssignableFrom(returnType)
+                    || typeof(CustomYieldInstruction).IsAssignableFrom(returnType))
+                    throw new BridgeCommandException(
+                        "E_METHOD_COMPLETION_UNPROVABLE",
+                        "reflection.method.call cannot prove completion for void, awaitable, yield, or AsyncOperation returns: " + returnType.FullName + ".",
+                        "Use a dedicated Tool with an explicit business predicate and proof source.");
             }
 
             // 参数可为位置数组或按参数名索引的对象；值转换复用 ObjectPatch 的 typed conversion。

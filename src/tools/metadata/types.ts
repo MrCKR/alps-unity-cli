@@ -21,6 +21,20 @@ export type ToolRiskLevel = "safe" | "low" | "medium" | "high" | "critical";
 export type ToolCancellation = "none" | "cooperative" | "job";
 export type PlayModeSupport = "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
 
+export interface ToolCompletionContract {
+  executionClass: "atomic" | "observed-state" | "resumable" | "external";
+  completionPredicate: string;
+  proofSource: string;
+  reloadPolicy: string;
+  timeoutError: string;
+  outcomeUnknownPolicy: string;
+  directInvocationPolicy?: "allowed" | "deferred-only" | "prohibited-unprovable";
+  frozenDeliveryPolicy?: "ordinary" | "preserved";
+  completionDriverId: string;
+  journalPolicy: "required" | "none" | "job-frozen";
+  mutation: boolean;
+}
+
 export interface ToolMetadata {
   /** Optional origin override when a live bridge descriptor already knows whether this tool is built-in/extension/project. */
   source?: ToolSource;
@@ -51,6 +65,8 @@ export interface ToolMetadata {
   requiresPackages?: string[];
   /** Live Bridge 计算的 handler+descriptor 指纹；破坏性 proof 必须绑定此值。 */
   liveDescriptorFingerprint?: string;
+  /** 每次直接调用必须命中的机器可执行 completion contract。 */
+  completionContract?: ToolCompletionContract;
 }
 
 export type ResolvedToolMetadata = ToolMetadata & {

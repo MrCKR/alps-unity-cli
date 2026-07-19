@@ -67,13 +67,14 @@ namespace UnityCli.ProBuilder
                 throw ProBuilderErrors.PackageNotAvailable();
 
             var name = request.Name ?? "ProBuilder_PolyShape";
-            var height = (float)(request.ExtrudeHeight ?? 1);
+            var height = ProBuilderOperationProof.CheckedFloat(request.ExtrudeHeight ?? 1, "extrudeHeight");
             var flipNormals = request.FlipNormals;
 
-            var points = request.Points?.Select(p => new Vector3((float)p.X, (float)p.Y, (float)p.Z)).ToList();
+            var points = request.Points?.Select(p => ProBuilderOperationProof.CheckedVector3(p.X, p.Y, p.Z, "points")).ToList();
             if (points == null || points.Count < 3)
                 throw ProBuilderErrors.SchemaInvalid("At least 3 points are required for create-poly-shape.");
 
+            ctx.CommitEffect();
             var go = new GameObject(name);
             Undo.RegisterCreatedObjectUndo(go, "ProBuilder Create Poly Shape");
 
@@ -93,9 +94,13 @@ namespace UnityCli.ProBuilder
 
             ProBuilderReflection.RefreshMesh(pbMesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(go.GetInstanceID().ToString());
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (freshGo == null || freshGo.name != name || !ProBuilderRequestProof.PolyShapeMatchesRequest(freshGo, freshMesh, points, height, flipNormals))
+                throw ProBuilderErrors.OperationFailed("create-poly-shape", "Created polygon did not match requested points, height, and normal orientation.");
 
-            var faceCount = ProBuilderReflection.GetFaceCount(pbMesh);
-            var vertexCount = ProBuilderReflection.GetVertexCount(pbMesh);
+            var faceCount = ProBuilderReflection.GetFaceCount(freshMesh);
+            var vertexCount = ProBuilderReflection.GetVertexCount(freshMesh);
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

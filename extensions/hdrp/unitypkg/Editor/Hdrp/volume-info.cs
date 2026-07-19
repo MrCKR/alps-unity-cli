@@ -12,7 +12,7 @@ namespace UnityCli
         {
             Name = "hdrp.volume.info", Summary = "Read one scene-session HDRP Volume component and in-memory profile reference.",
             Description = "Reads the HDRP Volume matching target by GameObject name or hierarchy path. Returns its current session state and profile reference. Requires com.unity.render-pipelines.high-definition and an active HDRenderPipelineAsset. Does not save scenes or assets.",
-            Group = "hdrp", Version = "1.0.0", DestructiveHint = false, RequiresPackages = new[] { "com.unity.render-pipelines.high-definition" }, SideEffects = new string[0], Target = "editor", PlayModeSupport = "session-affecting", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
+            Group = "hdrp", Version = "1.0.0", DestructiveHint = false, RequiresPackages = new[] { "com.unity.render-pipelines.high-definition" }, SideEffects = new string[0], Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Inspect an HDRP volume", Input = new Request { Target = "GlobalVolume" } } }
         };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)

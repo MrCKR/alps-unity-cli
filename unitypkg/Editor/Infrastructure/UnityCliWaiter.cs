@@ -17,6 +17,7 @@ namespace UnityCli
         UnityCliMainThreadAwaitable<bool> NextFrame(int frames = 1, CancellationToken ct = default);
         UnityCliMainThreadAwaitable<bool> Delay(TimeSpan duration, CancellationToken ct = default);
         UnityCliMainThreadAwaitable<bool> Until(Func<bool> predicate, TimeSpan timeout, CancellationToken ct = default);
+        UnityCliMainThreadAwaitable<bool> UntilStable(Func<bool> predicate, TimeSpan timeout, int minimumFrames = 2, TimeSpan minimumDuration = default, CancellationToken ct = default);
         UnityCliMainThreadAwaitable<bool> UntilEditorReady(TimeSpan timeout, CancellationToken ct = default);
         UnityCliMainThreadAwaitable<bool> UntilPlayModeState(PlayModeStateChange state, TimeSpan timeout, CancellationToken ct = default);
         UnityCliMainThreadAwaitable<T> ForCallback<T>(Action<Action<T>, Action<Exception>> start, TimeSpan timeout, CancellationToken ct = default);
@@ -83,6 +84,11 @@ namespace UnityCli
         public UnityCliMainThreadAwaitable<bool> Until(Func<bool> predicate, TimeSpan timeout, CancellationToken ct = default)
         {
             return UnityCliWaitScheduler.Until(requestId, owner, predicate, timeout, ct);
+        }
+
+        public UnityCliMainThreadAwaitable<bool> UntilStable(Func<bool> predicate, TimeSpan timeout, int minimumFrames = 2, TimeSpan minimumDuration = default, CancellationToken ct = default)
+        {
+            return UnityCliWaitScheduler.UntilStable(requestId, owner, predicate, timeout, minimumFrames, minimumDuration, ct);
         }
 
         public UnityCliMainThreadAwaitable<bool> UntilEditorReady(TimeSpan timeout, CancellationToken ct = default)
@@ -307,6 +313,72 @@ namespace UnityCli
             }
         }
 
+        private sealed class StableEditorReadyWait : PendingWaitBase<bool>
+        {
+            private readonly DateTime deadlineUtc;
+            private int consecutiveReadyTicks;
+            private DateTime? readySinceUtc;
+
+            public StableEditorReadyWait(string requestId, string owner, TimeSpan timeout, CancellationToken cancellationToken)
+                : base(requestId, owner, cancellationToken)
+            {
+                deadlineUtc = DateTime.UtcNow.Add(timeout < TimeSpan.Zero ? TimeSpan.Zero : timeout);
+            }
+
+            protected override bool Advance(DateTime utcNow)
+            {
+                if (EditorReadyNow())
+                {
+                    consecutiveReadyTicks += 1;
+                    if (!readySinceUtc.HasValue) readySinceUtc = utcNow;
+                }
+                else
+                {
+                    consecutiveReadyTicks = 0;
+                    readySinceUtc = null;
+                }
+                if (consecutiveReadyTicks >= 3 && readySinceUtc.HasValue && utcNow - readySinceUtc.Value >= TimeSpan.FromSeconds(1)) return Succeed(true);
+                if (utcNow >= deadlineUtc) return Succeed(false);
+                return false;
+            }
+        }
+
+        /// <summary>目标谓词必须连续成立指定帧数和最小时长，避免把瞬态读回作为完成。</summary>
+        private sealed class StablePredicateWait : PendingWaitBase<bool>
+        {
+            private readonly Func<bool> predicate;
+            private readonly DateTime deadlineUtc;
+            private readonly int minimumFrames;
+            private readonly TimeSpan minimumDuration;
+            private int consecutiveFrames;
+            private DateTime? stableSinceUtc;
+
+            public StablePredicateWait(string requestId, string owner, Func<bool> predicate, TimeSpan timeout, int minimumFrames, TimeSpan minimumDuration, CancellationToken cancellationToken)
+                : base(requestId, owner, cancellationToken)
+            {
+                this.predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
+                deadlineUtc = DateTime.UtcNow.Add(timeout < TimeSpan.Zero ? TimeSpan.Zero : timeout);
+                this.minimumFrames = Math.Max(1, minimumFrames);
+                this.minimumDuration = minimumDuration < TimeSpan.Zero ? TimeSpan.Zero : minimumDuration;
+            }
+
+            protected override bool Advance(DateTime utcNow)
+            {
+                if (predicate())
+                {
+                    consecutiveFrames += 1;
+                    if (!stableSinceUtc.HasValue) stableSinceUtc = utcNow;
+                    if (consecutiveFrames >= minimumFrames && utcNow - stableSinceUtc.Value >= minimumDuration) return Succeed(true);
+                }
+                else
+                {
+                    consecutiveFrames = 0;
+                    stableSinceUtc = null;
+                }
+                return utcNow >= deadlineUtc && Succeed(false);
+            }
+        }
+
         private sealed class CallbackWait<T> : PendingWaitBase<T>
         {
             private readonly object callbackLock = new object();
@@ -396,9 +468,27 @@ namespace UnityCli
             return new UnityCliMainThreadAwaitable<bool>(wait);
         }
 
+        public static UnityCliMainThreadAwaitable<bool> UntilStable(string requestId, string owner, Func<bool> predicate, TimeSpan timeout, int minimumFrames, TimeSpan minimumDuration, CancellationToken cancellationToken)
+        {
+            var wait = new StablePredicateWait(requestId, owner, predicate, timeout, minimumFrames, minimumDuration, cancellationToken);
+            Register(wait);
+            return new UnityCliMainThreadAwaitable<bool>(wait);
+        }
+
         public static UnityCliMainThreadAwaitable<bool> UntilEditorReady(string requestId, string owner, TimeSpan timeout, CancellationToken cancellationToken)
         {
-            return Until(requestId, owner, () => !EditorApplication.isCompiling && !EditorApplication.isUpdating && !UnityCliBridge.IsPlayModeChanging() && !UnityCliBridge.IsBuildingPlayer() && !UnityCliBridge.IsDomainReloading(), timeout, cancellationToken);
+            var wait = new StableEditorReadyWait(requestId, owner, timeout, cancellationToken);
+            Register(wait);
+            return new UnityCliMainThreadAwaitable<bool>(wait);
+        }
+
+        private static bool EditorReadyNow()
+        {
+            return !EditorApplication.isCompiling
+                && !EditorApplication.isUpdating
+                && !UnityCliBridge.IsPlayModeChanging()
+                && !UnityCliBridge.IsBuildingPlayer()
+                && !UnityCliBridge.IsDomainReloading();
         }
 
         public static UnityCliMainThreadAwaitable<bool> UntilPlayModeState(string requestId, string owner, PlayModeStateChange state, TimeSpan timeout, CancellationToken cancellationToken)
@@ -409,7 +499,7 @@ namespace UnityCli
         private static bool MatchesPlayModeState(PlayModeStateChange state)
         {
             var playing = EditorApplication.isPlaying;
-            var changing = EditorApplication.isPlayingOrWillChangePlaymode;
+            var changing = UnityCliBridge.IsPlayModeChanging();
             switch (state)
             {
                 case PlayModeStateChange.EnteredPlayMode: return playing && !changing;
@@ -430,6 +520,9 @@ namespace UnityCli
         public static void Tick()
         {
             EnsureMainThreadSynchronizationContext();
+            // 由既有 Bridge 主循环驱动，compile coordinator 自身不注册 EditorApplication.update。
+            UnityCliCompilationEventBroker.Tick();
+            UnityCliBridge.UnityCliCompileCoordinator.Tick();
             MainThreadSynchronizationContext.Drain();
             var now = DateTime.UtcNow;
             List<IPendingWait> completed = null;

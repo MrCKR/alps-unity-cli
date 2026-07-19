@@ -14,7 +14,7 @@ namespace UnityCli
     {
         public sealed class Request { [UnityCliRequired] public string Package { get; set; } }
         public sealed class Result { public string PackageId { get; set; } public string EmbeddedPath { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "package.embed", Summary = "Embed an installed registry package as a local project package.", Description = "Use PackageClient.Embed to copy an installed registry package into Packages/<id>. The embedded local copy replaces registry resolution until it is removed.", Group = "package", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true, SideEffects = new[] { "package-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 120000, MaxTimeoutMs = 300000, Examples = new[] { new ToolExample { Description = "Embed the installed ProBuilder package", Input = new Request { Package = "com.unity.probuilder" } } } };
+        public ToolDescriptor Describe() => new() { Name = "package.embed", Summary = "Embed an installed registry package and return its verified local package readback.", Description = "Use PackageClient.Embed to copy an installed registry package into Packages/<id>, absorb package import/reload, and succeed only when PackageInfo reports source=Embedded and a real resolved directory. The embedded local copy replaces registry resolution until it is removed.", Group = "package", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true, SideEffects = new[] { "package-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 120000, MaxTimeoutMs = 300000, Examples = new[] { new ToolExample { Description = "Embed the installed ProBuilder package", Input = new Request { Package = "com.unity.probuilder" } } } };
         public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(r.Package)) throw new UnityCliBridge.BridgeCommandException("E_PACKAGE_ID_REQUIRED", "package.embed requires --package <id>.", "Pass a package id like com.unity.x.");
@@ -28,9 +28,23 @@ namespace UnityCli
                     PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "package.embed", Path = r.Package } }
                 };
             }
+            var continuation = ctx.ProofOnly ? ctx.RequireProofContinuation("package-embed-v1") : ctx.ProofContinuation;
+            object continuationPackage;
+            object beforeEmbedded;
+            if (continuation == null
+                || !continuation.TryGetValue("packageId", out continuationPackage) || !string.Equals(continuationPackage as string, r.Package, StringComparison.Ordinal)
+                || !continuation.TryGetValue("beforeEmbedded", out beforeEmbedded) || !(beforeEmbedded is bool) || (bool)beforeEmbedded)
+                throw new UnityCliBridge.BridgeCommandException("E_REQUEST_JOURNAL_CORRUPT", "Package embed continuation is missing or does not match the request.", "Inspect the request journal before submitting a new request.");
+            if (ctx.ProofOnly)
+            {
+                var recoveredReady = await ctx.Wait.UntilEditorReady(TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
+                if (!recoveredReady) throw new UnityCliBridge.BridgeCommandException("E_PACKAGE_EMBED_PROOF_MISSING", "The Editor did not recover to a stable state for embedded package proof.", "Inspect Package Manager diagnostics before submitting a new request.");
+                return BuildEmbeddedResult(r.Package);
+            }
             var client = typeof(UnityEditor.PackageManager.Client);
             var embedMethod = client.GetMethod("Embed", BindingFlags.Static | BindingFlags.Public);
             if (embedMethod == null) throw new UnityCliBridge.BridgeCommandException("E_PACKAGE_EMBED_UNSUPPORTED", "PackageClient.Embed is not available in this Unity version.", "Use Unity Editor Package Manager UI.");
+            ctx.CommitEffect();
             var request = embedMethod.Invoke(null, new object[] { r.Package });
             // 等待嵌入完成(同步轮询)
             var requestType = request.GetType();
@@ -67,9 +81,25 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PACKAGE_EMBED_FAILED", "Package Manager completed without an embed result for " + r.Package + ".", "Inspect Unity Console and Package Manager diagnostics before retrying.");
             }
-            var resultType = result.GetType();
-            var localPath = resultType.GetProperty("localPath")?.GetValue(result, null) as string;
-            return new Result { PackageId = r.Package, EmbeddedPath = localPath ?? ("Packages/" + r.Package), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "package.embed", Path = r.Package } } };
+            var ready = await ctx.Wait.UntilEditorReady(TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
+            if (!ready) throw new UnityCliBridge.BridgeCommandException("E_PACKAGE_EMBED_PROOF_MISSING", "The Editor did not become stable after embedding " + r.Package + ".", "Inspect Package Manager diagnostics before submitting a new request.");
+            return BuildEmbeddedResult(r.Package);
+        }
+
+        /// <summary>只从 PackageManager registry 与磁盘构造 terminal proof，不触发 resolve/embed。</summary>
+        private static Result BuildEmbeddedResult(string packageId)
+        {
+            var assetPath = "Packages/" + packageId;
+            var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(assetPath);
+            var expected = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "Packages", packageId));
+            var actual = info == null || string.IsNullOrEmpty(info.resolvedPath) ? null : System.IO.Path.GetFullPath(info.resolvedPath);
+            if (info == null
+                || info.source != UnityEditor.PackageManager.PackageSource.Embedded
+                || !string.Equals(info.name, packageId, StringComparison.Ordinal)
+                || !string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase)
+                || !System.IO.Directory.Exists(actual))
+                throw new UnityCliBridge.BridgeCommandException("E_PACKAGE_EMBED_PROOF_MISSING", "Package Manager does not report a verified embedded package at " + assetPath + ".", "Inspect Packages/ and Package Manager diagnostics before submitting a new request.");
+            return new Result { PackageId = packageId, EmbeddedPath = actual, PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "package.embed", Path = packageId } } };
         }
     }
 }

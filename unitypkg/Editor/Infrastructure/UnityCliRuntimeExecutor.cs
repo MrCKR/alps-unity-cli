@@ -201,6 +201,7 @@ namespace UnityCli
             [UnityCliAnyJson] public object Input { get; set; }
             public string PlayModeSessionId { get; set; }
             public string FingerprintMode { get; set; }
+            public string ExpectedDescriptorFingerprint { get; set; }
             public string ArtifactDir { get; set; }
             public string ProjectPath { get; set; }
         }
@@ -269,6 +270,15 @@ namespace UnityCli
 
             // runtime-tool.run 是内部包装命令；门禁前刷新 live 指纹，防止跨 PlayMode/domain reload 重放旧 proof。
             var fingerprintCheck = RefreshProjectToolFingerprint(definition, args.FingerprintMode);
+            if (!string.IsNullOrEmpty(args.ExpectedDescriptorFingerprint)
+                && !string.Equals(args.ExpectedDescriptorFingerprint, definition.Fingerprint, StringComparison.Ordinal))
+            {
+                throw new BridgeCommandException(
+                    "E_TOOL_DESCRIPTOR_CHANGED",
+                    "The runtime Tool descriptor changed after discovery: " + name,
+                    new Dictionary<string, object> { { "toolName", name }, { "expectedFingerprint", args.ExpectedDescriptorFingerprint }, { "actualFingerprint", definition.Fingerprint } },
+                    new[] { "Run tools describe again in the current Play Mode generation before constructing a new request." });
+            }
             var dryRun = request.Execution != null && request.Execution.DryRun == true;
             if (definition.DestructiveHint
                 && !(dryRun && definition.SupportsDryRun)
@@ -326,6 +336,7 @@ namespace UnityCli
                 {
                     toolTimeout.CancelAfter(timeoutMs);
                     var typedInput = UnityCliSerializer.Deserialize(inputJson, definition.RequestType);
+                    var effectPreparation = PrepareToolEffect(request, definition.CompletionContract, typedInput);
                     result = await definition.InvokeAsync(typedInput, new UnityCliProjectToolContext
                     {
                         RequestId = request.RequestId,
@@ -333,6 +344,10 @@ namespace UnityCli
                         ArtifactDir = artifactDir,
                         LogPath = LogPath(),
                         DryRun = dryRun,
+                        ProofOnly = IsProofRecoveryRequest(request.RequestId),
+                        ProofContinuation = effectPreparation == null ? null : effectPreparation.Value,
+                        CommitEffectAction = () => CommitToolEffect(request, definition.CompletionContract, effectPreparation),
+                        ListenerGeneration = CurrentListenerGeneration(),
                         TimeoutMs = timeoutMs,
                         Wait = CreateWaiter(request.RequestId, name),
                         CancellationToken = toolTimeout.Token
@@ -350,8 +365,14 @@ namespace UnityCli
                 var inner = exception.InnerException ?? exception;
                 var innerBce = inner as BridgeCommandException;
                 if (innerBce != null) throw innerBce;
+                if (inner is OperationCanceledException)
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed before the runtime Tool reached its terminal proof.", "Inspect editor.state before submitting a new request.");
                 throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message,
                     "Check Unity Console and UnityCliBridge.log with the returned requestId.");
+            }
+            catch (OperationCanceledException)
+            {
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed before the runtime Tool reached its terminal proof.", "Inspect editor.state before submitting a new request.");
             }
             catch (Exception exception)
             {
@@ -372,7 +393,17 @@ namespace UnityCli
                     new[] { "Re-enter Play Mode and verify the tool's side effects before retrying." });
             }
 
-            return CompleteRuntimeToolSuccess(request, definition, artifactDir, timeoutMs, startedAt, result, name);
+            var outputJson = UnityCliSerializer.Serialize(result);
+            var outputError = ValidateTypedInput(definition.ResultType, outputJson);
+            if (outputError != null)
+                throw new BridgeCommandException(
+                    "E_TOOL_COMPLETION_PROOF_INVALID",
+                    "Runtime Tool result failed its derived output schema at " + outputError.Path + ".",
+                    new Dictionary<string, object> { { "toolName", definition.Name }, { "path", outputError.Path }, { "expected", outputError.Expected }, { "actual", outputError.Actual } },
+                    new[] { "Fix the runtime Tool result DTO or completion driver before retrying." });
+            var terminalData = CompleteRuntimeToolSuccess(request, definition, artifactDir, timeoutMs, startedAt, result, name);
+            RecordToolCompletionEvidence(request, definition, result, terminalData);
+            return terminalData;
         }
 
         private static object CompleteRuntimeToolSuccess(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, string artifactDir, int timeoutMs, DateTime startedAt, object result, string name)

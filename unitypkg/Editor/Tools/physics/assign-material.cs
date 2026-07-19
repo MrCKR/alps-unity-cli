@@ -53,27 +53,36 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_MATERIAL_NOT_FOUND", "PhysicMaterial asset not found: " + path, "Create it with physics.material first, then rerun physics.assign-material.");
             }
             var collider = PhysicsToolSupport.ResolveCollider(target, request.Collider, request.ColliderIndex);
+            var targetId = target.GetInstanceID();
+            var colliderId = collider.GetInstanceID();
             var previous = collider.sharedMaterial;
             var dryRun = ctx.DryRun;
             if (!dryRun)
             {
+                ctx.CommitEffect();
                 UnityCliSceneMutation.RecordObject(collider, "Assign PhysicMaterial");
                 collider.sharedMaterial = material;
                 UnityCliSceneMutation.MarkSceneObjectDirty(collider);
                 UnityCliSceneMutation.MarkSceneDirty(target.scene);
             }
+            // mutation 后同时重解析目标与组件，禁止使用写前 Collider 引用作为 proof。
+            var observedTarget = dryRun ? target : EditorUtility.InstanceIDToObject(targetId) as GameObject;
+            var observedCollider = dryRun ? collider : EditorUtility.InstanceIDToObject(colliderId) as Collider;
+            var observedMaterial = observedCollider == null ? null : observedCollider.sharedMaterial;
+            if (observedTarget == null || observedCollider == null || (!dryRun && observedMaterial != material))
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_ASSIGN_MATERIAL_STATE_MISMATCH", "Collider material did not match the requested PhysicMaterial.", "Inspect the Collider material after the Editor is idle and retry.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 DryRun = dryRun,
-                Target = new GameObjectTargetRef { Id = target.GetInstanceID(), Name = target.name, Path = GameObjectToolSupport.HierarchyPath(target) },
+                Target = new GameObjectTargetRef { Id = observedTarget.GetInstanceID(), Name = observedTarget.name, Path = GameObjectToolSupport.HierarchyPath(observedTarget) },
                 Collider = new ColliderAssignmentInfo
                 {
-                    Type = collider.GetType().Name,
-                    InstanceId = collider.GetInstanceID(),
+                    Type = observedCollider.GetType().Name,
+                    InstanceId = observedCollider.GetInstanceID(),
                     PreviousMaterial = previous == null ? null : new PhysicMaterialRef { Name = previous.name, Path = AssetDatabase.GetAssetPath(previous) },
-                    Material = new PhysicMaterialRef { Name = material.name, Path = path }
+                    Material = observedMaterial == null ? null : new PhysicMaterialRef { Name = observedMaterial.name, Path = AssetDatabase.GetAssetPath(observedMaterial) }
                 },
-                PlannedEffects = new List<PhysicsPlannedEffect> { new PhysicsPlannedEffect { Type = "physics.assign-material", Target = GameObjectToolSupport.HierarchyPath(target) } }
+                PlannedEffects = new List<PhysicsPlannedEffect> { new PhysicsPlannedEffect { Type = "physics.assign-material", Target = GameObjectToolSupport.HierarchyPath(observedTarget) } }
             });
         }
     }

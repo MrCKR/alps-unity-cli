@@ -1,7 +1,8 @@
-import { getBoolean, getString } from "../args.js";
+import { getBoolean } from "../args.js";
 import { executeBridgePayload, type BridgeRuntime } from "../bridge/index.js";
 import { ExtensionRegistry } from "../extensions/index.js";
 import { hasInstanceForFlags } from "../instances.js";
+import { staticCapabilityCatalog } from "../static-capability-catalog.js";
 import { failure } from "../output.js";
 import type { CliResult } from "../types.js";
 import { scoreSearch } from "../util.js";
@@ -15,13 +16,13 @@ export interface ContextCatalogRuntime extends Partial<BridgeRuntime> {
   projectContexts?: unknown[];
 }
 
-export type ContextCatalogResult = { ok: true; contexts: ContextDescriptor[]; live: boolean } | (CliResult & { ok: false });
+export type ContextCatalogResult = { ok: true; contexts: ContextDescriptor[]; live: boolean; liveContexts: ContextDescriptor[] } | (CliResult & { ok: false });
 
 /** 无 live 目标时只暴露生成 registry 中的 TS-local Context。 */
 export async function shouldLoadLiveContextCatalog(flags: Record<string, string | boolean>, runtime: ContextCatalogRuntime): Promise<boolean> {
-  if (getBoolean(flags, "include-custom") || runtime.projectContexts !== undefined || runtime.bridgeExecute !== undefined || runtime.bridgeEndpoint !== undefined) return true;
-  if (getString(flags, "bridge-endpoint") || getString(flags, "target") || getString(flags, "instance") || process.env.UNITY_CLI_BRIDGE_ENDPOINT) return true;
-  return typeof runtime.dataDir === "string" && hasInstanceForFlags(flags, runtime.dataDir);
+  return getBoolean(flags, "include-custom")
+    || runtime.projectContexts !== undefined
+    || runtime.bridgeExecute !== undefined;
 }
 
 /** 加载唯一 catalog view；任何 malformed descriptor 或 duplicate 都使 registry fail closed。 */
@@ -33,12 +34,12 @@ export async function loadContextCatalog(
 ): Promise<ContextCatalogResult> {
   let local: ContextDescriptor[];
   try {
-    local = defineContextMetadata();
+    local = builtinContextDescriptors();
   } catch (error) {
     return unhealthy(requestId, error instanceof Error ? error.message : String(error));
   }
   const loadLive = options.requireLive === true || await shouldLoadLiveContextCatalog(flags, runtime);
-  if (!loadLive) return { ok: true, contexts: local, live: false };
+  if (!loadLive) return { ok: true, contexts: local, live: false, liveContexts: [] };
 
   let live: ContextDescriptor[];
   if (runtime.projectContexts) {
@@ -46,7 +47,7 @@ export async function loadContextCatalog(
     if (parsed.ok === false) return parsed;
     live = parsed.contexts;
   } else {
-    const result = await executeBridgePayload(requestId, "context.list", {}, flags, runtime);
+    const result = await executeBridgePayload(requestId, "context.list", {}, flags, runtime, undefined, { mode: "read", mutation: false });
     if (result.ok === false) return result as CliResult & { ok: false };
     const raw = (result.data as { contexts?: unknown } | undefined)?.contexts;
     if (!Array.isArray(raw)) return unhealthy(requestId, "context.list response must contain a contexts array.");
@@ -55,10 +56,11 @@ export async function loadContextCatalog(
     live = parsed.contexts;
   }
 
-  const merged = [...local, ...live];
+  const liveNames = new Set(live.map((context) => context.name));
+  const merged = [...local.filter((context) => !liveNames.has(context.name)), ...live];
   const duplicate = duplicateNames(merged);
   if (duplicate.length > 0) return unhealthy(requestId, `Duplicate context registration: ${duplicate.join(", ")}.`, { duplicates: duplicate });
-  return { ok: true, contexts: merged, live: true };
+  return { ok: true, contexts: merged, live: true, liveContexts: live };
 }
 
 export async function resolveCatalogContext(
@@ -67,15 +69,34 @@ export async function resolveCatalogContext(
   runtime: ContextCatalogRuntime,
   requestId: string
 ): Promise<{ ok: true; context?: ContextDescriptor; live: boolean } | (CliResult & { ok: false })> {
-  const local = defineContextMetadata().find((context) => context.name === name);
+  // editor.state 由 TS 聚合 identity/session/Windows UI；不得被旧 live descriptor 覆盖。
+  if (name === "editor.state") return { ok: true, context: builtinContextDescriptors().find((context) => context.name === name), live: false };
+  if (runtime.projectContexts !== undefined || runtime.bridgeExecute !== undefined) {
+    const supplied = await loadContextCatalog(flags, runtime, requestId, { requireLive: true });
+    if (supplied.ok === false) return supplied;
+    const context = supplied.contexts.find((candidate) => candidate.name === name);
+    if (context) return { ok: true, context, live: true };
+  }
+  const local = builtinContextDescriptors().find((context) => context.name === name);
   if (local) return { ok: true, context: local, live: false };
-  if (!await shouldLoadLiveContextCatalog(flags, runtime)) return { ok: true, context: undefined, live: false };
+  const shouldLoad = await shouldLoadLiveContextCatalog(flags, runtime)
+    || (typeof runtime.dataDir === "string" && await hasInstanceForFlags(flags, runtime.dataDir));
+  if (!shouldLoad) return { ok: true, context: undefined, live: false };
   const catalog = await loadContextCatalog(flags, runtime, requestId, { requireLive: true });
   return catalog.ok ? { ok: true, context: catalog.contexts.find((context) => context.name === name), live: true } : catalog;
 }
 
 export function builtinContextDescriptors(): ContextDescriptor[] {
-  return defineContextMetadata();
+  return [...defineContextMetadata(), ...staticBridgeContextDescriptors()];
+}
+
+/** 将 package snapshot 映射为当前严格 Context descriptor；任一 malformed entry 都 fail closed。 */
+export function staticBridgeContextDescriptors(): ContextDescriptor[] {
+  return staticCapabilityCatalog().contexts.filter((descriptor) => descriptor.name !== "editor.state").map((descriptor) => {
+    const parsed = parseLiveDescriptor(descriptor);
+    if (typeof parsed === "string") throw new Error(`Malformed static Context descriptor ${String(descriptor.name ?? "unknown")}: ${parsed}`);
+    return parsed;
+  });
 }
 
 export function builtinContextCategories(): string[] {
@@ -146,6 +167,7 @@ export function parseLiveDescriptor(value: unknown): ContextDescriptor | string 
     outputSchema: raw.outputSchema,
     examples,
     cliCommand: `context read ${String(raw.name)}`,
+    ...(typeof raw.descriptorFingerprint === "string" ? { descriptorFingerprint: raw.descriptorFingerprint } : {}),
     ...(typeof raw.supportStatus === "string" ? { supportStatus: raw.supportStatus } : {}),
     ...(requiresPackages ? { requiresPackages } : {}),
     ...(ownership ? { extensionId: ownership.id } : {}),

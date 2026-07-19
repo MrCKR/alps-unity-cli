@@ -20,12 +20,12 @@ namespace UnityCli
             Name = "profiler.frame-debugger.disable",
             Summary = "Disable the Unity Frame Debugger.",
             Description = "Disable the Unity Frame Debugger for the current Editor session. Use this after profiler.frame-debugger.events when draw-call inspection is complete; it returns enabled=false without modifying project assets.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "frame-debugger-state" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Disable Frame Debugger", Input = new Request { } } }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!FrameDebuggerReflection.Available)
             {
@@ -33,6 +33,7 @@ namespace UnityCli
                     "FrameDebuggerUtility not found via reflection.",
                     "Run in a Unity Editor with Frame Debugger support.");
             }
+            ctx.CommitEffect();
             try { FrameDebuggerReflection.SetEnabled(false); }
             catch (Exception ex)
             {
@@ -40,7 +41,12 @@ namespace UnityCli
                     "Failed to disable Frame Debugger: " + ex.Message,
                     "Check Unity Console.");
             }
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "profiler.frame-debugger.disable", Enabled = false });
+            var stable = await ctx.Wait.UntilStable(
+                () => !FrameDebuggerReflection.GetEnabled(),
+                TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct: ct);
+            var enabled = FrameDebuggerReflection.GetEnabled();
+            if (!stable || enabled) throw new UnityCliBridge.BridgeCommandException("E_FRAME_DEBUGGER_STATE_MISMATCH", "Frame Debugger disable write did not produce a disabled readback.", "Check Frame Debugger availability and retry.");
+            return new Result { Command = "profiler.frame-debugger.disable", Enabled = enabled };
         }
     }
 }

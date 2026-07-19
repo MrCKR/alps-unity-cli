@@ -9,7 +9,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private sealed class BridgeCommandRegistry
+        internal sealed class BridgeCommandRegistry
         {
             private readonly Dictionary<string, BridgeCommandDefinition> commands = new Dictionary<string, BridgeCommandDefinition>(StringComparer.Ordinal);
 
@@ -86,6 +86,8 @@ namespace UnityCli
             RegisterInstalledExtensionCommands(registry);
             RegisterPackageRefreshCommand(registry);
             RegisterCodeExecCommand(registry);
+            RegisterEditorStateSnapshotCommand(registry);
+            UnityCliCompileCoordinator.Register(registry);
             RegisterProjectToolCommands(registry);
             RegisterRuntimeToolCommands(registry);
             RegisterContextCommands(registry);

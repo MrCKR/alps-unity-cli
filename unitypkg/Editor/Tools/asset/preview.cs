@@ -4,7 +4,7 @@ using UnityEditor;
 namespace UnityCli
 {
     /// <summary>
-    /// asset.preview — 生成资产缩略图预览元数据(宽高/是否异步加载中)。
+    /// asset.preview — 生成资产缩略图预览元数据(宽高/终态)。
     /// </summary>
     public class AssetPreviewTool : IUnityCliTool<AssetPreviewTool.Request, AssetPreviewTool.Result>
     {
@@ -30,10 +30,11 @@ namespace UnityCli
         {
             Name = "asset.preview",
             Summary = "Return AssetPreview thumbnail metadata (width/height/transient) for an Assets/* asset.",
-            Description = "Return AssetPreview thumbnail metadata for an Assets/* asset. Read-only; preview may be transient (still loading) — re-run when isTransient is true. Does not return image bytes; use camera.screenshot or screenshot.scene-view for rendered captures.",
+            Description = "Return terminal AssetPreview thumbnail metadata for an Assets/* asset. A cache miss waits for Editor preview generation; assets without a preview return hasPreview=false as a terminal result. Does not return image bytes; use camera.screenshot or screenshot.scene-view for rendered captures.",
             Group = "asset",
             Version = "1.0.0",
             DestructiveHint = false,
+            SideEffects = new[] { "asset-preview-generation", "editor-cache-write" },
             Target = "editor",
             PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000,
@@ -44,7 +45,7 @@ namespace UnityCli
             }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = AssetToolSupport.RequireAssetPath(request.AssetPath ?? request.Path);
             if (!AssetToolSupport.AssetExists(path))
@@ -52,6 +53,21 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run tools run asset.search --input '{\"query\":\"<keyword>\"}' to discover the path.");
             }
             var asset = AssetDatabase.LoadMainAssetAtPath(path);
+            if (asset == null)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run tools run asset.search --input '{\"query\":\"<keyword>\"}' to discover the path.");
+            }
+            var instanceId = asset.GetInstanceID();
+            ctx.CommitEffect();
+            AssetPreview.GetAssetPreview(asset);
+            var completed = await ctx.Wait.Until(
+                () => !AssetPreview.IsLoadingAssetPreview(instanceId),
+                System.TimeSpan.FromMilliseconds(System.Math.Max(1, ctx.TimeoutMs)),
+                ct);
+            if (!completed)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_PREVIEW_TIMEOUT", "Asset preview did not finish loading: " + path, "Wait for the Editor to finish generating previews, then retry.");
+            }
             var preview = AssetPreview.GetAssetPreview(asset);
             var hasPreview = preview != null;
             var result = new Result
@@ -60,15 +76,15 @@ namespace UnityCli
                 AssetPath = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 TypeName = asset.GetType().FullName,
-                HasPreview = hasPreview
+                HasPreview = hasPreview,
+                IsTransient = false
             };
             if (hasPreview)
             {
                 result.Width = preview.width;
                 result.Height = preview.height;
-                result.IsTransient = AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID());
             }
-            return new System.Threading.Tasks.ValueTask<Result>(result);
+            return result;
         }
     }
 }

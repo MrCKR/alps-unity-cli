@@ -74,15 +74,22 @@ namespace UnityCli
                 {
                     throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_SLOT_INVALID", "Renderer material slot is out of range: " + slot.ToString(CultureInfo.InvariantCulture), "Pass --slot between 0 and " + Math.Max(0, materials.Length - 1).ToString(CultureInfo.InvariantCulture) + ".");
                 }
+                var targetId = gameObject.GetInstanceID();
+                var materialGuid = AssetDatabase.AssetPathToGUID(materialPath);
+                ctx.CommitEffect();
                 UnityCliSceneMutation.RecordObject(renderer, "Assign material");
                 materials[slot] = material;
                 renderer.sharedMaterials = materials;
                 UnityCliSceneMutation.MarkSceneObjectDirty(renderer);
                 UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+                var observedTarget = EditorUtility.InstanceIDToObject(targetId) as GameObject;
+                var observedRenderer = observedTarget == null ? null : observedTarget.GetComponent<Renderer>();
+                var observedMaterials = observedRenderer == null ? null : observedRenderer.sharedMaterials;
+                if (observedMaterials == null || slot >= observedMaterials.Length || AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(observedMaterials[slot])) != materialGuid) throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_ASSIGN_STATE_MISMATCH", "Renderer material slot did not contain the requested material after assignment.", "Inspect the Renderer materials and retry after the Editor is idle.");
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Target = BuildTarget(gameObject),
-                    Material = new MaterialRef { Path = materialPath, Guid = AssetDatabase.AssetPathToGUID(materialPath) },
+                    Target = BuildTarget(observedTarget),
+                    Material = new MaterialRef { Path = materialPath, Guid = materialGuid },
                     ComponentType = "Renderer",
                     Slot = slot,
                     PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.assign", Target = GameObjectToolSupport.HierarchyPath(gameObject), Path = materialPath } }
@@ -97,14 +104,22 @@ namespace UnityCli
                 {
                     throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_ASSIGN_UNSUPPORTED", "UI Graphic material property is not writable on target: " + target, "Assign to a Renderer or UI Graphic component with a writable material property.");
                 }
+                var targetId = gameObject.GetInstanceID();
+                var materialGuid = AssetDatabase.AssetPathToGUID(materialPath);
+                ctx.CommitEffect();
                 UnityCliSceneMutation.RecordObject(graphic, "Assign material");
                 property.SetValue(graphic, material, null);
                 UnityCliSceneMutation.MarkSceneObjectDirty(graphic);
                 UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+                var observedTarget = EditorUtility.InstanceIDToObject(targetId) as GameObject;
+                var observedGraphic = observedTarget == null ? null : MaterialToolSupport.FindUiGraphic(observedTarget);
+                var observedProperty = observedGraphic == null ? null : observedGraphic.GetType().GetProperty("material", BindingFlags.Instance | BindingFlags.Public);
+                var observedMaterial = observedProperty == null ? null : observedProperty.GetValue(observedGraphic, null) as Material;
+                if (observedMaterial == null || AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(observedMaterial)) != materialGuid) throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_ASSIGN_STATE_MISMATCH", "UI Graphic material did not contain the requested material after assignment.", "Inspect the Graphic component and retry after the Editor is idle.");
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Target = BuildTarget(gameObject),
-                    Material = new MaterialRef { Path = materialPath, Guid = AssetDatabase.AssetPathToGUID(materialPath) },
+                    Target = BuildTarget(observedTarget),
+                    Material = new MaterialRef { Path = materialPath, Guid = materialGuid },
                     ComponentType = "Graphic",
                     Slot = 0,
                     PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.assign", Target = GameObjectToolSupport.HierarchyPath(gameObject), Path = materialPath } }

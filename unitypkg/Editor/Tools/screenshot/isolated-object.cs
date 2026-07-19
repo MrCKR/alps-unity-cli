@@ -48,6 +48,7 @@ namespace UnityCli
             var outputPath = ScreenshotToolSupport.ResolveScreenshotOutputPath(request.Path);
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Output exists: " + outputPath);
+            ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
             var width = Math.Max(1, request.Width ?? 512);
             var height = Math.Max(1, request.Height ?? 512);
@@ -64,32 +65,27 @@ namespace UnityCli
             tempGo.transform.LookAt(bounds.center);
 
             byte[] bytes;
-            var rt = new RenderTexture(width, height, 24);
-            var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
             try
             {
-                cam.targetTexture = rt;
-                cam.Render();
-                var prev = RenderTexture.active;
-                RenderTexture.active = rt;
-                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-                texture.Apply();
-                RenderTexture.active = prev;
-                bytes = format == "jpg" ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
-                ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes);
+                var texture = ScreenshotToolSupport.RenderScreenshotTexture(cam, width, height);
+                try
+                {
+                    bytes = format == "jpg" ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
+                    ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes);
+                }
+                finally { UnityEngine.Object.DestroyImmediate(texture); }
             }
             finally
             {
-                UnityEngine.Object.DestroyImmediate(texture);
-                rt.Release();
-                UnityEngine.Object.DestroyImmediate(rt);
                 UnityEngine.Object.DestroyImmediate(tempGo);
             }
 
+            var artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, format);
             var result = new Result
             {
                 ScreenshotPath = outputPath, ArtifactPath = outputPath, Format = format,
-                Width = width, Height = height, Quality = 95, Source = "isolated-object", Target = go.name
+                Width = width, Height = height, Quality = 95, Source = "isolated-object", Target = go.name,
+                SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256
             };
             ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
             return new System.Threading.Tasks.ValueTask<Result>(result);

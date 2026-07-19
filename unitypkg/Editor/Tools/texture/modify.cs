@@ -68,9 +68,9 @@ namespace UnityCli
             TextureToolSupport.EnsureEditorNotBusy("texture.modify");
             var path = TextureToolSupport.ResolveTexturePath(request.Path ?? request.Target);
             var extension = Path.GetExtension(path).ToLowerInvariant();
-            if (extension != ".png" && extension != ".jpg" && extension != ".jpeg")
+            if (extension != ".png")
             {
-                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_FORMAT_UNSUPPORTED", "texture.modify can write PNG/JPG assets only: " + path, "Use texture.create with --source for other texture formats, or modify the source file directly.");
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_FORMAT_UNSUPPORTED", "texture.modify supports PNG only because post-write pixel proof must be exact: " + path, "Convert the texture to PNG before modifying it.");
             }
             var color = TextureToolSupport.ParseTextureColor(request.Color ?? request.FillColor);
             var texture = TextureToolSupport.LoadTextureAsset(path);
@@ -84,6 +84,16 @@ namespace UnityCli
             }
             width = Math.Min(width, texture.width - x);
             height = Math.Min(height, texture.height - y);
+            var sourceBytes = File.ReadAllBytes(AssetToolSupport.AssetFullPath(path));
+            var decodedPlan = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            try
+            {
+                if (!ImageConversion.LoadImage(decodedPlan, sourceBytes))
+                    throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_DECODE_FAILED", "Failed to decode texture bytes: " + path, "Reimport the asset or verify the image file is valid.");
+                if (decodedPlan.width != texture.width || decodedPlan.height != texture.height)
+                    throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_DECODE_FAILED", "Texture bytes did not match imported texture dimensions: " + path, "Reimport the asset and retry.");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(decodedPlan); }
             if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
@@ -94,13 +104,12 @@ namespace UnityCli
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.modify", Path = path } }
                 });
             }
+            ctx.CommitEffect();
             var working = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             try
             {
-                if (!ImageConversion.LoadImage(working, File.ReadAllBytes(AssetToolSupport.AssetFullPath(path))))
-                {
-                    throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_DECODE_FAILED", "Failed to decode texture bytes: " + path, "Reimport the asset or verify the image file is valid.");
-                }
+                if (!ImageConversion.LoadImage(working, sourceBytes))
+                    throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_DECODE_FAILED", "Texture bytes changed after planning: " + path, "Retry after the Editor is idle.");
                 for (var row = y; row < y + height; row++)
                 {
                     for (var col = x; col < x + width; col++)
@@ -113,6 +122,7 @@ namespace UnityCli
                 File.WriteAllBytes(AssetToolSupport.AssetFullPath(path), bytes);
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
                 AssetDatabase.Refresh();
+                VerifyPixels(path, x, y, width, height, color);
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "texture.modify",
@@ -127,6 +137,21 @@ namespace UnityCli
             {
                 UnityEngine.Object.DestroyImmediate(working);
             }
+        }
+
+        // File bytes are decoded again after import; importer state is not accepted as pixel proof.
+        private static void VerifyPixels(string path, int x, int y, int width, int height, Color expected)
+        {
+            var observed = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            try
+            {
+                if (!ImageConversion.LoadImage(observed, File.ReadAllBytes(AssetToolSupport.AssetFullPath(path))))
+                    throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_MODIFY_STATE_MISMATCH", "Texture bytes could not be decoded after write: " + path, "Check the image encoder and retry.");
+                for (var row = y; row < y + height; row++) for (var col = x; col < x + width; col++)
+                    if (observed.GetPixel(col, row) != expected)
+                        throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_MODIFY_STATE_MISMATCH", "A requested texture pixel did not match after write.", "Check texture compression and retry.");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(observed); }
         }
     }
 }

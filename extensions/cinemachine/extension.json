@@ -2,7 +2,7 @@
   "id": "cinemachine",
   "name": "Cinemachine",
   "version": "1.0.0",
-  "description": "Cinemachine camera tools: virtual camera creation, targets, lens, priority, blends, body/aim/noise, brain overrides, and extensions.",
+  "description": "Cinemachine CM2 and CM3 camera tools: virtual camera creation, targets, lens, priority, blends, body/aim/noise, brain configuration, and extensions.",
   "unityPackages": [
     {
       "packageId": "com.unity.cinemachine",
@@ -43,12 +43,6 @@
       },
       {
         "name": "cinemachine.brain.status"
-      },
-      {
-        "name": "cinemachine.force-camera"
-      },
-      {
-        "name": "cinemachine.release-override"
       },
       {
         "name": "cinemachine.extension.list"
@@ -99,10 +93,6 @@
         "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.Cinemachine.ForceCameraTool",
-        "description": "Live capability implementation."
-      },
-      {
         "type": "UnityCli.Cinemachine.LensTool",
         "description": "Live capability implementation."
       },
@@ -116,10 +106,6 @@
       },
       {
         "type": "UnityCli.Cinemachine.PriorityTool",
-        "description": "Live capability implementation."
-      },
-      {
-        "type": "UnityCli.Cinemachine.ReleaseOverrideTool",
         "description": "Live capability implementation."
       },
       {

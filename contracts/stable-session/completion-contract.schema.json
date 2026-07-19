@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/contracts/stable-session/completion-contract.schema.json",
+  "title": "Public Tool completion contract registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "baselineCommit", "semantics", "jobScope", "tools"],
+  "properties": {
+    "version": { "const": 1 },
+    "baselineCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "semantics": { "type": "string", "minLength": 1 },
+    "jobScope": { "type": "object" },
+    "tools": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/toolCompletion" }
+    }
+  },
+  "$defs": {
+    "toolCompletion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toolName", "descriptorOwner", "source", "deliveryMode", "executionClass", "completionPredicate", "proofSource", "reloadPolicy", "timeoutError", "outcomeUnknownPolicy", "asyncSignals"],
+      "properties": {
+        "toolName": { "type": "string", "minLength": 3 },
+        "descriptorOwner": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "deliveryMode": { "enum": ["direct-terminal", "job-deferred"] },
+        "executionClass": { "enum": ["atomic", "observed-state", "resumable", "external"] },
+        "completionPredicate": { "$ref": "#/$defs/policy" },
+        "proofSource": { "$ref": "#/$defs/policy" },
+        "reloadPolicy": { "$ref": "#/$defs/policy" },
+        "timeoutError": { "type": "string", "pattern": "^E_[A-Z0-9_]+$" },
+        "outcomeUnknownPolicy": { "$ref": "#/$defs/policy" },
+        "directInvocationPolicy": { "$ref": "#/$defs/policy" },
+        "frozenDeliveryPolicy": { "$ref": "#/$defs/policy" },
+        "asyncSignals": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "description"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

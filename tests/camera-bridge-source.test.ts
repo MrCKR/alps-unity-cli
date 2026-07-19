@@ -124,10 +124,11 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(vfxSource, /FindType\("UnityEngine\.VFX\.VisualEffect"\)/);
   assert.match(vfxSource, /E_VFX_PACKAGE_MISSING/);
   assert.match(vfxSource, /CreateVfxGraphAsset/);
-  assert.match(vfxSource, /FindType\("UnityEditor\.VisualEffectAssetEditorUtility"\)/);
+  assert.match(vfxSource, /FindType\("UnityEditor\.VFX\.VisualEffectAssetEditorUtility"\)/);
   assert.match(vfxSource, /GetMethod\("CreateNewAsset"/);
-  assert.match(vfxSource, /WriteMinimalVfxGraphYaml/);
-  assert.match(vfxSource, /VisualEffectResource:\\n/);
+  assert.match(vfxSource, /PrepareVfxGraphFactory/);
+  assert.match(vfxSource, /E_VFX_GRAPH_FACTORY_UNAVAILABLE/);
+  assert.doesNotMatch(vfxSource, /WriteMinimalVfxGraphYaml|VisualEffectResource|guid: [0-9a-f]{32}/);
   assert.doesNotMatch(vfxSource, /SetAssetPath/);
   assert.doesNotMatch(vfxSource, /graphProperty\.SetValue/);
   assert.match(vfxSource, /AssetDatabase\.LoadAssetAtPath\(path, assetType\)/);
@@ -543,10 +544,11 @@ test("Unity Bridge cancellation prevents queued side effects and cancels started
   assert.match(source, /public void Cancel\(\)[\s\S]*cancellation\.Cancel\(\)/);
   assert.match(source, /item\.CancelBeforeStart\(\)[\s\S]*E_UNITY_BUSY/);
   assert.match(source, /item\.Cancel\(\)[\s\S]*E_EXECUTION_TIMEOUT/);
-  assert.match(source, /await Execute\(item\.Request, item\.Token\)/);
+  assert.match(source, /await ExecuteCoordinatedRequest\(item\.Request, item\.RawRequestBytes, item\.TryAcceptJournal, item\.Token\)/);
+  assert.match(source, /CancelBeforeJournalAcceptance\(\)/);
   assert.match(source, /request\.ContentLength64/);
   assert.match(source, /stream\.Read\(bytes, offset, bytes\.Length - offset\)/);
-  assert.match(source, /bridge_request_enqueued requestId=/);
+  assert.match(source, /"bridge_request_enqueued" : "bridge_request_attached"/);
   assert.match(source, /bridge_request_dequeued requestId=/);
   assert.match(source, /bridge_request_skipped_expired/);
 });
@@ -568,7 +570,15 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /File\.Exists\(outputPath\) && !overwrite/);
   assert.match(source, /CreateScreenshotDirectory\(outputPath\)/);
   assert.match(source, /WriteScreenshotBytes\(outputPath, bytes\)/);
+  assert.match(source, /bytes == null \|\| bytes\.Length == 0/);
+  assert.match(source, /E_SCREENSHOT_ENCODE_FAILED/);
+  assert.match(source, /File\.Exists\(outputPath\) \|\| new FileInfo\(outputPath\)\.Length <= 0/);
+  assert.match(source, /E_SCREENSHOT_WRITE_PROOF_MISSING/);
   assert.match(source, /Path\.GetFullPath/);
+
+  const multiviewSource = await readFile(new URL("Tools/camera/multiview.cs", editorUrl), "utf8");
+  assert.match(multiviewSource, /CameraToolSupport\.NormalizeFormat\(request\.Format, Path\.Combine\(outputDir, "capture\.png"\)\)/);
+  assert.match(multiviewSource, /CaptureCamera\(camera, width, height, false, 95, plan\.Value, format/);
   assert.match(readme, /`E_CAMERA_NOT_FOUND` for `tools run camera\.info` when a target Camera cannot be resolved/);
   assert.match(readme, /`E_TARGET_NOT_FOUND` for `tools run camera\.screenshot` when the target is empty or cannot be resolved/);
   assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation\/binding summaries, Animator state\/play\/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument\/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows \+ Unity Editor validation/);
@@ -600,7 +610,8 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
-  assert.match(source, /Name = "editor\.state"/);
+  assert.doesNotMatch(source, /Name = "editor\.state"/);
+  assert.match(source, /"internal\.editor\.state\.snapshot"/);
   assert.match(source, /Name = "editor\.play"/);
   assert.match(source, /Name = "editor\.pause"/);
   assert.match(source, /Name = "editor\.stop"/);
@@ -624,15 +635,16 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /stale_bridge_listener_stopped/);
   assert.match(source, /diagnosticsFingerprint/);
   assert.match(source, /moduleVersionId/);
-  assert.match(source, /bridgeDiagnosticsFingerprint/);
-  assert.match(source, /bridgeListenerId/);
-  assert.match(source, /bridgeAssemblyMvid/);
-  assert.match(source, /packageName/);
-  assert.match(source, /packageAssetPath/);
-  assert.match(source, /packageResolvedPath/);
-  assert.match(source, /runtimeLoadFile/);
-  assert.match(source, /buildStamp/);
-  assert.match(source, /EditorApplication\.ExecuteMenuItem\(path\)/);
+  assert.match(source, /"version", 2L/);
+  assert.match(source, /"instanceId", InstanceId\(\)/);
+  assert.match(source, /"canonicalProjectPath", ProjectIdentity\(\)\.CanonicalProjectPath/);
+  assert.match(source, /"canonicalizationVersion"/);
+  assert.match(source, /"editorSessionId", EditorSessionId\(\)/);
+  assert.match(source, /"listenerId", ListenerId/);
+  assert.match(source, /"actualPort", \(long\)port/);
+  assert.match(source, /"buildStamp", BridgeBuildStamp\(\)/);
+  assert.match(source, /EditorApplication\.ExecuteMenuItem\(request\.Path\)/);
+  assert.match(source, /E_MENU_COMPLETION_UNSUPPORTED/);
   assert.match(source, /EditorApplication\.isPlaying/);
   assert.match(source, /EditorApplication\.isPaused/);
   assert.match(source, /EditorApplication\.isPlayingOrWillChangePlaymode/);
@@ -642,13 +654,14 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /EnsureEditorNotBusy/);
   assert.doesNotMatch(source, /WaitForPlayModeState/);
   assert.match(source, /PrefabStage/);
-  assert.match(readme, /`tools run editor\.state` returns playMode, pause, busy, activeScene and Prefab Stage status/);
-  assert.match(readme, /`tools run editor\.play`, `tools run editor\.pause` and `tools run editor\.stop` control Editor PlayMode/);
+  assert.match(readme, /`context read editor\.state --input '\{\}'` immediately observes compile\/import\/build\/PlayMode\/Prefab Stage, progress, blockers and freshness without waiting or side effects/);
+  assert.match(readme, /`tools run editor\.play`, `tools run editor\.pause` and `tools run editor\.stop` control Editor PlayMode and return only stable observed terminal state/);
   assert.match(readme, /`tools run editor\.menu --input '\{"path":"<path>"\}'` executes a Unity Editor menu item/);
   assert.match(readme, /`tools run console\.get --input '\{"count":<n>\}'` returns recent Unity Console entries/);
   assert.match(readme, /E_UNITY_BUSY/);
-  assert.match(readme, /E_PLAYMODE_TIMEOUT/);
+  assert.match(readme, /E_UNITY_TRANSITION_TIMEOUT/);
   assert.match(readme, /E_MENU_NOT_FOUND/);
+  assert.match(readme, /E_MENU_COMPLETION_UNSUPPORTED/);
 });
 
 test("Unity Bridge treats PlayMode switching as editor-command busy state", async () => {
@@ -668,7 +681,7 @@ test("Bridge execution uses the protocol request, linked cancellation, and one e
   assert.match(executeBlock, /await ExecuteData\(request, cancellationToken\)/);
   assert.match(executeBlock, /ProtocolEnvelopeFactory\.Success\(request\.RequestId, data\)/);
   assert.match(executeBlock, /CommandRegistry\.ExecuteAsync\(request, cancellationToken\)/);
-  assert.match(executeBlock, /!EditorApplication\.isPlaying && !allowedDuringPlayModeTransition/);
+  assert.match(executeBlock, /if \(IsPlayModeChanging\(\)\)[\s\S]*if \(!allowedDuringPlayModeTransition\)/);
   assert.match(executeBlock, /request\.Command == "runtime-tool\.run"/);
   assert.doesNotMatch(executeBlock, /editor-domain write commands are not available/);
 
@@ -687,12 +700,13 @@ test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
 
   assert.ok(handleHttpCoreStart > -1, "Could not find HandleHttpCore method");
 
-  assert.match(httpBlock, /!cachedIsPlaying && !allowedDuringPlayModeTransition/, "HandleHttpCore must only block transition-time commands");
+  assert.match(httpBlock, /if \(cachedIsPlayModeChanging\)[\s\S]*if \(!allowedDuringPlayModeTransition\)/, "HandleHttpCore must only block transition-time commands");
   assert.match(httpBlock, /http-guard-v3/, "HandleHttpCore transition error must include the v3 marker");
   assert.doesNotMatch(httpBlock, /editor-domain write commands are not available/, "Stable Play Mode must not be rejected before queueing");
 
   // HandleHttpCore 的切换期 allowlist 需要与 Execute 保持一致。
-  assert.match(httpBlock, /request\.Command == "editor\.state"/, "HandleHttpCore must allow editor.state during Play Mode transitions");
+  assert.match(httpBlock, /IsEditorStateSnapshotCommand\(request\.Command\)/, "HandleHttpCore must allow the private state snapshot during Play Mode transitions");
+  assert.doesNotMatch(httpBlock, /request\.Command == "editor\.state"/, "The removed public editor.state command must not stay in the transition allowlist");
   assert.match(httpBlock, /request\.Command == "editor\.console"/, "HandleHttpCore must allow editor.console during Play Mode transitions");
   assert.match(httpBlock, /request\.Command == "editor\.pause"/, "HandleHttpCore must allow editor.pause during Play Mode transitions");
   assert.match(httpBlock, /request\.Command == "editor\.stop"/, "HandleHttpCore must allow editor.stop during Play Mode transitions");
@@ -716,16 +730,15 @@ test("EnsureEditorNotBusy only blocks Play Mode transitions", async () => {
   assert.doesNotMatch(busyBlock, /this editor-domain command is not available/, "Stable Play Mode must not reject editor-domain commands");
 });
 
-test("editor.state and shared wait guards treat stable Play Mode as ready", async () => {
+test("private state sampler and shared wait guards treat stable Play Mode as ready", async () => {
   // 回归保护：isPlayingOrWillChangePlaymode 在稳定 PlayMode 中仍为 true，不能直接作为 busy 标志。
-  const stateSource = await readFile(new URL("Contexts/editor/state.cs", editorUrl), "utf8");
+  const stateSource = await readFile(new URL("Infrastructure/UnityCliEditorStateSnapshot.cs", editorUrl), "utf8");
   const editorSupport = await readFile(new URL("Tools/editor/EditorToolSupport.cs", editorUrl), "utf8");
   const waiter = await readFile(new URL("Infrastructure/UnityCliWaiter.cs", editorUrl), "utf8");
   const allSource = await readUnityBridgeSources();
 
-  assert.match(stateSource, /EditorApplication\.isPlayingOrWillChangePlaymode != EditorApplication\.isPlaying/);
-  assert.match(stateSource, /IsEditorBusy\(\)[\s\S]*IsPlayModeChanging\(\)/);
-  assert.match(stateSource, /PlayModeChanging = IsPlayModeChanging\(\)/);
+  assert.match(stateSource, /IsPlayModeChanging\(\) \? "transitioning" : \(EditorApplication\.isPlaying \? "play" : "edit"\)/);
+  assert.match(stateSource, /EditorApplication\.isPlaying && !IsPlayModeChanging\(\)/);
   assert.match(editorSupport, /EnsureEditorNotBusy[\s\S]*UnityCliBridge\.IsPlayModeChanging\(\)/);
   assert.match(editorSupport, /IsBusy = [^\n]*UnityCliBridge\.IsPlayModeChanging\(\)/);
   assert.match(editorSupport, /PlayModeChanging = UnityCliBridge\.IsPlayModeChanging\(\)/);
@@ -744,11 +757,15 @@ test("HTTP and execution guards share the safe Play Mode transition allowlist", 
   const executeBlock = source.slice(executeStart, executeEnd);
 
   assert.ok(httpStart > -1 && executeStart > -1 && executeEnd > executeStart);
-  for (const command of ["editor.state", "runtime-tool.list", "runtime-tool.run", "context.read"]) {
+  assert.match(httpBlock, /IsEditorStateSnapshotCommand\(request\.Command\)/);
+  assert.match(executeBlock, /IsEditorStateSnapshotCommand\(request\.Command\)/);
+  assert.doesNotMatch(httpBlock, /request\.Command == "editor\.state"/);
+  assert.doesNotMatch(executeBlock, /request\.Command == "editor\.state"/);
+  for (const command of ["runtime-tool.list", "runtime-tool.run", "context.read"]) {
     const pattern = new RegExp(`request\\.Command == "${command.replaceAll(".", "\\.")}"`);
     assert.match(httpBlock, pattern, `${command} must be allowed before queueing`);
     assert.match(executeBlock, pattern, `${command} must be allowed during execution`);
   }
-  assert.match(httpBlock, /!cachedIsPlaying && !allowedDuringPlayModeTransition/);
-  assert.match(executeBlock, /!EditorApplication\.isPlaying && !allowedDuringPlayModeTransition/);
+  assert.match(httpBlock, /if \(cachedIsPlayModeChanging\)[\s\S]*if \(!allowedDuringPlayModeTransition\)/);
+  assert.match(executeBlock, /if \(IsPlayModeChanging\(\)\)[\s\S]*if \(!allowedDuringPlayModeTransition\)/);
 });

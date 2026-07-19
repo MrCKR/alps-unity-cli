@@ -10,6 +10,7 @@ export interface BuildStatusRequest {
 }
 
 export interface BuildStatusObject {
+  [key: string]: AnyJson;
 }
 
 export interface BuildStatusError {

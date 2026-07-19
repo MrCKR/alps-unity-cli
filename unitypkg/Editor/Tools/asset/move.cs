@@ -47,16 +47,23 @@ namespace UnityCli
             AssetToolSupport.EnsureEditorNotBusy("asset.move");
             var source = AssetToolSupport.RequireExistingAssetPath(request.Source ?? request.Path);
             var destination = AssetToolSupport.RequireAssetPath(request.Destination);
-            AssetToolSupport.CreateAssetDirectory(destination);
-            var error = AssetDatabase.MoveAsset(source, destination);
-            if (!string.IsNullOrEmpty(error))
+            if (AssetToolSupport.AssetExists(destination))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_ASSET_MOVE_FAILED", "Failed to move asset: " + error, "Check source, destination and Unity Console diagnostics.");
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Destination asset already exists: " + destination, "Choose another destination path.");
             }
+            var sourceGuid = AssetDatabase.AssetPathToGUID(source);
+            ctx.CommitEffect();
+            AssetToolSupport.CreateAssetDirectory(destination);
+            AssetDatabase.MoveAsset(source, destination);
             AssetDatabase.Refresh();
+            var observedPath = string.IsNullOrEmpty(sourceGuid) ? null : AssetDatabase.GUIDToAssetPath(sourceGuid);
+            if (observedPath != destination || AssetDatabase.LoadMainAssetAtPath(observedPath) == null)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_MOVE_STATE_MISMATCH", "Asset move did not produce the expected source and destination state.", "Check source, destination and Unity Console diagnostics.");
+            }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Asset = AssetToolSupport.BuildAssetDetail(destination),
+                Asset = AssetToolSupport.BuildAssetDetail(observedPath),
                 Source = source,
                 PlannedEffects = new List<AssetPlannedEffect> { new AssetPlannedEffect { Type = "asset.move", Path = destination, Source = source } }
             });

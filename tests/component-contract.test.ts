@@ -78,7 +78,7 @@ test("component tools are contract-discovered and expose expected live descripto
       group: "component",
       supportsDryRun: true,
       playModeSupport: "session-affecting",
-      inputSchema: { type: "object", properties: { pathPatches: { type: "array" }, jsonPatch: { type: "array" }, componentDiff: { type: "object" } } }
+      inputSchema: { type: "object", properties: { pathPatches: { type: "array" } } }
     }),
     makeLiveTool({
       name: "component.list-types",
@@ -128,8 +128,8 @@ test("component tools are contract-discovered and expose expected live descripto
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.playModeSupport, "session-affecting");
   assert.ok(modifyProps.pathPatches);
-  assert.ok(modifyProps.jsonPatch);
-  assert.ok(modifyProps.componentDiff);
+  assert.equal(modifyProps.jsonPatch, undefined);
+  assert.equal(modifyProps.componentDiff, undefined);
 
   const listTypes = tools.get("component.list-types")!;
   assert.equal(listTypes.playModeSupport, "supported");
@@ -191,6 +191,9 @@ test("C# component lifecycle handlers support properties and indexed duplicate c
   assert.match(supportSource, /DisallowMultipleComponent/);
   assert.match(toolSource, /type\.IsInstanceOfType\(component\)/);
   assert.match(toolSource, /E_COMPONENT_ADD_FAILED/);
+  assert.match(toolSource, /GetComponents\(type\)/);
+  assert.match(toolSource, /candidate\.GetInstanceID\(\) == componentId/);
+  assert.doesNotMatch(toolSource.slice(toolSource.indexOf("VerifyComponentReadback")), /GetComponent\(type\)/);
   assert.match(supportSource, /E_COMPONENT_INDEX_OUT_OF_RANGE/);
   assert.match(toolSource, /ChangedProperties/);
 });
@@ -202,7 +205,7 @@ test("C# component deep handlers return typed Result via IUnityCliTool", async (
   assert.match(getSource, /ObjectSerializer\.Serialize\(component, options\)/, "component.get should serialize the component");
   const modifySource = await readFile(new URL("../unitypkg/Editor/Tools/component/modify.cs", import.meta.url), "utf8");
   assert.match(modifySource, /DryRun/, "component.modify should support dry-run");
-  assert.match(modifySource, /ObjectPatch\.ApplyMergePatch/, "component.modify should apply merge patches");
+  assert.match(modifySource, /ObjectPatch\.ApplyVerifiedSerializedPatches/, "component.modify should apply prevalidated serialized path patches");
   const listSource = await readFile(new URL("../unitypkg/Editor/Tools/component/list-types.cs", import.meta.url), "utf8");
   assert.match(listSource, /Name = "component\.list-types"/, "component.list-types should be an IUnityCliTool");
   const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs", import.meta.url), "utf8");

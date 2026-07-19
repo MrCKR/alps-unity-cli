@@ -29,7 +29,10 @@ namespace UnityCli
     [InitializeOnLoad]
     public static partial class UnityCliBridge
     {
-        private const int Port = 47392;
+        private const int PreferredPortBase = 47392;
+        private const int PreferredPortRange = 4096;
+        private const int PreferredPortRetryCount = 4;
+        private const int DeterministicFallbackCount = 64;
         private static readonly object QueueLock = new object();
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview" };
         private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.build-settings", "scene.create", "scene.load", "scene.save" };
@@ -46,7 +49,7 @@ namespace UnityCli
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop", "animator.get-info", "animator.get-parameter", "animator.set-parameter", "animator.crossfade", "animator.set-speed", "animator.set-enabled", "controller.create", "controller.add-state", "controller.add-transition", "controller.add-parameter", "controller.get-info", "controller.assign", "controller.add-layer", "controller.remove-layer", "controller.set-layer-weight", "controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
-        private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.compile", "editor.console", "project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove" };
+        private static readonly string[] EditorCommands = { "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.console", "project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove" };
         private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
@@ -55,7 +58,7 @@ namespace UnityCli
         private static readonly string[] ExtensionCommands = { "extension.status" };
         private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
-        private static readonly string ListenerId = Guid.NewGuid().ToString("N");
+        private static readonly string ListenerId = "listener-" + Guid.NewGuid().ToString("N");
         private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
         private static HttpListener listener;
         private static bool started;
@@ -74,12 +77,16 @@ namespace UnityCli
         private static volatile bool cachedIsPlayingOrWillChangePlaymode;
         private static volatile bool cachedIsPlaying;
         private static volatile bool cachedIsBuilding;
+        private static volatile bool cachedIsPlayModeChanging;
+        private static volatile bool playModeChanging = EditorApplication.isPlaying != EditorApplication.isPlayingOrWillChangePlaymode;
 
         static UnityCliBridge()
         {
             // AssetImportWorker 不是可寻址 Editor 实例，不得启动 listener 或写入 instance registry。
             if (AssetDatabase.IsAssetImportWorkerProcess()) return;
             WriteRuntimeLoadDiagnostics("static_constructor");
+            UnityCliCompilationEventBroker.Initialize();
+            UnityCliCompileCoordinator.Initialize();
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
@@ -103,12 +110,13 @@ namespace UnityCli
                 port = StartHttpListener(listener);
                 started = true;
                 Task.Run(ListenLoop);
-                RegisterInstance("healthy");
+                if (!RegisterInstance("ready")) throw new InvalidOperationException("Initial instance registry publication failed.");
                 WriteRuntimeLoadDiagnostics("listener_started");
                 WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
             catch (Exception exception)
             {
+                StopListener();
                 WriteRuntimeLoadDiagnostics("listener_start_failed");
                 WriteLog("bridge_start_failed " + exception.GetType().Name + ": " + exception.Message + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
@@ -117,16 +125,20 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
+            UnityCliCompilationEventBroker.BeforeReload();
+            UnityCliCompileCoordinator.BeforeReload();
             BridgeLifetime.Cancel();
             CancelQueuedWork();
             CancelPendingWaits("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
-            RegisterInstance("stale");
+            RegisterInstance("transitioning");
             StopListener();
         }
 
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
+            UnityCliCompilationEventBroker.Initialize();
+            UnityCliCompileCoordinator.Initialize();
             WriteLog("bridge_after_assembly_reload restarting listener");
             StopStaleBridgeListeners();
             StartListener();
@@ -138,6 +150,8 @@ namespace UnityCli
 
         private static void UnregisterAndStop()
         {
+            UnityCliCompilationEventBroker.Shutdown();
+            UnityCliCompileCoordinator.Shutdown();
             BridgeLifetime.Cancel();
             CancelQueuedWork();
             CancelPendingWaits("E_UNITY_QUITTING", "Unity Editor is quitting.", "Restart Unity and retry the request.", 5000);
@@ -145,8 +159,10 @@ namespace UnityCli
             StopListener();
         }
 
+        /// <summary>统一记录 PlayMode 过渡；稳定 Play 下 isPlayingOrWillChangePlaymode 仍为 true，不能直接用它判断 changing。</summary>
         private static void OnBridgePlayModeStateChanged(PlayModeStateChange state)
         {
+            playModeChanging = state == PlayModeStateChange.ExitingEditMode || state == PlayModeStateChange.ExitingPlayMode;
             if (state == PlayModeStateChange.ExitingPlayMode)
             {
                 runtimeSession.Cancel();
@@ -155,19 +171,23 @@ namespace UnityCli
             }
         }
 
-        private static CancellationTokenSource CreateExecutionLifetime(UnityCli.Protocol.BridgeRequest request, CancellationToken clientAbort = default)
+        internal static bool IsPlayModeChanging() { return playModeChanging; }
+
+        private static CancellationTokenSource CreateExecutionLifetime(UnityCli.Protocol.BridgeRequest request)
         {
             var tokens = new List<CancellationToken> { BridgeLifetime.Token };
             if (request != null && string.Equals(request.Command, "runtime-tool.run", StringComparison.Ordinal)) tokens.Add(runtimeSession.Token);
-            if (clientAbort.CanBeCanceled) tokens.Add(clientAbort);
             return CancellationTokenSource.CreateLinkedTokenSource(tokens.ToArray());
         }
 
         private static CancellationTokenSource CreateExecutionTimeout(UnityCli.Protocol.BridgeRequest request)
         {
             var source = CreateExecutionLifetime(request);
-            var timeoutMs = request == null || request.Execution == null ? null : request.Execution.TimeoutMs;
-            if (timeoutMs.HasValue && timeoutMs.Value > 0) source.CancelAfter(TimeSpan.FromMilliseconds(Math.Min(timeoutMs.Value, int.MaxValue)));
+            int remainingMs;
+            if (request != null && request.TryDeadlineRemainingMs(out remainingMs))
+                source.CancelAfter(TimeSpan.FromMilliseconds(remainingMs));
+            else
+                source.Cancel();
             return source;
         }
 
@@ -250,9 +270,8 @@ namespace UnityCli
                 return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                     request.RequestId,
                     "E_EXECUTION_TIMEOUT",
-                    "Bridge request execution was cancelled or timed out.",
-                    nextActions: new[] { "Retry with a larger execution.timeoutMs after Unity is responsive." },
-                    transient: true));
+                    "Bridge request execution was cancelled because the immutable deadline elapsed or the Unity session ended.",
+                    nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." }));
             }
             catch (Exception exception)
             {
@@ -273,7 +292,7 @@ namespace UnityCli
                 throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", null, new[] { "Wait for domain reload to complete and retry." }, true, 10000);
             }
 
-            var allowedDuringCompileOrImport = request.Command == "editor.compile";
+            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
             if (EditorApplication.isCompiling && !allowedDuringCompileOrImport)
             {
                 throw new BridgeCommandException("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", null, new[] { "Wait for Unity to finish compiling and retry." }, true, 5000);
@@ -284,10 +303,11 @@ namespace UnityCli
                 throw new BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", null, new[] { "Wait for Unity to finish importing and retry." }, true, 5000);
             }
 
-            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            if (IsPlayModeChanging())
             {
-                // 只在 Play Mode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续操作 Unity。
-                var allowedDuringPlayModeTransition = request.Command == "editor.state"
+                // 只在 PlayMode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续操作 Unity。
+                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command)
+                    || IsEditorStateSnapshotCommand(request.Command)
                     || request.Command == "editor.console"
                     || request.Command == "editor.pause"
                     || request.Command == "editor.stop"
@@ -300,7 +320,7 @@ namespace UnityCli
                     || request.Command == "context.read"
                     || request.Command == "extension.status";
 
-                if (!EditorApplication.isPlaying && !allowedDuringPlayModeTransition)
+                if (!allowedDuringPlayModeTransition)
                 {
                     WriteLog("execute_play_mode_guard_blocked_transition requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
                     throw new BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (execute-guard-v3)", null, new[] { "Wait for Play mode transition to complete and retry." }, true, 3000);

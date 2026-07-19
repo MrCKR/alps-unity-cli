@@ -51,6 +51,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SCENE_OUTPUT_EXISTS", "Scene already exists: " + path, "Choose a different Assets/*.unity path or run scene load/save.");
             }
+            ctx.CommitEffect();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             if (!string.IsNullOrEmpty(path))
             {
@@ -60,9 +61,12 @@ namespace UnityCli
                     throw new UnityCliBridge.BridgeCommandException("E_SCENE_SAVE_FAILED", "Failed to save new scene: " + path, "Check destination path and Unity Console diagnostics.");
                 }
             }
+            var observedScene = SceneManager.GetActiveScene();
+            if (!observedScene.IsValid() || !observedScene.isLoaded || (!string.IsNullOrEmpty(path) && observedScene.path != path))
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_CREATE_STATE_MISMATCH", "Created scene readback did not match the requested path.", "Inspect the active scene and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Scene = SceneToolSupport.BuildSceneInfo(SceneManager.GetActiveScene()),
+                Scene = SceneToolSupport.BuildSceneInfo(observedScene),
                 RequestedPath = path,
                 PlannedEffects = new List<ScenePlannedEffect>
                 {

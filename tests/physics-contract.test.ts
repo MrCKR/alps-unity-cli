@@ -122,16 +122,49 @@ test("physics.validate C# wraps result in structured tool result", async () => {
 
 test("physics.rigidbody mutation reports the attached component", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/rigidbody.cs", import.meta.url), "utf8");
-  assert.match(source, /HasRigidbody = true,\s*Rigidbody = PhysicsToolSupport\.BuildRigidbodyInfo\(rigidbody\)/, "mutation result must report the post-operation component state");
-  assert.doesNotMatch(source, /attached\)/, "missing-component guidance must remain executable and well-formed");
+  assert.match(source, /var observedTarget = EditorUtility\.InstanceIDToObject\(targetId\) as GameObject/, "mutation must fresh-resolve the target");
+  assert.match(source, /var observedRigidbody = observedTarget == null \? null : observedTarget\.GetComponent<Rigidbody>\(\)/, "mutation must re-read the attached component");
+  assert.match(source, /E_PHYSICS_RIGIDBODY_STATE_MISMATCH/, "mutation must fail when the fresh readback does not match");
+  assert.match(source, /HasRigidbody = observedRigidbody != null,\s*Rigidbody = PhysicsToolSupport\.BuildRigidbodyInfo\(observedRigidbody\)/, "mutation result must report the fresh post-operation component state");
+  assert.match(source, /if \(rigidbody != null && !hasSetter\)[\s\S]*PlannedEffects = new List<PhysicsPlannedEffect>\(\)[\s\S]*ctx\.CommitEffect\(\)/, "an existing Rigidbody with no setters must remain read-only");
 });
 
 test("physics.joint.add re-resolves the component after mode-safe attachment", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/joint/add.cs", import.meta.url), "utf8");
   assert.match(source, /UnityCliSceneMutation\.AddComponent\(target, type\)/);
   assert.match(source, /var joint = target\.GetComponent\(type\) as Joint/);
+  assert.match(source, /var observedTarget = EditorUtility\.InstanceIDToObject\(targetId\) as GameObject/);
+  assert.match(source, /var observedJoint = observedTarget == null \? null : observedTarget\.GetComponent\(type\) as Joint/);
+  assert.match(source, /var observedConnectedBody = connectedBodyId == 0 \? null : EditorUtility\.InstanceIDToObject\(connectedBodyId\) as Rigidbody/);
   assert.match(source, /E_PHYSICS_JOINT_ADD_FAILED/);
   assert.match(source, /ct\.ThrowIfCancellationRequested\(\)/);
+});
+
+test("physics mutation tools validate before commit and prove fresh observed state", async () => {
+  const force = await readFile(new URL("../unitypkg/Editor/Tools/physics/force.cs", import.meta.url), "utf8");
+  assert.match(force, /ValidateFinite\(force, "force"\)/);
+  assert.match(force, /Enum\.IsDefined\(typeof\(ForceMode\), mode\)/);
+  assert.match(force, /Enum\.IsDefined\(typeof\(ForceApplicationType\), forceType\)/);
+  assert.ok(force.indexOf("ValidateFinite(force") < force.indexOf("ctx.CommitEffect()"));
+  assert.match(force, /EditorUtility\.InstanceIDToObject\(targetId\) as GameObject/);
+
+  const assignMaterial = await readFile(new URL("../unitypkg/Editor/Tools/physics/assign-material.cs", import.meta.url), "utf8");
+  assert.match(assignMaterial, /var observedTarget = dryRun \? target : EditorUtility\.InstanceIDToObject\(targetId\) as GameObject/);
+  assert.match(assignMaterial, /var observedCollider = dryRun \? collider : EditorUtility\.InstanceIDToObject\(colliderId\) as Collider/);
+  assert.match(force, /candidate\.GetInstanceID\(\) == rigidbodyId/);
+
+  const jointRemove = await readFile(new URL("../unitypkg/Editor/Tools/physics/joint/remove.cs", import.meta.url), "utf8");
+  assert.match(jointRemove, /requestedJointIds/);
+  assert.match(jointRemove, /remainingIds\.Contains\(id\)/);
+  assert.match(jointRemove, /E_PHYSICS_JOINT_REMOVE_STATE_MISMATCH/);
+
+  const settings = await readFile(new URL("../unitypkg/Editor/Tools/physics/settings.cs", import.meta.url), "utf8");
+  assert.match(settings, /private sealed class SettingPlan/);
+  assert.match(settings, /var immutablePlans = plans\.AsReadOnly\(\)/);
+  assert.match(settings, /if \(immutablePlans\.Count > 0\)\s*\{\s*ctx\.CommitEffect\(\)/);
+  assert.match(settings, /Unsupported physics setting/);
+  assert.match(settings, /bool\.TryParse/);
+  assert.match(settings, /foreach \(var plan in immutablePlans\)\s*if \(!plan\.ReadbackMatches\(\)\)/);
 });
 
 test("physics bridge spec forwards structured --input fields", async () => {

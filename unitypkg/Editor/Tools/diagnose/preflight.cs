@@ -83,11 +83,8 @@ namespace UnityCli
             };
 
             public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
-        {
-                // 触发项目自定义工具/上下文发现,确保 fingerprint 摘要反映最新注册状态
-                DiscoverProjectTools();
-                DiscoverProjectContexts();
-
+            {
+                // preflight 只读取已经发布的 registry 快照，不能为了诊断触发 discovery 或写入缓存。
                 var scene = SceneManager.GetActiveScene();
                 var checks = new List<object>
                 {

@@ -60,6 +60,7 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result { DryRun = true, Path = path, Type = type.FullName, Overwrite = request.Overwrite });
             }
+            ctx.CommitEffect();
             ScriptableObjectToolSupport.CreateAssetDirectory(path);
             if (request.Overwrite && !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
             {
@@ -68,11 +69,16 @@ namespace UnityCli
             var asset = ScriptableObject.CreateInstance(type);
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            var observedAsset = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
+            if (observedAsset == null || observedAsset.GetType() != type)
+                throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_CREATE_READBACK_FAILED", "Created ScriptableObject could not be reloaded with the requested type: " + path, "Check Unity Console for asset import errors.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Path = path,
-                Type = type.FullName,
-                ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, asset)
+                Type = observedAsset.GetType().FullName,
+                Overwrite = request.Overwrite,
+                ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, observedAsset)
             });
         }
     }

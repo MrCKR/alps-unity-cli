@@ -11,8 +11,17 @@ namespace UnityCli.Protocol
         {
             var request = UnityCli.UnityCliSerializer.Deserialize<BridgeRequest>(json);
             if (request == null || string.IsNullOrWhiteSpace(request.Command)) throw new FormatException("Bridge request requires a non-empty command.");
+            if (request.ProtocolVersion != 2d) throw new FormatException("Bridge request requires protocolVersion=2.");
+            if (string.IsNullOrWhiteSpace(request.InstanceId)) throw new FormatException("Bridge request requires a non-empty instanceId.");
             if (string.IsNullOrWhiteSpace(request.RequestId)) throw new FormatException("Bridge request requires a non-empty requestId.");
-            if (request.Input == null) request.Input = new Dictionary<string, object>(StringComparer.Ordinal);
+            if (!(request.Input is IDictionary<string, object>)) throw new FormatException("Bridge request requires input as an explicit JSON object.");
+            if (request.Execution == null) throw new FormatException("Bridge request requires execution.");
+            if (request.Execution.CompletionContractVersion != 1d) throw new FormatException("Bridge request requires completionContractVersion=1.");
+            if (request.Execution.RequestDigestVersion != 1d) throw new FormatException("Bridge request requires requestDigestVersion=1.");
+            DateTimeOffset deadline;
+            if (string.IsNullOrWhiteSpace(request.Execution.AbsoluteDeadlineUtc)
+                || !DateTimeOffset.TryParse(request.Execution.AbsoluteDeadlineUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline))
+                throw new FormatException("Bridge request requires execution.absoluteDeadlineUtc as an ISO-8601 timestamp.");
             return request;
         }
 
@@ -63,21 +72,37 @@ namespace UnityCli.Protocol
             catch (Exception exception) when (exception is FormatException || exception is InvalidCastException) { return null; }
         }
 
-        // 从传输层 execution 读取并校验 timeout，禁止业务 input 覆盖执行策略。
+        /// <summary>
+        /// 从 immutable absolute deadline 计算 handler 剩余预算；排队、transition 与 listener recovery 已消耗的时间不会重置。
+        /// maximum 只限制单个 Tool 的执行上限，不改变请求的绝对截止时间。
+        /// </summary>
         public int ExecutionTimeoutMs(int fallback, int maximum)
         {
-            var value = Execution == null ? null : Execution.TimeoutMs;
-            if (!value.HasValue) return fallback;
-            var timeoutMs = value.Value;
-            if (double.IsNaN(timeoutMs) || double.IsInfinity(timeoutMs) || timeoutMs != Math.Truncate(timeoutMs) || timeoutMs <= 0 || timeoutMs > maximum || timeoutMs > int.MaxValue)
+            int remainingMs;
+            if (!TryDeadlineRemainingMs(out remainingMs))
             {
                 throw new UnityCli.UnityCliBridge.BridgeCommandException(
-                    "E_SCHEMA_INVALID",
-                    "execution.timeoutMs must be an integer between 1 and " + maximum.ToString(CultureInfo.InvariantCulture) + ".",
-                    new Dictionary<string, object> { { "field", "execution.timeoutMs" }, { "maximum", maximum }, { "actual", timeoutMs } },
-                    new[] { "Pass --timeout-ms with an integer between 1 and " + maximum.ToString(CultureInfo.InvariantCulture) + "." });
+                    "E_EXECUTION_TIMEOUT",
+                    "The immutable request deadline elapsed before Unity execution started.",
+                    new Dictionary<string, object> { { "absoluteDeadlineUtc", Execution == null ? null : Execution.AbsoluteDeadlineUtc } },
+                    new[] { "Inspect editor.state and retry only after Unity is responsive." });
             }
-            return (int)timeoutMs;
+            return Math.Max(1, Math.Min(maximum > 0 ? maximum : fallback, remainingMs));
+        }
+
+        /// <summary>返回当前 absolute deadline 的剩余毫秒；过期或无效时返回 false。</summary>
+        public bool TryDeadlineRemainingMs(out int remainingMs)
+        {
+            remainingMs = 0;
+            DateTimeOffset deadline;
+            if (Execution == null
+                || string.IsNullOrWhiteSpace(Execution.AbsoluteDeadlineUtc)
+                || !DateTimeOffset.TryParse(Execution.AbsoluteDeadlineUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline))
+                return false;
+            var remaining = (deadline - DateTimeOffset.UtcNow).TotalMilliseconds;
+            if (remaining <= 0d) return false;
+            remainingMs = (int)Math.Min(int.MaxValue, Math.Max(1d, Math.Ceiling(remaining)));
+            return true;
         }
 
         public bool SecurityConfirmed(string toolName, bool destructiveHint, bool supportsDryRun, string bridgeCommand, string liveDescriptorFingerprint = null)
@@ -90,11 +115,12 @@ namespace UnityCli.Protocol
                 { "bridgeCommand", bridgeCommand }
             };
             if (!string.IsNullOrEmpty(liveDescriptorFingerprint)) descriptor.Add("liveDescriptorFingerprint", liveDescriptorFingerprint);
-            return Security != null
-                && Security.Confirmed
-                && string.Equals(Security.ToolName, toolName, StringComparison.Ordinal)
-                && string.Equals(Security.DescriptorFingerprint, UnityCli.UnityCliSerializer.Sha256Canonical(descriptor), StringComparison.Ordinal)
-                && string.Equals(Security.InputSha256, UnityCli.UnityCliSerializer.Sha256Canonical(Input), StringComparison.Ordinal);
+            var security = Execution == null ? null : Execution.SecurityProof;
+            return security != null
+                && security.Confirmed
+                && string.Equals(security.ToolName, toolName, StringComparison.Ordinal)
+                && string.Equals(security.DescriptorFingerprint, UnityCli.UnityCliSerializer.Sha256Canonical(descriptor), StringComparison.Ordinal)
+                && string.Equals(security.InputSha256, UnityCli.UnityCliSerializer.Sha256Canonical(Input), StringComparison.Ordinal);
         }
 
         private object GetInputField(string name)

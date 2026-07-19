@@ -55,12 +55,15 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("create-polygon", "No ProBuilderMesh on target.");
 
-            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).ToArray();
+            int[] vertexIndices = request.VertexIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "vertexIndices")).ToArray();
             if (vertexIndices == null || vertexIndices.Length < 3)
                 throw ProBuilderErrors.SchemaInvalid("At least 3 vertexIndices required for create-polygon.");
 
             var unordered = request.Unordered ?? true;
-
+            var beforeFaceCount = ProBuilderReflection.GetFaceCount(mesh);
+            if (beforeFaceCount < 1 || vertexIndices.Any(index => index < 0 || index >= ProBuilderReflection.GetVertexCount(mesh)))
+                throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Create Polygon");
             var created = ProBuilderReflection.CreatePolygon(mesh, vertexIndices, unordered);
             if (!created)
@@ -68,9 +71,12 @@ namespace UnityCli.ProBuilder
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.PolygonWasCreatedFromRequestedVertices(freshMesh, vertexIndices, beforeFaceCount + 1))
+                throw ProBuilderErrors.OperationFailed("create-polygon", "Created face did not contain exactly the requested vertex set.");
 
-            var faceCount = ProBuilderReflection.GetFaceCount(mesh);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceIndex = faceCount - 1 });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceIndex = beforeFaceCount });
         }
     }
 }

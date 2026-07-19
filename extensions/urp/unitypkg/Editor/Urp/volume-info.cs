@@ -15,7 +15,7 @@ namespace UnityCli
             Summary = "Read one scene-session URP Volume component and in-memory profile reference.",
             Description = "Reads the URP Volume matching target by GameObject name or hierarchy path. Returns its current session state and profile reference. Requires com.unity.render-pipelines.universal and an active UniversalRenderPipelineAsset. Does not save scenes or assets.",
             Group = "urp", Version = "1.0.0", DestructiveHint = false,
-            RequiresPackages = new[] { "com.unity.render-pipelines.universal" }, SideEffects = new string[0], Target = "editor", PlayModeSupport = "session-affecting", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
+            RequiresPackages = new[] { "com.unity.render-pipelines.universal" }, SideEffects = new string[0], Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Inspect a URP volume", Input = new Request { Target = "GlobalVolume" } } }
         };
 

@@ -61,8 +61,17 @@ namespace UnityCli
                     "Pass a GameObject name / hierarchy path with a ParticleSystem component.");
             }
 
-            var emission = particleSystem.emission;
+            VfxToolSupport.RequireFinite(request.RateOverTime, "rateOverTime", 0);
+            VfxToolSupport.RequireFinite(request.RateOverDistance, "rateOverDistance", 0);
+            if (request.BurstCount.HasValue && request.BurstCount.Value < 0) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "burstCount must be non-negative.", "Pass burstCount greater than or equal to zero.");
+            if (request.Bursts != null && (!request.BurstCount.HasValue || request.Bursts.Count > request.BurstCount.Value)) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "bursts requires burstCount large enough to contain every burst.", "Set burstCount to the number of supplied bursts.");
+            VfxToolSupport.PrepareParticleBursts(request.Bursts);
+            VfxToolSupport.RequireMutation(request.Enabled.HasValue || request.RateOverTime.HasValue || request.RateOverDistance.HasValue || request.BurstCount.HasValue, "vfx.particle-emission");
+            var gameObjectId = particleSystem.gameObject.GetInstanceID();
             var effects = new List<VfxPlannedEffect>();
+            ctx.CommitEffect();
+            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-emission");
+            var emission = particleSystem.emission;
             if (request.Enabled.HasValue)
             {
                 emission.enabled = request.Enabled.Value;
@@ -81,30 +90,37 @@ namespace UnityCli
             if (request.BurstCount.HasValue)
             {
                 var burstCount = request.BurstCount.Value;
-                emission.SetBursts(new ParticleSystem.Burst[0]);
+                var bursts = new ParticleSystem.Burst[burstCount];
                 for (var index = 0; index < burstCount; index++)
                 {
                     var burst = request.Bursts != null && index < request.Bursts.Count ? request.Bursts[index] : null;
-                    emission.SetBurst(index, new ParticleSystem.Burst(
+                    bursts[index] = new ParticleSystem.Burst(
                         (float)(burst?.Time ?? 0d),
                         (short)(burst?.Count ?? 10),
                         (short)(burst?.Cycles ?? 1),
-                        (float)(burst?.RepeatInterval ?? 0.01d)));
+                        (float)(burst?.RepeatInterval ?? 0.01d));
                 }
-                effects.Add(VfxToolSupport.Effect("vfx.particle-emission", "burstCount", burstCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                emission.SetBursts(bursts);
             }
 
-            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
-            VfxToolSupport.MarkSceneDirty(particleSystem.gameObject);
+            var observed = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-emission");
+            VfxToolSupport.VerifyParticleEmissionFields(observed, request.Enabled, request.RateOverTime, request.RateOverDistance, request.BurstCount, request.Bursts);
+            var observedEmission = observed.emission;
+            if (request.Enabled.HasValue) effects.Add(VfxToolSupport.Effect("vfx.particle-emission", "enabled", VfxToolSupport.Bool(observedEmission.enabled)));
+            if (request.RateOverTime.HasValue) effects.Add(VfxToolSupport.Effect("vfx.particle-emission", "rateOverTime", VfxToolSupport.Number(observedEmission.rateOverTime.constant)));
+            if (request.RateOverDistance.HasValue) effects.Add(VfxToolSupport.Effect("vfx.particle-emission", "rateOverDistance", VfxToolSupport.Number(observedEmission.rateOverDistance.constant)));
+            if (request.BurstCount.HasValue) effects.Add(VfxToolSupport.Effect("vfx.particle-emission", "burstCount", observedEmission.burstCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            UnityCliSceneMutation.MarkSceneObjectDirty(observed);
+            VfxToolSupport.MarkSceneDirty(observed.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
+                Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
                 Emission = new VfxParticleEmissionInfo
                 {
-                    Enabled = emission.enabled,
-                    RateOverTime = emission.rateOverTime.constant,
-                    RateOverDistance = emission.rateOverDistance.constant,
-                    BurstCount = emission.burstCount
+                    Enabled = observed.emission.enabled,
+                    RateOverTime = observed.emission.rateOverTime.constant,
+                    RateOverDistance = observed.emission.rateOverDistance.constant,
+                    BurstCount = observed.emission.burstCount
                 },
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath

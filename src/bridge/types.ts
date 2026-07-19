@@ -1,6 +1,6 @@
 export interface BridgeRuntime {
-  bridgeEndpoint?: string;
   dataDir?: string;
+  /** 仅用于隔离测试；真实 CLI transport 始终由 SessionSupervisor 绑定 registry listener。 */
   bridgeExecute?: (payload: BridgeRequest) => Promise<BridgeResponse>;
 }
 
@@ -25,6 +25,43 @@ export interface BridgeSecurityDescriptor {
   supportsDryRun: boolean;
   bridgeCommand: string;
   liveDescriptorFingerprint?: string;
+}
+
+export interface BridgeInvocationOptions {
+  mode?: "execute" | "read" | "observeNow";
+  mutation?: boolean;
+  defaultTimeoutMs?: number;
+  /** 私有 observation deadline；调用链内以同一 wall-clock deadline 传递。 */
+  observationAbsoluteDeadlineMs?: number;
+  /** 私有调用链 deadline；只能收紧调用者预算，绝不进入 Bridge body。 */
+  absoluteDeadlineMs?: number;
+  /** 仅 editor.state 内部传递已完成的真实选择结果；Symbol 字段不会进入公开请求。 */
+  [observationSelectionKey]?: import("../instances.js").InstanceSelection;
+  [transitionBindingKey]?: true;
+}
+
+// 不导出 key，外部 flags、CLI 输入和 JSON 均不能伪造这个内部调用字段。
+const observationSelectionKey: unique symbol = Symbol("unity-cli.observation-selection");
+const transitionBindingKey: unique symbol = Symbol("unity-cli.transition-binding");
+
+export function withObservationSelection(
+  options: Omit<BridgeInvocationOptions, typeof observationSelectionKey>,
+  selection: import("../instances.js").InstanceSelection,
+): BridgeInvocationOptions {
+  return { ...options, [observationSelectionKey]: selection };
+}
+
+export function observationSelectionFrom(options: BridgeInvocationOptions): import("../instances.js").InstanceSelection | undefined {
+  return options[observationSelectionKey];
+}
+
+/** 仅 compile continuation 可在 registry transitioning 时绑定同一会话。 */
+export function withTransitionBinding(options: Omit<BridgeInvocationOptions, typeof transitionBindingKey>): BridgeInvocationOptions {
+  return { ...options, [transitionBindingKey]: true };
+}
+
+export function transitionBindingAllowed(options: BridgeInvocationOptions): boolean {
+  return options[transitionBindingKey] === true;
 }
 
 export interface BridgeArgContext {

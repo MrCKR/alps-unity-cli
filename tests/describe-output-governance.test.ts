@@ -15,7 +15,7 @@ const P0_EXAMPLE_TOOLS = new Set([
   "package.remove",
   "package.deploy",
   "package.restore",
-  "editor.compile-diagnostics",
+  "editor.compile",
   "build.run",
   "test.run"
 ]);
@@ -56,17 +56,17 @@ function assertNoInternalSourceText(subject: string, text: string): void {
   assert.doesNotMatch(text, INTERNAL_SOURCE_PATTERN, `${subject} must not expose internal reference-project wording`);
 }
 
-test("TS-local descriptor registry owns exactly the 37 offline/hybrid tools", () => {
+test("TS-local descriptor registry owns exactly the 36 offline/hybrid tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
     "build.cancel", "build.run", "build.status", "code.exec", "diagnose.capabilities",
-    "docs.get", "docs.list", "docs.search", "docs.topic", "editor.compile-diagnostics",
+    "docs.get", "docs.list", "docs.search", "docs.topic", "editor.compile",
     "editor.launch-dialog.dismiss", "editor.refresh", "package.bridge-remove", "package.deploy",
     "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get",
     "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add",
     "package.scoped-registry.list", "package.scoped-registry.remove", "package.search", "package.status",
     "reflect.member", "reflect.search", "reflect.type", "test.run", "tools.describe", "tools.group",
-    "tools.group-list", "tools.run", "tools.search"
+    "tools.group-list", "tools.search"
   ]);
   assert.equal(findToolByName("asset.refresh"), undefined, "bridge-discovered tools must not retain TS-local descriptors");
 });

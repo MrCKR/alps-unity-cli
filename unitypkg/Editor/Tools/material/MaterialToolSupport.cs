@@ -164,38 +164,47 @@ namespace UnityCli
         /// <summary>对 Material 属性赋值并返回赋值后的结构化值。</summary>
         public static object ApplyMaterialValue(Material material, string propertyName, string type, string value)
         {
+            return ApplyMaterialValue(material, propertyName, BuildMaterialValuePlan(type, value));
+        }
+
+        /// <summary>在 effect 前将请求值解析为类型化、可复用的赋值计划。</summary>
+        public static MaterialValuePlan BuildMaterialValuePlan(string type, string value)
+        {
+            if (type == "color") return new MaterialValuePlan { Type = type, Color = ParseColor(value) };
+            if (type == "float") return new MaterialValuePlan { Type = type, Float = ParseFloat(value, "E_MATERIAL_VALUE_INVALID", "Pass a finite numeric value for float/range Material properties.") };
+            if (type == "vector") return new MaterialValuePlan { Type = type, Vector = ParseVector(value) };
+            var texturePath = AssetToolSupport.NormalizeAssetPath(value);
+            if (string.IsNullOrEmpty(texturePath) || string.Equals(texturePath, "null", StringComparison.OrdinalIgnoreCase)) return new MaterialValuePlan { Type = "texture" };
+            var texture = AssetDatabase.LoadAssetAtPath<Texture>(texturePath);
+            if (texture == null) throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found: " + texturePath, "Pass an existing Assets texture path or value null to clear the texture.");
+            return new MaterialValuePlan { Type = "texture", Texture = texture, TexturePath = texturePath };
+        }
+
+        public static object ApplyMaterialValue(Material material, string propertyName, MaterialValuePlan plan)
+        {
+            var type = plan.Type;
             if (type == "color")
             {
-                var color = ParseColor(value);
+                var color = plan.Color;
                 material.SetColor(propertyName, color);
                 return new MaterialColor { R = color.r, G = color.g, B = color.b, A = color.a };
             }
             if (type == "float")
             {
-                var number = ParseFloat(value, "E_MATERIAL_VALUE_INVALID", "Pass a numeric value for float/range Material properties.");
+                var number = plan.Float;
                 material.SetFloat(propertyName, number);
                 return number;
             }
             if (type == "vector")
             {
-                var vector = ParseVector(value);
+                var vector = plan.Vector;
                 material.SetVector(propertyName, vector);
                 return new MaterialVector4 { X = vector.x, Y = vector.y, Z = vector.z, W = vector.w };
             }
             if (type == "texture")
             {
-                var texturePath = AssetToolSupport.NormalizeAssetPath(value);
-                Texture texture = null;
-                if (!string.IsNullOrEmpty(texturePath) && !string.Equals(texturePath, "null", StringComparison.OrdinalIgnoreCase))
-                {
-                    texture = AssetDatabase.LoadAssetAtPath<Texture>(texturePath);
-                    if (texture == null)
-                    {
-                        throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found: " + texturePath, "Pass an existing Assets texture path or value null to clear the texture.");
-                    }
-                }
-                material.SetTexture(propertyName, texture);
-                return new MaterialTextureValue { Path = texturePath, Guid = texture == null ? null : AssetDatabase.AssetPathToGUID(texturePath) };
+                material.SetTexture(propertyName, plan.Texture);
+                return new MaterialTextureValue { Path = plan.TexturePath, Guid = plan.Texture == null ? null : AssetDatabase.AssetPathToGUID(plan.TexturePath) };
             }
             throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_PROPERTY_TYPE_UNSUPPORTED", "Unsupported Material property value type: " + type, "Pass --type color|float|vector|texture.");
         }
@@ -276,6 +285,8 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException(code, "Invalid numeric Material value: " + value, nextAction);
             }
+            if (float.IsNaN(parsed) || float.IsInfinity(parsed))
+                throw new UnityCliBridge.BridgeCommandException(code, "Numeric Material value must be finite: " + value, nextAction);
             return parsed;
         }
 
@@ -297,6 +308,16 @@ namespace UnityCli
     }
 
     // ─── material 域共享 DTO ──────────────────────────────────────────────
+
+    public sealed class MaterialValuePlan
+    {
+        public string Type { get; set; }
+        public Color Color { get; set; }
+        public float Float { get; set; }
+        public Vector4 Vector { get; set; }
+        public Texture Texture { get; set; }
+        public string TexturePath { get; set; }
+    }
 
     public sealed class MaterialInfo
     {

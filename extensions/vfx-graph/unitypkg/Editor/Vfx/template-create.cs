@@ -20,7 +20,7 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Create a simple particle graph", Input = new Request { Template = "SimpleParticleSystem", Path = "Assets/VFX/SimpleParticle.vfx", Overwrite = true } } }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.template.create");
             VfxToolSupport.RequireVfxPackageInstalled();
@@ -34,19 +34,23 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_VFX_TEMPLATE_NOT_FOUND", "VFX Graph template not found: " + request.Template, "Run vfx.template.list to discover available templates.");
 
             var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.template.create", Template = request.Template, Path = destinationPath } };
-            if (context.DryRun)
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { TemplateName = request.Template, DryRun = true, PlannedEffects = effects, LogPath = context.LogPath });
+            if (ctx.DryRun)
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { TemplateName = request.Template, DryRun = true, PlannedEffects = effects, LogPath = ctx.LogPath });
 
+            ctx.CommitEffect();
             AssetToolSupport.CreateAssetDirectory(destinationPath);
             if (existing != null) AssetDatabase.DeleteAsset(destinationPath);
             if (!AssetDatabase.CopyAsset(templatePath, destinationPath))
                 throw new UnityCliBridge.BridgeCommandException("E_VFX_TEMPLATE_COPY_FAILED", "Failed to copy template to: " + destinationPath, "Check the destination path and Unity Console errors.");
             AssetDatabase.ImportAsset(destinationPath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.SaveAssets();
             var created = AssetDatabase.LoadAssetAtPath(destinationPath, graphType);
+            if (created == null || !graphType.IsInstanceOfType(created))
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_TEMPLATE_COPY_FAILED", "Copied template did not produce a readable VisualEffectAsset: " + destinationPath, "Check the template and Unity Console errors.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Graph = VfxToolSupport.BuildGraphInfo(destinationPath, created), TemplateName = request.Template,
-                PlannedEffects = effects, LogPath = context.LogPath
+                PlannedEffects = effects, LogPath = ctx.LogPath
             });
         }
     }

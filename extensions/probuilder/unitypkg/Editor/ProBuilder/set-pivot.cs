@@ -62,14 +62,19 @@ namespace UnityCli.ProBuilder
             if (mesh == null) throw ProBuilderErrors.OperationFailed("set-pivot", "No ProBuilderMesh on target.");
 
             var pos = go.transform.position;
-            var x = request.X.HasValue ? (float)request.X.Value : pos.x;
-            var y = request.Y.HasValue ? (float)request.Y.Value : pos.y;
-            var z = request.Z.HasValue ? (float)request.Z.Value : pos.z;
+            var x = request.X.HasValue ? ProBuilderOperationProof.CheckedFloat(request.X.Value, "x") : pos.x;
+            var y = request.Y.HasValue ? ProBuilderOperationProof.CheckedFloat(request.Y.Value, "y") : pos.y;
+            var z = request.Z.HasValue ? ProBuilderOperationProof.CheckedFloat(request.Z.Value, "z") : pos.z;
             var newPivot = new Vector3(x, y, z);
-
+            if (go.transform.position == newPivot)
+                throw ProBuilderErrors.OperationFailed("set-pivot", "Requested pivot already matches the readable transform position.");
+            ctx.CommitEffect();
             Undo.RecordObject(go.transform, "ProBuilder Set Pivot");
             go.transform.position = newPivot;
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            if (!ProBuilderRequestProof.TransformMatchesRequestedPivot(freshGo, newPivot))
+                throw ProBuilderErrors.OperationFailed("set-pivot", "Pivot did not match the requested transform position.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

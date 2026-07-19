@@ -18,7 +18,7 @@ test("capabilities without bridge returns TS-local static capabilities only", as
 
   const staticData = data.static as Record<string, unknown>;
   const groups = staticData.groups as Record<string, number>;
-  assert.equal(staticData.toolCount, 37);
+  assert.equal(staticData.toolCount, 36);
   assert.ok(groups.docs > 0, "docs group should stay offline-visible");
   assert.ok(groups.tools > 0, "tools group should stay offline-visible");
   assert.equal(groups.scene, undefined, "scene group should require live discovery");

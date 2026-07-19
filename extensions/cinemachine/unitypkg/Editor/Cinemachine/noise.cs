@@ -54,86 +54,68 @@ namespace UnityCli.Cinemachine
             CinemachineToolSupport.EnsureCinemachineAvailable();
 
             var gameObject = CinemachineToolSupport.ResolveRequiredTarget(request.Target, "cinemachine noise requires --target <go>.");
-            CinemachineToolSupport.RequireCameraComponent(gameObject);
+            var camera = CinemachineToolSupport.RequireCameraComponent(gameObject);
             var noiseType = CinemachineToolSupport.RequireComponentType("CinemachineBasicMultiChannelPerlin", "Noise");
+            CinemachineToolSupport.RequirePipelineComponentStage(noiseType, "Noise");
             var effects = new List<CinemachinePlannedEffect>();
+            var existing = CinemachineToolSupport.GetPipelineComponent(camera, "Noise");
+            if (request.Remove == true && (request.Amplitude.HasValue || request.Frequency.HasValue || !string.IsNullOrWhiteSpace(request.NoiseProfile)))
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_NOISE_REMOVE_CONFLICT", "remove cannot be combined with noise settings.", "Pass remove alone, or omit it when configuring noise.");
+            if (request.Remove == true && existing == null)
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_NOISE_NOT_FOUND", "No CinemachineBasicMultiChannelPerlin component found on target: " + GameObjectToolSupport.HierarchyPath(gameObject), "The noise component may have already been removed.");
+            if (request.Amplitude.HasValue) CinemachineToolSupport.RequireFinite(request.Amplitude.Value, "amplitude");
+            if (request.Frequency.HasValue) CinemachineToolSupport.RequireFinite(request.Frequency.Value, "frequency");
 
+            var profile = string.IsNullOrWhiteSpace(request.NoiseProfile) ? null : CinemachineToolSupport.FindNoiseProfile(request.NoiseProfile);
+            if (!string.IsNullOrWhiteSpace(request.NoiseProfile) && profile == null)
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_NOISE_PROFILE_NOT_FOUND", "Noise profile not found: " + request.NoiseProfile, "Pass the name of an imported NoiseSettings asset.");
+            var profilePlan = profile == null ? null : CinemachineToolSupport.PrepareFirstComponentObjectMember(noiseType, profile, "NoiseProfile", "m_NoiseProfile");
+            var amplitudePlan = request.Amplitude.HasValue ? CinemachineToolSupport.PrepareFirstComponentMember(noiseType, request.Amplitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), "AmplitudeGain", "Amplitude", "m_AmplitudeGain", "m_Amplitude") : null;
+            var frequencyPlan = request.Frequency.HasValue ? CinemachineToolSupport.PrepareFirstComponentMember(noiseType, request.Frequency.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), "FrequencyGain", "Frequency", "m_FrequencyGain", "m_Frequency") : null;
+
+            ctx.CommitEffect();
             if (request.Remove == true)
             {
-                var existing = gameObject.GetComponent(noiseType);
-                if (existing == null)
-                {
-                    throw new UnityCliBridge.BridgeCommandException(
-                        "E_CINEMACHINE_NOISE_NOT_FOUND",
-                        "No CinemachineBasicMultiChannelPerlin component found on target: " + GameObjectToolSupport.HierarchyPath(gameObject),
-                        "The noise component may have already been removed.");
-                }
-
-                UnityCliSceneMutation.DestroyObject(existing);
-                CinemachineToolSupport.MarkDirty(gameObject);
-                effects.Add(new CinemachinePlannedEffect
-                {
-                    Type = "cinemachine.noise.remove",
-                    Target = GameObjectToolSupport.HierarchyPath(gameObject)
-                });
-                return new System.Threading.Tasks.ValueTask<Result>(new Result
-                {
-                    Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
-                    Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
-                    PlannedEffects = effects,
-                    LogPath = ctx.LogPath
-                });
+                CinemachineToolSupport.RemovePipelineComponent(camera, existing);
+                var removedTarget = CinemachineToolSupport.ResolveRequiredTarget(gameObject.GetInstanceID().ToString(), "Cinemachine noise target could not be resolved after removal.");
+                var removedCamera = CinemachineToolSupport.RequireCameraComponent(removedTarget);
+                if (CinemachineToolSupport.GetPipelineComponent(removedCamera, "Noise") != null)
+                    throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_NOISE_VERIFY_FAILED", "Cinemachine noise component still exists after removal.", "Inspect the virtual camera before retrying.");
+                CinemachineToolSupport.MarkDirty(removedTarget);
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise.remove", Target = GameObjectToolSupport.HierarchyPath(removedTarget) });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Cinemachine = CinemachineToolSupport.BuildPackageStatus(), Object = CinemachineToolSupport.BuildObjectInfo(removedTarget), PlannedEffects = effects, LogPath = ctx.LogPath });
             }
 
-            var noise = gameObject.GetComponent(noiseType) ?? UnityCliSceneMutation.AddComponent(gameObject, noiseType);
+            if (existing == null) CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Noise", noiseType);
+            var noise = CinemachineToolSupport.GetPipelineComponent(camera, "Noise");
+            if (noise == null)
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_NOISE_COMPONENT_NOT_FOUND", "Cinemachine noise component could not be resolved after installation.", "Inspect the virtual camera before retrying.");
 
-            if (!string.IsNullOrWhiteSpace(request.NoiseProfile))
+            if (profilePlan != null)
             {
-                var profile = CinemachineToolSupport.FindNoiseProfile(request.NoiseProfile);
-                if (profile != null)
-                {
-                    var property = noise.GetType().GetProperty("NoiseProfile") ?? noise.GetType().GetProperty("m_NoiseProfile");
-                    if (property != null && property.CanWrite)
-                    {
-                        property.SetValue(noise, profile, null);
-                        effects.Add(new CinemachinePlannedEffect
-                        {
-                            Type = "cinemachine.noise",
-                            Target = GameObjectToolSupport.HierarchyPath(gameObject),
-                            Field = "noiseProfile",
-                            Value = request.NoiseProfile
-                        });
-                    }
-                }
+                CinemachineToolSupport.ApplyComponentMember(noise, profilePlan);
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = "noiseProfile", Value = request.NoiseProfile });
             }
-
-            if (request.Amplitude.HasValue || request.Frequency.HasValue)
+            if (amplitudePlan != null)
             {
-                using (var serializedObject = new SerializedObject(noise))
-                {
-                    if (request.Amplitude.HasValue)
-                    {
-                        var amplitude = serializedObject.FindProperty("Amplitude") ?? serializedObject.FindProperty("m_Amplitude");
-                        if (amplitude != null)
-                        {
-                            amplitude.floatValue = (float)request.Amplitude.Value;
-                            effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = "amplitude", Value = request.Amplitude.Value.ToString() });
-                        }
-                    }
-                    if (request.Frequency.HasValue)
-                    {
-                        var frequency = serializedObject.FindProperty("Frequency") ?? serializedObject.FindProperty("m_Frequency");
-                        if (frequency != null)
-                        {
-                            frequency.floatValue = (float)request.Frequency.Value;
-                            effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = "frequency", Value = request.Frequency.Value.ToString() });
-                        }
-                    }
-                    serializedObject.ApplyModifiedProperties();
-                }
+                CinemachineToolSupport.ApplyComponentMember(noise, amplitudePlan);
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = "amplitude", Value = request.Amplitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+            }
+            if (frequencyPlan != null)
+            {
+                CinemachineToolSupport.ApplyComponentMember(noise, frequencyPlan);
+                effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise", Target = GameObjectToolSupport.HierarchyPath(gameObject), Field = "frequency", Value = request.Frequency.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             }
 
-            CinemachineToolSupport.MarkDirty(gameObject);
+            var observedObject = CinemachineToolSupport.ResolveRequiredTarget(gameObject.GetInstanceID().ToString(), "Cinemachine noise target could not be resolved after mutation.");
+            var observedCamera = CinemachineToolSupport.RequireCameraComponent(observedObject);
+            var observedNoise = CinemachineToolSupport.GetPipelineComponent(observedCamera, "Noise");
+            if (observedNoise == null)
+                throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_NOISE_VERIFY_FAILED", "Cinemachine noise component is missing after mutation.", "Inspect the virtual camera before retrying.");
+            if (profilePlan != null) CinemachineToolSupport.VerifyComponentMember(observedNoise, profilePlan, "E_CINEMACHINE_NOISE_VERIFY_FAILED");
+            if (amplitudePlan != null) CinemachineToolSupport.VerifyComponentMember(observedNoise, amplitudePlan, "E_CINEMACHINE_NOISE_VERIFY_FAILED");
+            if (frequencyPlan != null) CinemachineToolSupport.VerifyComponentMember(observedNoise, frequencyPlan, "E_CINEMACHINE_NOISE_VERIFY_FAILED");
+            CinemachineToolSupport.MarkDirty(observedObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),

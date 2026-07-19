@@ -67,6 +67,7 @@ namespace UnityCli
         public string HandlerSha256 { get; set; }
         public Type RequestType { get; set; }
         public Type ResultType { get; set; }
+        public UnityCliToolCompletionContract CompletionContract { get; set; }
         public Func<object, UnityCliProjectToolContext, CancellationToken, ValueTask<object>> InvokeAsync { get; set; }
     }
 }

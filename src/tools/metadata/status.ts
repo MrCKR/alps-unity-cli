@@ -27,12 +27,10 @@ const OFFLINE_TOOL_NAMES = new Set([
 ]);
 const JOB_TOOL_NAMES = new Set(["build.run", "editor.refresh", "test.run"]);
 const HYBRID_TOOL_NAMES = new Set([
-  "editor.compile-diagnostics",
   "package.install",
   "package.remove",
   "package.resolve",
-  "profiler.start",
-  "tools.run"
+  "profiler.start"
 ]);
 const HYBRID_TOOL_PREFIXES = ["probuilder.", "cinemachine.", "urp.", "hdrp."];
 

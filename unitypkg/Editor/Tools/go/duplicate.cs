@@ -53,16 +53,23 @@ namespace UnityCli
             }
             var source = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "GameObject duplicate requires a target.");
             var parentTransform = string.IsNullOrEmpty(request.Parent) ? source.transform.parent : GameObjectToolSupport.ResolveUniqueTarget(request.Parent, "Parent GameObject is required.").transform;
+            var parentId = parentTransform == null ? 0 : parentTransform.gameObject.GetInstanceID();
+            var duplicateName = request.NewName ?? request.Name ?? (source.name + " Copy");
+            ctx.CommitEffect();
             var duplicate = UnityEngine.Object.Instantiate(source);
             UnityCliSceneMutation.RegisterCreatedObject(duplicate, "go.duplicate");
-            duplicate.name = request.NewName ?? request.Name ?? (source.name + " Copy");
+            var duplicateId = duplicate.GetInstanceID();
+            duplicate.name = duplicateName;
             duplicate.transform.SetParent(parentTransform, true);
             duplicate.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
             UnityCliSceneMutation.MarkSceneDirty(duplicate.scene);
+            var observed = EditorUtility.InstanceIDToObject(duplicateId) as GameObject;
+            if (observed == null || observed.name != duplicateName || (observed.transform.parent == null ? 0 : observed.transform.parent.gameObject.GetInstanceID()) != parentId)
+                throw new UnityCliBridge.BridgeCommandException("E_GO_DUPLICATE_STATE_MISMATCH", "Duplicate did not satisfy the requested name or parent after creation.", "Inspect the scene hierarchy and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                GameObject = GameObjectToolSupport.BuildGameObjectDetail(duplicate),
-                PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.duplicate", Target = GameObjectToolSupport.HierarchyPath(duplicate) } }
+                GameObject = GameObjectToolSupport.BuildGameObjectDetail(observed),
+                PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.duplicate", Target = GameObjectToolSupport.HierarchyPath(observed) } }
             });
         }
     }

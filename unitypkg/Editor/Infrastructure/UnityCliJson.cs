@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -38,15 +39,16 @@ namespace UnityCli
             return string.Join("/", names.ToArray());
         }
 
-        private static string ReadBody(HttpListenerRequest request)
+        /// <summary>读取 HTTP 收到的 exact bytes；chunked body 同样受 1 MiB hard limit 约束。</summary>
+        private static byte[] ReadBodyBytes(HttpListenerRequest request)
         {
-            var encoding = request.ContentEncoding ?? Encoding.UTF8;
+            const int maximumBytes = 1024 * 1024;
             using (var stream = request.InputStream)
             {
                 if (request.ContentLength64 >= 0)
                 {
                     var length = request.ContentLength64;
-                    if (length > 1024 * 1024) throw new InvalidOperationException("Bridge request body is too large.");
+                    if (length > maximumBytes) throw new InvalidOperationException("Bridge request body is too large.");
                     var bytes = new byte[(int)length];
                     var offset = 0;
                     while (offset < bytes.Length)
@@ -55,10 +57,30 @@ namespace UnityCli
                         if (read <= 0) throw new EndOfStreamException("Request body ended before Content-Length bytes were read.");
                         offset += read;
                     }
-                    return encoding.GetString(bytes, 0, bytes.Length);
+                    return bytes;
                 }
-                using (var reader = new StreamReader(stream, encoding)) return reader.ReadToEnd();
+                using (var buffer = new MemoryStream())
+                {
+                    var chunk = new byte[8192];
+                    for (;;)
+                    {
+                        var read = stream.Read(chunk, 0, chunk.Length);
+                        if (read <= 0) break;
+                        if (buffer.Length + read > maximumBytes) throw new InvalidOperationException("Bridge request body is too large.");
+                        buffer.Write(chunk, 0, read);
+                    }
+                    return buffer.ToArray();
+                }
             }
+        }
+
+        /// <summary>协议只接受无 BOM 的 strict UTF-8；digest 仍使用解码前 exact bytes。</summary>
+        private static string DecodeRequestBody(byte[] bytes)
+        {
+            if (bytes == null) throw new ArgumentNullException("bytes");
+            if (bytes.Length >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf)
+                throw new FormatException("Bridge request body must not contain a UTF-8 BOM.");
+            return new UTF8Encoding(false, true).GetString(bytes);
         }
 
         // HTTP 边界接收最终 JSON response body，不在业务 helper 中拼接 JSON。
@@ -69,6 +91,11 @@ namespace UnityCli
                 var bytes = Encoding.UTF8.GetBytes(json);
                 context.Response.StatusCode = statusCode;
                 context.Response.ContentType = "application/json; charset=utf-8";
+                // transport attestation 由 supervisor 消费，禁止写入公开 business envelope。
+                context.Response.Headers["x-unity-cli-instance-id"] = InstanceId();
+                context.Response.Headers["x-unity-cli-editor-session-id"] = EditorSessionId();
+                context.Response.Headers["x-unity-cli-listener-id"] = ListenerId;
+                context.Response.Headers["x-unity-cli-listener-generation"] = CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture);
                 context.Response.ContentLength64 = bytes.Length;
                 context.Response.OutputStream.Write(bytes, 0, bytes.Length);
                 context.Response.OutputStream.Close();

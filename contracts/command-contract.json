@@ -525,15 +525,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "cinemachine.force-camera",
-      "group": "cinemachine",
-      "command": "force-camera",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "cinemachine.lens",
       "group": "cinemachine",
       "command": "lens",
@@ -564,15 +555,6 @@
       "bridgeCommand": "cinemachine.priority",
       "group": "cinemachine",
       "command": "priority",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "cinemachine.release-override",
-      "group": "cinemachine",
-      "command": "release-override",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -870,15 +852,6 @@
       "bridgeCommand": "editor.compile",
       "group": "editor",
       "command": "compile",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "editor.compile-diagnostics",
-      "group": "editor",
-      "command": "compile-diagnostics",
       "handler_type": "hybrid",
       "csharp_handler": "none",
       "destructive": false,
@@ -960,15 +933,6 @@
       "bridgeCommand": "editor.selection.set",
       "group": "editor",
       "command": "selection-set",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "editor.state",
-      "group": "editor",
-      "command": "state",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -1458,7 +1422,7 @@
       "handler_type": "hybrid",
       "csharp_handler": "none",
       "destructive": true,
-      "timeout": 30000
+      "timeout": 120000
     },
     {
       "bridgeCommand": "package.embed",
@@ -1548,7 +1512,7 @@
       "handler_type": "hybrid",
       "csharp_handler": "none",
       "destructive": true,
-      "timeout": 30000
+      "timeout": 120000
     },
     {
       "bridgeCommand": "package.scoped-registry.add",
@@ -2838,15 +2802,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "tools.run",
-      "group": "tools",
-      "command": "run",
-      "handler_type": "hybrid",
-      "csharp_handler": "none",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "tools.search",
       "group": "tools",
       "command": "search",
@@ -3216,15 +3171,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "vfx.event",
-      "group": "vfx",
-      "command": "event",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "vfx.graph.create",
       "group": "vfx",
       "command": "graph.create",
@@ -3300,15 +3246,6 @@
       "bridgeCommand": "vfx.particle-main",
       "group": "vfx",
       "command": "particle-main",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "vfx.particle-module",
-      "group": "vfx",
-      "command": "particle-module",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,

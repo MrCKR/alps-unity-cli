@@ -25,11 +25,14 @@ namespace UnityCli
             var isAnyState = string.Equals(r.FromState, "AnyState", System.StringComparison.OrdinalIgnoreCase) || string.Equals(r.FromState, "Any", System.StringComparison.OrdinalIgnoreCase);
             var toState = AnimationToolSupport.FindStateInLayer(sm, r.ToState);
             if (toState == null) throw new UnityCliBridge.BridgeCommandException("E_STATE_NOT_FOUND", "Destination state '" + r.ToState + "' not found in layer " + layerIndex + ".", "Run controller.get-info to inspect available states.");
+            var fromState = isAnyState ? null : AnimationToolSupport.FindStateInLayer(sm, r.FromState);
+            if (!isAnyState && fromState == null) throw new UnityCliBridge.BridgeCommandException("E_STATE_NOT_FOUND", "Source state '" + r.FromState + "' not found in layer " + layerIndex + ".", "Run controller.get-info to inspect available states.");
+            ctx.CommitEffect();
             Undo.RecordObject(controller, "Add Animator Transition");
             AnimatorStateTransition transition;
             var fromStateName = r.FromState;
             if (isAnyState) { transition = sm.AddAnyStateTransition(toState); fromStateName = "AnyState"; }
-            else { var fromState = AnimationToolSupport.FindStateInLayer(sm, r.FromState); if (fromState == null) throw new UnityCliBridge.BridgeCommandException("E_STATE_NOT_FOUND", "Source state '" + r.FromState + "' not found in layer " + layerIndex + ".", "Run controller.get-info to inspect available states."); transition = fromState.AddTransition(toState); }
+            else transition = fromState.AddTransition(toState);
             transition.hasExitTime = r.HasExitTime ?? true;
             transition.duration = r.Duration ?? 0.25f;
             transition.exitTime = r.ExitTime ?? 0.75f;
@@ -47,8 +50,18 @@ namespace UnityCli
                     transition.AddCondition(mode, threshold, pName); conditionCount++;
                 }
             }
-            EditorUtility.SetDirty(controller); AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, FromState = fromStateName, ToState = r.ToState, HasExitTime = transition.hasExitTime, Duration = transition.duration, ConditionCount = conditionCount, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-transition", Path = path, State = fromStateName + "->" + r.ToState } } });
+            EditorUtility.SetDirty(controller);
+            var observedController = AnimationToolSupport.ReloadControllerAsset(path);
+            var observedMachine = observedController == null ? null : observedController.layers[layerIndex].stateMachine;
+            var observedDestination = observedMachine == null ? null : AnimationToolSupport.FindStateInLayer(observedMachine, r.ToState);
+            AnimatorStateTransition observedTransition = null;
+            if (observedMachine != null && observedDestination != null)
+            {
+                var transitions = isAnyState ? observedMachine.anyStateTransitions : AnimationToolSupport.FindStateInLayer(observedMachine, r.FromState).transitions;
+                foreach (var candidate in transitions) if (candidate.destinationState == observedDestination && candidate.hasExitTime == (r.HasExitTime ?? true) && Mathf.Approximately(candidate.duration, r.Duration ?? 0.25f) && candidate.conditions.Length == conditionCount) { observedTransition = candidate; break; }
+            }
+            if (observedTransition == null) throw AnimationToolSupport.StateMismatch("E_CONTROLLER_TRANSITION_STATE_MISMATCH", "AnimatorController transition");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, FromState = fromStateName, ToState = observedDestination.name, HasExitTime = observedTransition.hasExitTime, Duration = observedTransition.duration, ConditionCount = observedTransition.conditions.Length, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-transition", Path = path, State = fromStateName + "->" + observedDestination.name } } });
         }
         internal static string[] ExtractArrayItems(string json) { var items = new List<string>(); var depth = 0; var start = -1; for (var i = 0; i < json.Length; i++) { if (json[i] == '{') { if (depth == 0) start = i; depth++; } else if (json[i] == '}') { depth--; if (depth == 0 && start >= 0) { items.Add(json.Substring(start, i - start + 1)); start = -1; } } } return items.ToArray(); }
         internal static string ExtractJsonField(string json, string field) { var key = "\"" + field + "\""; var idx = json.IndexOf(key, System.StringComparison.OrdinalIgnoreCase); if (idx < 0) return null; idx = json.IndexOf(':', idx + key.Length); if (idx < 0) return null; idx++; while (idx < json.Length && char.IsWhiteSpace(json[idx])) idx++; if (idx >= json.Length) return null; if (json[idx] == '"') { var end = json.IndexOf('"', idx + 1); return end > idx ? json.Substring(idx + 1, end - idx - 1) : null; } var endIdx = idx; while (endIdx < json.Length && json[endIdx] != ',' && json[endIdx] != '}' && !char.IsWhiteSpace(json[endIdx])) endIdx++; return json.Substring(idx, endIdx - idx); }

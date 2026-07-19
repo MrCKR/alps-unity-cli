@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -58,12 +59,14 @@ namespace UnityCli.ProBuilder
             var beforeCount = ProBuilderReflection.GetFaceCount(mesh);
             if (beforeCount < 1)
                 throw ProBuilderErrors.OperationFailed("subdivide", "Target has no readable faces.");
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).Distinct().ToArray();
             if (faceIndices == null || faceIndices.Length == 0)
                 faceIndices = Enumerable.Range(0, beforeCount).ToArray();
             if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
                 throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
-
+            var before = ProBuilderOperationProof.Capture(mesh, faceIndices: faceIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("subdivide", "Requested face geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Subdivide");
             if (!ProBuilderReflection.SubdivideFaces(mesh, faceIndices))
                 throw ProBuilderErrors.OperationFailed("subdivide", "ProBuilder 5.x Subdivision.Subdivide failed.");
@@ -71,9 +74,11 @@ namespace UnityCli.ProBuilder
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var afterCount = ProBuilderReflection.GetFaceCount(mesh);
-            if (afterCount <= beforeCount)
-                throw ProBuilderErrors.OperationFailed("subdivide", "Subdivide completed without increasing face count.");
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var afterCount = ProBuilderReflection.GetFaceCount(freshMesh);
+            var after = ProBuilderOperationProof.Capture(freshMesh, faceIndices: Enumerable.Range(0, Math.Max(0, afterCount)).ToArray());
+            if (!ProBuilderOperationProof.HasSubdividedRequestedFaces(before, after) || afterCount <= beforeCount)
+                throw ProBuilderErrors.OperationFailed("subdivide", "Subdivide did not produce readable requested mesh topology.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 BeforeFaceCount = beforeCount,

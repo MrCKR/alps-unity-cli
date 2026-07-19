@@ -18,10 +18,13 @@ namespace UnityCli
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             if (AssetDatabase.LoadAssetAtPath<AnimatorController>(path) != null)
                 throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_EXISTS", "AnimatorController already exists at: " + path, "Delete it first or use a different path.");
+            ctx.CommitEffect();
             SceneToolSupport.CreateAssetDirectory(path);
             var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
-            AssetDatabase.SaveAssets(); AssetDatabase.Refresh();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Controller = new ControllerInfo { Path = path, Guid = AssetDatabase.AssetPathToGUID(path), Name = controller.name, LayerCount = controller.layers.Length, ParameterCount = controller.parameters.Length }, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.create", Path = path } } });
+            var observedController = AnimationToolSupport.ReloadControllerAsset(path);
+            if (observedController == null || observedController.name != controller.name || observedController.layers == null || observedController.layers.Length != 1 || observedController.parameters == null || observedController.parameters.Length != 0)
+                throw AnimationToolSupport.StateMismatch("E_CONTROLLER_CREATE_STATE_MISMATCH", "AnimatorController creation");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Controller = new ControllerInfo { Path = path, Guid = AssetDatabase.AssetPathToGUID(path), Name = observedController.name, LayerCount = observedController.layers.Length, ParameterCount = observedController.parameters.Length }, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.create", Path = path } } });
         }
     }
 }

@@ -59,16 +59,19 @@ namespace UnityCli
             return typeof(UnityCliBridgeBuildInfo).GetField("BuildStamp", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null) as string ?? "unknown";
         }
 
+        /// <summary>health 只返回严格 transport identity，禁止把 HTTP 2xx 或端口复用当成目标存活。</summary>
         private static string BridgeHealthJson()
         {
             var data = new Dictionary<string, object>
             {
-                { "bridge", "unity_cli" }, { "target", TargetContextData() }, { "port", port }, { "route", "POST /bridge/execute" }, { "buildStamp", BridgeBuildStamp() },
-                { "diagnosticsFingerprint", BridgeDiagnosticsFingerprint }, { "listenerId", ListenerId }, { "loadedAt", BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture) },
-                { "assembly", new Dictionary<string, object> { { "fullName", typeof(UnityCliBridge).Assembly.FullName }, { "location", AssemblyLocation(typeof(UnityCliBridge).Assembly) }, { "moduleVersionId", AssemblyMvid() } } },
-                { "package", new Dictionary<string, object> { { "name", BridgePackageName() }, { "assetPath", BridgePackageAssetPath() }, { "resolvedPath", BridgePackageResolvedPath() } } },
-                { "diagnostics", new Dictionary<string, object> { { "executeStageLogs", true }, { "contentLengthBoundedRead", true }, { "runtimeLoadFile", RuntimeDiagnosticsPath() } } },
-                { "capabilities", CapabilitiesData() }
+                { "version", 2L },
+                { "instanceId", InstanceId() },
+                { "canonicalProjectPath", ProjectIdentity().CanonicalProjectPath },
+                { "canonicalizationVersion", (long)UnityCliCanonicalProjectPath.CanonicalizationVersion },
+                { "editorSessionId", EditorSessionId() },
+                { "listenerId", ListenerId },
+                { "actualPort", (long)port },
+                { "buildStamp", BridgeBuildStamp() }
             };
             return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(string.Empty, data));
         }
@@ -131,11 +134,33 @@ namespace UnityCli
             }
         }
 
+        /// <summary>按完整 project identity 计算稳定 preferred port。</summary>
+        private static int PreferredPort()
+        {
+            var seed = ulong.Parse(ProjectHash().Substring(0, 16), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            return PreferredPortBase + (int)(seed % (ulong)PreferredPortRange);
+        }
+
+        /// <summary>preferred -> previous fallback -> deterministic probe；每次 reload 都重新评估 preferred。</summary>
         private static int StartHttpListener(HttpListener httpListener)
         {
             Exception lastException = null;
-            for (var candidate = Port; candidate < Port + 20; candidate++)
+            var preferred = PreferredPort();
+            var previous = PreviousActualPort();
+            var candidates = new List<int>();
+            for (var retry = 0; retry < PreferredPortRetryCount; retry++) candidates.Add(preferred);
+            if (previous.HasValue && previous.Value != preferred) candidates.Add(previous.Value);
+
+            var seed = ulong.Parse(ProjectHash().Substring(16, 16), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            for (var index = 1; index <= DeterministicFallbackCount; index++)
             {
+                var candidate = PreferredPortBase + (int)((seed + (ulong)(index * 7919)) % (ulong)PreferredPortRange);
+                if (!candidates.Contains(candidate)) candidates.Add(candidate);
+            }
+
+            for (var index = 0; index < candidates.Count; index++)
+            {
+                var candidate = candidates[index];
                 try
                 {
                     httpListener.Prefixes.Clear();
@@ -146,9 +171,10 @@ namespace UnityCli
                 catch (Exception exception)
                 {
                     lastException = exception;
+                    if (candidate == preferred && index + 1 < PreferredPortRetryCount) Thread.Sleep(50);
                 }
             }
-            throw lastException ?? new InvalidOperationException("No loopback port available.");
+            throw lastException ?? new InvalidOperationException("No deterministic loopback port is available.");
         }
 
         private static async Task ListenLoop()
@@ -180,39 +206,22 @@ namespace UnityCli
             }
         }
 
-        private static async Task WatchClientDisconnect(HttpListenerContext context, BridgeWorkItem item, CancellationToken stop)
-        {
-            // HttpListener 不暴露连接 abort token；响应流关闭/不可写是可观测的断连信号。
-            while (!stop.IsCancellationRequested && !item.Completed.IsSet)
-            {
-                try
-                {
-                    if (!context.Response.OutputStream.CanWrite)
-                    {
-                        WriteLog("bridge_client_disconnected requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
-                        item.CancelClientDisconnected();
-                        return;
-                    }
-                }
-                catch (ObjectDisposedException)
-                {
-                    item.CancelClientDisconnected();
-                    return;
-                }
-                catch (HttpListenerException)
-                {
-                    item.CancelClientDisconnected();
-                    return;
-                }
-                try { await Task.Delay(100, stop); }
-                catch (OperationCanceledException) { return; }
-            }
-        }
-
         private static void HandleHttpCore(HttpListenerContext context)
         {
             if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/health")
             {
+                var expectedInstanceId = context.Request.Headers["x-unity-cli-expected-instance-id"];
+                var expectedSessionId = context.Request.Headers["x-unity-cli-expected-editor-session-id"];
+                if ((!string.IsNullOrEmpty(expectedInstanceId) && !string.Equals(expectedInstanceId, InstanceId(), StringComparison.Ordinal))
+                    || (!string.IsNullOrEmpty(expectedSessionId) && !string.Equals(expectedSessionId, EditorSessionId(), StringComparison.Ordinal)))
+                {
+                    WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                        string.Empty,
+                        "E_INSTANCE_IDENTITY_MISMATCH",
+                        "Bridge health identity does not match the requested Unity project session.",
+                        nextActions: new[] { "Resolve the target again through --instance or the current Unity project CWD." })), 409);
+                    return;
+                }
                 WriteJson(context, BridgeHealthJson(), 200);
                 return;
             }
@@ -227,12 +236,29 @@ namespace UnityCli
                 return;
             }
 
+            var expectedExecuteInstanceId = context.Request.Headers["x-unity-cli-expected-instance-id"];
+            var expectedExecuteSessionId = context.Request.Headers["x-unity-cli-expected-editor-session-id"];
+            var expectedExecuteListenerId = context.Request.Headers["x-unity-cli-expected-listener-id"];
+            var expectedExecuteGeneration = context.Request.Headers["x-unity-cli-expected-listener-generation"];
+            if ((!string.IsNullOrEmpty(expectedExecuteInstanceId) && !string.Equals(expectedExecuteInstanceId, InstanceId(), StringComparison.Ordinal))
+                || (!string.IsNullOrEmpty(expectedExecuteSessionId) && !string.Equals(expectedExecuteSessionId, EditorSessionId(), StringComparison.Ordinal))
+                || (!string.IsNullOrEmpty(expectedExecuteListenerId) && !string.Equals(expectedExecuteListenerId, ListenerId, StringComparison.Ordinal))
+                || (!string.IsNullOrEmpty(expectedExecuteGeneration) && !string.Equals(expectedExecuteGeneration, CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)))
+            {
+                WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    string.Empty,
+                    "E_INSTANCE_IDENTITY_MISMATCH",
+                    "Bridge execute attestation does not match the selected Unity listener generation.",
+                    nextActions: new[] { "Resolve the target again through --instance and retry after the selected generation is stable." })), 409);
+                return;
+            }
+
             WriteLog("bridge_execute_accepted method=" + context.Request.HttpMethod + " path=" + context.Request.Url.AbsolutePath + " contentLength=" + context.Request.ContentLength64.ToString(CultureInfo.InvariantCulture));
 
-            string body;
+            byte[] rawBody;
             try
             {
-                body = ReadBody(context.Request);
+                rawBody = ReadBodyBytes(context.Request);
             }
             catch (Exception exception)
             {
@@ -243,9 +269,9 @@ namespace UnityCli
             UnityCli.Protocol.BridgeRequest request;
             try
             {
-                request = UnityCli.Protocol.BridgeRequest.DeserializeStrict(body);
+                request = UnityCli.Protocol.BridgeRequest.DeserializeStrict(DecodeRequestBody(rawBody));
             }
-            catch (Exception exception) when (exception is FormatException || exception is OverflowException || exception is InvalidCastException)
+            catch (Exception exception) when (exception is FormatException || exception is OverflowException || exception is InvalidCastException || exception is DecoderFallbackException)
             {
                 var details = new Dictionary<string, object>
                 {
@@ -261,7 +287,27 @@ namespace UnityCli
                     new[] { "Send command, requestId, input, execution, and security using their declared JSON types." })), 200);
                 return;
             }
-            WriteLog("bridge_request_body_read requestId=" + request.RequestId + " command=" + request.Command + " bytes=" + Encoding.UTF8.GetByteCount(body ?? string.Empty).ToString(CultureInfo.InvariantCulture));
+            if (!string.Equals(request.InstanceId, InstanceId(), StringComparison.Ordinal))
+            {
+                WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    request.RequestId,
+                    "E_INSTANCE_IDENTITY_MISMATCH",
+                    "Bridge request instanceId does not match this canonical Unity project.",
+                    new Dictionary<string, object> { { "expectedInstanceId", InstanceId() }, { "actualInstanceId", request.InstanceId } },
+                    new[] { "Resolve the target again through --instance or the current Unity project CWD." })), 409);
+                return;
+            }
+            int initialRemainingMs;
+            if (!request.TryDeadlineRemainingMs(out initialRemainingMs))
+            {
+                WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    request.RequestId,
+                    "E_EXECUTION_TIMEOUT",
+                    "The immutable request deadline elapsed before the request reached the Unity queue.",
+                    nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." })), 200);
+                return;
+            }
+            WriteLog("bridge_request_body_read requestId=" + request.RequestId + " command=" + request.Command + " bytes=" + rawBody.Length.ToString(CultureInfo.InvariantCulture));
 
             // Check for transient Unity state before queuing the request.
             // During compile/import/domain reload, immediately return a transient error
@@ -271,7 +317,7 @@ namespace UnityCli
                 WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
                 return;
             }
-            var allowedDuringCompileOrImport = request.Command == "editor.compile";
+            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
             if (cachedIsCompiling && !allowedDuringCompileOrImport)
             {
                 WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000), 200);
@@ -282,11 +328,12 @@ namespace UnityCli
                 WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000), 200);
                 return;
             }
-            if (cachedIsPlayingOrWillChangePlaymode)
+            if (cachedIsPlayModeChanging)
             {
-                // 只在 Play Mode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续入队执行。
+                // 只在 PlayMode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续入队执行。
                 // 这里必须与 UnityCliBridge.Execute() 的切换期 allowlist 保持一致。
-                var allowedDuringPlayModeTransition = request.Command == "editor.state"
+                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command)
+                    || IsEditorStateSnapshotCommand(request.Command)
                     || request.Command == "editor.console"
                     || request.Command == "editor.pause"
                     || request.Command == "editor.stop"
@@ -301,7 +348,7 @@ namespace UnityCli
 
                 WriteLog("http_play_mode_guard requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlayingOrWillChange=" + Bool(cachedIsPlayingOrWillChangePlaymode) + " cachedIsPlaying=" + Bool(cachedIsPlaying) + " transitionAllowed=" + Bool(allowedDuringPlayModeTransition));
 
-                if (!cachedIsPlaying && !allowedDuringPlayModeTransition)
+                if (!allowedDuringPlayModeTransition)
                 {
                     WriteLog("http_play_mode_guard_blocked_transition requestId=" + request.RequestId + " command=" + request.Command);
                     WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (http-guard-v3)", "Wait for Play mode transition to complete and retry.", 3000), 200);
@@ -310,59 +357,94 @@ namespace UnityCli
                 WriteLog("http_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlaying=" + Bool(cachedIsPlaying));
             }
 
-            var item = new BridgeWorkItem(request);
-            var queueDepth = 0;
-            lock (QueueLock)
+            BridgeWorkItem item;
+            bool created;
+            int queueDepth;
+            try
             {
-                WorkQueue.Enqueue(item);
-                queueDepth = WorkQueue.Count;
+                item = EnqueueOrAttach(request, rawBody, out created, out queueDepth);
             }
-            WriteLog("bridge_request_enqueued requestId=" + request.RequestId + " command=" + request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
-
-            using (var monitorStop = new CancellationTokenSource())
+            catch (BridgeCommandException exception)
             {
-                _ = WatchClientDisconnect(context, item, monitorStop.Token);
-                try
-                {
-                    // queue start deadline 与 handler execution timeout 独立，排队时间不消耗工具执行预算。
-                    var queueSignal = WaitHandle.WaitAny(new[] { item.Started.WaitHandle, item.Completed.WaitHandle }, 60000);
-                    if (queueSignal == WaitHandle.WaitTimeout)
-                    {
-                        item.CancelBeforeStart();
-                        WriteLog("bridge_queue_start_timeout requestId=" + request.RequestId + " command=" + request.Command);
-                        WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_QUEUE_START_TIMEOUT", "Unity Editor did not start the bridge request before the queue deadline.", "No Unity side effects were applied. Wait for Unity to become responsive and retry.", 5000), 200);
-                        return;
-                    }
-                    if (queueSignal == 1)
-                    {
-                        WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request was cancelled before execution.", "Retry after Unity is ready.", 1000), 200);
-                        return;
-                    }
-
-                    var requestedTimeoutMs = request.Execution == null ? null : request.Execution.TimeoutMs;
-                    var executionHttpDeadline = TimeSpan.FromMilliseconds(requestedTimeoutMs.HasValue && requestedTimeoutMs.Value > 0
-                        ? Math.Min(requestedTimeoutMs.Value + 5000, int.MaxValue)
-                        : 65000);
-                    if (!item.Completed.Wait(executionHttpDeadline))
-                    {
-                        item.Cancel();
-                        WriteLog("bridge_execution_timeout requestId=" + request.RequestId + " command=" + request.Command);
-                        WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                            request.RequestId,
-                            "E_EXECUTION_TIMEOUT",
-                            "Unity Editor did not finish the bridge request before the execution deadline; execution was cancelled.",
-                            nextActions: new[] { "Retry with a larger execution.timeoutMs after Unity is responsive." },
-                            transient: true)), 200);
-                        return;
-                    }
-
-                    WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request completed without a response.", "Check UnityCliBridge.log before retrying.", 1000), 200);
-                }
-                finally
-                {
-                    monitorStop.Cancel();
-                }
+                WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, exception), 200);
+                return;
             }
+            WriteLog((created ? "bridge_request_enqueued" : "bridge_request_attached") + " requestId=" + request.RequestId + " command=" + request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
+
+            // queue 与 handler 共用 immutable absolute deadline；HTTP client 断开不得取消已接收的业务请求。
+            int queueRemainingMs;
+            if (!request.TryDeadlineRemainingMs(out queueRemainingMs)) queueRemainingMs = 0;
+            var queueSignal = WaitHandle.WaitAny(new[] { item.Started.WaitHandle, item.Completed.WaitHandle }, queueRemainingMs);
+            if (queueSignal == WaitHandle.WaitTimeout)
+            {
+                if (item.CancelBeforeStart())
+                {
+                    WriteLog("bridge_queue_start_timeout requestId=" + request.RequestId + " command=" + request.Command);
+                    WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                        request.RequestId,
+                        "E_EXECUTION_TIMEOUT",
+                        "Unity Editor did not start the bridge request before the immutable deadline.",
+                        nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." })), 200);
+                    return;
+                }
+                WriteLog("bridge_queue_start_timeout requestId=" + request.RequestId + " command=" + request.Command);
+                WriteJson(context, ResolveStartedTimeoutResponse(item, request,
+                    "The immutable deadline elapsed after Unity started the request."), 200);
+                return;
+            }
+            if (queueSignal == 1)
+            {
+                WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request was cancelled before execution.", "Retry after Unity is ready.", 1000), 200);
+                return;
+            }
+
+            int executionRemainingMs;
+            if (!request.TryDeadlineRemainingMs(out executionRemainingMs)) executionRemainingMs = 0;
+            if (!item.Completed.Wait(TimeSpan.FromMilliseconds(executionRemainingMs)))
+            {
+                item.Cancel();
+                WriteLog("bridge_execution_timeout requestId=" + request.RequestId + " command=" + request.Command);
+                WriteJson(context, ResolveStartedTimeoutResponse(item, request,
+                    "The immutable deadline elapsed after Unity started the request."), 200);
+                return;
+            }
+
+            WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request completed without a response.", "Check UnityCliBridge.log before retrying.", 1000), 200);
+        }
+
+        /// <summary>已开始请求的 timeout 只能由 response、durable terminal 或 effect barrier 裁决。</summary>
+        private static string ResolveStartedTimeoutResponse(BridgeWorkItem item, UnityCli.Protocol.BridgeRequest request, string reason)
+        {
+            var response = item.Response;
+            if (response != null) return response;
+
+            string terminal;
+            if (TryGetRequestJournalTerminal(request.RequestId, out terminal)) return terminal;
+
+            // CompleteWorkItem/Response 可能恰好在上述读取后发生；再读一次避免丢失已完成结果。
+            if (item.Completed.Wait(0) && item.Response != null) return item.Response;
+            if (TryGetRequestJournalTerminal(request.RequestId, out terminal)) return terminal;
+
+            if (item.IsMutation)
+            {
+                var beforeEffectTimeout = UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    request.RequestId,
+                    "E_EXECUTION_TIMEOUT",
+                    reason + " No durable effect barrier was crossed.",
+                    nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." });
+                object timeoutTerminal;
+                if (TryPersistTimeoutByEffectBarrier(request.RequestId, beforeEffectTimeout, out timeoutTerminal))
+                    return UnityCliSerializer.Serialize(timeoutTerminal);
+                if (item.CancelBeforeJournalAcceptance()) return UnityCliSerializer.Serialize(beforeEffectTimeout);
+                // acceptance 与 record 创建共享 journal mutex；若 cancellation 输掉，重读必然看到 record 或已确定的创建失败。
+                return UnityCliSerializer.Serialize(TryPersistTimeoutByEffectBarrier(request.RequestId, beforeEffectTimeout, out timeoutTerminal) ? timeoutTerminal : beforeEffectTimeout);
+            }
+
+            return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                request.RequestId,
+                "E_EXECUTION_TIMEOUT",
+                reason + " No durable effect barrier was crossed.",
+                nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." }));
         }
     }
 }

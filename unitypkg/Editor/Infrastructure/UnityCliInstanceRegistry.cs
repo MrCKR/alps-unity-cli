@@ -1,67 +1,90 @@
 #if UNITY_EDITOR
 using System;
-using System.CodeDom.Compiler;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.CSharp;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
-using UiButton = UnityEngine.UI.Button;
-using UiCanvasScaler = UnityEngine.UI.CanvasScaler;
-using UiGraphicRaycaster = UnityEngine.UI.GraphicRaycaster;
-using UiImage = UnityEngine.UI.Image;
-using UiText = UnityEngine.UI.Text;
 
 namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static string ProjectRoot()
+        private const int RegistryMutexTimeoutMs = 5000;
+        private const uint MutexAllAccess = 0x001F0001;
+        private const uint WaitObject0 = 0x00000000;
+        private const uint WaitAbandoned = 0x00000080;
+        private const uint WaitTimeout = 0x00000102;
+        private const uint WaitFailed = 0xFFFFFFFF;
+        private const uint SecurityDescriptorRevision = 1;
+        private const uint TokenQuery = 0x0008;
+        private const int TokenUser = 1;
+        private const int ErrorInsufficientBuffer = 122;
+        private static CanonicalProjectPathResult canonicalIdentity;
+        private static string editorSessionId;
+        private static long listenerGeneration;
+
+        /// <summary>当前 listener generation 只用于 transport attestation 与 registry 内部一致性校验。</summary>
+        private static long CurrentListenerGeneration()
         {
-            return Directory.GetParent(Application.dataPath).FullName;
+            return listenerGeneration;
         }
 
-        // 实例 ID 对同一 Unity 进程保持稳定，domain reload 只通过 bridgeListenerId 区分。
+        /// <summary>返回共享 CanonicalPath v1 解析结果；失败时禁止 listener/registry 继续启动。</summary>
+        private static CanonicalProjectPathResult ProjectIdentity()
+        {
+            if (canonicalIdentity != null) return canonicalIdentity;
+            canonicalIdentity = UnityCliCanonicalProjectPath.Resolve(Application.dataPath);
+            if (!canonicalIdentity.Success)
+                throw new InvalidOperationException(canonicalIdentity.ErrorCode + ": " + canonicalIdentity.ErrorMessage);
+            return canonicalIdentity;
+        }
+
+        private static string ProjectRoot()
+        {
+            return ProjectIdentity().DisplayProjectPath;
+        }
+
         private static string InstanceId()
         {
-            return "unity-" + ProjectHash() + "-" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture);
+            return ProjectIdentity().InstanceId;
         }
 
         private static string ProjectHash()
         {
-            using (var sha = System.Security.Cryptography.SHA256.Create())
-            {
-                var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(ProjectRoot().ToLowerInvariant()));
-                return BitConverter.ToString(bytes).Replace("-", string.Empty).Substring(0, 12).ToLowerInvariant();
-            }
+            return ProjectIdentity().IdentityHash;
+        }
+
+        /// <summary>Unity.exe 生命周期 identity；domain reload 不改变，进程重启必然改变。</summary>
+        private static string EditorSessionId()
+        {
+            if (!string.IsNullOrEmpty(editorSessionId)) return editorSessionId;
+            var process = Process.GetCurrentProcess();
+            var seed = InstanceId() + "\0" + process.Id.ToString(CultureInfo.InvariantCulture) + "\0" + ProcessStartedAt(process);
+            editorSessionId = "session-" + Sha256Utf8(seed);
+            return editorSessionId;
+        }
+
+        private static string ProcessStartedAt(Process process = null)
+        {
+            return (process ?? Process.GetCurrentProcess()).StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
         }
 
         private static string DataDir()
         {
             var configured = Environment.GetEnvironmentVariable("UNITY_CLI_DATA_DIR");
-            if (!string.IsNullOrEmpty(configured))
-            {
-                return configured;
-            }
+            if (!string.IsNullOrEmpty(configured)) return configured;
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return string.IsNullOrEmpty(localAppData) ? Path.Combine(ProjectRoot(), ".unity_cli") : Path.Combine(localAppData, "UnityCli");
-        }
-
-        private static string RegistryPath()
-        {
-            return Path.Combine(DataDir(), "instances.json");
+            if (string.IsNullOrEmpty(localAppData)) throw new InvalidOperationException("LOCALAPPDATA is required for Unity CLI registry state.");
+            return Path.Combine(localAppData, "UnityCli");
         }
 
         private static string InstancesDir()
@@ -74,27 +97,150 @@ namespace UnityCli
             return Path.Combine(InstancesDir(), InstanceId() + ".json");
         }
 
-        // 同目录原子替换 registry 文件，避免 heartbeat 原地截断时让并发 CLI 短暂丢失 target。
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SecurityAttributes
+        {
+            public int Length;
+            public IntPtr SecurityDescriptor;
+            [MarshalAs(UnmanagedType.Bool)] public bool InheritHandle;
+        }
+
+        [DllImport("kernel32.dll", EntryPoint = "GetCurrentProcess")]
+        private static extern IntPtr GetCurrentProcessHandle();
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetTokenInformation(IntPtr tokenHandle, int tokenInformationClass, IntPtr tokenInformation, uint tokenInformationLength, out uint returnLength);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ConvertSidToStringSidW(IntPtr sid, out IntPtr stringSid);
+
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            string stringSecurityDescriptor,
+            uint stringSDRevision,
+            out IntPtr securityDescriptor,
+            out uint securityDescriptorSize);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateMutexExW(
+            ref SecurityAttributes mutexAttributes,
+            string name,
+            uint flags,
+            uint desiredAccess);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ReleaseMutex(IntPtr handle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr LocalFree(IntPtr memory);
+
+        /// <summary>从 process token 读取当前 Windows user SID；避免 Unity Mono 未实现的 WindowsIdentity.User。</summary>
+        private static string CurrentUserSidString()
+        {
+            IntPtr token = IntPtr.Zero;
+            IntPtr buffer = IntPtr.Zero;
+            IntPtr sidText = IntPtr.Zero;
+            try
+            {
+                if (!OpenProcessToken(GetCurrentProcessHandle(), TokenQuery, out token))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open the current process token.");
+                uint required;
+                GetTokenInformation(token, TokenUser, IntPtr.Zero, 0, out required);
+                if (required == 0 || Marshal.GetLastWin32Error() != ErrorInsufficientBuffer)
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not determine the current token user size.");
+                buffer = Marshal.AllocHGlobal((int)required);
+                if (!GetTokenInformation(token, TokenUser, buffer, required, out required))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not read the current token user.");
+                var sid = Marshal.ReadIntPtr(buffer);
+                if (sid == IntPtr.Zero || !ConvertSidToStringSidW(sid, out sidText))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not format the current user SID.");
+                return Marshal.PtrToStringUni(sidText);
+            }
+            finally
+            {
+                if (sidText != IntPtr.Zero) LocalFree(sidText);
+                if (buffer != IntPtr.Zero) Marshal.FreeHGlobal(buffer);
+                if (token != IntPtr.Zero) CloseHandle(token);
+            }
+        }
+
+        /// <summary>在 native current-user DACL named mutex 内执行临界区；abandoned 表示已取得所有权。</summary>
+        private static void WithCurrentUserMutex(string name, int timeoutMs, Action action)
+        {
+            if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Mutex name is required.", "name");
+            if (action == null) throw new ArgumentNullException("action");
+            var sddl = "D:P(A;;GA;;;" + CurrentUserSidString() + ")";
+            IntPtr descriptor;
+            uint descriptorSize;
+            if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SecurityDescriptorRevision, out descriptor, out descriptorSize))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not build the current-user mutex DACL.");
+
+            IntPtr handle = IntPtr.Zero;
+            var acquired = false;
+            try
+            {
+                var attributes = new SecurityAttributes
+                {
+                    Length = Marshal.SizeOf(typeof(SecurityAttributes)),
+                    SecurityDescriptor = descriptor,
+                    InheritHandle = false
+                };
+                handle = CreateMutexExW(ref attributes, name, 0, MutexAllAccess);
+                if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not create the current-user mutex.");
+
+                var wait = WaitForSingleObject(handle, (uint)timeoutMs);
+                if (wait == WaitTimeout) throw new TimeoutException("Timed out waiting for current-user mutex.");
+                if (wait == WaitFailed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not wait for current-user mutex.");
+                if (wait != WaitObject0 && wait != WaitAbandoned) throw new InvalidOperationException("Unexpected current-user mutex wait result: " + wait.ToString(CultureInfo.InvariantCulture));
+                acquired = true;
+                action();
+            }
+            finally
+            {
+                if (acquired && !ReleaseMutex(handle)) WriteLog("current_user_mutex_release_failed win32=" + Marshal.GetLastWin32Error().ToString(CultureInfo.InvariantCulture));
+                if (handle != IntPtr.Zero && handle != new IntPtr(-1)) CloseHandle(handle);
+                if (descriptor != IntPtr.Zero) LocalFree(descriptor);
+            }
+        }
+
+        /// <summary>保留 registry 原有锁名、超时和调用语义。</summary>
+        private static void WithRegistryMutex(Action action)
+        {
+            WithCurrentUserMutex("Local\\UnityCli.Registry." + InstanceId(), RegistryMutexTimeoutMs, action);
+        }
+
+        /// <summary>durable 写入临时文件后原子替换，任何时刻旧或新 revision 至少有一个完整可读。</summary>
         private static void WriteRegistryTextAtomically(string path, string content)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            var temporaryPath = path + "." + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            var temporaryPath = path + "." + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                File.WriteAllText(temporaryPath, content, Encoding.UTF8);
-                for (var attempt = 0; ; attempt++)
+                using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
                 {
-                    try
-                    {
-                        if (File.Exists(path)) File.Replace(temporaryPath, path, null);
-                        else File.Move(temporaryPath, path);
-                        return;
-                    }
-                    catch (IOException) when (attempt < 4)
-                    {
-                        Thread.Sleep(10 * (attempt + 1));
-                    }
+                    writer.Write(content);
+                    writer.Flush();
+                    stream.Flush(true);
                 }
+                if (File.Exists(path)) File.Replace(temporaryPath, path, null);
+                else File.Move(temporaryPath, path);
             }
             finally
             {
@@ -102,33 +248,45 @@ namespace UnityCli
             }
         }
 
-        private static void RegisterInstance(string status)
+        /// <summary>写入或更新当前 editor session claim；同 identity 的其他存活 claim 必须保留以形成 conflict。</summary>
+        private static bool RegisterInstance(string requestedState)
         {
             try
             {
-                Directory.CreateDirectory(InstancesDir());
-                DeleteSupersededInstanceFiles();
-                var instanceData = InstanceData(status);
-                WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(instanceData));
-                WriteRegistryFile(instanceData);
-                WriteLog("instance_registered id=" + InstanceId() + " status=" + status + " endpoint=http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
+                WithRegistryMutex(() =>
+                {
+                    var registry = ReadCurrentRegistry();
+                    var sessions = ReadSessions(registry);
+                    sessions = sessions.Where(IsRetainedForeignClaim).ToList();
+                    EnsureListenerGeneration(registry);
+                    sessions.Add(CurrentSessionData(NormalizeSessionState(requestedState)));
+                    var revision = ReadLong(registry, "revision") + 1L;
+                    var data = RegistryData(revision, sessions);
+                    WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(data) + "\n");
+                });
+                WriteLog("instance_registered id=" + InstanceId() + " session=" + EditorSessionId() + " state=" + NormalizeSessionState(requestedState) + " listenerId=" + ListenerId + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture));
+                return true;
             }
             catch (Exception exception)
             {
-                WriteLog("instance_register_failed " + exception.GetType().Name + ": " + exception.Message);
+                WriteLog("instance_register_failed " + exception);
+                return false;
             }
         }
 
+        /// <summary>Editor 退出只移除当前 session claim，保留 offline project identity 记录。</summary>
         private static void DeleteInstanceRegistration()
         {
             try
             {
-                if (File.Exists(InstancePath()))
+                WithRegistryMutex(() =>
                 {
-                    File.Delete(InstancePath());
-                }
-                WriteRegistryFile(null);
-                WriteLog("instance_unregistered id=" + InstanceId());
+                    var registry = ReadCurrentRegistry();
+                    var sessions = ReadSessions(registry).Where(session => !IsCurrentSession(session)).Where(IsProcessClaimAliveOrUnverifiable).ToList();
+                    var data = RegistryData(ReadLong(registry, "revision") + 1L, sessions);
+                    WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(data) + "\n");
+                });
+                WriteLog("instance_session_removed id=" + InstanceId() + " session=" + EditorSessionId());
             }
             catch (Exception exception)
             {
@@ -136,119 +294,198 @@ namespace UnityCli
             }
         }
 
-        private static void WriteRegistryFile(Dictionary<string, object> instanceData)
+        /// <summary>读取 v2 record；旧/异 identity 内容绝不迁移或覆盖。</summary>
+        private static Dictionary<string, object> ReadCurrentRegistry()
         {
-            Directory.CreateDirectory(DataDir());
-            var items = new List<object>();
-            if (File.Exists(RegistryPath()))
-            {
-                var registry = UnityCliSerializer.Parse(File.ReadAllText(RegistryPath())) as Dictionary<string, object>;
-                object existingInstances;
-                var existing = registry != null && registry.TryGetValue("instances", out existingInstances) ? existingInstances as List<object> : null;
-                foreach (var item in existing ?? new List<object>())
-                {
-                    var registration = item as Dictionary<string, object>;
-                    if (registration != null && !ShouldRemoveRegistration(registration)) items.Add(registration);
-                }
-            }
-            if (instanceData != null)
-            {
-                items.Add(instanceData);
-            }
-            var registryData = new Dictionary<string, object>
-            {
-                { "version", 1L },
-                { "instances", items }
-            };
-            WriteRegistryTextAtomically(RegistryPath(), UnityCliSerializer.Serialize(registryData));
+            if (!File.Exists(InstancePath())) return new Dictionary<string, object>();
+            var parsed = UnityCliSerializer.Parse(File.ReadAllText(InstancePath(), Encoding.UTF8)) as Dictionary<string, object>;
+            if (parsed == null) throw new InvalidDataException("Instance registry is not a JSON object.");
+            if (ReadLong(parsed, "version") != 2L) throw new InvalidDataException("Obsolete or unsupported instance registry version.");
+            var identity = ReadDictionary(parsed, "identity");
+            if (identity == null
+                || !string.Equals(ReadString(identity, "instanceId"), InstanceId(), StringComparison.Ordinal)
+                || !string.Equals(ReadString(identity, "canonicalProjectPath"), ProjectIdentity().CanonicalProjectPath, StringComparison.Ordinal))
+                throw new InvalidDataException("Instance registry identity does not match CanonicalPath v1.");
+            return parsed;
         }
 
-        private const double StaleRegistrationSeconds = 30.0;
-
-        // 清理同项目的旧注册：当前进程旧随机文件直接移除，心跳过期的历史文件也移除。
-        private static void DeleteSupersededInstanceFiles()
+        /// <summary>读取当前 session 上一次 listener 代次；domain reload 后严格递增。</summary>
+        private static void EnsureListenerGeneration(Dictionary<string, object> registry)
         {
-            if (!Directory.Exists(InstancesDir()))
+            if (listenerGeneration > 0) return;
+            var previous = ReadSessions(registry).FirstOrDefault(IsCurrentSession);
+            var listener = ReadDictionary(previous, "listener");
+            listenerGeneration = Math.Max(1L, ReadLong(listener, "generation") + 1L);
+        }
+
+        /// <summary>供 deterministic port 选择读取本 session 的 previous actual port。</summary>
+        private static int? PreviousActualPort()
+        {
+            try
             {
-                return;
+                int? result = null;
+                WithRegistryMutex(() =>
+                {
+                    var previous = ReadSessions(ReadCurrentRegistry()).FirstOrDefault(IsCurrentSession);
+                    var endpoint = ReadDictionary(ReadDictionary(previous, "listener"), "endpoint");
+                    var value = ReadLong(endpoint, "actualPort");
+                    if (value >= 1024 && value <= 65535) result = (int)value;
+                });
+                return result;
             }
-
-            foreach (var path in Directory.GetFiles(InstancesDir(), "*.json"))
+            catch (Exception exception)
             {
-                if (string.Equals(path, InstancePath(), StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+                WriteLog("instance_previous_port_failed " + exception.GetType().Name + ": " + exception.Message);
+                return null;
+            }
+        }
 
-                try
-                {
-                    var json = File.ReadAllText(path);
-                    if (ShouldRemoveRegistration(json))
+        private static Dictionary<string, object> RegistryData(long revision, List<Dictionary<string, object>> sessions)
+        {
+            return new Dictionary<string, object>
+            {
+                { "version", 2L },
+                { "revision", revision },
+                { "canonicalizationVersion", (long)UnityCliCanonicalProjectPath.CanonicalizationVersion },
+                { "identity", new Dictionary<string, object>
                     {
-                        File.Delete(path);
+                        { "instanceId", InstanceId() },
+                        { "canonicalProjectPath", ProjectIdentity().CanonicalProjectPath },
+                        { "displayProjectPath", ProjectIdentity().DisplayProjectPath }
                     }
-                }
-                catch (Exception exception)
-                {
-                    WriteLog("instance_cleanup_failed " + Path.GetFileName(path) + " " + exception.GetType().Name + ": " + exception.Message);
-                }
-            }
+                },
+                { "sessions", sessions.Cast<object>().ToList() },
+                { "updatedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) }
+            };
         }
 
-        // 判断结构化注册项是否属于当前项目且已被当前注册取代。
-        private static bool ShouldRemoveRegistration(string json)
-        {
-            return ShouldRemoveRegistration(UnityCliSerializer.Parse(json) as Dictionary<string, object>);
-        }
-
-        private static bool ShouldRemoveRegistration(Dictionary<string, object> registration)
-        {
-            object projectHash;
-            if (registration == null || !registration.TryGetValue("projectHash", out projectHash)
-                || !string.Equals(projectHash as string, ProjectHash(), StringComparison.Ordinal)) return false;
-
-            var pid = RegistrationPid(registration);
-            if (pid.HasValue && pid.Value == System.Diagnostics.Process.GetCurrentProcess().Id) return true;
-
-            var timestamp = RegistrationTimestamp(registration);
-            return timestamp.HasValue && DateTime.UtcNow - timestamp.Value.ToUniversalTime() > TimeSpan.FromSeconds(StaleRegistrationSeconds);
-        }
-
-        // 从结构化注册项读取 Unity 进程 ID。
-        private static int? RegistrationPid(Dictionary<string, object> registration)
-        {
-            object value;
-            if (!registration.TryGetValue("processId", out value)) registration.TryGetValue("pid", out value);
-            try { return value == null ? (int?)null : Convert.ToInt32(value, CultureInfo.InvariantCulture); }
-            catch (Exception) { return null; }
-        }
-
-        // 从结构化注册项读取最近心跳时间。
-        private static DateTime? RegistrationTimestamp(Dictionary<string, object> registration)
-        {
-            object value;
-            if (!registration.TryGetValue("lastSeenAt", out value)) registration.TryGetValue("lastHeartbeatAt", out value);
-            DateTime timestamp;
-            return value is string text && DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out timestamp) ? (DateTime?)timestamp : null;
-        }
-
-        private static Dictionary<string, object> InstanceData(string status)
+        private static Dictionary<string, object> CurrentSessionData(string state)
         {
             var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-            var endpoint = "http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture);
-            return new Dictionary<string, object> {
-                { "instanceId", InstanceId() }, { "projectName", Path.GetFileName(ProjectRoot()) }, { "projectPath", ProjectRoot() }, { "projectHash", ProjectHash() },
-                { "processId", (long)System.Diagnostics.Process.GetCurrentProcess().Id }, { "pid", (long)System.Diagnostics.Process.GetCurrentProcess().Id }, { "host", "127.0.0.1" }, { "port", (long)port }, { "bridgeEndpoint", endpoint },
-                { "unityVersion", Application.unityVersion }, { "packageVersion", BridgeBuildStamp() }, { "packageName", BridgePackageName() }, { "packageAssetPath", BridgePackageAssetPath() }, { "packageResolvedPath", BridgePackageResolvedPath() },
-                { "capabilitiesHash", BridgeBuildStamp() }, { "bridgeDiagnosticsFingerprint", BridgeDiagnosticsFingerprint }, { "bridgeListenerId", ListenerId }, { "bridgeAssemblyMvid", AssemblyMvid() }, { "status", status == "healthy" ? "ready" : status },
-                { "editorState", EditorStateSummaryData() }, { "playModeState", PlayModeStateData() }, { "runtimeSessionId", currentPlayModeSessionId ?? string.Empty }, { "toolCatalogFingerprint", runtimeToolCatalogFingerprint ?? string.Empty },
-                { "registryVersion", runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture) }, { "registeredAt", now }, { "lastSeenAt", now }, { "lastHeartbeatAt", now }
+            var session = new Dictionary<string, object>
+            {
+                { "editorSessionId", EditorSessionId() },
+                { "processId", (long)Process.GetCurrentProcess().Id },
+                { "processStartedAt", ProcessStartedAt() },
+                { "lastHeartbeatAt", now },
+                { "claimVerification", "verified" },
+                { "state", state },
+                { "lastUnitySnapshot", SampleEditorStateSnapshot(now) },
+                { "listener", ListenerData(now) },
+                { "progress", SnapshotProgress() },
+                { "blockers", new List<object>() },
+                { "unityVersion", Application.unityVersion },
+                { "buildStamp", BridgeBuildStamp() },
+                { "toolCatalogFingerprint", runtimeToolCatalogFingerprint ?? string.Empty }
             };
+            return session;
+        }
+
+        private static Dictionary<string, object> ListenerData(string now)
+        {
+            var preferred = PreferredPort();
+            return new Dictionary<string, object>
+            {
+                { "listenerId", ListenerId },
+                { "generation", listenerGeneration },
+                { "startedAt", BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture) },
+                { "endpoint", new Dictionary<string, object>
+                    {
+                        { "host", "127.0.0.1" },
+                        { "preferredPort", (long)preferred },
+                        { "actualPort", (long)port },
+                        { "fallback", port != preferred },
+                        { "url", "http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) }
+                    }
+                }
+            };
+        }
+
+        private static string NormalizeSessionState(string requested)
+        {
+            if (string.Equals(requested, "blocked", StringComparison.Ordinal)) return "blocked";
+            if (string.Equals(requested, "transitioning", StringComparison.Ordinal)
+                || domainReloading || EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer
+                || IsPlayModeChanging()) return "transitioning";
+            return "ready";
+        }
+
+        /// <summary>当前 claim 由新 heartbeat 替换；其他 claim 只有 OS 证明进程生命周期失效才移除。</summary>
+        private static bool IsRetainedForeignClaim(Dictionary<string, object> session)
+        {
+            return !IsCurrentSession(session) && IsProcessClaimAliveOrUnverifiable(session);
+        }
+
+        private static bool IsCurrentSession(Dictionary<string, object> session)
+        {
+            return session != null && string.Equals(ReadString(session, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal);
+        }
+
+        private static bool IsProcessClaimAliveOrUnverifiable(Dictionary<string, object> session)
+        {
+            if (session == null) return false;
+            var pid = (int)ReadLong(session, "processId");
+            var expectedStart = ReadString(session, "processStartedAt");
+            if (pid <= 0 || string.IsNullOrEmpty(expectedStart)) return true;
+            try
+            {
+                using (var process = Process.GetProcessById(pid))
+                {
+                    return string.Equals(ProcessStartedAt(process), expectedStart, StringComparison.Ordinal);
+                }
+            }
+            catch (ArgumentException) { return false; }
+            catch (InvalidOperationException) { return false; }
+            catch (Exception) { return true; }
+        }
+
+        private static List<Dictionary<string, object>> ReadSessions(Dictionary<string, object> registry)
+        {
+            object value;
+            var raw = registry != null && registry.TryGetValue("sessions", out value) ? value as List<object> : null;
+            return (raw ?? new List<object>()).OfType<Dictionary<string, object>>().ToList();
+        }
+
+        private static Dictionary<string, object> ReadDictionary(Dictionary<string, object> value, string key)
+        {
+            object raw;
+            return value != null && value.TryGetValue(key, out raw) ? raw as Dictionary<string, object> : null;
+        }
+
+        private static string ReadString(Dictionary<string, object> value, string key)
+        {
+            object raw;
+            return value != null && value.TryGetValue(key, out raw) ? raw as string : null;
+        }
+
+        private static long ReadLong(Dictionary<string, object> value, string key)
+        {
+            object raw;
+            if (value == null || !value.TryGetValue(key, out raw) || raw == null) return 0L;
+            try { return Convert.ToInt64(raw, CultureInfo.InvariantCulture); }
+            catch { return 0L; }
+        }
+
+        private static string Sha256Utf8(string value)
+        {
+            using (var sha = SHA256.Create())
+            {
+                var bytes = sha.ComputeHash(new UTF8Encoding(false).GetBytes(value));
+                var builder = new StringBuilder(bytes.Length * 2);
+                foreach (var item in bytes) builder.Append(item.ToString("x2"));
+                return builder.ToString();
+            }
         }
 
         private static Dictionary<string, object> TargetContextData()
         {
-            return new Dictionary<string, object> { { "id", InstanceId() }, { "alias", null }, { "projectPath", ProjectRoot() } };
+            return new Dictionary<string, object>
+            {
+                { "id", InstanceId() },
+                { "canonicalProjectPath", ProjectIdentity().CanonicalProjectPath },
+                { "displayProjectPath", ProjectIdentity().DisplayProjectPath },
+                { "editorSessionId", EditorSessionId() }
+            };
         }
 
         private static Dictionary<string, object> EditorStateSummaryData()

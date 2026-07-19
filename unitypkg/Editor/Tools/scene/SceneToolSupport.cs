@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -24,7 +25,11 @@ namespace UnityCli
         // 场景资产路径规范化:反斜杠转正斜杠并去首尾空白;空返回 null。
         internal static string NormalizeAssetPath(string rawPath)
         {
-            return string.IsNullOrEmpty(rawPath) ? null : rawPath.Replace('\\', '/').Trim();
+            if (string.IsNullOrWhiteSpace(rawPath)) return null;
+            var path = rawPath.Replace('\\', '/').Trim();
+            if (path.Split('/').Contains(".") || path.Split('/').Contains(".."))
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_PATH_INVALID", "Scene paths must not contain '.' or '..' segments: " + path, "Pass a canonical Assets/*.unity path.");
+            return path;
         }
 
         // Unity 工程根目录(Assets 的父目录)。
@@ -36,7 +41,11 @@ namespace UnityCli
         // Assets/ 相对路径转工程内绝对路径。
         internal static string AssetFullPath(string assetPath)
         {
-            return Path.Combine(ProjectRoot(), assetPath.Replace('/', Path.DirectorySeparatorChar));
+            var fullPath = Path.GetFullPath(Path.Combine(ProjectRoot(), assetPath.Replace('/', Path.DirectorySeparatorChar)));
+            var dataPath = Path.GetFullPath(UnityEngine.Application.dataPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!string.Equals(fullPath, dataPath, StringComparison.OrdinalIgnoreCase) && !fullPath.StartsWith(dataPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_PATH_INVALID", "Scene path resolves outside Application.dataPath: " + assetPath, "Pass a canonical Assets/*.unity path.");
+            return fullPath;
         }
 
         // 判断 Assets/ 路径是否存在(文件或已导入资产)。

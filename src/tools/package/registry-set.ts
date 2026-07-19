@@ -33,10 +33,9 @@ export default defineTool<PackageRegistrySetRequest, PackageRegistrySetResult>({
   async execute(request, context) {
     const projectPath = resolve(request.project ?? context.projectPath);
     const registry = validateRegistryUrl(request.url);
-    if (context.execution.dryRun) {
-      const snapshot = await readSnapshot(projectPath);
-      return { projectPath, manifestPath: snapshot.manifestPath, registry, previousRegistry: snapshot.registry, dryRun: true, plannedEffects: [{ type: "package.registry.set", registry }] };
-    }
-    return { projectPath, ...(await setRegistry(projectPath, registry)) };
+    const prepared = await setRegistry(projectPath, registry, { dryRun: true });
+    if (context.execution.dryRun) return { projectPath, ...prepared } as PackageRegistrySetResult;
+    await context.commitEffect?.();
+    return { projectPath, ...(await setRegistry(projectPath, registry)) } as PackageRegistrySetResult;
   }
 });

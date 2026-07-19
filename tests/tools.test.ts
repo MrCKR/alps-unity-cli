@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { ExtensionRegistry } from "../src/extensions/index.js";
 import { installExtensionBundle } from "../src/extensions/installer.js";
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools/commands.js";
+import { validateLocalCompletionProof } from "../src/tools/dispatcher.js";
+import { generatedToolCompletionContract } from "../src/tools/.generated-completion-registry.js";
 import {
   allRegisteredToolMetadata,
   builtinToolGroups,
@@ -26,9 +28,9 @@ test("live dispatcher forwards validated typed input without rebuilding it from 
   assert.match(block, /executeBridgeCommand\(requestId, wrapper, bridgeWrapperFlags\(flags, input\), tool\.name/);
   assert.doesNotMatch(block, /spec\.buildArgs/);
 
-  const diagnostics = await readFile(new URL("../src/tools/editor/compile-diagnostics.js", import.meta.url), "utf8");
-  assert.match(diagnostics, /instance: selectedInstance\(context\)/);
-  assert.match(diagnostics, /context\.flags\?\.instance/);
+  const compile = await readFile(new URL("../src/tools/editor/compile.js", import.meta.url), "utf8");
+  assert.match(compile, /internal\.editor\.compile\.start/);
+  assert.match(compile, /internal\.editor\.compile\.status/);
 });
 
 const requestId = "test_req_tools_001";
@@ -49,8 +51,8 @@ async function makeProject(packages: Record<string, string> = {}): Promise<strin
 
 test("offline builtin tool metadata only contains TS-local defineTool entries", () => {
   const tools = builtinToolMetadata();
-  assert.equal(tools.length, 37);
-  assert.equal(allRegisteredToolMetadata().length, 37);
+  assert.equal(tools.length, 36);
+  assert.equal(allRegisteredToolMetadata().length, 36);
   assert.deepEqual(builtinToolGroups(), [
     "build",
     "code",
@@ -100,7 +102,7 @@ test("representative local metadata keeps expected handlers and risk hints", () 
 
 test("defineTool registry stays aligned with local metadata only", () => {
   const metadataNames = new Set(defineToolMetadata().map((tool) => tool.name));
-  assert.equal(metadataNames.size, 37);
+  assert.equal(metadataNames.size, 36);
   assert.ok(metadataNames.has("tools.group"));
   assert.ok(metadataNames.has("docs.search"));
   assert.equal(metadataNames.has("scene.hierarchy"), false);
@@ -108,15 +110,15 @@ test("defineTool registry stays aligned with local metadata only", () => {
   assert.ok(findDefineTool("code.exec"));
 });
 
-test("tools group offline only lists TS-local groups", async () => {
+test("tools group offline includes packaged C# and Extension groups", async () => {
   const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
   assert.ok(result.ok);
   const groups = (result.data as { groups: Array<{ name: string }> }).groups.map((group) => group.name);
   assert.ok(groups.includes("docs"));
   assert.ok(groups.includes("tools"));
   assert.ok(groups.includes("package"));
-  assert.equal(groups.includes("scene"), false);
-  assert.equal(groups.includes("probuilder"), false);
+  assert.equal(groups.includes("scene"), true);
+  assert.equal(groups.includes("probuilder"), true);
 });
 
 test("tools group/search/describe include live-discovered built-in C# tools from runtime.projectTools", async () => {
@@ -131,9 +133,8 @@ test("tools group/search/describe include live-discovered built-in C# tools from
   const list = await handleToolsCommand("group", ["list", "scene"], {}, runtime, requestId);
   assert.ok(list.ok);
   const listData = list.data as { count: number; tools: Array<{ name: string; source: string }> };
-  assert.equal(listData.count, 1);
-  assert.deepEqual(listData.tools.map((tool) => tool.name), ["scene.hierarchy"]);
-  assert.equal(listData.tools[0].source, "built-in");
+  assert.equal(listData.count, 13);
+  assert.ok(listData.tools.some((tool) => tool.name === "scene.hierarchy" && tool.source === "built-in"));
 
   const search = await handleToolsCommand("search", ["hierarchy"], {}, runtime, requestId);
   assert.ok(search.ok);
@@ -182,27 +183,29 @@ test("tools group/search/describe include project custom tools from runtime.proj
   assert.equal((describe.data as Record<string, unknown>).source, "project");
 });
 
-test("tools describe preserves transient discovery error metadata", async () => {
+test("tools describe remains offline while a live transport is transitioning", async () => {
+  let bridgeCalls = 0;
   const runtime: ToolsRuntime = {
-    bridgeEndpoint: "http://127.0.0.1:49999",
-    bridgeExecute: async (payload) => ({
+    bridgeExecute: async (payload) => {
+      bridgeCalls += 1;
+      return {
       ok: false as const,
       requestId: payload.requestId,
       error: {
-        code: "E_TARGET_STALE",
-        message: "target is reloading",
+        code: "E_UNITY_TRANSITIONING",
+        message: "Unity is reloading",
         nextActions: ["Retry."],
         transient: true,
         retryAfterMs: 1234
       }
-    })
+    };
+    }
   };
 
-  const result = await handleToolsCommand("describe", ["scene.hierarchy"], { "bridge-endpoint": runtime.bridgeEndpoint! }, runtime, requestId);
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_TARGET_STALE");
-  assert.equal(result.error?.transient, true);
-  assert.equal(result.error?.retryAfterMs, 1234);
+  const result = await handleToolsCommand("describe", ["scene.hierarchy"], {}, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal((result.data as { name: string }).name, "scene.hierarchy");
+  assert.equal(bridgeCalls, 0);
 });
 
 test("tools describe unknown tool still returns E_TOOL_NOT_FOUND_FOR_TARGET", async () => {
@@ -217,6 +220,38 @@ test("tools run accepts only strict JSON object input", async () => {
     assert.ok(!result.ok);
     assert.equal(result.error?.code, input === "[]" || input === "true" || input === "null" ? "E_SCHEMA_INVALID" : "E_TOOL_INPUT_JSON_INVALID");
   }
+});
+
+test("local completion proof rejects nested failure and skipped external operations", () => {
+  const deploy = generatedToolCompletionContract("package.deploy")!;
+  assert.throws(() => validateLocalCompletionProof("package.deploy", deploy, {
+    status: "deployed",
+    targetPath: "D:/project/Packages/com.example.tool",
+    sourceHash: "abc",
+    copiedFileCount: 3,
+    liveRefresh: { status: "failed", code: "E_UNITY_TRANSITION_TIMEOUT" }
+  }, false), /returned failed terminal status failed/);
+  assert.doesNotThrow(() => validateLocalCompletionProof("package.deploy", deploy, {
+    status: "deployed",
+    targetPath: "D:/project/Packages/com.example.tool",
+    sourceHash: "abc",
+    copiedFileCount: 3,
+    liveRefresh: { status: "completed" }
+  }, false));
+  assert.throws(() => validateLocalCompletionProof("unknown.external", deploy, { status: "completed", result: true }, false), /has no registered Tool-specific external validator/);
+
+  const resolve = generatedToolCompletionContract("package.resolve")!;
+  assert.throws(() => validateLocalCompletionProof("package.resolve", resolve, {
+    action: "resolve",
+    projectPath: "D:/project",
+    resolve: "skipped"
+  }, false), /did not prove terminal Unity package resolution/);
+  assert.doesNotThrow(() => validateLocalCompletionProof("package.resolve", resolve, {
+    action: "resolve",
+    projectPath: "D:/project",
+    resolve: "live_bridge_refresh",
+    liveRefresh: { status: "completed" }
+  }, false));
 });
 
 test("tools describe local TS-owned tools still works offline", async () => {
@@ -251,7 +286,18 @@ test("tools run routes runtime-target live-discovered tools through runtime-tool
     summary: "Echo runtime state.",
     description: "Echo runtime state from Play Mode.",
     group: "runtime",
-    target: "runtime"
+    target: "runtime",
+    completionContract: {
+      executionClass: "atomic",
+      completionPredicate: "typed-business-terminal",
+      proofSource: "typed-result-and-effect-readback",
+      reloadPolicy: "same-session-proof-recovery",
+      timeoutError: "E_EXECUTION_TIMEOUT",
+      outcomeUnknownPolicy: "fail-closed-no-replay",
+      completionDriverId: "atomic-typed-result-v1",
+      journalPolicy: "none",
+      mutation: false
+    }
   });
   const runtime: ToolsRuntime = {
     projectTools: [runtimeTool],
@@ -306,7 +352,15 @@ test("tools run forwards live-discovered tool execution to project-tool.run with
 
   const result = await handleToolsCommand("run", ["scene.save"], { input: '{"path":"Assets/Scene.unity"}', yes: true }, runtime, requestId);
   assert.ok(result.ok);
-  assert.deepEqual(requests, [{ command: "project-tool.run", args: { name: "scene.save", input: { path: "Assets/Scene.unity" } } }]);
+  assert.deepEqual(requests, [{ command: "project-tool.run", args: { name: "scene.save", input: { path: "Assets/Scene.unity" }, expectedDescriptorFingerprint: "a".repeat(64) } }]);
+});
+
+test("tools run rejects invalid execution timeout before tool selection or effects", async () => {
+  for (const raw of ["nope", "0", "-1", "1.5"]) {
+    const result = await handleToolsCommand("run", ["docs.list"], { "timeout-ms": raw }, emptyRuntime, `${requestId}_${raw}`);
+    assert.ok(!result.ok);
+    assert.equal(result.error?.code, "E_SCHEMA_INVALID");
+  }
 });
 
 test("tools run local offline tool still executes through defineTool", async () => {
@@ -325,26 +379,4 @@ test("tools run local tools.group and tools.describe wrappers still execute offl
   const describe = await handleToolsCommand("run", ["tools.describe"], { input: '{"name":"docs.search"}' }, emptyRuntime, requestId);
   assert.ok(describe.ok);
   assert.equal((describe.data as Record<string, unknown>).name, "docs.search");
-});
-
-test("tools.run defineTool wrapper can target live-discovered tools without leaking outer wrapper name", async () => {
-  const requests: Array<{ command: string; args: unknown }> = [];
-  const runtime: ToolsRuntime = {
-    projectTools: [sceneHierarchyTool()],
-    bridgeExecute: async (payload) => {
-      requests.push({ command: payload.command, args: payload.input! });
-      return { ok: true as const, requestId: payload.requestId, data: {} };
-    }
-  };
-
-  const result = await handleToolsCommand(
-    "run",
-    ["tools.run"],
-    { input: '{"name":"scene.hierarchy","input":{"pageSize":2}}', yes: true },
-    runtime,
-    requestId
-  );
-
-  assert.ok(result.ok);
-  assert.deepEqual(requests, [{ command: "project-tool.run", args: { name: "scene.hierarchy", input: { pageSize: 2 } } }]);
 });

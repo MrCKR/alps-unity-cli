@@ -4,6 +4,7 @@ import type { ContextCatalogRuntime } from "../../contexts/catalog.js";
 import type { BridgeRuntime } from "../../bridge/index.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface DiagnoseCapabilitiesRequest {
   json?: boolean;
@@ -12,7 +13,7 @@ export interface DiagnoseCapabilitiesRequest {
   includeCustom?: boolean;
 }
 
-export interface DiagnoseCapabilitiesObject {}
+export interface DiagnoseCapabilitiesObject { [key: string]: AnyJson; }
 
 export interface DiagnoseCapabilitiesResult {
   command: string;
@@ -23,7 +24,6 @@ export interface DiagnoseCapabilitiesResult {
   customContexts?: DiagnoseCapabilitiesObject;
   runtime?: DiagnoseCapabilitiesObject;
   runtimeCustomContexts?: DiagnoseCapabilitiesObject;
-  bridgeEndpoint?: string;
   contextDiscovery: DiagnoseCapabilitiesObject;
   toolsGroupFirstDiscovery: boolean;
   extensions: DiagnoseCapabilitiesObject;
@@ -40,8 +40,8 @@ function requestFlags(request: DiagnoseCapabilitiesRequest, base: Record<string,
 
 export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResult>({
   name: "diagnose.capabilities",
-  summary: "Summarize built-in CLI capabilities, tool/context catalog counts, extension availability, and optional live Unity bridge capabilities when --bridge-endpoint is provided.",
-  description: "Summarize built-in CLI capabilities, tool/context catalog counts, extension availability, and optional live Unity bridge capabilities when --bridge-endpoint is provided. Safe to run offline; runtime data is best-effort.",
+  summary: "Summarize built-in CLI capabilities, tool/context catalog counts, extension availability, and optional selected Unity session capabilities.",
+  description: "Summarize offline CLI capabilities and, when --instance selects a live project, include validated Unity session capabilities through the session supervisor.",
   group: "diagnose",
   destructiveHint: false,
   playModeSupport: "supported",
@@ -49,7 +49,7 @@ export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResul
   supportStatus: "cli-only",
   examples: [
     { description: "Read offline CLI capabilities", argv: ["tools", "run", "diagnose.capabilities", "--input", "{}"] },
-    { description: "Include live bridge capabilities", argv: ["tools", "run", "diagnose.capabilities", "--bridge-endpoint", "http://127.0.0.1:47395"] }
+    { description: "Include selected live capabilities", argv: ["tools", "run", "diagnose.capabilities", "--instance", "<projectPath>"] }
   ],
   /** 复用既有 capabilities 状态机,保持 offline/live/custom discovery 语义一致。 */
   async execute(request, ctx) {
@@ -57,7 +57,6 @@ export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResul
     const runtime: BridgeRuntime & ProjectToolRuntime & ContextCatalogRuntime = {
       dataDir: ctx.dataDir,
       bridgeExecute: ctx.bridgeExecute,
-      bridgeEndpoint: ctx.bridgeEndpoint,
       projectTools: ctx.projectTools,
       projectContexts: ctx.projectContexts
     };

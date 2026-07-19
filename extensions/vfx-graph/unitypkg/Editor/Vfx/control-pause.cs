@@ -16,13 +16,21 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Toggle emitter pause", Input = new Request { Target = "Effects/Emitter" } } }
         };
 
-        public System.Threading.Tasks.ValueTask<VfxControlActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<VfxControlActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.control.pause");
             var paused = VfxActionToolSupport.ReadBool(effect, "pause");
             if (!paused.HasValue) throw new UnityCliBridge.BridgeCommandException("E_VFX_PROPERTY_UNSUPPORTED", "VisualEffect pause state is unavailable.", "Check the installed Visual Effect Graph package version.");
-            VfxActionToolSupport.SetRequired(effect, "pause", !paused.Value);
-            return new System.Threading.Tasks.ValueTask<VfxControlActionResult>(VfxActionToolSupport.BuildControlResult(effect, "vfx.control.pause", context.LogPath));
+            var expected = !paused.Value;
+            var gameObjectId = effect.gameObject.GetInstanceID(); var effectType = effect.GetType();
+            VfxActionToolSupport.PrepareWritableBoolProperty(effectType, "pause");
+            ctx.CommitEffect();
+
+            effect = VfxActionToolSupport.ResolveObservedEffect(gameObjectId, effectType, "vfx.control.pause");
+            VfxActionToolSupport.SetRequired(effect, "pause", expected);
+            await VfxActionToolSupport.RequirePauseState(effect, expected, "vfx.control.pause", ctx, ct);
+            effect = VfxActionToolSupport.ResolveObservedEffect(gameObjectId, effectType, "vfx.control.pause");
+            return VfxActionToolSupport.BuildControlResult(effect, "vfx.control.pause", ctx.LogPath);
         }
     }
 }

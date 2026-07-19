@@ -56,14 +56,21 @@ namespace UnityCli
                     "Pass a GameObject name / hierarchy path with a ParticleSystem component.");
             }
 
+            VfxToolSupport.PrepareParticleMainFields(request);
+            VfxToolSupport.RequireMutation(request.Duration.HasValue || request.StartLifetime.HasValue || request.StartSpeed.HasValue || request.StartSize.HasValue || !string.IsNullOrWhiteSpace(request.StartColor) || request.StartRotation.HasValue || request.GravityModifier.HasValue || request.MaxParticles.HasValue || request.Loop.HasValue || request.PlayOnAwake.HasValue || !string.IsNullOrWhiteSpace(request.SimulationSpace) || !string.IsNullOrWhiteSpace(request.ScalingMode), "vfx.particle-main");
+            var gameObjectId = particleSystem.gameObject.GetInstanceID();
             var effects = new List<VfxPlannedEffect>();
-            VfxToolSupport.ApplyParticleMainFields(particleSystem, request, "vfx.particle-main", effects);
-            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
-            VfxToolSupport.MarkSceneDirty(particleSystem.gameObject);
+            ctx.CommitEffect();
+            var writable = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-main");
+            VfxToolSupport.ApplyParticleMainFields(writable, request, "vfx.particle-main", effects);
+            var observed = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-main");
+            VfxToolSupport.VerifyParticleMainFields(observed, request);
+            UnityCliSceneMutation.MarkSceneObjectDirty(observed);
+            VfxToolSupport.MarkSceneDirty(observed.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
-                ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem),
+                Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
+                ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(observed),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
             });

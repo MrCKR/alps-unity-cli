@@ -184,14 +184,36 @@ namespace UnityCli
             return new ScriptableObjectPatchResult { Index = index, PropertyPath = propertyPath, Op = op, Ok = ok, Changed = changed, PropertyType = propertyType, Message = message };
         }
 
-        internal static void SetObjectMemberValue(object target, string propertyName, object value)
+        internal sealed class ScriptableObjectMemberWrite
+        {
+            internal PropertyInfo Property;
+            internal FieldInfo Field;
+            internal object ExpectedValue;
+        }
+
+        /// <summary>在 barrier 前解析可写 member 并完成转换，避免 setter 或转换失败发生在 effect_started 后。</summary>
+        internal static ScriptableObjectMemberWrite PrepareObjectMemberWrite(object target, string propertyName, object value)
         {
             var flags = BindingFlags.Instance | BindingFlags.Public;
             var property = target.GetType().GetProperty(propertyName, flags);
-            if (property != null && property.CanWrite) { property.SetValue(target, ConvertScriptableObjectValue(value, property.PropertyType), null); return; }
+            if (property != null && property.CanWrite) return new ScriptableObjectMemberWrite { Property = property, ExpectedValue = ConvertScriptableObjectValue(value, property.PropertyType) };
             var field = target.GetType().GetField(propertyName, flags);
-            if (field != null) { field.SetValue(target, ConvertScriptableObjectValue(value, field.FieldType)); return; }
+            if (field != null) return new ScriptableObjectMemberWrite { Field = field, ExpectedValue = ConvertScriptableObjectValue(value, field.FieldType) };
             throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_PROPERTY_NOT_FOUND", "Writable ScriptableObject member not found: " + propertyName, "Use a public writable field or property name.");
+        }
+
+        internal static void SetObjectMemberValue(object target, ScriptableObjectMemberWrite write)
+        {
+            if (write.Property != null) { write.Property.SetValue(target, write.ExpectedValue, null); return; }
+            if (write.Field != null) { write.Field.SetValue(target, write.ExpectedValue); return; }
+            throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_PROPERTY_NOT_FOUND", "Prepared ScriptableObject member write is invalid.", "Retry with a public writable field or property name.");
+        }
+
+        /// <summary>fresh asset readback 必须与 barrier 前冻结的转换结果精确相等。</summary>
+        internal static bool ObjectMemberValueMatches(object target, ScriptableObjectMemberWrite write)
+        {
+            var actual = write.Property != null ? write.Property.GetValue(target, null) : write.Field != null ? write.Field.GetValue(target) : null;
+            return Equals(actual, write.ExpectedValue);
         }
 
         // 将 typed 输入转换为 ScriptableObject 公共字段/属性的基础类型。

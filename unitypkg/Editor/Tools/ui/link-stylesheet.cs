@@ -20,7 +20,9 @@ namespace UnityCli
             if (string.IsNullOrEmpty(uxmlPath) || string.IsNullOrEmpty(ussPath)) throw new UnityCliBridge.BridgeCommandException("E_UI_PATH_REQUIRED", "ui.link-stylesheet requires --path (uxml) and --uss.", "Pass both uxml and uss paths.");
             var dryRun = ctx.DryRun;
             if (dryRun) return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.link-stylesheet", DryRun = true, Path = uxmlPath, Uss = ussPath, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.link-stylesheet", Path = uxmlPath, Uss = ussPath } } });
-            var content = File.ReadAllText(SceneToolSupport.AssetFullPath(uxmlPath));
+            var uxmlFullPath = SceneToolSupport.AssetFullPath(uxmlPath);
+            var requestedStyleSheet = UiToolSupport.LoadStyleSheet(ussPath);
+            var content = File.ReadAllText(uxmlFullPath);
             var styleLine = "  <Style src=\"" + Path.GetFileName(ussPath) + "\" />\n";
             if (!content.Contains(styleLine.Trim()))
             {
@@ -29,9 +31,23 @@ namespace UnityCli
                 if (insertIdx >= 0) content = content.Insert(insertIdx, styleLine);
                 else content += styleLine;
             }
-            File.WriteAllText(SceneToolSupport.AssetFullPath(uxmlPath), content, System.Text.Encoding.UTF8);
+            ctx.CommitEffect();
+            File.WriteAllText(uxmlFullPath, content, System.Text.Encoding.UTF8);
             AssetDatabase.ImportAsset(uxmlPath, ImportAssetOptions.ForceUpdate);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.link-stylesheet", DryRun = false, Path = uxmlPath, Uss = ussPath, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.link-stylesheet", Path = uxmlPath, Uss = ussPath } } });
+            AssetDatabase.SaveAssets();
+            var observedContent = File.ReadAllText(uxmlFullPath, System.Text.Encoding.UTF8);
+            var observedDocument = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(uxmlPath);
+            var observedStyleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(ussPath);
+            var expectedSource = Path.GetFileName(AssetDatabase.GetAssetPath(requestedStyleSheet));
+            var parsed = System.Xml.Linq.XDocument.Parse(observedContent);
+            var linked = false;
+            foreach (var element in parsed.Descendants())
+            {
+                var source = element.Attribute("src");
+                if (element.Name.LocalName == "Style" && source != null && source.Value == expectedSource) { linked = true; break; }
+            }
+            if (observedDocument == null || observedStyleSheet == null || !linked) throw new UnityCliBridge.BridgeCommandException("E_UI_STYLESHEET_READBACK_FAILED", "Stylesheet link could not be verified: " + uxmlPath, "Check Unity Console for UXML import errors.");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.link-stylesheet", DryRun = false, Path = AssetDatabase.GetAssetPath(observedDocument), Uss = AssetDatabase.GetAssetPath(observedStyleSheet), PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.link-stylesheet", Path = uxmlPath, Uss = ussPath } } });
         }
     }
 }

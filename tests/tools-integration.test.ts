@@ -16,7 +16,7 @@ async function makeRuntime() {
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
 
-test("integration: offline tools group via execute() only shows TS-local groups", async () => {
+test("integration: offline tools group via execute() includes packaged static groups", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "group"], runtime);
   assert.ok(result.ok);
@@ -27,7 +27,8 @@ test("integration: offline tools group via execute() only shows TS-local groups"
   const groupNames = groups.map((g) => g.name);
   assert.ok(groupNames.includes("docs"));
   assert.ok(groupNames.includes("tools"));
-  assert.ok(!groupNames.includes("scene"));
+  assert.ok(groupNames.includes("scene"));
+  assert.ok(groupNames.includes("probuilder"));
 });
 
 test("integration: live-discovered built-in group list via execute()", async () => {
@@ -38,8 +39,8 @@ test("integration: live-discovered built-in group list via execute()", async () 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "tools.group.list");
   const tools = data.tools as Array<{ name: string; source: string }>;
-  assert.deepEqual(tools.map((tool) => tool.name), ["scene.hierarchy"]);
-  assert.equal(tools[0].source, "built-in");
+  assert.equal(tools.length, 13);
+  assert.ok(tools.some((tool) => tool.name === "scene.hierarchy" && tool.source === "built-in"));
 });
 
 test("integration: live-discovered extension tool search via execute()", async () => {

@@ -75,8 +75,7 @@ async function startEditorRefreshJob(request: EditorRefreshRequest, context: Too
     dataDir: context.dataDir,
     store: context.jobStore,
     runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute,
-    bridgeEndpoint: context.bridgeEndpoint
+    bridgeExecute: context.bridgeExecute
   }, context.requestId, ["-executeMethod", compile ? "UnityCli.UnityCliBatch.RefreshAndCompile" : "UnityCli.UnityCliBatch.Refresh"], {
     action: "refresh",
     compile

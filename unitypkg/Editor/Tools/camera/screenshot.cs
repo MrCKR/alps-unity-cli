@@ -58,6 +58,7 @@ namespace UnityCli
             var width = CameraToolSupport.ClampScreenshotDimension(request.Width ?? (camera.pixelWidth > 0 ? camera.pixelWidth : 1280), "width");
             var height = CameraToolSupport.ClampScreenshotDimension(request.Height ?? (camera.pixelHeight > 0 ? camera.pixelHeight : 720), "height");
             var quality = Mathf.Clamp(request.Quality ?? 95, 1, 100);
+            ctx.CommitEffect();
             return new System.Threading.Tasks.ValueTask<CameraCapture>(CameraToolSupport.CaptureCamera(camera, width, height, request.Transparent, quality, outputPath, format, request.Overwrite, request.InlineBase64));
         }
     }

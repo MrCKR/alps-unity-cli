@@ -159,10 +159,13 @@ test("ui C# keeps one capability per physical file with CRUD, stylesheet, list, 
     await readFile(new URL(`../unitypkg/Editor/Tools/ui/${file}`, import.meta.url), "utf8")
   ]))) as Record<keyof typeof files, string>;
 
-  assert.match(sources.update, /class UiDocumentUpdateTool : IUnityCliTool[\s\S]*File\.WriteAllText/);
-  assert.match(sources.delete, /class UiDocumentDeleteTool : IUnityCliTool[\s\S]*AssetDatabase\.DeleteAsset/);
-  assert.match(sources.detach, /class UiDetachDocumentTool : IUnityCliTool[\s\S]*UnityCliSceneMutation\.DestroyObject\(doc\)/);
-  assert.match(sources.stylesheet, /class UiLinkStylesheetTool : IUnityCliTool[\s\S]*File\.ReadAllText[\s\S]*File\.WriteAllText/);
+  assert.match(sources.update, /class UiDocumentUpdateTool : IUnityCliTool[\s\S]*File\.WriteAllText[\s\S]*File\.ReadAllText[\s\S]*LoadAssetAtPath<VisualTreeAsset>/);
+  assert.match(sources.update, /E_UI_DOCUMENT_READBACK_FAILED/);
+  assert.match(sources.delete, /class UiDocumentDeleteTool : IUnityCliTool[\s\S]*AssetDatabase\.DeleteAsset[\s\S]*LoadAssetAtPath<UnityEngine\.Object>/);
+  assert.match(sources.delete, /E_UI_DOCUMENT_READBACK_FAILED/);
+  assert.match(sources.detach, /class UiDetachDocumentTool : IUnityCliTool[\s\S]*UnityCliSceneMutation\.DestroyObject\(doc\)[\s\S]*GetComponent<UIDocument>\(\)/);
+  assert.match(sources.detach, /bool Attached/);
+  assert.match(sources.stylesheet, /class UiLinkStylesheetTool : IUnityCliTool[\s\S]*File\.ReadAllText[\s\S]*File\.WriteAllText[\s\S]*LoadAssetAtPath<VisualTreeAsset>[\s\S]*XDocument\.Parse/);
   assert.match(sources.list, /class UiListDocumentsTool : IUnityCliTool[\s\S]*AssetDatabase\.FindAssets/);
   assert.match(sources.preview, /class UiRenderPreviewTool : IUnityCliTool/);
   assert.match(sources.preview, /public async ValueTask<Result> ExecuteAsync/);
@@ -174,8 +177,10 @@ test("ui C# keeps one capability per physical file with CRUD, stylesheet, list, 
   assert.match(sources.preview, /finally[\s\S]*DestroyImmediate\(panelSettings\)/);
   assert.match(sources.preview, /ctx\.DryRun/);
   assert.doesNotMatch(sources.preview, /new Texture2D\(1, 1/);
-  assert.match(sources.modify, /class UiModifyVisualElementTool : IUnityCliTool[\s\S]*rootVisualElement\.Q\(r\.ElementName\)/);
-  assert.match(sources.panel, /class UiCreatePanelSettingsTool : IUnityCliTool[\s\S]*referenceResolution/);
+  assert.match(sources.modify, /class UiModifyVisualElementTool : IUnityCliTool[\s\S]*rootVisualElement\.Q\(r\.ElementName\)[\s\S]*E_UI_ELEMENT_READBACK_FAILED/);
+  assert.match(sources.modify, /UiVisualElementInfo[\s\S]*ClassListContains/);
+  assert.match(sources.panel, /class UiCreatePanelSettingsTool : IUnityCliTool[\s\S]*referenceResolution[\s\S]*ImportAsset\(path, ImportAssetOptions\.ForceUpdate\)[\s\S]*LoadAssetAtPath<PanelSettings>/);
+  assert.match(sources.panel, /observed\.scaleMode != scaleMode[\s\S]*observed\.referenceResolution != resolution[\s\S]*observed\.sortingOrder != sortingOrder/, "PanelSettings readback must compare the values fixed before the effect barrier");
 });
 
 test("ui bridge spec forwards structured --input fields", async () => {

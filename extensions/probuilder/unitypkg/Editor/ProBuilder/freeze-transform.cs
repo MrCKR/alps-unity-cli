@@ -53,7 +53,11 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("freeze-transform", "No ProBuilderMesh on target.");
 
+            var beforePositions = ProBuilderRequestProof.CapturePositions(mesh);
             var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
+            if (beforePositions == null || (go.transform.position == Vector3.zero && go.transform.rotation == Quaternion.identity && go.transform.localScale == Vector3.one))
+                throw ProBuilderErrors.OperationFailed("freeze-transform", "Target transform is already identity and has no transform to bake.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Freeze Transform");
 
             // 将顶点位置变换到世界空间,重置变换,再写回(此时 local = world)
@@ -88,6 +92,10 @@ namespace UnityCli.ProBuilder
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.TransformWasBaked(freshGo, freshMesh, beforePositions))
+                throw ProBuilderErrors.OperationFailed("freeze-transform", "Transform was not baked into mesh positions and reset to identity.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { BakedVertexCount = vertexCount });
         }

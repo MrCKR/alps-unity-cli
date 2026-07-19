@@ -17,10 +17,10 @@ namespace UnityCli.ProBuilder
         {
             [UnityCliRequired] public string Target { get; set; }
             public List<long> FaceIndices { get; set; }             // 可选,空则作用于全部面
-            public double R { get; set; }                            // 默认 1
-            public double G { get; set; }                            // 默认 1
-            public double B { get; set; }                            // 默认 1
-            public double A { get; set; }                            // 默认 1
+            public double? R { get; set; }                           // 默认 1
+            public double? G { get; set; }                           // 默认 1
+            public double? B { get; set; }                           // 默认 1
+            public double? A { get; set; }                           // 默认 1
         }
 
         public sealed class Result
@@ -59,9 +59,15 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("set-face-color", "No ProBuilderMesh on target.");
 
-            var color = new Color((float)request.R, (float)request.G, (float)request.B, (float)request.A);
+            var red = ProBuilderOperationProof.CheckedFloat(request.R ?? 1d, "r");
+            var green = ProBuilderOperationProof.CheckedFloat(request.G ?? 1d, "g");
+            var blue = ProBuilderOperationProof.CheckedFloat(request.B ?? 1d, "b");
+            var alpha = ProBuilderOperationProof.CheckedFloat(request.A ?? 1d, "a");
+            if (red < 0 || red > 1 || green < 0 || green > 1 || blue < 0 || blue > 1 || alpha < 0 || alpha > 1)
+                throw ProBuilderErrors.SchemaInvalid("Color channels must be between 0 and 1.");
+            var color = new Color(red, green, blue, alpha);
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).ToArray();
 
             var faces = faceIndices != null && faceIndices.Length > 0
                 ? ProBuilderReflection.GetFacesByIndices(mesh, faceIndices)
@@ -70,6 +76,7 @@ namespace UnityCli.ProBuilder
             if (faces == null || faces.Length == 0)
                 throw ProBuilderErrors.OperationFailed("set-face-color", "No faces found on target.");
 
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Set Face Color");
 
             var colored = ProBuilderReflection.SetFaceColor(mesh, faces, color);
@@ -78,6 +85,10 @@ namespace UnityCli.ProBuilder
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.RequestedFacesHaveColor(freshMesh, faceIndices ?? Enumerable.Range(0, faces.Length).ToArray(), color))
+                throw ProBuilderErrors.OperationFailed("set-face-color", "Every requested face did not retain the requested vertex color.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { ColoredFaceCount = faces.Length });
         }

@@ -69,28 +69,36 @@ namespace UnityCli.ProBuilder
                 throw ProBuilderErrors.SchemaInvalid("Unsupported shapeType for probuilder.create-shape: " + shapeType + ". Supported values: " + SupportedShapeValues + ".");
 
             var name = request.Name ?? ("ProBuilder_" + shapeType);
-            var position = new Vector3((float)request.X, (float)request.Y, (float)request.Z);
+            var position = ProBuilderOperationProof.CheckedVector3(request.X, request.Y, request.Z, "position");
+            var width = request.Width.HasValue ? ProBuilderOperationProof.CheckedPositiveFloat(request.Width.Value, "width") : (float?)null;
+            var height = request.Height.HasValue ? ProBuilderOperationProof.CheckedPositiveFloat(request.Height.Value, "height") : (float?)null;
+            var depth = request.Depth.HasValue ? ProBuilderOperationProof.CheckedPositiveFloat(request.Depth.Value, "depth") : (float?)null;
 
+            ctx.CommitEffect();
             var go = ProBuilderReflection.CreateShape(shapeType, position, Quaternion.identity);
             if (go == null)
                 throw ProBuilderErrors.OperationFailed("create-shape", "ProBuilder 5.x ShapeGenerator.CreateShape failed for shape: " + shapeType);
 
             go.name = name;
 
-            // 应用尺寸(如指定)
-            if (request.Width.HasValue || request.Height.HasValue || request.Depth.HasValue)
-            {
-                var scale = go.transform.localScale;
-                go.transform.localScale = new Vector3(
-                    (float)(request.Width ?? scale.x),
-                    (float)(request.Height ?? scale.y),
-                    (float)(request.Depth ?? scale.z));
-            }
+            // 按实际 bounds 缩放，保证公开尺寸字段表示成品尺寸而非 transform 数值。
+            var renderer = go.GetComponent<Renderer>();
+            if (renderer == null)
+                throw ProBuilderErrors.OperationFailed("create-shape", "Created shape has no Renderer for requested bounds verification.");
+            var actualSize = renderer.bounds.size;
+            var requestedSize = new Vector3(width ?? actualSize.x, height ?? actualSize.y, depth ?? actualSize.z);
+            if (actualSize.x <= 0 || actualSize.y <= 0 || actualSize.z <= 0 || requestedSize.x <= 0 || requestedSize.y <= 0 || requestedSize.z <= 0)
+                throw ProBuilderErrors.OperationFailed("create-shape", "Created shape has unreadable bounds.");
+            go.transform.localScale = new Vector3(requestedSize.x / actualSize.x, requestedSize.y / actualSize.y, requestedSize.z / actualSize.z);
 
             Undo.RegisterCreatedObjectUndo(go, "ProBuilder Create Shape");
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var hasPbMesh = ProBuilderReflection.HasProBuilderMesh(go);
+            var freshGo = ProBuilderInput.ResolveTarget(go.GetInstanceID().ToString());
+            var createdMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            var hasPbMesh = ProBuilderReflection.HasProBuilderMesh(freshGo);
+            if (freshGo == null || freshGo.name != name || !hasPbMesh || !ProBuilderRequestProof.CreatedShapeMatchesRequest(freshGo, createdMesh, position, requestedSize))
+                throw ProBuilderErrors.OperationFailed("create-shape", "Created shape did not retain readable bounds and position.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Object = new ObjectRef
@@ -98,7 +106,7 @@ namespace UnityCli.ProBuilder
                     Id = go.GetInstanceID(),
                     Name = go.name,
                     Path = HierarchyPath(go),
-                    Shape = shapeType,
+                    Shape = null,
                     HasProBuilderMesh = hasPbMesh
                 }
             });

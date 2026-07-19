@@ -1,17 +1,18 @@
+import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "../.generated-completion-registry.js";
 import type { ToolCancellation, ToolMetadata, ToolRiskLevel, ToolSource } from "./types.js";
 import { supportStatusForTool } from "./status.js";
+
+const TOOL_MUTATION_CONTRACTS = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((contract) => [contract.toolName, contract.mutation]));
 
 const TOOL_CLI_COMMAND_OVERRIDES = new Map<string, string>([
   ["tools.group", "tools group"],
   ["tools.group-list", "tools group list"],
   ["tools.search", "tools search"],
-  ["tools.describe", "tools describe"],
-  ["tools.run", "tools run"]
+  ["tools.describe", "tools describe"]
 ]);
 
 const DOCS_TOPIC_OVERRIDES = new Map<string, string>([
-  ["type.schema", "reflection"],
-  ["tools.run", "tool-execution"]
+  ["type.schema", "reflection"]
 ]);
 
 const LONG_RUNNING_TOOL_NAMES = new Set<string>([
@@ -20,7 +21,6 @@ const LONG_RUNNING_TOOL_NAMES = new Set<string>([
   "cinemachine.create",
   "code.exec",
   "editor.compile",
-  "editor.compile-diagnostics",
   "editor.refresh",
   "graphics.bake-start",
   "package.resolve",
@@ -113,6 +113,16 @@ export function isLongRunningTool(tool: { name: string; longRunning?: boolean; s
   if (tool.longRunning) return true;
   if (LONG_RUNNING_TOOL_NAMES.has(tool.name)) return true;
   return tool.sideEffects?.some((effect) => effect === "lightmapping-bake" || effect === "editor-long-running") ?? false;
+}
+
+/** known Tool 使用 completion contract；custom Tool 无契约时按 descriptor 风险信号保守归类。 */
+export function toolIsMutation(tool: Pick<ToolMetadata, "name" | "destructiveHint" | "supportsDryRun" | "sideEffects" | "playModeSupport">): boolean {
+  const contracted = TOOL_MUTATION_CONTRACTS.get(tool.name);
+  if (contracted !== undefined) return contracted;
+  return tool.destructiveHint
+    || tool.supportsDryRun === true
+    || (tool.sideEffects?.length ?? 0) > 0
+    || tool.playModeSupport === "session-affecting";
 }
 
 /** 将旧长文本取消说明收敛成 AI 可分支处理的短枚举。 */

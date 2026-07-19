@@ -23,10 +23,19 @@ namespace UnityCli
             else if (!string.IsNullOrEmpty(r.LayerName)) { for (var i = 0; i < controller.layers.Length; i++) if (controller.layers[i].name == r.LayerName) { idx = i; break; } }
             if (idx < 0 || idx >= controller.layers.Length) throw new UnityCliBridge.BridgeCommandException("E_LAYER_NOT_FOUND", "Layer not found.", "Run controller.get-info to inspect layers.");
             var weight = r.Weight ?? 1f;
+            if (float.IsNaN(weight) || float.IsInfinity(weight) || weight < 0f || weight > 1f)
+                throw new UnityCliBridge.BridgeCommandException("E_LAYER_WEIGHT_INVALID", "Layer weight must be finite and within Unity's 0 to 1 range.", "Pass a finite weight from 0 to 1.");
+            var controllerGuid = AssetDatabase.AssetPathToGUID(path);
+            if (string.IsNullOrEmpty(controllerGuid)) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController has no stable asset GUID: " + path, "Check the controller asset path and retry.");
+            var expectedLayer = AnimationToolSupport.CaptureLayerIdentity(controller.layers[idx]);
+            ctx.CommitEffect();
             Undo.RecordObject(controller, "Set Layer Weight");
             var layers = controller.layers; layers[idx].defaultWeight = weight; controller.layers = layers;
-            EditorUtility.SetDirty(controller); AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, LayerIndex = idx, LayerName = controller.layers[idx].name, Weight = weight, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.set-layer-weight", Path = path } } });
+            EditorUtility.SetDirty(controller);
+            var observedController = AnimationToolSupport.ReloadControllerAsset(path, controllerGuid);
+            var observedLayers = observedController == null ? null : observedController.layers;
+            if (observedLayers == null || idx >= observedLayers.Length || observedLayers[idx].name != expectedLayer.Name || !Mathf.Approximately(observedLayers[idx].defaultWeight, weight)) throw AnimationToolSupport.StateMismatch("E_CONTROLLER_LAYER_WEIGHT_STATE_MISMATCH", "AnimatorController layer weight");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, LayerIndex = idx, LayerName = observedLayers[idx].name, Weight = observedLayers[idx].defaultWeight, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.set-layer-weight", Path = path } } });
         }
     }
 }

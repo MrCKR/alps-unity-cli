@@ -47,19 +47,21 @@ namespace UnityCli
             AssetToolSupport.EnsureEditorNotBusy("asset.duplicate");
             var source = AssetToolSupport.RequireExistingAssetPath(request.Source ?? request.Path);
             var destination = AssetToolSupport.RequireAssetPath(request.Destination);
-            AssetToolSupport.CreateAssetDirectory(destination);
             if (AssetToolSupport.AssetExists(destination))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Destination asset already exists: " + destination, "Choose another destination path.");
             }
-            if (!AssetDatabase.CopyAsset(source, destination))
-            {
-                throw new UnityCliBridge.BridgeCommandException("E_ASSET_DUPLICATE_FAILED", "Failed to duplicate asset: " + source, "Check destination path and Unity Console diagnostics.");
-            }
+            ctx.CommitEffect();
+            AssetToolSupport.CreateAssetDirectory(destination);
+            AssetDatabase.CopyAsset(source, destination);
             AssetDatabase.Refresh();
+            var destinationGuid = AssetDatabase.AssetPathToGUID(destination);
+            var observedPath = string.IsNullOrEmpty(destinationGuid) ? null : AssetDatabase.GUIDToAssetPath(destinationGuid);
+            if (string.IsNullOrEmpty(observedPath) || AssetDatabase.LoadMainAssetAtPath(observedPath) == null)
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_DUPLICATE_STATE_MISMATCH", "Duplicated asset was not available at the requested destination.", "Check destination path and Unity Console diagnostics.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Asset = AssetToolSupport.BuildAssetDetail(destination),
+                Asset = AssetToolSupport.BuildAssetDetail(observedPath),
                 Source = source,
                 PlannedEffects = new List<AssetPlannedEffect> { new AssetPlannedEffect { Type = "asset.duplicate", Path = destination, Source = source } }
             });

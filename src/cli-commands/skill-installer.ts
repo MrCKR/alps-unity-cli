@@ -1,5 +1,5 @@
-import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { copyFile, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -182,8 +182,14 @@ class BaseSkillInstaller implements SkillInstaller {
       };
     }
 
-    // Copy source to target
-    await copyFile(sourcePath, targetPath);
+    // 先写入同目录暂存文件，再原子替换目标；读取方不会看到半份 SKILL.md。
+    const temporaryPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await copyFile(sourcePath, temporaryPath);
+      await rename(temporaryPath, targetPath);
+    } finally {
+      await rm(temporaryPath, { force: true }).catch(() => undefined);
+    }
 
     if (existingHash !== undefined) {
       return {

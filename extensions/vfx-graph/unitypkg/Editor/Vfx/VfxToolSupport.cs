@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -91,7 +92,8 @@ namespace UnityCli
                 Path = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 Name = asset == null ? null : asset.name,
-                Type = asset == null ? null : asset.GetType().FullName
+                Type = asset == null ? null : asset.GetType().FullName,
+                Hash = HashAsset(path)
             };
         }
 
@@ -163,6 +165,145 @@ namespace UnityCli
             return new GameObject(string.IsNullOrWhiteSpace(name) ? "GameObject" : name);
         }
 
+        // Commit 后只能通过稳定 instance ID 重新取得场景对象，不能把提交前的组件引用当作完成证明。
+        public static T ResolveObservedComponent<T>(int gameObjectId, string toolName) where T : Component
+        {
+            var gameObject = FindGameObjectByTarget(gameObjectId.ToString(CultureInfo.InvariantCulture));
+            var component = gameObject == null ? null : gameObject.GetComponent<T>();
+            if (component == null)
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", toolName + " target/component disappeared after commit.", "Retry after checking the target still exists.");
+            return component;
+        }
+
+        public static void RequireFinite(double? value, string field, double? minimum = null, double? maximum = null)
+        {
+            if (!value.HasValue) return;
+            if (double.IsNaN(value.Value) || double.IsInfinity(value.Value) || value.Value < -float.MaxValue || value.Value > float.MaxValue || (minimum.HasValue && value.Value < minimum.Value) || (maximum.HasValue && value.Value > maximum.Value))
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "Invalid " + field + " value.", "Pass a finite value within the supported range.");
+        }
+
+        public static void PrepareParticleBursts(List<ParticleBurstInput> bursts)
+        {
+            if (bursts == null) return;
+            foreach (var burst in bursts)
+            {
+                if (burst == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "bursts cannot contain null entries.", "Pass a complete burst object for every entry.");
+                RequireFinite(burst.Time, "bursts.time", 0);
+                RequireFinite(burst.RepeatInterval, "bursts.repeatInterval", 0);
+                if (burst.Count.HasValue && (burst.Count.Value < 0 || burst.Count.Value > short.MaxValue)) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "bursts.count must be a non-negative Int16.", "Pass a count between 0 and 32767.");
+                if (burst.Cycles.HasValue && (burst.Cycles.Value < 1 || burst.Cycles.Value > short.MaxValue)) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "bursts.cycles must fit positive Int16.", "Pass cycles between 1 and 32767.");
+            }
+        }
+
+        public static void RequireMutation(bool hasMutation, string toolName)
+        {
+            if (!hasMutation)
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_REQUIRED", toolName + " requires at least one field to modify.", "Provide one or more supported mutation fields.");
+        }
+
+        public static void PrepareLineRendererFields(LineRendererFields request)
+        {
+            RequireFinite(request.StartWidth, "startWidth", 0); RequireFinite(request.EndWidth, "endWidth", 0); RequireFinite(request.WidthMultiplier, "widthMultiplier", 0);
+            RequireFinite(request.PositionCount, "positionCount", 0); RequireFinite(request.NumCornerVertices, "numCornerVertices", 0); RequireFinite(request.NumCapVertices, "numCapVertices", 0);
+            if (request.WidthCurve != null) BuildCurve(request.WidthCurve);
+            if (request.ColorGradient != null) BuildGradient(request.ColorGradient);
+            if (!string.IsNullOrWhiteSpace(request.StartColor)) GraphicsToolSupport.ParseColor(request.StartColor);
+            if (!string.IsNullOrWhiteSpace(request.EndColor)) GraphicsToolSupport.ParseColor(request.EndColor);
+            if (!string.IsNullOrWhiteSpace(request.Material)) ResolveOptionalMaterial(request.Material);
+            if (!string.IsNullOrWhiteSpace(request.Alignment)) ParseEnum<LineAlignment>(request.Alignment, "E_LINE_ALIGNMENT_INVALID", "Use View or TransformZ.");
+            if (!string.IsNullOrWhiteSpace(request.TextureMode)) ParseEnum<LineTextureMode>(request.TextureMode, "E_LINE_TEXTURE_MODE_INVALID", "Use a valid LineTextureMode.");
+            if (request.Positions != null) foreach (var position in request.Positions) { RequireFinite(position.X, "positions.x"); RequireFinite(position.Y, "positions.y"); RequireFinite(position.Z, "positions.z"); }
+        }
+
+        public static void PrepareTrailRendererFields(TrailRendererFields request)
+        {
+            RequireFinite(request.Time, "time", 0); RequireFinite(request.StartWidth, "startWidth", 0); RequireFinite(request.EndWidth, "endWidth", 0); RequireFinite(request.WidthMultiplier, "widthMultiplier", 0); RequireFinite(request.MinVertexDistance, "minVertexDistance", 0);
+            RequireFinite(request.NumCornerVertices, "numCornerVertices", 0); RequireFinite(request.NumCapVertices, "numCapVertices", 0);
+            if (request.WidthCurve != null) BuildCurve(request.WidthCurve);
+            if (request.ColorGradient != null) BuildGradient(request.ColorGradient);
+            if (!string.IsNullOrWhiteSpace(request.StartColor)) GraphicsToolSupport.ParseColor(request.StartColor);
+            if (!string.IsNullOrWhiteSpace(request.EndColor)) GraphicsToolSupport.ParseColor(request.EndColor);
+            if (!string.IsNullOrWhiteSpace(request.Material)) ResolveOptionalMaterial(request.Material);
+            if (!string.IsNullOrWhiteSpace(request.Alignment)) ParseEnum<LineAlignment>(request.Alignment, "E_TRAIL_ALIGNMENT_INVALID", "Use View or TransformZ.");
+            if (!string.IsNullOrWhiteSpace(request.TextureMode)) ParseEnum<LineTextureMode>(request.TextureMode, "E_TRAIL_TEXTURE_MODE_INVALID", "Use a valid LineTextureMode.");
+        }
+
+        public static void VerifyLineRendererFields(LineRenderer line, LineRendererFields request)
+        {
+            if ((request.StartWidth.HasValue && !Mathf.Approximately((float)request.StartWidth.Value, line.startWidth)) ||
+                (request.EndWidth.HasValue && !Mathf.Approximately((float)request.EndWidth.Value, line.endWidth)) ||
+                (request.WidthMultiplier.HasValue && !Mathf.Approximately((float)request.WidthMultiplier.Value, line.widthMultiplier)) ||
+                (request.WidthCurve != null && request.WidthCurve.Count > 0 && !CurveEquals(line.widthCurve, request.WidthCurve)) ||
+                (!string.IsNullOrWhiteSpace(request.StartColor) && line.startColor != GraphicsToolSupport.ParseColor(request.StartColor)) ||
+                (!string.IsNullOrWhiteSpace(request.EndColor) && line.endColor != GraphicsToolSupport.ParseColor(request.EndColor)) ||
+                (request.ColorGradient != null && request.ColorGradient.Count > 0 && !GradientEquals(line.colorGradient, request.ColorGradient)) ||
+                (request.PositionCount.HasValue && line.positionCount != request.PositionCount.Value) ||
+                (request.Positions != null && request.Positions.Count > 0 && !PositionsEqual(line, ToUnityVector3Array(request.Positions))) ||
+                (request.Loop.HasValue && line.loop != request.Loop.Value) || (request.UseWorldSpace.HasValue && line.useWorldSpace != request.UseWorldSpace.Value) ||
+                (!string.IsNullOrWhiteSpace(request.Alignment) && line.alignment != ParseEnum<LineAlignment>(request.Alignment, "E_LINE_ALIGNMENT_INVALID", "Use View or TransformZ.")) ||
+                (!string.IsNullOrWhiteSpace(request.TextureMode) && line.textureMode != ParseEnum<LineTextureMode>(request.TextureMode, "E_LINE_TEXTURE_MODE_INVALID", "Use a valid LineTextureMode.")) ||
+                (request.NumCornerVertices.HasValue && line.numCornerVertices != request.NumCornerVertices.Value) || (request.NumCapVertices.HasValue && line.numCapVertices != request.NumCapVertices.Value) ||
+                (!string.IsNullOrWhiteSpace(request.Material) && !SameAssetPathOrGuid(line.sharedMaterial, ResolveOptionalMaterial(request.Material))))
+                throw new UnityCliBridge.BridgeCommandException("E_LINE_VERIFY_FAILED", "LineRenderer did not retain every requested field.", "Check the LineRenderer state and retry.");
+        }
+
+        public static void VerifyTrailRendererFields(TrailRenderer trail, TrailRendererFields request)
+        {
+            if ((request.Time.HasValue && !Mathf.Approximately((float)request.Time.Value, trail.time)) ||
+                (request.StartWidth.HasValue && !Mathf.Approximately((float)request.StartWidth.Value, trail.startWidth)) ||
+                (request.EndWidth.HasValue && !Mathf.Approximately((float)request.EndWidth.Value, trail.endWidth)) ||
+                (request.WidthMultiplier.HasValue && !Mathf.Approximately((float)request.WidthMultiplier.Value, trail.widthMultiplier)) ||
+                (request.MinVertexDistance.HasValue && !Mathf.Approximately((float)request.MinVertexDistance.Value, trail.minVertexDistance)) ||
+                (request.WidthCurve != null && request.WidthCurve.Count > 0 && !CurveEquals(trail.widthCurve, request.WidthCurve)) ||
+                (!string.IsNullOrWhiteSpace(request.StartColor) && trail.startColor != GraphicsToolSupport.ParseColor(request.StartColor)) ||
+                (!string.IsNullOrWhiteSpace(request.EndColor) && trail.endColor != GraphicsToolSupport.ParseColor(request.EndColor)) ||
+                (request.ColorGradient != null && request.ColorGradient.Count > 0 && !GradientEquals(trail.colorGradient, request.ColorGradient)) ||
+                (request.Autodestruct.HasValue && trail.autodestruct != request.Autodestruct.Value) || (request.Emitting.HasValue && trail.emitting != request.Emitting.Value) ||
+                (!string.IsNullOrWhiteSpace(request.Alignment) && trail.alignment != ParseEnum<LineAlignment>(request.Alignment, "E_TRAIL_ALIGNMENT_INVALID", "Use View or TransformZ.")) ||
+                (!string.IsNullOrWhiteSpace(request.TextureMode) && trail.textureMode != ParseEnum<LineTextureMode>(request.TextureMode, "E_TRAIL_TEXTURE_MODE_INVALID", "Use a valid LineTextureMode.")) ||
+                (request.NumCornerVertices.HasValue && trail.numCornerVertices != request.NumCornerVertices.Value) || (request.NumCapVertices.HasValue && trail.numCapVertices != request.NumCapVertices.Value) ||
+                (!string.IsNullOrWhiteSpace(request.Material) && !SameAssetPathOrGuid(trail.sharedMaterial, ResolveOptionalMaterial(request.Material))))
+                throw new UnityCliBridge.BridgeCommandException("E_TRAIL_VERIFY_FAILED", "TrailRenderer did not retain every requested field.", "Check the TrailRenderer state and retry.");
+        }
+
+        private static bool PositionsEqual(LineRenderer line, Vector3[] expected)
+        {
+            if (line.positionCount != expected.Length) return false;
+            var actual = new Vector3[expected.Length]; line.GetPositions(actual);
+            for (var index = 0; index < actual.Length; index++) if (actual[index] != expected[index]) return false;
+            return true;
+        }
+
+        private static bool CurveEquals(AnimationCurve actual, List<VfxCurveKeyInput> expected)
+        {
+            var keys = actual == null ? new Keyframe[0] : actual.keys;
+            if (keys.Length != expected.Count) return false;
+            for (var index = 0; index < keys.Length; index++) if (!Mathf.Approximately(keys[index].time, (float)expected[index].Time) || !Mathf.Approximately(keys[index].value, (float)expected[index].Value)) return false;
+            return true;
+        }
+
+        private static bool GradientEquals(Gradient actual, List<VfxGradientStopInput> expected)
+        {
+            var colors = actual == null ? new GradientColorKey[0] : actual.colorKeys;
+            var alphas = actual == null ? new GradientAlphaKey[0] : actual.alphaKeys;
+            if (colors.Length != expected.Count || alphas.Length != expected.Count) return false;
+            for (var index = 0; index < expected.Count; index++)
+            {
+                var color = GraphicsToolSupport.ParseColor(expected[index].Color);
+                if (!Mathf.Approximately(colors[index].time, (float)expected[index].Time) || colors[index].color != color || !Mathf.Approximately(alphas[index].time, (float)expected[index].Time) || !Mathf.Approximately(alphas[index].alpha, color.a)) return false;
+            }
+            return true;
+        }
+
+        private static bool SameAssetPathOrGuid(UnityEngine.Object actual, UnityEngine.Object expected)
+        {
+            if (actual == expected) return true;
+            if (actual == null || expected == null) return false;
+            var actualPath = AssetDatabase.GetAssetPath(actual); var expectedPath = AssetDatabase.GetAssetPath(expected);
+            return string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(AssetDatabase.AssetPathToGUID(actualPath), AssetDatabase.AssetPathToGUID(expectedPath), StringComparison.OrdinalIgnoreCase);
+        }
+
         public static void MarkSceneDirty(GameObject gameObject)
         {
             if (gameObject != null && gameObject.scene.IsValid())
@@ -176,15 +317,9 @@ namespace UnityCli
             try
             {
                 var created = CreateVfxGraphAssetWithUnityUtility(path, assetType);
-                if (created != null)
-                {
-                    return created;
-                }
-
-                WriteMinimalVfxGraphYaml(path);
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-                AssetDatabase.Refresh();
-                return AssetDatabase.LoadAssetAtPath(path, assetType);
+                if (created == null)
+                    throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_FACTORY_UNAVAILABLE", "VisualEffectAssetEditorUtility did not create a readable VisualEffectAsset.", "Update the Visual Effect Graph package to a version exposing VisualEffectAssetEditorUtility.CreateNewAsset(string).");
+                return created;
             }
             catch (UnityCliBridge.BridgeCommandException)
             {
@@ -270,6 +405,15 @@ namespace UnityCli
             return null;
         }
 
+        public static void PrepareParticleMainFields(ParticleMainFields request)
+        {
+            RequireFinite(request.Duration, "duration", 0); RequireFinite(request.StartLifetime, "startLifetime", 0); RequireFinite(request.StartSpeed, "startSpeed"); RequireFinite(request.StartSize, "startSize", 0); RequireFinite(request.StartRotation, "startRotation"); RequireFinite(request.GravityModifier, "gravityModifier");
+            if (request.MaxParticles.HasValue && request.MaxParticles.Value < 1) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "maxParticles must be positive.", "Pass maxParticles greater than zero.");
+            if (!string.IsNullOrWhiteSpace(request.StartColor)) GraphicsToolSupport.ParseColor(request.StartColor);
+            if (!string.IsNullOrWhiteSpace(request.SimulationSpace)) ParseEnum<ParticleSystemSimulationSpace>(request.SimulationSpace, "E_PARTICLE_SIMULATION_SPACE_INVALID", "Use Local, World, or Custom.");
+            if (!string.IsNullOrWhiteSpace(request.ScalingMode)) ParseEnum<ParticleSystemScalingMode>(request.ScalingMode, "E_PARTICLE_SCALING_MODE_INVALID", "Use Hierarchy, Local, or Shape.");
+        }
+
         public static void ApplyParticleMainFields(ParticleSystem particleSystem, ParticleMainFields request, string effectType, List<VfxPlannedEffect> effects)
         {
             var main = particleSystem.main;
@@ -333,6 +477,49 @@ namespace UnityCli
                 main.scalingMode = ParseEnum<ParticleSystemScalingMode>(request.ScalingMode, "E_PARTICLE_SCALING_MODE_INVALID", "Use Hierarchy, Local, or Shape.");
                 effects.Add(Effect(effectType, "scalingMode", main.scalingMode.ToString()));
             }
+        }
+
+        // 每个请求字段都从模块 getter 重新读取，避免把写入时的局部模块缓存当成完成证明。
+        public static void VerifyParticleMainFields(ParticleSystem particleSystem, ParticleMainFields request)
+        {
+            var main = particleSystem.main;
+            if ((request.Duration.HasValue && !Mathf.Approximately(main.duration, (float)request.Duration.Value)) ||
+                (request.StartLifetime.HasValue && !Mathf.Approximately(main.startLifetime.constant, (float)request.StartLifetime.Value)) ||
+                (request.StartSpeed.HasValue && !Mathf.Approximately(main.startSpeed.constant, (float)request.StartSpeed.Value)) ||
+                (request.StartSize.HasValue && !Mathf.Approximately(main.startSize.constant, (float)request.StartSize.Value)) ||
+                (!string.IsNullOrWhiteSpace(request.StartColor) && main.startColor.color != GraphicsToolSupport.ParseColor(request.StartColor)) ||
+                (request.StartRotation.HasValue && !Mathf.Approximately(main.startRotation.constant * Mathf.Rad2Deg, (float)request.StartRotation.Value)) ||
+                (request.GravityModifier.HasValue && !Mathf.Approximately(main.gravityModifier.constant, (float)request.GravityModifier.Value)) ||
+                (request.MaxParticles.HasValue && main.maxParticles != request.MaxParticles.Value) ||
+                (request.Loop.HasValue && main.loop != request.Loop.Value) ||
+                (request.PlayOnAwake.HasValue && main.playOnAwake != request.PlayOnAwake.Value) ||
+                (!string.IsNullOrWhiteSpace(request.SimulationSpace) && !string.Equals(main.simulationSpace.ToString(), request.SimulationSpace, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(request.ScalingMode) && !string.Equals(main.scalingMode.ToString(), request.ScalingMode, StringComparison.OrdinalIgnoreCase)))
+                throw new UnityCliBridge.BridgeCommandException("E_PARTICLE_VERIFY_FAILED", "ParticleSystem main module did not retain every requested field.", "Check the ParticleSystem main module and retry.");
+        }
+
+        public static void VerifyParticleEmissionFields(ParticleSystem particleSystem, bool? enabled, double? rateOverTime, double? rateOverDistance, int? burstCount, List<ParticleBurstInput> bursts)
+        {
+            var emission = particleSystem.emission;
+            if ((enabled.HasValue && emission.enabled != enabled.Value) || (rateOverTime.HasValue && !Mathf.Approximately(emission.rateOverTime.constant, (float)rateOverTime.Value)) || (rateOverDistance.HasValue && !Mathf.Approximately(emission.rateOverDistance.constant, (float)rateOverDistance.Value)) || (burstCount.HasValue && emission.burstCount != burstCount.Value))
+                throw new UnityCliBridge.BridgeCommandException("E_PARTICLE_VERIFY_FAILED", "ParticleSystem emission module did not retain every requested field.", "Check the ParticleSystem emission module and retry.");
+            if (burstCount.HasValue)
+            {
+                var actual = new ParticleSystem.Burst[emission.burstCount]; emission.GetBursts(actual);
+                for (var index = 0; index < actual.Length; index++)
+                {
+                    var expected = bursts != null && index < bursts.Count ? bursts[index] : null;
+                    if (!Mathf.Approximately(actual[index].time, (float)(expected?.Time ?? 0d)) || actual[index].minCount != (short)(expected?.Count ?? 10) || actual[index].maxCount != (short)(expected?.Count ?? 10) || actual[index].cycleCount != (short)(expected?.Cycles ?? 1) || !Mathf.Approximately(actual[index].repeatInterval, (float)(expected?.RepeatInterval ?? 0.01d)))
+                        throw new UnityCliBridge.BridgeCommandException("E_PARTICLE_VERIFY_FAILED", "ParticleSystem burst did not retain every requested field.", "Check burst time, count, cycles, and repeatInterval.");
+                }
+            }
+        }
+
+        public static void VerifyParticleShapeFields(ParticleSystem particleSystem, bool? enabled, string shapeType, double? radius, double? angle, double? arc, double? length, double? boxX, double? boxY, double? boxZ, bool? randomDirection)
+        {
+            var shape = particleSystem.shape;
+            if ((enabled.HasValue && shape.enabled != enabled.Value) || (!string.IsNullOrWhiteSpace(shapeType) && !string.Equals(shape.shapeType.ToString(), shapeType, StringComparison.OrdinalIgnoreCase)) || (radius.HasValue && !Mathf.Approximately(shape.radius, (float)radius.Value)) || (angle.HasValue && !Mathf.Approximately(shape.angle, (float)angle.Value)) || (arc.HasValue && !Mathf.Approximately(shape.arc, (float)arc.Value)) || (length.HasValue && !Mathf.Approximately(shape.length, (float)length.Value)) || (boxX.HasValue && !Mathf.Approximately(shape.scale.x, (float)boxX.Value)) || (boxY.HasValue && !Mathf.Approximately(shape.scale.y, (float)boxY.Value)) || (boxZ.HasValue && !Mathf.Approximately(shape.scale.z, (float)boxZ.Value)) || (randomDirection.HasValue && shape.randomDirection != randomDirection.Value))
+                throw new UnityCliBridge.BridgeCommandException("E_PARTICLE_VERIFY_FAILED", "ParticleSystem shape module did not retain every requested field.", "Check the ParticleSystem shape module and retry.");
         }
 
         public static void ApplyLineRendererFields(LineRenderer line, LineRendererFields request, string effectType, List<VfxPlannedEffect> effects)
@@ -505,297 +692,6 @@ namespace UnityCli
             }
         }
 
-        public static bool ApplyParticleModuleFields(ParticleSystem particleSystem, VfxParticleModuleTool.Request request, List<VfxPlannedEffect> effects)
-        {
-            var key = (request.Module ?? string.Empty).Replace("-", string.Empty).Replace("_", string.Empty).ToLowerInvariant();
-            var enabled = request.Enabled;
-            switch (key)
-            {
-                case "coloroverlifetime":
-                case "color":
-                    var color = particleSystem.colorOverLifetime;
-                    if (enabled.HasValue)
-                    {
-                        color.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "colorOverLifetime.enabled", Bool(color.enabled)));
-                    }
-                    if (!string.IsNullOrWhiteSpace(request.Color))
-                    {
-                        color.color = new ParticleSystem.MinMaxGradient(GraphicsToolSupport.ParseColor(request.Color));
-                        effects.Add(Effect("vfx.particle-module", "colorOverLifetime.color", request.Color));
-                    }
-                    return true;
-                case "sizeoverlifetime":
-                case "size":
-                    var size = particleSystem.sizeOverLifetime;
-                    if (enabled.HasValue)
-                    {
-                        size.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "sizeOverLifetime.enabled", Bool(size.enabled)));
-                    }
-                    if (request.Size.HasValue)
-                    {
-                        size.size = new ParticleSystem.MinMaxCurve((float)request.Size.Value);
-                        effects.Add(Effect("vfx.particle-module", "sizeOverLifetime.size", Number(size.size.constant)));
-                    }
-                    return true;
-                case "rotationoverlifetime":
-                case "rotation":
-                    var rotation = particleSystem.rotationOverLifetime;
-                    if (enabled.HasValue)
-                    {
-                        rotation.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "rotationOverLifetime.enabled", Bool(rotation.enabled)));
-                    }
-                    if (request.Rotation.HasValue)
-                    {
-                        rotation.z = new ParticleSystem.MinMaxCurve((float)request.Rotation.Value * Mathf.Deg2Rad);
-                        effects.Add(Effect("vfx.particle-module", "rotationOverLifetime.z", request.Rotation.Value.ToString(CultureInfo.InvariantCulture)));
-                    }
-                    return true;
-                case "velocityoverlifetime":
-                case "velocity":
-                    var velocity = particleSystem.velocityOverLifetime;
-                    if (enabled.HasValue)
-                    {
-                        velocity.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "velocityOverLifetime.enabled", Bool(velocity.enabled)));
-                    }
-                    if (request.X.HasValue)
-                    {
-                        velocity.x = new ParticleSystem.MinMaxCurve((float)request.X.Value);
-                        effects.Add(Effect("vfx.particle-module", "velocityOverLifetime.x", Number(velocity.x.constant)));
-                    }
-                    if (request.Y.HasValue)
-                    {
-                        velocity.y = new ParticleSystem.MinMaxCurve((float)request.Y.Value);
-                        effects.Add(Effect("vfx.particle-module", "velocityOverLifetime.y", Number(velocity.y.constant)));
-                    }
-                    if (request.Z.HasValue)
-                    {
-                        velocity.z = new ParticleSystem.MinMaxCurve((float)request.Z.Value);
-                        effects.Add(Effect("vfx.particle-module", "velocityOverLifetime.z", Number(velocity.z.constant)));
-                    }
-                    if (!string.IsNullOrWhiteSpace(request.Space))
-                    {
-                        velocity.space = ParseEnum<ParticleSystemSimulationSpace>(request.Space, "E_PARTICLE_SPACE_INVALID", "Use Local or World.");
-                        effects.Add(Effect("vfx.particle-module", "velocityOverLifetime.space", velocity.space.ToString()));
-                    }
-                    if (request.SpeedModifier.HasValue)
-                    {
-                        velocity.speedModifier = new ParticleSystem.MinMaxCurve((float)request.SpeedModifier.Value);
-                        effects.Add(Effect("vfx.particle-module", "velocityOverLifetime.speedModifier", Number(velocity.speedModifier.constant)));
-                    }
-                    return true;
-                case "forceoverlifetime":
-                case "force":
-                    var force = particleSystem.forceOverLifetime;
-                    if (enabled.HasValue)
-                    {
-                        force.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "forceOverLifetime.enabled", Bool(force.enabled)));
-                    }
-                    if (request.X.HasValue)
-                    {
-                        force.x = new ParticleSystem.MinMaxCurve((float)request.X.Value);
-                        effects.Add(Effect("vfx.particle-module", "forceOverLifetime.x", Number(force.x.constant)));
-                    }
-                    if (request.Y.HasValue)
-                    {
-                        force.y = new ParticleSystem.MinMaxCurve((float)request.Y.Value);
-                        effects.Add(Effect("vfx.particle-module", "forceOverLifetime.y", Number(force.y.constant)));
-                    }
-                    if (request.Z.HasValue)
-                    {
-                        force.z = new ParticleSystem.MinMaxCurve((float)request.Z.Value);
-                        effects.Add(Effect("vfx.particle-module", "forceOverLifetime.z", Number(force.z.constant)));
-                    }
-                    if (!string.IsNullOrWhiteSpace(request.Space))
-                    {
-                        force.space = ParseEnum<ParticleSystemSimulationSpace>(request.Space, "E_PARTICLE_SPACE_INVALID", "Use Local or World.");
-                        effects.Add(Effect("vfx.particle-module", "forceOverLifetime.space", force.space.ToString()));
-                    }
-                    return true;
-                case "noise":
-                    var noise = particleSystem.noise;
-                    if (enabled.HasValue)
-                    {
-                        noise.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "noise.enabled", Bool(noise.enabled)));
-                    }
-                    if (request.Strength.HasValue)
-                    {
-                        noise.strength = (float)request.Strength.Value;
-                        effects.Add(Effect("vfx.particle-module", "noise.strength", Number(noise.strength.constant)));
-                    }
-                    if (request.Frequency.HasValue)
-                    {
-                        noise.frequency = (float)request.Frequency.Value;
-                        effects.Add(Effect("vfx.particle-module", "noise.frequency", Number(noise.frequency)));
-                    }
-                    if (request.ScrollSpeed.HasValue)
-                    {
-                        noise.scrollSpeed = (float)request.ScrollSpeed.Value;
-                        effects.Add(Effect("vfx.particle-module", "noise.scrollSpeed", Number(noise.scrollSpeed.constant)));
-                    }
-                    if (request.OctaveCount.HasValue)
-                    {
-                        noise.octaveCount = request.OctaveCount.Value;
-                        effects.Add(Effect("vfx.particle-module", "noise.octaveCount", noise.octaveCount.ToString(CultureInfo.InvariantCulture)));
-                    }
-                    if (!string.IsNullOrWhiteSpace(request.Quality))
-                    {
-                        noise.quality = ParseEnum<ParticleSystemNoiseQuality>(request.Quality, "E_PARTICLE_NOISE_QUALITY_INVALID", "Use Low, Medium, or High.");
-                        effects.Add(Effect("vfx.particle-module", "noise.quality", noise.quality.ToString()));
-                    }
-                    return true;
-                case "collision":
-                    var collision = particleSystem.collision;
-                    if (enabled.HasValue)
-                    {
-                        collision.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "collision.enabled", Bool(collision.enabled)));
-                    }
-                    if (!string.IsNullOrWhiteSpace(request.CollisionType))
-                    {
-                        collision.type = ParseEnum<ParticleSystemCollisionType>(request.CollisionType, "E_PARTICLE_COLLISION_TYPE_INVALID", "Use Planes or World.");
-                        effects.Add(Effect("vfx.particle-module", "collision.type", collision.type.ToString()));
-                    }
-                    if (!string.IsNullOrWhiteSpace(request.CollisionMode))
-                    {
-                        collision.mode = ParseEnum<ParticleSystemCollisionMode>(request.CollisionMode, "E_PARTICLE_COLLISION_MODE_INVALID", "Use Collision3D or Collision2D.");
-                        effects.Add(Effect("vfx.particle-module", "collision.mode", collision.mode.ToString()));
-                    }
-                    if (request.Dampen.HasValue)
-                    {
-                        collision.dampen = (float)request.Dampen.Value;
-                        effects.Add(Effect("vfx.particle-module", "collision.dampen", Number(collision.dampen.constant)));
-                    }
-                    if (request.Bounce.HasValue)
-                    {
-                        collision.bounce = (float)request.Bounce.Value;
-                        effects.Add(Effect("vfx.particle-module", "collision.bounce", Number(collision.bounce.constant)));
-                    }
-                    if (request.LifetimeLoss.HasValue)
-                    {
-                        collision.lifetimeLoss = (float)request.LifetimeLoss.Value;
-                        effects.Add(Effect("vfx.particle-module", "collision.lifetimeLoss", Number(collision.lifetimeLoss.constant)));
-                    }
-                    if (request.MinKillSpeed.HasValue)
-                    {
-                        collision.minKillSpeed = (float)request.MinKillSpeed.Value;
-                        effects.Add(Effect("vfx.particle-module", "collision.minKillSpeed", Number(collision.minKillSpeed)));
-                    }
-                    if (request.MaxKillSpeed.HasValue)
-                    {
-                        collision.maxKillSpeed = (float)request.MaxKillSpeed.Value;
-                        effects.Add(Effect("vfx.particle-module", "collision.maxKillSpeed", Number(collision.maxKillSpeed)));
-                    }
-                    if (request.RadiusScale.HasValue)
-                    {
-                        collision.radiusScale = (float)request.RadiusScale.Value;
-                        effects.Add(Effect("vfx.particle-module", "collision.radiusScale", Number(collision.radiusScale)));
-                    }
-                    return true;
-                case "subemitters":
-                case "subemitter":
-                case "sub":
-                    var sub = particleSystem.subEmitters;
-                    if (enabled.HasValue)
-                    {
-                        sub.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "subEmitters.enabled", Bool(sub.enabled)));
-                    }
-                    ApplySubEmitterFields(sub, request, effects);
-                    return true;
-                case "textureanimation":
-                case "texturesheetanimation":
-                case "texture":
-                    var texture = particleSystem.textureSheetAnimation;
-                    if (enabled.HasValue)
-                    {
-                        texture.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "textureSheetAnimation.enabled", Bool(texture.enabled)));
-                    }
-                    return true;
-                case "lights":
-                    var lights = particleSystem.lights;
-                    if (enabled.HasValue)
-                    {
-                        lights.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "lights.enabled", Bool(lights.enabled)));
-                    }
-                    return true;
-                case "trails":
-                case "trail":
-                    var trails = particleSystem.trails;
-                    if (enabled.HasValue)
-                    {
-                        trails.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "trails.enabled", Bool(trails.enabled)));
-                    }
-                    if (request.Ratio.HasValue)
-                    {
-                        trails.ratio = (float)request.Ratio.Value;
-                        effects.Add(Effect("vfx.particle-module", "trails.ratio", Number(trails.ratio)));
-                    }
-                    if (request.Lifetime.HasValue)
-                    {
-                        trails.lifetime = (float)request.Lifetime.Value;
-                        effects.Add(Effect("vfx.particle-module", "trails.lifetime", Number(trails.lifetime.constant)));
-                    }
-                    if (request.Width.HasValue)
-                    {
-                        trails.widthOverTrail = new ParticleSystem.MinMaxCurve((float)request.Width.Value);
-                        effects.Add(Effect("vfx.particle-module", "trails.width", Number(trails.widthOverTrail.constant)));
-                    }
-                    if (!string.IsNullOrWhiteSpace(request.Color))
-                    {
-                        trails.colorOverTrail = new ParticleSystem.MinMaxGradient(GraphicsToolSupport.ParseColor(request.Color));
-                        effects.Add(Effect("vfx.particle-module", "trails.color", request.Color));
-                    }
-                    return true;
-                case "inheritvelocity":
-                    var inherit = particleSystem.inheritVelocity;
-                    if (enabled.HasValue)
-                    {
-                        inherit.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "inheritVelocity.enabled", Bool(inherit.enabled)));
-                    }
-                    if (!string.IsNullOrWhiteSpace(request.Mode))
-                    {
-                        inherit.mode = ParseEnum<ParticleSystemInheritVelocityMode>(request.Mode, "E_PARTICLE_INHERIT_MODE_INVALID", "Use Initial or Current.");
-                        effects.Add(Effect("vfx.particle-module", "inheritVelocity.mode", inherit.mode.ToString()));
-                    }
-                    if (request.Curve.HasValue)
-                    {
-                        inherit.curve = new ParticleSystem.MinMaxCurve((float)request.Curve.Value);
-                        effects.Add(Effect("vfx.particle-module", "inheritVelocity.curve", Number(inherit.curve.constant)));
-                    }
-                    return true;
-                case "limitvelocityoverlifetime":
-                case "limitvelocity":
-                    var limit = particleSystem.limitVelocityOverLifetime;
-                    if (enabled.HasValue)
-                    {
-                        limit.enabled = enabled.Value;
-                        effects.Add(Effect("vfx.particle-module", "limitVelocityOverLifetime.enabled", Bool(limit.enabled)));
-                    }
-                    if (request.Speed.HasValue)
-                    {
-                        limit.limit = new ParticleSystem.MinMaxCurve((float)request.Speed.Value);
-                        effects.Add(Effect("vfx.particle-module", "limitVelocityOverLifetime.limit", Number(limit.limit.constant)));
-                    }
-                    if (request.Dampen.HasValue)
-                    {
-                        limit.dampen = (float)request.Dampen.Value;
-                        effects.Add(Effect("vfx.particle-module", "limitVelocityOverLifetime.dampen", Number(limit.dampen)));
-                    }
-                    return true;
-                default:
-                    return false;
-            }
-        }
 
         public static VfxParticleSystemInfo BuildParticleSystemInfo(ParticleSystem particleSystem)
         {
@@ -920,14 +816,14 @@ namespace UnityCli
         public static AnimationCurve BuildCurve(List<VfxCurveKeyInput> keys)
         {
             var items = new List<Keyframe>();
+            double? previousTime = null;
             foreach (var key in keys)
             {
+                if (key == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "widthCurve cannot contain null keys.", "Pass finite time/value curve keys.");
+                RequireFinite(key.Time, "widthCurve.time"); RequireFinite(key.Value, "widthCurve.value");
+                if (previousTime.HasValue && key.Time <= previousTime.Value) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "widthCurve key times must be strictly increasing.", "Sort keys by time and do not repeat a time value.");
                 items.Add(new Keyframe((float)key.Time, (float)key.Value));
-            }
-            if (items.Count == 0)
-            {
-                items.Add(new Keyframe(0f, 1f));
-                items.Add(new Keyframe(1f, 1f));
+                previousTime = key.Time;
             }
             return new AnimationCurve(items.ToArray());
         }
@@ -936,20 +832,19 @@ namespace UnityCli
         {
             var colorKeys = new List<GradientColorKey>();
             var alphaKeys = new List<GradientAlphaKey>();
+            double? previousTime = null;
             foreach (var stop in stops)
             {
+                if (stop == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "colorGradient cannot contain null stops.", "Pass color stops with times from zero through one.");
+                RequireFinite(stop.Time, "colorGradient.time", 0, 1);
+                if (previousTime.HasValue && stop.Time <= previousTime.Value) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "colorGradient stop times must be strictly increasing.", "Sort stops by time and do not repeat a time value.");
                 var color = GraphicsToolSupport.ParseColor(stop.Color);
                 var time = (float)stop.Time;
                 colorKeys.Add(new GradientColorKey(color, time));
                 alphaKeys.Add(new GradientAlphaKey(color.a, time));
+                previousTime = stop.Time;
             }
-            if (colorKeys.Count == 0)
-            {
-                colorKeys.Add(new GradientColorKey(Color.white, 0f));
-                colorKeys.Add(new GradientColorKey(Color.white, 1f));
-                alphaKeys.Add(new GradientAlphaKey(1f, 0f));
-                alphaKeys.Add(new GradientAlphaKey(1f, 1f));
-            }
+            if (colorKeys.Count < 2) throw new UnityCliBridge.BridgeCommandException("E_VFX_INPUT_RANGE_INVALID", "colorGradient requires at least two stops.", "Provide at least two strictly time-ordered color stops.");
             var gradient = new Gradient();
             gradient.SetKeys(colorKeys.ToArray(), alphaKeys.ToArray());
             return gradient;
@@ -998,7 +893,7 @@ namespace UnityCli
         public static T ParseEnum<T>(string value, string code, string nextAction) where T : struct
         {
             T parsed;
-            if (Enum.TryParse<T>(value, true, out parsed))
+            if (Enum.TryParse<T>(value, true, out parsed) && Enum.IsDefined(typeof(T), parsed))
             {
                 return parsed;
             }
@@ -1027,19 +922,7 @@ namespace UnityCli
 
         private static UnityEngine.Object CreateVfxGraphAssetWithUnityUtility(string path, Type assetType)
         {
-            var utilityType = GameObjectToolSupport.FindType("UnityEditor.VisualEffectAssetEditorUtility");
-            if (utilityType == null)
-            {
-                return null;
-            }
-
-            var createMethod = utilityType.GetMethod("CreateNewAsset", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (createMethod == null)
-            {
-                return null;
-            }
-
-            var created = createMethod.Invoke(null, new object[] { path }) as UnityEngine.Object;
+            var created = RequireVfxGraphFactory().Invoke(null, new object[] { path }) as UnityEngine.Object;
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             AssetDatabase.Refresh();
             return created == null || !assetType.IsInstanceOfType(created)
@@ -1047,25 +930,18 @@ namespace UnityCli
                 : created;
         }
 
-        private static void WriteMinimalVfxGraphYaml(string path)
+        public static void PrepareVfxGraphFactory()
         {
-            var fullPath = Path.Combine(AssetToolSupport.ProjectRoot(), path.Replace('/', Path.DirectorySeparatorChar));
-            var directory = Path.GetDirectoryName(fullPath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+            RequireVfxGraphFactory();
+        }
 
-            File.WriteAllText(
-                fullPath,
-                "%YAML 1.1\n"
-                + "%TAG !u! tag:unity3d.com,2011:\n"
-                + "--- !u!114 &114350483966674976\n"
-                + "MonoBehaviour:\n"
-                + "  m_Script: {fileID: 11500000, guid: 7d4c867f6b72b714dbb5fd1780afe208, type: 3}\n"
-                + "--- !u!2058629511 &1\n"
-                + "VisualEffectResource:\n"
-                + "  m_Graph: {fileID: 114350483966674976}\n");
+        private static MethodInfo RequireVfxGraphFactory()
+        {
+            var utilityType = GameObjectToolSupport.FindType("UnityEditor.VFX.VisualEffectAssetEditorUtility");
+            var createMethod = utilityType == null ? null : utilityType.GetMethod("CreateNewAsset", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null);
+            if (createMethod == null)
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_FACTORY_UNAVAILABLE", "VisualEffectAssetEditorUtility.CreateNewAsset(string) is unavailable.", "Update the Visual Effect Graph package to a version exposing UnityEditor.VFX.VisualEffectAssetEditorUtility.");
+            return createMethod;
         }
 
         private static string[] GetTemplateSearchPaths(string resolvedPath)
@@ -1087,6 +963,19 @@ namespace UnityCli
                 && !fullPath.StartsWith(normalizedRoot + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return null;
             var relative = fullPath.Substring(normalizedRoot.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/');
             return "Packages/" + packageName + "/" + relative;
+        }
+
+        // 创建类工具返回工件内容哈希，调用方可证明路径上的资产确实是本次可读取结果。
+        private static string HashAsset(string path)
+        {
+            try
+            {
+                var fullPath = Path.Combine(AssetToolSupport.ProjectRoot(), path.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(fullPath)) return null;
+                using (var stream = File.OpenRead(fullPath))
+                using (var hash = SHA256.Create()) return BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", string.Empty).ToLowerInvariant();
+            }
+            catch { return null; }
         }
 
         private static bool PackageManifestContains(string packageName)
@@ -1147,66 +1036,6 @@ namespace UnityCli
             };
         }
 
-        private static void ApplySubEmitterFields(ParticleSystem.SubEmittersModule sub, VfxParticleModuleTool.Request request, List<VfxPlannedEffect> effects)
-        {
-            var action = (request.SubEmitterAction ?? string.Empty).Trim().ToLowerInvariant();
-            if (string.IsNullOrEmpty(action))
-            {
-                return;
-            }
-
-            if (action == "clear")
-            {
-                for (var index = sub.subEmittersCount - 1; index >= 0; index--)
-                {
-                    sub.RemoveSubEmitter(index);
-                }
-                effects.Add(Effect("vfx.particle-module", "subEmitters", "cleared"));
-                return;
-            }
-
-            if (action == "remove")
-            {
-                var index = request.Index ?? 0;
-                if (index < 0 || index >= sub.subEmittersCount)
-                {
-                    throw new UnityCliBridge.BridgeCommandException(
-                        "E_SUB_EMITTER_INDEX_INVALID",
-                        "Sub-emitter index out of range: " + index.ToString(CultureInfo.InvariantCulture),
-                        "Pass a valid sub-emitter index.");
-                }
-                sub.RemoveSubEmitter(index);
-                effects.Add(Effect("vfx.particle-module", "subEmitters", "removed"));
-                return;
-            }
-
-            if (action == "add")
-            {
-                var subParticleSystem = ResolveParticleSystem(request.SubEmitterTarget);
-                if (subParticleSystem == null)
-                {
-                    throw new UnityCliBridge.BridgeCommandException(
-                        "E_SUB_EMITTER_NOT_FOUND",
-                        "Sub-emitter ParticleSystem not found: " + request.SubEmitterTarget,
-                        "Pass subEmitterTarget as a GameObject with ParticleSystem.");
-                }
-
-                var type = string.IsNullOrWhiteSpace(request.SubEmitterType)
-                    ? ParticleSystemSubEmitterType.Birth
-                    : ParseEnum<ParticleSystemSubEmitterType>(request.SubEmitterType, "E_SUB_EMITTER_TYPE_INVALID", "Use Birth, Collision, Death, Trigger, or Manual.");
-                var properties = string.IsNullOrWhiteSpace(request.SubEmitterProperties)
-                    ? ParticleSystemSubEmitterProperties.InheritNothing
-                    : ParseEnum<ParticleSystemSubEmitterProperties>(request.SubEmitterProperties, "E_SUB_EMITTER_PROPERTIES_INVALID", "Use InheritNothing or InheritEverything.");
-                sub.AddSubEmitter(subParticleSystem, type, properties);
-                effects.Add(Effect("vfx.particle-module", "subEmitters", "added"));
-                return;
-            }
-
-            throw new UnityCliBridge.BridgeCommandException(
-                "E_SUB_EMITTER_ACTION_INVALID",
-                "Unsupported subEmitterAction: " + action,
-                "Use add, remove, or clear.");
-        }
 
         private static VfxCurveData BuildCurveData(AnimationCurve curve)
         {
@@ -1355,6 +1184,7 @@ namespace UnityCli
         public string Guid { get; set; }
         public string Name { get; set; }
         public string Type { get; set; }
+        public string Hash { get; set; }
     }
 
     public sealed class VfxEffectInfo

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using UnityEditor;
 
 namespace UnityCli
@@ -32,7 +33,7 @@ namespace UnityCli
         {
             Name = "asset.import",
             Summary = "Import a file into an Assets/ path from a source file or inline content, then force-import it.",
-            Description = "Import a file into an Assets/ path. When source is set, the source file (absolute or Assets/ path) is copied to the destination; otherwise inline content is written. The destination is then force-imported. Refuses to overwrite unless overwrite=true.",
+            Description = "Import a file into an Assets/ path. When source is set, the source file (absolute or Assets/ path) is copied to the destination; otherwise inline content is written. The destination is force-imported, compile/import/reload is absorbed, and success proves the recovered AssetDatabase resolves the destination GUID. Refuses to overwrite unless overwrite=true.",
             Group = "asset",
             Version = "1.0.0",
             DestructiveHint = true,
@@ -48,22 +49,31 @@ namespace UnityCli
             }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            AssetToolSupport.EnsureEditorNotBusy("asset.import");
+            if (!ctx.ProofOnly) AssetToolSupport.EnsureEditorNotBusy("asset.import");
             var path = AssetToolSupport.RequireAssetPath(request.Path ?? request.Destination);
             var source = request.Source;
             var overwrite = request.Overwrite ?? false;
             var effects = new List<AssetPlannedEffect> { new AssetPlannedEffect { Type = "asset.import", Path = path, Source = source } };
             if (ctx.DryRun)
             {
-                return new System.Threading.Tasks.ValueTask<Result>(new Result
+                return new Result
                 {
                     Asset = new AssetDetail { Path = path, Name = Path.GetFileNameWithoutExtension(path), Extension = Path.GetExtension(path), Exists = File.Exists(AssetToolSupport.AssetFullPath(path)) },
                     Source = source,
                     DryRun = true,
                     PlannedEffects = effects
-                });
+                };
+            }
+            if (ctx.ProofOnly)
+            {
+                var recoveredReady = await ctx.Wait.UntilEditorReady(TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
+                var recovered = AssetToolSupport.BuildAssetDetail(path);
+                VerifyContentProof(ctx, path);
+                if (!recoveredReady || !recovered.Exists || string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
+                    throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_PROOF_MISSING", "The imported asset is not resolvable after session recovery: " + path, "Inspect import/compile diagnostics before submitting a new request.");
+                return new Result { Asset = recovered, Source = source, PlannedEffects = effects };
             }
             if (!string.IsNullOrEmpty(source))
             {
@@ -75,25 +85,63 @@ namespace UnityCli
                 {
                     throw new UnityCliBridge.BridgeCommandException("E_ASSET_SOURCE_NOT_FOUND", "Source file not found: " + source, "Pass an existing file path or Assets/* source asset.");
                 }
-                AssetToolSupport.CreateAssetDirectory(path);
                 var fullDestination = AssetToolSupport.AssetFullPath(path);
                 if (File.Exists(fullDestination) && !overwrite)
                 {
                     throw new UnityCliBridge.BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Asset already exists: " + path, "Pass --overwrite or choose another destination.");
                 }
+                if (string.Equals(Path.GetFullPath(fullSource), Path.GetFullPath(fullDestination), StringComparison.OrdinalIgnoreCase))
+                    throw new UnityCliBridge.BridgeCommandException("E_ASSET_SOURCE_EQUALS_DESTINATION", "Asset import source and destination resolve to the same file.", "Choose a different destination path.");
+                ctx.CommitEffect();
+                AssetToolSupport.CreateAssetDirectory(path);
                 File.Copy(fullSource, fullDestination, true);
             }
             else
             {
-                AssetToolSupport.WriteTextAsset(path, request.Content ?? string.Empty, overwrite);
+                if (request.Content == null)
+                    throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_INPUT_REQUIRED", "asset.import requires source or content.", "Pass a source file or inline content.");
+                var fullDestination = AssetToolSupport.AssetFullPath(path);
+                if (File.Exists(fullDestination) && !overwrite)
+                    throw new UnityCliBridge.BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Asset already exists: " + path, "Pass --overwrite or choose another destination.");
+                ctx.CommitEffect();
+                AssetToolSupport.WriteTextAsset(path, request.Content, overwrite);
             }
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            var ready = await ctx.Wait.UntilEditorReady(TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
+            if (!ready)
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_TIMEOUT", "The Editor did not reach a stable ready state after importing " + path + ".", "Inspect editor.state and compile diagnostics before submitting a new request.");
+            var asset = AssetToolSupport.BuildAssetDetail(path);
+            VerifyContentProof(ctx, path);
+            if (!asset.Exists || string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_PROOF_MISSING", "The imported asset is not resolvable after import: " + path, "Inspect import/compile diagnostics before submitting a new request.");
+            return new Result { Asset = asset, Source = source, PlannedEffects = effects };
+        }
+
+        /// <summary>按 durable continuation 校验 destination bytes，避免把预存资产误当成本次 import proof。</summary>
+        private static void VerifyContentProof(UnityCliProjectToolContext ctx, string path)
+        {
+            var continuation = ctx.ProofOnly ? ctx.RequireProofContinuation("asset-content-sha256-v1") : ctx.ProofContinuation;
+            object expectedPath;
+            object expectedHash;
+            if (continuation == null
+                || !continuation.TryGetValue("path", out expectedPath)
+                || !continuation.TryGetValue("contentSha256", out expectedHash)
+                || !string.Equals(expectedPath as string, path, StringComparison.Ordinal))
+                throw new UnityCliBridge.BridgeCommandException("E_REQUEST_JOURNAL_CORRUPT", "Asset import continuation does not match the destination path.", "Inspect the request journal before submitting a new request.");
+            var fullPath = AssetToolSupport.AssetFullPath(path);
+            var actualHash = File.Exists(fullPath) ? FileSha256(fullPath) : null;
+            if (!string.Equals(actualHash, expectedHash as string, StringComparison.Ordinal))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_PROOF_MISSING", "Imported destination bytes do not match the immutable pre-effect content digest.", "Inspect the source and destination files before submitting a new request.");
+        }
+
+        private static string FileSha256(string path)
+        {
+            using (var stream = File.OpenRead(path))
+            using (var sha = SHA256.Create())
             {
-                Asset = AssetToolSupport.BuildAssetDetail(path),
-                Source = source,
-                PlannedEffects = effects
-            });
+                var bytes = sha.ComputeHash(stream);
+                return string.Concat(Array.ConvertAll(bytes, value => value.ToString("x2")));
+            }
         }
     }
 }

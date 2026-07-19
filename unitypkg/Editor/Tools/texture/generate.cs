@@ -58,14 +58,16 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             TextureToolSupport.EnsureEditorNotBusy("texture.generate");
-            var path = request.Path;
-            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            var path = TextureToolSupport.RequireTexturePath(request.Path);
+            if (!path.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_PATH_REQUIRED", "texture.generate requires an Assets/*.png path.", "Pass Assets/Textures/Generated.png.");
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_PATH_INVALID", "texture.generate requires an Assets/*.png path: " + path, "Pass Assets/Textures/Generated.png.");
             }
-            var width = Math.Max(1, Math.Min(request.Width ?? 256, 4096));
-            var height = Math.Max(1, Math.Min(request.Height ?? 256, 4096));
+            var width = request.Width ?? 256;
+            var height = request.Height ?? 256;
             var pattern = request.Pattern ?? "solid";
+            var patternSize = request.PatternSize ?? 8;
+            ValidateGenerateRequest(width, height, pattern, patternSize);
             var color1 = ParseColorArg(request.Color, Color.white);
             var color2 = ParseColorArg(request.Color2, Color.black);
             if (ctx.DryRun)
@@ -81,32 +83,69 @@ namespace UnityCli
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.generate", Path = path } }
                 });
             }
+            ctx.CommitEffect();
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             var pixels = new Color32[width * height];
             for (var y = 0; y < height; y++)
             {
                 for (var x = 0; x < width; x++)
                 {
-                    pixels[y * width + x] = ComputePixel(pattern, x, y, width, height, color1, color2, request.PatternSize ?? 8);
+                    pixels[y * width + x] = ComputePixel(pattern, x, y, width, height, color1, color2, patternSize);
                 }
             }
             texture.SetPixels32(pixels);
             texture.Apply();
             AssetToolSupport.CreateAssetDirectory(path);
             var bytes = texture.EncodeToPNG();
-            File.WriteAllBytes(AssetToolSupport.AssetFullPath(path), bytes);
-            AssetDatabase.ImportAsset(path);
+            if (bytes == null || bytes.Length == 0)
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_GENERATE_FAILED", "Texture encoder returned no PNG bytes: " + path, "Check the requested texture dimensions and retry.");
+            }
+            var fullPath = AssetToolSupport.AssetFullPath(path);
+            File.WriteAllBytes(fullPath, bytes);
+            if (!File.Exists(fullPath) || new FileInfo(fullPath).Length <= 0)
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_GENERATE_FAILED", "Generated texture file was not written with content: " + path, "Check destination path and permissions, then retry.");
+            }
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+            var importedTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             UnityEngine.Object.DestroyImmediate(texture);
+            if (importedTexture == null)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_GENERATE_FAILED", "Generated texture failed to import: " + path, "Inspect Unity import diagnostics and retry.");
+            }
+            var sizeBytes = new FileInfo(fullPath).Length;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "texture.generate",
                 Path = path,
-                Width = width,
-                Height = height,
+                Width = importedTexture.width,
+                Height = importedTexture.height,
                 Pattern = pattern,
-                SizeBytes = bytes.Length,
+                SizeBytes = sizeBytes,
                 PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.generate", Path = path } }
             });
+        }
+
+        private static void ValidateGenerateRequest(int width, int height, string pattern, int patternSize)
+        {
+            if (width < 1 || width > 4096 || height < 1 || height > 4096)
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_RANGE_INVALID", "Width and Height must be between 1 and 4096.", "Pass dimensions from 1 through 4096.");
+            if (patternSize < 1)
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_RANGE_INVALID", "PatternSize must be positive.", "Pass a positive patternSize.");
+            var valid = string.Equals(pattern, "solid", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pattern, "gradient", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pattern, "radial", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pattern, "noise", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pattern, "checkerboard", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pattern, "stripes", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pattern, "dots", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pattern, "grid", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pattern, "brick", StringComparison.OrdinalIgnoreCase);
+            if (!valid)
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_PATTERN_INVALID", "Unsupported texture pattern: " + pattern, "Pass solid, gradient, radial, noise, checkerboard, stripes, dots, grid, or brick.");
         }
 
         private static Color32 ComputePixel(string pattern, int x, int y, int width, int height, Color32 color1, Color32 color2, int patternSize)
@@ -154,11 +193,12 @@ namespace UnityCli
             return color1;
         }
 
-        private static Color32 ParseColorArg(string value, Color32 fallback)
+        private static Color32 ParseColorArg(string value, Color32 defaultColor)
         {
-            if (string.IsNullOrEmpty(value)) return fallback;
-            if (ColorUtility.TryParseHtmlString(value, out var c)) return c;
-            return fallback;
+            if (string.IsNullOrEmpty(value)) return defaultColor;
+            Color color;
+            if (ColorUtility.TryParseHtmlString(value, out color)) return color;
+            throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_COLOR_INVALID", "Texture color must be a hex RGB/RGBA value: " + value, "Pass a value such as #ffffff or #ff00ffff.");
         }
     }
 }

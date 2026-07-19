@@ -8,6 +8,14 @@ import type { ExtensionManifest } from "../extensions/types.js";
 
 export type CommandHandlerType = "bridge" | "hybrid" | "job" | "offline" | "cli_only";
 
+/** Bridge 内部路由的唯一清单；这些 command 永远不得进入 public command contract。 */
+export const PRIVATE_BRIDGE_COMMANDS: ReadonlySet<string> = new Set([
+  "bridge.package.refresh",
+  "internal.editor.state.snapshot",
+  "internal.editor.compile.start",
+  "internal.editor.compile.status",
+]);
+
 export interface CommandContractEntry {
   bridgeCommand: string;
   group: string;

@@ -8,7 +8,7 @@ import type { ProjectToolRuntime } from "../project-tool-discovery.js";
 import { validateSchema } from "../schema/validator.js";
 import type { CliResult } from "../types.js";
 import { loadContextCatalog, resolveCatalogContext, searchContexts, toContextListEntry, type ContextCatalogRuntime } from "./catalog.js";
-import { findDefineContext, StructuredContextError } from "./define.js";
+import { findDefineContext, StructuredContextError, type ContextReadContext } from "./define.js";
 import type { ContextDescriptor } from "./types.js";
 
 export type ContextRuntime = BridgeRuntime & ProjectToolRuntime & ContextCatalogRuntime & { dataDir?: string };
@@ -22,6 +22,8 @@ export async function dispatchContext(
   runtime: ContextRuntime,
   requestId: string
 ): Promise<CliResult> {
+  // This starts the editor.state observation wall clock before any dispatcher work.
+  const executionStartedAt = Date.now();
   if (operation === "list" || operation === "search") {
     const catalog = await loadContextCatalog(flags, runtime, requestId);
     if (catalog.ok === false) return catalog;
@@ -53,25 +55,30 @@ export async function dispatchContext(
   const resolved = await resolveCatalogContext(name, flags, runtime, requestId);
   if (resolved.ok === false) return resolved;
   if (!resolved.context) return failure(requestId, "E_CONTEXT_NOT_FOUND", `Context not found: ${name}.`, ["Run unity_cli context list to inspect the current catalog.", "Connect a Unity Bridge target to discover live contexts."]);
-  const availabilityFlags = await contextAvailabilityFlags(flags, runtime);
-  const descriptor = await decorateAvailability(resolved.context, availabilityFlags);
+  // editor.state is a TS-local, always-available observation owner. Do not resolve a
+  // project for extension availability before it begins its bounded observation.
+  const isEditorState = resolved.context.name === "editor.state";
+  const availabilityFlags = isEditorState ? flags : await contextAvailabilityFlags(flags, runtime);
+  const descriptor = isEditorState ? resolved.context : await decorateAvailability(resolved.context, availabilityFlags);
 
   if (operation === "describe") {
     return success(requestId, { command: "context.describe", ...descriptor });
   }
 
-  if (descriptor.available === false && descriptor.source !== "extension") {
+  if (!isEditorState && descriptor.available === false && descriptor.source !== "extension") {
     return failure(requestId, "E_CONTEXT_UNAVAILABLE", `Context is not available for the selected target: ${descriptor.name}.`, [
       `Run unity_cli context describe ${descriptor.name} to inspect target, availabilityScope, and playModeSupport.`,
       "Select a compatible Unity target or Editor/Play Mode state and retry."
     ], { target: descriptor.target, availabilityScope: descriptor.availabilityScope, playModeSupport: descriptor.playModeSupport });
   }
-  const availability = await checkContextExtensionAvailability(descriptor.name, availabilityFlags);
-  if (!availability.available) {
-    return failure(requestId, availability.errorCode, availability.message, availability.nextActions, {
-      extensionId: availability.extensionId,
-      missingPackageIds: availability.availabilityResult?.missingPackageIds ?? descriptor.requiresPackages ?? []
-    });
+  if (!isEditorState) {
+    const availability = await checkContextExtensionAvailability(descriptor.name, availabilityFlags);
+    if (!availability.available) {
+      return failure(requestId, availability.errorCode, availability.message, availability.nextActions, {
+        extensionId: availability.extensionId,
+        missingPackageIds: availability.availabilityResult?.missingPackageIds ?? descriptor.requiresPackages ?? []
+      });
+    }
   }
   const parsed = await parseContextInput(flags, requestId);
   if (!parsed.ok) return parsed.error;
@@ -86,8 +93,20 @@ export async function dispatchContext(
   }
 
   const definition = findDefineContext(descriptor.name);
-  if (definition) return readLocalContext(descriptor, definition, parsed.input, flags, runtime, requestId);
-  return executeBridgePayload(requestId, "context.read", { name: descriptor.name, input: parsed.input }, flags, runtime);
+  if (definition) return readLocalContext(descriptor, definition, parsed.input, flags, runtime, requestId, executionStartedAt);
+  return executeBridgePayload(
+    requestId,
+    "context.read",
+    {
+      name: descriptor.name,
+      input: parsed.input,
+      ...(descriptor.descriptorFingerprint ? { expectedDescriptorFingerprint: descriptor.descriptorFingerprint } : {}),
+    },
+    flags,
+    runtime,
+    undefined,
+    { mode: descriptor.name === "editor.state" ? "observeNow" : "read", mutation: false },
+  );
 }
 
 /** physical gate 优先使用显式 project，否则从当前 target/active instance 推断项目。 */
@@ -112,17 +131,22 @@ async function readLocalContext(
   input: Record<string, unknown>,
   flags: Record<string, string | boolean>,
   runtime: ContextRuntime,
-  requestId: string
+  requestId: string,
+  startedAt: number,
 ): Promise<CliResult> {
   try {
     const data = await definition.read(input, {
       requestId,
+      startedAt,
       flags,
       bridgeExecute: runtime.bridgeExecute,
-      bridgeEndpoint: runtime.bridgeEndpoint,
       dataDir: runtime.dataDir,
       projectTools: runtime.projectTools
-    });
+    } as ContextReadContext);
+    const issues = validateSchema(descriptor.outputSchema, data);
+    if (issues.length > 0) {
+      return failure(requestId, "E_CONTEXT_OUTPUT_SCHEMA_INVALID", `Context ${descriptor.name} returned data that violates its output schema.`, ["Inspect the Context implementation and its generated output schema."], { issues });
+    }
     return success(requestId, { command: "context.read", context: descriptor.name, ...(data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : { data }) });
   } catch (error) {
     if (error instanceof StructuredContextError) return failure(requestId, error.code, error.message, error.nextActions, error.details);

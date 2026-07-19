@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "identity": {
+    "canonicalizationVersion": 1,
+    "instanceId": "unity-<sha256(canonical UTF-8 project path)>",
+    "selectors": ["--instance <instanceId|canonicalProjectPath|alias>", "nearest Unity project root from CWD"],
+    "forbiddenSelectors": ["PID", "port", "endpoint", "projectHash prefix", "--target", "active target", "single ready instance"]
+  },
+  "request": {
+    "rootRequestId": "one UUID per direct public call",
+    "serialization": "one immutable UTF-8 body without BOM",
+    "deadline": "one absolute deadline frozen before lifecycle waiting",
+    "digestVersion": 1,
+    "digest": "SHA256(UTF8('unity-cli-request-v1') + NUL + UTF8(instanceId) + NUL + exactRequestBodyBytes)",
+    "redelivery": "same root requestId, same absolute deadline and byte-identical body only"
+  },
+  "toolExecution": {
+    "success": "terminal business success proven by the tool's unique completion contract",
+    "failure": "terminal structured failure with stable code, details and nextActions",
+    "forbiddenSuccessSignals": ["accepted", "requested", "queued", "started", "operation handle", "listener recovery", "transport success"],
+    "successEnvelopeFields": ["ok", "requestId", "data", "durationMs", "logsRef"],
+    "forbiddenSuccessFields": ["bridgeEndpoint", "port", "listenerId", "journalPhase", "transitionTimeline", "internalOperationId"]
+  },
+  "contextRead": {
+    "ordinary": {
+      "mode": "read",
+      "completion": "one complete snapshot from one validated listener generation",
+      "transitionPolicy": "wait within the original absolute deadline, then rerun the complete read",
+      "journal": false
+    },
+    "editor.state": {
+      "mode": "observeNow",
+      "completion": "one immediate read-only registry, Bridge and Windows observation",
+      "budgetMs": 1000,
+      "bridgeProbeBudgetMs": 300,
+      "transitionPolicy": "never wait for state change",
+      "journal": false
+    }
+  },
+  "transitionPolicy": {
+    "transparent": ["domain reload", "script compile", "asset import/update", "listener restart", "endpoint fallback", "supported PlayMode transition", "waitable Unity progress"],
+    "failClosed": ["external modal blocker", "identity conflict", "process exit before terminal", "request ID digest conflict", "schema failure", "security failure"]
+  },
+  "mutationRecovery": {
+    "states": ["created", "accepted", "running", "completed", "failed", "cancelled", "outcome_unknown"],
+    "barriers": ["received", "accepted_before_effect", "effect_started", "effect_proven", "result_persisted"],
+    "disconnect": "does not cancel an accepted mutation",
+    "terminalPersistence": "terminal envelope is durable before HTTP response",
+    "uncertainEffect": "E_REQUEST_OUTCOME_UNKNOWN and no automatic replay"
+  },
+  "compile": {
+    "publicOwner": "src/tools/editor/compile.ts",
+    "privateCommands": ["internal.editor.compile.start", "internal.editor.compile.status"],
+    "inputFields": ["refresh", "path", "forceUpdate", "importRecursive", "includeWarnings"],
+    "forbiddenInputFields": ["waitReady"],
+    "proof": "owned CompilationPipeline cycle terminal, zero compiler errors, import/compile/reload stable and Editor ready",
+    "diagnostics": ["CompilationPipeline.assemblyCompilationFinished", "CompilationPipeline.compilationFinished"],
+    "errors": ["E_UNITY_COMPILE_FAILED", "E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "E_COMPILE_CYCLE_UNATTRIBUTED", "E_EXECUTION_TIMEOUT", "E_UNITY_TRANSITION_TIMEOUT", "E_REQUEST_OUTCOME_UNKNOWN"]
+  },
+  "errors": [
+    "E_INSTANCE_REQUIRED",
+    "E_INSTANCE_NOT_FOUND",
+    "E_INSTANCE_NOT_RUNNING",
+    "E_INSTANCE_PROJECT_MISMATCH",
+    "E_INSTANCE_IDENTITY_MISMATCH",
+    "E_INSTANCE_PATH_UNAVAILABLE",
+    "E_INSTANCE_REMOTE_PATH_UNSUPPORTED",
+    "E_INSTANCE_PATH_CASE_SENSITIVE_UNSUPPORTED",
+    "E_INSTANCE_CONFLICT",
+    "E_UNITY_BLOCKED",
+    "E_UNITY_TRANSITION_TIMEOUT",
+    "E_CONTEXT_READ_TIMEOUT",
+    "E_EXECUTION_TIMEOUT",
+    "E_QUEUE_START_TIMEOUT",
+    "E_EDITOR_SESSION_REPLACED",
+    "E_TOOL_COMPLETION_PROOF_INVALID",
+    "E_REQUEST_ID_REUSED",
+    "E_REQUEST_OUTCOME_UNKNOWN",
+    "E_UNITY_COMPILE_FAILED",
+    "E_UNITY_COMPILE_REQUIRES_EDIT_MODE",
+    "E_COMPILE_CYCLE_UNATTRIBUTED",
+    "E_OBSOLETE_LOCAL_STATE"
+  ],
+  "deferredDelivery": {
+    "commands": ["jobs", "--job", "batch"],
+    "rule": "public delivery semantics remain byte-for-byte baseline-equivalent and cannot satisfy direct-call acceptance"
+  }
+}

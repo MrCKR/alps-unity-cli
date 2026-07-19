@@ -25,6 +25,104 @@ namespace UnityCli
                 public readonly List<object> AuditEntries = new List<object>();
             }
 
+            // Generic reflection patches cannot prove a fresh serialized value. Only direct writable SerializedProperties are admitted.
+            public static void ValidateOnly(UnityEngine.Object target, IList pathPatches, object mergePatch)
+            {
+                if (mergePatch != null || pathPatches == null || pathPatches.Count == 0)
+                    throw new BridgeCommandException("E_OBJECT_PATCH_UNSUPPORTED", "Only non-empty pathPatches on directly writable SerializedProperties are supported.", "Use a direct serialized property path and replace operation.");
+                var serialized = new SerializedObject(target);
+                foreach (var item in pathPatches)
+                {
+                    var patch = item as Dictionary<string, object>;
+                    var path = GetField(patch, "path") as string;
+                    var op = (GetField(patch, "op") as string) ?? "replace";
+                    if (patch == null || string.IsNullOrEmpty(path) || !string.Equals(op, "replace", StringComparison.OrdinalIgnoreCase) || !HasField(patch, "value"))
+                        throw new BridgeCommandException("E_OBJECT_PATCH_UNSUPPORTED", "Each patch must be a direct replace with a value.", "Use { path, op: replace, value }.");
+                    var property = serialized.FindProperty(path);
+                    if (property == null || !IsVerifiableProperty(property.propertyType))
+                        throw new BridgeCommandException("E_OBJECT_PATCH_UNSUPPORTED", "Patch path is not a verifiable SerializedProperty: " + path, "Use a supported direct serialized primitive, enum, color, vector, or object-reference property.");
+                    ValidateFiniteAndReference(GetField(patch, "value"), property, path);
+                }
+            }
+
+            public static PatchResult ApplyVerifiedSerializedPatches(UnityEngine.Object target, IList pathPatches)
+            {
+                var result = new PatchResult(); var serialized = new SerializedObject(target);
+                foreach (var item in pathPatches)
+                {
+                    var patch = item as Dictionary<string, object>; var path = GetField(patch, "path") as string; var value = GetField(patch, "value");
+                    var property = serialized.FindProperty(path);
+                    switch (property.propertyType)
+                    {
+                        case SerializedPropertyType.Integer: property.longValue = Convert.ToInt64(value, CultureInfo.InvariantCulture); break;
+                        case SerializedPropertyType.Boolean: property.boolValue = ToBool(value); break;
+                        case SerializedPropertyType.Float: property.floatValue = ToFloat(value); break;
+                        case SerializedPropertyType.String: property.stringValue = Convert.ToString(value, CultureInfo.InvariantCulture); break;
+                        case SerializedPropertyType.ObjectReference: property.objectReferenceValue = ResolveUnityObjectValue(value, typeof(UnityEngine.Object)); break;
+                        case SerializedPropertyType.Enum: property.enumValueIndex = GetEnumValueIndex(property, value); break;
+                        default: throw new BridgeCommandException("E_OBJECT_PATCH_UNSUPPORTED", "Patch type is not writable by the verified patcher: " + property.propertyType, "Use a supported direct property.");
+                    }
+                    result.ChangedPaths.Add(path); result.AuditEntries.Add(new { path, op = "replace", verified = true });
+                }
+                serialized.ApplyModifiedPropertiesWithoutUndo(); return result;
+            }
+
+            public static void VerifyFreshSerializedProperties(UnityEngine.Object target, IList pathPatches)
+            {
+                var serialized = new SerializedObject(target); serialized.Update();
+                foreach (var item in pathPatches)
+                {
+                    var patch = item as Dictionary<string, object>;
+                    var path = GetField(patch, "path") as string;
+                    var property = serialized.FindProperty(path);
+                    if (property == null || !SerializedValueMatches(property, GetField(patch, "value")))
+                        throw new BridgeCommandException("E_OBJECT_MODIFY_STATE_MISMATCH", "Fresh serialized property did not match request: " + path, "Inspect the target and retry.");
+                }
+            }
+
+            private static bool IsVerifiableProperty(SerializedPropertyType type)
+            {
+                return type == SerializedPropertyType.Integer || type == SerializedPropertyType.Boolean || type == SerializedPropertyType.Float || type == SerializedPropertyType.String || type == SerializedPropertyType.ObjectReference || type == SerializedPropertyType.Enum;
+            }
+            private static void ValidateFiniteAndReference(object value, SerializedProperty property, string path)
+            {
+                var type = property.propertyType;
+                if (type == SerializedPropertyType.Float || type == SerializedPropertyType.Integer)
+                {
+                    double number;
+                    if (value == null || !double.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out number) || double.IsNaN(number) || double.IsInfinity(number))
+                        throw new BridgeCommandException("E_OBJECT_PATCH_VALUE_INVALID", "Patch value must be finite: " + path, "Pass a finite numeric value.");
+                }
+                if (type == SerializedPropertyType.Enum && GetEnumValueIndex(property, value) < 0)
+                    throw new BridgeCommandException("E_OBJECT_PATCH_VALUE_INVALID", "Patch enum value is invalid: " + path, "Pass a declared enum name or index.");
+                if (type == SerializedPropertyType.ObjectReference && value != null && ResolveUnityObjectValue(value, typeof(UnityEngine.Object)) == null) throw new BridgeCommandException("E_OBJECT_PATCH_VALUE_INVALID", "Object reference could not be resolved: " + path, "Pass a valid instanceId, assetPath, or guid.");
+            }
+            private static bool SerializedValueMatches(SerializedProperty property, object value)
+            {
+                switch (property.propertyType)
+                {
+                    case SerializedPropertyType.Integer: return property.longValue == Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                    case SerializedPropertyType.Boolean: return property.boolValue == ToBool(value);
+                    case SerializedPropertyType.Float: return Mathf.Approximately(property.floatValue, ToFloat(value));
+                    case SerializedPropertyType.String: return property.stringValue == Convert.ToString(value, CultureInfo.InvariantCulture);
+                    case SerializedPropertyType.ObjectReference: return property.objectReferenceValue == ResolveUnityObjectValue(value, typeof(UnityEngine.Object));
+                    case SerializedPropertyType.Enum: return property.enumValueIndex == GetEnumValueIndex(property, value);
+                }
+                return false;
+            }
+
+            private static int GetEnumValueIndex(SerializedProperty property, object value)
+            {
+                var enumNames = property.enumNames;
+                var enumValue = Convert.ToString(value, CultureInfo.InvariantCulture);
+                int index;
+                if (int.TryParse(enumValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out index))
+                    return index >= 0 && index < enumNames.Length ? index : -1;
+                for (var i = 0; i < enumNames.Length; i++)
+                    if (string.Equals(enumNames[i], enumValue, StringComparison.OrdinalIgnoreCase)) return i;
+                return -1;
+            }
+
             /// <summary>应用 pathPatches：每项 {path, value, op}。op 默认 replace，支持 replace/add/remove。</summary>
             public static PatchResult ApplyPathPatches(object target, IList pathPatches)
             {

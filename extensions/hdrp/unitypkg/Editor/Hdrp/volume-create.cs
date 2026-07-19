@@ -18,7 +18,9 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("hdrp.volume.create"); HdrpToolSupport.EnsureHdrpAvailable();
-            var created = HdrpVolumeOperations.Create(request.Name, request.IsGlobal, request.Priority, request.Weight, "HDRP", "E_HDRP");
+            var plan = HdrpVolumeOperations.ValidateCreate(request.Priority, request.Weight, "E_HDRP");
+            ctx.CommitEffect();
+            var created = HdrpVolumeOperations.Create(request.Name, request.IsGlobal, plan, "HDRP", "E_HDRP");
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "hdrp.volume.create", Target = GameObjectToolSupport.BuildGameObjectRef(created.GameObject), IsGlobal = created.IsGlobal, PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.create", Name = created.GameObject.name } }, LogPath = ctx.LogPath });
         }
     }

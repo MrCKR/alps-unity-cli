@@ -8,7 +8,9 @@ namespace UnityCli
         public static System.Threading.Tasks.ValueTask<ProjectTagLayerResult> Apply(bool layer, bool add, string name, int? index, string toolName, UnityCliProjectToolContext ctx)
         {
             EditorToolSupport.EnsureEditorNotBusy(toolName);
-            var (changed, layerIndex) = EditorActionToolSupport.ApplyTagLayerChange(layer, add, name, index);
+            var plan = EditorActionToolSupport.PrepareTagLayerChange(layer, add, name, index);
+            ctx.CommitEffect();
+            var (changed, layerIndex) = EditorActionToolSupport.ApplyTagLayerChange(plan);
             return new(new ProjectTagLayerResult { Name = name, Changed = changed, LayerIndex = layer && layerIndex >= 0 ? layerIndex : (long?)null, PlannedEffects = changed ? new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = toolName, Action = add ? "add" : "remove", Name = name } } : new List<EditorPlannedEffect>() });
         }
     }

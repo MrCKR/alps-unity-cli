@@ -64,7 +64,9 @@ namespace UnityCli
             var primitiveType = string.IsNullOrEmpty(request.Primitive) ? (PrimitiveType?)null : GameObjectToolSupport.ParsePrimitiveType(request.Primitive);
             // 先完整校验输入,避免半成品对象
             GameObjectToolSupport.ValidateMutationInputs(request.TagValue, request.LayerValue);
+            GameObjectToolSupport.ValidateTransformMutationValues(request.X, request.Y, request.Z, request.RotationX, request.RotationY, request.RotationZ, request.ScaleX, request.ScaleY, request.ScaleZ);
 
+            ctx.CommitEffect();
             GameObject gameObject;
             if (primitiveType.HasValue)
             {
@@ -80,9 +82,11 @@ namespace UnityCli
                 request.X, request.Y, request.Z, request.RotationX, request.RotationY, request.RotationZ, request.ScaleX, request.ScaleY, request.ScaleZ);
             UnityCliSceneMutation.RegisterCreatedObject(gameObject, "go.create");
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            var observed = EditorUtility.InstanceIDToObject(gameObject.GetInstanceID()) as GameObject;
+            if (observed == null) throw new UnityCliBridge.BridgeCommandException("E_GO_CREATE_STATE_MISMATCH", "Created GameObject could not be read back.", "Retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject),
+                GameObject = GameObjectToolSupport.BuildGameObjectDetail(observed),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.create", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
             });
         }

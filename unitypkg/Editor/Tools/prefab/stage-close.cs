@@ -48,14 +48,19 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_DIRTY_CONFLICT", "Prefab Stage has unsaved changes: " + path, "Run tools run prefab.stage-save, then retry prefab.stage-close.");
             }
+            ctx.CommitEffect();
             if (!PrefabToolSupport.ClosePrefabStage())
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_CLOSE_FAILED", "Failed to close Prefab Stage: " + path, "Close the Prefab Stage in Unity or check UnityCliBridge.log.");
             }
+            var observedStage = PrefabToolSupport.CurrentPrefabStage();
+            if (observedStage != null)
+                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_CLOSE_MISMATCH", "Prefab Stage remained open after close: " + PrefabToolSupport.StageAssetPath(observedStage), "Inspect the current Prefab Stage and retry.");
+            var observed = PrefabToolSupport.BuildClosedStageInfo(path);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Stage = new PrefabStageInfo { Action = "close", Path = path, Dirty = false },
-                PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-close", Path = path } }
+                Stage = observed,
+                PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-close", Path = observed.Path } }
             });
         }
     }

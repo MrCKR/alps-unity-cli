@@ -80,11 +80,11 @@ test("node dist cli help prints an envelope", async () => {
   assert.ok(payload.ok);
   assert.equal(payload.data.usage, "unity_cli <command> [options]");
   assert.ok(payload.data.commands.includes("target alias list"));
-  assert.ok(payload.data.commands.includes("target alias set <instanceId> <alias> [--force]"));
+  assert.ok(payload.data.commands.includes("target alias set <projectPath|instanceId> <alias> [--force]"));
   assert.ok(payload.data.commands.includes("target alias unset <alias>"));
   assert.ok(payload.data.options.some((option) => option.includes("--raw") && option.includes("compact single-line JSON")));
   assert.match(payload.data.note, /examples\[\]\.argv.*JSON token array.*PowerShell.*single quotes.*--input-file/);
-  assert.match(payload.data.note, /exact instance.*--instance.*do not call `target set`.*persists mutable global active-target state/);
+  assert.match(payload.data.note, /Live target resolution accepts only `--instance.*canonical-project-path.*target` manages aliases only.*active-target.*fallback selection do not exist/);
 });
 
 test("node dist cli version prints package version", async () => {
@@ -356,6 +356,15 @@ test("build run accepts multiple targets and returns build job batch", async () 
 
 test("build status and cancel wrap build jobs only", async () => {
   const runtime = await makeRuntime();
+  await Promise.all([
+    mkdir(join(runtime.dataDir, "Assets")),
+    mkdir(join(runtime.dataDir, "Packages")),
+    mkdir(join(runtime.dataDir, "ProjectSettings"))
+  ]);
+  await Promise.all([
+    writeFile(join(runtime.dataDir, "Packages", "manifest.json"), JSON.stringify({ dependencies: {} })),
+    writeFile(join(runtime.dataDir, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 2022.3.62f1\n")
+  ]);
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 30000);`);
 
   const created = await execute(["tools", "run", "build.run", "--yes", "--unity", unity, "--project", runtime.dataDir], runtime);
@@ -420,7 +429,12 @@ test("process timeout marks job as timeout", async () => {
 async function makeUnityProject(): Promise<string> {
   const project = await mkdtemp(join(tmpdir(), "unity-project-"));
   const packages = join(project, "Packages");
-  await mkdir(packages, { recursive: true });
+  await Promise.all([
+    mkdir(join(project, "Assets"), { recursive: true }),
+    mkdir(packages, { recursive: true }),
+    mkdir(join(project, "ProjectSettings"), { recursive: true }),
+  ]);
+  await writeFile(join(project, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 2022.3.62f1\n", "utf8");
   await writeFile(join(packages, "manifest.json"), JSON.stringify({
     registry: "https://packages.unity.com",
     dependencies: {
@@ -475,7 +489,7 @@ test("init copies com.unity_cli package to Packages/com.unity_cli without requir
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  const initialized = await execute(["init", "--project", project], runtime);
   assert.ok(initialized.ok);
   const data = initialized.data as { action: string; status: string; projectPath: string; package: { status: string; bridge: { dependencyName: string; bridgePath: string; packageVersion: string; sourceHash: string; projectHash: string; installMode: string; installTime: string; cliCompatibilityRange: string; installMetadataPath: string; fileManifestPath: string }; liveRefresh: { status: string } }; liveRefresh: { status: string }; resolve: string };
   assert.equal(data.action, "init");
@@ -520,7 +534,7 @@ test("init --check verifies copy-mode install metadata", async () => {
   const missingData = missing.data as { action: string; package: { status: string; code: string; message: string } };
   assert.equal(missingData.package.status, "not_installed");
 
-  await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  await execute(["init", "--project", project], runtime);
   const checked = await execute(["init", "--check", "--project", project], runtime);
 
   assert.ok(checked.ok);
@@ -539,7 +553,7 @@ test("package bridge-remove previews and removes the copy-mode Bridge package", 
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  const initialized = await execute(["init", "--project", project], runtime);
   assert.ok(initialized.ok);
   const bridge = (initialized.data as { package: { bridge: { bridgePath: string; installMetadataPath: string } } }).package.bridge;
 
@@ -616,6 +630,32 @@ test("package deploy and restore copy local package sources with backup", async 
   assert.equal(afterRestoreMetadata.deployments["com.acme.local"], undefined);
 });
 
+test("package deploy forwards the remaining absolute deadline to live refresh", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const source = await mkdtemp(join(tmpdir(), "unity-package-deadline-"));
+  await writeFile(join(source, "package.json"), JSON.stringify({ name: "com.acme.deadline", version: "1.0.0" }, null, 2), "utf8");
+  const requests: BridgeRequest[] = [];
+  const startedAt = Date.now();
+
+  const deployed = await execute([
+    "tools", "run", "package.deploy", "--project", project,
+    "--input", JSON.stringify({ source }), "--timeout-ms", "60000", "--yes"
+  ], {
+    ...runtime,
+    bridgeExecute: async (payload) => {
+      requests.push(payload);
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, result: { refreshed: true } } };
+    }
+  });
+
+  assert.ok(deployed.ok);
+  assert.equal(requests.length, 1);
+  const remainingMs = Date.parse(requests[0].execution.absoluteDeadlineUtc) - startedAt;
+  assert.ok(remainingMs > 50_000, `expected caller deadline, got ${remainingMs}ms`);
+  assert.ok(remainingMs <= 61_000, `deadline setup overhead exceeded tolerance: ${remainingMs}ms`);
+});
+
 test("package restore removes a newly deployed package when no backup existed", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
@@ -654,9 +694,11 @@ test("init asks an already open bridge to refresh assets", async () => {
   assert.match(requests[0].requestId, /^req_/);
   assert.equal(requests[0].command, "bridge.package.refresh");
   assert.deepEqual(requests[0].input, {});
-  assert.deepEqual(requests[0].execution, { timeoutMs: 15000 });
-  assert.equal(requests[0].security, undefined);
-  assert.equal(((initialized.data as { liveRefresh: { status: string } }).liveRefresh.status), "triggered");
+  assert.equal(requests[0].execution.completionContractVersion, 1);
+  assert.equal(requests[0].execution.requestDigestVersion, 1);
+  assert.ok(Date.parse(requests[0].execution.absoluteDeadlineUtc) > Date.now());
+  assert.equal(requests[0].execution.securityProof, undefined);
+  assert.equal(((initialized.data as { liveRefresh: { status: string } }).liveRefresh.status), "completed");
 });
 
 test("package install updates manifest, deploys bridge and can start package resolve job", async () => {
@@ -664,7 +706,7 @@ test("package install updates manifest, deploys bridge and can start package res
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
-  const installed = await execute(["tools", "run", "package.install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity, "--yes"], runtime);
+  const installed = await execute(["tools", "run", "package.install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity, "--job", "--yes"], runtime);
   assert.ok(installed.ok);
   const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string; bridge: { dependencyName: string; bridgePath: string; installMode: string } } };
   assert.equal(jobData.kind, "package");
@@ -766,13 +808,15 @@ test("package remove with --yes asks an open Editor to refresh via bridge instea
   assert.match(requests[0].requestId, /^req_/);
   assert.equal(requests[0].command, "bridge.package.refresh");
   assert.deepEqual(requests[0].input, {});
-  assert.deepEqual(requests[0].execution, { timeoutMs: 15000 });
-  assert.equal(requests[0].security, undefined);
+  assert.equal(requests[0].execution.completionContractVersion, 1);
+  assert.equal(requests[0].execution.requestDigestVersion, 1);
+  assert.ok(Date.parse(requests[0].execution.absoluteDeadlineUtc) > Date.now());
+  assert.equal(requests[0].execution.securityProof, undefined);
   const data = removed.data as { action: string; package: string; resolve: string; liveRefresh: { status: string } };
   assert.equal(data.action, "remove");
   assert.equal(data.package, "com.example.tool");
   assert.equal(data.resolve, "live_bridge_refresh");
-  assert.equal(data.liveRefresh.status, "triggered");
+  assert.equal(data.liveRefresh.status, "completed");
 
   // Manifest should have the package removed even though batchmode was not started.
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
@@ -787,7 +831,7 @@ test("package remove with --yes tolerates a stale UnityLockfile", async () => {
   await mkdir(join(project, "Temp"), { recursive: true });
   await writeFile(lockPath, "stale");
 
-  const removed = await execute(["tools", "run", "package.remove", "com.example.tool", "--project", project, "--unity", unity, "--bridge-endpoint", "http://127.0.0.1:9", "--yes"], runtime);
+  const removed = await execute(["tools", "run", "package.remove", "com.example.tool", "--project", project, "--unity", unity, "--job", "--yes"], runtime);
 
   assert.ok(removed.ok);
   assert.ok(["queued", "running"].includes((removed.data as { status: string }).status));
@@ -796,7 +840,7 @@ test("package remove with --yes tolerates a stale UnityLockfile", async () => {
   assert.equal(manifest.dependencies["com.example.tool"], undefined);
 });
 
-test("package remove with --yes returns UNITY_BUSY when bridge refresh fails in an open Editor", async () => {
+test("package remove returns outcome unknown when live refresh fails after manifest effect", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`process.exit(0);`);
@@ -807,18 +851,23 @@ test("package remove with --yes returns UNITY_BUSY when bridge refresh fails in 
   });
 
   assert.ok(!removed.ok);
-  assert.equal(removed.error?.code, "UNITY_BUSY");
-  assert.equal(removed.error?.transient, true);
-  assert.equal((removed.error?.details as { resolve: string }).resolve, "blocked_by_open_editor");
+  assert.equal(removed.error?.code, "E_REQUEST_OUTCOME_UNKNOWN");
+  assert.equal(removed.error?.transient, false);
+  assert.equal((removed.error?.details as { toolName: string }).toolName, "package.remove");
 });
 
-test("package write commands require an existing Unity manifest", async () => {
+test("package write commands require a canonical Unity project identity", async () => {
   const runtime = await makeRuntime();
-  const project = await mkdtemp(join(tmpdir(), "not-unity-project-"));
+  const project = await mkdtemp(join(tmpdir(), "unity-project-without-manifest-"));
+  await Promise.all([
+    mkdir(join(project, "Assets")),
+    mkdir(join(project, "Packages")),
+    mkdir(join(project, "ProjectSettings"))
+  ]);
 
   const result = await execute(["tools", "run", "package.install", "com.acme.lib", "--project", project, "--yes"], runtime);
   assert.ok(!result.ok);
-  assert.equal(result.error?.code, "MANIFEST_NOT_FOUND");
+  assert.equal(result.error?.code, "E_INSTANCE_REQUIRED");
 });
 
 test("package resolve job maps version conflicts to package diagnostics", async () => {
@@ -830,7 +879,7 @@ process.stdout.write("E_PACKAGE_RESOLVE_FAILED: version conflict for com.acme.li
 process.exit(1);
 `);
 
-  const created = await execute(["tools", "run", "package.resolve", "--yes", "--project", project, "--unity", unity], runtime);
+  const created = await execute(["tools", "run", "package.resolve", "--yes", "--project", project, "--unity", unity, "--job"], runtime);
   assert.ok(created.ok);
   const waited = await runtime.runner.wait((dataOf(created) as { jobId: string }).jobId, 3000);
   assert.equal(waited.status, "failed");
@@ -847,7 +896,7 @@ process.stdout.write("Packages\\\\com.unity_cli\\\\Editor\\\\UnityCliBatch.cs(13
 process.exit(1);
 `);
 
-  const created = await execute(["tools", "run", "package.resolve", "--yes", "--project", project, "--unity", unity], runtime);
+  const created = await execute(["tools", "run", "package.resolve", "--yes", "--project", project, "--unity", unity, "--job"], runtime);
   assert.ok(created.ok);
   const waited = await runtime.runner.wait((dataOf(created) as { jobId: string }).jobId, 3000);
   assert.equal(waited.status, "failed");
@@ -975,7 +1024,7 @@ test("init --agent pi installs unitypkg + pi skill", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const result = await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  const result = await execute(["init", "--project", project, "--agent", "pi"], runtime);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.action, "init");
@@ -995,7 +1044,7 @@ test("init --agent pi,claude installs unitypkg + two skills", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const result = await execute(["init", "--project", project, "--agent", "pi,claude", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  const result = await execute(["init", "--project", project, "--agent", "pi,claude"], runtime);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package);
@@ -1011,7 +1060,7 @@ test("init --pkg-only installs unitypkg only, no skills", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const result = await execute(["init", "--project", project, "--pkg-only", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  const result = await execute(["init", "--project", project, "--pkg-only"], runtime);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
@@ -1078,7 +1127,7 @@ test("init --check without --agent checks only unitypkg when no agent dir exists
   const project = await makeUnityProject();
 
   // Install first
-  await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  await execute(["init", "--project", project], runtime);
 
   const checkResult = await execute(["init", "--check", "--project", project], runtime);
   assert.ok(checkResult.ok);
@@ -1093,7 +1142,7 @@ test("init --check without --agent checks auto-detected agent skills", async () 
   await mkdir(join(project, ".pi"), { recursive: true });
 
   // Install first
-  await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  await execute(["init", "--project", project], runtime);
 
   const checkResult = await execute(["init", "--check", "--project", project], runtime);
   assert.ok(checkResult.ok);
@@ -1112,7 +1161,7 @@ test("init --check --agent pi checks unitypkg + skill", async () => {
   const project = await makeUnityProject();
 
   // Install first
-  await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  await execute(["init", "--project", project, "--agent", "pi"], runtime);
 
   const checkResult = await execute(["init", "--check", "--project", project, "--agent", "pi"], runtime);
   assert.ok(checkResult.ok);
@@ -1130,7 +1179,7 @@ test("init --check --skill-only --agent pi checks only skill", async () => {
   const project = await makeUnityProject();
 
   // Install first
-  await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  await execute(["init", "--project", project, "--agent", "pi"], runtime);
 
   const checkResult = await execute(["init", "--check", "--skill-only", "--agent", "pi", "--project", project], runtime);
   assert.ok(checkResult.ok);
@@ -1143,7 +1192,7 @@ test("init without --agent defaults to unitypkg-only when no agent dir exists", 
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const result = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  const result = await execute(["init", "--project", project], runtime);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
@@ -1155,7 +1204,7 @@ test("init without --agent installs skill for existing agent directory", async (
   const project = await makeUnityProject();
   await mkdir(join(project, ".pi"), { recursive: true });
 
-  const result = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  const result = await execute(["init", "--project", project], runtime);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
@@ -1223,7 +1272,7 @@ test("init --check --agent on missing skill reports missing", async () => {
   const project = await makeUnityProject();
 
   // Install unitypkg only (not skills)
-  await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  await execute(["init", "--project", project], runtime);
 
   const checkResult = await execute(["init", "--check", "--agent", "pi", "--project", project], runtime);
   assert.ok(checkResult.ok);

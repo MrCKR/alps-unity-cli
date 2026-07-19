@@ -83,6 +83,7 @@ namespace UnityCli
                     "The installed com.unity.memoryprofiler version may be incompatible.");
             }
 
+            ctx.CommitEffect();
             return await ctx.Wait.ForCallback<Result>((complete, fail) =>
             {
                 var callback = new Action<string, bool>((capturedPath, captureResult) =>
@@ -99,11 +100,18 @@ namespace UnityCli
 
                         var finalPath = capturedPath ?? outputPath;
                         var info = new FileInfo(finalPath);
+                        if (!info.Exists || info.Length <= 0)
+                        {
+                            fail(new UnityCliBridge.BridgeCommandException("E_PROFILER_SNAPSHOT_ARTIFACT_MISSING",
+                                "MemoryProfiler reported success without a non-empty snapshot artifact: " + finalPath,
+                                "Check available disk space and the Unity Console, then retry the snapshot."));
+                            return;
+                        }
                         complete(new Result
                         {
                             Command = "profiler.memory-snapshot.take",
                             Path = finalPath,
-                            SizeBytes = info.Exists ? info.Length : 0L,
+                            SizeBytes = info.Length,
                             PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.memory-snapshot.take", Path = finalPath } }
                         });
                     }

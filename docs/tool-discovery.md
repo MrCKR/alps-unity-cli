@@ -52,7 +52,7 @@ unity_cli tools group
 当 Bridge 可达时，`tools group` 会自动发现项目自定义工具的分组：
 
 ```powershell
-unity_cli tools group --bridge-endpoint http://127.0.0.1:47392
+unity_cli tools group --include-custom --instance <instanceId|projectPath|alias>
 ```
 
 ## tools group list
@@ -163,4 +163,5 @@ unity_cli tools describe my.custom-tool --include-custom
 
 - `E_TOOL_NOT_FOUND_FOR_TARGET` → 工具在当前目标不可用，检查 `requiresPackages`、`extensionAvailability` 和目标实例状态
 - `E_RUNTIME_NOT_READY` → Runtime 工具需要 Play Mode 活跃，检查 `target: "runtime"`
-- `E_TARGET_AMBIGUOUS` → 多个实例可用，需要显式指定 `--target`
+- `E_INSTANCE_CONFLICT` -> 同一 canonical project 存在多个 Unity Editor process/session claim，关闭重复 Editor 后再执行
+- `E_INSTANCE_NOT_RUNNING` -> 选定项目没有可验证的运行中 Editor；静态内置/Extension catalog 仍可离线发现

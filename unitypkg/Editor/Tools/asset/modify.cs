@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 
 namespace UnityCli
@@ -45,12 +46,19 @@ namespace UnityCli
             AssetToolSupport.EnsureEditorNotBusy("asset.modify");
             var path = AssetToolSupport.RequireExistingAssetPath(request.Path);
             var content = request.Content;
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+            var textExtensions = new HashSet<string> { ".txt", ".json", ".xml", ".csv", ".md", ".yaml", ".yml", ".uss", ".uxml", ".shader", ".cginc", ".compute", ".asmdef", ".asmref" };
+            if (!textExtensions.Contains(extension) || Directory.Exists(AssetToolSupport.AssetFullPath(path)))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_MODIFY_TYPE_UNSUPPORTED", "asset.modify only supports existing ordinary text files with a safe extension: " + path, "Use an approved text extension or the specialized asset tool.");
             if (content == null)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_CONTENT_REQUIRED", "Asset modify requires content or content-file.", "Pass text content for a text-like asset file.");
             }
+            ctx.CommitEffect();
             AssetToolSupport.WriteTextAsset(path, content, true);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            if (!File.Exists(AssetToolSupport.AssetFullPath(path)) || File.ReadAllText(AssetToolSupport.AssetFullPath(path)) != content)
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_MODIFY_STATE_MISMATCH", "Fresh asset bytes did not match the requested content: " + path, "Check file permissions and retry.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Asset = AssetToolSupport.BuildAssetDetail(path),

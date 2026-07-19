@@ -1,4 +1,6 @@
 #if UNITY_EDITOR
+using UnityEngine;
+
 namespace UnityCli
 {
     /// <summary>清空目标 ParticleSystem 的活动粒子。</summary>
@@ -19,11 +21,18 @@ namespace UnityCli
             }
         };
 
-        public System.Threading.Tasks.ValueTask<VfxParticleActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<VfxParticleActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var particleSystem = VfxActionToolSupport.RequireParticle(request.Target, "vfx.particle.clear");
-            particleSystem.Clear(request.WithChildren ?? true);
-            return new System.Threading.Tasks.ValueTask<VfxParticleActionResult>(VfxActionToolSupport.BuildParticleResult(particleSystem, "vfx.particle.clear", context.LogPath));
+            var withChildren = request.WithChildren ?? true;
+            var gameObjectId = particleSystem.gameObject.GetInstanceID();
+            ctx.CommitEffect();
+
+            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.clear");
+            particleSystem.Clear(withChildren);
+            await VfxActionToolSupport.RequireParticleState(particleSystem, withChildren, system => system.particleCount == 0, "vfx.particle.clear", ctx, ct);
+            var observed = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.clear");
+            return VfxActionToolSupport.BuildParticleResult(observed, "vfx.particle.clear", ctx.LogPath);
         }
     }
 }

@@ -1,6 +1,6 @@
 # Cinemachine 工具
 
-Unity Cinemachine 智能相机系统的 CLI 工具集。提供可用性检测、虚拟相机创建、目标跟踪、镜头控制、优先级管理、混合配置、Body/Aim 管线组件、Brain 强制 override、噪声和扩展组件管理。
+Unity Cinemachine 智能相机系统的 CLI 工具集。支持 Cinemachine CM2 与 CM3 的公开相机、管线和扩展 API，提供可用性检测、虚拟相机创建、目标跟踪、镜头控制、优先级管理、混合配置、Body/Aim 管线组件、噪声和扩展组件管理。
 
 ## 工具列表
 
@@ -17,11 +17,9 @@ Unity Cinemachine 智能相机系统的 CLI 工具集。提供可用性检测、
 | `cinemachine.noise` | 添加、配置或移除多通道 Perlin 噪声组件 |
 | `cinemachine.brain.ensure` | 确保目标相机挂载 CinemachineBrain |
 | `cinemachine.brain.status` | 读取 Brain 及当前活动虚拟相机状态 |
-| `cinemachine.force-camera` | 调用 CinemachineBrain.SetCameraOverride 强制切到目标虚拟相机，并返回 overrideId |
-| `cinemachine.release-override` | 使用 overrideId 释放上一条强制相机 override |
 | `cinemachine.extension.list` | 列出目标上的 CinemachineExtension 派生组件 |
-| `cinemachine.extension.add` | 添加 CinemachineExtension 派生组件 |
-| `cinemachine.extension.remove` | 移除 CinemachineExtension 派生组件 |
+| `cinemachine.extension.add` | 添加 CinemachineExtension 派生组件，并重新枚举相机扩展确认存在 |
+| `cinemachine.extension.remove` | 移除 CinemachineExtension 派生组件，并重新枚举相机扩展确认不存在 |
 
 ## 前置条件
 

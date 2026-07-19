@@ -62,7 +62,7 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("set-face-uvs", "No ProBuilderMesh on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).ToArray();
 
             var faces = faceIndices != null && faceIndices.Length > 0
                 ? ProBuilderReflection.GetFacesByIndices(mesh, faceIndices)
@@ -71,76 +71,54 @@ namespace UnityCli.ProBuilder
             if (faces == null || faces.Length == 0)
                 throw ProBuilderErrors.OperationFailed("set-face-uvs", "No faces found on target.");
 
-            var scaleVal = request.Scale.HasValue ? (float?)request.Scale.Value : null;
-            var offsetU = request.OffsetU.HasValue ? (float?)request.OffsetU.Value : null;
-            var offsetV = request.OffsetV.HasValue ? (float?)request.OffsetV.Value : null;
-            var rotation = request.Rotation.HasValue ? (float?)request.Rotation.Value : null;
+            var scaleVal = request.Scale.HasValue ? (float?)ProBuilderOperationProof.CheckedFloat(request.Scale.Value, "scale") : null;
+            var offsetU = request.OffsetU.HasValue ? (float?)ProBuilderOperationProof.CheckedFloat(request.OffsetU.Value, "offsetU") : null;
+            var offsetV = request.OffsetV.HasValue ? (float?)ProBuilderOperationProof.CheckedFloat(request.OffsetV.Value, "offsetV") : null;
+            var rotation = request.Rotation.HasValue ? (float?)ProBuilderOperationProof.CheckedFloat(request.Rotation.Value, "rotation") : null;
             var flipU = request.FlipU;
             var flipV = request.FlipV;
+            var faceType = ProBuilderReflection.GetFaceType();
+            var uvProperty = faceType?.GetProperty("uv", BindingFlags.Instance | BindingFlags.Public);
+            var autoUnwrapType = uvProperty?.PropertyType;
+            var scaleField = autoUnwrapType?.GetField("scale", BindingFlags.Instance | BindingFlags.Public);
+            var offsetField = autoUnwrapType?.GetField("offset", BindingFlags.Instance | BindingFlags.Public);
+            var rotationField = autoUnwrapType?.GetField("rotation", BindingFlags.Instance | BindingFlags.Public);
+            var flipUField = autoUnwrapType?.GetField("flipU", BindingFlags.Instance | BindingFlags.Public);
+            var flipVField = autoUnwrapType?.GetField("flipV", BindingFlags.Instance | BindingFlags.Public);
+            var refreshUvParameterType = faceType == null ? null : typeof(IEnumerable<>).MakeGenericType(faceType);
+            var refreshUvMethod = refreshUvParameterType == null ? null : ProBuilderReflection.GetProBuilderMeshType()?.GetMethod(
+                "RefreshUV", BindingFlags.Instance | BindingFlags.Public, null, new[] { refreshUvParameterType }, null);
+            if (uvProperty == null || !uvProperty.CanRead || !uvProperty.CanWrite || scaleField == null || offsetField == null
+                || rotationField == null || flipUField == null || flipVField == null || refreshUvMethod == null
+                || refreshUvMethod.ReturnType != typeof(void) || !refreshUvParameterType.IsInstanceOfType(faces)
+                || (scaleVal.HasValue && scaleField.FieldType != typeof(Vector2))
+                || ((offsetU.HasValue || offsetV.HasValue) && offsetField.FieldType != typeof(Vector2))
+                || (rotation.HasValue && rotationField.FieldType != typeof(float))
+                || flipUField.FieldType != typeof(bool) || flipVField.FieldType != typeof(bool))
+                throw ProBuilderErrors.OperationFailed("set-face-uvs", "Required ProBuilder 5.2.4 UV members are unavailable or have incompatible types.");
+            if (faces.Cast<object>().Any(face => face == null || uvProperty.GetValue(face) == null))
+                throw ProBuilderErrors.OperationFailed("set-face-uvs", "A requested face has unreadable AutoUnwrapSettings.");
 
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Set Face UVs");
-
-            // 通过反射修改 Face.uv 属性
-            try
+            foreach (var face in faces)
             {
-                var faceType = ProBuilderReflection.GetFaceType();
-                if (faceType != null)
-                {
-                    var uvProperty = faceType.GetProperty("uv");
-                    if (uvProperty != null)
-                    {
-                        var autoUnwrapType = uvProperty.PropertyType;
-
-                        // 解析 AutoUnwrapSettings 类型上的字段/属性
-                        var scaleField = autoUnwrapType.GetField("scale") ?? (MemberInfo)autoUnwrapType.GetProperty("scale");
-                        var offsetField = autoUnwrapType.GetField("offset");
-                        var rotField = autoUnwrapType.GetField("rotation");
-                        var flipUField = autoUnwrapType.GetField("flipU");
-                        var flipVField = autoUnwrapType.GetField("flipV");
-
-                        foreach (var face in faces)
-                        {
-                            var uvSettings = uvProperty.GetValue(face);
-                            if (uvSettings == null) continue;
-
-                            if (scaleVal.HasValue && scaleField is FieldInfo scaleFi)
-                                scaleFi.SetValue(uvSettings, new Vector2(scaleVal.Value, scaleVal.Value));
-                            else if (scaleVal.HasValue && scaleField is PropertyInfo scalePi)
-                                scalePi.SetValue(uvSettings, new Vector2(scaleVal.Value, scaleVal.Value));
-
-                            if (offsetU.HasValue || offsetV.HasValue)
-                            {
-                                if (offsetField != null)
-                                    offsetField.SetValue(uvSettings, new Vector2(offsetU ?? 0f, offsetV ?? 0f));
-                            }
-
-                            if (rotation.HasValue && rotField != null)
-                                rotField.SetValue(uvSettings, rotation.Value);
-
-                            if (flipU && flipUField != null)
-                                flipUField.SetValue(uvSettings, true);
-
-                            if (flipV && flipVField != null)
-                                flipVField.SetValue(uvSettings, true);
-
-                            uvProperty.SetValue(face, uvSettings);
-                        }
-
-                        // 刷新 UV
-                        var refreshUVMethod = ProBuilderReflection.GetProBuilderMeshType()?.GetMethod("RefreshUV",
-                            BindingFlags.Instance | BindingFlags.Public);
-                        if (refreshUVMethod != null)
-                        {
-                            var allFaces = ProBuilderReflection.GetAllFaces(mesh);
-                            refreshUVMethod.Invoke(mesh, new[] { allFaces });
-                        }
-                    }
-                }
+                var uvSettings = uvProperty.GetValue(face);
+                if (scaleVal.HasValue) scaleField.SetValue(uvSettings, new Vector2(scaleVal.Value, scaleVal.Value));
+                if (offsetU.HasValue || offsetV.HasValue) offsetField.SetValue(uvSettings, new Vector2(offsetU ?? 0f, offsetV ?? 0f));
+                if (rotation.HasValue) rotationField.SetValue(uvSettings, rotation.Value);
+                flipUField.SetValue(uvSettings, flipU);
+                flipVField.SetValue(uvSettings, flipV);
+                uvProperty.SetValue(face, uvSettings);
             }
-            catch (Exception) { }
+            refreshUvMethod.Invoke(mesh, new object[] { faces });
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.RequestedFacesHaveUv(freshMesh, faceIndices ?? Enumerable.Range(0, faces.Length).ToArray(), scaleVal, offsetU, offsetV, rotation, flipU, flipV))
+                throw ProBuilderErrors.OperationFailed("set-face-uvs", "Every requested face did not retain the requested UV fields.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { UpdatedFaceCount = faces.Length });
         }

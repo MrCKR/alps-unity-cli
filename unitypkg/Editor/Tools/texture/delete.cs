@@ -1,5 +1,7 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 
 namespace UnityCli
@@ -43,31 +45,48 @@ namespace UnityCli
             }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             TextureToolSupport.EnsureEditorNotBusy("texture.delete");
             var path = TextureToolSupport.ResolveTexturePath(request.Path ?? request.Target);
             if (ctx.DryRun)
             {
-                return new System.Threading.Tasks.ValueTask<Result>(new Result
+                return new Result
                 {
                     Command = "texture.delete",
                     DryRun = true,
                     Texture = TextureToolSupport.BuildTextureInfo(path, TextureToolSupport.LoadTextureAsset(path)),
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.delete", Path = path } }
-                });
+                };
             }
+            ctx.CommitEffect();
             if (!AssetDatabase.DeleteAsset(path))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_DELETE_FAILED", "Failed to delete texture asset: " + path, "Check Unity Console and file permissions.");
             }
             AssetDatabase.Refresh();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            var fullPath = AssetToolSupport.AssetFullPath(path);
+            var deleted = await ctx.Wait.Until(
+                () => !File.Exists(fullPath)
+                    && !Directory.Exists(fullPath)
+                    && string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path))
+                    && AssetDatabase.LoadMainAssetAtPath(path) == null,
+                TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)),
+                ct);
+            var observedExists = File.Exists(fullPath)
+                || Directory.Exists(fullPath)
+                || !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path))
+                || AssetDatabase.LoadMainAssetAtPath(path) != null;
+            if (!deleted || observedExists)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_DELETE_PROOF_MISSING", "Texture deletion was not observed in the file system and AssetDatabase: " + path, "Inspect Unity Console and file permissions before retrying.");
+            }
+            return new Result
             {
                 Command = "texture.delete",
-                Texture = new TextureInfo { Path = path },
+                Texture = new TextureInfo { Path = path, SizeBytes = 0 },
                 PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.delete", Path = path } }
-            });
+            };
         }
     }
 }

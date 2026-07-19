@@ -54,7 +54,7 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("duplicate-and-flip", "No ProBuilderMesh on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).ToArray();
 
             var faces = faceIndices != null && faceIndices.Length > 0
                 ? ProBuilderReflection.GetFacesByIndices(mesh, faceIndices)
@@ -63,6 +63,11 @@ namespace UnityCli.ProBuilder
             if (faces == null || faces.Length == 0)
                 throw ProBuilderErrors.OperationFailed("duplicate-and-flip", "No faces found on target.");
 
+            var requestedFaceIndices = faceIndices ?? Enumerable.Range(0, ProBuilderReflection.GetFaceCount(mesh)).ToArray();
+            ProBuilderOperationProof.ValidateFaceIndices(mesh, requestedFaceIndices);
+            var before = ProBuilderOperationProof.Capture(mesh, faceIndices: requestedFaceIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("duplicate-and-flip", "Requested face geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Duplicate and Flip");
             var duplicated = ProBuilderReflection.DuplicateAndFlip(mesh, faces);
             if (!duplicated)
@@ -70,6 +75,10 @@ namespace UnityCli.ProBuilder
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, faceIndices: requestedFaceIndices);
+            if (!ProBuilderOperationProof.HasTopologyExpansion(before, after))
+                throw ProBuilderErrors.OperationFailed("duplicate-and-flip", "Requested faces did not produce readable duplicated topology.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { DuplicatedCount = faces.Length });
         }

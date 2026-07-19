@@ -64,22 +64,31 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("insert-vertex", "No ProBuilderMesh on target.");
 
-            var point = new Vector3((float)request.X, (float)request.Y, (float)request.Z);
+            var point = ProBuilderOperationProof.CheckedVector3(request.X, request.Y, request.Z, "point");
 
             if ((request.Edge != null) == request.FaceIndex.HasValue)
                 throw ProBuilderErrors.SchemaInvalid("Pass exactly one of edge or faceIndex for insert-vertex.");
-
+            var requestedFaces = request.FaceIndex.HasValue ? new[] { ProBuilderOperationProof.CheckedInt(request.FaceIndex.Value, "faceIndex") } : null;
+            var requestedEdges = request.Edge == null ? null : ProBuilderOperationProof.ValidateEdges(mesh, null, new[] { new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(request.Edge.A, "edge.a"), b = ProBuilderOperationProof.CheckedInt(request.Edge.B, "edge.b") } });
+            if (requestedFaces != null) ProBuilderOperationProof.ValidateFaceIndices(mesh, requestedFaces);
+            var before = ProBuilderOperationProof.Capture(mesh, requestedFaces, requestedEdges);
+            if (before == null) throw ProBuilderErrors.OperationFailed("insert-vertex", "Requested insertion geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Insert Vertex");
 
             var vertexCountBefore = ProBuilderReflection.GetVertexCount(mesh);
             var inserted = request.Edge != null
-                ? ProBuilderReflection.InsertVertexOnEdgeByPair(mesh, (int)request.Edge.A, (int)request.Edge.B, point)
-                : ProBuilderReflection.InsertVertexInFace(mesh, (int)request.FaceIndex.Value, point);
-            var vertexCountAfter = ProBuilderReflection.GetVertexCount(mesh);
-            if (!inserted || vertexCountBefore < 0 || vertexCountAfter < 0)
+                ? ProBuilderReflection.InsertVertexOnEdgeByPair(mesh, ProBuilderOperationProof.CheckedInt(request.Edge.A, "edge.a"), ProBuilderOperationProof.CheckedInt(request.Edge.B, "edge.b"), point)
+                : ProBuilderReflection.InsertVertexInFace(mesh, ProBuilderOperationProof.CheckedInt(request.FaceIndex.Value, "faceIndex"), point);
+            if (!inserted || vertexCountBefore < 0)
+                throw ProBuilderErrors.OperationFailed("insert-vertex", "ProBuilder 5.x AppendElements insertion failed.");
+            ProBuilderReflection.RefreshMesh(mesh);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var vertexCountAfter = ProBuilderReflection.GetVertexCount(freshMesh);
+            var after = ProBuilderOperationProof.Capture(freshMesh, requestedFaces, requestedEdges);
+            if (vertexCountAfter < 0 || !ProBuilderOperationProof.HasInsertedVertices(before, after))
                 throw ProBuilderErrors.OperationFailed("insert-vertex", "ProBuilder 5.x AppendElements insertion failed.");
 
-            ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result

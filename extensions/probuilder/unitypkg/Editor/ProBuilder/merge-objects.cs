@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -56,11 +57,21 @@ namespace UnityCli.ProBuilder
                 throw ProBuilderErrors.PackageNotAvailable();
 
             var targets = ProBuilderInput.ResolveTargets(request.Targets);
-            if (targets == null || targets.Length < 2)
-                throw ProBuilderErrors.SchemaInvalid("At least 2 targets required for merge-objects.");
+            if (request.Targets == null || targets == null || targets.Length != request.Targets.Count || targets.Length < 2)
+                throw ProBuilderErrors.SchemaInvalid("At least 2 unique, unambiguous targets required for merge-objects.");
 
             var name = request.Name ?? "ProBuilder_Merged";
             var autoConvert = request.AutoConvert ?? true;
+            if (!autoConvert && targets.Any(target => ProBuilderReflection.GetProBuilderMesh(target) == null))
+                throw ProBuilderErrors.SchemaInvalid("autoConvert=false requires every target to already have a ProBuilderMesh component.");
+            var sourceIds = targets.Select(target => target.GetInstanceID()).ToArray();
+            var minimumFaceCount = targets.Sum(target =>
+            {
+                var sourceMesh = ProBuilderReflection.GetProBuilderMesh(target);
+                var faceCount = sourceMesh == null ? 0 : ProBuilderReflection.GetFaceCount(sourceMesh);
+                if (faceCount < 0) throw ProBuilderErrors.OperationFailed("merge-objects", "A source mesh has unreadable face topology.");
+                return faceCount;
+            });
 
             // 收集或转换 ProBuilder 网格
             var pbMeshes = new List<object>();
@@ -83,6 +94,8 @@ namespace UnityCli.ProBuilder
                 }
             }
 
+            // Conversion mutates its source objects, so all preconditions above are complete.
+            ctx.CommitEffect();
             // 转换非 ProBuilder 对象
             foreach (var go in nonPbObjects)
             {
@@ -94,7 +107,6 @@ namespace UnityCli.ProBuilder
 
             if (pbMeshes.Count < 2)
                 throw ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required after conversion.");
-
             Undo.RecordObject(targets[0], "ProBuilder Merge Objects");
 
             var merged = ProBuilderReflection.CombineMeshesViaReflection(pbMeshes.ToArray(), pbMeshes[0]);
@@ -105,6 +117,10 @@ namespace UnityCli.ProBuilder
             var firstGo = targets[0];
             if (!string.IsNullOrEmpty(name)) firstGo.name = name;
             EditorSceneManager.MarkSceneDirty(firstGo.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(sourceIds[0].ToString());
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (freshGo == null || freshGo.name != name || !ProBuilderRequestProof.SourcesWereRemovedAndGeometryIncluded(freshGo, freshMesh, sourceIds, minimumFaceCount))
+                throw ProBuilderErrors.OperationFailed("merge-objects", "Sources did not disappear into a result containing their geometry.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

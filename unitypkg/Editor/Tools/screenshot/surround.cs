@@ -110,6 +110,7 @@ namespace UnityCli
                 });
             }
 
+            ctx.CommitEffect();
             Directory.CreateDirectory(outputFullDir);
             ScreenshotToolSupport.CreateScreenshotDirectory(contactSheetPath);
             var tempGo = new GameObject("__unity_cli_surround_cam__");
@@ -130,11 +131,11 @@ namespace UnityCli
                     cam.transform.LookAt(center);
                     var tile = ScreenshotToolSupport.RenderScreenshotTexture(cam, width, height);
                     tiles.Add(tile);
-                    ScreenshotToolSupport.WriteScreenshotBytes(shotPaths[i], tile.EncodeToPNG());
+                    var proof = ScreenshotToolSupport.WriteScreenshotBytes(shotPaths[i], tile.EncodeToPNG());
                     artifacts.Add(new SurroundShot
                     {
                         Angle = labels[i],
-                        Artifact = new ScreenshotArtifactEntry { Source = "surround", Path = shotPaths[i], Camera = "surround:" + labels[i], Width = width, Height = height, Format = "png" },
+                        Artifact = new ScreenshotArtifactEntry { Source = "surround", Path = shotPaths[i], Camera = "surround:" + labels[i], Width = width, Height = height, Format = "png", SizeBytes = proof.SizeBytes, Sha256 = proof.Sha256 },
                         CameraPosition = new double[] { positions[i].x, positions[i].y, positions[i].z }
                     });
                 }
@@ -148,11 +149,12 @@ namespace UnityCli
                 UnityEngine.Object.DestroyImmediate(tempGo);
             }
 
+            var contactProof = ScreenshotToolSupport.VerifyScreenshotArtifact(contactSheetPath, "png");
             var result = new Result
             {
                 Command = "screenshot.surround", Target = go.name,
                 Center = new double[] { center.x, center.y, center.z }, Radius = radius, Count = 6,
-                ContactSheet = new ScreenshotArtifactEntry { Source = "surround-contact-sheet", Path = contactSheetPath, Width = width * 3, Height = height * 2, Format = "png" },
+                ContactSheet = new ScreenshotArtifactEntry { Source = "surround-contact-sheet", Path = contactSheetPath, Width = width * 3, Height = height * 2, Format = "png", SizeBytes = contactProof.SizeBytes, Sha256 = contactProof.Sha256 },
                 Artifacts = artifacts
             };
             if (request.InlineBase64 && contactBytes != null && contactBytes.Length <= 512 * 1024)

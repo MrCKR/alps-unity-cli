@@ -18,17 +18,21 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "profiler.frame", Summary = "Read current frame count, timing, module diagnostics and FrameTimingManager CPU/GPU fields.",
-            Description = "Read current frame count, timing, selected profiler module diagnostics and FrameTimingManager CPU/GPU timing fields.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Description = "Capture FrameTimingManager timing, then return current frame count, selected profiler module diagnostics, and CPU/GPU timing fields.",
+            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "frame-timing-capture" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read frame timing", Input = new Request { } } }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default) => new System.Threading.Tasks.ValueTask<Result>(new Result
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
+            ctx.CommitEffect();
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            {
             Profiler = ProfilerToolSupport.BuildProfilerState(),
             Frame = ProfilerToolSupport.BuildProfilerFrame(request.Module ?? "CPU Usage")
-        });
+            });
+        }
     }
 }
 #endif

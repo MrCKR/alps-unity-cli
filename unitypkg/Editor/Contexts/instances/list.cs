@@ -1,9 +1,6 @@
 #if UNITY_EDITOR
-using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Reflection;
 using UnityEngine;
 
 namespace UnityCli.Contexts.Instances
@@ -20,7 +17,6 @@ namespace UnityCli.Contexts.Instances
             public string InstanceId { get; set; }
             public string ProjectPath { get; set; }
             public string UnityVersion { get; set; }
-            public string BridgeEndpoint { get; set; }
             public string Status { get; set; }
         }
 
@@ -33,8 +29,8 @@ namespace UnityCli.Contexts.Instances
         public ContextDescriptor Describe() => new ContextDescriptor
         {
             Name = "instances.list",
-            Summary = "Read the current Unity Bridge instance summary from the live Editor process.",
-            Description = "Read the live Unity Bridge process instance summary currently serving this request. This observes the active Bridge listener only; it does not read or prune the CLI instance registry on disk and does not modify targets.",
+            Summary = "Read the current logical Unity project instance summary from the live Editor process.",
+            Description = "Read the CanonicalPath v1 project identity and Editor readiness visible to the current Unity process. Transport listeners, endpoints, ports, and generations are private session-supervisor state.",
             Category = "instances",
             Version = "1.0.0",
             Source = "built-in",
@@ -46,24 +42,17 @@ namespace UnityCli.Contexts.Instances
         };
 
         /// <summary>
-        /// 读取当前 Bridge listener 的只读摘要；通过窄反射读取 Bridge 自身的实例字段。
-    /// </summary>
+        /// <summary>读取当前 Editor 的逻辑项目 identity；transport generation 不进入 Context 结果。</summary>
         public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var listenerId = ReadBridgeStringField("ListenerId") ?? "unknown";
-            var bridgePort = ReadBridgeIntField("port");
-            var endpoint = bridgePort > 0
-                ? "http://127.0.0.1:" + bridgePort.ToString(CultureInfo.InvariantCulture)
-                : null;
-
+            var identity = UnityCliCanonicalProjectPath.Resolve(ProjectRoot(ctx));
             var instances = new List<InstanceInfo>
             {
                 new InstanceInfo
                 {
-                    InstanceId = listenerId,
-                    ProjectPath = ProjectRoot(ctx),
+                    InstanceId = identity.InstanceId,
+                    ProjectPath = identity.CanonicalProjectPath,
                     UnityVersion = Application.unityVersion,
-                    BridgeEndpoint = endpoint,
                     Status = "ready"
                 }
             };
@@ -73,22 +62,6 @@ namespace UnityCli.Contexts.Instances
                 Instances = instances,
                 Count = instances.Count
             });
-        }
-
-        // 读取 UnityCliBridge 私有静态字符串字段，供实例摘要使用。
-        private static string ReadBridgeStringField(string name)
-        {
-            var field = typeof(UnityCliBridge).GetField(name, BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            return field == null ? null : field.GetValue(null) as string;
-        }
-
-        // 读取 UnityCliBridge 私有静态 int 字段；找不到时返回 0，让调用方省略 endpoint。
-        private static int ReadBridgeIntField(string name)
-        {
-            var field = typeof(UnityCliBridge).GetField(name, BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            if (field == null) return 0;
-            var value = field.GetValue(null);
-            return value is int intValue ? intValue : 0;
         }
 
         // 优先使用 registry 注入的项目路径；缺失时回退到当前 Unity project root。

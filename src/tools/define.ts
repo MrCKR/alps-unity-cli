@@ -38,6 +38,8 @@ export interface ToolDefinition<TReq = unknown, TRes = unknown> {
 export interface ToolContext {
   requestId: string;
   projectPath: string;
+  /** dispatcher 入口冻结的绝对截止时间；本地前置工作与 Bridge 等待必须共同消费。 */
+  absoluteDeadlineMs?: number;
   /** 命令层执行控制，不属于 Tool Request 或公开业务 schema。 */
   execution: {
     dryRun?: boolean;
@@ -45,10 +47,13 @@ export interface ToolContext {
     job?: boolean;
     wait?: boolean;
     waitTimeoutMs?: number;
-    retry?: number;
   };
   /** CLI data 目录,用于离线 cache 与 job store。 */
   dataDir?: string;
+  /** TS mutation 在全部前置校验后、首个业务 effect 前调用；dispatcher 注入 durable barrier。 */
+  commitEffect?: () => Promise<void>;
+  /** 当前 direct TS mutation 是否由 local root journal 托管；仅用于派生内部 child requestId。 */
+  localJournalActive?: boolean;
   /** artifact 目录(可写)。 */
   artifactDir: string;
   /** bridge 日志路径。 */
@@ -59,10 +64,8 @@ export interface ToolContext {
   projectTools?: ToolMetadata[];
   /** 运行时已发现的项目自定义 Context,供 diagnose.capabilities 保持统一 discovery 语义。 */
   projectContexts?: unknown[];
-  /** 可选 live Bridge 执行器,供 defineTool 包装既有 live/offline 混合工具。 */
+  /** 可选 live Bridge 执行器，仅供 defineTool 的隔离测试 transport。 */
   bridgeExecute?: BridgeRuntime["bridgeExecute"];
-  /** 可选 live Bridge endpoint,供 describe/run 输入与 runtime 默认值组合。 */
-  bridgeEndpoint?: string;
   /** 测试或宿主注入的文档抓取器,用于 docs online fallback,避免工具内部直接绑定全局网络。 */
   fetch?: BuiltinDocsRuntime["fetch"];
   /** CLI job store,供 build/test/job 类 defineTool 读取持久化 job 状态。 */

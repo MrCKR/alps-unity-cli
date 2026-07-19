@@ -10,7 +10,7 @@ export interface TestRunRequest {
   unity?: string;
 }
 
-export interface TestRunObject {}
+export interface TestRunObject { [key: string]: AnyJson; }
 
 export interface TestRunError {
   code: string;
@@ -75,8 +75,7 @@ async function startTestRunJob(request: TestRunRequest, context: ToolContext): P
     dataDir: context.dataDir,
     store: context.jobStore,
     runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute,
-    bridgeEndpoint: context.bridgeEndpoint
+    bridgeExecute: context.bridgeExecute
   }, context.requestId, ["-runTests", "-testPlatform", platform, "-testResults", resultPath], {
     action: "test",
     platform,

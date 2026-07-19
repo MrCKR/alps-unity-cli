@@ -54,6 +54,7 @@ namespace UnityCli
 
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
+            ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
 
             var prevTarget = camera.targetTexture;
@@ -85,11 +86,12 @@ namespace UnityCli
                 UnityEngine.Object.DestroyImmediate(rt);
             }
 
+            var artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, format);
             var result = new Result
             {
                 ScreenshotPath = outputPath, ArtifactPath = outputPath, Format = format,
                 Width = width, Height = height, Transparent = request.Transparent, Quality = quality,
-                Source = "scene-view", Target = "SceneView.camera"
+                Source = "scene-view", Target = "SceneView.camera", SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256
             };
             ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
             return new System.Threading.Tasks.ValueTask<Result>(result);

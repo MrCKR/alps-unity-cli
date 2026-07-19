@@ -18,8 +18,10 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("hdrp.volume.add-effect"); HdrpToolSupport.EnsureHdrpAvailable();
-            var target = HdrpVolumeOperations.AddEffect(request.Target, request.EffectType, "E_HDRP", HdrpToolSupport.FindVolumeEffectType);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "hdrp.volume.add-effect", Target = GameObjectToolSupport.BuildGameObjectRef(target), EffectType = request.EffectType, PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.add-effect", Target = GameObjectToolSupport.HierarchyPath(target), EffectType = request.EffectType } }, LogPath = ctx.LogPath });
+            HdrpVolumeOperations.ValidateAddEffect(request.Target, request.EffectType, "E_HDRP", HdrpToolSupport.FindVolumeEffectType);
+            ctx.CommitEffect();
+            var added = HdrpVolumeOperations.AddEffect(request.Target, request.EffectType, "E_HDRP", HdrpToolSupport.FindVolumeEffectType);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "hdrp.volume.add-effect", Target = GameObjectToolSupport.BuildGameObjectRef(added.GameObject), EffectType = added.ObservedEffectType, PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.add-effect", Target = GameObjectToolSupport.HierarchyPath(added.GameObject), EffectType = added.ObservedEffectType } }, LogPath = ctx.LogPath });
         }
     }
 }

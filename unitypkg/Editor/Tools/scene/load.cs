@@ -49,10 +49,14 @@ namespace UnityCli
             SceneToolSupport.EnsureEditorNotBusy("scene.load");
             request = request ?? new Request();
             var path = SceneToolSupport.ResolveExistingScenePath(request.Path, request.Name);
+            ctx.CommitEffect();
             var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            var observedScene = SceneManager.GetActiveScene();
+            if (!observedScene.isLoaded || observedScene.path != path || observedScene.handle != scene.handle)
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_LOAD_STATE_MISMATCH", "Active scene did not match the requested scene after load.", "Inspect open scenes and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Scene = SceneToolSupport.BuildSceneInfo(scene),
+                Scene = SceneToolSupport.BuildSceneInfo(observedScene),
                 RequestedPath = path,
                 PlannedEffects = new List<ScenePlannedEffect>
                 {

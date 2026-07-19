@@ -9,18 +9,31 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "vfx.control.play", Summary = "Play a VisualEffect component.",
-            Description = "Start the existing VisualEffect component on one target GameObject.",
+            Description = "Play the VisualEffect and prove a running transition through pause=false plus a changed positive aliveParticleCount. Fails closed when the graph exposes no observable particle transition.",
             Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Play the matrix emitter", Input = new Request { Target = "Effects/Emitter" } } }
         };
 
-        public System.Threading.Tasks.ValueTask<VfxControlActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<VfxControlActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.control.play");
+            var beforeAlive = VfxActionToolSupport.ReadLong(effect, "aliveParticleCount");
+            if (!beforeAlive.HasValue)
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_STATE_UNOBSERVABLE", "VisualEffect aliveParticleCount is unavailable for play proof.", "Use a Visual Effect Graph version exposing aliveParticleCount.");
+            var gameObjectId = effect.gameObject.GetInstanceID(); var effectType = effect.GetType();
+            VfxActionToolSupport.PrepareControlMethod(effectType, "Play");
+            VfxActionToolSupport.PrepareWritableBoolProperty(effectType, "pause");
+            ctx.CommitEffect();
+
+            effect = VfxActionToolSupport.ResolveObservedEffect(gameObjectId, effectType, "vfx.control.play");
             VfxActionToolSupport.InvokeRequired(effect, "Play");
-            return new System.Threading.Tasks.ValueTask<VfxControlActionResult>(VfxActionToolSupport.BuildControlResult(effect, "vfx.control.play", context.LogPath));
+            VfxActionToolSupport.SetRequired(effect, "pause", false);
+            await VfxActionToolSupport.RequirePauseState(effect, false, "play", ctx, ct);
+            await VfxActionToolSupport.RequireAliveState(effect, count => count > 0 && count != beforeAlive.Value, "play", ctx, ct);
+            effect = VfxActionToolSupport.ResolveObservedEffect(gameObjectId, effectType, "vfx.control.play");
+            return VfxActionToolSupport.BuildControlResult(effect, "vfx.control.play", ctx.LogPath);
         }
     }
 }

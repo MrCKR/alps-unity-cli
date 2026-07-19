@@ -41,8 +41,19 @@ namespace UnityCli
         {
             var resolved = PhysicsJointToolSupport.Resolve(request.Target, request.Type, "physics.joint.add");
             var target = resolved.Item1;
+            var targetId = target.GetInstanceID();
             var type = resolved.Item2;
             var existing = target.GetComponent(type) as Joint;
+            Rigidbody connectedBody = null;
+            var connectedBodyId = 0;
+            if (!string.IsNullOrEmpty(request.ConnectedBody))
+            {
+                var connectedTarget = GameObjectToolSupport.ResolveUniqueTarget(request.ConnectedBody, "Connected body target not found.");
+                connectedBody = connectedTarget.GetComponent<Rigidbody>();
+                if (connectedBody == null)
+                    throw new UnityCliBridge.BridgeCommandException("E_RIGIDBODY_NOT_FOUND", "Connected body target has no Rigidbody: " + connectedTarget.name, "Add a Rigidbody to the connected body before adding this joint.");
+                connectedBodyId = connectedBody.GetInstanceID();
+            }
             if (ctx.DryRun)
             {
                 return new ValueTask<PhysicsJointResult>(new PhysicsJointResult
@@ -56,6 +67,7 @@ namespace UnityCli
             }
 
             ct.ThrowIfCancellationRequested();
+            ctx.CommitEffect();
             if (existing == null) UnityCliSceneMutation.AddComponent(target, type);
             var joint = target.GetComponent(type) as Joint;
             if (joint == null)
@@ -66,15 +78,22 @@ namespace UnityCli
                     "Confirm the requested joint type is compatible with the target GameObject and retry.");
             }
 
-            if (!string.IsNullOrEmpty(request.ConnectedBody))
+            if (connectedBody != null)
             {
-                var connectedTarget = GameObjectToolSupport.ResolveUniqueTarget(request.ConnectedBody, "Connected body target not found.");
-                joint.connectedBody = connectedTarget.GetComponent<Rigidbody>();
+                joint.connectedBody = connectedBody;
+                if (joint.connectedBody != connectedBody)
+                    throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_JOINT_ADD_STATE_MISMATCH", "Joint connectedBody did not match the requested Rigidbody.", "Inspect the Joint component and retry after the Editor is idle.");
             }
             UnityCliSceneMutation.MarkSceneDirty(target.scene);
+            // proof 必须从 instance ID 重解析目标、Joint 及 connectedBody，不能复用写前引用。
+            var observedTarget = EditorUtility.InstanceIDToObject(targetId) as GameObject;
+            var observedJoint = observedTarget == null ? null : observedTarget.GetComponent(type) as Joint;
+            var observedConnectedBody = connectedBodyId == 0 ? null : EditorUtility.InstanceIDToObject(connectedBodyId) as Rigidbody;
+            if (observedJoint == null || (connectedBodyId != 0 && (observedConnectedBody == null || observedJoint.connectedBody != observedConnectedBody)))
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_JOINT_ADD_STATE_MISMATCH", "Requested Joint component state was not present after mutation.", "Inspect the target GameObject and retry.");
             return new ValueTask<PhysicsJointResult>(new PhysicsJointResult
             {
-                Target = PhysicsJointToolSupport.TargetRef(target),
+                Target = PhysicsJointToolSupport.TargetRef(observedTarget),
                 Type = type.Name,
                 Exists = true,
                 PlannedEffects = PhysicsJointToolSupport.Effects("physics.joint.add", existing == null ? "add" : "configure", type.Name)

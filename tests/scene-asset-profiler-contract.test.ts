@@ -80,8 +80,23 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
 
   assert.match(consoleSource, /class ConsoleGetTool : IUnityCliTool/);
   assert.match(consoleSource, /Skip\(cursor\)\.Take\(count\)/);
-  assert.match(menuSource, /class EditorMenuTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(r\.Path\)/);
+  assert.match(menuSource, /class EditorMenuTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(request\.Path\)/);
+  assert.match(menuSource, /E_MENU_COMPLETION_UNSUPPORTED[\s\S]*Use a dedicated Tool, or use File\/Save/);
+  assert.match(menuSource, /string\.Equals\(request\.Path, "File\/Save"/);
+  assert.match(menuSource, /ctx\.Wait\.UntilStable\([\s\S]*!activeScene\.isDirty/);
+  assert.match(menuSource, /scene\.isDirty/);
   assert.doesNotMatch(menuSource, /unity_cli editor menu/);
+});
+
+test("asset preview and delete expose only terminal observed state", async () => {
+  const previewSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/preview.cs", import.meta.url), "utf8");
+  const deleteSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/delete.cs", import.meta.url), "utf8");
+
+  assert.match(previewSource, /AssetPreview\.GetAssetPreview\(asset\)[\s\S]*ctx\.Wait\.Until\([\s\S]*!AssetPreview\.IsLoadingAssetPreview\(instanceId\)[\s\S]*AssetPreview\.GetAssetPreview\(asset\)/);
+  assert.match(previewSource, /IsTransient = false/);
+  assert.match(previewSource, /E_ASSET_PREVIEW_TIMEOUT/);
+  assert.match(deleteSource, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*AssetPathToGUID\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.match(deleteSource, /E_ASSET_DELETE_PROOF_MISSING/);
 });
 
 test("build/animation/package sources keep current typed-result flows", async () => {
@@ -103,7 +118,8 @@ test("build/animation/package sources keep current typed-result flows", async ()
   assert.match(animationSource, /AnimationUtility\.GetAnimationClipSettings\(clip\)/);
   assert.match(animationSource, /AnimationUtility\.SetAnimationClipSettings\(clip, settings\)/);
   assert.match(animationSource, /if \(r\.LoopTime\.HasValue\) settings\.loopTime = r\.LoopTime\.Value/);
-  assert.match(animationSource, /if \(!string\.IsNullOrEmpty\(r\.WrapMode\) && System\.Enum\.TryParse<WrapMode>\(r\.WrapMode, true, out var wm\)\) clip\.wrapMode = wm/);
+  assert.match(animationSource, /var wm = AnimationToolSupport\.ValidateClipSettings\(r\.FrameRate, r\.WrapMode, r\.StartTime, r\.StopTime, r\.Length\)/);
+  assert.match(animationSource, /if \(!string\.IsNullOrEmpty\(r\.WrapMode\)\) clip\.wrapMode = wm/);
   assert.match(controllerSource, /ControllerCreateBlendTree1DTool[\s\S]*E_STATE_EXISTS/);
   assert.match(controllerSource, /ControllerCreateBlendTree2DTool[\s\S]*E_STATE_EXISTS/);
   assert.match(controllerSource, /ControllerGetInfoTool[\s\S]*Parameters = parameters/);

@@ -71,13 +71,30 @@ test("reflection.method.call supports instanceRef and confirmation flow", async 
 test("reflection.method.call example is executable and overload selection is explicit", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/reflection/method/call.cs", import.meta.url), "utf8");
   const reflection = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliReflection.cs", import.meta.url), "utf8");
-  assert.match(source, /TypeName = "UnityEngine\.Random", MethodName = "InitState", Args = new object\[\] \{ 12345 \}/);
+  assert.match(source, /TypeName = "UnityEngine\.Mathf", MethodName = "Abs"/);
+  assert.match(source, /ParameterTypes = new List<string> \{ "System\.Single" \}/);
   assert.match(source, /public List<string> ParameterTypes/);
   assert.match(source, /request\.Args, request\.ParameterTypes, request\.InstanceRef/);
   assert.match(reflection, /private static MethodInfo ResolveCallMethod/);
   assert.match(reflection, /E_METHOD_AMBIGUOUS/);
+  assert.match(reflection, /RequireSynchronousResult/);
+  assert.match(reflection, /E_METHOD_COMPLETION_UNPROVABLE/);
+  assert.match(reflection, /E_METHOD_INVOCATION_FAILED/);
+  assert.doesNotMatch(reflection, /audit\["ok"\] = false/);
   assert.doesNotMatch(reflection, /type\.GetMethod\(methodName, bindings\)/);
   assert.doesNotMatch(source, /MethodName = "Translate"/);
+});
+
+test("reflection probe bake requires Unity output and a readable cubemap artifact", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/graphics/bake-reflection-probe.cs", import.meta.url), "utf8");
+  assert.match(source, /E_REFLECTION_PROBE_BAKE_FAILED/);
+  assert.match(source, /E_REFLECTION_PROBE_BAKE_ARTIFACT_MISSING/);
+  assert.match(source, /AssetDatabase\.ImportAsset\(probePath, ImportAssetOptions\.ForceSynchronousImport\)/);
+  assert.match(source, /AssetDatabase\.LoadAssetAtPath<Cubemap>\(probePath\)/);
+  assert.match(source, /File\.ReadAllBytes\(outputPath\)/);
+  assert.match(source, /E_REFLECTION_PROBE_BAKE_ARTIFACT_INVALID/);
+  assert.match(source, /info\.Length < 4/);
+  assert.match(source, /var bytes = File\.ReadAllBytes\(outputPath\)/);
 });
 
 test("bridge specs resolve for reflection and type tools", () => {

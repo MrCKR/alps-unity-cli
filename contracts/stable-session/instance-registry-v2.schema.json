@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/contracts/stable-session/instance-registry-v2.schema.json",
+  "title": "Unity CLI instance registry v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "revision", "canonicalizationVersion", "identity", "sessions", "updatedAt"],
+  "properties": {
+    "version": { "const": 2 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "canonicalizationVersion": { "const": 1 },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instanceId", "canonicalProjectPath", "displayProjectPath"],
+      "properties": {
+        "instanceId": { "type": "string", "pattern": "^unity-[0-9a-f]{64}$" },
+        "canonicalProjectPath": { "type": "string", "minLength": 3 },
+        "displayProjectPath": { "type": "string", "minLength": 3 }
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/session" }
+    },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["editorSessionId", "processId", "processStartedAt", "lastHeartbeatAt", "claimVerification", "state", "lastUnitySnapshot", "listener", "progress", "blockers", "buildStamp"],
+      "properties": {
+        "editorSessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
+        "processId": { "type": "integer", "minimum": 1 },
+        "processStartedAt": { "type": "string", "format": "date-time" },
+        "lastHeartbeatAt": { "type": "string", "format": "date-time" },
+        "claimVerification": { "enum": ["verified", "unverifiable"] },
+        "state": { "enum": ["ready", "transitioning", "blocked"] },
+        "lastUnitySnapshot": { "$ref": "#/$defs/snapshot" },
+        "listener": { "$ref": "#/$defs/listener" },
+        "progress": { "type": "array", "items": { "$ref": "#/$defs/progress" } },
+        "blockers": { "type": "array", "items": { "$ref": "#/$defs/blocker" } },
+        "unityVersion": { "type": "string" },
+        "buildStamp": { "type": "string" },
+        "toolCatalogFingerprint": { "type": "string" }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "observedAt", "sourceEditorSessionId", "sourceListenerGeneration", "fields"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "sourceEditorSessionId": { "type": "string" },
+        "sourceListenerGeneration": { "type": "integer", "minimum": 1 },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["compile", "import", "build", "playMode", "prefabStage", "activeScene", "runtime"],
+          "properties": {
+            "compile": { "$ref": "#/$defs/knownField" },
+            "import": { "$ref": "#/$defs/knownField" },
+            "build": { "$ref": "#/$defs/knownField" },
+            "playMode": { "$ref": "#/$defs/knownField" },
+            "prefabStage": { "$ref": "#/$defs/knownField" },
+            "activeScene": { "$ref": "#/$defs/knownField" },
+            "runtime": { "$ref": "#/$defs/knownField" }
+          }
+        }
+      }
+    },
+    "knownField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["known"],
+      "properties": {
+        "known": { "type": "boolean" },
+        "value": true
+      }
+    },
+    "listener": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["listenerId", "generation", "startedAt", "endpoint"],
+      "properties": {
+        "listenerId": { "type": "string", "pattern": "^listener-[0-9a-f]{32}$" },
+        "generation": { "type": "integer", "minimum": 1 },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "endpoint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["host", "preferredPort", "actualPort", "fallback", "url"],
+          "properties": {
+            "host": { "const": "127.0.0.1" },
+            "preferredPort": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+            "actualPort": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+            "fallback": { "type": "boolean" },
+            "url": { "type": "string", "pattern": "^http://127\\.0\\.0\\.1:[0-9]+$" }
+          }
+        }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "title", "canWait", "source"],
+      "properties": {
+        "kind": { "type": "string" },
+        "title": { "type": "string" },
+        "value": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "canWait": { "type": "boolean" },
+        "source": { "enum": ["unity", "registry"] }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "title", "message", "requiresUserAction", "canAutoResolve", "source", "confidence"],
+      "properties": {
+        "kind": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "requiresUserAction": { "type": "boolean" },
+        "canAutoResolve": { "const": false },
+        "source": { "enum": ["unity", "windows-ui", "registry"] },
+        "confidence": { "enum": ["exact", "inferred", "unknown"] }
+      }
+    }
+  }
+}

@@ -55,22 +55,27 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("weld-vertices", "No ProBuilderMesh on target.");
 
-            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).Distinct().ToArray();
+            int[] vertexIndices = request.VertexIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "vertexIndices")).Distinct().ToArray();
             var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
             if (vertexIndices == null || vertexIndices.Length < 2)
                 throw ProBuilderErrors.SchemaInvalid("At least 2 unique vertexIndices are required for weld-vertices.");
             if (vertexCount < 0 || vertexIndices.Any(index => index < 0 || index >= vertexCount))
                 throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
-            var radius = (float)(request.Radius ?? 0.01);
+            var radius = ProBuilderOperationProof.CheckedFloat(request.Radius ?? 0.01, "radius");
             if (radius <= 0)
                 throw ProBuilderErrors.SchemaInvalid("radius must be greater than 0.");
 
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Weld Vertices");
             var welded = ProBuilderReflection.WeldVerticesWithRadius(mesh, vertexIndices, radius);
             if (welded < 0)
                 throw ProBuilderErrors.OperationFailed("weld-vertices", "ProBuilder 5.x VertexEditing.WeldVertices failed.");
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.SelectedVerticesWereWelded(freshMesh, vertexIndices, radius))
+                throw ProBuilderErrors.OperationFailed("weld-vertices", "Requested vertices were not welded within the requested radius.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { WeldedCount = welded });
         }

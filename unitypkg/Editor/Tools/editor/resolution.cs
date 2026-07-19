@@ -18,10 +18,16 @@ namespace UnityCli
             EditorToolSupport.EnsureEditorNotBusy("editor.resolution");
             var width = Math.Max(1, r.Width ?? PlayerSettings.defaultScreenWidth);
             var height = Math.Max(1, r.Height ?? PlayerSettings.defaultScreenHeight);
+            ctx.CommitEffect();
             PlayerSettings.defaultScreenWidth = width;
             PlayerSettings.defaultScreenHeight = height;
             if (r.Fullscreen.HasValue) PlayerSettings.fullScreenMode = r.Fullscreen.Value ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Resolution = new ResolutionInfo { Width = width, Height = height, FullScreenMode = PlayerSettings.fullScreenMode.ToString() }, PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.resolution" } } });
+            var observedWidth = PlayerSettings.defaultScreenWidth;
+            var observedHeight = PlayerSettings.defaultScreenHeight;
+            var observedMode = PlayerSettings.fullScreenMode;
+            if (observedWidth != width || observedHeight != height || (r.Fullscreen.HasValue && observedMode != (r.Fullscreen.Value ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed)))
+                throw new UnityCliBridge.BridgeCommandException("E_EDITOR_RESOLUTION_STATE_MISMATCH", "PlayerSettings resolution readback did not match the request.", "Inspect Player Settings and retry after the Editor is idle.");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Resolution = new ResolutionInfo { Width = observedWidth, Height = observedHeight, FullScreenMode = observedMode.ToString() }, PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.resolution" } } });
         }
     }
 }

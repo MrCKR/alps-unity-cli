@@ -22,6 +22,16 @@ namespace UnityCli
             if (ac == null) throw new UnityCliBridge.BridgeCommandException("E_ANIMATOR_NO_CONTROLLER", "Animator has no AnimatorController assigned: " + GameObjectToolSupport.HierarchyPath(go), "Assign an AnimatorController asset.");
             var param = AnimationToolSupport.FindAnimatorParameter(animator, r.ParameterName);
             if (param == null) throw new UnityCliBridge.BridgeCommandException("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + r.ParameterName + "' not found: " + GameObjectToolSupport.HierarchyPath(go), "Run animator.get-info to list parameters.");
+            var expectedFloat = 0f;
+            var expectedInt = 0;
+            var expectedBool = false;
+            switch (param.type)
+            {
+                case AnimatorControllerParameterType.Float: expectedFloat = GameObjectToolSupport.ParseFloat(r.Value ?? "0", r.ParameterName); break;
+                case AnimatorControllerParameterType.Int: expectedInt = int.Parse(r.Value ?? "0", System.Globalization.CultureInfo.InvariantCulture); break;
+                case AnimatorControllerParameterType.Bool: expectedBool = bool.Parse(r.Value ?? "false"); break;
+            }
+            ctx.CommitEffect();
             Undo.RecordObject(ac, "Set Animator Parameter Default");
             var parameters = ac.parameters;
             for (var i = 0; i < parameters.Length; i++)
@@ -30,16 +40,31 @@ namespace UnityCli
                 {
                     switch (param.type)
                     {
-                        case AnimatorControllerParameterType.Float: parameters[i].defaultFloat = GameObjectToolSupport.ParseFloat(r.Value ?? "0", r.ParameterName); break;
-                        case AnimatorControllerParameterType.Int: parameters[i].defaultInt = int.Parse(r.Value ?? "0", System.Globalization.CultureInfo.InvariantCulture); break;
-                        case AnimatorControllerParameterType.Bool: parameters[i].defaultBool = bool.Parse(r.Value ?? "false"); break;
+                        case AnimatorControllerParameterType.Float: parameters[i].defaultFloat = expectedFloat; break;
+                        case AnimatorControllerParameterType.Int: parameters[i].defaultInt = expectedInt; break;
+                        case AnimatorControllerParameterType.Bool: parameters[i].defaultBool = expectedBool; break;
                     }
                     break;
                 }
             }
             ac.parameters = parameters;
-            EditorUtility.SetDirty(ac); AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Parameter = new AnimatorParameterRef { Name = r.ParameterName, Type = param.type.ToString() }, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-parameter", Target = GameObjectToolSupport.HierarchyPath(go), Parameter = r.ParameterName } } });
+            EditorUtility.SetDirty(ac);
+            var observedController = AnimationToolSupport.ReloadControllerAsset(AssetDatabase.GetAssetPath(ac));
+            AnimatorControllerParameter observedParameter = null;
+            if (observedController != null) foreach (var candidate in observedController.parameters) if (candidate.name == r.ParameterName) { observedParameter = candidate; break; }
+            if (observedParameter == null || !DefaultValueMatches(observedParameter, r.Value)) throw AnimationToolSupport.StateMismatch("E_ANIMATOR_PARAMETER_STATE_MISMATCH", "AnimatorController parameter default");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Parameter = new AnimatorParameterRef { Name = observedParameter.name, Type = observedParameter.type.ToString() }, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-parameter", Target = GameObjectToolSupport.HierarchyPath(go), Parameter = observedParameter.name } } });
+        }
+
+        private static bool DefaultValueMatches(AnimatorControllerParameter parameter, string value)
+        {
+            switch (parameter.type)
+            {
+                case AnimatorControllerParameterType.Float: return Mathf.Approximately(parameter.defaultFloat, GameObjectToolSupport.ParseFloat(value ?? "0", parameter.name));
+                case AnimatorControllerParameterType.Int: return parameter.defaultInt == int.Parse(value ?? "0", System.Globalization.CultureInfo.InvariantCulture);
+                case AnimatorControllerParameterType.Bool: return parameter.defaultBool == bool.Parse(value ?? "false");
+                default: return true;
+            }
         }
     }
 }

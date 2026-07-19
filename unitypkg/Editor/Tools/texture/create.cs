@@ -62,25 +62,35 @@ namespace UnityCli
             TextureToolSupport.EnsureEditorNotBusy("texture.create");
             var path = TextureToolSupport.RequireTexturePath(request.Path);
             var overwrite = request.Overwrite ?? false;
+            TextureToolSupport.ValidateTextureSettings(BuildSettings(request));
+            if (string.IsNullOrEmpty(request.Source) && ((request.Width.HasValue && request.Width.Value <= 0) || (request.Height.HasValue && request.Height.Value <= 0)))
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_RANGE_INVALID", "Generated texture width and height must be positive.", "Pass positive width and height.");
+            var settings = BuildSettings(request);
+            byte[] sourceBytes = null;
+            byte[] generatedBytes = null;
+            if (!string.IsNullOrEmpty(request.Source)) sourceBytes = ReadAndValidateSource(request.Source);
+            else generatedBytes = EncodeGeneratedTexture(path, request);
             if (AssetToolSupport.AssetExists(path) && !overwrite)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_OUTPUT_EXISTS", "Texture output already exists: " + path, "Pass --overwrite or choose a different texture asset path.");
             }
 
+            ctx.CommitEffect();
             AssetToolSupport.CreateAssetDirectory(path);
             if (!string.IsNullOrEmpty(request.Source))
             {
-                CopyTextureSource(request.Source, path, overwrite);
+                CopyTextureSource(sourceBytes, path, overwrite);
             }
             else
             {
-                WriteGeneratedTexture(path, request);
+                File.WriteAllBytes(AssetToolSupport.AssetFullPath(path), generatedBytes);
+                AssetDatabase.Refresh();
             }
 
             try
             {
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-                TextureToolSupport.ApplyTextureSettings(TextureToolSupport.RequireTextureImporter(path), BuildSettings(request), true);
+                TextureToolSupport.ApplyTextureSettings(TextureToolSupport.RequireTextureImporter(path), settings, true);
                 AssetDatabase.SaveAssets();
             }
             catch (UnityCliBridge.BridgeCommandException)
@@ -104,34 +114,38 @@ namespace UnityCli
             });
         }
 
-        private static void CopyTextureSource(string source, string destinationPath, bool overwrite)
+        private static byte[] ReadAndValidateSource(string source)
         {
             var sourcePath = AssetToolSupport.NormalizeAssetPath(source);
-            var fullSource = sourcePath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)
-                ? AssetToolSupport.AssetFullPath(sourcePath)
-                : Path.GetFullPath(source.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar));
+            var fullSource = sourcePath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ? AssetToolSupport.AssetFullPath(sourcePath) : Path.GetFullPath(source);
+            if (!File.Exists(fullSource)) throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SOURCE_NOT_FOUND", "Texture source file not found: " + source, "Pass an existing texture source file.");
+            var bytes = File.ReadAllBytes(fullSource);
+            var decoded = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            try { if (!ImageConversion.LoadImage(decoded, bytes)) throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_DECODE_FAILED", "Texture source could not be decoded: " + source, "Pass a valid image source file."); }
+            finally { UnityEngine.Object.DestroyImmediate(decoded); }
+            return bytes;
+        }
+
+        private static void CopyTextureSource(byte[] sourceBytes, string destinationPath, bool overwrite)
+        {
             var fullDestination = AssetToolSupport.AssetFullPath(destinationPath);
-            if (!File.Exists(fullSource))
-            {
-                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SOURCE_NOT_FOUND", "Texture source file not found: " + source, "Pass --source with an existing file path or Assets/ texture path.");
-            }
             if (File.Exists(fullDestination) && overwrite)
             {
                 File.Delete(fullDestination);
             }
-            File.Copy(fullSource, fullDestination, overwrite);
+            File.WriteAllBytes(fullDestination, sourceBytes);
             AssetDatabase.Refresh();
         }
 
-        private static void WriteGeneratedTexture(string path, Request request)
+        private static byte[] EncodeGeneratedTexture(string path, Request request)
         {
             var extension = Path.GetExtension(path).ToLowerInvariant();
             if (extension != ".png" && extension != ".jpg" && extension != ".jpeg")
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_FORMAT_UNSUPPORTED", "Generated textures can only be written as .png or .jpg: " + path, "Pass --source for other texture formats.");
             }
-            var width = Math.Max(1, request.Width ?? 1);
-            var height = Math.Max(1, request.Height ?? 1);
+            var width = request.Width ?? 1;
+            var height = request.Height ?? 1;
             var color = TextureToolSupport.ParseTextureColor(request.Color);
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             try
@@ -141,8 +155,7 @@ namespace UnityCli
                 texture.SetPixels(pixels);
                 texture.Apply();
                 var bytes = extension == ".png" ? texture.EncodeToPNG() : texture.EncodeToJPG(95);
-                File.WriteAllBytes(AssetToolSupport.AssetFullPath(path), bytes);
-                AssetDatabase.Refresh();
+                return bytes;
             }
             finally
             {

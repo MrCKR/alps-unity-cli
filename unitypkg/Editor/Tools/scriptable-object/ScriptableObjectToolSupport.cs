@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
@@ -40,7 +41,11 @@ namespace UnityCli
         /// <summary>Assets/ 路径规范化:反斜杠转正斜杠并去首尾空白。</summary>
         public static string NormalizeAssetPath(string rawPath)
         {
-            return string.IsNullOrEmpty(rawPath) ? null : rawPath.Replace('\\', '/').Trim();
+            if (string.IsNullOrWhiteSpace(rawPath)) return null;
+            var path = rawPath.Replace('\\', '/').Trim();
+            if (path.Split('/').Any(segment => segment == "." || segment == ".."))
+                throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_PATH_INVALID", "ScriptableObject path must not contain '.' or '..' segments: " + path, "Pass a canonical Assets/*.asset path without path traversal segments.");
+            return path;
         }
 
         /// <summary>Unity 工程根目录(Assets 的父目录)。</summary>
@@ -52,7 +57,12 @@ namespace UnityCli
         /// <summary>确保资产目录存在,缺失则创建并刷新 AssetDatabase。</summary>
         public static void CreateAssetDirectory(string assetPath)
         {
-            var directory = Path.GetDirectoryName(assetPath);
+            var path = RequireScriptableObjectPath(assetPath);
+            var fullPath = Path.GetFullPath(Path.Combine(ProjectRoot(), path.Replace('/', Path.DirectorySeparatorChar)));
+            var assetsPath = Path.GetFullPath(Application.dataPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!fullPath.StartsWith(assetsPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_PATH_INVALID", "ScriptableObject path resolves outside Application.dataPath: " + path, "Pass a canonical Assets/*.asset path.");
+            var directory = Path.GetDirectoryName(path);
             if (string.IsNullOrEmpty(directory) || AssetDatabase.IsValidFolder(directory.Replace('\\', '/')))
             {
                 return;
@@ -107,9 +117,9 @@ namespace UnityCli
                     if (type != null) break;
                 }
             }
-            if (type == null || !typeof(ScriptableObject).IsAssignableFrom(type))
+            if (type == null || !typeof(ScriptableObject).IsAssignableFrom(type) || type.IsAbstract || type.ContainsGenericParameters)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_TYPE_NOT_FOUND", "ScriptableObject type not found: " + typeName, "Use a type deriving from UnityEngine.ScriptableObject.");
+                throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_TYPE_NOT_FOUND", "ScriptableObject type is not instantiable: " + typeName, "Use a concrete, non-generic type deriving from UnityEngine.ScriptableObject.");
             }
             return type;
         }

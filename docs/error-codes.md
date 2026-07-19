@@ -9,12 +9,12 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
   "ok": false,
   "requestId": "req-xxx",
   "error": {
-    "code": "E_TARGET_AMBIGUOUS",
-    "message": "Multiple ready instances found.",
-    "details": "...",
+    "code": "E_INSTANCE_CONFLICT",
+    "message": "Multiple Unity Editor sessions claim the selected project.",
+    "details": { "instanceId": "unity-...", "status": "conflict" },
     "nextActions": [
-      "Run unity_cli instances list to discover targets.",
-      "Run unity_cli target set <id|alias> to select a target."
+      "Close every duplicate Editor process except the intended session.",
+      "Run unity_cli instances list to verify one session remains."
     ],
     "transient": false,
     "retryAfterMs": 0
@@ -24,14 +24,18 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 ## 错误分类
 
-### Target / Instance 错误
+### Project Identity / Instance 错误
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_TARGET_NOT_FOUND` | 无可用目标实例 | `instances list` 检查实例 |
-| `E_TARGET_STALE` | target ID 校验后的 health probe 暂未恢复 stale 注册 | `transient:true`；按 `retryAfterMs` 重试，持续失败再清理注册 |
-| `E_TARGET_UNREACHABLE` | `/health` 无响应、响应畸形或 target ID 不匹配 | `transient:true`；检查 Bridge 身份并按 `retryAfterMs` 重试 |
-| `E_TARGET_AMBIGUOUS` | 多个就绪实例 | `target set <id>` 显式选择 |
+| `E_INSTANCE_REQUIRED` | 没有显式 selector，CWD 也不在 Unity 项目中 | 传完整 `--instance <id|projectPath|alias>` 或从项目目录调用 |
+| `E_INSTANCE_NOT_FOUND` | selector 无法解析到 canonical project identity | 运行 `instances list` 或核对项目路径/alias |
+| `E_INSTANCE_NOT_RUNNING` | 项目 identity 已确定，但没有可验证的运行中 Editor | 打开该项目并等待 Bridge 注册 |
+| `E_INSTANCE_CONFLICT` | 同一项目被多个 Unity Editor process/session 声明，或 process claim 无法唯一证明 | 关闭重复 Editor，只保留目标 session |
+| `E_INSTANCE_IDENTITY_MISMATCH` | registry、health 或请求中的 canonical identity 不一致 | 停止调用并检查项目移动、registry claim 或 Bridge 安装 |
+| `E_INSTANCE_PROJECT_MISMATCH` | 显式项目约束与 selector 指向不同 identity | 统一 `--project` 和 `--instance` |
+| `E_INSTANCE_PATH_UNAVAILABLE` | 无法取得可证明的物理 canonical path | 修复不可访问路径、broken link 或 reparse 配置 |
+| `E_INSTANCE_REMOTE_PATH_UNSUPPORTED` | 项目位于不支持的远程路径 | 使用本机可验证项目路径 |
 
 ### Runtime / Play Mode 错误
 
@@ -88,26 +92,33 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_METHOD_AMBIGUOUS` | 多个 overload 与参数数量匹配 | 将选中签名的 `parameterType` 数组作为 `parameterTypes` 重试 |
 | `E_TYPE_NOT_FOUND` | 目标类型或参数类型不存在 | 使用完整 C# type name |
 
-### 执行错误
+### 执行与 durable terminal 错误
 
 | 错误码 | 含义 |
 |--------|------|
-| `E_UNITY_BUSY` | Unity 正忙 |
-| `E_EXECUTION_TIMEOUT` | 执行超时 |
-| `E_CODE_COMPILE_FAILED` | 代码编译失败 |
-| `E_CODE_RUNTIME_EXCEPTION` | 代码运行时异常 |
+| `E_UNITY_BLOCKED` | 已证明存在需要外部处理的 Unity/UI blocker |
+| `E_UNITY_TRANSITION_TIMEOUT` | 可恢复 lifecycle transition 未在 absolute deadline 内稳定 |
+| `E_CONTEXT_READ_TIMEOUT` | Context 未在同一 validated generation 上完成读取 |
+| `E_EXECUTION_TIMEOUT` | Tool 业务 operation 在 effect 前或其契约 deadline 内未完成 |
+| `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
+| `E_REQUEST_OUTCOME_UNKNOWN` | effect 已可能发生，但 durable terminal proof 不可用；禁止 blind replay |
+| `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
+| `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
+| `E_UNITY_COMPILE_FAILED` | owned compilation cycle 完成且包含 compiler error；details 带本次 diagnostics |
+| `E_CODE_COMPILE_FAILED` | Runtime Code 编译失败 |
+| `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常 |
 | `E_IO_ERROR` | IO 错误 |
 
 ## AI Agent 错误处理流程
 
 1. 读取 `error.code` 确定错误类别
-2. 检查 `transient` — 若为 true，等待 `retryAfterMs` 后重试
-3. 遵循 `nextActions` 的建议恢复
-4. 不要猜测恢复方式，使用建议的命令
+2. 检查 `transient` 和 `retryAfterMs`；只有错误明确允许时才提交新的逻辑请求
+3. `E_REQUEST_OUTCOME_UNKNOWN` 必须先独立观察业务状态，不能原样 blind replay
+4. 遵循 `nextActions`；可恢复 compile/import/reload/listener transition 已由 supervisor 内部处理
 
 ### nextActions 规则
 
-- Target 错误的 `nextActions` 必须指向 `instances list` 或 `target set`
+- Instance 错误的 `nextActions` 必须指向 `instances list`、显式 `--instance`、项目路径或关闭重复 Editor
 - Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
 - Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search` 或 `tools describe`
 - 诊断错误的 `nextActions` 必须指向 `doctor` 或 `tools run diagnose.preflight`

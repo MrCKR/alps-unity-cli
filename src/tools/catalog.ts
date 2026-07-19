@@ -1,12 +1,14 @@
-import { getBoolean, getString } from "../args.js";
+import { getBoolean } from "../args.js";
 import { hasInstanceForFlags } from "../instances.js";
 import {
   discoverProjectTools,
   discoverRuntimeTools,
-  shouldDiscoverProjectTools,
+  projectDescriptorToToolMetadata,
   type ProjectToolRuntime
 } from "../project-tool-discovery.js";
+import { staticCapabilityCatalog } from "../static-capability-catalog.js";
 import type { CliResult } from "../types.js";
+import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "./.generated-completion-registry.js";
 import {
   builtinToolMetadata,
   inferToolRiskLevel,
@@ -22,10 +24,24 @@ import {
 export type ToolCatalogRuntime = ProjectToolRuntime & { dataDir?: string };
 export type ToolCatalogResult = { ok: true; tools: ToolMetadata[] } | (CliResult & { ok: false });
 
-/** 判断当前调用是否具备 live catalog 目标；无目标时 catalog 严格保持 TS-local。 */
+/** package snapshot 中的 C# built-in/Extension descriptor；ownership 不匹配或结构异常时 fail closed。 */
+export function staticBridgeToolMetadata(): ToolMetadata[] {
+  const bridgeOwners = new Set(GENERATED_TOOL_COMPLETION_CONTRACTS
+    .filter((contract) => contract.descriptorOwner === "built-in" || contract.descriptorOwner.startsWith("extension:"))
+    .map((contract) => contract.toolName));
+  return staticCapabilityCatalog().tools.filter((descriptor) => bridgeOwners.has(String(descriptor.name ?? ""))).map((descriptor) => {
+    const tool = projectDescriptorToToolMetadata(descriptor);
+    if (!tool) throw new Error(`Malformed static Tool descriptor: ${String(descriptor.name ?? "unknown")}`);
+    return tool;
+  });
+}
+
+/** 静态 discovery 永不因 ready instance 自动进入 supervisor；只有显式 custom/runtime 请求才读取 live catalog。 */
 export async function shouldLoadLiveCatalog(flags: Record<string, string | boolean>, runtime: ToolCatalogRuntime): Promise<boolean> {
-  if (getBoolean(flags, "include-custom") || shouldDiscoverProjectTools(flags, runtime)) return true;
-  return typeof runtime.dataDir === "string" && hasInstanceForFlags(flags, runtime.dataDir);
+  return getBoolean(flags, "include-custom")
+    || getBoolean(flags, "runtime")
+    || runtime.projectTools !== undefined
+    || runtime.bridgeExecute !== undefined;
 }
 
 /** 合并 TS-local 与 Bridge 返回的 built-in、extension、project、runtime descriptor。 */
@@ -35,7 +51,7 @@ export async function loadToolCatalog(
   requestId: string,
   options: { requireLive?: boolean } = {}
 ): Promise<ToolCatalogResult> {
-  const tools = [...builtinToolMetadata()];
+  const tools = [...builtinToolMetadata(), ...staticBridgeToolMetadata()];
   const loadLive = options.requireLive === true || await shouldLoadLiveCatalog(flags, runtime);
   if (!loadLive) return { ok: true, tools };
 
@@ -58,9 +74,19 @@ export async function resolveCatalogTool(
   runtime: ToolCatalogRuntime,
   requestId: string
 ): Promise<{ ok: true; tool?: ToolMetadata } | (CliResult & { ok: false })> {
-  const local = builtinToolMetadata().find((tool) => tool.name === name);
+  // editor.state is a Context-only observation capability.
+  if (name === "editor.state") return { ok: true, tool: undefined };
+  if (runtime.projectTools) {
+    const supplied = await discoverProjectTools(flags, runtime, requestId, { requireBridge: true });
+    if (supplied.ok === false) return supplied;
+    const tool = supplied.tools.find((candidate) => candidate.name === name);
+    if (tool) return { ok: true, tool };
+  }
+  const local = [...builtinToolMetadata(), ...staticBridgeToolMetadata()].find((tool) => tool.name === name);
   if (local) return { ok: true, tool: local };
-  if (!await shouldLoadLiveCatalog(flags, runtime)) return { ok: true, tool: undefined };
+  const shouldLoad = await shouldLoadLiveCatalog(flags, runtime)
+    || (typeof runtime.dataDir === "string" && await hasInstanceForFlags(flags, runtime.dataDir));
+  if (!shouldLoad) return { ok: true, tool: undefined };
   const runtimeCatalog = await discoverRuntimeTools(flags, runtime, requestId, { requireBridge: true });
   if (runtimeCatalog.ok === false) return runtimeCatalog;
   const runtimeTool = runtimeCatalog.tools.find((tool) => tool.name === name);
@@ -110,8 +136,6 @@ export function catalogFlags(request: Record<string, unknown>, base: Record<stri
   const flags = { ...base };
   const mappings: Record<string, string> = {
     includeCustom: "include-custom",
-    bridgeEndpoint: "bridge-endpoint",
-    target: "target",
     instance: "instance",
     runtime: "runtime",
     project: "project"
@@ -120,7 +144,5 @@ export function catalogFlags(request: Record<string, unknown>, base: Record<stri
     const value = request[property];
     if (typeof value === "string" || typeof value === "boolean") flags[flag] = value;
   }
-  const endpoint = getString(flags, "bridge-endpoint");
-  if (endpoint) flags["bridge-endpoint"] = endpoint;
   return flags;
 }

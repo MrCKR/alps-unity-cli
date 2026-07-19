@@ -19,13 +19,14 @@ namespace UnityCli
         {
             Name = "profiler.start", Summary = "Begin profiler data collection with optional deep profiling, binary log file and allocation callstacks.",
             Description = "Begin Unity Profiler data collection in the Editor session. May enable deep profiling, binary logging or allocation callstacks.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Start profiler", Input = new Request { } } }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
+            ctx.CommitEffect();
             if (!ProfilerToolSupport.PreviousProfilerEditorRecording.HasValue)
                 ProfilerToolSupport.PreviousProfilerEditorRecording = ProfilerToolSupport.GetProfilerEditorRecording();
             ProfilerToolSupport.SetProfilerEditorRecording(true);
@@ -33,11 +34,21 @@ namespace UnityCli
             ProfilerToolSupport.SetProfilerDeepProfiling(request.DeepProfiling);
             if (!string.IsNullOrEmpty(request.LogFile)) { Profiler.logFile = request.LogFile; Profiler.enableBinaryLog = true; }
             if (request.EnableCallstacks) Profiler.enableAllocationCallstacks = true;
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            var stable = await ctx.Wait.UntilStable(() =>
             {
-                Profiler = ProfilerToolSupport.BuildProfilerState(),
+                var state = ProfilerToolSupport.BuildProfilerState();
+                return state.Enabled && state.ProfileEditor && ProfilerToolSupport.GetProfilerDeepProfiling() == request.DeepProfiling
+                    && (string.IsNullOrEmpty(request.LogFile) || (state.EnableBinaryLog && string.Equals(state.LogFile, request.LogFile, StringComparison.Ordinal)))
+                    && (!request.EnableCallstacks || state.EnableAllocationCallstacks);
+            }, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct: ct);
+            var observed = ProfilerToolSupport.BuildProfilerState();
+            if (!stable || !observed.Enabled || !observed.ProfileEditor || ProfilerToolSupport.GetProfilerDeepProfiling() != request.DeepProfiling || (!string.IsNullOrEmpty(request.LogFile) && (!observed.EnableBinaryLog || !string.Equals(observed.LogFile, request.LogFile, StringComparison.Ordinal))) || (request.EnableCallstacks && !observed.EnableAllocationCallstacks))
+                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_STATE_MISMATCH", "Profiler start write did not produce the requested stable readback.", "Inspect Profiler availability and Editor session state, then retry.");
+            return new Result
+            {
+                Profiler = observed,
                 PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.start" } }
-            });
+            };
         }
     }
 }

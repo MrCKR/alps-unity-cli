@@ -105,7 +105,8 @@ test("graphics bridge spec forwards structured --input fields", async () => {
 test("graphics C# keeps current pipeline/quality/bake implementation details", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/graphics/", import.meta.url));
   assert.match(source, /ResolveQualityLevel[\s\S]*QualitySettings\.names[\s\S]*E_QUALITY_LEVEL_INVALID/, "graphics quality should resolve index or quality level name");
-  assert.match(source, /GraphicsSettings\.defaultRenderPipeline = null/, "pipeline settings should support built-in/null pipeline assignment");
+  assert.match(source, /var pipeline = resetToBuiltIn \? null : AssetDatabase\.LoadAssetAtPath<RenderPipelineAsset>/, "pipeline settings should plan built-in/null assignment before commit");
+  assert.match(source, /GraphicsSettings\.defaultRenderPipeline = pipeline/, "pipeline settings should apply the prevalidated asset or null");
   assert.match(source, /BuildGraphicsSummary\(\)[\s\S]*BuildQualitySettings\(\)/, "pipeline info should return graphics and quality summaries through shared helpers");
   assert.match(source, /new LightingSettings\(\)/, "bake settings writes should create LightingSettings when the scene lacks one");
   assert.match(source, /builtin:Default-Skybox[\s\S]*AssetDatabase\.GetBuiltinExtraResource<Material>\("Default-Skybox\.mat"\)/, "skybox material restore should support Unity built-in default skybox");

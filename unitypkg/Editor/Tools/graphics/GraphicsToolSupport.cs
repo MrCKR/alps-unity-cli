@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
+using System.Security.Cryptography;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -27,27 +28,61 @@ namespace UnityCli
             return string.Format(CultureInfo.InvariantCulture, "#{0:X2}{1:X2}{2:X2}{3:X2}", (int)(color.r * 255f), (int)(color.g * 255f), (int)(color.b * 255f), (int)(color.a * 255f));
         }
 
-        /// <summary>解析颜色字符串(#RRGGBB / #RRGGBBAA / r,g,b / r,g,b,a)。</summary>
+        /// <summary>解析并校验颜色字符串。</summary>
         public static Color ParseColor(string value)
         {
-            if (string.IsNullOrEmpty(value)) return Color.white;
+            if (string.IsNullOrEmpty(value)) throw new UnityCliBridge.BridgeCommandException("E_GRAPHICS_COLOR_INVALID", "Color is required.", "Pass #RRGGBB, #RRGGBBAA, or components in the range 0..1.");
             if (value.StartsWith("#"))
             {
                 var hex = value.Substring(1);
+                if (hex.Length != 6 && hex.Length != 8) throw new UnityCliBridge.BridgeCommandException("E_GRAPHICS_COLOR_INVALID", "Invalid color: " + value, "Pass #RRGGBB or #RRGGBBAA.");
                 if (hex.Length == 6) hex += "FF";
-                var r = int.Parse(hex.Substring(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                var g = int.Parse(hex.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                var b = int.Parse(hex.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                var a = int.Parse(hex.Substring(6, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                int r, g, b, a;
+                if (!int.TryParse(hex.Substring(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out r) || !int.TryParse(hex.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out g) || !int.TryParse(hex.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b) || !int.TryParse(hex.Substring(6, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out a)) throw new UnityCliBridge.BridgeCommandException("E_GRAPHICS_COLOR_INVALID", "Invalid color: " + value, "Pass hexadecimal color components.");
                 return new Color(r / 255f, g / 255f, b / 255f, a / 255f);
             }
             var parts = value.Split(',');
-            return new Color(
-                parts.Length > 0 ? GameObjectToolSupport.ParseFloat(parts[0], "r") : 1f,
-                parts.Length > 1 ? GameObjectToolSupport.ParseFloat(parts[1], "g") : 1f,
-                parts.Length > 2 ? GameObjectToolSupport.ParseFloat(parts[2], "b") : 1f,
-                parts.Length > 3 ? GameObjectToolSupport.ParseFloat(parts[3], "a") : 1f);
+            if (parts.Length != 3 && parts.Length != 4) throw new UnityCliBridge.BridgeCommandException("E_GRAPHICS_COLOR_INVALID", "Invalid color: " + value, "Pass three or four components in the range 0..1.");
+            return new Color(ParseFinite(parts[0], "color.r", 0f, 1f), ParseFinite(parts[1], "color.g", 0f, 1f), ParseFinite(parts[2], "color.b", 0f, 1f), parts.Length == 4 ? ParseFinite(parts[3], "color.a", 0f, 1f) : 1f);
         }
+
+        public static float ParseFinite(string value, string property, float minimum, float maximum)
+        {
+            float parsed;
+            if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) || float.IsNaN(parsed) || float.IsInfinity(parsed) || parsed < minimum || parsed > maximum)
+                throw new UnityCliBridge.BridgeCommandException("E_GRAPHICS_RANGE_INVALID", "Invalid " + property + ": " + value, "Pass a finite value in the supported range.");
+            return parsed;
+        }
+
+        public static T ParseEnum<T>(string raw, string property) where T : struct
+        {
+            T value;
+            if (string.IsNullOrEmpty(raw) || !Enum.TryParse<T>(raw, true, out value) || !Enum.IsDefined(typeof(T), value)) throw new UnityCliBridge.BridgeCommandException("E_GRAPHICS_ENUM_INVALID", "Invalid " + property + ": " + raw, "Pass a supported " + typeof(T).Name + " value.");
+            return value;
+        }
+
+        public static string NormalizeAssetPathRequired(string raw, string extension)
+        {
+            var path = SceneToolSupport.NormalizeAssetPath(raw);
+            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) throw new UnityCliBridge.BridgeCommandException("E_GRAPHICS_ASSET_PATH_INVALID", "Invalid asset path: " + raw, "Pass an Assets/ path ending in " + extension + ".");
+            return path;
+        }
+
+        /// <summary>保存并从记录的 Unity asset path/GUID 重新获取资产，避免使用写入前对象作为读回证明。</summary>
+        public static T ReloadAsset<T>(string path, string guid) where T : UnityEngine.Object
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            var resolvedPath = string.IsNullOrEmpty(guid) ? path : AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(resolvedPath) || (!string.IsNullOrEmpty(path) && !string.Equals(path, resolvedPath, StringComparison.Ordinal))) return null;
+            return AssetDatabase.LoadAssetAtPath<T>(resolvedPath);
+        }
+
+        public static bool IsValidTextureLod(int value) { return value >= 0 && value <= 8; }
+        public static bool IsValidMaximumLod(int value) { return value >= 0 && value <= 100000; }
+
+        public static string FileSha256(byte[] bytes) { using (var sha = SHA256.Create()) return string.Concat(Array.ConvertAll(sha.ComputeHash(bytes), value => value.ToString("x2"))); }
+        public static bool SameColor(Color actual, Color expected) { return Mathf.Approximately(actual.r, expected.r) && Mathf.Approximately(actual.g, expected.g) && Mathf.Approximately(actual.b, expected.b) && Mathf.Approximately(actual.a, expected.a); }
 
         /// <summary>解析 Vector3 数组字符串("x,y,z x,y,z ...")。</summary>
         public static Vector3[] ParseVector3Array(string value)

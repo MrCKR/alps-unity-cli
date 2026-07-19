@@ -10,11 +10,16 @@
  * 核心 CLI 不在编译期依赖任何可选 Unity Package。
  */
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { readFile, writeFile, mkdir, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
-import { getBoolean, getString } from "../args.js";
+import { getString } from "../args.js";
 import { failure, success } from "../output.js";
+import { executeWithLocalRequestJournal } from "../local-request-journal.js";
+import { ProjectIdentityError, resolveProjectIdentity } from "../project-identity.js";
+import { defaultDataDir } from "../platform.js";
+import { readUnityManifestDependencies, PackageManagerError } from "../package-manager.js";
+import { StructuredToolError } from "../tools/errors.js";
 import type { CliResult } from "../types.js";
 import type { Runtime } from "./types.js";
 import {
@@ -26,7 +31,7 @@ import {
 import { readInstalledUnityPackages } from "../extensions/project-resolver.js";
 import {
   checkExtensionBundles,
-  installExtensionBundle,
+  installExtensionBundleUnchecked,
   removeExtensionBundle,
   readExtensionInstallManifest,
   resolveInstallAvailability,
@@ -42,35 +47,43 @@ function extensionsStatePath(projectPath: string): string {
   return join(resolve(projectPath), "Packages", "com.unity_cli", "extensions.json");
 }
 
-/**
- * Read the set of enabled (installed) extension IDs for a project.
- *
- * Returns an empty Set when the state file does not exist yet (nothing
- * installed). A malformed state file is treated as empty rather than
- * fatal, because doctor should report such corruption, not list.
- */
+/** 读取启用状态；只有不存在的状态文件可视为空，损坏内容必须 fail closed。 */
 export async function readInstalledExtensions(projectPath: string): Promise<Set<ExtensionId>> {
   const statePath = extensionsStatePath(projectPath);
+  let content: string;
   try {
-    const content = await readFile(statePath, "utf8");
-    const parsed = JSON.parse(content) as { extensions?: string[] };
-    return new Set(parsed.extensions ?? []);
+    content = await readFile(statePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Set();
+    throw error;
+  }
+  try {
+    const parsed = JSON.parse(content) as { extensions?: unknown };
+    if (!Array.isArray(parsed.extensions) || !parsed.extensions.every((id) => typeof id === "string")) throw new Error("extensions must be a string array");
+    return new Set(parsed.extensions as ExtensionId[]);
   } catch {
-    return new Set();
+    throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", `Extension state file is invalid: ${statePath}`, ["Repair or remove extensions.json only after inspecting its contents."]);
   }
 }
 
-/**
- * Write the set of enabled extension IDs for a project.
- */
+/** 原子替换状态文件并从目标位置回读，避免成功响应依赖内存状态。 */
 export async function writeInstalledExtensions(projectPath: string, ids: Set<ExtensionId>): Promise<void> {
   const statePath = extensionsStatePath(projectPath);
   const dir = resolve(statePath, "..");
-  if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true });
+  const temporaryPath = `${statePath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, JSON.stringify({ extensions: [...ids].sort() }, null, 2) + "\n", "utf8");
+    await rename(temporaryPath, statePath);
+    const readback = await readInstalledExtensions(projectPath);
+    if (readback.size !== ids.size || [...ids].some((id) => !readback.has(id))) throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", "Extension state readback did not match the committed state.");
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
   }
-  const payload = { extensions: [...ids].sort() };
-  await writeFile(statePath, JSON.stringify(payload, null, 2) + "\n", "utf8");
+}
+
+export class ExtensionStateError extends Error {
+  public constructor(public readonly code: string, message: string, public readonly nextActions: string[] = []) { super(message); }
 }
 
 // ── Command handler ────────────────────────────────────────────────────────
@@ -79,27 +92,22 @@ export async function handleExtensionsCommand(
   command: string | undefined,
   args: string[],
   flags: Record<string, string | boolean>,
-  _runtime: Runtime,
+  runtime: Runtime,
   requestId: string
 ): Promise<CliResult> {
-  if (!command || command === "list") {
-    return handleExtensionsList(flags, requestId);
+  try {
+    if (!command || command === "list") return await handleExtensionsList(flags, requestId);
+    if (command === "install") return await handleExtensionsInstall(args[0] ?? getString(flags, "name"), flags, runtime, requestId);
+    if (command === "remove") return await handleExtensionsRemove(args[0] ?? getString(flags, "name"), flags, runtime, requestId);
+    if (command === "doctor") return await handleExtensionsDoctor(flags, requestId);
+    return failure(requestId, "UNKNOWN_EXTENSIONS_COMMAND", `Expected extensions list, install, remove or doctor (got "${command ?? ""}").`, ["Run unity_cli extensions list to see available extensions."]);
+  } catch (error) {
+    if (error instanceof ExtensionStateError || error instanceof ExtensionInstallerError || error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
+    if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);
+    if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details,
+      error.transient === undefined ? undefined : { transient: error.transient, retryAfterMs: error.retryAfterMs });
+    throw error;
   }
-  if (command === "install") {
-    return handleExtensionsInstall(args[0] ?? getString(flags, "name"), flags, requestId);
-  }
-  if (command === "remove") {
-    return handleExtensionsRemove(args[0] ?? getString(flags, "name"), flags, requestId);
-  }
-  if (command === "doctor") {
-    return handleExtensionsDoctor(flags, requestId);
-  }
-  return failure(requestId, "UNKNOWN_EXTENSIONS_COMMAND", `Expected extensions list, install, remove or doctor (got "${command ?? ""}").`, [
-    "Run unity_cli extensions list to see available extensions.",
-    "Run unity_cli extensions install <name> to enable an extension.",
-    "Run unity_cli extensions remove <name> to disable an extension.",
-    "Run unity_cli extensions doctor to diagnose extension state."
-  ]);
 }
 
 // ── extensions list ────────────────────────────────────────────────────────
@@ -179,6 +187,7 @@ async function handleExtensionsList(
 async function handleExtensionsInstall(
   extensionId: string | undefined,
   flags: Record<string, string | boolean>,
+  runtime: Runtime,
   requestId: string
 ): Promise<CliResult> {
   if (!extensionId) {
@@ -203,47 +212,62 @@ async function handleExtensionsInstall(
     ]);
   }
 
-  const installedPackages = await readInstalledUnityPackages(projectPath);
   const manifest = registry.getExtension(extensionId)!.manifest;
-  const availability = resolveInstallAvailability(manifest, installedPackages);
-  if (availability.status !== "available") {
-    return failure(requestId, "E_EXTENSION_DEPENDENCY_MISSING", `Extension "${extensionId}" requires Unity package(s) that are not installed: ${availability.missingPackageIds.join(", ")}.`, [
-      "Install the required Unity package in Packages/manifest.json or Unity Package Manager.",
-      "Run tools run package.resolve after changing packages.",
-      `Then run unity_cli extensions install ${extensionId} --project <path>.`,
-      "The CLI does not install optional Unity packages automatically."
-    ], {
-      extensionId,
-      missingPackageIds: availability.missingPackageIds
-    });
-  }
-  const installManifest = await readExtensionInstallManifest(projectPath);
-  const alreadyInstalled = installManifest.extensions.some((entry) => entry.extensionId === extensionId);
-  const installResult = await installExtensionBundle(projectPath, manifest);
+  const identity = resolveProjectIdentity(projectPath);
+  const absoluteDeadlineMs = Date.now() + Math.max(1, Number(getString(flags, "timeout-ms")) || 60_000);
 
-  const enabled = await readInstalledExtensions(projectPath);
-  enabled.add(extensionId);
-  await writeInstalledExtensions(projectPath, enabled);
-
-  return success(requestId, {
+  return executeWithLocalRequestJournal({
+    identity,
+    requestId,
     command: "extensions.install",
-    extensionId,
-    name: manifest.name,
-    status: alreadyInstalled ? "already_installed" : installResult.status,
-    availability: availability.status,
+    toolName: "extensions.install",
+    input: { extensionId, manifestVersion: manifest.version },
     projectPath,
-    targetRoot: installResult.targetRoot,
-    fileCount: installResult.fileCount,
-    sourceHash: installResult.sourceHash,
-    unityPackages: manifest.unityPackages.map((pkg) => ({
-      packageId: pkg.packageId,
-      displayName: pkg.displayName,
-      installed: availability.packages.find((p) => p.packageId === pkg.packageId)?.installed ?? false
-    })),
-    nextActions: [
-      `Extension "${extensionId}" Unity-side directory is installed under Packages/com.unity_cli/Extensions/${extensionId}.`,
-      "Wait for Unity to recompile, then run tools group list/describe/run for provided tools."
-    ]
+    dataDir: runtime.dataDir ?? defaultDataDir(),
+    absoluteDeadlineMs,
+    executionClass: "atomic",
+    completionDriverId: "extension-install-readback"
+  }, async (commitEffect) => {
+    // 资源锁后冻结所有会影响 effect 的项目状态，避免并发请求基于旧视图提交。
+    try {
+      await readUnityManifestDependencies(projectPath);
+    } catch (error) {
+      if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
+      throw error;
+    }
+    const installedPackages = await readInstalledUnityPackages(projectPath);
+    const availability = resolveInstallAvailability(manifest, installedPackages);
+    if (availability.status !== "available") {
+      return failure(requestId, "E_EXTENSION_DEPENDENCY_MISSING", `Extension "${extensionId}" requires Unity package(s) that are not installed: ${availability.missingPackageIds.join(", ")}.`, [
+        "Install the required Unity package in Packages/manifest.json or Unity Package Manager.",
+        "Run tools run package.resolve after changing packages.",
+        `Then run unity_cli extensions install ${extensionId} --project <path>.`
+      ]);
+    }
+    let installManifest;
+    let enabledBefore;
+    try {
+      installManifest = await readExtensionInstallManifest(projectPath);
+      enabledBefore = await readInstalledExtensions(projectPath);
+    } catch (error) {
+      if (error instanceof ExtensionInstallerError || error instanceof ExtensionStateError) return failure(requestId, error.code, error.message, error.nextActions);
+      throw error;
+    }
+    const alreadyInstalled = installManifest.extensions.some((entry) => entry.extensionId === extensionId);
+    await commitEffect();
+    const installResult = await installExtensionBundleUnchecked(projectPath, manifest);
+    const enabled = new Set(enabledBefore);
+    enabled.add(extensionId);
+    await writeInstalledExtensions(projectPath, enabled);
+    const freshEnabled = await readInstalledExtensions(projectPath);
+    if (!freshEnabled.has(extensionId)) throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", "Installed extension is absent from fresh state readback.");
+    return success(requestId, {
+      command: "extensions.install", extensionId, name: manifest.name,
+      status: alreadyInstalled ? "already_installed" : installResult.status, availability: availability.status, projectPath,
+      targetRoot: installResult.targetRoot, fileCount: installResult.fileCount, sourceHash: installResult.sourceHash,
+      unityPackages: manifest.unityPackages.map((pkg) => ({ packageId: pkg.packageId, displayName: pkg.displayName, installed: availability.packages.find((p) => p.packageId === pkg.packageId)?.installed ?? false })),
+      nextActions: [`Extension "${extensionId}" Unity-side directory is installed under Packages/com.unity_cli/Extensions/${extensionId}.`, "Wait for Unity to recompile, then run tools group list/describe/run for provided tools."]
+    });
   });
 }
 
@@ -252,6 +276,7 @@ async function handleExtensionsInstall(
 async function handleExtensionsRemove(
   extensionId: string | undefined,
   flags: Record<string, string | boolean>,
+  runtime: Runtime,
   requestId: string
 ): Promise<CliResult> {
   if (!extensionId) {
@@ -267,30 +292,41 @@ async function handleExtensionsRemove(
     ]);
   }
 
-  try {
+  const identity = resolveProjectIdentity(projectPath);
+  const absoluteDeadlineMs = Date.now() + Math.max(1, Number(getString(flags, "timeout-ms")) || 60_000);
+  return executeWithLocalRequestJournal({
+    identity, requestId, command: "extensions.remove", toolName: "extensions.remove",
+    input: { extensionId }, projectPath, dataDir: runtime.dataDir ?? defaultDataDir(), absoluteDeadlineMs,
+    executionClass: "atomic", completionDriverId: "extension-remove-readback"
+  }, async (commitEffect) => {
+    try {
+      await readUnityManifestDependencies(projectPath);
+    } catch (error) {
+      if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
+      throw error;
+    }
+    await readInstalledUnityPackages(projectPath);
+    let installManifest;
+    let enabledBefore;
+    try {
+      installManifest = await readExtensionInstallManifest(projectPath);
+      enabledBefore = await readInstalledExtensions(projectPath);
+    } catch (error) {
+      if (error instanceof ExtensionInstallerError || error instanceof ExtensionStateError) return failure(requestId, error.code, error.message, error.nextActions);
+      throw error;
+    }
+    const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
+    if (!entry) return failure(requestId, "EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unity_cli extensions list --project <path> to inspect extension state."]);
+    await commitEffect();
     const removeResult = await removeExtensionBundle(projectPath, extensionId);
-    const enabled = await readInstalledExtensions(projectPath);
+    const enabled = new Set(enabledBefore);
     enabled.delete(extensionId);
     await writeInstalledExtensions(projectPath, enabled);
-
-    return success(requestId, {
-      command: "extensions.remove",
-      extensionId,
-      status: removeResult.status,
-      projectPath,
-      targetRoot: removeResult.targetRoot,
-      fileCount: removeResult.fileCount,
-      nextActions: [
-        `Extension "${extensionId}" bundle files listed in the manifest were removed.`,
-        "The required Unity package was not removed."
-      ]
-    });
-  } catch (error) {
-    if (error instanceof ExtensionInstallerError) {
-      return failure(requestId, error.code, error.message, error.nextActions);
-    }
-    throw error;
-  }
+    const freshEnabled = await readInstalledExtensions(projectPath);
+    const freshManifest = await readExtensionInstallManifest(projectPath);
+    if (freshEnabled.has(extensionId) || freshManifest.extensions.some((item) => item.extensionId === extensionId)) throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", "Removed extension remains in fresh state readback.");
+    return success(requestId, { command: "extensions.remove", extensionId, status: removeResult.status, projectPath, targetRoot: removeResult.targetRoot, fileCount: removeResult.fileCount, nextActions: [`Extension "${extensionId}" bundle files listed in the manifest were removed.`, "The required Unity package was not removed."] });
+  });
 }
 
 // ── extensions doctor ──────────────────────────────────────────────────────

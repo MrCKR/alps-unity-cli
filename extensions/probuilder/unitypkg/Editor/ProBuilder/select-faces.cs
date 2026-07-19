@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -80,6 +81,8 @@ namespace UnityCli.ProBuilder
                 for (int i = 0; i < allFaces.Length; i++)
                 {
                     var normal = ProBuilderReflection.ComputeFaceNormal(mesh, allFaces.GetValue(i));
+                    if (normal == Vector3.zero)
+                        throw ProBuilderErrors.OperationFailed("select-faces", "Could not read a non-zero normal for face index " + i + ".");
                     if (Vector3.Dot(normal, targetDir) > tolerance)
                         selectedIndices.Add(i);
                 }
@@ -96,13 +99,13 @@ namespace UnityCli.ProBuilder
                 if (grow.HasValue && grow.Value < 1)
                     throw ProBuilderErrors.SchemaInvalid("grow must be at least 1.");
 
-                var seedIndices = request.SeedFaceIndices.ConvertAll(value => (int)value).ToArray();
+                var seedIndices = request.SeedFaceIndices.Select(value => ProBuilderOperationProof.CheckedInt(value, "seedFaceIndices")).ToArray();
                 var seeds = ProBuilderReflection.GetFacesByIndices(mesh, seedIndices);
                 if (seeds == null || seeds.Length != seedIndices.Length)
                     throw ProBuilderErrors.SchemaInvalid("seedFaceIndices contains an invalid face index.");
 
                 var operation = grow.HasValue ? "grow" : flood ? "flood" : loop ? "loop" : "ring";
-                var selectedFaces = ProBuilderReflection.SelectFaces(mesh, seeds, operation, (int)(grow ?? 1));
+                var selectedFaces = ProBuilderReflection.SelectFaces(mesh, seeds, operation, ProBuilderOperationProof.CheckedInt(grow ?? 1, "grow"));
                 if (selectedFaces == null)
                     throw ProBuilderErrors.OperationFailed("select-faces", "ProBuilder 5.x ElementSelection failed for operation: " + operation);
                 selectedIndices.AddRange(ResolveFaceIndices(allFaces, selectedFaces));

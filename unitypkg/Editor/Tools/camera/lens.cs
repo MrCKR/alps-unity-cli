@@ -59,9 +59,20 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_CAMERA_NOT_FOUND", "Camera not found: " + request.Target, "Run tools run camera.list, then retry with a camera name, hierarchy path, or instance id from the result.");
             }
+            if (!request.FieldOfView.HasValue && !request.Orthographic.HasValue && !request.OrthographicSize.HasValue && !request.NearClipPlane.HasValue && !request.FarClipPlane.HasValue && string.IsNullOrEmpty(request.ClearFlags) && !request.Depth.HasValue)
+                throw new UnityCliBridge.BridgeCommandException("E_CAMERA_LENS_REQUEST_EMPTY", "camera.lens requires at least one lens setting.", "Pass a fieldOfView, projection, clipping, clearFlags, or depth value.");
+            CameraToolSupport.ValidateFloatRange(request.FieldOfView, "fieldOfView", 1d, 179d);
+            CameraToolSupport.ValidateFloatRange(request.OrthographicSize, "orthographicSize", double.Epsilon, float.MaxValue);
+            CameraToolSupport.ValidateFloatRange(request.NearClipPlane, "nearClipPlane", double.Epsilon, float.MaxValue);
+            CameraToolSupport.ValidateFloatRange(request.FarClipPlane, "farClipPlane", double.Epsilon, float.MaxValue);
+            CameraToolSupport.ValidateFloatRange(request.Depth, "depth", -float.MaxValue, float.MaxValue);
+            if (request.NearClipPlane.HasValue && request.FarClipPlane.HasValue && request.NearClipPlane.Value >= request.FarClipPlane.Value)
+                throw new UnityCliBridge.BridgeCommandException("E_CAMERA_LENS_RANGE_INVALID", "nearClipPlane must be less than farClipPlane.", "Pass finite clipping planes with nearClipPlane < farClipPlane.");
             // clearFlags 先校验再写入,避免部分应用
             var clearFlags = string.IsNullOrEmpty(request.ClearFlags) ? (CameraClearFlags?)null : CameraToolSupport.ParseCameraClearFlags(request.ClearFlags);
             var effects = new List<CameraPlannedEffect>();
+            var cameraId = camera.GetInstanceID();
+            ctx.CommitEffect();
             if (request.FieldOfView.HasValue)
             {
                 camera.fieldOfView = (float)request.FieldOfView.Value;
@@ -98,8 +109,12 @@ namespace UnityCli
                 effects.Add(new CameraPlannedEffect { Type = "camera.lens", Property = "depth", Value = camera.depth.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             }
             UnityCliSceneMutation.MarkSceneObjectDirty(camera);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Camera = CameraToolSupport.BuildCameraInfo(camera), PlannedEffects = effects });
+            var observed = EditorUtility.InstanceIDToObject(cameraId) as Camera;
+            if (observed == null || (request.FieldOfView.HasValue && !Mathf.Approximately(observed.fieldOfView, (float)request.FieldOfView.Value)) || (request.Orthographic.HasValue && observed.orthographic != request.Orthographic.Value) || (request.OrthographicSize.HasValue && !Mathf.Approximately(observed.orthographicSize, (float)request.OrthographicSize.Value)) || (request.NearClipPlane.HasValue && !Mathf.Approximately(observed.nearClipPlane, (float)request.NearClipPlane.Value)) || (request.FarClipPlane.HasValue && !Mathf.Approximately(observed.farClipPlane, (float)request.FarClipPlane.Value)) || (clearFlags.HasValue && observed.clearFlags != clearFlags.Value) || (request.Depth.HasValue && !Mathf.Approximately(observed.depth, (float)request.Depth.Value)))
+                throw new UnityCliBridge.BridgeCommandException("E_CAMERA_LENS_STATE_MISMATCH", "Camera lens did not satisfy the requested predicate.", "Inspect the Camera and retry after the Editor is idle.");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Camera = CameraToolSupport.BuildCameraInfo(observed), PlannedEffects = effects });
         }
+
     }
 }
 #endif

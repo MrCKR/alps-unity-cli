@@ -63,7 +63,18 @@ namespace UnityCli
                     "Pass overwrite=true or choose a different output path.");
             }
 
+            ctx.CommitEffect();
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+            if (File.Exists(outputPath))
+            {
+                try { File.Delete(outputPath); }
+                catch (Exception exception)
+                {
+                    throw new UnityCliBridge.BridgeCommandException("E_PROFILER_ARTIFACT_PREPARE_FAILED",
+                        "Failed to replace existing profiler artifact: " + exception.Message,
+                        "Close programs using the output file or choose a different path.");
+                }
+            }
             var startedAt = DateTime.UtcNow;
             var format = ProfilerToolSupport.NormalizeProfilerFormat(request.Format, outputPath);
             var durationMs = Math.Max(0, request.DurationMs ?? 0);
@@ -111,7 +122,7 @@ namespace UnityCli
                     RestoreProfiler(previousLogFile, previousEnabled, previousBinaryLog);
                 }
 
-                EnsureRawFile(outputPath);
+                ProfilerToolSupport.EnsureRawProfilerArtifact(outputPath);
                 var finishedAt = DateTime.UtcNow;
                 var endFrame = (long)Time.frameCount;
                 if (!string.IsNullOrEmpty(captureTag))
@@ -127,7 +138,7 @@ namespace UnityCli
             }
             else
             {
-                File.WriteAllText(outputPath, BuildJsonArtifact(ctx.RequestId, startedAt, durationMs, frames), System.Text.Encoding.UTF8);
+                ProfilerToolSupport.WriteAndVerifyJsonProfilerArtifact(outputPath, BuildJsonArtifact(ctx.RequestId, startedAt, durationMs, frames));
             }
 
             var finishedSyncAt = DateTime.UtcNow;
@@ -145,14 +156,6 @@ namespace UnityCli
             Profiler.enabled = previousEnabled;
             Profiler.enableBinaryLog = previousBinaryLog;
             Profiler.logFile = previousLogFile;
-        }
-
-        private static void EnsureRawFile(string outputPath)
-        {
-            if (!File.Exists(outputPath))
-            {
-                File.WriteAllText(outputPath, "Profiler raw capture was requested; Unity did not emit binary data for this editor version." + Environment.NewLine, System.Text.Encoding.UTF8);
-            }
         }
 
         private static Result BuildResult(string outputPath, string format, int durationMs, long frames, long startFrame, long endFrame, string captureTag, DateTime startedAt, DateTime finishedAt)

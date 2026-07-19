@@ -2,20 +2,22 @@ import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { CliResult } from "../types.js";
 import { durationMsFrom, failure, success } from "../output.js";
-import { withRetry, type RetryOptions } from "../envelope.js";
-import { instanceSelectionFailure, selectInstanceForFlags, type InstanceSelection } from "../instances.js";
+import { instanceSelectionFailure } from "../instances.js";
 import { BridgeArgumentError } from "./args.js";
 import { bridgeCommandRegistry } from "./registry.js";
 import { confirmDestructiveExecution, destructiveSecurityProof, isDestructiveConfirmed, isDryRunRequested, type SecurityProof } from "../security.js";
 import { ensurePackageBridge, PackageManagerError } from "../package-manager.js";
 import { isProjectLocked, startUnityJob } from "../cli-commands/unity-job.js";
 import { discoverUnity } from "../platform.js";
+import { resolveProjectIdentity } from "../project-identity.js";
 import type { JobRunner } from "../job-runner.js";
 import type { JobStore } from "../job-store.js";
-import type { BridgeCommandSpec, BridgeError, BridgeFlags, BridgeRequest, BridgeResponse, BridgeRuntime, BridgeSecurityDescriptor } from "./types.js";
+import { observationSelectionFrom, transitionBindingAllowed, type BridgeCommandSpec, type BridgeError, type BridgeFlags, type BridgeInvocationOptions, type BridgeRequest, type BridgeResponse, type BridgeRuntime, type BridgeSecurityDescriptor } from "./types.js";
+import { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "./session-supervisor.js";
 
 export { BridgeCommandRegistry, bridgeCommandRegistry } from "./registry.js";
-export type { BridgeCommandSpec, BridgeRequest, BridgeResponse, BridgeRuntime, BridgeSecurityDescriptor } from "./types.js";
+export { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "./session-supervisor.js";
+export type { BridgeCommandSpec, BridgeInvocationOptions, BridgeRequest, BridgeResponse, BridgeRuntime, BridgeSecurityDescriptor } from "./types.js";
 
 export interface BridgeJobRuntime extends BridgeRuntime {
   dataDir: string;
@@ -29,7 +31,8 @@ export async function executeBridgeCommand(
   flags: BridgeFlags,
   positionalTarget: string | undefined,
   runtime: BridgeRuntime,
-  securityDescriptor?: BridgeSecurityDescriptor
+  securityDescriptor?: BridgeSecurityDescriptor,
+  invocation: BridgeInvocationOptions = {}
 ): Promise<CliResult> {
   try {
     const spec = bridgeCommandRegistry.lookupBridgeCommand(command);
@@ -51,7 +54,7 @@ export async function executeBridgeCommand(
       args = { name: spec.toolName, input: args };
       bridgeCommand = spec.bridgeCommand;
     }
-    return executeBridgePayload(requestId, bridgeCommand, args, flags, runtime, securityDescriptor);
+    return executeBridgePayload(requestId, bridgeCommand, args, flags, runtime, securityDescriptor, invocation);
   } catch (error) {
     if (error instanceof BridgeArgumentError) {
       return failure(requestId, error.code, error.message, error.nextActions);
@@ -66,101 +69,82 @@ export async function executeBridgePayload(
   args: Record<string, unknown>,
   flags: BridgeFlags,
   runtime: BridgeRuntime,
-  securityDescriptor?: BridgeSecurityDescriptor
+  securityDescriptor?: BridgeSecurityDescriptor,
+  invocation: BridgeInvocationOptions = {}
 ): Promise<CliResult> {
   const startMs = Date.now();
-  let selectedInstance: InstanceSelection | undefined;
-  let endpoint: string | undefined;
+  const requested = requestedTimeoutMs(flags, args);
+  const timeoutMs = requested ?? invocation.defaultTimeoutMs;
+  const rawInput = requested !== undefined && Object.prototype.hasOwnProperty.call(args, "timeoutMs")
+    ? Object.fromEntries(Object.entries(args).filter(([key]) => key !== "timeoutMs"))
+    : args;
+  const input = securityDescriptor?.liveDescriptorFingerprint && (command === "project-tool.run" || command === "runtime-tool.run")
+    ? { ...rawInput, expectedDescriptorFingerprint: securityDescriptor.liveDescriptorFingerprint }
+    : rawInput;
+  const securityProof = bridgeSecurity(command, flags, input, securityDescriptor);
+  const supervisor = new SessionSupervisor(selectionFlags(command, flags), runtime);
+
   try {
-    selectedInstance = await selectInstanceForFlags(selectionFlags(command, flags), runtime.dataDir ?? process.cwd());
-    endpoint = bridgeEndpoint(flags, runtime, selectedInstance);
-  } catch (error) {
-    const result = instanceSelectionFailure(requestId, error);
-    if (result) {
+    const template = {
+      requestId,
+      command,
+      input,
+      timeoutMs,
+      absoluteDeadlineMs: invocation.absoluteDeadlineMs,
+      observationAbsoluteDeadlineMs: invocation.observationAbsoluteDeadlineMs,
+      dryRun: isDryRunRequested(flags),
+      securityProof,
+      mutation: invocation.mutation ?? true,
+      observationSelection: observationSelectionFrom(invocation),
+      allowTransitionBinding: transitionBindingAllowed(invocation),
+    };
+    const bridgeResult = invocation.mode === "read"
+      ? await supervisor.read(template)
+      : invocation.mode === "observeNow"
+        ? await supervisor.observeNow(template)
+        : await supervisor.execute(template);
+
+    if (bridgeResult.ok === false) {
+      const bridgeError = bridgeResult.error;
+      const details = command === "code.exec" && bridgeError.code === "E_UNITY_BUSY"
+        ? liveCodeBusyDetails(requestId, args, bridgeErrorDetails(bridgeError))
+        : bridgeError.details;
+      const result = failure(requestId, bridgeError.code, bridgeError.message, bridgeError.nextActions, details, {
+        transient: bridgeError.transient,
+        retryAfterMs: bridgeError.retryAfterMs
+      });
+      result.durationMs = durationMsFrom(startMs);
       return result;
     }
-    throw error;
-  }
-  if (!runtime.bridgeExecute && !endpoint) {
-    // 当前 project-tool.run 路由允许 ui.document.info 直接读取磁盘上的 UXML。
-    if (command === "project-tool.run" && args.name === "ui.document.info") {
-      const offlineInput = (args.input ?? {}) as Record<string, unknown>;
-      if (typeof offlineInput.path === "string") {
-        return readUiDocumentOffline(requestId, "ui.document.info", offlineInput.path);
+
+    const result = success(requestId, { command, ...bridgeResult.data });
+    result.durationMs = durationMsFrom(startMs);
+    return result;
+  } catch (error) {
+    const selectionFailure = instanceSelectionFailure(requestId, error);
+    if (selectionFailure) {
+      if (command === "project-tool.run" && args.name === "ui.document.info") {
+        const offlineInput = (args.input ?? {}) as Record<string, unknown>;
+        if (typeof offlineInput.path === "string") return readUiDocumentOffline(requestId, "ui.document.info", offlineInput.path);
       }
+      selectionFailure.durationMs = durationMsFrom(startMs);
+      return selectionFailure;
     }
-    return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set UNITY_CLI_BRIDGE_ENDPOINT for live query/edit/screenshot/code commands.", [
-      "Open Unity with the Unity CLI Bridge package installed.",
-      "Pass --bridge-endpoint http://127.0.0.1:<port>."
-    ]);
-  }
-
-  const maxRetries = typeof flags.retry === "string" ? Number(flags.retry) : flags.retry === true ? 3 : 0;
-  const retryOptions: RetryOptions = { maxRetries, onRetry: (attempt, error, retryAfterMs) => {
-    if (!error.ok) {
-      process.stderr.write(`[retry] attempt ${attempt}/${maxRetries} after ${retryAfterMs}ms: ${error.error.code} – ${error.error.message}\n`);
-    }
-  } };
-
-  const result = await withRetry(async () => {
-    try {
-      const timeoutMs = requestedTimeoutMs(flags, args);
-      const input = timeoutMs !== undefined && Object.prototype.hasOwnProperty.call(args, "timeoutMs")
-        ? Object.fromEntries(Object.entries(args).filter(([key]) => key !== "timeoutMs"))
-        : args;
-      const security = bridgeSecurity(command, flags, input, securityDescriptor);
-      const payload: BridgeRequest = {
-        requestId,
-        command,
-        input,
-        ...((isDryRunRequested(flags) || timeoutMs !== undefined) ? {
-          execution: {
-            ...(isDryRunRequested(flags) ? { dryRun: true } : {}),
-            ...(timeoutMs !== undefined ? { timeoutMs } : {})
-          }
-        } : {}),
-        ...(security ? { security } : {})
-      };
-      const bridgeResult = runtime.bridgeExecute
-        ? await runtime.bridgeExecute(payload)
-        : await postBridgeExecute(endpoint!, payload);
-
-      if (bridgeResult.ok === false) {
-        const bridgeError = bridgeResult.error;
-        const code = bridgeError.code;
-        const details = command === "code.exec" && code === "E_UNITY_BUSY"
-          ? liveCodeBusyDetails(requestId, endpoint, args, bridgeErrorDetails(bridgeError))
-          : bridgeError.details;
-        return failure(requestId, code, bridgeError.message, bridgeError.nextActions, details, {
-          transient: bridgeError.transient,
-          retryAfterMs: bridgeError.retryAfterMs
-        });
-      }
-
-      if (command === "code.exec" && bridgeResult.data?.status === "running" && bridgeResult.data?.sideEffectSemantics === "started-before-http-timeout") {
-        return liveCodeTimeoutFailure(requestId, endpoint, args, bridgeResult.data);
-      }
-
-      return success(requestId, {
-        command,
-        bridgeEndpoint: endpoint,
-        ...bridgeResult.data
+    if (error instanceof SessionSupervisorError) {
+      const result = failure(requestId, error.code, error.message, error.nextActions, error.details, {
+        transient: error.transient,
+        retryAfterMs: error.retryAfterMs,
       });
-    } catch (error) {
-      if (command === "code.exec" && isAbortLikeError(error)) {
-        return liveCodeTimeoutFailure(requestId, endpoint, args, { cause: errorMessage(error) });
-      }
-
-      // live transport 在 domain reload、PlayMode 切换或 listener 重启时可能短暂断开，调用方应按 envelope 重试。
-      return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), ["Check Unity Bridge endpoint and logs."], undefined, {
-        transient: true,
-        retryAfterMs: 1000
-      });
+      result.durationMs = durationMsFrom(startMs);
+      return result;
     }
-  }, retryOptions);
-
-  result.durationMs = durationMsFrom(startMs);
-  return result;
+    const result = failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), [
+      "Run unity_cli instances list and inspect the selected Unity session.",
+      "Run unity_cli context read editor.state for transition or blocker details."
+    ], undefined, { transient: true, retryAfterMs: 100 });
+    result.durationMs = durationMsFrom(startMs);
+    return result;
+  }
 }
 
 /** 通过 Unity batchmode 执行任意支持 job 的 Bridge command。 */
@@ -196,17 +180,21 @@ export async function startBridgeCommandJob(
       ? Object.fromEntries(Object.entries(args).filter(([key]) => key !== "timeoutMs"))
       : args;
     const security = bridgeSecurity(bridgeCommand, flags, input);
+    const identity = resolveProjectIdentity(projectPath);
+    const absoluteDeadlineMs = Date.now() + (timeoutMs ?? 60_000);
     const payload: BridgeRequest = {
+      protocolVersion: 2,
       command: bridgeCommand,
       requestId,
+      instanceId: identity.instanceId,
       input,
-      ...((isDryRunRequested(flags) || timeoutMs !== undefined) ? {
-        execution: {
-          ...(isDryRunRequested(flags) ? { dryRun: true } : {}),
-          ...(timeoutMs !== undefined ? { timeoutMs } : {})
-        }
-      } : {}),
-      ...(security ? { security } : {})
+      execution: {
+        absoluteDeadlineUtc: new Date(absoluteDeadlineMs).toISOString(),
+        completionContractVersion: 1,
+        requestDigestVersion: 1,
+        ...(isDryRunRequested(flags) ? { dryRun: true } : {}),
+        ...(security ? { securityProof: security } : {})
+      }
     };
     return startUnityJob("bridge", flags, runtime, requestId, [
       "-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand",
@@ -264,16 +252,8 @@ function requestedTimeoutMs(flags: BridgeFlags, _input: Record<string, unknown>)
   return value !== undefined && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
-function bridgeEndpoint(flags: BridgeFlags, runtime: BridgeRuntime, selectedInstance?: InstanceSelection): string | undefined {
-  const explicit = flags["bridge-endpoint"];
-  return typeof explicit === "string" && explicit.length > 0
-    ? explicit
-    : runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT ?? selectedInstance?.instance.bridgeEndpoint;
-}
-
-function selectionFlags(command: string, flags: BridgeFlags): BridgeFlags {
-  const { target: _target, ...rest } = flags;
-  return rest;
+function selectionFlags(_command: string, flags: BridgeFlags): BridgeFlags {
+  return flags;
 }
 
 async function readUiDocumentOffline(requestId: string, command: string, path: string): Promise<CliResult> {
@@ -319,25 +299,6 @@ function uiDocumentDiagnostics(content: string, extension: string): Array<Record
   return diagnostics;
 }
 
-async function postBridgeExecute(endpoint: string, payload: BridgeRequest): Promise<BridgeResponse> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), bridgeHttpTimeoutMs(payload));
-  try {
-    const response = await fetch(new URL("/bridge/execute", endpoint), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    if (!response.ok) {
-      throw new Error(`Bridge returned HTTP ${response.status}.`);
-    }
-    return (await response.json()) as BridgeResponse;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function bridgeErrorDetails(error: BridgeError): Record<string, unknown> {
   if (error.details && typeof error.details === "object" && !Array.isArray(error.details)) {
     return error.details;
@@ -345,12 +306,7 @@ function bridgeErrorDetails(error: BridgeError): Record<string, unknown> {
   return {};
 }
 
-export function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
-  const timeoutMs = payload.execution?.timeoutMs;
-  return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs + 5000 : 65_000;
-}
-
-function liveCodeBusyDetails(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): Record<string, unknown> {
+function liveCodeBusyDetails(requestId: string, args: Record<string, unknown>, details: Record<string, unknown>): Record<string, unknown> {
   const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? args.timeoutMs : null;
   const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/UnityCliBridge.log";
   return {
@@ -358,36 +314,10 @@ function liveCodeBusyDetails(requestId: string, endpoint: string | undefined, ar
     command: "code.exec",
     channel: "live",
     timeoutMs,
-    bridgeEndpoint: endpoint ?? null,
     audit: { requestId, command: "code.exec", channel: "live", timeoutMs },
     logs: { bridge: logPath },
     ...details
   };
-}
-
-function liveCodeTimeoutFailure(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): CliResult {
-  const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? args.timeoutMs : null;
-  const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/UnityCliBridge.log";
-  return failure(requestId, "E_EXECUTION_TIMEOUT", timeoutMs === null ? "Runtime Code live execution did not complete before the bridge HTTP timeout." : `Runtime Code live execution did not complete within ${timeoutMs}ms.`, [
-    "Inspect the Unity Editor for a long-running script or busy dialog.",
-    "Inspect the Unity project Logs/UnityCliBridge.log for bridge_request_timeout_started and requestId.",
-    "Retry after Unity is responsive, or increase --timeout-ms for intentionally long-running code."
-  ], {
-    requestId,
-    command: "code.exec",
-    channel: "live",
-    timeoutMs,
-    bridgeEndpoint: endpoint ?? null,
-    audit: { requestId, command: "code.exec", channel: "live", timeoutMs },
-    logs: { bridge: logPath },
-    ...details
-  });
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  const name = error instanceof Error ? error.name : "";
-  const message = errorMessage(error);
-  return name === "AbortError" || /\b(abort|aborted|timed? out|timeout)\b/i.test(message);
 }
 
 function errorMessage(error: unknown): string {

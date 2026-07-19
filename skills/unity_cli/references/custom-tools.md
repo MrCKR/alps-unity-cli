@@ -75,6 +75,7 @@ namespace MyProject.UnityCLI
 - `[UnityCliRequired]` 标记必填输入字段；不要手写 schema 字符串。
 - `Describe()` 只写 `Name`、`Summary`、`Description`、`Group`、风险、target、Play Mode、examples 等人工字段。
 - `Execute(Request, ctx)` 成功返回 Result DTO；失败交给框架转结构化错误 envelope，不要返回伪造的 `{ ok:false }`。
+- mutation Tool 在全部输入、目标、权限和包前置校验后、紧邻首个真实 effect 前必须恰好调用一次 `ctx.CommitEffect()`。漏调而返回成功会被协调器拒绝为 `E_TOOL_COMPLETION_PROOF_INVALID`；重复调用稳定返回 `E_TOOL_EFFECT_BARRIER_DUPLICATE`。只读 Tool、dry-run 与 proof-only recovery 不得调用。
 - `DestructiveHint = true` 的 Tool 必须通过 CLI `--yes` 门禁；能预览的写操作设置 `SupportsDryRun = true`。
 - runtime Tool 设置 `Target = "runtime"` 和 `PlayModeSupport = "runtime-only"`；非 Play Mode 时让错误 envelope 提供 `transient`、`retryAfterMs`、`nextActions`。
 

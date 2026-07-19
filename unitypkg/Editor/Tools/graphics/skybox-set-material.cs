@@ -17,9 +17,16 @@ namespace UnityCli
             if (string.IsNullOrEmpty(r.Material)) throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_PATH_REQUIRED", "Pass --material <Assets/*.mat path>.", "Use tools run graphics.skybox-set-material --input '{\"material\":\"Assets/Skyboxes/Day.mat\"}'.");
             var material = GraphicsToolSupport.ResolveSkyboxMaterial(r.Material);
             if (material == null) throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_NOT_FOUND", "Skybox material not found: " + r.Material, "Pass an existing Assets/*.mat path.");
+            var materialPath = AssetDatabase.GetAssetPath(material);
+            var materialGuid = string.IsNullOrEmpty(materialPath) ? null : AssetDatabase.AssetPathToGUID(materialPath);
+            ctx.CommitEffect();
             RenderSettings.skybox = material;
             UnityCliSceneMutation.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Skybox = material.name, PlannedEffects = new List<GraphicsPlannedEffect> { new GraphicsPlannedEffect { Type = "graphics.skybox-set-material", Property = "skybox", Value = r.Material } } });
+            var observed = RenderSettings.skybox;
+            var observedPath = observed == null ? null : AssetDatabase.GetAssetPath(observed);
+            var observedGuid = string.IsNullOrEmpty(observedPath) ? null : AssetDatabase.AssetPathToGUID(observedPath);
+            if (observed == null || !string.Equals(observedGuid, materialGuid, System.StringComparison.Ordinal) || (materialGuid == null && observed != material)) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_MATERIAL_STATE_MISMATCH", "Skybox material GUID readback did not match the request.", "Retry after the editor is idle.");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Skybox = observed.name, PlannedEffects = new List<GraphicsPlannedEffect> { new GraphicsPlannedEffect { Type = "graphics.skybox-set-material", Property = "skybox", Value = r.Material } } });
         }
     }
 }

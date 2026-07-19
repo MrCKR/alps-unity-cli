@@ -62,6 +62,7 @@ test("UnityCliSerializer is the protocol envelope serialization boundary", async
 
   assert.match(projectTools, /InputSchema = UnityCliSchemaDeriver\.DeriveSchema\(typeof\(TReq\)\)/);
   assert.match(projectTools, /OutputSchema = UnityCliSchemaDeriver\.DeriveSchema\(typeof\(TRes\)\)/);
-  assert.match(projectTools, /return CompleteProjectToolSuccess/);
+  assert.match(projectTools, /var terminalData = CompleteProjectToolSuccess/);
+  assert.match(projectTools, /RecordToolCompletionEvidence\(request, definition, result, terminalData\)/);
   assert.doesNotMatch(projectTools, /ProtocolEnvelopeFactory\.(?:Success|Error)/);
 });

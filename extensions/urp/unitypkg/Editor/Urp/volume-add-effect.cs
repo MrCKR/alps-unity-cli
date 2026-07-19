@@ -23,8 +23,10 @@ namespace UnityCli
         {
             GameObjectToolSupport.EnsureEditorNotBusy("urp.volume.add-effect");
             UrpToolSupport.EnsureUrpAvailable();
-            var target = UrpVolumeOperations.AddEffect(request.Target, request.EffectType, "E_URP", UrpToolSupport.FindVolumeEffectType);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "urp.volume.add-effect", Target = GameObjectToolSupport.BuildGameObjectRef(target), EffectType = request.EffectType, PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.add-effect", Target = GameObjectToolSupport.HierarchyPath(target), EffectType = request.EffectType } }, LogPath = ctx.LogPath });
+            UrpVolumeOperations.ValidateAddEffect(request.Target, request.EffectType, "E_URP", UrpToolSupport.FindVolumeEffectType);
+            ctx.CommitEffect();
+            var added = UrpVolumeOperations.AddEffect(request.Target, request.EffectType, "E_URP", UrpToolSupport.FindVolumeEffectType);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "urp.volume.add-effect", Target = GameObjectToolSupport.BuildGameObjectRef(added.GameObject), EffectType = added.ObservedEffectType, PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.add-effect", Target = GameObjectToolSupport.HierarchyPath(added.GameObject), EffectType = added.ObservedEffectType } }, LogPath = ctx.LogPath });
         }
     }
 }

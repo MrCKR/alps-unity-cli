@@ -1,5 +1,8 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography;
 using UnityEditor;
 
 namespace UnityCli
@@ -31,8 +34,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "asset.refresh",
-            Summary = "Refresh the AssetDatabase or reimport a single Assets/ asset; supports --dry-run preview.",
-            Description = "Refresh the AssetDatabase. With no path, refreshes the whole database; with a path, reimports that single asset. forceUpdate and importRecursive map to ImportAssetOptions. Supports --dry-run to preview the planned import.",
+            Summary = "Reimport one Assets/ asset with content and AssetDatabase readback proof; supports --dry-run preview.",
+            Description = "Reimport one Assets/ asset and return only after its continued file digest and AssetDatabase GUID are stable. Whole-database refresh has no attributable business completion identity and is rejected. forceUpdate and importRecursive map to ImportAssetOptions. Supports --dry-run to preview the planned import.",
             Group = "asset",
             Version = "1.0.0",
             DestructiveHint = false,
@@ -45,21 +48,22 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Refresh the whole database", Input = new Request { } },
                 new ToolExample { Description = "Preview reimporting one asset", Input = new Request { Path = "Assets/Textures/Icon.png", ForceUpdate = true }, Execution = new ToolExampleExecution { DryRun = true } }
             }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            AssetToolSupport.EnsureEditorNotBusy("asset.refresh");
+            if (!ctx.ProofOnly) AssetToolSupport.EnsureEditorNotBusy("asset.refresh");
             var path = request.Path ?? request.AssetPath ?? request.Target;
+            if (string.IsNullOrEmpty(path))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_REFRESH_PROOF_MISSING", "asset.refresh requires one asset path because whole-database refresh has no attributable completion proof.", "Pass an Assets/* path to reimport one observable asset.");
             var options = ImportAssetOptions.Default;
             if (request.ForceUpdate ?? false) options |= ImportAssetOptions.ForceUpdate;
             if (request.ImportRecursive ?? false) options |= ImportAssetOptions.ImportRecursive;
             if (ctx.DryRun)
             {
-                return new System.Threading.Tasks.ValueTask<Result>(new Result
+                return new Result
                 {
                     Command = "asset.refresh",
                     DryRun = true,
@@ -67,19 +71,39 @@ namespace UnityCli
                     Options = options.ToString(),
                     PlannedEffects = new List<AssetPlannedEffect>
                     {
-                        new AssetPlannedEffect { Type = string.IsNullOrEmpty(path) ? "asset.refresh" : "asset.import", Path = path, SideEffects = options.ToString() }
+                        new AssetPlannedEffect { Type = "asset.import", Path = path, SideEffects = options.ToString() }
                     }
-                });
+                };
             }
-            if (string.IsNullOrEmpty(path))
+            var continuation = ctx.ProofOnly ? ctx.RequireProofContinuation("asset-refresh-v1") : ctx.ProofContinuation;
+            object expectedPath;
+            object beforeGeneration;
+            var normalizedPath = string.IsNullOrEmpty(path) ? string.Empty : AssetToolSupport.RequireAssetPath(path);
+            if (continuation == null
+                || !continuation.TryGetValue("path", out expectedPath) || !string.Equals(expectedPath as string, normalizedPath, StringComparison.Ordinal)
+                || !continuation.TryGetValue("beforeListenerGeneration", out beforeGeneration))
+                throw new UnityCliBridge.BridgeCommandException("E_REQUEST_JOURNAL_CORRUPT", "Asset refresh continuation does not match the requested path.", "Inspect the request journal before submitting a new request.");
+            if (ctx.ProofOnly && ctx.ListenerGeneration <= Convert.ToInt64(beforeGeneration))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_REFRESH_PROOF_MISSING", "Asset refresh recovery did not observe a replacement listener generation.", "Inspect editor.state before submitting a new request.");
+            if (!ctx.ProofOnly)
             {
-                AssetDatabase.Refresh(options);
-            }
-            else
-            {
+                ctx.CommitEffect();
                 AssetDatabase.ImportAsset(AssetToolSupport.RequireAssetPath(path), options);
             }
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            path = AssetToolSupport.RequireAssetPath(path);
+            object expectedHash;
+            var fullPath = AssetToolSupport.AssetFullPath(path);
+            if (!continuation.TryGetValue("contentSha256", out expectedHash))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_REFRESH_PROOF_MISSING", "Asset refresh continuation is missing the content digest: " + path, "Inspect the asset file before submitting a new request.");
+            var stable = await ctx.Wait.UntilStable(() =>
+                File.Exists(fullPath)
+                && string.Equals(FileSha256(fullPath), expectedHash as string, StringComparison.Ordinal)
+                && !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)),
+                TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct: ct);
+            var guid = AssetDatabase.AssetPathToGUID(path);
+            if (!stable || !File.Exists(fullPath) || !string.Equals(FileSha256(fullPath), expectedHash as string, StringComparison.Ordinal) || string.IsNullOrEmpty(guid))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_REFRESH_PROOF_MISSING", "The reimported asset did not retain its continued content digest and AssetDatabase identity: " + path, "Inspect the asset import diagnostics before submitting a new request.");
+            return new Result
             {
                 Command = "asset.refresh",
                 Path = path,
@@ -87,9 +111,19 @@ namespace UnityCli
                 Refreshed = true,
                 PlannedEffects = new List<AssetPlannedEffect>
                 {
-                    new AssetPlannedEffect { Type = string.IsNullOrEmpty(path) ? "asset.refresh" : "asset.import", Path = path }
+                    new AssetPlannedEffect { Type = "asset.import", Path = path }
                 }
-            });
+            };
+        }
+
+        private static string FileSha256(string path)
+        {
+            using (var stream = File.OpenRead(path))
+            using (var sha = SHA256.Create())
+            {
+                var bytes = sha.ComputeHash(stream);
+                return string.Concat(Array.ConvertAll(bytes, value => value.ToString("x2")));
+            }
         }
     }
 }

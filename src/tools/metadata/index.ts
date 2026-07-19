@@ -19,8 +19,8 @@ import { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCliCo
 import { supportStatusForTool, toolHandler } from "./status.js";
 
 export { supportStatusForTool, toolHandler } from "./status.js";
-export { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCancellation, toolCliCommand, toolDocsTopic, toolSource } from "./derived.js";
-export type { PlayModeSupport, ResolvedToolMetadata, ToolCancellation, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
+export { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCancellation, toolCliCommand, toolDocsTopic, toolIsMutation, toolSource } from "./derived.js";
+export type { PlayModeSupport, ResolvedToolMetadata, ToolCancellation, ToolCompletionContract, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
 
 /** Extension groups are discovered from extension manifests, not TS tool metadata. */
 export const EXTENSION_GROUPS = new Set(builtinExtensionGroupNames());

@@ -57,18 +57,24 @@ namespace UnityCli.ProBuilder
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
             if (faceCount < 1)
                 throw ProBuilderErrors.OperationFailed("flip-normals", "Target has no readable faces.");
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).Distinct().ToArray();
             if (faceIndices == null || faceIndices.Length == 0)
                 faceIndices = Enumerable.Range(0, faceCount).ToArray();
             if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
                 throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
+            var before = ProBuilderOperationProof.Capture(mesh, faceIndices: faceIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("flip-normals", "Requested face geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Flip Normals");
             if (!ProBuilderReflection.FlipFaces(mesh, faceIndices))
                 throw ProBuilderErrors.OperationFailed("flip-normals", "ProBuilder 5.x Face.Reverse failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            if (!ProBuilderOperationProof.HasFlippedRequestedFaces(before, freshMesh, faceIndices))
+                throw ProBuilderErrors.OperationFailed("flip-normals", "Requested faces did not reverse readable winding.");
 
             var flipped = faceIndices.Length;
             return new System.Threading.Tasks.ValueTask<Result>(new Result { FlippedCount = flipped });

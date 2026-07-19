@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>
-    /// component.modify — 用 pathPatches/jsonPatch/componentDiff 深改单个 Component。支持 dryRun。
+    /// component.modify — 用可验证的 SerializedProperty pathPatches 修改单个 Component。支持 dryRun。
     /// </summary>
     public class ComponentModifyTool : IUnityCliTool<ComponentModifyTool.Request, ComponentModifyTool.Result>
     {
@@ -26,8 +26,6 @@ namespace UnityCli
             public string ComponentType { get; set; }
             public int? MaxDepth { get; set; }
             [UnityCliAnyJson] public List<object> PathPatches { get; set; }
-            [UnityCliAnyJson] public object JsonPatch { get; set; }
-            [UnityCliAnyJson] public object ComponentDiff { get; set; }
         }
 
         public sealed class Result
@@ -46,8 +44,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "component.modify",
-            Summary = "Modify one Component with pathPatches/jsonPatch/componentDiff; use component.get/type.schema first.",
-            Description = "Apply pathPatches, jsonPatch (Merge Patch) or componentDiff to a Component. Returns updated data, changed paths, logs and audit. Use component.get first. In Play Mode, scene component changes affect only the current runtime session unless later persisted by Unity workflow; in Edit Mode they mark scene/component state dirty.",
+            Summary = "Modify one Component with verified serialized pathPatches; use component.get/type.schema first.",
+            Description = "Apply direct replace pathPatches to verifiable SerializedProperties of one Component. Returns updated data, changed paths, logs and audit. Use component.get first. In Play Mode, scene component changes affect only the current runtime session unless later persisted by Unity workflow; in Edit Mode they mark scene/component state dirty.",
             Group = "component",
             Version = "1.0.0",
             DestructiveHint = false,
@@ -67,12 +65,9 @@ namespace UnityCli
         {
             GameObjectToolSupport.EnsureEditorNotBusy("component.modify");
             var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request);
-            if ((request.PathPatches == null || request.PathPatches.Count == 0) && request.JsonPatch == null && request.ComponentDiff == null)
-            {
-                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PATCH_REQUIRED",
-                    "component.modify requires pathPatches, jsonPatch or componentDiff.",
-                    "Pass --input '{\"component\":{\"type\":\"Transform\"},\"pathPatches\":[{\"path\":\"localPosition\",\"value\":{\"x\":1}}]}'.");
-            }
+            if (request.PathPatches == null || request.PathPatches.Count == 0)
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PATCH_REQUIRED", "component.modify requires non-empty pathPatches.", "Pass direct replace pathPatches for writable serialized properties.");
+            UnityCliBridge.ObjectPatch.ValidateOnly(component, request.PathPatches, null);
             if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
@@ -89,23 +84,20 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "component.modify cannot modify persistent assets during Play Mode.", "Target a scene component or exit Play Mode before modifying an asset.");
             }
 
-            // 执行顺序对齐 IvanMurzak: jsonPatch/componentDiff → pathPatches
-            UnityCliBridge.ObjectPatch.PatchResult result = null;
-            var effectiveMerge = request.JsonPatch ?? request.ComponentDiff;
-            if (effectiveMerge != null)
-            {
-                result = UnityCliBridge.ObjectPatch.ApplyMergePatch(component, effectiveMerge);
-            }
-            if (request.PathPatches != null && request.PathPatches.Count > 0)
-            {
-                var pathResult = UnityCliBridge.ObjectPatch.ApplyPathPatches(component, request.PathPatches);
-                if (result == null) result = pathResult;
-                else { result.ChangedPaths.AddRange(pathResult.ChangedPaths); result.Logs.AddRange(pathResult.Logs); }
-            }
+            // 所有请求形态、target 和 PlayMode 均已预检；紧邻首个 patch effect 提交屏障。
+            ctx.CommitEffect();
+            UnityCliBridge.ObjectPatch.PatchResult result = UnityCliBridge.ObjectPatch.ApplyVerifiedSerializedPatches(component, request.PathPatches);
             UnityCliSceneMutation.MarkSceneObjectDirty(component);
             UnityCliSceneMutation.MarkSceneDirty(component.gameObject.scene);
+            var componentId = component.GetInstanceID();
+            var observedComponent = EditorUtility.InstanceIDToObject(componentId) as Component;
+            if (observedComponent == null || observedComponent.GetInstanceID() != componentId)
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_MODIFY_STATE_MISMATCH", "Component target/type did not match after independent readback.", "Inspect the component and retry after the Editor is idle.");
+            var observedSerializedObject = new SerializedObject(observedComponent);
+            observedSerializedObject.Update();
+            UnityCliBridge.ObjectPatch.VerifyFreshSerializedProperties(observedComponent, request.PathPatches);
             var maxDepth = request.MaxDepth ?? 2;
-            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(component, new UnityCliBridge.ObjectSerializer.Options { MaxDepth = maxDepth, IncludeFields = true, IncludeProperties = true, DeepSerialization = false });
+            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedComponent, new UnityCliBridge.ObjectSerializer.Options { MaxDepth = maxDepth, IncludeFields = true, IncludeProperties = true, DeepSerialization = false });
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "component.modify",

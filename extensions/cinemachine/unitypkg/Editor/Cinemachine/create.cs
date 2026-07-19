@@ -71,32 +71,30 @@ namespace UnityCli.Cinemachine
             }
 
             var cameraName = string.IsNullOrWhiteSpace(request.Name) ? "UnityCli_CM_" + preset : request.Name.Trim();
+            var parent = CinemachineToolSupport.ResolveOptionalTarget(request.Parent);
+            var follow = CinemachineToolSupport.ResolveOptionalTarget(request.Follow);
+            var lookAt = CinemachineToolSupport.ResolveOptionalTarget(request.LookAt);
+            if (request.X.HasValue) CinemachineToolSupport.RequireFinite(request.X.Value, "x");
+            if (request.Y.HasValue) CinemachineToolSupport.RequireFinite(request.Y.Value, "y");
+            if (request.Z.HasValue) CinemachineToolSupport.RequireFinite(request.Z.Value, "z");
+            var bodyType = string.IsNullOrWhiteSpace(presetParts[0]) ? null : CinemachineToolSupport.RequireComponentType(presetParts[0], "Body");
+            var aimType = string.IsNullOrWhiteSpace(presetParts[1]) ? null : CinemachineToolSupport.RequireComponentType(presetParts[1], "Aim");
+            if (bodyType != null) CinemachineToolSupport.RequirePipelineComponentStage(bodyType, "Body");
+            if (aimType != null) CinemachineToolSupport.RequirePipelineComponentStage(aimType, "Aim");
+            var followPlan = follow == null ? null : CinemachineToolSupport.PrepareFirstComponentObjectMember(CinemachineToolSupport.CameraType, follow.transform, "Follow", "m_Follow");
+            var lookAtPlan = lookAt == null ? null : CinemachineToolSupport.PrepareFirstComponentObjectMember(CinemachineToolSupport.CameraType, lookAt.transform, "LookAt", "m_LookAt");
+            if (request.Priority.HasValue) CinemachineToolSupport.RequirePriorityWritable(CinemachineToolSupport.CameraType);
+            ctx.CommitEffect();
             var gameObject = new GameObject(cameraName);
             var camera = gameObject.AddComponent(CinemachineToolSupport.CameraType);
             UnityCliSceneMutation.RegisterCreatedObject(gameObject, "UnityCli Cinemachine Create");
 
-            gameObject.transform.position = new Vector3(
-                (float)(request.X ?? gameObject.transform.position.x),
-                (float)(request.Y ?? gameObject.transform.position.y),
-                (float)(request.Z ?? gameObject.transform.position.z));
+            if (parent != null) gameObject.transform.SetParent(parent.transform, false);
+            var expectedPosition = new Vector3((float)(request.X ?? 0d), (float)(request.Y ?? 0d), (float)(request.Z ?? 0d));
+            gameObject.transform.position = expectedPosition;
 
-            var parent = CinemachineToolSupport.ResolveOptionalTarget(request.Parent);
-            if (parent != null)
-            {
-                gameObject.transform.SetParent(parent.transform, false);
-            }
-
-            var follow = CinemachineToolSupport.ResolveOptionalTarget(request.Follow);
-            if (follow != null)
-            {
-                CinemachineToolSupport.SetFollowTarget(camera, follow.transform);
-            }
-
-            var lookAt = CinemachineToolSupport.ResolveOptionalTarget(request.LookAt);
-            if (lookAt != null)
-            {
-                CinemachineToolSupport.SetLookAtTarget(camera, lookAt.transform);
-            }
+            if (followPlan != null) CinemachineToolSupport.ApplyComponentMember(camera, followPlan);
+            if (lookAtPlan != null) CinemachineToolSupport.ApplyComponentMember(camera, lookAtPlan);
 
             if (request.Priority.HasValue)
             {
@@ -105,25 +103,44 @@ namespace UnityCli.Cinemachine
 
             if (!string.IsNullOrWhiteSpace(presetParts[0]))
             {
-                CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Body", CinemachineToolSupport.RequireComponentType(presetParts[0], "Body"));
+                CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Body", bodyType);
             }
             if (!string.IsNullOrWhiteSpace(presetParts[1]))
             {
-                CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Aim", CinemachineToolSupport.RequireComponentType(presetParts[1], "Aim"));
+                CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Aim", aimType);
             }
 
-            CinemachineToolSupport.MarkDirty(gameObject);
+            // 从场景重新解析并读取组件，避免以刚写入的引用作为完成证明。
+            var observedObject = CinemachineToolSupport.ResolveRequiredTarget(gameObject.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture), "Created Cinemachine camera could not be resolved.");
+            var observedCamera = CinemachineToolSupport.RequireCameraComponent(observedObject);
+            if (!string.Equals(observedObject.name, cameraName, System.StringComparison.Ordinal) || observedObject.transform.parent != (parent == null ? null : parent.transform) || (observedObject.transform.position - expectedPosition).sqrMagnitude > 0.0000001f) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_CREATE_VERIFY_FAILED", "Created camera identity, parent or position did not retain the request.", "Inspect the created object before retrying.");
+            if (followPlan != null) CinemachineToolSupport.VerifyComponentMember(observedCamera, followPlan, "E_CINEMACHINE_CREATE_VERIFY_FAILED");
+            if (lookAtPlan != null) CinemachineToolSupport.VerifyComponentMember(observedCamera, lookAtPlan, "E_CINEMACHINE_CREATE_VERIFY_FAILED");
+            if (bodyType != null && CinemachineToolSupport.GetPipelineComponent(observedCamera, "Body")?.GetType() != bodyType) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_CREATE_VERIFY_FAILED", "Created camera Body did not retain the preset.", "Check the preset and retry.");
+            if (aimType != null && CinemachineToolSupport.GetPipelineComponent(observedCamera, "Aim")?.GetType() != aimType) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_CREATE_VERIFY_FAILED", "Created camera Aim did not retain the preset.", "Check the preset and retry.");
+            if (request.Priority.HasValue)
+            {
+                using (var observedSerialized = new UnityEditor.SerializedObject(observedCamera))
+                {
+                    var priorityRoot = observedSerialized.FindProperty("Priority") ?? observedSerialized.FindProperty("m_Priority");
+                    var priorityValue = priorityRoot?.FindPropertyRelative("Value") ?? priorityRoot?.FindPropertyRelative("m_Value");
+                    var directPriority = observedCamera.GetType().GetProperty("Priority", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                    var actualPriority = priorityValue != null ? (int?)priorityValue.intValue : directPriority != null ? (int?)System.Convert.ToInt32(directPriority.GetValue(observedCamera, null)) : null;
+                    if (!actualPriority.HasValue || actualPriority.Value != request.Priority.Value) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_CREATE_VERIFY_FAILED", "Created camera priority did not retain the request.", "Inspect the created object before retrying.");
+                }
+            }
+            CinemachineToolSupport.MarkDirty(observedObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
-                Object = CinemachineToolSupport.BuildObjectInfo(gameObject, preset),
+                Object = CinemachineToolSupport.BuildObjectInfo(observedObject, preset),
                 PlannedEffects = new List<CinemachinePlannedEffect>
                 {
                     new CinemachinePlannedEffect
                     {
                         Type = "cinemachine.create",
                         Preset = preset,
-                        Target = GameObjectToolSupport.HierarchyPath(gameObject)
+                        Target = GameObjectToolSupport.HierarchyPath(observedObject)
                     }
                 },
                 LogPath = ctx.LogPath

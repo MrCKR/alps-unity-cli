@@ -28,6 +28,7 @@ namespace UnityCli
             public int Width { get; set; }
             public int Height { get; set; }
             public long SizeBytes { get; set; }
+            public string Sha256 { get; set; }
             public List<UiPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -82,6 +83,7 @@ namespace UnityCli
                 return new Result { Command = "ui.render-preview", DryRun = true, OutputPath = outputPath, Width = width, Height = height, PlannedEffects = effects };
             }
 
+            ctx.CommitEffect();
             var originalPanelSettings = document.panelSettings;
             var originalEnabled = document.enabled;
             var renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
@@ -104,6 +106,7 @@ namespace UnityCli
                 texture.Apply(false, false);
                 var bytes = texture.EncodeToPNG();
                 ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes);
+                var artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, "png");
                 return new Result
                 {
                     Command = "ui.render-preview",
@@ -111,7 +114,8 @@ namespace UnityCli
                     OutputPath = outputPath,
                     Width = width,
                     Height = height,
-                    SizeBytes = bytes.LongLength,
+                    SizeBytes = artifact.SizeBytes,
+                    Sha256 = artifact.Sha256,
                     PlannedEffects = effects
                 };
             }

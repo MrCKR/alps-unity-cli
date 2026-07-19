@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/contracts/stable-session/editor-state.schema.json",
+  "title": "editor.state public observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["identity", "session", "status", "state", "progress", "blockers", "observation"],
+  "properties": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instanceId", "canonicalProjectPath", "displayProjectPath"],
+      "properties": {
+        "instanceId": { "type": "string" },
+        "canonicalProjectPath": { "type": "string" },
+        "displayProjectPath": { "type": "string" }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["known", "editorSessionId", "processId"],
+      "properties": {
+        "known": { "type": "boolean" },
+        "editorSessionId": { "type": ["string", "null"] },
+        "processId": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "status": { "enum": ["ready", "transitioning", "blocked", "offline", "conflict"] },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compile", "import", "build", "playMode", "prefabStage", "activeScene", "runtime"],
+      "properties": {
+        "compile": { "$ref": "#/$defs/observedField" },
+        "import": { "$ref": "#/$defs/observedField" },
+        "build": { "$ref": "#/$defs/observedField" },
+        "playMode": { "$ref": "#/$defs/observedField" },
+        "prefabStage": { "$ref": "#/$defs/observedField" },
+        "activeScene": { "$ref": "#/$defs/observedField" },
+        "runtime": { "$ref": "#/$defs/observedField" }
+      }
+    },
+    "progress": { "type": "array", "items": { "$ref": "#/$defs/progress" } },
+    "blockers": { "type": "array", "items": { "$ref": "#/$defs/blocker" } },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live", "sources", "observedAt", "elapsedMs", "freshness", "lastHeartbeatAt", "dataObservedAt", "dataAgeMs", "unknownFields"],
+      "properties": {
+        "live": { "type": "boolean" },
+        "sources": { "type": "array", "items": { "enum": ["bridge", "registry", "windows-ui", "process"] }, "uniqueItems": true },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "elapsedMs": { "type": "integer", "minimum": 0, "maximum": 1100 },
+        "freshness": { "enum": ["live", "fresh", "stale", "unknown"] },
+        "lastHeartbeatAt": { "type": ["string", "null"], "format": "date-time" },
+        "dataObservedAt": { "type": ["string", "null"], "format": "date-time" },
+        "dataAgeMs": { "type": ["integer", "null"], "minimum": 0 },
+        "unknownFields": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    }
+  },
+  "$defs": {
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "title", "canWait", "source"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "value": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "canWait": { "type": "boolean" },
+        "source": { "enum": ["unity", "registry"] }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "title", "message", "requiresUserAction", "canAutoResolve", "source", "confidence"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "requiresUserAction": { "type": "boolean" },
+        "canAutoResolve": { "const": false },
+        "source": { "enum": ["unity", "registry", "windows-ui"] },
+        "confidence": { "enum": ["exact", "inferred", "unknown"] },
+        "buttons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "observedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["known", "freshness"],
+      "properties": {
+        "known": { "type": "boolean" },
+        "value": { "x-unityCliAnyJson": true },
+        "freshness": { "enum": ["live", "fresh", "stale", "unknown"] }
+      }
+    }
+  }
+}

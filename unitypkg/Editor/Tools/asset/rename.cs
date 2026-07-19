@@ -57,6 +57,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_NAME_INVALID", "Asset rename name must not include path separators: " + name, "Use asset move for changing directories.");
             }
             var guid = AssetDatabase.AssetPathToGUID(path);
+            ctx.CommitEffect();
             var error = AssetDatabase.RenameAsset(path, name);
             if (!string.IsNullOrEmpty(error))
             {
@@ -67,6 +68,10 @@ namespace UnityCli
             if (string.IsNullOrEmpty(renamedPath))
             {
                 renamedPath = AssetToolSupport.NormalizeAssetPath(Path.Combine(Path.GetDirectoryName(path) ?? "Assets", name));
+            }
+            if (!AssetToolSupport.AssetExists(renamedPath) || AssetToolSupport.AssetExists(path))
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_RENAME_STATE_MISMATCH", "Asset rename did not produce the expected source and destination state.", "Check Unity Console diagnostics and retry after the editor is idle.");
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

@@ -52,7 +52,18 @@ namespace UnityCli.Cinemachine
             var gameObject = CinemachineToolSupport.ResolveRequiredTarget(request.Target, "cinemachine priority requires --target <go>.");
             var camera = CinemachineToolSupport.RequireCameraComponent(gameObject);
             var effects = new List<CinemachinePlannedEffect>();
+            if (!request.Priority.HasValue && !request.Enabled.HasValue) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_PRIORITY_INPUT_REQUIRED", "cinemachine.priority requires priority or enabled.", "Pass at least one priority field.");
+            using (var validate = new UnityEditor.SerializedObject(camera))
+            {
+                var priority = validate.FindProperty("Priority") ?? validate.FindProperty("m_Priority");
+                var value = priority != null && priority.propertyType == UnityEditor.SerializedPropertyType.Integer ? priority : priority?.FindPropertyRelative("Value") ?? priority?.FindPropertyRelative("m_Value");
+                var enabled = priority?.FindPropertyRelative("Enabled") ?? priority?.FindPropertyRelative("m_Enabled");
+                if (priority == null || (request.Priority.HasValue && (value == null || value.propertyType != UnityEditor.SerializedPropertyType.Integer)) || (request.Enabled.HasValue && (enabled == null || enabled.propertyType != UnityEditor.SerializedPropertyType.Boolean))) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_PRIORITY_PROPERTY_NOT_FOUND", "Cinemachine priority fields are not writable.", "Use a supported Cinemachine package version.");
+            }
 
+            if (request.Enabled.HasValue) CinemachineToolSupport.RequirePriorityEnabledWritable(camera);
+
+            ctx.CommitEffect();
             if (request.Priority.HasValue)
             {
                 CinemachineToolSupport.SetPriority(camera, request.Priority.Value);
@@ -75,6 +86,16 @@ namespace UnityCli.Cinemachine
                     Field = "enabled",
                     Value = request.Enabled.Value ? "true" : "false"
                 });
+            }
+
+            var observedCamera = CinemachineToolSupport.RequireCameraComponent(CinemachineToolSupport.ResolveRequiredTarget(gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture), "Cinemachine camera could not be resolved after setting priority."));
+            using (var observed = new UnityEditor.SerializedObject(observedCamera))
+            {
+                var priority = observed.FindProperty("Priority") ?? observed.FindProperty("m_Priority");
+                var value = priority != null && priority.propertyType == UnityEditor.SerializedPropertyType.Integer ? priority : priority?.FindPropertyRelative("Value") ?? priority?.FindPropertyRelative("m_Value");
+                var enabled = priority?.FindPropertyRelative("Enabled") ?? priority?.FindPropertyRelative("m_Enabled");
+                if (request.Priority.HasValue && (value == null || value.intValue != request.Priority.Value)) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_PRIORITY_VERIFY_FAILED", "Cinemachine priority did not retain the requested value.", "Check the camera and retry.");
+                if (request.Enabled.HasValue && (enabled == null || enabled.boolValue != request.Enabled.Value)) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_PRIORITY_VERIFY_FAILED", "Cinemachine priority enabled flag did not retain the requested value.", "Check the camera and retry.");
             }
 
             if (effects.Count > 0)

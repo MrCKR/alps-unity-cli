@@ -28,7 +28,15 @@ namespace UnityCli
         public static GameObject ResolveUiParent(string parent)
         {
             if (string.IsNullOrEmpty(parent)) return null;
-            try { return GameObjectToolSupport.ResolveUniqueTarget(parent, "UI parent not found."); } catch { return null; }
+            try
+            {
+                var resolved = GameObjectToolSupport.ResolveUniqueTarget(parent, "UI parent not found.");
+                if (resolved == null || resolved.GetComponent<RectTransform>() == null) return null;
+                var instanceId = resolved.GetInstanceID();
+                var fresh = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+                return fresh != null && fresh.GetInstanceID() == instanceId && fresh.GetComponent<RectTransform>() != null ? fresh : null;
+            }
+            catch { return null; }
         }
 
         /// <summary>解析 GameObject 目标,支持名称/路径/实例ID。</summary>
@@ -57,20 +65,55 @@ namespace UnityCli
         /// <summary>校验 uxml 路径。</summary>
         public static string RequireUxmlPath(string rawPath)
         {
-            var path = SceneToolSupport.NormalizeAssetPath(rawPath);
-            if (string.IsNullOrEmpty(path) || !path.EndsWith(".uxml", System.StringComparison.OrdinalIgnoreCase))
-                throw new UnityCliBridge.BridgeCommandException("E_UI_UXML_PATH_REQUIRED", "Pass an Assets/*.uxml path.", "Use ui.document.create with a uxml path.");
+            return RequireUiDocumentPath(rawPath, ".uxml", "E_UI_UXML_PATH_REQUIRED");
+        }
+
+        /// <summary>校验 USS 路径。</summary>
+        public static string RequireUssPath(string rawPath)
+        {
+            return RequireUiDocumentPath(rawPath, ".uss", "E_UI_USS_PATH_REQUIRED");
+        }
+
+        /// <summary>校验 UI 文档路径在 Assets/ 内且不含路径穿越段。</summary>
+        public static string RequireUiDocumentPath(string rawPath, string extension, string errorCode)
+        {
+            var path = AssetToolSupport.RequireAssetPath(rawPath);
+            if (!path.EndsWith(extension, System.StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException(errorCode, "Pass an Assets/*" + extension + " path.", "Use a canonical path under Assets/ without path traversal segments.");
+            AssetToolSupport.AssetFullPath(path);
             return path;
         }
 
-        /// <summary>确保文本资产存在,不存在则创建默认内容。</summary>
-        public static void EnsureTextAsset(string path, string defaultContent, bool overwrite, string existsErrorCode)
+        /// <summary>校验 UXML 或 USS 文档路径。</summary>
+        public static string RequireUiDocumentAssetPath(string rawPath)
         {
-            var fullPath = SceneToolSupport.AssetFullPath(path);
-            if (File.Exists(fullPath) && !overwrite)
+            var path = AssetToolSupport.RequireAssetPath(rawPath);
+            if (!path.EndsWith(".uxml", System.StringComparison.OrdinalIgnoreCase) && !path.EndsWith(".uss", System.StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException("E_UI_DOCUMENT_PATH_INVALID", "UI document path must end with .uxml or .uss: " + path, "Pass a canonical Assets/*.uxml or Assets/*.uss path.");
+            AssetToolSupport.AssetFullPath(path);
+            return path;
+        }
+
+        public static void ValidateVisualElementSize(float? width, float? height)
+        {
+            ValidateFinite(width, "Width");
+            ValidateFinite(height, "Height");
+            if ((width.HasValue && width.Value < 0f) || (height.HasValue && height.Value < 0f))
+                throw new UnityCliBridge.BridgeCommandException("E_UI_RANGE_INVALID", "Width and Height must be finite and non-negative.", "Pass finite dimensions greater than or equal to zero.");
+        }
+
+        /// <summary>在 effect 前验证文本资产路径与覆盖策略。</summary>
+        public static void ValidateTextAssetCreation(string path, bool overwrite, string existsErrorCode)
+        {
+            if (File.Exists(SceneToolSupport.AssetFullPath(path)) && !overwrite)
                 throw new UnityCliBridge.BridgeCommandException(existsErrorCode, "Asset already exists: " + path, "Pass overwrite=true or choose a different path.");
+        }
+
+        /// <summary>写入已验证的文本资产。</summary>
+        public static void EnsureTextAsset(string path, string defaultContent)
+        {
             SceneToolSupport.CreateAssetDirectory(path);
-            File.WriteAllText(fullPath, defaultContent, System.Text.Encoding.UTF8);
+            File.WriteAllText(SceneToolSupport.AssetFullPath(path), defaultContent, System.Text.Encoding.UTF8);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
         }
 
@@ -86,6 +129,19 @@ namespace UnityCli
         /// <summary>默认 USS 模板。</summary>
         public static string DefaultUss() => ":root { font-size: 14px; }\n";
 
+        public static void ValidateUguiRequest(int? fontSize, float? width, float? height, float? x, float? y)
+        {
+            if (fontSize.HasValue && fontSize.Value <= 0) throw new UnityCliBridge.BridgeCommandException("E_UI_RANGE_INVALID", "FontSize must be positive.", "Pass a positive fontSize.");
+            ValidateFinite(width, "Width"); ValidateFinite(height, "Height"); ValidateFinite(x, "X"); ValidateFinite(y, "Y");
+            if (width.HasValue && width.Value < 0f || height.HasValue && height.Value < 0f)
+                throw new UnityCliBridge.BridgeCommandException("E_UI_RANGE_INVALID", "Width and Height cannot be negative.", "Pass non-negative dimensions.");
+        }
+        private static void ValidateFinite(float? value, string field)
+        {
+            if (value.HasValue && (float.IsNaN(value.Value) || float.IsInfinity(value.Value)))
+                throw new UnityCliBridge.BridgeCommandException("E_UI_VALUE_INVALID", field + " must be finite.", "Pass a finite numeric value.");
+        }
+
         /// <summary>构造 UI 元素引用 DTO。</summary>
         public static UiElementRef BuildUiElementRef(GameObject go, string kind)
         {
@@ -98,6 +154,8 @@ namespace UnityCli
     public sealed class UiElementRef { public long Id { get; set; } public string Name { get; set; } public string Path { get; set; } public string Kind { get; set; } }
     public sealed class UiDocumentAssetInfo { public string Path { get; set; } public string Name { get; set; } public bool Exists { get; set; } public string VisualTreeName { get; set; } public string StyleSheetName { get; set; } }
     public sealed class UiDocumentLiveInfo { public string VisualTreeAsset { get; set; } public string PanelSettings { get; set; } public double SortingOrder { get; set; } }
+    public sealed class UiPanelSettingsInfo { public string Path { get; set; } public string ScaleMode { get; set; } public int ReferenceWidth { get; set; } public int ReferenceHeight { get; set; } public double SortingOrder { get; set; } }
+    public sealed class UiVisualElementInfo { public string Name { get; set; } public string Text { get; set; } public string Display { get; set; } public float? Width { get; set; } public float? Height { get; set; } public string[] Classes { get; set; } }
     public sealed class UiPlannedEffect { public string Type { get; set; } public string Target { get; set; } public string Path { get; set; } public string Uxml { get; set; } public string Uss { get; set; } }
     public sealed class UiHierarchyItem { public string Name { get; set; } public string Path { get; set; } public string Type { get; set; } public long ChildCount { get; set; } }
 }

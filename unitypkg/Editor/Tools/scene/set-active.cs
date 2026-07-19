@@ -43,6 +43,7 @@ namespace UnityCli
             }
         };
 
+        // 切换后读取 Unity 当前活动场景，确认写入已生效。
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             SceneToolSupport.EnsureEditorNotBusy("scene.set-active");
@@ -52,10 +53,15 @@ namespace UnityCli
                 var scene = SceneManager.GetSceneAt(i);
                 if (string.Equals(SceneToolSupport.NormalizeAssetPath(scene.path), path, System.StringComparison.OrdinalIgnoreCase))
                 {
+                    ctx.CommitEffect();
                     EditorSceneManager.SetActiveScene(scene);
+                    // 写后读取激活场景，确认场景切换已由 Unity 接受。
+                    var observedScene = SceneManager.GetActiveScene();
+                    if (observedScene.path != scene.path || observedScene.handle != scene.handle)
+                        throw new UnityCliBridge.BridgeCommandException("E_SCENE_ACTIVE_STATE_MISMATCH", "Unity did not set the requested active scene.", "Inspect the active scene and retry.");
                     return new System.Threading.Tasks.ValueTask<Result>(new Result
                     {
-                        Scene = SceneToolSupport.BuildSceneInfo(scene),
+                        Scene = SceneToolSupport.BuildSceneInfo(observedScene),
                         RequestedPath = path,
                         PlannedEffects = new List<ScenePlannedEffect>
                         {

@@ -57,20 +57,28 @@ namespace UnityCli
             // 父级先解析,clearFlags 先校验,再创建 GameObject,避免半成品
             var parentGo = string.IsNullOrEmpty(request.Parent) ? null : GameObjectToolSupport.ResolveUniqueTarget(request.Parent, "camera.create --parent <go> not found.");
             var clearFlags = string.IsNullOrEmpty(request.ClearFlags) ? (CameraClearFlags?)null : CameraToolSupport.ParseCameraClearFlags(request.ClearFlags);
+            var position = string.IsNullOrEmpty(request.Position) ? (Vector3?)null : GameObjectToolSupport.ParseVector3(request.Position);
+            var rotation = string.IsNullOrEmpty(request.Rotation) ? (Vector3?)null : GameObjectToolSupport.ParseVector3(request.Rotation);
+            GameObjectToolSupport.ValidateMutationInputs(request.Tag, null);
+            CameraToolSupport.ValidateFloatRange(request.FieldOfView, "fieldOfView", 1d, 179d);
+            CameraToolSupport.ValidateFloatRange(request.OrthographicSize, "orthographicSize", double.Epsilon, float.MaxValue);
+            CameraToolSupport.ValidateFloatRange(request.Depth, "depth", -float.MaxValue, float.MaxValue);
+            var parentId = parentGo == null ? 0 : parentGo.GetInstanceID();
 
+            ctx.CommitEffect();
             var gameObject = new GameObject(name);
             if (parentGo != null)
             {
                 gameObject.transform.SetParent(parentGo.transform, false);
             }
             var camera = gameObject.AddComponent<Camera>();
-            if (!string.IsNullOrEmpty(request.Position))
+            if (position.HasValue)
             {
-                gameObject.transform.position = GameObjectToolSupport.ParseVector3(request.Position);
+                gameObject.transform.position = position.Value;
             }
-            if (!string.IsNullOrEmpty(request.Rotation))
+            if (rotation.HasValue)
             {
-                gameObject.transform.eulerAngles = GameObjectToolSupport.ParseVector3(request.Rotation);
+                gameObject.transform.eulerAngles = rotation.Value;
             }
             if (request.FieldOfView.HasValue) camera.fieldOfView = (float)request.FieldOfView.Value;
             if (request.Orthographic.HasValue) camera.orthographic = request.Orthographic.Value;
@@ -83,9 +91,19 @@ namespace UnityCli
             }
             UnityCliSceneMutation.MarkSceneObjectDirty(gameObject);
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            var observed = EditorUtility.InstanceIDToObject(camera.GetInstanceID()) as Camera;
+            if (observed == null || observed.gameObject.name != name || (parentId == 0 && observed.transform.parent != null) || (parentId != 0 && (observed.transform.parent == null || observed.transform.parent.GetInstanceID() != parentId)) ||
+                (position.HasValue && observed.transform.position != position.Value) || (rotation.HasValue && observed.transform.eulerAngles != rotation.Value) ||
+                (request.FieldOfView.HasValue && !Mathf.Approximately(observed.fieldOfView, (float)request.FieldOfView.Value)) ||
+                (request.Orthographic.HasValue && observed.orthographic != request.Orthographic.Value) ||
+                (request.OrthographicSize.HasValue && !Mathf.Approximately(observed.orthographicSize, (float)request.OrthographicSize.Value)) ||
+                (clearFlags.HasValue && observed.clearFlags != clearFlags.Value) ||
+                (request.Depth.HasValue && !Mathf.Approximately(observed.depth, (float)request.Depth.Value)) ||
+                (request.Tag == "MainCamera" && observed.gameObject.tag != "MainCamera"))
+                throw new UnityCliBridge.BridgeCommandException("E_CAMERA_CREATE_STATE_MISMATCH", "Created Camera did not satisfy the requested predicate.", "Inspect the Camera and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Camera = CameraToolSupport.BuildCameraInfo(camera),
+                Camera = CameraToolSupport.BuildCameraInfo(observed),
                 PlannedEffects = new List<CameraPlannedEffect>
                 {
                     new CameraPlannedEffect { Type = "camera.create", Target = name }

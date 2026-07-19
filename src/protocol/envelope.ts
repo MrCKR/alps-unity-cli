@@ -56,11 +56,6 @@ export interface ToolError<TDetails = unknown> {
  * CLI → Bridge 的请求信封。command 字符串是天然 kind/discriminator,仅用于路由;
  * 字段取用走反序列化好的 DTO(废除 BridgeRequest 的正则刮 JSON)。
  */
-export interface BridgeExecution {
-  dryRun?: boolean;
-  timeoutMs?: number;
-}
-
 export interface BridgeSecurity {
   confirmed: boolean;
   toolName: string;
@@ -68,15 +63,26 @@ export interface BridgeSecurity {
   inputSha256: string;
 }
 
+/** 单个逻辑请求的执行控制；absoluteDeadlineUtc 在首次序列化后不可改变。 */
+export interface BridgeExecution {
+  absoluteDeadlineUtc: string;
+  completionContractVersion: number;
+  requestDigestVersion: number;
+  dryRun?: boolean;
+  securityProof?: BridgeSecurity;
+}
+
 export interface BridgeRequest<TInput = unknown> {
+  /** 稳定会话协议版本。 */
+  protocolVersion: number;
+  /** CanonicalPath v1 派生的逻辑项目 identity。 */
+  instanceId: string;
   /** 命令名，仅用于路由。 */
   command: string;
   /** 请求追踪 ID。 */
   requestId: string;
-  /** 命令输入，缺省时按空对象处理。 */
-  input?: TInput;
-  /** 与业务输入分离的执行控制。 */
-  execution?: BridgeExecution;
-  /** 绑定工具 descriptor 与输入内容的确认凭证。 */
-  security?: BridgeSecurity;
+  /** typed command input；空输入也必须显式发送空对象。 */
+  input: TInput;
+  /** 与业务输入分离的 immutable 执行控制。 */
+  execution: BridgeExecution;
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
@@ -92,6 +93,24 @@ test("bridge specs resolve for screenshot tools", () => {
     assert.ok(spec, `${group} ${command} should resolve in bridge registry`);
     assert.equal(spec?.bridgeCommand, bridgeCommand);
   }
+});
+
+test("screenshot tools restore render state and require a non-empty written artifact", async () => {
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/screenshot/ScreenshotToolSupport.cs", import.meta.url), "utf8");
+  const gameViewSource = await readFile(new URL("../unitypkg/Editor/Tools/screenshot/game-view.cs", import.meta.url), "utf8");
+  const isolatedSource = await readFile(new URL("../unitypkg/Editor/Tools/screenshot/isolated-object.cs", import.meta.url), "utf8");
+  const orbitSource = await readFile(new URL("../unitypkg/Editor/Tools/screenshot/orbit.cs", import.meta.url), "utf8");
+  assert.match(supportSource, /E_SCREENSHOT_ARTIFACT_EMPTY/);
+  assert.match(supportSource, /E_SCREENSHOT_ARTIFACT_MISSING/);
+  assert.match(supportSource, /RenderTexture\.active = previousActive/);
+  assert.match(supportSource, /camera\.targetTexture = previousTarget/);
+  assert.match(gameViewSource, /RenderTexture\.active = previousActive/);
+  assert.match(gameViewSource, /finally \{ cam\.targetTexture = prevTarget; \}/);
+  assert.match(isolatedSource, /RenderScreenshotTexture\(cam, width, height\)/);
+  assert.match(isolatedSource, /finally \{ UnityEngine\.Object\.DestroyImmediate\(texture\); \}/);
+  assert.match(orbitSource, /previousPosition = cam\.transform\.position/);
+  assert.match(orbitSource, /cam\.transform\.position = previousPosition/);
+  assert.match(orbitSource, /finally \{ UnityEngine\.Object\.DestroyImmediate\(texture\); \}/);
 });
 
 test("contract entries exist for screenshot tools with present C# handler", () => {

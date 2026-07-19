@@ -54,19 +54,26 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("split-vertices", "No ProBuilderMesh on target.");
 
-            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).Distinct().ToArray();
+            int[] vertexIndices = request.VertexIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "vertexIndices")).Distinct().ToArray();
             var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
             if (vertexIndices == null || vertexIndices.Length == 0)
                 throw ProBuilderErrors.SchemaInvalid("vertexIndices is required for split-vertices.");
             if (vertexCount < 0 || vertexIndices.Any(index => index < 0 || index >= vertexCount))
                 throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
 
+            var before = ProBuilderOperationProof.Capture(mesh, vertexIndices: vertexIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("split-vertices", "Requested shared vertices are not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Split Vertices");
             var split = ProBuilderReflection.SplitVerticesWithList(mesh, vertexIndices);
             if (split < 0)
                 throw ProBuilderErrors.OperationFailed("split-vertices", "ProBuilder 5.x VertexEditing.SplitVertices failed.");
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, vertexIndices: vertexIndices);
+            if (!ProBuilderOperationProof.HasSplitVertices(before, after))
+                throw ProBuilderErrors.OperationFailed("split-vertices", "Requested vertices did not split in readable shared-vertex topology.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { SplitCount = split });
         }

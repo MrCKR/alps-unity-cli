@@ -33,12 +33,6 @@ namespace UnityCli.Protocol
         public double RetryAfterMs { get; set; }
     }
 
-    public sealed partial class BridgeExecution
-    {
-        public bool? DryRun { get; set; }
-        public double? TimeoutMs { get; set; }
-    }
-
     public sealed partial class BridgeSecurity
     {
         public bool Confirmed { get; set; }
@@ -47,13 +41,23 @@ namespace UnityCli.Protocol
         public string InputSha256 { get; set; }
     }
 
+    public sealed partial class BridgeExecution
+    {
+        public string AbsoluteDeadlineUtc { get; set; }
+        public double CompletionContractVersion { get; set; }
+        public double RequestDigestVersion { get; set; }
+        public bool? DryRun { get; set; }
+        public BridgeSecurity SecurityProof { get; set; }
+    }
+
     public sealed partial class BridgeRequest
     {
+        public double ProtocolVersion { get; set; }
+        public string InstanceId { get; set; }
         public string Command { get; set; }
         public string RequestId { get; set; }
         public object Input { get; set; }
         public BridgeExecution Execution { get; set; }
-        public BridgeSecurity Security { get; set; }
     }
 }
 #endif

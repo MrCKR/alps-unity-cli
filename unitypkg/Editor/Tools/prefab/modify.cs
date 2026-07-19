@@ -54,52 +54,52 @@ namespace UnityCli
             try
             {
                 var name = request.Name;
-                if (!string.IsNullOrEmpty(name) && root.name != name)
+                var addChild = request.AddChild;
+                var removeChild = request.RemoveChild;
+                var existingAddChild = string.IsNullOrEmpty(addChild) ? null : root.transform.Find(addChild);
+                var existingRemoveChild = string.IsNullOrEmpty(removeChild) ? null : root.transform.Find(removeChild);
+                if (existingAddChild != null && !(request.Overwrite ?? false))
+                    throw new UnityCliBridge.BridgeCommandException("E_PREFAB_CHILD_EXISTS", "Prefab child already exists: " + addChild, "Pass --overwrite or choose another child name.");
+                if (!string.IsNullOrEmpty(addChild) && addChild == removeChild)
+                    throw new UnityCliBridge.BridgeCommandException("E_PREFAB_CHILD_CONFLICT", "addChild and removeChild cannot target the same child.", "Use separate prefab.modify requests for conflicting child operations.");
+                if (!string.IsNullOrEmpty(removeChild) && existingRemoveChild == null)
+                    throw new UnityCliBridge.BridgeCommandException("E_PREFAB_CHILD_NOT_FOUND", "Prefab child not found: " + removeChild, "Run tools run prefab.hierarchy --input '{\"path\":\"<path>\"}' to inspect child paths.");
+                var rename = !string.IsNullOrEmpty(name) && root.name != name;
+                if (!rename && string.IsNullOrEmpty(addChild) && string.IsNullOrEmpty(removeChild))
+                    throw new UnityCliBridge.BridgeCommandException("E_PREFAB_MODIFY_NOOP", "No Prefab modifications were requested.", "Pass name, addChild or removeChild.");
+
+                ctx.CommitEffect();
+                if (rename)
                 {
                     root.name = name;
                     effects.Add(new PrefabPlannedEffect { Type = "prefab.modify", Path = path, Property = "name" });
                 }
-
-                var addChild = request.AddChild;
                 if (!string.IsNullOrEmpty(addChild))
                 {
-                    var existing = root.transform.Find(addChild);
-                    if (existing != null && !(request.Overwrite ?? false))
-                    {
-                        throw new UnityCliBridge.BridgeCommandException("E_PREFAB_CHILD_EXISTS", "Prefab child already exists: " + addChild, "Pass --overwrite or choose another child name.");
-                    }
-                    if (existing != null)
-                    {
-                        Object.DestroyImmediate(existing.gameObject);
-                    }
+                    if (existingAddChild != null) Object.DestroyImmediate(existingAddChild.gameObject);
                     var child = new GameObject(addChild);
                     child.transform.SetParent(root.transform, false);
                     effects.Add(new PrefabPlannedEffect { Type = "prefab.modify", Path = path, AddChild = addChild });
                 }
-
-                var removeChild = request.RemoveChild;
                 if (!string.IsNullOrEmpty(removeChild))
                 {
-                    var child = root.transform.Find(removeChild);
-                    if (child == null)
-                    {
-                        throw new UnityCliBridge.BridgeCommandException("E_PREFAB_CHILD_NOT_FOUND", "Prefab child not found: " + removeChild, "Run tools run prefab.hierarchy --input '{\"path\":\"<path>\"}' to inspect child paths.");
-                    }
-                    Object.DestroyImmediate(child.gameObject);
+                    Object.DestroyImmediate(existingRemoveChild.gameObject);
                     effects.Add(new PrefabPlannedEffect { Type = "prefab.modify", Path = path, RemoveChild = removeChild });
-                }
-
-                if (effects.Count == 0)
-                {
-                    throw new UnityCliBridge.BridgeCommandException("E_PREFAB_MODIFY_NOOP", "No Prefab modifications were requested.", "Pass name, addChild or removeChild.");
                 }
 
                 PrefabUtility.SaveAsPrefabAsset(root, path);
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
+                var observed = PrefabToolSupport.LoadPrefabAsset(path);
+                if (rename && observed.name != name)
+                    throw new UnityCliBridge.BridgeCommandException("E_PREFAB_MODIFY_PROOF_MISSING", "Prefab root name was not persisted.", "Inspect the Prefab asset before submitting a new request.");
+                if (!string.IsNullOrEmpty(addChild) && observed.transform.Find(addChild) == null)
+                    throw new UnityCliBridge.BridgeCommandException("E_PREFAB_MODIFY_PROOF_MISSING", "Prefab child was not persisted: " + addChild, "Inspect the Prefab asset before submitting a new request.");
+                if (!string.IsNullOrEmpty(removeChild) && observed.transform.Find(removeChild) != null)
+                    throw new UnityCliBridge.BridgeCommandException("E_PREFAB_MODIFY_PROOF_MISSING", "Prefab child was not removed: " + removeChild, "Inspect the Prefab asset before submitting a new request.");
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Prefab = PrefabToolSupport.BuildPrefabInfo(path, root, root, true),
+                    Prefab = PrefabToolSupport.BuildPrefabInfo(path, observed, observed, true),
                     PlannedEffects = effects
                 });
             }

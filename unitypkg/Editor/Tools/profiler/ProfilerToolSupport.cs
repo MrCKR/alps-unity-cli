@@ -330,18 +330,54 @@ namespace UnityCli
                 Profiler.enableBinaryLog = previousBinaryLog;
                 Profiler.logFile = previousLogFile;
             }
-            if (!File.Exists(outputPath))
+            EnsureRawProfilerArtifact(outputPath);
+        }
+
+        /// <summary>确认 Unity 实际写出了非空 raw profiler artifact，绝不伪造占位文件。</summary>
+        public static void EnsureRawProfilerArtifact(string outputPath)
+        {
+            if (!File.Exists(outputPath) || new FileInfo(outputPath).Length <= 0)
             {
-                File.WriteAllText(outputPath, "Profiler raw capture was requested; Unity did not emit binary data for this editor version." + Environment.NewLine, System.Text.Encoding.UTF8);
+                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_RAW_ARTIFACT_MISSING",
+                    "Unity did not write a non-empty raw profiler artifact: " + outputPath,
+                    "Check that binary profiling is supported and enabled, then retry the capture.");
+            }
+        }
+
+        /// <summary>写入 JSON artifact 后重读内容、确认非空并计算 SHA-256，避免把写入调用当作 artifact 证明。</summary>
+        public static void WriteAndVerifyJsonProfilerArtifact(string outputPath, string content)
+        {
+            File.WriteAllText(outputPath, content, System.Text.Encoding.UTF8);
+            var persisted = File.ReadAllText(outputPath, System.Text.Encoding.UTF8);
+            if (string.IsNullOrEmpty(persisted) || !string.Equals(persisted, content, StringComparison.Ordinal))
+                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_JSON_ARTIFACT_INVALID", "Profiler JSON artifact is missing, empty, or differs after write: " + outputPath, "Choose a writable output path and retry.");
+            using (var stream = File.OpenRead(outputPath))
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var hash = sha.ComputeHash(stream);
+                if (hash == null || hash.Length == 0)
+                    throw new UnityCliBridge.BridgeCommandException("E_PROFILER_JSON_ARTIFACT_INVALID", "Profiler JSON artifact SHA-256 could not be computed: " + outputPath, "Choose a readable output path and retry.");
+            }
+        }
+
+        /// <summary>读取非空文件并计算 SHA-256，作为外部输入 identity。</summary>
+        public static string FileSha256(string path)
+        {
+            if (!File.Exists(path) || new FileInfo(path).Length <= 0)
+                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_CAPTURE_NOT_FOUND", "Profiler capture file is missing or empty: " + path, "Pass a readable non-empty .raw or .data file.");
+            using (var stream = File.OpenRead(path))
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                return string.Concat(Array.ConvertAll(sha.ComputeHash(stream), value => value.ToString("x2")));
             }
         }
 
         /// <summary>写入采集元数据 sidecar。</summary>
         public static void WriteCaptureMetadataSidecar(string outputPath, string requestId, string captureTag, long startFrame, long endFrame, DateTime startedAt, DateTime finishedAt)
         {
+            var sidecarPath = outputPath + ".metadata.json";
             try
             {
-                var sidecarPath = outputPath + ".metadata.json";
                 var sidecar = new ProfilerCaptureMetadataSidecar
                 {
                     RequestId = requestId,
@@ -354,11 +390,15 @@ namespace UnityCli
                     SidecarVersion = "unity-cli-profiler-capture-v1"
                 };
                 File.WriteAllText(sidecarPath, UnityCliSerializer.Serialize(sidecar), System.Text.Encoding.UTF8);
+                if (!File.Exists(sidecarPath) || new FileInfo(sidecarPath).Length <= 0)
+                    throw new IOException("Metadata sidecar is missing or empty after write.");
             }
             catch (Exception exception)
             {
-                // sidecar 写入失败不阻塞主流程
-                System.Diagnostics.Debug.WriteLine("profiler_capture_metadata_failed: " + exception.Message);
+                throw new UnityCliBridge.BridgeCommandException(
+                    "E_PROFILER_METADATA_WRITE_FAILED",
+                    "Profiler metadata sidecar could not be written: " + exception.Message,
+                    "Choose a writable output path and retry the capture.");
             }
         }
 

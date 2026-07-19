@@ -11,6 +11,7 @@ export interface BuildCancelRequest {
 }
 
 export interface BuildCancelObject {
+  [key: string]: AnyJson;
 }
 
 export interface BuildCancelError {
@@ -62,6 +63,7 @@ export default defineTool<BuildCancelRequest, BuildCancelResult>({
     }
     const jobId = resolveBuildJobId(request);
     try {
+      await context.commitEffect?.();
       const cancelled = await context.jobRunner.cancel(jobId);
       const summary = await buildJobSummary("build.cancel", cancelled);
       return summary as unknown as BuildCancelResult;

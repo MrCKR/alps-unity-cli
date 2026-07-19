@@ -5,8 +5,8 @@ import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const FLAGS = new Set(["--yes", "--dry-run", "--runtime", "--wait", "--timeout-ms", "--wait-timeout-ms", "--instance", "--target", "--bridge-endpoint", "--artifact-dir", "--project", "--raw"]);
-const VALUE_FLAGS = new Set(["--timeout-ms", "--wait-timeout-ms", "--instance", "--target", "--bridge-endpoint", "--artifact-dir", "--project"]);
+const FLAGS = new Set(["--yes", "--dry-run", "--runtime", "--wait", "--timeout-ms", "--wait-timeout-ms", "--instance", "--artifact-dir", "--project", "--raw"]);
+const VALUE_FLAGS = new Set(["--timeout-ms", "--wait-timeout-ms", "--instance", "--artifact-dir", "--project"]);
 const FIXTURES = ["concurrency", "timeout_cancel", "stale_target", "domain_reload", "shell_quoting", "prefab_stage", "ui_cache"];
 // Package import 和 PlayMode domain reload 在大型项目中可超过 30 秒，矩阵必须等待完整公开 timeout 窗口。
 const TRANSIENT_MAX_ATTEMPTS = 120;
@@ -216,14 +216,14 @@ class Matrix {
         this.closedBaselineReady = true;
       }
       await restoreClosedProjectBaseline(project, this.closedBaseline);
-      const record = { id, at: new Date().toISOString(), project, target: null, endpoint: null, buildStamp: this.o.build_stamp ?? null, baseline: { path: this.closedBaseline, stateDirectories: CLOSED_PROJECT_STATE, preserved: ["Library", "Temp", "UnityLockfile"] }, assertion: { status: "PASS" } };
+      const record = { id, at: new Date().toISOString(), project, target: null, buildStamp: this.o.build_stamp ?? null, baseline: { path: this.closedBaseline, stateDirectories: CLOSED_PROJECT_STATE, preserved: ["Library", "Temp", "UnityLockfile"] }, assertion: { status: "PASS" } };
       this.records.push(record); await appendFile(this.jsonl, `${JSON.stringify(record)}\n`); return true;
     } catch (error) {
-      const record = { id, at: new Date().toISOString(), project, target: null, endpoint: null, buildStamp: this.o.build_stamp ?? null, assertion: { status: "FAIL", issue: `Closed project baseline restore failed: ${error instanceof Error ? error.message : String(error)}` } };
+      const record = { id, at: new Date().toISOString(), project, target: null, buildStamp: this.o.build_stamp ?? null, assertion: { status: "FAIL", issue: `Closed project baseline restore failed: ${error instanceof Error ? error.message : String(error)}` } };
       this.records.push(record); await appendFile(this.jsonl, `${JSON.stringify(record)}\n`); return false;
     }
   }
-  argv(base, project = this.o.project) { const a = [...base, "--project", project]; if (resolve(project) === resolve(this.o.project)) { if (this.o.target) a.push("--instance", this.o.target); if (this.o.endpoint) a.push("--bridge-endpoint", this.o.endpoint); } return [...a, "--raw"]; }
+  argv(base, project = this.o.project) { const a = [...base, "--project", project]; if (resolve(project) === resolve(this.o.project) && this.o.target) a.push("--instance", this.o.target); return [...a, "--raw"]; }
   /** 复用证据必须同时绑定 build、project 与 target，避免跨环境跳过 case。 */
   hasReusablePass(id, project = this.o.project) {
     const old = this.prior.get(id);
@@ -233,7 +233,7 @@ class Matrix {
       && resolve(old.project) === resolve(project)
       && old.target === (this.o.target ?? null);
   }
-  async state(project) { const argv = this.argv(["context", "read", "editor.state", "--input", "{}", "--timeout-ms", "10000"], project); const result = await runCli(this.o.cli, [...this.o.cli_args, ...argv], Math.min(this.o.timeoutMs, 15000)); let envelope; try { envelope = JSON.parse(result.stdout); } catch {} return { capturedAt: new Date().toISOString(), argv, result, envelope, target: this.o.target ?? null, endpoint: this.o.endpoint ?? null, buildStamp: this.o.build_stamp ?? null }; }
+  async state(project) { const argv = this.argv(["context", "read", "editor.state", "--input", "{}", "--timeout-ms", "10000"], project); const result = await runCli(this.o.cli, [...this.o.cli_args, ...argv], Math.min(this.o.timeoutMs, 15000)); let envelope; try { envelope = JSON.parse(result.stdout); } catch {} return { capturedAt: new Date().toISOString(), argv, result, envelope, target: this.o.target ?? null, buildStamp: this.o.build_stamp ?? null }; }
   async call(id, base, assertion, meta = {}, project = this.o.project) {
     this.expected.add(id);
     const argv = this.argv(base, project);
@@ -254,7 +254,7 @@ class Matrix {
       attempts.push({ attempt, at: new Date().toISOString(), exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, envelope, preState, ...(parse ? { parse } : {}), ...(issue ? { issue } : {}) });
       final = { result, envelope, preState, issue };
       if (issue) {
-        const checkpoint = { id, at: new Date().toISOString(), argv, input: inputFrom(argv), exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, envelope, preState, target: this.o.target ?? null, endpoint: this.o.endpoint ?? null, project, buildStamp: this.o.build_stamp ?? null, assertion: { status: "FAIL", issue }, retryCheckpoint: { attempt }, ...meta };
+        const checkpoint = { id, at: new Date().toISOString(), argv, input: inputFrom(argv), exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, envelope, preState, target: this.o.target ?? null, project, buildStamp: this.o.build_stamp ?? null, assertion: { status: "FAIL", issue }, retryCheckpoint: { attempt }, ...meta };
         await appendFile(this.jsonl, `${JSON.stringify(checkpoint)}\n`);
       }
       const retryAssertion = meta.retryAssertion === true && envelope?.ok === true;
@@ -265,14 +265,14 @@ class Matrix {
     }
 
     const { result, envelope, preState, issue } = final;
-    const r = { id, at: new Date().toISOString(), argv, input: inputFrom(argv), exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, envelope, preState, target: this.o.target ?? null, endpoint: this.o.endpoint ?? null, project, buildStamp: this.o.build_stamp ?? null, assertion: { status: issue ? "FAIL" : "PASS", ...(issue ? { issue } : {}) }, ...(attempts.length > 1 ? { attempts } : {}), ...meta };
+    const r = { id, at: new Date().toISOString(), argv, input: inputFrom(argv), exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, envelope, preState, target: this.o.target ?? null, project, buildStamp: this.o.build_stamp ?? null, assertion: { status: issue ? "FAIL" : "PASS", ...(issue ? { issue } : {}) }, ...(attempts.length > 1 ? { attempts } : {}), ...meta };
     if (existingIndex >= 0) this.records[existingIndex] = r; else this.records.push(r);
     await appendFile(this.jsonl, `${JSON.stringify(r)}\n`);
     return r;
   }
-  async blocked(id, issue, meta = {}) { this.expected.add(id); const r = { id, at: new Date().toISOString(), project: this.o.project, target: this.o.target ?? null, endpoint: this.o.endpoint ?? null, buildStamp: this.o.build_stamp ?? null, assertion: { status: "BLOCKED", issue }, ...meta }; this.records.push(r); await appendFile(this.jsonl, `${JSON.stringify(r)}\n`); return r; }
-  async notApplicable(id, reason, meta = {}) { this.expected.add(id); const r = { id, at: new Date().toISOString(), project: this.o.project, target: this.o.target ?? null, endpoint: this.o.endpoint ?? null, buildStamp: this.o.build_stamp ?? null, applicability: "not-applicable", assertion: { status: "PASS", reason }, ...meta }; this.records.push(r); await appendFile(this.jsonl, `${JSON.stringify(r)}\n`); return r; }
-  async failed(id, issue, meta = {}) { this.expected.add(id); const r = { id, at: new Date().toISOString(), project: this.o.project, target: this.o.target ?? null, endpoint: this.o.endpoint ?? null, buildStamp: this.o.build_stamp ?? null, assertion: { status: "FAIL", issue }, ...meta }; this.records.push(r); await appendFile(this.jsonl, `${JSON.stringify(r)}\n`); return r; }
+  async blocked(id, issue, meta = {}) { this.expected.add(id); const r = { id, at: new Date().toISOString(), project: this.o.project, target: this.o.target ?? null, buildStamp: this.o.build_stamp ?? null, assertion: { status: "BLOCKED", issue }, ...meta }; this.records.push(r); await appendFile(this.jsonl, `${JSON.stringify(r)}\n`); return r; }
+  async notApplicable(id, reason, meta = {}) { this.expected.add(id); const r = { id, at: new Date().toISOString(), project: this.o.project, target: this.o.target ?? null, buildStamp: this.o.build_stamp ?? null, applicability: "not-applicable", assertion: { status: "PASS", reason }, ...meta }; this.records.push(r); await appendFile(this.jsonl, `${JSON.stringify(r)}\n`); return r; }
+  async failed(id, issue, meta = {}) { this.expected.add(id); const r = { id, at: new Date().toISOString(), project: this.o.project, target: this.o.target ?? null, buildStamp: this.o.build_stamp ?? null, assertion: { status: "FAIL", issue }, ...meta }; this.records.push(r); await appendFile(this.jsonl, `${JSON.stringify(r)}\n`); return r; }
 }
 function inputFrom(argv) { const i = argv.indexOf("--input"); try { return i < 0 ? {} : JSON.parse(argv[i + 1]); } catch { return null; } }
 async function discover(m) {
@@ -285,7 +285,7 @@ async function discover(m) {
 async function getDescriptor(m, kind, name) { const cached = m.descriptors.get(`${kind}:${name}`); if (cached) return cached; const r = await m.call(`${kind}.${name}.describe`, kind === "tool" ? ["tools", "describe", name] : ["context", "describe", name], (e) => assertSuccess(e, {})); const d = descriptorOf(r.envelope); if (d) m.descriptors.set(`${kind}:${name}`, d); return d; }
 function matrixExampleFlags(flags) {
   const result = [];
-  const routed = new Set(["--project", "--instance", "--target", "--bridge-endpoint"]);
+  const routed = new Set(["--project", "--instance"]);
   for (let index = 0; index < flags.length; index += 1) {
     if (flags[index] === "--raw") continue;
     if (routed.has(flags[index])) { index += 1; continue; }

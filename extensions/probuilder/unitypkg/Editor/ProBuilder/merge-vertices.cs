@@ -56,19 +56,25 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("merge-vertices", "No ProBuilderMesh on target.");
 
-            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).Distinct().ToArray();
+            int[] vertexIndices = request.VertexIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "vertexIndices")).Distinct().ToArray();
             var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
             if (vertexIndices == null || vertexIndices.Length < 2)
                 throw ProBuilderErrors.SchemaInvalid("At least 2 unique vertexIndices are required for merge-vertices.");
             if (vertexCount < 0 || vertexIndices.Any(index => index < 0 || index >= vertexCount))
                 throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
-
+            var before = ProBuilderOperationProof.Capture(mesh, vertexIndices: vertexIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("merge-vertices", "Requested vertex geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Merge Vertices");
             var mergedToIndex = ProBuilderReflection.MergeVerticesWithCollapse(mesh, vertexIndices, request.CollapseToFirst);
             if (mergedToIndex < 0)
                 throw ProBuilderErrors.OperationFailed("merge-vertices", "ProBuilder 5.x VertexEditing.MergeVertices failed.");
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, vertexIndices: vertexIndices);
+            if (!ProBuilderOperationProof.HasMergedVertices(before, after))
+                throw ProBuilderErrors.OperationFailed("merge-vertices", "Requested vertices did not merge in readable topology.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { MergedToIndex = mergedToIndex, SourceVertexCount = vertexIndices.Length });
         }

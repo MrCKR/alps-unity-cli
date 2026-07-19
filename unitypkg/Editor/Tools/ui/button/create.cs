@@ -19,12 +19,19 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var parent = UiToolSupport.ResolveUiParent(r.Parent);
-            if (parent == null) throw new UnityCliBridge.BridgeCommandException("E_UI_PARENT_NOT_FOUND", "UI parent Canvas or RectTransform not found: " + r.Parent, "Create a Canvas first.");
+            if (parent == null || parent.GetComponent<RectTransform>() == null) throw new UnityCliBridge.BridgeCommandException("E_UI_PARENT_NOT_FOUND", "UI parent Canvas or RectTransform not found: " + r.Parent, "Create a Canvas first.");
+            var parentId = parent.GetInstanceID();
+            var freshParent = EditorUtility.InstanceIDToObject(parentId) as GameObject;
+            if (freshParent == null || freshParent.GetInstanceID() != parentId) throw new UnityCliBridge.BridgeCommandException("E_UI_PARENT_NOT_FOUND", "UI parent could not be fresh-resolved: " + r.Parent, "Retry after the Editor is idle.");
+            parent = freshParent;
             var name = string.IsNullOrEmpty(r.Name) ? "Button" : r.Name;
+            var requestedColor = string.IsNullOrEmpty(r.Color) ? Color.white : GraphicsToolSupport.ParseColor(r.Color);
+            UiToolSupport.ValidateUguiRequest(r.FontSize, r.Width, r.Height, r.X, r.Y);
+            ctx.CommitEffect();
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent.transform, false);
             var image = go.AddComponent<UiImage>();
-            image.color = string.IsNullOrEmpty(r.Color) ? Color.white : GraphicsToolSupport.ParseColor(r.Color);
+            image.color = requestedColor;
             go.AddComponent<UiButton>();
             var labelGo = new GameObject("Text", typeof(RectTransform));
             labelGo.transform.SetParent(go.transform, false);
@@ -36,6 +43,13 @@ namespace UnityCli
             label.alignment = TextAnchor.MiddleCenter;
             label.color = Color.black;
             UiRectHelper.ApplyRect(go.GetComponent<RectTransform>(), r.Width, r.Height, r.X, r.Y);
+            var observedGo = EditorUtility.InstanceIDToObject(go.GetInstanceID()) as GameObject;
+            var observedButton = observedGo == null ? null : observedGo.GetComponent<UiButton>();
+            var observedImage = observedGo == null ? null : observedGo.GetComponent<UiImage>();
+            var observedLabel = observedGo == null ? null : observedGo.GetComponentInChildren<UiText>();
+            var observedRect = observedGo == null ? null : observedGo.GetComponent<RectTransform>();
+            if (observedGo == null || observedGo.transform.parent != parent.transform || observedRect == null || (r.Width.HasValue && !Mathf.Approximately(observedRect.sizeDelta.x, r.Width.Value)) || (r.Height.HasValue && !Mathf.Approximately(observedRect.sizeDelta.y, r.Height.Value)) || (r.X.HasValue && !Mathf.Approximately(observedRect.anchoredPosition.x, r.X.Value)) || (r.Y.HasValue && !Mathf.Approximately(observedRect.anchoredPosition.y, r.Y.Value)) || observedButton == null || observedImage == null || observedImage.color != requestedColor || observedLabel == null || observedLabel.text != label.text || observedLabel.fontSize != label.fontSize)
+                throw new UnityCliBridge.BridgeCommandException("E_UI_BUTTON_READBACK_FAILED", "Created Button does not match the requested values.", "Check Unity Console for scene mutation errors.");
             Selection.activeGameObject = go;
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Element = UiToolSupport.BuildUiElementRef(go, "Button"), PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.button.create", Target = GameObjectToolSupport.HierarchyPath(go) } } });
         }

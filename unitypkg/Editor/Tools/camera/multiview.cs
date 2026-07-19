@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using UnityEditor;
 using UnityEngine;
 
 namespace UnityCli
@@ -64,18 +65,30 @@ namespace UnityCli
                 cameras.Add(camera);
             }
             var outputDir = string.IsNullOrEmpty(request.Output) ? "Screenshots" : request.Output;
-            var width = request.Width ?? 1280;
-            var height = request.Height ?? 720;
-            var format = string.IsNullOrEmpty(request.Format) ? "png" : request.Format.ToLowerInvariant();
-            if (format == "jpeg") format = "jpg";
+            var width = CameraToolSupport.ClampScreenshotDimension(request.Width ?? 1280, "width");
+            var height = CameraToolSupport.ClampScreenshotDimension(request.Height ?? 720, "height");
+            var format = CameraToolSupport.NormalizeFormat(request.Format, Path.Combine(outputDir, "capture.png"));
             var captures = new List<CameraCapture>();
             var effects = new List<CameraPlannedEffect>();
+            var plans = new List<KeyValuePair<int, string>>();
+            var outputPaths = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             foreach (var camera in cameras)
             {
-                var outputPath = Path.Combine(outputDir, camera.name + "." + format);
-                var capture = CameraToolSupport.CaptureCamera(camera, width, height, false, 95, outputPath, format, true, false);
+                var outputPath = CameraToolSupport.ResolveScreenshotOutputPath(Path.Combine(outputDir, camera.name + "." + format));
+                if (!outputPaths.Add(outputPath))
+                    throw new UnityCliBridge.BridgeCommandException("E_MULTIVIEW_OUTPUT_CONFLICT", "Each camera.multiview target must produce a distinct artifact path.", "Use uniquely named cameras or capture targets separately.");
+                plans.Add(new KeyValuePair<int, string>(camera.GetInstanceID(), outputPath));
+            }
+            ctx.CommitEffect();
+            foreach (var plan in plans)
+            {
+                var camera = EditorUtility.InstanceIDToObject(plan.Key) as Camera;
+                if (camera == null) throw new UnityCliBridge.BridgeCommandException("E_CAMERA_NOT_FOUND", "Camera disappeared before capture.", "Retry after the Editor is idle.");
+                var capture = CameraToolSupport.CaptureCamera(camera, width, height, false, 95, plan.Value, format, true, false);
+                if (!File.Exists(plan.Value) || new FileInfo(plan.Value).Length == 0)
+                    throw new UnityCliBridge.BridgeCommandException("E_MULTIVIEW_ARTIFACT_MISSING", "Camera capture artifact was not observed: " + plan.Value, "Check the output directory and retry.");
                 captures.Add(capture);
-                effects.Add(new CameraPlannedEffect { Type = "camera.multiview", Property = "capture", Path = outputPath });
+                effects.Add(new CameraPlannedEffect { Type = "camera.multiview", Property = "capture", Path = plan.Value });
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Captures = captures, Count = captures.Count, PlannedEffects = effects });
         }

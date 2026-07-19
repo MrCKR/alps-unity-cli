@@ -13,7 +13,6 @@ import { readInstalledUnityPackages } from "../src/extensions/project-resolver.j
 import { validateExtensionManifestContracts } from "../src/contracts/command-contract.js";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { checkToolExtensionAvailability, checkContextExtensionAvailability, extensionAvailabilityFlags } from "../src/extension-availability.js";
-import { writeInstances, type UnityInstance } from "../src/instances.js";
 import { builtinToolMetadata, builtinToolGroups, EXTENSION_GROUPS } from "../src/tools/metadata/index.js";
 import { builtinExtensionMetadata } from "../src/extensions/metadata/index.js";
 import { builtinExtensionToolContributions, findBuiltinExtensionToolContribution, requiredPackagesForContribution } from "../src/extensions/tool-manifest.js";
@@ -35,7 +34,9 @@ test("URP and HDRP Volume capabilities use one action-free source per tool", asy
 test("URP/HDRP Volume profile lookup avoids stale runtime clones", async () => {
   for (const [pipeline, folder] of [["urp", "Urp"], ["hdrp", "Hdrp"]] as const) {
     const source = await readFile(new URL(`../../extensions/${pipeline}/unitypkg/Editor/${folder}/${folder}ToolSupport.cs`, import.meta.url), "utf8");
-    assert.ok(source.indexOf('GetProperty("sharedProfile"') < source.indexOf('GetProperty("profile"'), `${pipeline} must prefer sharedProfile`);
+    const mutationLookup = source.slice(source.indexOf("public static UnityEngine.Object GetVolumeProfile"), source.indexOf("internal static UnityEngine.Object GetProfileForPlanning"));
+    assert.match(mutationLookup, /GetProperty\("profile"/i, `${pipeline} mutation must use an independent runtime profile`);
+    assert.doesNotMatch(mutationLookup, /GetProperty\("sharedProfile"/, `${pipeline} mutation must not write the shared profile asset`);
   }
   const addEffect = await readFile(new URL("../../extensions/urp/unitypkg/Editor/Urp/volume-add-effect.cs", import.meta.url), "utf8");
   assert.match(addEffect, /Description = "Add Vignette"[\s\S]*EffectType = "Vignette"/);
@@ -185,40 +186,16 @@ test("checkToolExtensionAvailability works with constructed live descriptors", a
   assert.equal(plain.available, true);
 });
 
-test("extension availability project inference keeps explicit projects and reports unresolved targets as unknown", async () => {
+test("extension availability keeps explicit project and unresolved strict instance remains unknown", async () => {
   const explicitProject = await makeFakeProject({ "com.unity.probuilder": "5.0.0" });
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-extension-flags-"));
-  const staleAt = new Date(Date.now() - 60_000).toISOString();
-  const stale: UnityInstance = {
-    instanceId: "stale-target",
-    projectPath: await makeFakeProject(),
-    bridgeEndpoint: "http://127.0.0.1:1",
-    status: "stale",
-    registeredAt: staleAt,
-    lastHeartbeatAt: staleAt
-  };
-  const unreachable: UnityInstance = {
-    ...stale,
-    instanceId: "unreachable-target",
-    status: "unreachable",
-    projectPath: await makeFakeProject()
-  };
-  await writeInstances(dataDir, [stale, unreachable]);
 
-  const explicit = await extensionAvailabilityFlags({ project: explicitProject, target: "stale-target" }, { dataDir });
+  const explicit = await extensionAvailabilityFlags({ project: explicitProject, instance: `unity-${"f".repeat(64)}` }, { dataDir });
   assert.equal(explicit.project, explicitProject);
 
-  const staleFlags = await extensionAvailabilityFlags({ target: "stale-target" }, { dataDir });
-  const staleResult = await checkToolExtensionAvailability(probuilderPingTool(), staleFlags);
-  assert.equal(staleResult.errorCode, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN");
-
-  const unreachableFlags = await extensionAvailabilityFlags({ target: "unreachable-target" }, { dataDir });
-  const unreachableResult = await checkToolExtensionAvailability(probuilderPingTool(), unreachableFlags);
-  assert.equal(unreachableResult.errorCode, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN");
-
-  const endpointFlags = await extensionAvailabilityFlags({ "bridge-endpoint": "http://127.0.0.1:9" }, { dataDir: await mkdtemp(join(tmpdir(), "unity_cli-extension-empty-")) });
-  const endpointResult = await checkToolExtensionAvailability(probuilderPingTool(), endpointFlags);
-  assert.equal(endpointResult.errorCode, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN");
+  const unresolvedFlags = await extensionAvailabilityFlags({ instance: `unity-${"f".repeat(64)}` }, { dataDir });
+  const unresolved = await checkToolExtensionAvailability(probuilderPingTool(), unresolvedFlags);
+  assert.equal(unresolved.errorCode, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN");
 });
 
 test("checkContextExtensionAvailability still resolves extension contexts from manifests", async () => {
@@ -284,8 +261,6 @@ test("URP, HDRP, Cinemachine, and VFX extension bridge specs route through proje
     ["hdrp", "settings-get", "hdrp.settings.get"],
     ["hdrp", "settings-set", "hdrp.settings.set"],
     ["cinemachine", "ping", "cinemachine.ping"],
-    ["cinemachine", "force-camera", "cinemachine.force-camera"],
-    ["cinemachine", "release-override", "cinemachine.release-override"],
     ["vfx", "graph.info", "vfx.graph.info"],
     ["vfx", "graph.create", "vfx.graph.create"],
     ["vfx", "effect.add", "vfx.effect.add"],

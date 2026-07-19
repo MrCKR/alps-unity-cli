@@ -71,14 +71,18 @@ namespace UnityCli
                     }
                 });
             }
+            ctx.CommitEffect();
             SceneToolSupport.CreateAssetDirectory(path);
             if (!EditorSceneManager.SaveScene(scene, path))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SCENE_SAVE_FAILED", "Failed to save scene: " + path, "Check Unity Console diagnostics and file permissions.");
             }
+            var observedScene = SceneManager.GetActiveScene();
+            if (!observedScene.isLoaded || observedScene.path != path || observedScene.isDirty)
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_SAVE_STATE_MISMATCH", "Saved scene readback did not match the requested path or remains dirty.", "Inspect the active scene and disk permissions before retrying.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Scene = SceneToolSupport.BuildSceneInfo(SceneManager.GetActiveScene()),
+                Scene = SceneToolSupport.BuildSceneInfo(observedScene),
                 RequestedPath = path,
                 PlannedEffects = new List<ScenePlannedEffect>
                 {

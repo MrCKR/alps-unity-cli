@@ -57,10 +57,13 @@ namespace UnityCli
             TextureToolSupport.EnsureEditorNotBusy("texture.import-settings");
             var path = TextureToolSupport.ResolveTexturePath(request.Path ?? request.Target);
             TextureToolSupport.LoadTextureAsset(path);
+            var settings = BuildSettings(request);
+            TextureToolSupport.ValidateTextureSettings(settings);
+            ctx.CommitEffect();
             bool changed;
             try
             {
-                changed = TextureToolSupport.ApplyTextureSettings(TextureToolSupport.RequireTextureImporter(path), BuildSettings(request), true);
+                changed = TextureToolSupport.ApplyTextureSettings(TextureToolSupport.RequireTextureImporter(path), settings, true);
             }
             catch (UnityCliBridge.BridgeCommandException)
             {

@@ -15,15 +15,19 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             Light sun = null;
+            var expectedId = 0;
             if (!string.IsNullOrEmpty(r.Target))
             {
                 var go = GameObjectToolSupport.ResolveUniqueTarget(r.Target, "graphics.skybox-set-sun requires --target <go>.");
                 sun = go.GetComponent<Light>();
-                if (sun == null) throw new UnityCliBridge.BridgeCommandException("E_LIGHT_NOT_FOUND", "No Light component on target: " + GameObjectToolSupport.HierarchyPath(go), "Pass a GameObject with a directional Light component.");
+                if (sun == null || sun.type != LightType.Directional) throw new UnityCliBridge.BridgeCommandException("E_DIRECTIONAL_LIGHT_REQUIRED", "Target must have a Directional Light component: " + GameObjectToolSupport.HierarchyPath(go), "Pass a GameObject with a directional Light component.");
+                expectedId = sun.GetInstanceID();
             }
-            else sun = RenderSettings.sun;
+            ctx.CommitEffect();
             RenderSettings.sun = sun;
-            var sunPath = sun == null ? "null" : GameObjectToolSupport.HierarchyPath(sun.gameObject);
+            var observed = RenderSettings.sun;
+            if ((expectedId == 0 && observed != null) || (expectedId != 0 && (observed == null || observed.GetInstanceID() != expectedId))) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_SUN_STATE_MISMATCH", "Skybox sun readback did not match the requested target.", "Retry after the editor is idle.");
+            var sunPath = observed == null ? "null" : GameObjectToolSupport.HierarchyPath(observed.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Sun = sunPath, PlannedEffects = new List<GraphicsPlannedEffect> { new GraphicsPlannedEffect { Type = "graphics.skybox-set-sun", Property = "sun", Value = sunPath } } });
         }
     }

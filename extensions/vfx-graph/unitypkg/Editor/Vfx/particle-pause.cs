@@ -1,4 +1,6 @@
 #if UNITY_EDITOR
+using UnityEngine;
+
 namespace UnityCli
 {
     /// <summary>暂停目标 ParticleSystem。</summary>
@@ -19,11 +21,17 @@ namespace UnityCli
             }
         };
 
-        public System.Threading.Tasks.ValueTask<VfxParticleActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<VfxParticleActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var particleSystem = VfxActionToolSupport.RequireParticle(request.Target, "vfx.particle.pause");
-            particleSystem.Pause(request.WithChildren ?? true);
-            return new System.Threading.Tasks.ValueTask<VfxParticleActionResult>(VfxActionToolSupport.BuildParticleResult(particleSystem, "vfx.particle.pause", context.LogPath));
+            var withChildren = request.WithChildren ?? true;
+            var gameObjectId = particleSystem.gameObject.GetInstanceID();
+            ctx.CommitEffect();
+
+            particleSystem = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.pause");
+            particleSystem.Pause(withChildren);
+            await VfxActionToolSupport.RequireParticleState(particleSystem, withChildren, system => system.isPaused, "vfx.particle.pause", ctx, ct);
+            return VfxActionToolSupport.BuildParticleResult(VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle.pause"), "vfx.particle.pause", ctx.LogPath);
         }
     }
 }

@@ -166,6 +166,24 @@ namespace UnityCli
             return root != null && root.scene.isDirty;
         }
 
+        /// <summary>从当前实际 Prefab Stage 构造读回结果。</summary>
+        public static PrefabStageInfo BuildStageInfo(string action, object stage)
+        {
+            return new PrefabStageInfo
+            {
+                Action = action,
+                Path = StageAssetPath(stage),
+                Dirty = StageIsDirty(stage),
+                Closed = false
+            };
+        }
+
+        /// <summary>从已验证关闭前的实际路径构造关闭终态。</summary>
+        public static PrefabStageInfo BuildClosedStageInfo(string path)
+        {
+            return new PrefabStageInfo { Action = "close", Path = path, Closed = true };
+        }
+
         private static object InvokePrefabStageUtility(string methodName, object[] args)
         {
             var method = PrefabStageUtilityMethod(methodName, args == null ? 0 : args.Length);
@@ -422,6 +440,7 @@ namespace UnityCli
         public string Action { get; set; }
         public string Path { get; set; }
         public bool Dirty { get; set; }
+        public bool Closed { get; set; }
     }
 }
 #endif

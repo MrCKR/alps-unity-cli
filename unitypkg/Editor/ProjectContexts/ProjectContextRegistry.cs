@@ -90,6 +90,7 @@ namespace UnityCli
             definition.RequiresPackages = definition.RequiresPackages ?? Array.Empty<string>();
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
             definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "IUnityCliContext" : definition.DescriptorSource;
+            ComputeProjectContextFingerprint(definition);
 
             if (definition.Source == "project" && !string.IsNullOrEmpty(definition.Method))
             {
@@ -245,8 +246,8 @@ namespace UnityCli
             public string Message;
         }
 
-        private static ProjectContextFingerprintCheck RefreshProjectContextFingerprint(
-            RegisteredContext definition, string requestedMode)
+        /// <summary>计算当前 handler+descriptor fingerprint，不读写 project pin state。</summary>
+        private static void ComputeProjectContextFingerprint(RegisteredContext definition)
         {
             var descriptor = ProjectContextDescriptorFingerprintMaterial(definition);
             definition.DescriptorSha256 = Sha256Hex(descriptor);
@@ -255,7 +256,12 @@ namespace UnityCli
                 ContextFingerprintAlgorithm +
                 "\nhandler=" + definition.HandlerSha256 +
                 "\ndescriptor=" + definition.DescriptorSha256);
+        }
 
+        private static ProjectContextFingerprintCheck RefreshProjectContextFingerprint(
+            RegisteredContext definition, string requestedMode)
+        {
+            ComputeProjectContextFingerprint(definition);
             var isPinned = !string.IsNullOrEmpty(definition.PinnedFingerprint);
             if (isPinned)
             {
@@ -419,6 +425,7 @@ namespace UnityCli
             public string Name { get; set; }
             [UnityCliAnyJson] public object Input { get; set; }
             public string FingerprintMode { get; set; }
+            public string ExpectedDescriptorFingerprint { get; set; }
             public string ProjectPath { get; set; }
         }
 
@@ -463,6 +470,15 @@ namespace UnityCli
                 var fingerprint = RefreshProjectContextFingerprint(definition, args.FingerprintMode);
                 if (fingerprint.Blocked)
                     throw new BridgeCommandException("E_CONTEXT_FINGERPRINT_MISMATCH", fingerprint.Message, ContextFingerprintDetails(definition), new[] { "Review the registered context code, then update its fingerprint or use warn mode when policy allows." });
+            }
+            if (!string.IsNullOrEmpty(args.ExpectedDescriptorFingerprint)
+                && !string.Equals(args.ExpectedDescriptorFingerprint, definition.Fingerprint, StringComparison.Ordinal))
+            {
+                throw new BridgeCommandException(
+                    "E_CONTEXT_DESCRIPTOR_CHANGED",
+                    "The Context descriptor changed after discovery: " + args.Name,
+                    new Dictionary<string, object> { { "contextName", args.Name }, { "expectedFingerprint", args.ExpectedDescriptorFingerprint }, { "actualFingerprint", definition.Fingerprint } },
+                    new[] { "Run context describe again against the selected Unity generation before constructing a new read." });
             }
 
             var inputJson = request.RawJsonArg("input") ?? "{}";
@@ -527,7 +543,8 @@ namespace UnityCli
                 { "examples", definition.Examples },
                 { "requiresPackages", definition.RequiresPackages },
                 { "supportStatus", "live-bridge" },
-                { "cliCommand", "context read " + definition.Name }
+                { "cliCommand", "context read " + definition.Name },
+                { "descriptorFingerprint", definition.Fingerprint }
             };
             if (definition.Source == "project") data["fingerprint"] = ProjectContextFingerprintData(definition);
             return data;

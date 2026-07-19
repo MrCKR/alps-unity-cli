@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -56,8 +57,8 @@ namespace UnityCli.ProBuilder
                 throw ProBuilderErrors.PackageNotAvailable();
 
             var targets = ProBuilderInput.ResolveTargets(request.Targets);
-            if (targets == null || targets.Length < 2)
-                throw ProBuilderErrors.SchemaInvalid("At least 2 targets required for combine-meshes.");
+            if (request.Targets == null || targets == null || targets.Length != request.Targets.Count || targets.Length < 2)
+                throw ProBuilderErrors.SchemaInvalid("At least 2 unique, unambiguous targets required for combine-meshes.");
 
             var name = request.Name ?? "ProBuilder_Combined";
 
@@ -73,7 +74,10 @@ namespace UnityCli.ProBuilder
 
             if (pbMeshes.Count < 2)
                 throw ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required for combine-meshes.");
-
+            var sourceIds = targets.Select(target => target.GetInstanceID()).ToArray();
+            var minimumFaceCount = pbMeshes.Sum(ProBuilderReflection.GetFaceCount);
+            if (minimumFaceCount < 2) throw ProBuilderErrors.OperationFailed("combine-meshes", "Source geometry is unreadable.");
+            ctx.CommitEffect();
             Undo.RecordObject(targets[0], "ProBuilder Combine Meshes");
 
             var combined = ProBuilderReflection.CombineMeshesViaReflection(pbMeshes.ToArray(), pbMeshes[0]);
@@ -84,6 +88,10 @@ namespace UnityCli.ProBuilder
             var firstGo = targets[0];
             if (!string.IsNullOrEmpty(name)) firstGo.name = name;
             EditorSceneManager.MarkSceneDirty(firstGo.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(sourceIds[0].ToString());
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (freshGo == null || freshGo.name != name || !ProBuilderRequestProof.SourcesWereRemovedAndGeometryIncluded(freshGo, freshMesh, sourceIds, minimumFaceCount))
+                throw ProBuilderErrors.OperationFailed("combine-meshes", "Sources did not disappear into a result containing their geometry.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

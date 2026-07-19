@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, mkdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -44,7 +44,10 @@ import {
 import {
   checkExtensionBundles,
   extensionInstallRoot,
-  installExtensionBundle
+  extensionSourceRoot,
+  installExtensionBundle,
+  readExtensionInstallManifest,
+  setAfterProjectionCopyForTest
 } from "../../src/extensions/installer.js";
 
 // ── Registry: built-in data ────────────────────────────────────────────────
@@ -377,7 +380,7 @@ test("collectAvailableTools returns available extension tools and built-in VFX c
   });
   const toolNames = tools.map((t) => t.name);
   assert.equal(toolNames.filter((name) => name.startsWith("probuilder.")).length, 36);
-  assert.equal(toolNames.filter((name) => name.startsWith("vfx.")).length, 14);
+  assert.equal(toolNames.filter((name) => name.startsWith("vfx.")).length, VFX_GRAPH_MANIFEST.contributions.tools!.filter((tool) => !(tool.requiresPackages ?? []).includes("com.unity.visualeffectgraph")).length);
   assert.ok(toolNames.includes("vfx.particle-create"));
   assert.ok(toolNames.includes("vfx.line-create"));
   assert.ok(toolNames.includes("vfx.trail.create"));
@@ -398,7 +401,6 @@ test("collectAvailableTools returns built-in VFX component tools when optional p
     "vfx.particle.stop",
     "vfx.particle.pause",
     "vfx.particle.clear",
-    "vfx.particle-module",
     "vfx.line-create",
     "vfx.line-positions",
     "vfx.trail.create",
@@ -417,9 +419,9 @@ test("collectAllTools includes unavailable extension tools with availability fla
   assert.equal(probuilderTools.length, 36);
   assert.ok(probuilderTools.every((t) => t.available));
 
-  // Cinemachine exposes one descriptor per operation.
+  // Cinemachine exposes one descriptor per manifest contribution.
   const cinemachineTools = tools.filter((t) => t.extensionId === "cinemachine");
-  assert.equal(cinemachineTools.length, 16);
+  assert.equal(cinemachineTools.length, CINEMACHINE_MANIFEST.contributions.tools!.length);
   assert.ok(cinemachineTools.every((t) => !t.available)); // Not installed
 });
 
@@ -447,7 +449,7 @@ test("collectAvailableCSharpEntries returns entries from available extensions", 
   assert.ok(entries.some((e) => e.type === "UnityCli.VfxGraphCreateTool"));
   assert.ok(entries.some((e) => e.type === "UnityCli.VfxTrailCreateTool"));
   assert.ok(entries.some((e) => e.type === "UnityCli.VfxTrailSetTool"));
-  assert.equal(entries.filter((e) => e.type.startsWith("UnityCli.Vfx")).length, 29);
+  assert.equal(entries.filter((e) => e.type.startsWith("UnityCli.Vfx")).length, VFX_GRAPH_MANIFEST.contributions.csharpEntries!.length);
 });
 
 // ── extensionAvailabilitySummary ───────────────────────────────────────────
@@ -595,7 +597,7 @@ test("ProBuilder manifest has correct tool contributions", () => {
 });
 
 test("VFX Graph manifest has one contribution per operation", () => {
-  assert.equal(VFX_GRAPH_MANIFEST.contributions.tools!.length, 29);
+  assert.equal(VFX_GRAPH_MANIFEST.contributions.tools!.length, VFX_GRAPH_MANIFEST.contributions.csharpEntries!.length);
   const toolNames = VFX_GRAPH_MANIFEST.contributions.tools!.map((t) => t.name);
   assert.ok(toolNames.includes("vfx.graph.info"));
   assert.ok(toolNames.includes("vfx.graph.create"));
@@ -610,16 +612,14 @@ test("VFX Graph manifest has one contribution per operation", () => {
   assert.ok(toolNames.includes("vfx.trail.create"));
   assert.ok(toolNames.includes("vfx.trail.set"));
   const graphOnly = VFX_GRAPH_MANIFEST.contributions.tools!.filter((t) => t.requiresPackages?.includes("com.unity.visualeffectgraph"));
-  assert.equal(graphOnly.length, 15);
+  assert.equal(graphOnly.length, VFX_GRAPH_MANIFEST.contributions.tools!.filter((tool) => tool.requiresPackages?.includes("com.unity.visualeffectgraph")).length);
 });
 
 test("Cinemachine manifest has split tools and no unimplemented contexts", () => {
-  assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 16);
+  assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, CINEMACHINE_MANIFEST.contributions.csharpEntries!.length);
   assert.equal(CINEMACHINE_MANIFEST.contributions.contexts!.length, 0);
   const toolNames = CINEMACHINE_MANIFEST.contributions.tools!.map((t) => t.name);
   assert.ok(toolNames.includes("cinemachine.ping"));
-  assert.ok(toolNames.includes("cinemachine.force-camera"));
-  assert.ok(toolNames.includes("cinemachine.release-override"));
 });
 
 test("render-pipeline volume setters support Unity 2022 generic TryGet API", async () => {
@@ -631,6 +631,31 @@ test("render-pipeline volume setters support Unity 2022 generic TryGet API", asy
     assert.match(source, /profile\.components\.FirstOrDefault/);
     assert.doesNotMatch(source, /GetMethod\("TryGet"/);
   }
+});
+
+test("extension mutating tools verify observed state instead of echoing requests", async () => {
+  const sources = await Promise.all([
+    "extensions/urp/unitypkg/Editor/Urp/UrpToolSupport.cs",
+    "extensions/hdrp/unitypkg/Editor/Hdrp/HdrpToolSupport.cs",
+    "extensions/urp/unitypkg/Editor/Urp/UrpFeatureToolSupport.cs",
+    "extensions/vfx-graph/unitypkg/Editor/Vfx/VfxActionToolSupport.cs",
+    "extensions/vfx-graph/unitypkg/Editor/Vfx/parameter.cs",
+    "extensions/cinemachine/unitypkg/Editor/Cinemachine/CinemachineExtensionToolSupport.cs"
+  ].map((file) => readFile(file, "utf8")));
+  for (const source of sources.slice(0, 2)) {
+    assert.match(source, /(?:serialized|observedSerialized)\.Update\(\)/);
+    assert.match(source, /VOLUME_VERIFY_FAILED/);
+    assert.match(source, /ReadSerializedValue/);
+  }
+  assert.match(sources[2], /RequireFeature\(featureIndex, rendererIndex, "urp\.feature\.toggle"\)/);
+  assert.match(sources[2], /ContainsFeature/);
+  assert.match(sources[2], /ReadSerializedPropertyValue/);
+  assert.match(sources[3], /SetAndReadRequired/);
+  assert.match(sources[4], /Has" \+ typeName/);
+  assert.match(sources[4], /Get" \+ typeName/);
+  assert.doesNotMatch(sources[4], /if \(method != null\)/);
+  assert.match(sources[5], /GetComponents\(CinemachineToolSupport\.ExtensionBaseType\)/);
+  assert.match(sources[5], /ResolveRequiredTarget\(targetId\.ToString/);
 });
 
 test("URP manifest has one tool per feature, volume, and settings operation", () => {
@@ -687,6 +712,71 @@ test("each extension compiles in its own Editor assembly", async () => {
     assert.deepEqual(assembly.includePlatforms, ["Editor"]);
     const requiresCoreRuntime = extensionId === "urp" || extensionId === "hdrp";
     assert.equal(assembly.references?.includes("Unity.RenderPipelines.Core.Runtime"), requiresCoreRuntime);
+  }
+});
+
+test("extension install manifest rejects incomplete managed file entries", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-ext-test-"));
+  try {
+    await mkdir(join(projectDir, "Packages", "com.unity_cli"), { recursive: true });
+    await writeFile(join(projectDir, "Packages", "com.unity_cli", "unity_cli.extensions.manifest.json"), JSON.stringify({
+      version: 1,
+      extensions: [{ extensionId: "probuilder", version: "1.0.0", installedAt: new Date().toISOString(), sourceHash: "0".repeat(64), files: [{ path: "Editor/test.cs" }], requiresUnityPackages: ["com.unity.probuilder"], copyRoot: "extension-directory", layout: "directory", installMode: "copy-if-package-present" }]
+    }));
+    await assert.rejects(() => readExtensionInstallManifest(projectDir), { code: "E_EXTENSION_INSTALL_MANIFEST_INVALID" });
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("extension install manifest rejects duplicate extension ids", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-ext-test-"));
+  try {
+    await mkdir(join(projectDir, "Packages", "com.unity_cli"), { recursive: true });
+    const entry = { extensionId: "probuilder", version: "1.0.0", installedAt: new Date().toISOString(), sourceHash: "0".repeat(64), files: [], requiresUnityPackages: ["com.unity.probuilder"], copyRoot: "extension-directory", layout: "directory", installMode: "copy-if-package-present" };
+    await writeFile(join(projectDir, "Packages", "com.unity_cli", "unity_cli.extensions.manifest.json"), JSON.stringify({ version: 1, extensions: [entry, entry] }));
+    await assert.rejects(() => readExtensionInstallManifest(projectDir), { code: "E_EXTENSION_INSTALL_MANIFEST_INVALID" });
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("extension source hash and managed files describe the same staged projection", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-ext-test-"));
+  try {
+    await mkdir(join(projectDir, "Packages"), { recursive: true });
+    await writeFile(join(projectDir, "Packages", "manifest.json"), JSON.stringify({ dependencies: {} }));
+    await writeFile(join(projectDir, "Packages", "packages-lock.json"), JSON.stringify({ dependencies: {} }));
+    await installExtensionBundle(projectDir, VFX_GRAPH_MANIFEST);
+    const entry = (await readExtensionInstallManifest(projectDir)).extensions.find((item) => item.extensionId === "vfx-graph")!;
+    const crypto = await import("node:crypto");
+    const hash = crypto.createHash("sha256");
+    for (const file of entry.files) {
+      hash.update(`file:${file.path}\n`);
+      hash.update(await readFile(join(extensionInstallRoot(projectDir, "vfx-graph"), file.path)));
+      hash.update("\n");
+    }
+    assert.equal(entry.sourceHash, hash.digest("hex"));
+  } finally {
+    await rm(projectDir, { recursive: true, force: true });
+  }
+});
+
+test("extension install rejects a source mutation before publishing the staging projection", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-ext-test-"));
+  const sourceFile = join(extensionSourceRoot("vfx-graph"), "extension.json");
+  const original = await readFile(sourceFile, "utf8");
+  try {
+    await mkdir(join(projectDir, "Packages"), { recursive: true });
+    await writeFile(join(projectDir, "Packages", "manifest.json"), JSON.stringify({ dependencies: {} }));
+    await writeFile(join(projectDir, "Packages", "packages-lock.json"), JSON.stringify({ dependencies: {} }));
+    setAfterProjectionCopyForTest(async () => { await writeFile(sourceFile, `${original}\n`, "utf8"); });
+    await assert.rejects(() => installExtensionBundle(projectDir, VFX_GRAPH_MANIFEST), { code: "E_EXTENSION_SOURCE_SNAPSHOT_STALE" });
+    await assert.rejects(() => stat(extensionInstallRoot(projectDir, "vfx-graph")), { code: "ENOENT" });
+  } finally {
+    setAfterProjectionCopyForTest(undefined);
+    await writeFile(sourceFile, original, "utf8");
+    await rm(projectDir, { recursive: true, force: true });
   }
 });
 

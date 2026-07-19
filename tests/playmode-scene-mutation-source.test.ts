@@ -94,7 +94,7 @@ test("PlayMode scene tools use the mutation helper instead of unsafe Editor APIs
 
   const componentModify = await source("unitypkg/Editor/Tools/component/modify.cs");
   const persistentGuard = componentModify.indexOf("EditorUtility.IsPersistent(component)");
-  const firstMutation = componentModify.indexOf("ObjectPatch.ApplyMergePatch");
+  const firstMutation = componentModify.indexOf("ObjectPatch.ApplyVerifiedSerializedPatches");
   assert.ok(persistentGuard >= 0 && firstMutation > persistentGuard, "persistent target must be rejected before applying patches");
 });
 
@@ -122,8 +122,9 @@ test("temporary EditMode cleanup descriptors avoid shared Undo probing", async (
 
   const undoSource = await source("unitypkg/Editor/Tools/editor/undo.cs");
   assert.match(undoSource, /exactly one entry from the shared Unity Editor Undo stack/);
-  assert.match(undoSource, /performed=true means the call was issued; it does not prove/);
-  assert.match(undoSource, /SideEffects = new\[\] \{ "scene-modify", "undo-stack" \}/);
+  assert.match(undoSource, /performed=true proves Unity raised undoRedoPerformed for this operation/);
+  assert.match(undoSource, /Undo\.undoRedoPerformed \+= callback[\s\S]*Undo\.PerformUndo\(\)[\s\S]*Undo\.undoRedoPerformed -= callback[\s\S]*if \(!performed\)/);
+  assert.match(undoSource, /SideEffects = new\[\] \{ "undo-redo-replay", "undo-stack" \}/);
   assert.match(undoSource, /use scene\.load once with the exact active scene path instead/);
 });
 

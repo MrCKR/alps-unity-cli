@@ -29,6 +29,7 @@ namespace UnityCli
             var outputPath = ResolveOutputPath(request.Path);
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Profiler artifact already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
+            ctx.CommitEffect();
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
             var startedAt = DateTime.UtcNow;
             var format = ProfilerToolSupport.NormalizeProfilerFormat(request.Format, outputPath);
@@ -40,7 +41,7 @@ namespace UnityCli
             else
             {
                 // JSON 格式:写入状态/内存/帧/计数器摘要
-                File.WriteAllText(outputPath, BuildProfilerArtifactJson(ctx.RequestId, startedAt, 0, 1), System.Text.Encoding.UTF8);
+                ProfilerToolSupport.WriteAndVerifyJsonProfilerArtifact(outputPath, BuildProfilerArtifactJson(ctx.RequestId, startedAt, 0, 1));
             }
             var finishedAt = DateTime.UtcNow;
             var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;

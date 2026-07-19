@@ -9,7 +9,7 @@ export interface PackageRegistryClearRequest {
 export interface PackageRegistryClearResult {
   projectPath: string;
   manifestPath: string;
-  previousRegistry?: string;
+  registryCleared?: boolean;
   dryRun?: boolean;
   plannedEffects?: Array<{ type: string; registry?: string }>;
 }
@@ -30,10 +30,9 @@ export default defineTool<PackageRegistryClearRequest, PackageRegistryClearResul
   ],
   async execute(request, context) {
     const projectPath = resolve(request.project ?? context.projectPath);
-    if (context.execution.dryRun) {
-      const snapshot = await readSnapshot(projectPath);
-      return { projectPath, manifestPath: snapshot.manifestPath, previousRegistry: snapshot.registry, dryRun: true, plannedEffects: [{ type: "package.registry.clear", registry: snapshot.registry }] };
-    }
-    return { projectPath, ...(await clearRegistry(projectPath)) };
+    const prepared = await clearRegistry(projectPath, { dryRun: true });
+    if (context.execution.dryRun) return { projectPath, ...prepared } as PackageRegistryClearResult;
+    await context.commitEffect?.();
+    return { projectPath, ...(await clearRegistry(projectPath)) } as PackageRegistryClearResult;
   }
 });

@@ -23,7 +23,9 @@ namespace UnityCli
         {
             GameObjectToolSupport.EnsureEditorNotBusy("urp.volume.create");
             UrpToolSupport.EnsureUrpAvailable();
-            var created = UrpVolumeOperations.Create(request.Name, request.IsGlobal, request.Priority, request.Weight, "URP", "E_URP");
+            var plan = UrpVolumeOperations.ValidateCreate(request.Priority, request.Weight, "E_URP");
+            ctx.CommitEffect();
+            var created = UrpVolumeOperations.Create(request.Name, request.IsGlobal, plan, "URP", "E_URP");
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "urp.volume.create", Target = GameObjectToolSupport.BuildGameObjectRef(created.GameObject), IsGlobal = created.IsGlobal, PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.create", Name = created.GameObject.name } }, LogPath = ctx.LogPath });
         }
     }

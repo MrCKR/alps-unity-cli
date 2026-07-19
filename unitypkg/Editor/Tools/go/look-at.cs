@@ -53,13 +53,23 @@ namespace UnityCli
             var gameObject = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "GameObject look-at requires a target.");
             var lookAtName = request.LookAt ?? request.Destination;
             var lookAt = GameObjectToolSupport.ResolveUniqueTarget(lookAtName, "GameObject look-at requires a lookAt target. Use unity_cli tools run go.look-at --input '{\"target\":\"CameraRig\",\"lookAt\":\"Player\"}'.");
+            var gameObjectId = gameObject.GetInstanceID();
+            var direction = lookAt.transform.position - gameObject.transform.position;
+            if (direction.sqrMagnitude <= Mathf.Epsilon)
+                throw new UnityCliBridge.BridgeCommandException("E_GO_LOOK_AT_DIRECTION_INVALID", "GameObject look-at target must not share the target position.", "Move one object before calling go.look-at.");
+            // 在 barrier 前冻结 LookAt 的不可变期望旋转，写入后只接受 fresh readback。
+            var expectedRotation = Quaternion.LookRotation(direction);
+            ctx.CommitEffect();
             UnityCliSceneMutation.RecordObject(gameObject.transform, "go.look-at");
-            gameObject.transform.LookAt(lookAt.transform);
+            gameObject.transform.rotation = expectedRotation;
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            var observed = EditorUtility.InstanceIDToObject(gameObjectId) as GameObject;
+            if (observed == null || Quaternion.Angle(observed.transform.rotation, expectedRotation) > 0.01f)
+                throw new UnityCliBridge.BridgeCommandException("E_GO_LOOK_AT_STATE_MISMATCH", "GameObject rotation did not match the requested look-at direction.", "Inspect the scene object and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject),
-                PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.look-at", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
+                GameObject = GameObjectToolSupport.BuildGameObjectDetail(observed),
+                PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.look-at", Target = GameObjectToolSupport.HierarchyPath(observed) } }
             });
         }
     }

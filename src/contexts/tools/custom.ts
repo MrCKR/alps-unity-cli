@@ -1,11 +1,11 @@
 import { discoverProjectTools } from "../../project-tool-discovery.js";
-import type { ToolMetadata } from "../../tools/metadata/index.js";
+import type { ResolvedToolMetadata } from "../../tools/metadata/index.js";
 import type { AnyJson } from "../../schema/any-json.js";
 import { contextErrorFromResult, defineContext } from "../define.js";
 
 export interface ToolsCustomRequest {}
 
-export interface ToolsCustomMetadata extends Omit<ToolMetadata, "inputSchema" | "outputSchema"> {
+export interface ToolsCustomMetadata extends Omit<ResolvedToolMetadata, "inputSchema" | "outputSchema"> {
   inputSchema: Record<string, AnyJson>;
   outputSchema?: Record<string, AnyJson>;
 }

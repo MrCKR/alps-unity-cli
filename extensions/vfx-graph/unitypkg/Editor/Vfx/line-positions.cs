@@ -60,32 +60,42 @@ namespace UnityCli
             }
 
             var effects = new List<VfxPlannedEffect>();
-            if (request.Positions != null && request.Positions.Count > 0)
+            VfxToolSupport.RequireMutation((request.Positions != null && request.Positions.Count > 0) || (request.Index.HasValue && request.Position != null), "vfx.line-positions");
+            if (request.Positions != null) foreach (var item in request.Positions) { VfxToolSupport.RequireFinite(item.X, "positions.x"); VfxToolSupport.RequireFinite(item.Y, "positions.y"); VfxToolSupport.RequireFinite(item.Z, "positions.z"); }
+            if (request.Position != null) { VfxToolSupport.RequireFinite(request.Position.X, "position.x"); VfxToolSupport.RequireFinite(request.Position.Y, "position.y"); VfxToolSupport.RequireFinite(request.Position.Z, "position.z"); }
+            var positions = request.Positions != null && request.Positions.Count > 0 ? VfxToolSupport.ToUnityVector3Array(request.Positions) : null;
+            var patchPosition = request.Position == null ? Vector3.zero : VfxToolSupport.ToUnityVector3(request.Position);
+            if (request.Index.HasValue && request.Position != null && (request.Index.Value < 0 || request.Index.Value >= (positions == null ? line.positionCount : positions.Length)))
             {
-                var positions = VfxToolSupport.ToUnityVector3Array(request.Positions);
+                throw new UnityCliBridge.BridgeCommandException(
+                    "E_INDEX_OUT_OF_RANGE",
+                    "Line position index out of range: " + request.Index.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    "Use an index between 0 and " + ((positions == null ? line.positionCount : positions.Length) - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + ".");
+            }
+            var gameObjectId = line.gameObject.GetInstanceID();
+            if (positions != null || (request.Index.HasValue && request.Position != null)) ctx.CommitEffect();
+            line = VfxToolSupport.ResolveObservedComponent<LineRenderer>(gameObjectId, "vfx.line-positions");
+            if (positions != null)
+            {
                 line.positionCount = positions.Length;
                 line.SetPositions(positions);
                 effects.Add(new VfxPlannedEffect { Type = "vfx.line-positions", Target = GameObjectToolSupport.HierarchyPath(line.gameObject), Property = "positions", Value = positions.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             }
             if (request.Index.HasValue && request.Position != null)
             {
-                if (request.Index.Value < 0 || request.Index.Value >= line.positionCount)
-                {
-                    throw new UnityCliBridge.BridgeCommandException(
-                        "E_INDEX_OUT_OF_RANGE",
-                        "Line position index out of range: " + request.Index.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        "Use an index between 0 and " + (line.positionCount - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + ".");
-                }
-                line.SetPosition(request.Index.Value, VfxToolSupport.ToUnityVector3(request.Position));
+                line.SetPosition(request.Index.Value, patchPosition);
                 effects.Add(new VfxPlannedEffect { Type = "vfx.line-positions", Target = GameObjectToolSupport.HierarchyPath(line.gameObject), Property = "index", Value = request.Index.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             }
 
-            UnityCliSceneMutation.MarkSceneObjectDirty(line);
-            VfxToolSupport.MarkSceneDirty(line.gameObject);
+            var observed = VfxToolSupport.ResolveObservedComponent<LineRenderer>(gameObjectId, "vfx.line-positions");
+            if (positions != null) VfxToolSupport.VerifyLineRendererFields(observed, new LineRendererFields { Positions = request.Positions });
+            if (request.Index.HasValue && request.Position != null && observed.GetPosition(request.Index.Value) != patchPosition) throw new UnityCliBridge.BridgeCommandException("E_LINE_VERIFY_FAILED", "LineRenderer indexed position did not retain the requested value.", "Retry after checking the LineRenderer.");
+            UnityCliSceneMutation.MarkSceneObjectDirty(observed);
+            VfxToolSupport.MarkSceneDirty(observed.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(line.gameObject),
-                Line = VfxToolSupport.BuildLineRendererInfo(line),
+                Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
+                Line = VfxToolSupport.BuildLineRendererInfo(observed),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
             });

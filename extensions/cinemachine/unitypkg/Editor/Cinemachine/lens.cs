@@ -55,7 +55,28 @@ namespace UnityCli.Cinemachine
             var gameObject = CinemachineToolSupport.ResolveRequiredTarget(request.Target, "cinemachine lens requires --target <go>.");
             var camera = CinemachineToolSupport.RequireCameraComponent(gameObject);
             var effects = new List<CinemachinePlannedEffect>();
-
+            if (!request.FieldOfView.HasValue && !request.NearClipPlane.HasValue && !request.FarClipPlane.HasValue && !request.OrthographicSize.HasValue && !request.Dutch.HasValue) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_LENS_INPUT_REQUIRED", "cinemachine.lens requires at least one lens value.", "Pass a supported lens field.");
+            if (request.FieldOfView.HasValue) CinemachineToolSupport.RequireFinite(request.FieldOfView.Value, "fieldOfView");
+            if (request.NearClipPlane.HasValue) CinemachineToolSupport.RequireFinite(request.NearClipPlane.Value, "nearClipPlane");
+            if (request.FarClipPlane.HasValue) CinemachineToolSupport.RequireFinite(request.FarClipPlane.Value, "farClipPlane");
+            if (request.OrthographicSize.HasValue) CinemachineToolSupport.RequireFinite(request.OrthographicSize.Value, "orthographicSize");
+            if (request.Dutch.HasValue) CinemachineToolSupport.RequireFinite(request.Dutch.Value, "dutch");
+            if (request.FieldOfView.HasValue && (request.FieldOfView.Value <= 0d || request.FieldOfView.Value >= 180d)) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_LENS_RANGE_INVALID", "fieldOfView must be between 0 and 180 degrees.", "Pass a fieldOfView greater than 0 and less than 180.");
+            if (request.NearClipPlane.HasValue && request.NearClipPlane.Value <= 0d) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_LENS_RANGE_INVALID", "nearClipPlane must be greater than zero.", "Pass a positive nearClipPlane.");
+            if (request.FarClipPlane.HasValue && request.FarClipPlane.Value <= 0d) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_LENS_RANGE_INVALID", "farClipPlane must be greater than zero.", "Pass a positive farClipPlane.");
+            if (request.NearClipPlane.HasValue && request.FarClipPlane.HasValue && request.FarClipPlane.Value <= request.NearClipPlane.Value) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_LENS_RANGE_INVALID", "farClipPlane must be greater than nearClipPlane.", "Pass a farClipPlane greater than nearClipPlane.");
+            if (request.OrthographicSize.HasValue && request.OrthographicSize.Value <= 0d) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_LENS_RANGE_INVALID", "orthographicSize must be greater than zero.", "Pass a positive orthographicSize.");
+            using (var validate = new SerializedObject(camera))
+            {
+                var lens = validate.FindProperty("Lens") ?? validate.FindProperty("m_Lens");
+                if (lens == null) throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_LENS_PROPERTY_NOT_FOUND", "Cinemachine Lens property not accessible via SerializedObject.", "Use a supported Cinemachine package version.");
+                if (request.FieldOfView.HasValue) CinemachineToolSupport.RequireLensFloat(lens, "FieldOfView");
+                if (request.NearClipPlane.HasValue) CinemachineToolSupport.RequireLensFloat(lens, "NearClipPlane");
+                if (request.FarClipPlane.HasValue) CinemachineToolSupport.RequireLensFloat(lens, "FarClipPlane");
+                if (request.OrthographicSize.HasValue) CinemachineToolSupport.RequireLensFloat(lens, "OrthographicSize");
+                if (request.Dutch.HasValue) CinemachineToolSupport.RequireLensFloat(lens, "Dutch");
+            }
+            ctx.CommitEffect();
             using (var serializedObject = new SerializedObject(camera))
             {
                 var lensProperty = serializedObject.FindProperty("Lens") ?? serializedObject.FindProperty("m_Lens");
@@ -94,6 +115,16 @@ namespace UnityCli.Cinemachine
                 }
 
                 serializedObject.ApplyModifiedProperties();
+            }
+
+            var observedCamera = CinemachineToolSupport.RequireCameraComponent(CinemachineToolSupport.ResolveRequiredTarget(gameObject.GetInstanceID().ToString(), "Cinemachine camera could not be resolved after setting lens."));
+            using (var observed = new SerializedObject(observedCamera))
+            {
+                if (request.FieldOfView.HasValue) CinemachineToolSupport.VerifyLensFloat(observed, "FieldOfView", (float)request.FieldOfView.Value);
+                if (request.NearClipPlane.HasValue) CinemachineToolSupport.VerifyLensFloat(observed, "NearClipPlane", (float)request.NearClipPlane.Value);
+                if (request.FarClipPlane.HasValue) CinemachineToolSupport.VerifyLensFloat(observed, "FarClipPlane", (float)request.FarClipPlane.Value);
+                if (request.OrthographicSize.HasValue) CinemachineToolSupport.VerifyLensFloat(observed, "OrthographicSize", (float)request.OrthographicSize.Value);
+                if (request.Dutch.HasValue) CinemachineToolSupport.VerifyLensFloat(observed, "Dutch", (float)request.Dutch.Value);
             }
 
             if (effects.Count > 0)

@@ -20,7 +20,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   "target-and-instance": {
     title: "Targets and Instances",
     summary: "Discover Unity instances, select a target, and understand instance lifecycle. This is the first step in the discovery path: instances → select target → tools discovery → tools run → verify. Do not read registration files or ping endpoints manually — always use CLI commands.",
-    guide: "Start with `instances list` to discover running Unity Editors. Use `target set <id|alias>` to select a target before executing any Bridge tool. When multiple instances are ready, the CLI returns E_TARGET_AMBIGUOUS instead of guessing. Never manually read registration files or ping bridge endpoints."
+    guide: "Start with `instances list` to discover canonical Unity project identities. Bind every Bridge-backed command with `--instance <full-id|canonical-project-path|alias>` or run from the target project directory. A project claimed by multiple Unity Editor processes or sessions returns E_INSTANCE_CONFLICT instead of guessing. Never read registry files or invoke Bridge transport directly."
   },
   "tool-discovery": {
     title: "Tool Discovery",
@@ -118,7 +118,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   editor: {
     title: "Editor Commands",
-    summary: "Control the Unity Editor: play mode, console, menu items, live compile requests, compile diagnostics, refresh jobs, and Windows launch-dialog dismiss. Handlers: bridge (state/play/pause/stop/menu/console/compile), hybrid (compile-diagnostics), job (refresh), offline (launch-dialog.dismiss). Target: editor. `editor.menu` is destructive (requires --yes).",
+    summary: "Control the Unity Editor: play mode, console, menu items, durable compile requests, refresh jobs, and Windows launch-dialog dismiss. Handlers: bridge (state/play/pause/stop/menu/console), hybrid (compile), job (refresh), offline (launch-dialog.dismiss). Target: editor. `editor.menu` is destructive (requires --yes).",
   },
   diagnose: {
     title: "Diagnose Commands",

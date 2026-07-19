@@ -85,6 +85,20 @@ namespace MyProject.UnityCLI
 
 `[UnityCliRequired]` 标记必填输入字段。未标记的引用类型字段可省略；无值字段按 proto3 风格不发送。Unity 2022.3 默认 C# 版本不支持 C# 11 `required`，因此必填语义使用 `[UnityCliRequired]`。
 
+## Mutation Completion
+
+修改 Unity、场景、资产、项目文件、Package 或会话状态的 Tool，必须在全部输入、目标、权限与包前置校验完成后，且紧邻第一个真实 effect 前调用一次 `ctx.CommitEffect()`。不要在校验前调用，也不要把它放在异步等待、写入或 Unity API effect 之后。
+
+```csharp
+ValidateRequest(request);
+ResolveAndValidateTarget(request);
+ctx.CommitEffect();
+ApplyMutation(request);
+return ReadBackTerminalResult();
+```
+
+一次 Tool 调用只能有一个 commit boundary。漏调时即使 handler 返回成功，协调器也会返回 `E_TOOL_COMPLETION_PROOF_INVALID`；重复调用稳定返回 `E_TOOL_EFFECT_BARRIER_DUPLICATE`。只读 Tool、dry-run 路径和 proof-only recovery 不得调用 `ctx.CommitEffect()`。只读与写入语义混合时，必须在确定本次实际执行写入分支后才调用。
+
 ## Descriptor 字段
 
 `Describe()` 只写 AI 需要理解的稳定语义：

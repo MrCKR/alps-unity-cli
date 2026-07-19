@@ -96,16 +96,17 @@ export async function handleCapabilitiesCommand(
 
   let runtimeCapabilities: Record<string, unknown> | undefined;
   let bridgeCustomContexts: Record<string, unknown> | undefined;
-  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
 
-  if (runtime.bridgeExecute || endpoint) {
+  if (runtime.bridgeExecute || getString(flags, "instance")) {
     try {
       const bridgeResult = await executeBridgePayload(
         requestId,
         "diagnose.preflight",
         {},
         flags,
-        runtime
+        runtime,
+        undefined,
+        { mode: "read", mutation: false }
       );
       if (bridgeResult.ok) {
         runtimeCapabilities = bridgeResult.data as Record<string, unknown>;
@@ -128,8 +129,7 @@ export async function handleCapabilitiesCommand(
     ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
     ...(projectContextDiagnostics ? { customContexts: projectContextDiagnostics } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
- ...(bridgeCustomContexts ? { runtimeCustomContexts: bridgeCustomContexts } : {}),
-    ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {}),
+    ...(bridgeCustomContexts ? { runtimeCustomContexts: bridgeCustomContexts } : {}),
     contextDiscovery: {
       enabled: true,
       contextCount,

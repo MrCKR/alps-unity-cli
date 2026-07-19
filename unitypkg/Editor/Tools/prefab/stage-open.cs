@@ -50,14 +50,19 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_DIRTY_CONFLICT", "Current Prefab Stage has unsaved changes.", "Run tools run prefab.stage-save or close/save the current Prefab Stage in Unity before opening another Prefab.");
             }
+            ctx.CommitEffect();
             if (!PrefabToolSupport.OpenPrefabStage(path))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_OPEN_FAILED", "Failed to open Prefab Stage: " + path, "Check Unity Console and UnityCliBridge.log.");
             }
+            var observedStage = PrefabToolSupport.CurrentPrefabStage();
+            if (observedStage == null || !string.Equals(PrefabToolSupport.StageAssetPath(observedStage), path, System.StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_OPEN_MISMATCH", "Prefab Stage did not open the requested asset: " + path, "Inspect the current Prefab Stage and retry.");
+            var observed = PrefabToolSupport.BuildStageInfo("open", observedStage);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Stage = new PrefabStageInfo { Action = "open", Path = path, Dirty = false },
-                PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-open", Path = path } }
+                Stage = observed,
+                PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-open", Path = observed.Path } }
             });
         }
     }

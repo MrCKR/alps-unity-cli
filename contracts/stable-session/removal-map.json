@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "baselineCommit": "6ff277f361f74e7d85c749557671824d5a46813c",
+  "entries": [
+    { "legacy": "TargetConfig.activeTarget", "finalDisposition": "delete", "verification": "product residual count is zero" },
+    { "legacy": "target current|set|clear", "finalDisposition": "delete public commands", "verification": "top-level help and CLI routing reject them" },
+    { "legacy": "--target instance selector", "finalDisposition": "delete", "verification": "unknown flag is rejected" },
+    { "legacy": "--bridge-endpoint", "finalDisposition": "delete", "verification": "unknown flag is rejected" },
+    { "legacy": "UNITY_CLI_BRIDGE_ENDPOINT", "finalDisposition": "delete", "verification": "product residual count is zero" },
+    { "legacy": "single-ready and active-target fallback", "finalDisposition": "delete", "verification": "non-project CWD returns E_INSTANCE_REQUIRED" },
+    { "legacy": "PID-based instance identity", "finalDisposition": "replace with CanonicalPath v1 SHA-256 identity", "verification": "restart keeps instanceId and health identity matches" },
+    { "legacy": "aggregate instances.json", "finalDisposition": "delete reader and writer", "verification": "registry v2 uses one identity file only" },
+    { "legacy": "healthy|stale|unreachable public states", "finalDisposition": "replace with ready|transitioning|blocked|offline|conflict", "verification": "public schema enum equality" },
+    { "legacy": "Bridge mutation withRetry blind replay", "finalDisposition": "replace with immutable request redelivery and journal dedup", "verification": "same digest attaches and different digest fails" },
+    { "legacy": "HTTP disconnect cancellation after acceptance", "finalDisposition": "replace with result recovery", "verification": "accepted mutation completes exactly once" },
+    { "legacy": "public editor.state Tool", "finalDisposition": "delete", "verification": "one TS hybrid Context owner remains" },
+    { "legacy": "C# public editor.state Context", "finalDisposition": "replace with private internal.editor.state.snapshot", "verification": "internal command is not discoverable" },
+    { "legacy": "editor.state transition wait", "finalDisposition": "replace with observeNow 1000ms budget", "verification": "zero wait and zero journal" },
+    { "legacy": "detector BM_CLICK and unscoped Unity process scan", "finalDisposition": "delete from detector", "verification": "read-only selected-PID source audit" },
+    { "legacy": "editor.compile-diagnostics", "finalDisposition": "delete", "verification": "product residual count is zero" },
+    { "legacy": "C# public EditorCompileTool", "finalDisposition": "replace with private persisted coordinator", "verification": "one TS hybrid editor.compile owner remains" },
+    { "legacy": "editor.compile.waitReady", "finalDisposition": "delete", "verification": "waiting is unconditional and field is rejected" },
+    { "legacy": "requested|skippedReason compile success", "finalDisposition": "replace with attributed terminal compile result", "verification": "success requires zero compiler errors and ready state" },
+    { "legacy": "Console text as owned compile diagnostics", "finalDisposition": "replace with CompilationPipeline broker", "verification": "cycle-attributed assembly diagnostics" }
+  ]
+}

@@ -44,15 +44,20 @@ namespace UnityCli
             PrefabToolSupport.EnsureEditorNotBusy("prefab.stage-save");
             var stage = PrefabToolSupport.RequireCurrentPrefabStage(request.Path);
             var path = PrefabToolSupport.StageAssetPath(stage);
+            ctx.CommitEffect();
             if (!PrefabToolSupport.SavePrefabStage(stage))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage: " + path, "Check Unity Console and UnityCliBridge.log.");
             }
             AssetDatabase.SaveAssets();
+            var observedStage = PrefabToolSupport.CurrentPrefabStage();
+            if (observedStage == null || !string.Equals(PrefabToolSupport.StageAssetPath(observedStage), path, System.StringComparison.OrdinalIgnoreCase) || PrefabToolSupport.StageIsDirty(observedStage))
+                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_SAVE_MISMATCH", "Prefab Stage did not reach a saved terminal state: " + path, "Inspect the current Prefab Stage and retry.");
+            var observed = PrefabToolSupport.BuildStageInfo("save", observedStage);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Stage = new PrefabStageInfo { Action = "save", Path = path, Dirty = false },
-                PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-save", Path = path } }
+                Stage = observed,
+                PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-save", Path = observed.Path } }
             });
         }
     }

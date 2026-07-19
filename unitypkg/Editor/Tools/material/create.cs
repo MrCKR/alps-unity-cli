@@ -58,16 +58,15 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SHADER_NOT_FOUND", "Shader not found: " + shaderName, "Check the shader name in Unity or import the required render pipeline package.");
             }
-            if (AssetDatabase.LoadAssetAtPath<Material>(path) != null && !overwrite)
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (existing != null && !overwrite)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_OUTPUT_EXISTS", "Material output already exists: " + path, "Pass --overwrite or choose a different Assets/*.mat path.");
             }
 
+            ctx.CommitEffect();
             AssetToolSupport.CreateAssetDirectory(path);
-            if (AssetDatabase.LoadAssetAtPath<Material>(path) != null)
-            {
-                AssetDatabase.DeleteAsset(path);
-            }
+            if (existing != null) AssetDatabase.DeleteAsset(path);
             var material = new Material(shader);
             material.name = Path.GetFileNameWithoutExtension(path);
             AssetDatabase.CreateAsset(material, path);

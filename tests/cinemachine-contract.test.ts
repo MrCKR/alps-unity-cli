@@ -19,19 +19,16 @@ const EXPECTED_CINEMACHINE_TOOLS = [
   "cinemachine.noise",
   "cinemachine.brain.ensure",
   "cinemachine.brain.status",
-  "cinemachine.force-camera",
-  "cinemachine.release-override",
   "cinemachine.extension.list",
   "cinemachine.extension.add",
   "cinemachine.extension.remove"
 ] as const;
 
-test("Cinemachine extension manifest exposes exactly 16 single-action tools", () => {
+test("Cinemachine extension manifest exposes the expected single-action tools", () => {
   const contributionNames = builtinExtensionToolContributions()
     .filter((tool) => tool.extensionId === "cinemachine")
     .map((tool) => tool.name)
     .sort();
-  assert.equal(contributionNames.length, 16);
   assert.deepEqual(contributionNames, [...EXPECTED_CINEMACHINE_TOOLS].sort());
 
   const manifest = builtinExtensionMetadata().find((entry) => entry.id === "cinemachine");
@@ -51,16 +48,9 @@ test("Cinemachine manifest contributions document package gate and extension own
 
 test("Cinemachine bridge specs route through project-tool.run with toolName", () => {
   const specs = bridgeCommandRegistry.specs().filter((spec) => spec.group === "cinemachine");
-  assert.equal(specs.length, 16);
+  assert.deepEqual(specs.map((spec) => spec.toolName).sort(), [...EXPECTED_CINEMACHINE_TOOLS].sort());
   assert.ok(specs.every((spec) => spec.bridgeCommand === "project-tool.run"));
   assert.ok(specs.every((spec) => spec.toolsOnly === true));
-  assert.deepEqual(specs.map((spec) => spec.toolName).sort(), [...EXPECTED_CINEMACHINE_TOOLS].sort());
-
-  const forceSpec = specs.find((spec) => spec.command === "force-camera");
-  assert.equal(forceSpec?.toolName, "cinemachine.force-camera");
-
-  const releaseSpec = specs.find((spec) => spec.command === "release-override");
-  assert.equal(releaseSpec?.toolName, "cinemachine.release-override");
 });
 
 test("Cinemachine tools have matching command contracts", () => {
@@ -74,25 +64,21 @@ test("Cinemachine tools have matching command contracts", () => {
   }
 });
 
-test("Cinemachine C# extension uses self-contained typed tool files", () => {
+test("Cinemachine extension uses the declared CM2 and CM3 package APIs", () => {
   assert.equal(existsSync("extensions/cinemachine/unitypkg/Editor/Commands/CinemachineCommands.cs"), false);
+  assert.equal(existsSync("extensions/cinemachine/unitypkg/Editor/Cinemachine/CinemachineCm2.cs"), false);
 
   const registrySource = readFileSync("unitypkg/Editor/Bridge/BridgeCommandRegistry.cs", "utf8");
   assert.doesNotMatch(registrySource, /RegisterCinemachineCommands/);
 
   const supportSource = readFileSync("extensions/cinemachine/unitypkg/Editor/Cinemachine/CinemachineToolSupport.cs", "utf8");
-  assert.match(supportSource, /FindSetCameraOverrideMethod/);
-  assert.match(supportSource, /FindReleaseCameraOverrideMethod/);
-  assert.match(supportSource, /FindPublicInstanceMethod\(Type ownerType, string methodName, params Type\[] parameterTypes\)/);
-  assert.match(supportSource, /GetPipelineComponent\(Component camera, string stage\)/);
-  assert.match(supportSource, /DestroyCinemachineComponent/);
-  assert.match(supportSource, /AddCinemachineComponent/);
-  assert.match(supportSource, /MakeGenericMethod\(newType\)\.Invoke\(camera, null\)/);
-  assert.match(supportSource, /ForceOverrideAvailable/);
+  assert.match(supportSource, /Unity\.Cinemachine\.CinemachineCamera/);
+  assert.match(supportSource, /Cinemachine\.CinemachineVirtualCamera/);
   assert.match(supportSource, /ComponentTypeAliases/);
-  assert.match(supportSource, /"CinemachineRotationComposer", new\[\] \{ "CinemachineComposer" \}/);
-  assert.match(supportSource, /"CinemachineFollow", new\[\] \{ "CinemachineTransposer" \}/);
-  assert.match(supportSource, /"CinemachineSplineDolly", new\[\] \{ "CinemachineTrackedDolly" \}/);
+  assert.match(supportSource, /AddCinemachineComponent/);
+  assert.match(supportSource, /GetPipelineComponent\(Component camera, string stage\)/);
+  assert.match(supportSource, /RequirePipelineComponentStage/);
+  assert.match(supportSource, /"Cinemachine\.CinemachineHardLookAt"/);
 
   const expectedFiles = [
     "ping.cs",
@@ -108,9 +94,7 @@ test("Cinemachine C# extension uses self-contained typed tool files", () => {
     "brain-status.cs",
     "extension-list.cs",
     "extension-add.cs",
-    "extension-remove.cs",
-    "force-camera.cs",
-    "release-override.cs"
+    "extension-remove.cs"
   ];
   for (const file of expectedFiles) {
     assert.equal(existsSync(`extensions/cinemachine/unitypkg/Editor/Cinemachine/${file}`), true, `${file} should exist`);

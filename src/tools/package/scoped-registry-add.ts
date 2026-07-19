@@ -14,7 +14,6 @@ export interface PackageScopedRegistryAddResult {
   projectPath: string;
   manifestPath: string;
   registry?: { name: string; url: string; scopes: string[] };
-  replaced?: boolean;
   dryRun?: boolean;
   plannedEffects?: Array<{ type: string; name: string; url: string; scopes: string[] }>;
 }
@@ -38,10 +37,9 @@ export default defineTool<PackageScopedRegistryAddRequest, PackageScopedRegistry
     const name = validatePackageName(request.name);
     const url = validateRegistryUrl(request.url);
     const scopes = parseScopes(request.scope ?? request.scopes);
-    if (context.execution.dryRun) {
-      const snapshot = await readSnapshot(projectPath);
-      return { projectPath, manifestPath: snapshot.manifestPath, dryRun: true, plannedEffects: [{ type: "package.scoped-registry.add", name, url, scopes }] };
-    }
-    return { projectPath, ...(await addScopedRegistry(projectPath, { name, url, scopes })) };
+    const prepared = await addScopedRegistry(projectPath, { name, url, scopes }, { dryRun: true });
+    if (context.execution.dryRun) return { projectPath, ...prepared } as PackageScopedRegistryAddResult;
+    await context.commitEffect?.();
+    return { projectPath, ...(await addScopedRegistry(projectPath, { name, url, scopes })) } as PackageScopedRegistryAddResult;
   }
 });

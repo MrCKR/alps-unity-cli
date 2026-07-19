@@ -39,10 +39,12 @@ test("raw descriptor mapping rejects unknown source and missing schemas", () => 
   assert.equal(rawDescriptorToContextDescriptor({ ...descriptor("built-in"), outputSchema: undefined }), undefined);
 });
 
-test("context discovery target detection recognizes explicit and runtime targets", () => {
+test("context discovery ignores removed endpoint and business target selectors", () => {
   assert.equal(shouldDiscoverContexts({}, {}), false);
   assert.equal(shouldDiscoverContexts({ "include-custom": true }, {}), true);
-  assert.equal(shouldDiscoverContexts({ "bridge-endpoint": "http://127.0.0.1:1234" }, {}), true);
+  assert.equal(shouldDiscoverContexts({ "bridge-endpoint": "http://127.0.0.1:1234" }, {}), false);
+  assert.equal(shouldDiscoverContexts({ target: "Main Camera" }, {}), false);
+  assert.equal(shouldDiscoverContexts({ instance: "C:/Project" }, {}), true);
   assert.equal(shouldDiscoverContexts({}, { projectContexts: [] }), true);
 });
 

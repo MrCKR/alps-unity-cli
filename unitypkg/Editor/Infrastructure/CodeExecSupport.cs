@@ -65,6 +65,7 @@ namespace UnityCli
                 return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                     request.RequestId, result.ErrorCode, result.ErrorMessage, result.Details, result.NextActions));
             }
+            RecordDirectCompletionEvidence(request.RequestId, "code.exec", ResolveRequestCompletionContract(request), result.Data);
             return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, result.Data));
         }
 
@@ -137,6 +138,7 @@ namespace UnityCli
                 Console.SetError(stderr);
                 var type = compiled.CompiledAssembly.GetType("UnityCli.RuntimeCode.Script", true);
                 var method = type.GetMethod("Run", BindingFlags.Public | BindingFlags.Static);
+                BeginDirectEffect(request.RequestId);
                 var returnValue = method.Invoke(null, new object[] { argsJson ?? "{}" });
                 Console.SetOut(previousOut);
                 Console.SetError(previousError);
@@ -273,7 +275,6 @@ namespace UnityCli
         // 构造 live 执行成功数据，保留运行输出、审计信息和副作用声明。
         private static Dictionary<string, object> CodeSuccessData(UnityCli.Protocol.BridgeRequest request, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue)
         {
-            var timeoutMs = request.Execution == null ? null : request.Execution.TimeoutMs;
             var argsJson = request.StringArg("argsJson");
             var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
             return new Dictionary<string, object>
@@ -284,7 +285,7 @@ namespace UnityCli
                     {
                         { "channel", "live" }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) },
                         { "endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture) }, { "durationMs", durationMs },
-                        { "timeoutMs", timeoutMs.HasValue ? (object)timeoutMs.Value : null }, { "exitState", "completed" }
+                        { "exitState", "completed" }
                     }
                 },
                 { "compile", new Dictionary<string, object> { { "ok", true }, { "diagnostics", Array.Empty<object>() } } },
@@ -306,11 +307,7 @@ namespace UnityCli
                                 { "args", UnityCliSerializer.Parse(string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) }
                             }
                         },
-                        { "execution", new Dictionary<string, object>
-                            {
-                                { "timeoutMs", timeoutMs.HasValue ? (object)timeoutMs.Value : null }, { "exitState", "completed" }
-                            }
-                        },
+                        { "execution", new Dictionary<string, object> { { "exitState", "completed" } } },
                         { "artifacts", Array.Empty<object>() }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) },
                         { "endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture) }, { "durationMs", durationMs },
                         { "effects", new Dictionary<string, object>

@@ -50,7 +50,10 @@ namespace UnityCli
                 var layerB = PhysicsToolSupport.ParseLayer(request.LayerB);
                 if (request.Ignore.HasValue)
                 {
+                    ctx.CommitEffect();
                     Physics.IgnoreLayerCollision(layerA, layerB, request.Ignore.Value);
+                    if (Physics.GetIgnoreLayerCollision(layerA, layerB) != request.Ignore.Value)
+                        throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_COLLISION_MATRIX_STATE_MISMATCH", "Collision matrix did not match the requested ignore state.", "Inspect Project Settings > Physics and retry after the Editor is idle.");
                 }
                 var effects = new List<PhysicsPlannedEffect>();
                 if (request.Ignore.HasValue)

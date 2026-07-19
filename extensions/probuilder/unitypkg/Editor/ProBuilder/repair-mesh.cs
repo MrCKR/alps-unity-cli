@@ -53,7 +53,13 @@ namespace UnityCli.ProBuilder
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("repair-mesh", "No ProBuilderMesh on target.");
-
+            var beforeDegenerateFaceCount = ProBuilderReflection.CountDegenerateFaces(mesh);
+            var beforeUnusedVertexCount = ProBuilderReflection.CountUnusedVertices(mesh);
+            if (beforeDegenerateFaceCount < 0 || beforeUnusedVertexCount < 0)
+                throw ProBuilderErrors.OperationFailed("repair-mesh", "Failed to read repairable mesh state.");
+            if (beforeDegenerateFaceCount == 0 && beforeUnusedVertexCount == 0)
+                throw ProBuilderErrors.OperationFailed("repair-mesh", "Mesh has no readable degenerate triangles or unused vertices to repair.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Repair Mesh");
 
             var removedDegenerateIndexCount = ProBuilderReflection.RemoveDegenerateTriangles(mesh);
@@ -64,10 +70,12 @@ namespace UnityCli.ProBuilder
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var remainingDegenerateFaceCount = ProBuilderReflection.CountDegenerateFaces(mesh);
-            var remainingUnusedVertexCount = ProBuilderReflection.CountUnusedVertices(mesh);
-            if (remainingDegenerateFaceCount < 0 || remainingUnusedVertexCount < 0)
-                throw ProBuilderErrors.OperationFailed("repair-mesh", "Failed to verify repaired mesh state.");
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            var remainingDegenerateFaceCount = ProBuilderReflection.CountDegenerateFaces(freshMesh);
+            var remainingUnusedVertexCount = ProBuilderReflection.CountUnusedVertices(freshMesh);
+            if (!ProBuilderRequestProof.RepairReducedInvalidGeometry(freshMesh, beforeDegenerateFaceCount, beforeUnusedVertexCount))
+                throw ProBuilderErrors.OperationFailed("repair-mesh", "Repair did not reduce readable invalid geometry.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

@@ -29,6 +29,25 @@ namespace UnityCli
             return path;
         }
 
+        public static WrapMode ValidateClipSettings(float? frameRate, string wrapMode, float? startTime, float? stopTime, float? length)
+        {
+            if (frameRate.HasValue && (float.IsNaN(frameRate.Value) || float.IsInfinity(frameRate.Value) || frameRate.Value <= 0f))
+                throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_CLIP_VALUE_INVALID", "frameRate must be finite and greater than zero.", "Pass a positive finite frameRate.");
+            if (startTime.HasValue && (float.IsNaN(startTime.Value) || float.IsInfinity(startTime.Value)) || stopTime.HasValue && (float.IsNaN(stopTime.Value) || float.IsInfinity(stopTime.Value)) || length.HasValue && (float.IsNaN(length.Value) || float.IsInfinity(length.Value) || length.Value <= 0f))
+                throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_CLIP_VALUE_INVALID", "Clip time values must be finite and length must be greater than zero.", "Pass finite startTime/stopTime and a positive finite length.");
+            if (stopTime.HasValue && length.HasValue)
+                throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_CLIP_TIME_CONFLICT", "stopTime and length are mutually exclusive.", "Pass either stopTime or length.");
+            if (startTime.HasValue && stopTime.HasValue && stopTime.Value <= startTime.Value)
+                throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_CLIP_TIME_INVALID", "stopTime must be greater than startTime.", "Pass startTime < stopTime.");
+            if (startTime.HasValue && length.HasValue && float.IsInfinity(startTime.Value + length.Value))
+                throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_CLIP_TIME_INVALID", "startTime plus length must be representable as a finite float.", "Use smaller finite time values.");
+            if (string.IsNullOrEmpty(wrapMode)) return default(WrapMode);
+            WrapMode parsed;
+            if (!System.Enum.TryParse<WrapMode>(wrapMode, true, out parsed) || !System.Enum.IsDefined(typeof(WrapMode), parsed))
+                throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_WRAP_MODE_INVALID", "Unsupported WrapMode: " + wrapMode, "Pass a defined Unity WrapMode value.");
+            return parsed;
+        }
+
         /// <summary>加载 AnimationClip 资产;不存在抛异常。</summary>
         public static AnimationClip LoadAnimationClipAsset(string path)
         {
@@ -44,8 +63,10 @@ namespace UnityCli
             var path = SceneToolSupport.NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
                 throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_PATH_REQUIRED", "Pass --controller-path <Assets/...>.controller>.", "Use controller.create to create one first.");
-            if (!path.EndsWith(".controller", System.StringComparison.OrdinalIgnoreCase))
-                throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_PATH_INVALID", "AnimatorController path must end with .controller: " + path, "Pass a Unity asset path such as Assets/Animations/Player.controller.");
+            if (!path.StartsWith("Assets/", System.StringComparison.Ordinal) || !path.EndsWith(".controller", System.StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_PATH_INVALID", "AnimatorController path must be a canonical Assets/*.controller path: " + path, "Pass a Unity asset path such as Assets/Animations/Player.controller.");
+            // 在任何 AssetDatabase 查找或创建目录前证明物理路径仍受 Assets/ 包含。
+            SceneToolSupport.AssetFullPath(path);
             return path;
         }
 
@@ -55,6 +76,78 @@ namespace UnityCli
             var path = SceneToolSupport.NormalizeAssetPath(controllerPath);
             if (string.IsNullOrEmpty(path)) return null;
             return AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+        }
+
+        /// <summary>强制从 AssetDatabase 重新加载控制器，避免用 effect 前的缓存对象作为完成证明。</summary>
+        public static AnimatorController ReloadControllerAsset(string path)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            return AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+        }
+
+        /// <summary>按 effect 前 GUID 重新定位控制器，拒绝 path 重绑定后的缓存读回。</summary>
+        public static AnimatorController ReloadControllerAsset(string path, string expectedGuid)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            var observedPath = string.IsNullOrEmpty(expectedGuid) ? null : AssetDatabase.GUIDToAssetPath(expectedGuid);
+            if (string.IsNullOrEmpty(observedPath) || !string.Equals(observedPath, path, System.StringComparison.Ordinal)) return null;
+            return AssetDatabase.LoadAssetAtPath<AnimatorController>(observedPath);
+        }
+
+        /// <summary>捕获层的可持久化完整身份，用于数组编辑后的顺序与删除证明。</summary>
+        public static ControllerLayerIdentity CaptureLayerIdentity(AnimatorControllerLayer layer)
+        {
+            return new ControllerLayerIdentity
+            {
+                Name = layer.name,
+                DefaultWeight = layer.defaultWeight,
+                BlendingMode = layer.blendingMode,
+                IKPass = layer.iKPass,
+                SyncedLayerIndex = layer.syncedLayerIndex,
+                SyncedLayerAffectsTiming = layer.syncedLayerAffectsTiming,
+                AvatarMaskIdentity = AssetObjectIdentity(layer.avatarMask),
+                StateMachineIdentity = AssetObjectIdentity(layer.stateMachine)
+            };
+        }
+
+        /// <summary>比较层全部可公开持久化字段及其子资产 identity，不能只依赖数组索引或数量。</summary>
+        public static bool SameLayerIdentity(ControllerLayerIdentity actual, ControllerLayerIdentity expected)
+        {
+            return actual != null && expected != null
+                && actual.Name == expected.Name
+                && Mathf.Approximately(actual.DefaultWeight, expected.DefaultWeight)
+                && actual.BlendingMode == expected.BlendingMode
+                && actual.IKPass == expected.IKPass
+                && actual.SyncedLayerIndex == expected.SyncedLayerIndex
+                && actual.SyncedLayerAffectsTiming == expected.SyncedLayerAffectsTiming
+                && actual.AvatarMaskIdentity == expected.AvatarMaskIdentity
+                && actual.StateMachineIdentity == expected.StateMachineIdentity;
+        }
+
+        private static string AssetObjectIdentity(Object value)
+        {
+            if (value == null) return string.Empty;
+            string guid;
+            long localId;
+            if (AssetDatabase.TryGetGUIDAndLocalFileIdentifier(value, out guid, out localId))
+                return guid + ":" + localId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return AssetDatabase.GetAssetPath(value) + ":" + value.name;
+        }
+
+        /// <summary>强制重新加载动画片段，用于持久化写入后的独立 readback。</summary>
+        public static AnimationClip ReloadAnimationClipAsset(string path)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            return AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+        }
+
+        /// <summary>构造稳定的业务 readback mismatch，供 Coordinator 将 effect 后失败归类为 unknown。</summary>
+        public static UnityCliBridge.BridgeCommandException StateMismatch(string code, string subject)
+        {
+            return new UnityCliBridge.BridgeCommandException(code, subject + " did not match the requested value after independent readback.", "Inspect the target state and retry after the Editor is idle.");
         }
 
         /// <summary>读取 Animator 可用层数量;运行态缓存未初始化时回退到 AnimatorController 资产层。</summary>
@@ -230,6 +323,7 @@ namespace UnityCli
     }
 
     public sealed class ControllerRef { public string Name { get; set; } public string Path { get; set; } public string Guid { get; set; } }
+    public sealed class ControllerLayerIdentity { public string Name { get; set; } public float DefaultWeight { get; set; } public AnimatorLayerBlendingMode BlendingMode { get; set; } public bool IKPass { get; set; } public int SyncedLayerIndex { get; set; } public bool SyncedLayerAffectsTiming { get; set; } public string AvatarMaskIdentity { get; set; } public string StateMachineIdentity { get; set; } }
     public sealed class AnimatorStateRef { public long FullPathHash { get; set; } public long ShortNameHash { get; set; } public double NormalizedTime { get; set; } public double Length { get; set; } }
     public sealed class AnimatorParameterInfo { public string Name { get; set; } public string Type { get; set; } public double DefaultFloat { get; set; } public long DefaultInt { get; set; } public bool DefaultBool { get; set; } }
     public sealed class AnimatorLayerInfo { public long Index { get; set; } public string Name { get; set; } public double Weight { get; set; } public long CurrentStateHash { get; set; } public double CurrentStateNormalizedTime { get; set; } public double CurrentStateLength { get; set; } public bool IsInTransition { get; set; } }

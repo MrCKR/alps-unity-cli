@@ -15,11 +15,7 @@ export function shouldDiscoverProjectTools(flags: Record<string, string | boolea
     getBoolean(flags, "runtime") ||
     runtime.projectTools !== undefined ||
     runtime.bridgeExecute !== undefined ||
-    typeof getString(flags, "bridge-endpoint") === "string" ||
-    typeof getString(flags, "target") === "string" ||
-    typeof getString(flags, "instance") === "string" ||
-    typeof runtime.bridgeEndpoint === "string" ||
-    typeof process.env.UNITY_CLI_BRIDGE_ENDPOINT === "string";
+    typeof getString(flags, "instance") === "string";
 }
 
 export async function discoverProjectTools(
@@ -36,7 +32,7 @@ export async function discoverProjectTools(
     return { ok: true, tools: [], mode: "skipped" };
   }
 
-  const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime);
+  const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }
@@ -83,7 +79,8 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     target,
     available: booleanProp(descriptor, "available") ?? undefined,
     source: toolSourceProp(descriptor, "source"),
-    liveDescriptorFingerprint: descriptorFingerprintProp(descriptor)
+    liveDescriptorFingerprint: descriptorFingerprintProp(descriptor),
+    completionContract: completionContractProp(descriptor, "completionContract")
   });
 }
 
@@ -135,6 +132,28 @@ function toolHandlerProp(record: Record<string, unknown>, key: string): ToolHand
 function toolSupportStatusProp(record: Record<string, unknown>, key: string): ToolSupportStatus | undefined {
   const value = record[key];
   return value === "live-bridge" || value === "live-bridge-runtime" || value === "bridge-job" || value === "batch-job" || value === "cli-only" || value === "planned" ? value : undefined;
+}
+
+function completionContractProp(record: Record<string, unknown>, key: string): ToolMetadata["completionContract"] {
+  const value = objectProp(record, key);
+  if (!value) return undefined;
+  const executionClass = stringProp(value, "executionClass");
+  const journalPolicy = stringProp(value, "journalPolicy");
+  const mutation = booleanProp(value, "mutation");
+  const completionPredicate = stringProp(value, "completionPredicate");
+  const proofSource = stringProp(value, "proofSource");
+  const reloadPolicy = stringProp(value, "reloadPolicy");
+  const timeoutError = stringProp(value, "timeoutError");
+  const outcomeUnknownPolicy = stringProp(value, "outcomeUnknownPolicy");
+  const directInvocationPolicy = stringProp(value, "directInvocationPolicy") ?? "allowed";
+  const frozenDeliveryPolicy = stringProp(value, "frozenDeliveryPolicy") ?? "ordinary";
+  const completionDriverId = stringProp(value, "completionDriverId");
+  if (!(executionClass === "atomic" || executionClass === "observed-state" || executionClass === "resumable" || executionClass === "external")
+      || !(journalPolicy === "required" || journalPolicy === "none" || journalPolicy === "job-frozen")
+      || !(directInvocationPolicy === "allowed" || directInvocationPolicy === "deferred-only" || directInvocationPolicy === "prohibited-unprovable")
+      || !(frozenDeliveryPolicy === "ordinary" || frozenDeliveryPolicy === "preserved")
+      || mutation === undefined || !completionPredicate || !proofSource || !reloadPolicy || !timeoutError || !outcomeUnknownPolicy || !completionDriverId) return undefined;
+  return { executionClass, journalPolicy, mutation, completionPredicate, proofSource, reloadPolicy, timeoutError, outcomeUnknownPolicy, directInvocationPolicy, frozenDeliveryPolicy, completionDriverId };
 }
 
 function objectProp(record: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
@@ -207,7 +226,7 @@ export async function discoverRuntimeTools(
     return { ok: true, tools: [], mode: "skipped" };
   }
 
-  const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime);
+  const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }

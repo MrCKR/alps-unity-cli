@@ -16,13 +16,15 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireAnimationClipPath(r.Path);
             var clip = AnimationToolSupport.LoadAnimationClipAsset(path);
+            var wm = AnimationToolSupport.ValidateClipSettings(r.FrameRate, r.WrapMode, r.StartTime, r.StopTime, r.Length);
             var dryRun = ctx.DryRun;
             if (dryRun)
                 return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "animation.clip.modify", DryRun = true, Clip = AnimationToolSupport.BuildAnimationClipInfo(path, clip, r.MaxCurveKeys ?? 5), PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animation.clip.modify", Path = path } } });
+            ctx.CommitEffect();
             Undo.RecordObject(clip, "Modify AnimationClip Settings");
             if (r.FrameRate.HasValue) clip.frameRate = r.FrameRate.Value;
             if (r.Legacy.HasValue) clip.legacy = r.Legacy.Value;
-            if (!string.IsNullOrEmpty(r.WrapMode) && System.Enum.TryParse<WrapMode>(r.WrapMode, true, out var wm)) clip.wrapMode = wm;
+            if (!string.IsNullOrEmpty(r.WrapMode)) clip.wrapMode = wm;
             var settings = AnimationUtility.GetAnimationClipSettings(clip);
             if (r.StartTime.HasValue) settings.startTime = r.StartTime.Value;
             if (r.StopTime.HasValue) settings.stopTime = r.StopTime.Value;
@@ -30,9 +32,11 @@ namespace UnityCli
             if (r.LoopTime.HasValue) settings.loopTime = r.LoopTime.Value;
             AnimationUtility.SetAnimationClipSettings(clip, settings);
             EditorUtility.SetDirty(clip);
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "animation.clip.modify", DryRun = false, Clip = AnimationToolSupport.BuildAnimationClipInfo(path, AnimationToolSupport.LoadAnimationClipAsset(path), r.MaxCurveKeys ?? 5), PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animation.clip.modify", Path = path } } });
+            var observedClip = AnimationToolSupport.ReloadAnimationClipAsset(path);
+            var observedSettings = observedClip == null ? default(AnimationClipSettings) : AnimationUtility.GetAnimationClipSettings(observedClip);
+            if (observedClip == null || (r.FrameRate.HasValue && !Mathf.Approximately(observedClip.frameRate, r.FrameRate.Value)) || (r.Legacy.HasValue && observedClip.legacy != r.Legacy.Value) || (!string.IsNullOrEmpty(r.WrapMode) && observedClip.wrapMode != wm) || (r.LoopTime.HasValue && observedSettings.loopTime != r.LoopTime.Value) || (r.StartTime.HasValue && !Mathf.Approximately(observedSettings.startTime, r.StartTime.Value)) || (r.StopTime.HasValue && !Mathf.Approximately(observedSettings.stopTime, r.StopTime.Value)) || (r.Length.HasValue && !r.StopTime.HasValue && !Mathf.Approximately(observedSettings.stopTime - observedSettings.startTime, r.Length.Value)))
+                throw AnimationToolSupport.StateMismatch("E_ANIMATION_CLIP_MODIFY_STATE_MISMATCH", "AnimationClip settings");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "animation.clip.modify", DryRun = false, Clip = AnimationToolSupport.BuildAnimationClipInfo(path, observedClip, r.MaxCurveKeys ?? 5), PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animation.clip.modify", Path = path } } });
         }
     }
 }

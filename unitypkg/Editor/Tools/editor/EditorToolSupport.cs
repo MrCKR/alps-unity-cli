@@ -119,9 +119,8 @@ namespace UnityCli
     public sealed class ActiveSceneInfo { public string Name { get; set; } public string Path { get; set; } public bool IsLoaded { get; set; } public bool IsDirty { get; set; } }
     public sealed class ConsoleEntry { public string Type { get; set; } public string Message { get; set; } public long Count { get; set; } }
     public sealed class EditorPlannedEffect { public string Type { get; set; } public string Path { get; set; } public string Action { get; set; } public string Name { get; set; } }
-    public sealed class PlayModeResult { public string Requested { get; set; } public bool Changed { get; set; } public bool IsPlaying { get; set; } public bool IsPaused { get; set; } }
+    public sealed class PlayModeResult { public bool Changed { get; set; } public bool IsPlaying { get; set; } public bool IsPaused { get; set; } }
     public sealed class MenuResult { public string Path { get; set; } public bool Executed { get; set; } public long ElapsedMs { get; set; } }
-    public sealed class CompileResult { public bool DryRun { get; set; } public bool Refresh { get; set; } public bool WaitReady { get; set; } public bool WouldRequest { get; set; } public string SkippedReason { get; set; } public bool Requested { get; set; } }
     public sealed class TagLayerResult { public string Action { get; set; } public string Name { get; set; } public bool Changed { get; set; } }
 }
 #endif

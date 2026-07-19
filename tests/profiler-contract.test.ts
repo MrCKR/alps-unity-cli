@@ -203,11 +203,24 @@ test("profiler.module-enable calls SetAreaEnabled", async () => {
   assert.doesNotMatch(source, /Editor prefs/);
 });
 
-test("profiler.load validates capture path before reporting success", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/load.cs", import.meta.url), "utf8");
-  assert.match(source, /File\.Exists\(resolvedPath\)/);
-  assert.match(source, /E_PROFILER_CAPTURE_NOT_FOUND/);
-  assert.match(source, /Loaded = true/);
+test("profiler.load and capture require real terminal artifacts before reporting success", async () => {
+  const loadSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/load.cs", import.meta.url), "utf8");
+  const captureSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/capture.cs", import.meta.url), "utf8");
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerToolSupport.cs", import.meta.url), "utf8");
+  assert.match(loadSource, /File\.Exists\(resolvedPath\)/);
+  assert.match(loadSource, /E_PROFILER_CAPTURE_NOT_FOUND/);
+  assert.match(loadSource, /E_PROFILER_LOAD_UNSUPPORTED/);
+  assert.match(loadSource, /E_PROFILER_LOAD_FAILED/);
+  assert.doesNotMatch(loadSource, /loadMethod\?\.Invoke/);
+  assert.match(loadSource, /Loaded = true/);
+  assert.match(captureSource, /File\.Delete\(outputPath\)/);
+  assert.match(captureSource, /EnsureRawProfilerArtifact\(outputPath\)/);
+  assert.match(supportSource, /E_PROFILER_RAW_ARTIFACT_MISSING/);
+  assert.match(supportSource, /new FileInfo\(outputPath\)\.Length <= 0/);
+  assert.match(supportSource, /E_PROFILER_METADATA_WRITE_FAILED/);
+  assert.match(supportSource, /new FileInfo\(sidecarPath\)\.Length <= 0/);
+  assert.doesNotMatch(supportSource, /sidecar 写入失败不阻塞主流程/);
+  assert.doesNotMatch(supportSource, /Unity did not emit binary data/);
 });
 
 test("profiler memory-snapshot and frame-debugger tools implement IUnityCliTool", async () => {
@@ -245,4 +258,6 @@ test("profiler.capture and memory-snapshot.take use async IUnityCliTool", async 
   assert.match(snapshotSource, /class ProfilerMemorySnapshotTakeTool : IUnityCliTool</);
   assert.match(snapshotSource, /public async ValueTask<Result> ExecuteAsync\(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default\)/);
   assert.match(snapshotSource, /await ctx\.Wait\.ForCallback<Result>\(/);
+  assert.match(snapshotSource, /E_PROFILER_SNAPSHOT_ARTIFACT_MISSING/);
+  assert.match(snapshotSource, /!info\.Exists \|\| info\.Length <= 0/);
 });

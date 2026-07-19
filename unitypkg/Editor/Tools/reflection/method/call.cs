@@ -43,8 +43,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "reflection.method.call",
-            Summary = "Call any C# method by reflection; arbitrary side effects, requires --yes.",
-            Description = "Call any C# method by reflection on a live type. Does not limit scope — arbitrary side effects are possible. Requires --yes. Run reflection.method.find first; when overloads share a name, pass its returned parameterType values as parameterTypes for exact selection. Dry-run returns a preview without execution.",
+            Summary = "Call a synchronous non-void C# method only inside the frozen batch delivery.",
+            Description = "Ordinary direct invocation is refused because a synchronous return value cannot prove arbitrary side effects. The existing frozen batch delivery may call a synchronous non-void method and serialize its result. void, Task/ValueTask, iterator, yield, and AsyncOperation methods are rejected. Run reflection.method.find first and pass parameterTypes for exact overload selection.",
             Group = "reflection",
             Version = "1.0.0",
             DestructiveHint = true,
@@ -56,7 +56,7 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Initialize UnityEngine.Random with an explicit seed", Input = new Request { TypeName = "UnityEngine.Random", MethodName = "InitState", Args = new object[] { 12345 } } }
+                new ToolExample { Description = "Evaluate a synchronous method with a concrete result", Input = new Request { TypeName = "UnityEngine.Mathf", MethodName = "Abs", Args = new object[] { -2.5f }, ParameterTypes = new List<string> { "System.Single" } } }
             }
         };
 
@@ -89,6 +89,7 @@ namespace UnityCli
             }
 
             var bindings = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+            ctx.CommitEffect();
             var data = UnityCliBridge.ReflectionInvoker.CallMethod(
                 request.TypeName, request.MethodName,
                 request.Args, request.ParameterTypes, request.InstanceRef, bindings);

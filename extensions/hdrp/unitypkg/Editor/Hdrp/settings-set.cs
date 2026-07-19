@@ -10,7 +10,7 @@ namespace UnityCli
     public sealed class HdrpSettingsSetTool : IUnityCliTool<HdrpSettingsSetTool.Request, HdrpSettingsSetTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Property { get; set; } [UnityCliRequired] public string Value { get; set; } }
-        public sealed class Result { public string Command { get; set; } [UnityCliAnyJson] public Dictionary<string, object> Settings { get; set; } public bool DryRun { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } public string LogPath { get; set; } }
+        public sealed class Result { public string Command { get; set; } public string Property { get; set; } public string ObservedValue { get; set; } [UnityCliAnyJson] public Dictionary<string, object> Settings { get; set; } public bool DryRun { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } public string LogPath { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -22,30 +22,25 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Rename the HDRP asset", Input = new Request { Property = "name", Value = "Matrix HDRP" } } }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("hdrp.settings.set");
             var pipeline = HdrpToolSupport.GetActivePipelineAsset();
+            var plan = HdrpToolSupport.PrepareSetting(pipeline, request.Property, request.Value);
             var effects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.settings.set", Property = request.Property, Value = request.Value } };
-            var publicProperty = pipeline.GetType().GetProperty(request.Property, BindingFlags.Instance | BindingFlags.Public);
-            if (publicProperty != null && publicProperty.CanWrite)
+            var observedValue = request.Value;
+            var pipelinePath = AssetDatabase.GetAssetPath(pipeline);
+            if (!ctx.DryRun && string.IsNullOrEmpty(pipelinePath)) throw new UnityCliBridge.BridgeCommandException("E_HDRP_SETTING_PERSISTENCE_UNPROVABLE", "HDRP pipeline setting cannot be independently persisted because the active pipeline has no asset path.", "Use an asset-backed pipeline or add a contract strategy for transient pipeline settings.");
+            if (!ctx.DryRun) ctx.CommitEffect();
+            if (!ctx.DryRun)
             {
-                object converted;
-                try { converted = HdrpToolSupport.ConvertValue(request.Value, publicProperty.PropertyType); }
-                catch (Exception exception) { throw new UnityCliBridge.BridgeCommandException("E_HDRP_SETTING_SET_FAILED", "Failed to convert " + request.Property + ": " + exception.Message, "Check the property name and value type."); }
-                if (!context.DryRun) publicProperty.SetValue(pipeline, converted, null);
+                HdrpToolSupport.ApplySetting(plan);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.ImportAsset(pipelinePath, ImportAssetOptions.ForceUpdate);
+                observedValue = HdrpToolSupport.VerifySettingReadback(plan, AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(pipelinePath));
             }
-            else
-            {
-                using (var serialized = new SerializedObject(pipeline))
-                {
-                    var property = serialized.FindProperty(request.Property) ?? serialized.FindProperty("m_" + char.ToUpper(request.Property[0]) + request.Property.Substring(1));
-                    if (property == null) throw new UnityCliBridge.BridgeCommandException("E_HDRP_SETTING_NOT_FOUND", "HDRP setting not found: " + request.Property, "Run hdrp.settings.get to inspect readable settings.");
-                    if (!context.DryRun) { HdrpToolSupport.SetSerializedPropertyValue(property, request.Value); serialized.ApplyModifiedProperties(); }
-                }
-            }
-            if (!context.DryRun) AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "hdrp.settings.set", Settings = HdrpToolSupport.ReadSettings(pipeline), DryRun = context.DryRun, PlannedEffects = effects, LogPath = context.LogPath });
+            var observedPipeline = ctx.DryRun ? pipeline : HdrpToolSupport.GetActivePipelineAsset();
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "hdrp.settings.set", Property = request.Property, ObservedValue = observedValue, Settings = HdrpToolSupport.ReadSettings(observedPipeline), DryRun = ctx.DryRun, PlannedEffects = effects, LogPath = ctx.LogPath });
         }
     }
 }

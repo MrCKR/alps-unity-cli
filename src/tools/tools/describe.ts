@@ -2,12 +2,12 @@ import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../.
 import { catalogFlags, publicToolDescriptor, resolveCatalogTool } from "../catalog.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
+import type { AnyJson } from "../../schema/any-json.js";
 import type { ToolExample } from "../metadata/index.js";
 
 export interface ToolsDescribeRequest { name: string; includeCustom?: boolean; project?: string }
-export interface ToolsDescribeSchemaObject {}
 export interface ToolsDescribeResult {
-  command: string; name: string; summary: string; description: string; group: string; inputSchema: ToolsDescribeSchemaObject; outputSchema?: ToolsDescribeSchemaObject;
+  command: string; name: string; summary: string; description: string; group: string; inputSchema: Record<string, AnyJson>; outputSchema?: Record<string, AnyJson>;
   destructiveHint: boolean; sideEffects?: string[]; playModeSupport?: string; supportsDryRun?: boolean; permissions?: string[]; examples?: ToolExample[]; source?: string;
   riskLevel: string; longRunning?: boolean; cancellation?: string; cliCommand: string; target: string; availabilityScope: string; supportStatus: string; requiresPackages?: string[];
   extensionAvailability?: string; extensionAvailabilityError?: string; extensionId?: string; missingPackageIds?: string[]; nextActions?: string[];

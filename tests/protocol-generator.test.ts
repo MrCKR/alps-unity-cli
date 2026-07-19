@@ -69,12 +69,17 @@ test("C# ProtocolEnvelopeFactory 为所有错误写入 required retry 元数据"
 
 test("生成的 BridgeRequest 类字段映射正确", () => {
   const cs = readFileSync(GENERATED_CS, "utf8");
-  // command: string(必填)→ string
+  assert.match(cs, /public double ProtocolVersion \{ get; set; \}/);
+  assert.match(cs, /public string InstanceId \{ get; set; \}/);
   assert.match(cs, /public string Command \{ get; set; \}/);
   assert.match(cs, /public string RequestId \{ get; set; \}/);
   assert.match(cs, /public object Input \{ get; set; \}/);
   assert.match(cs, /public BridgeExecution Execution \{ get; set; \}/);
-  assert.match(cs, /public BridgeSecurity Security \{ get; set; \}/);
+  assert.match(cs, /public string AbsoluteDeadlineUtc \{ get; set; \}/);
+  assert.match(cs, /public double CompletionContractVersion \{ get; set; \}/);
+  assert.match(cs, /public double RequestDigestVersion \{ get; set; \}/);
+  assert.match(cs, /public BridgeSecurity SecurityProof \{ get; set; \}/);
+  assert.doesNotMatch(cs, /public BridgeSecurity Security \{ get; set; \}/);
 });
 
 test("生成器不新增 ts-morph 依赖(用已装 typescript Compiler API)", () => {

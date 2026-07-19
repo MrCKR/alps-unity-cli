@@ -83,11 +83,15 @@ namespace UnityCli
                         });
                     }
                     // dirty 保存策略:save=true 且场景有未保存改动时先保存再卸载,避免丢失改动。
+                    ctx.CommitEffect();
                     if (saveDirty && scene.isDirty && !string.IsNullOrEmpty(scene.path))
                     {
                         EditorSceneManager.SaveScene(scene);
                     }
                     EditorSceneManager.CloseScene(scene, opts == UnloadSceneOptions.UnloadAllEmbeddedSceneObjects);
+                    var observedScene = SceneManager.GetSceneByPath(path);
+                    if (observedScene.isLoaded)
+                        throw new UnityCliBridge.BridgeCommandException("E_SCENE_UNLOAD_STATE_MISMATCH", "Scene remained loaded after unload.", "Inspect open scenes and retry after the Editor is idle.");
                     return new System.Threading.Tasks.ValueTask<Result>(new Result
                     {
                         Scene = SceneToolSupport.BuildSceneInfo(SceneManager.GetActiveScene()),

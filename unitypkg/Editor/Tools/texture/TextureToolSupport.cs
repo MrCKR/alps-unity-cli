@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -146,6 +147,47 @@ namespace UnityCli
             return changed;
         }
 
+        public static void ValidateTextureSettings(TextureSettings settings)
+        {
+            if (settings == null) return;
+            ValidateEnum<TextureImporterType>(settings.TextureType, "TextureType", "sprite", "Sprite");
+            ValidateEnum<TextureWrapMode>(settings.WrapMode, "WrapMode");
+            ValidateEnum<FilterMode>(settings.FilterMode, "FilterMode");
+            ValidateEnum<TextureImporterCompression>(settings.Compression, "Compression");
+            if (settings.MaxTextureSize.HasValue && settings.MaxTextureSize.Value <= 0)
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_RANGE_INVALID", "MaxTextureSize must be positive.", "Pass a positive maxTextureSize.");
+        }
+
+        public static void ValidateSpriteRequest(string mode, int? pixelsPerUnit, double? pivotX, double? pivotY, List<TextureSliceInput> slices)
+        {
+            if (!string.IsNullOrEmpty(mode) && !string.Equals(mode, "single", StringComparison.OrdinalIgnoreCase) && !string.Equals(mode, "multiple", StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SPRITE_MODE_INVALID", "SpriteMode must be single or multiple.", "Pass spriteMode=single or spriteMode=multiple.");
+            if (pixelsPerUnit.HasValue && pixelsPerUnit.Value <= 0) throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_RANGE_INVALID", "PixelsPerUnit must be positive.", "Pass a positive pixelsPerUnit.");
+            ValidateFiniteUnit(pivotX, "PivotX"); ValidateFiniteUnit(pivotY, "PivotY");
+            if (slices != null) foreach (var slice in slices)
+            {
+                if (slice == null || !IsFinite(slice.X) || !IsFinite(slice.Y) || !IsFinite(slice.Width) || !IsFinite(slice.Height) || slice.Width <= 0 || slice.Height <= 0)
+                    throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SPRITE_SLICE_INVALID", "Sprite slice coordinates must be finite and width/height positive.", "Pass finite x/y/width/height values.");
+                ValidateFiniteUnit(slice.PivotX, "slice pivotX"); ValidateFiniteUnit(slice.PivotY, "slice pivotY");
+            }
+        }
+
+        private static void ValidateEnum<T>(string value, string field, params string[] aliases) where T : struct
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            foreach (var alias in aliases) if (string.Equals(value, alias, StringComparison.OrdinalIgnoreCase)) return;
+            if (!Enum.GetNames(typeof(T)).Any(name => string.Equals(name, value, StringComparison.OrdinalIgnoreCase)))
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_ENUM_INVALID", field + " has an invalid enum value: " + value, "Pass a documented " + field + " value.");
+        }
+
+        private static bool IsFinite(float value) { return !float.IsNaN(value) && !float.IsInfinity(value); }
+        private static void ValidateFiniteUnit(double? value, string field)
+        {
+            if (!value.HasValue) return;
+            if (double.IsNaN(value.Value) || double.IsInfinity(value.Value) || value.Value < 0d || value.Value > 1d)
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_RANGE_INVALID", field + " must be finite and in [0, 1].", "Pass a value from 0 through 1.");
+        }
+
         private static bool ApplyBool(bool? next, bool current, Action<bool> setter)
         {
             if (!next.HasValue || current == next.Value) return false;
@@ -173,6 +215,13 @@ namespace UnityCli
         }
 
         /// <summary>把结构化 sprite 切片输入转换为 SpriteMetaData 数组。</summary>
+        public static void ValidateSpriteSliceBounds(SpriteMetaData[] slices, int textureWidth, int textureHeight)
+        {
+            foreach (var slice in slices)
+                if (slice.rect.x < 0f || slice.rect.y < 0f || slice.rect.xMax > textureWidth || slice.rect.yMax > textureHeight)
+                    throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SPRITE_SLICE_INVALID", "Sprite slice is outside texture bounds: " + slice.name, "Pass slice coordinates within the texture dimensions.");
+        }
+
         public static SpriteMetaData[] BuildSpriteSlices(List<TextureSliceInput> slices)
         {
             if (slices == null || slices.Count == 0) return new SpriteMetaData[0];

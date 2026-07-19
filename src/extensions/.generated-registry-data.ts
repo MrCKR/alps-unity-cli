@@ -7,7 +7,7 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
   "id": "cinemachine",
   "name": "Cinemachine",
   "version": "1.0.0",
-  "description": "Cinemachine camera tools: virtual camera creation, targets, lens, priority, blends, body/aim/noise, brain overrides, and extensions.",
+  "description": "Cinemachine CM2 and CM3 camera tools: virtual camera creation, targets, lens, priority, blends, body/aim/noise, brain configuration, and extensions.",
   "unityPackages": [
     {
       "packageId": "com.unity.cinemachine",
@@ -48,12 +48,6 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
       },
       {
         "name": "cinemachine.brain.status"
-      },
-      {
-        "name": "cinemachine.force-camera"
-      },
-      {
-        "name": "cinemachine.release-override"
       },
       {
         "name": "cinemachine.extension.list"
@@ -104,10 +98,6 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
         "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.Cinemachine.ForceCameraTool",
-        "description": "Live capability implementation."
-      },
-      {
         "type": "UnityCli.Cinemachine.LensTool",
         "description": "Live capability implementation."
       },
@@ -121,10 +111,6 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
       },
       {
         "type": "UnityCli.Cinemachine.PriorityTool",
-        "description": "Live capability implementation."
-      },
-      {
-        "type": "UnityCli.Cinemachine.ReleaseOverrideTool",
         "description": "Live capability implementation."
       },
       {
@@ -644,7 +630,7 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
   "id": "vfx-graph",
   "name": "VFX Graph",
   "version": "1.0.0",
-  "description": "Visual effects tools for VFX Graph assets and components, exposed parameters, events, ParticleSystem modules, LineRenderer, and TrailRenderer.",
+  "description": "Visual effects tools for VFX Graph assets and components, exposed parameters, ParticleSystem modules, LineRenderer, and TrailRenderer.",
   "unityPackages": [],
   "contributions": {
     "tools": [
@@ -721,12 +707,6 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
         ]
       },
       {
-        "name": "vfx.event",
-        "requiresPackages": [
-          "com.unity.visualeffectgraph"
-        ]
-      },
-      {
         "name": "vfx.template.list",
         "requiresPackages": [
           "com.unity.visualeffectgraph"
@@ -772,10 +752,6 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
       },
       {
         "name": "vfx.particle.clear",
-        "requiresPackages": []
-      },
-      {
-        "name": "vfx.particle-module",
         "requiresPackages": []
       },
       {
@@ -846,10 +822,6 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
         "description": "Implements vfx.control.set-seed."
       },
       {
-        "type": "UnityCli.VfxEventTool",
-        "description": "Implements vfx.event."
-      },
-      {
         "type": "UnityCli.VfxTemplateListTool",
         "description": "Implements vfx.template.list."
       },
@@ -892,10 +864,6 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
       {
         "type": "UnityCli.VfxParticleClearTool",
         "description": "Implements vfx.particle.clear."
-      },
-      {
-        "type": "UnityCli.VfxParticleModuleTool",
-        "description": "Implements vfx.particle-module."
       },
       {
         "type": "UnityCli.VfxLineCreateTool",

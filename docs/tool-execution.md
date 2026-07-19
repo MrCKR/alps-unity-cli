@@ -54,9 +54,19 @@ unity_cli tools run camera.screenshot --input '{}'
 
 ## Bridge 执行约束
 
-Bridge-backed tools 由 Unity Editor 侧队列调度到 Unity 主线程执行。Unity 正在 compile/import/build、切换 Play Mode 或 domain reload 时，工具可能返回 busy/transient 错误；先读 `tools run editor.state --input '{"waitReady":true}'`，等 `busy.isBusy=false` 后再重试。
+Bridge-backed Tool 由 Unity Editor 主线程执行。session supervisor 在调用的单一 absolute deadline 内透明吸收 compile、import、domain reload 和 listener restart，并在恢复后的 validated generation 上继续同一逻辑请求。调用方不需要轮询 listener 或手动重试 transport。
 
-Bridge listener 会在 domain reload 后重新注册并恢复 heartbeat。`editor.state` 输出里的 `bridge` build stamp 与 heartbeat 是 AI 判断自动重连是否恢复的公开信号；不要直接读内部注册文件或手动 ping endpoint 替代这个检查。
+直接 Tool 只返回已证明的 terminal business success 或 terminal structured failure。mutation 在首个真实 effect 前持久化 effect barrier；effect 后若 durable proof 丢失，返回 `E_REQUEST_OUTCOME_UNKNOWN` 且禁止 blind replay。要即时观察进度、freshness 和 blocker，使用 `context read editor.state --input '{}'`；它不会等待 ready、创建 request journal 或触发 Unity 副作用。
+
+### `editor.compile`
+
+`editor.compile` 是唯一公开编译 Tool。一次调用在同一 root request 下等待 pre-existing import/compile、触发 owned compilation cycle、跨 domain reload 恢复、收集本次 `CompilationPipeline` diagnostics，并等待 Editor 与 listener 重新稳定。公开成功要求 `compile.completed=true`、`errorCount=0`、`editorState.status=ready`；warning 可作为 diagnostics 返回。compiler error 返回 `E_UNITY_COMPILE_FAILED`，不会用旧 Console 历史判断本次结果。
+
+```powershell
+unity_cli tools run editor.compile --input '{"refresh":true,"includeWarnings":true}' --timeout-ms 120000
+```
+
+accepted、queued、phase、run ID、listener 和 journal 字段仅属于内部 coordinator，不会成为公开成功。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh、compile 或 journal。
 
 ## Fingerprint 保护
 
@@ -172,8 +182,10 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 | `E_TOOL_FINGERPRINT_MISMATCH` | handler 代码变更 | 审计后 `--fingerprint-mode warn` |
 | `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 直接使用 `--yes` 确认 |
 | `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | 破坏性工具未确认 | 添加 `--yes` 标志 |
-| `E_TARGET_AMBIGUOUS` | 多个实例可用 | 显式指定 `--target` |
-| `E_TARGET_NOT_FOUND` | 无可用实例 | 检查 `instances list` |
+| `E_INSTANCE_CONFLICT` | 同一 canonical project 存在多个 Unity Editor process/session claim | 关闭重复 Editor，只保留目标 session |
+| `E_INSTANCE_NOT_RUNNING` | 选定项目没有可验证的运行中 Editor | 检查 `instances list` 并打开该项目 |
+| `E_REQUEST_OUTCOME_UNKNOWN` | effect 已可能发生但 terminal proof 不可用 | 先观察业务状态；不要原样盲重放 |
+| `E_UNITY_TRANSITION_TIMEOUT` | lifecycle transition 未在 absolute deadline 内稳定 | 检查 `editor.state` 的 progress/blockers |
 
 ## 深度修改与 patch 语义
 

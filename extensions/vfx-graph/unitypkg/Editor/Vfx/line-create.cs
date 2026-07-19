@@ -47,9 +47,14 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.line-create");
-            var gameObject = string.IsNullOrWhiteSpace(request.Target)
+            VfxToolSupport.PrepareLineRendererFields(request);
+            var preparedTarget = string.IsNullOrWhiteSpace(request.Target) ? null : GameObjectToolSupport.ResolveUniqueTarget(request.Target, "vfx.line-create requires target.");
+            ctx.CommitEffect();
+            var gameObject = preparedTarget == null
                 ? VfxToolSupport.CreateSceneObject(string.IsNullOrWhiteSpace(request.Name) ? "Line" : request.Name)
-                : GameObjectToolSupport.ResolveUniqueTarget(request.Target, "vfx.line-create requires target.");
+                : VfxToolSupport.FindGameObjectByTarget(preparedTarget.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (gameObject == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.line-create target disappeared after commit.", "Retry after checking the target still exists.");
+            var gameObjectId = gameObject.GetInstanceID();
             var line = gameObject.GetComponent<LineRenderer>();
             var effects = new List<VfxPlannedEffect>();
             if (line == null)
@@ -58,12 +63,14 @@ namespace UnityCli
                 effects.Add(new VfxPlannedEffect { Type = "vfx.line-create", Target = GameObjectToolSupport.HierarchyPath(gameObject), Property = "component", Value = "added" });
             }
             VfxToolSupport.ApplyLineRendererFields(line, request, "vfx.line-create", effects);
-            UnityCliSceneMutation.MarkSceneObjectDirty(line);
-            VfxToolSupport.MarkSceneDirty(gameObject);
+            var observed = VfxToolSupport.ResolveObservedComponent<LineRenderer>(gameObjectId, "vfx.line-create");
+            VfxToolSupport.VerifyLineRendererFields(observed, request);
+            UnityCliSceneMutation.MarkSceneObjectDirty(observed);
+            VfxToolSupport.MarkSceneDirty(observed.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
-                Line = VfxToolSupport.BuildLineRendererInfo(line),
+                Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
+                Line = VfxToolSupport.BuildLineRendererInfo(observed),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
             });

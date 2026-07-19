@@ -13,7 +13,7 @@ namespace UnityCli
         {
             Name = "urp.volume.set",
             Summary = "Set a scalar serialized parameter on a scene-session URP Volume effect.",
-            Description = "Sets property on effectType in the target URP Volume's in-memory profile. property is a SerializedProperty path such as intensity.m_Value. Only scalar serialized values are supported. The profile and scene remain unsaved. Requires com.unity.render-pipelines.universal and an active UniversalRenderPipelineAsset.",
+            Description = "Sets property on effectType in the target URP Volume's in-memory profile, verifies its typed SerializedProperty readback, and returns the observed value. property is a SerializedProperty path such as intensity.m_Value. Only scalar serialized values are supported. The profile and scene remain unsaved. Requires com.unity.render-pipelines.universal and an active UniversalRenderPipelineAsset.",
             Group = "urp", Version = "1.0.0", DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.render-pipelines.universal" }, SideEffects = new[] { "scene-modify", "volume-profile-edit" }, Target = "editor", PlayModeSupport = "session-affecting", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Set Bloom intensity", Input = new Request { Target = "GlobalVolume", EffectType = "Bloom", Property = "intensity.m_Value", Value = "1.5" } } }
@@ -23,8 +23,10 @@ namespace UnityCli
         {
             GameObjectToolSupport.EnsureEditorNotBusy("urp.volume.set");
             UrpToolSupport.EnsureUrpAvailable();
-            var target = UrpVolumeOperations.Set(request.Target, request.EffectType, request.Property, request.Value, "E_URP", UrpToolSupport.FindVolumeEffectType, UrpToolSupport.SetSerializedPropertyValue);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "urp.volume.set", Target = GameObjectToolSupport.BuildGameObjectRef(target), EffectType = request.EffectType, Property = request.Property, Value = request.Value, PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.set", Target = GameObjectToolSupport.HierarchyPath(target), EffectType = request.EffectType, Property = request.Property, Value = request.Value } }, LogPath = ctx.LogPath });
+            var plan = UrpVolumeOperations.ValidateSet(request.Target, request.EffectType, request.Property, request.Value, "E_URP", UrpToolSupport.FindVolumeEffectType);
+            ctx.CommitEffect();
+            var set = UrpVolumeOperations.Set(plan, "E_URP");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "urp.volume.set", Target = GameObjectToolSupport.BuildGameObjectRef(set.GameObject), EffectType = set.ObservedEffectType, Property = request.Property, Value = set.Value, PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.set", Target = GameObjectToolSupport.HierarchyPath(set.GameObject), EffectType = set.ObservedEffectType, Property = request.Property, Value = set.Value } }, LogPath = ctx.LogPath });
         }
     }
 }

@@ -8,34 +8,35 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private sealed class PackageRefreshRequest
-        {
-            public PackageRefreshRequest() { }
-        }
-
         // 注册 package 安装控制面使用的窄权限刷新命令；不依赖业务 Tool registry。
         private static void RegisterPackageRefreshCommand(BridgeCommandRegistry registry)
         {
-            registry.Register<PackageRefreshRequest>(
+            registry.Register<UnityCli.Protocol.BridgeRequest>(
                 "bridge.package.refresh",
                 "bridge",
                 false,
                 15000,
-                RefreshPackageAssets);
+                (request, cancellationToken) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return new ValueTask<object>(RefreshPackageAssets(request));
+                });
         }
 
-        // 触发 Unity package/import 刷新；可能引发 compile 与 domain reload，但不直接写入项目资产。
-        private static ValueTask<object> RefreshPackageAssets(PackageRefreshRequest request, CancellationToken cancellationToken)
+        /// <summary>在 durable effect barrier 后同步刷新，并仅以已完成 readback 登记 terminal proof。</summary>
+        private static object RefreshPackageAssets(UnityCli.Protocol.BridgeRequest request)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            BeginDirectEffect(request.RequestId);
             AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
-            cancellationToken.ThrowIfCancellationRequested();
-            return new ValueTask<object>(new Dictionary<string, object>
+            var result = new Dictionary<string, object>
             {
                 { "command", "bridge.package.refresh" },
-                { "status", "triggered" },
+                { "status", "completed" },
+                { "refreshed", true },
                 { "domainReloadPossible", true }
-            });
+            };
+            RecordDirectCompletionEvidence(request.RequestId, "bridge.package.refresh", ResolveRequestCompletionContract(request), result);
+            return result;
         }
     }
 }

@@ -186,7 +186,7 @@ test("ProBuilderReflection edge helpers use shared vertex lookup for deduplicati
 test("ProBuilder edge and point inputs use typed request DTOs", () => {
   assert.match(INPUT_SRC, /struct EdgePair[\s\S]*public int a;[\s\S]*public int b;/);
   assert.match(EXTRUDE_EDGES_SRC, /public List<EdgeRef> Edges \{ get; set; \}/);
-  assert.match(EXTRUDE_EDGES_SRC, /request\.Edges\?\.Select\(e => new ProBuilderInput\.EdgePair \{ a = \(int\)e\.A, b = \(int\)e\.B \}\)/);
+  assert.match(EXTRUDE_EDGES_SRC, /request\.Edges\?\.Select\(e => new ProBuilderInput\.EdgePair \{ a = ProBuilderOperationProof\.CheckedInt\(e\.A, "edges\.a"\), b = ProBuilderOperationProof\.CheckedInt\(e\.B, "edges\.b"\) \}\)/);
   assert.match(CREATE_POLY_SHAPE_SRC, /\[UnityCliRequired\] public List<Point3D> Points \{ get; set; \}/);
   assert.doesNotMatch(INPUT_SRC, /EdgePairArrayArg|EdgeArg|Vector3ListArg|RawJsonArg/);
 });
@@ -348,9 +348,10 @@ test("append-vertices-to-edge calls AppendElements.AppendVerticesToEdge", () => 
     "append-vertices-to-edge must call ProBuilderReflection.AppendVerticesToEdge"
   );
   assert.ok(
-    APPEND_VERTICES_SRC.includes("ProBuilderReflection.ResolveEdges"),
-    "append-vertices-to-edge must resolve edges from input"
+    APPEND_VERTICES_SRC.includes("ProBuilderOperationProof.ValidateEdges"),
+    "append-vertices-to-edge must validate requested edges and capture fresh operation proof"
   );
+  assert.ok(APPEND_VERTICES_SRC.includes("ResolveFreshMesh"), "append-vertices-to-edge must read back from a freshly resolved mesh");
 });
 
 // ─── insert-vertex: must support edge pairs and face index ─────────────
@@ -423,18 +424,19 @@ test("split-vertices uses VertexEditing.SplitVertices with IList overload", () =
 
 // ─── set-face-color: must use SetFaceColor (not ProBuilder.Color) ───────
 
-test("set-face-color uses ProBuilderMesh.SetFaceColor", () => {
-  // OLD: looked for the non-existent UnityEngine.ProBuilder.Color type and did nothing.
-  // NEW: must call SetFaceColor with a UnityEngine.Color.
+test("set-face-color uses ProBuilderMesh.SetFaceColor and nullable white defaults", () => {
   assert.ok(
     SET_FACE_COLOR_SRC.includes("ProBuilderReflection.SetFaceColor"),
     "set-face-color must call ProBuilderReflection.SetFaceColor"
   );
-
-  // Must NOT reference the non-existent ProBuilder.Color type
+  assert.match(SET_FACE_COLOR_SRC, /public double\? R/);
+  assert.match(SET_FACE_COLOR_SRC, /request\.R \?\? 1d/);
+  assert.match(SET_FACE_COLOR_SRC, /request\.G \?\? 1d/);
+  assert.match(SET_FACE_COLOR_SRC, /request\.B \?\? 1d/);
+  assert.match(SET_FACE_COLOR_SRC, /request\.A \?\? 1d/);
   assert.ok(
     !SET_FACE_COLOR_SRC.includes("UnityEngine.ProBuilder.Color"),
-    "set-face-color must NOT reference the non-existent UnityEngine.ProBuilder.Color type"
+    "set-face-color must NOT reference the non-existent ProBuilder.Color type"
   );
 });
 

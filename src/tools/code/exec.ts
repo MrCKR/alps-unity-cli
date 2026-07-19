@@ -38,16 +38,7 @@ export interface CodeExecPlannedEffect {
   sideEffects?: string;
 }
 
-export interface CodeExecResult {
-  command?: string;
-  dryRun?: boolean;
-  preview?: CodeExecPreview;
-  plannedEffects?: CodeExecPlannedEffect[];
-  artifactDir?: string;
-  manifestPath?: string;
-  status?: string;
-  jobId?: string;
-}
+export type CodeExecResult = Record<string, AnyJson>;
 
 /** 读取执行控制 flag；这些字段不进入 code.exec 业务 Request。 */
 function executionFlag(context: ToolContext, name: string): string | undefined {
@@ -64,23 +55,19 @@ async function runCodeExec(request: CodeExecRequest, context: ToolContext): Prom
     job: context.execution.job,
     wait: context.execution.wait,
     waitTimeoutMs: context.execution.waitTimeoutMs,
-    retry: context.execution.retry,
     dryRun: context.execution.dryRun,
-    bridgeEndpoint: executionFlag(context, "bridge-endpoint") ?? context.bridgeEndpoint,
-    instance: executionFlag(context, "instance"),
-    target: executionFlag(context, "target")
+    instance: executionFlag(context, "instance")
   }, {
     dataDir: context.dataDir ?? context.projectPath,
     runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute,
-    bridgeEndpoint: context.bridgeEndpoint
+    bridgeExecute: context.bridgeExecute
   }, context.requestId) as Promise<CodeExecResult>;
 }
 
 export default defineTool<CodeExecRequest, CodeExecResult>({
   name: "code.exec",
-  summary: "Execute trusted C# code in the Unity Editor live bridge or a Unity batchmode job.",
-  description: "Execute trusted C# code in the Unity Editor live bridge or a Unity batchmode job. This is high risk: code can modify scenes/assets, call Unity APIs, write artifacts, hang the Editor, or trigger import/compile. Use --dry-run first to inspect source hash/channel/artifactDir; real execution requires --yes.",
+  summary: "Execute trusted C# code through a deferred job or batchmode delivery.",
+  description: "Execute trusted C# code only through --job, channel=batchmode, or the frozen batch delivery. Ordinary live direct execution is refused because arbitrary side effects have no independent business-state proof. This is high risk: code can modify scenes/assets, call Unity APIs, write artifacts, hang the Editor, or trigger import/compile. Use --dry-run first to inspect source hash/channel/artifactDir; real execution requires --yes.",
   group: "code",
   destructiveHint: true,
   supportsDryRun: true,
@@ -92,7 +79,7 @@ export default defineTool<CodeExecRequest, CodeExecResult>({
   target: "editor",
   examples: [
     { description: "Dry-run inline code before execution", argv: ["tools", "run", "code.exec", "--code", "Debug.Log(\"hello\"); return null;", "--dry-run"] },
-    { description: "Execute trusted inline code after review", argv: ["tools", "run", "code.exec", "--code", "return 1;", "--yes"] },
+    { description: "Start a deferred inline code job", argv: ["tools", "run", "code.exec", "--code", "return 1;", "--job", "--yes"] },
     { description: "Start a batchmode code job", argv: ["tools", "run", "code.exec", "--file", "script.cs", "--channel", "batchmode", "--project", ".", "--yes"] }
   ],
   async execute(request, context) {

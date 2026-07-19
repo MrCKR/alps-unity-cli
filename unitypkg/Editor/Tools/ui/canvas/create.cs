@@ -19,13 +19,20 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var name = string.IsNullOrEmpty(r.Name) ? "Canvas" : r.Name;
+            ctx.CommitEffect();
             var go = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(UiCanvasScaler), typeof(UiGraphicRaycaster));
             var canvas = go.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = go.GetComponent<UiCanvasScaler>();
             scaler.uiScaleMode = UiCanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
-            Selection.activeGameObject = go;
+            var observedGo = EditorUtility.InstanceIDToObject(go.GetInstanceID()) as GameObject;
+            var observedCanvas = observedGo == null ? null : observedGo.GetComponent<Canvas>();
+            var observedScaler = observedGo == null ? null : observedGo.GetComponent<UiCanvasScaler>();
+            var observedRaycaster = observedGo == null ? null : observedGo.GetComponent<UiGraphicRaycaster>();
+            if (observedGo == null || observedGo.transform.parent != null || observedGo.GetComponent<RectTransform>() == null || observedCanvas == null || observedCanvas.renderMode != RenderMode.ScreenSpaceOverlay || observedScaler == null || observedScaler.uiScaleMode != UiCanvasScaler.ScaleMode.ScaleWithScreenSize || observedScaler.referenceResolution != new Vector2(1920, 1080) || observedRaycaster == null)
+                throw new UnityCliBridge.BridgeCommandException("E_UI_CANVAS_READBACK_FAILED", "Created Canvas does not match required components and settings.", "Check Unity Console for scene mutation errors.");
+            Selection.activeGameObject = observedGo;
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Element = UiToolSupport.BuildUiElementRef(go, "Canvas"), PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.canvas.create", Target = GameObjectToolSupport.HierarchyPath(go) } } });
         }
     }

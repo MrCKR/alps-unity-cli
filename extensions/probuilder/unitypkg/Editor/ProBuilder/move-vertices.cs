@@ -57,16 +57,24 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("move-vertices", "No ProBuilderMesh on target.");
 
-            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).ToArray();
+            int[] vertexIndices = request.VertexIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "vertexIndices")).ToArray();
             if (vertexIndices == null || vertexIndices.Length == 0)
                 throw ProBuilderErrors.SchemaInvalid("vertexIndices is required for move-vertices.");
 
-            var offset = new Vector3((float)request.X, (float)request.Y, (float)request.Z);
+            var offset = ProBuilderOperationProof.CheckedVector3(request.X, request.Y, request.Z, "offset");
 
+            var beforePositions = ProBuilderRequestProof.CapturePositions(mesh);
+            if (beforePositions == null || vertexIndices.Any(index => index < 0 || index >= beforePositions.Count))
+                throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Move Vertices");
             var moved = ProBuilderReflection.MoveVerticesByOffset(mesh, vertexIndices, offset);
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
+            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+            if (!ProBuilderRequestProof.VerticesMovedByRequestedOffset(freshMesh, beforePositions, vertexIndices, offset))
+                throw ProBuilderErrors.OperationFailed("move-vertices", "Every requested vertex did not move by the requested offset.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { MovedCount = moved });
         }

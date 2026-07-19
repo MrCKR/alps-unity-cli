@@ -56,7 +56,18 @@ namespace UnityCli
         {
             PrefabToolSupport.EnsureEditorNotBusy("prefab.instantiate");
             var path = PrefabToolSupport.RequirePrefabPath(request.Path);
+            GameObjectToolSupport.ValidateTransformMutationValues(request.X, request.Y, request.Z);
+            var sourceGuid = AssetDatabase.AssetPathToGUID(path);
+            var prefab = PrefabToolSupport.LoadPrefabAsset(path);
+            if (string.IsNullOrEmpty(sourceGuid) || AssetDatabase.GUIDToAssetPath(sourceGuid) != path)
+                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab source GUID could not be resolved: " + path, "Pass an existing canonical Assets/*.prefab path.");
             var parentName = request.Parent;
+            Transform parent = null;
+            if (!string.IsNullOrEmpty(parentName))
+            {
+                var parentGo = GameObjectToolSupport.ResolveUniqueTarget(parentName, "Parent GameObject is required.");
+                parent = parentGo.transform;
+            }
             var posX = (float)(request.X ?? 0f);
             var posY = (float)(request.Y ?? 0f);
             var posZ = (float)(request.Z ?? 0f);
@@ -70,18 +81,7 @@ namespace UnityCli
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.instantiate", Path = path } }
                 });
             }
-            var prefab = AssetDatabase.LoadMainAssetAtPath(path) as GameObject;
-            if (prefab == null)
-            {
-                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Run tools run asset.search --input '{\"filter\":\"t:Prefab\"}' to discover the path.");
-            }
-            Transform parent = null;
-            if (!string.IsNullOrEmpty(parentName))
-            {
-                var parentGo = PrefabToolSupport.ResolveGameObjectByPath(parentName);
-                if (parentGo == null) throw new UnityCliBridge.BridgeCommandException("E_PARENT_NOT_FOUND", "Parent not found: " + parentName, "Pass a valid path.");
-                parent = parentGo.transform;
-            }
+            ctx.CommitEffect();
             var instance = EditorApplication.isPlaying
                 ? UnityEngine.Object.Instantiate(prefab)
                 : (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent != null ? parent.gameObject.scene : SceneManager.GetActiveScene());
@@ -89,10 +89,18 @@ namespace UnityCli
             instance.transform.position = new Vector3(posX, posY, posZ);
             if (!string.IsNullOrEmpty(request.Name)) instance.name = request.Name;
             UnityCliSceneMutation.MarkSceneDirty(instance.scene);
+            var observedInstance = EditorUtility.InstanceIDToObject(instance.GetInstanceID()) as GameObject;
+            var observedSourcePath = AssetDatabase.GUIDToAssetPath(sourceGuid);
+            var observedPrefab = string.IsNullOrEmpty(observedSourcePath) ? null : PrefabToolSupport.LoadPrefabAsset(observedSourcePath);
+            if (observedInstance == null || observedSourcePath != path || observedPrefab != prefab || PrefabUtility.GetCorrespondingObjectFromSource(observedInstance) != observedPrefab ||
+                observedInstance.transform.position != new Vector3(posX, posY, posZ) ||
+                (parent != null && observedInstance.transform.parent != parent) ||
+                (!string.IsNullOrEmpty(request.Name) && observedInstance.name != request.Name))
+                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_INSTANTIATE_STATE_MISMATCH", "Prefab instance readback did not match the request.", "Inspect the active scene and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "prefab.instantiate",
-                Instance = GameObjectToolSupport.BuildGameObjectRef(instance),
+                Instance = GameObjectToolSupport.BuildGameObjectRef(observedInstance),
                 SourcePath = path,
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.instantiate", Path = path } }
             });

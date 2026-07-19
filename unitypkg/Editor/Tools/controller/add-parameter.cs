@@ -22,11 +22,29 @@ namespace UnityCli
             foreach (var existing in controller.parameters) if (existing.name == r.ParameterName) throw new UnityCliBridge.BridgeCommandException("E_PARAMETER_EXISTS", "Parameter '" + r.ParameterName + "' already exists.", "Use animator.set-parameter to change its default value.");
             var typeStr = (r.ParameterType ?? "float").ToLowerInvariant();
             var paramType = typeStr == "int" || typeStr == "integer" ? AnimatorControllerParameterType.Int : typeStr == "bool" || typeStr == "boolean" ? AnimatorControllerParameterType.Bool : typeStr == "trigger" ? AnimatorControllerParameterType.Trigger : AnimatorControllerParameterType.Float;
+            var expectedFloat = 0f;
+            var expectedInt = 0;
+            var expectedBool = false;
+            if (r.DefaultValue != null && paramType == AnimatorControllerParameterType.Float)
+            {
+                if (!float.TryParse(r.DefaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out expectedFloat) || float.IsNaN(expectedFloat) || float.IsInfinity(expectedFloat))
+                    throw new UnityCliBridge.BridgeCommandException("E_PARAMETER_DEFAULT_INVALID", "Float parameter defaultValue must be finite.", "Pass a finite floating-point defaultValue.");
+            }
+            if (r.DefaultValue != null && paramType == AnimatorControllerParameterType.Int && !int.TryParse(r.DefaultValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out expectedInt))
+                throw new UnityCliBridge.BridgeCommandException("E_PARAMETER_DEFAULT_INVALID", "Int parameter defaultValue must be an integer.", "Pass an integer defaultValue.");
+            if (r.DefaultValue != null && paramType == AnimatorControllerParameterType.Bool)
+                expectedBool = string.Equals(r.DefaultValue, "true", System.StringComparison.OrdinalIgnoreCase) || r.DefaultValue == "1";
+            ctx.CommitEffect();
             Undo.RecordObject(controller, "Add Animator Parameter");
             controller.AddParameter(r.ParameterName, paramType);
-            if (r.DefaultValue != null) { var allParams = controller.parameters; var added = allParams[allParams.Length - 1]; if (paramType == AnimatorControllerParameterType.Float) { float f; if (float.TryParse(r.DefaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out f)) added.defaultFloat = f; } else if (paramType == AnimatorControllerParameterType.Int) { int i; if (int.TryParse(r.DefaultValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out i)) added.defaultInt = i; } else if (paramType == AnimatorControllerParameterType.Bool) { added.defaultBool = string.Equals(r.DefaultValue, "true", System.StringComparison.OrdinalIgnoreCase) || r.DefaultValue == "1"; } controller.parameters = allParams; }
-            EditorUtility.SetDirty(controller); AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, ParameterName = r.ParameterName, ParameterType = typeStr, TotalParameters = controller.parameters.Length, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-parameter", Path = path, Parameter = r.ParameterName } } });
+            if (r.DefaultValue != null) { var allParams = controller.parameters; var added = allParams[allParams.Length - 1]; if (paramType == AnimatorControllerParameterType.Float) added.defaultFloat = expectedFloat; else if (paramType == AnimatorControllerParameterType.Int) added.defaultInt = expectedInt; else if (paramType == AnimatorControllerParameterType.Bool) added.defaultBool = expectedBool; controller.parameters = allParams; }
+            EditorUtility.SetDirty(controller);
+            var observedController = AnimationToolSupport.ReloadControllerAsset(path);
+            AnimatorControllerParameter observedParameter = null;
+            if (observedController != null) foreach (var candidate in observedController.parameters) if (candidate.name == r.ParameterName) { observedParameter = candidate; break; }
+            if (observedParameter == null || observedParameter.type != paramType || (paramType == AnimatorControllerParameterType.Float && r.DefaultValue != null && !Mathf.Approximately(observedParameter.defaultFloat, expectedFloat)) || (paramType == AnimatorControllerParameterType.Int && r.DefaultValue != null && observedParameter.defaultInt != expectedInt) || (paramType == AnimatorControllerParameterType.Bool && r.DefaultValue != null && observedParameter.defaultBool != expectedBool))
+                throw AnimationToolSupport.StateMismatch("E_CONTROLLER_ADD_PARAMETER_STATE_MISMATCH", "AnimatorController parameter");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, ParameterName = observedParameter.name, ParameterType = observedParameter.type.ToString(), TotalParameters = observedController.parameters.Length, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-parameter", Path = path, Parameter = observedParameter.name } } });
         }
     }
 }

@@ -23,12 +23,17 @@ namespace UnityCli
             if (layerIndex < 0 || layerIndex >= controller.layers.Length) throw new UnityCliBridge.BridgeCommandException("E_LAYER_INDEX_INVALID", "Layer index out of range.", "Run controller.get-info to inspect layers.");
             var sm = controller.layers[layerIndex].stateMachine;
             if (AnimationToolSupport.FindStateInLayer(sm, r.StateName) != null) throw new UnityCliBridge.BridgeCommandException("E_STATE_EXISTS", "State '" + r.StateName + "' already exists.", "Choose a different state name.");
+            ctx.CommitEffect();
             Undo.RecordObject(controller, "Create BlendTree 1D");
             var blendTree = new BlendTree { name = r.StateName, blendType = BlendTreeType.Simple1D, blendParameter = r.BlendParameter ?? "" };
             AssetDatabase.AddObjectToAsset(blendTree, controller);
             var state = sm.AddState(r.StateName); state.motion = blendTree;
-            EditorUtility.SetDirty(controller); AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = r.StateName, BlendParameter = r.BlendParameter, LayerIndex = layerIndex, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.create-blend-tree-1d", Path = path, State = r.StateName } } });
+            EditorUtility.SetDirty(controller);
+            var observedController = AnimationToolSupport.ReloadControllerAsset(path);
+            var observedState = observedController == null ? null : AnimationToolSupport.FindStateInLayer(observedController.layers[layerIndex].stateMachine, r.StateName);
+            var observedTree = observedState == null ? null : observedState.motion as BlendTree;
+            if (observedTree == null || observedTree.blendType != BlendTreeType.Simple1D || observedTree.blendParameter != (r.BlendParameter ?? "")) throw AnimationToolSupport.StateMismatch("E_CONTROLLER_BLEND_TREE_1D_STATE_MISMATCH", "1D BlendTree");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = observedState.name, BlendParameter = observedTree.blendParameter, LayerIndex = layerIndex, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.create-blend-tree-1d", Path = path, State = observedState.name } } });
         }
     }
 }

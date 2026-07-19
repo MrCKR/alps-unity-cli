@@ -18,15 +18,23 @@ namespace UnityCli
             var ls = Lightmapping.GetLightingSettingsForScene(scene);
             var effects = new List<GraphicsPlannedEffect>();
             var hasWrite = !string.IsNullOrEmpty(r.LightingMode) || r.BakedGI.HasValue || r.RealtimeGI.HasValue || r.DirectSamples.HasValue || r.IndirectSamples.HasValue || r.EnvironmentSamples.HasValue || r.Bounces.HasValue || !string.IsNullOrEmpty(r.Filtering);
+#if UNITY_2023_2_OR_NEWER
+            var lightingMode = string.IsNullOrEmpty(r.LightingMode) ? (LightingMode?)null : GraphicsToolSupport.ParseEnum<LightingMode>(r.LightingMode, "lightingMode");
+#else
+            var lightingMode = string.IsNullOrEmpty(r.LightingMode) ? (MixedLightingMode?)null : GraphicsToolSupport.ParseEnum<MixedLightingMode>(r.LightingMode, "lightingMode");
+#endif
+            var filtering = string.IsNullOrEmpty(r.Filtering) ? (LightingSettings.FilterType?)null : GraphicsToolSupport.ParseEnum<LightingSettings.FilterType>(r.Filtering, "filtering");
+            if ((r.DirectSamples.HasValue && r.DirectSamples.Value <= 0) || (r.IndirectSamples.HasValue && r.IndirectSamples.Value <= 0) || (r.EnvironmentSamples.HasValue && r.EnvironmentSamples.Value <= 0) || (r.Bounces.HasValue && r.Bounces.Value < 0)) throw new UnityCliBridge.BridgeCommandException("E_BAKE_SETTINGS_RANGE_INVALID", "Bake samples must be positive and bounces non-negative.", "Pass valid bake sample and bounce values.");
+            if (hasWrite) ctx.CommitEffect();
             if (ls == null && hasWrite) { ls = new LightingSettings(); effects.Add(new GraphicsPlannedEffect { Type = "graphics.bake-settings", Property = "lightingSettings", Value = "created" }); }
             if (ls != null)
             {
                 if (!string.IsNullOrEmpty(r.LightingMode))
                 {
 #if UNITY_2023_2_OR_NEWER
-                    if (System.Enum.TryParse<LightingMode>(r.LightingMode, true, out var lm)) ls.lightingMode = lm;
+                    ls.lightingMode = lightingMode.Value;
 #else
-                    if (System.Enum.TryParse<MixedLightingMode>(r.LightingMode, true, out var mm)) ls.mixedBakeMode = mm;
+                    ls.mixedBakeMode = lightingMode.Value;
 #endif
                     effects.Add(new GraphicsPlannedEffect { Type = "graphics.bake-settings", Property = "lightingMode", Value = r.LightingMode });
                 }
@@ -36,15 +44,38 @@ namespace UnityCli
                 if (r.IndirectSamples.HasValue) { SetIndirectSamples(ls, r.IndirectSamples.Value); effects.Add(new GraphicsPlannedEffect { Type = "graphics.bake-settings", Property = "indirectSamples", Value = r.IndirectSamples.Value.ToString() }); }
                 if (r.EnvironmentSamples.HasValue) { SetEnvSamples(ls, r.EnvironmentSamples.Value); effects.Add(new GraphicsPlannedEffect { Type = "graphics.bake-settings", Property = "environmentSamples", Value = r.EnvironmentSamples.Value.ToString() }); }
                 if (r.Bounces.HasValue) { SetBounces(ls, r.Bounces.Value); effects.Add(new GraphicsPlannedEffect { Type = "graphics.bake-settings", Property = "bounces", Value = r.Bounces.Value.ToString() }); }
-                if (!string.IsNullOrEmpty(r.Filtering) && System.Enum.TryParse<LightingSettings.FilterType>(r.Filtering, true, out var ft)) { SetFiltering(ls, ft); effects.Add(new GraphicsPlannedEffect { Type = "graphics.bake-settings", Property = "filtering", Value = r.Filtering }); }
-                if (hasWrite) { Lightmapping.SetLightingSettingsForScene(scene, ls); UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene); }
+                if (filtering.HasValue) { SetFiltering(ls, filtering.Value); effects.Add(new GraphicsPlannedEffect { Type = "graphics.bake-settings", Property = "filtering", Value = r.Filtering }); }
+                if (hasWrite)
+                {
+                    Lightmapping.SetLightingSettingsForScene(scene, ls);
+                    EditorUtility.SetDirty(ls);
+                    UnityCliSceneMutation.MarkSceneDirty(scene);
+                    var lightingSettingsPath = AssetDatabase.GetAssetPath(ls);
+                    if (string.IsNullOrEmpty(lightingSettingsPath)) throw new UnityCliBridge.BridgeCommandException("E_BAKE_SETTINGS_STATE_MISMATCH", "LightingSettings was not persisted at an asset path.", "Save the scene and retry after the editor is idle.");
+                    AssetDatabase.SaveAssets();
+                    AssetDatabase.Refresh();
+                    LightingSettings fresh = null;
+                    foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(lightingSettingsPath)) { fresh = asset as LightingSettings; if (fresh != null) break; }
+                    if (fresh == null) throw new UnityCliBridge.BridgeCommandException("E_BAKE_SETTINGS_STATE_MISMATCH", "LightingSettings fresh asset readback failed.", "Retry after the editor is idle.");
+                    ls = fresh;
+                }
+                var observed = Lightmapping.GetLightingSettingsForScene(scene);
+                if (hasWrite && (observed == null || observed.GetInstanceID() != ls.GetInstanceID())) throw new UnityCliBridge.BridgeCommandException("E_BAKE_SETTINGS_STATE_MISMATCH", "Scene does not bind the freshly reloaded LightingSettings asset.", "Retry after the editor is idle.");
+                if (observed != null) ls = observed;
+                var readback = BuildLightingSettingsInfo(ls);
+                if ((r.BakedGI.HasValue && readback.BakedGI != r.BakedGI.Value) || (r.RealtimeGI.HasValue && readback.RealtimeGI != r.RealtimeGI.Value) || (r.DirectSamples.HasValue && readback.DirectSamples != r.DirectSamples.Value) || (r.IndirectSamples.HasValue && readback.IndirectSamples != r.IndirectSamples.Value) || (r.EnvironmentSamples.HasValue && readback.EnvironmentSamples != r.EnvironmentSamples.Value) || (r.Bounces.HasValue && readback.Bounces != r.Bounces.Value) || (lightingMode.HasValue && readback.LightingMode != lightingMode.Value.ToString()) || (filtering.HasValue && readback.Filtering != filtering.Value.ToString())) throw new UnityCliBridge.BridgeCommandException("E_BAKE_SETTINGS_STATE_MISMATCH", "LightingSettings readback did not match the request.", "Retry after the editor is idle.");
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Settings = BuildLightingSettingsInfo(ls), ScenePath = scene.path, PlannedEffects = effects });
         }
         private static Scene ResolveLightingScene(string path)
         {
-            for (var i = 0; i < SceneManager.sceneCount; i++) { var s = SceneManager.GetSceneAt(i); if (string.IsNullOrEmpty(path) || s.path == path || s.name == path) return s; }
-            return SceneManager.GetActiveScene();
+            if (string.IsNullOrEmpty(path)) return SceneManager.GetActiveScene();
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (scene.path == path || scene.name == path) return scene;
+            }
+            throw new UnityCliBridge.BridgeCommandException("E_BAKE_SCENE_NOT_FOUND", "Scene is not loaded: " + path, "Pass the path or name of a currently loaded scene.");
         }
         private static void SetDirectSamples(LightingSettings ls, int v)
         {

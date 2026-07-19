@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile, readdir } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../../src/bridge/index.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../../src/extensions/index.js";
-import { commandContracts, validateBridgeRegistryContracts, validateExtensionManifestContracts, validateToolMetadataContracts } from "../../src/contracts/command-contract.js";
+import { PRIVATE_BRIDGE_COMMANDS, commandContracts, validateBridgeRegistryContracts, validateExtensionManifestContracts, validateToolMetadataContracts } from "../../src/contracts/command-contract.js";
 import { extractCSharpRegisteredCommandsFromSource } from "../../src/contracts/csharp-command-extractor.js";
 import { allRegisteredToolMetadata, builtinToolMetadata } from "../../src/tools/metadata/index.js";
 import "../../src/extensions/index.js";
@@ -114,12 +114,10 @@ test("command contract marks representative routing correctly", () => {
   assert.equal(assetRefresh.destructive, false);
 
   assert.ok(editorCompile);
-  assert.equal(editorCompile.handler_type, "bridge");
-  assert.equal(editorCompile.csharp_handler, "present");
+  assert.equal(editorCompile.handler_type, "hybrid");
+  assert.equal(editorCompile.csharp_handler, "none");
 
-  assert.ok(compileDiagnostics);
-  assert.equal(compileDiagnostics.handler_type, "hybrid");
-  assert.equal(compileDiagnostics.csharp_handler, "none");
+  assert.equal(compileDiagnostics, undefined);
 });
 
 test("typed generic C# registry registrations are extracted from executable code", () => {
@@ -149,6 +147,8 @@ test("C# registry extraction ignores similar comments and strings", () => {
 });
 
 test("registered C# command inventory agrees with command contracts", async () => {
+  // editor.state 是 TS-owned Context；Unity 只注册不可发现的私有快照命令。
+  assert.deepEqual([...PRIVATE_BRIDGE_COMMANDS].sort(), ["bridge.package.refresh", "internal.editor.compile.start", "internal.editor.compile.status", "internal.editor.state.snapshot"]);
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
   const csharpCommands = await registeredCsharpCommands(editorUrl);
   const extensionCsharpCommands = await registeredExtensionCsharpCommands();
@@ -160,10 +160,16 @@ test("registered C# command inventory agrees with command contracts", async () =
   }
 
   for (const command of allCsharpCommands) {
+    if (PRIVATE_BRIDGE_COMMANDS.has(command)) {
+      assert.equal(contracts.has(command), false, `${command} must remain private and absent from the public contract`);
+      continue;
+    }
     const contract = contracts.get(command);
     assert.ok(contract, `${command} is registered in C# but absent from the command contract inventory`);
     assert.equal(contract.csharp_handler, "present", `${command} must advertise its C# handler`);
   }
+  // Compile coordinator 的 private handlers 随 C# backend 独立交付；其唯一 TS contract
+  // 约束是绝不能成为 public command contract 项。
 });
 
 async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {

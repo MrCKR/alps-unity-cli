@@ -47,19 +47,19 @@ test("context read accepts only strict JSON object input", async () => {
   }
 });
 
-test("generated registry is the only offline context catalog", async () => {
-  assert.deepEqual(builtinContextDescriptors().map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
-  assert.deepEqual(builtinContextCategories(), ["tools"]);
+test("offline context catalog merges generated TS registry and packaged C# snapshot", async () => {
+  assert.equal(builtinContextDescriptors().length, 25);
+  assert.ok(builtinContextCategories().includes("editor"));
   assert.deepEqual(filterContextsByCategory("tools").map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
-  assert.equal(findBuiltinContextByName("project.info"), undefined);
+  assert.equal(findBuiltinContextByName("project.info")?.source, "built-in");
   assert.ok(searchContexts("custom").some((context) => context.name === "tools.custom"));
 
   const result = await handleContextCommand("list", [], {}, runtime(), requestId);
   assert.ok(result.ok);
   const data = result.data as { count: number; contexts: ContextDescriptor[] };
-  assert.equal(data.count, 2);
-  assert.deepEqual(data.contexts.map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
-  assert.ok(data.contexts.every((context) => context.source === "built-in"));
+  assert.equal(data.count, 25);
+  assert.ok(data.contexts.some((context) => context.name === "editor.state"));
+  assert.deepEqual(new Set(data.contexts.map((context) => context.source)), new Set(["built-in", "extension"]));
 });
 
 test("live list and search merge built-in, extension, and project descriptors", async () => {
@@ -73,7 +73,7 @@ test("live list and search merge built-in, extension, and project descriptors", 
   const listed = await handleContextCommand("list", [], {}, runtime(bridgeExecute), requestId);
   assert.ok(listed.ok);
   const listData = listed.data as { count: number; contexts: ContextDescriptor[] };
-  assert.equal(listData.count, 5);
+  assert.equal(listData.count, 26);
   assert.deepEqual(new Set(listData.contexts.map((context) => context.source)), new Set(["built-in", "extension", "project"]));
 
   const searched = await handleContextCommand("search", ["sample"], {}, runtime(bridgeExecute), requestId);

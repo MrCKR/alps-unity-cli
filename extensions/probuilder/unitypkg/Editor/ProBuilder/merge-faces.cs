@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -56,13 +57,16 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("merge-faces", "No ProBuilderMesh on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).Distinct().ToArray();
             if (faceIndices == null || faceIndices.Length < 2)
                 throw ProBuilderErrors.SchemaInvalid("At least 2 unique faceIndices are required for merge.");
             if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
                 throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
+            var before = ProBuilderOperationProof.Capture(mesh, faceIndices: faceIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("merge-faces", "Requested face geometry is not readable.");
             var beforeCount = ProBuilderReflection.GetFaceCount(mesh);
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Merge Faces");
 
             if (!ProBuilderReflection.MergeFaces(mesh, faceIndices))
@@ -70,9 +74,11 @@ namespace UnityCli.ProBuilder
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var afterCount = ProBuilderReflection.GetFaceCount(mesh);
-            if (beforeCount < 0 || afterCount != beforeCount - faceIndices.Length + 1)
-                throw ProBuilderErrors.OperationFailed("merge-faces", "Face count did not match a single merged face result.");
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var afterCount = ProBuilderReflection.GetFaceCount(freshMesh);
+            var after = ProBuilderOperationProof.Capture(freshMesh, faceIndices: Enumerable.Range(0, Math.Max(0, afterCount)).ToArray());
+            if (!ProBuilderOperationProof.HasMergedRequestedFaces(before, after) || beforeCount < 0 || afterCount != beforeCount - faceIndices.Length + 1)
+                throw ProBuilderErrors.OperationFailed("merge-faces", "Requested faces were not merged into readable topology.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 BeforeFaceCount = beforeCount,

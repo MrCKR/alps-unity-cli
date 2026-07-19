@@ -21,109 +21,64 @@ namespace UnityCli.ProBuilder
         }
 
         /// <summary>
-        /// 按 instance id、层级路径或名称解析目标对象。
+        /// 按 instance id、完整层级路径或名称唯一解析目标；存在多个同名候选时拒绝猜测。
         /// </summary>
         public static GameObject ResolveTarget(string target)
         {
-            if (string.IsNullOrEmpty(target)) return null;
+            if (string.IsNullOrWhiteSpace(target)) return null;
 
             int instanceId;
             if (int.TryParse(target, NumberStyles.Integer, CultureInfo.InvariantCulture, out instanceId))
+                return EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+
+            var candidates = new List<GameObject>();
+            foreach (var go in EnumerateLoadedObjects())
             {
-                var go = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
-                if (go != null) return go;
+                if (target.IndexOf('/') >= 0 ? HierarchyPath(go) == target.Trim('/') : go.name == target)
+                    candidates.Add(go);
             }
-
-            var found = GameObject.Find(target);
-            if (found != null) return found;
-
-            if (target.IndexOf('/') >= 0)
-            {
-                found = FindByHierarchyPath(target);
-                if (found != null) return found;
-            }
-
-            for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
-            {
-                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
-                if (!scene.isLoaded) continue;
-                foreach (var root in scene.GetRootGameObjects())
-                {
-                    if (root.name == target) return root;
-                    var child = FindDescendant(root.transform, target);
-                    if (child != null) return child.gameObject;
-                }
-            }
-
-            return null;
+            return candidates.Count == 1 ? candidates[0] : null;
         }
 
         /// <summary>
-        /// 按 instance id、层级路径或名称解析多个目标对象。
+        /// 批量解析必须全部唯一且互不重复；任何失败都不返回部分结果，并保持请求顺序。
         /// </summary>
         public static GameObject[] ResolveTargets(IEnumerable<string> targets)
         {
             if (targets == null) return new GameObject[0];
 
             var results = new List<GameObject>();
+            var seen = new HashSet<int>();
             foreach (var target in targets)
             {
                 var go = ResolveTarget(target);
-                if (go != null) results.Add(go);
+                if (go == null || !seen.Add(go.GetInstanceID())) return new GameObject[0];
+                results.Add(go);
             }
             return results.ToArray();
         }
 
-        private static GameObject FindByHierarchyPath(string path)
+        private static IEnumerable<GameObject> EnumerateLoadedObjects()
         {
-            var parts = path.Trim('/').Split('/');
-            if (parts.Length == 0) return null;
-
             for (var i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
             {
                 var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
                 if (!scene.isLoaded) continue;
                 foreach (var root in scene.GetRootGameObjects())
                 {
-                    if (root.name != parts[0]) continue;
-                    var current = root.transform;
-                    var matched = true;
-                    for (var partIndex = 1; partIndex < parts.Length; partIndex++)
-                    {
-                        current = FindDirectChild(current, parts[partIndex]);
-                        if (current == null)
-                        {
-                            matched = false;
-                            break;
-                        }
-                    }
-                    if (matched) return current.gameObject;
+                    yield return root;
+                    foreach (var child in root.GetComponentsInChildren<Transform>(true))
+                        if (child != root.transform) yield return child.gameObject;
                 }
             }
-
-            return null;
         }
 
-        private static Transform FindDirectChild(Transform parent, string name)
+        private static string HierarchyPath(GameObject go)
         {
-            for (var i = 0; i < parent.childCount; i++)
-            {
-                var child = parent.GetChild(i);
-                if (child.name == name) return child;
-            }
-            return null;
-        }
-
-        private static GameObject FindDescendant(Transform parent, string name)
-        {
-            for (var i = 0; i < parent.childCount; i++)
-            {
-                var child = parent.GetChild(i);
-                if (child.name == name) return child.gameObject;
-                var found = FindDescendant(child, name);
-                if (found != null) return found;
-            }
-            return null;
+            var names = new Stack<string>();
+            for (var current = go.transform; current != null; current = current.parent)
+                names.Push(current.name);
+            return string.Join("/", names.ToArray());
         }
     }
 }

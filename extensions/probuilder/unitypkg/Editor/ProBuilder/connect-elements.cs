@@ -62,15 +62,20 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("connect-elements", "No ProBuilderMesh on target.");
 
-            int[] edgeIndices = request.EdgeIndices?.Select(i => (int)i).ToArray();
-            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = (int)e.A, b = (int)e.B }).ToArray();
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            int[] edgeIndices = request.EdgeIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "edgeIndices")).ToArray();
+            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(e.A, "edges.a"), b = ProBuilderOperationProof.CheckedInt(e.B, "edges.b") }).ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).ToArray();
 
             if ((edgeIndices == null || edgeIndices.Length == 0) &&
                 (edgePairs == null || edgePairs.Length == 0) &&
                 (faceIndices == null || faceIndices.Length == 0))
                 throw ProBuilderErrors.SchemaInvalid("Either edgeIndices, edges, or faceIndices parameter is required for connect-elements.");
 
+            if (faceIndices != null && faceIndices.Length > 0) ProBuilderOperationProof.ValidateFaceIndices(mesh, faceIndices);
+            var edgeArray = faceIndices != null && faceIndices.Length > 0 ? null : ProBuilderOperationProof.ValidateEdges(mesh, edgeIndices, edgePairs);
+            var before = ProBuilderOperationProof.Capture(mesh, faceIndices, edgeArray);
+            if (before == null) throw ProBuilderErrors.OperationFailed("connect-elements", "Requested element geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Connect Elements");
             var connected = ProBuilderReflection.ConnectElements(mesh, edgeIndices, edgePairs, faceIndices);
             if (!connected)
@@ -78,6 +83,10 @@ namespace UnityCli.ProBuilder
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, faceIndices, edgeArray);
+            if (!ProBuilderOperationProof.HasTopologyExpansion(before, after))
+                throw ProBuilderErrors.OperationFailed("connect-elements", "Requested elements did not produce readable connecting topology.");
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { ConnectedCount = 1 });
         }

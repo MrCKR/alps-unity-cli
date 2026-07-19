@@ -55,25 +55,40 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_CAMERA_NOT_FOUND", "Camera not found: " + request.Target, "Run tools run camera.list, then retry with a camera name, hierarchy path, or instance id from the result.");
             }
+            if (string.IsNullOrEmpty(request.LookAt) && string.IsNullOrEmpty(request.Position) && string.IsNullOrEmpty(request.Rotation))
+                throw new UnityCliBridge.BridgeCommandException("E_CAMERA_TARGET_REQUEST_EMPTY", "camera.target requires lookAt, position, or rotation.", "Pass at least one transform setting.");
+            if (!string.IsNullOrEmpty(request.LookAt) && !string.IsNullOrEmpty(request.Rotation))
+                throw new UnityCliBridge.BridgeCommandException("E_CAMERA_TARGET_CONFLICT", "camera.target cannot combine lookAt with explicit rotation.", "Use lookAt or rotation, not both.");
             var effects = new List<CameraPlannedEffect>();
-            if (!string.IsNullOrEmpty(request.LookAt))
+            var cameraId = camera.GetInstanceID();
+            var position = string.IsNullOrEmpty(request.Position) ? (Vector3?)null : GameObjectToolSupport.ParseVector3(request.Position);
+            var rotation = string.IsNullOrEmpty(request.Rotation) ? (Vector3?)null : GameObjectToolSupport.ParseVector3(request.Rotation);
+            var lookAtGo = string.IsNullOrEmpty(request.LookAt) ? null : GameObjectToolSupport.ResolveUniqueTarget(request.LookAt, "camera.target --look-at <go> not found.");
+            var plannedPosition = position ?? camera.transform.position;
+            var lookDirection = lookAtGo == null ? Vector3.zero : lookAtGo.transform.position - plannedPosition;
+            if (lookAtGo != null && lookDirection == Vector3.zero) throw new UnityCliBridge.BridgeCommandException("E_CAMERA_TARGET_INVALID", "camera.target lookAt must not be at the planned Camera position.", "Choose a target at a different position.");
+            var expectedLookRotation = lookAtGo == null ? Quaternion.identity : Quaternion.LookRotation(lookDirection);
+            ctx.CommitEffect();
+            if (position.HasValue)
             {
-                var lookAtGo = GameObjectToolSupport.ResolveUniqueTarget(request.LookAt, "camera.target --look-at <go> not found.");
-                camera.transform.LookAt(lookAtGo.transform);
-                effects.Add(new CameraPlannedEffect { Type = "camera.target", Property = "lookAt", Target = CameraToolSupport.HierarchyPath(lookAtGo) });
-            }
-            if (!string.IsNullOrEmpty(request.Position))
-            {
-                camera.transform.position = GameObjectToolSupport.ParseVector3(request.Position);
+                camera.transform.position = position.Value;
                 effects.Add(new CameraPlannedEffect { Type = "camera.target", Property = "position", Value = request.Position });
             }
-            if (!string.IsNullOrEmpty(request.Rotation))
+            if (lookAtGo != null)
             {
-                camera.transform.eulerAngles = GameObjectToolSupport.ParseVector3(request.Rotation);
+                camera.transform.rotation = expectedLookRotation;
+                effects.Add(new CameraPlannedEffect { Type = "camera.target", Property = "lookAt", Target = CameraToolSupport.HierarchyPath(lookAtGo) });
+            }
+            if (rotation.HasValue)
+            {
+                camera.transform.eulerAngles = rotation.Value;
                 effects.Add(new CameraPlannedEffect { Type = "camera.target", Property = "rotation", Value = request.Rotation });
             }
             UnityCliSceneMutation.MarkSceneObjectDirty(camera);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Camera = CameraToolSupport.BuildCameraInfo(camera), PlannedEffects = effects });
+            var observed = EditorUtility.InstanceIDToObject(cameraId) as Camera;
+            if (observed == null || (lookAtGo != null && Quaternion.Angle(observed.transform.rotation, expectedLookRotation) > 0.01f) || (position.HasValue && observed.transform.position != position.Value) || (rotation.HasValue && observed.transform.eulerAngles != rotation.Value))
+                throw new UnityCliBridge.BridgeCommandException("E_CAMERA_TARGET_STATE_MISMATCH", "Camera transform did not satisfy the requested target predicate.", "Inspect the Camera and retry after the Editor is idle.");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Camera = CameraToolSupport.BuildCameraInfo(observed), PlannedEffects = effects });
         }
     }
 }

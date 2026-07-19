@@ -23,6 +23,8 @@ export interface ContextDefinition<TReq = unknown, TRes = unknown> {
 export interface ContextReadContext extends Partial<BridgeRuntime>, ProjectToolRuntime {
   requestId: string;
   flags?: Record<string, string | boolean>;
+  /** 私有 wall-clock 上限；hybrid Tool 的前置 observation 不得扩展 root deadline。 */
+  observationAbsoluteDeadlineMs?: number;
 }
 
 export class StructuredContextError extends Error {

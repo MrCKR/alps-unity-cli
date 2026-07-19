@@ -9,7 +9,7 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "vfx.control.set-seed", Summary = "Set VisualEffect random seed.",
-            Description = "Set startSeed and optionally resetSeedOnPlay on the existing VisualEffect component.",
+            Description = "Set startSeed and optionally resetSeedOnPlay on the existing VisualEffect component, then return verified public-property readbacks.",
             Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
@@ -20,15 +20,24 @@ namespace UnityCli
             }
         };
 
-        public System.Threading.Tasks.ValueTask<VfxControlActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext context, System.Threading.CancellationToken ct = default)
+        public System.Threading.Tasks.ValueTask<VfxControlActionResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            if (request.Seed.Value < 0) throw new UnityCliBridge.BridgeCommandException("E_VFX_SEED_INVALID", "VisualEffect seed must be non-negative.", "Pass seed as an integer greater than or equal to zero.");
+            if (!request.Seed.HasValue || request.Seed.Value < 0) throw new UnityCliBridge.BridgeCommandException("E_VFX_SEED_INVALID", "VisualEffect seed must be non-negative.", "Pass seed as an integer greater than or equal to zero.");
             var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.control.set-seed");
-            VfxActionToolSupport.SetRequired(effect, "startSeed", (uint)request.Seed.Value);
-            if (request.ResetSeedOnPlay.HasValue) VfxActionToolSupport.SetRequired(effect, "resetSeedOnPlay", request.ResetSeedOnPlay.Value);
-            var result = VfxActionToolSupport.BuildControlResult(effect, "vfx.control.set-seed", context.LogPath);
-            result.Seed = request.Seed.Value;
-            result.ResetSeedOnPlay = request.ResetSeedOnPlay;
+            var seedProperty = effect.GetType().GetProperty("startSeed", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            var resetProperty = effect.GetType().GetProperty("resetSeedOnPlay", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            if (seedProperty == null || !seedProperty.CanRead || !seedProperty.CanWrite || seedProperty.PropertyType != typeof(uint) || (request.ResetSeedOnPlay.HasValue && (resetProperty == null || !resetProperty.CanRead || !resetProperty.CanWrite || resetProperty.PropertyType != typeof(bool)))) throw new UnityCliBridge.BridgeCommandException("E_VFX_PROPERTY_UNSUPPORTED", "VisualEffect seed property is unavailable.", "Check the installed Visual Effect Graph package version.");
+            var gameObjectId = effect.gameObject.GetInstanceID(); var effectType = effect.GetType();
+            ctx.CommitEffect();
+            var observedObject = VfxToolSupport.FindGameObjectByTarget(gameObjectId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            effect = observedObject == null ? null : observedObject.GetComponent(effectType);
+            if (effect == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.control.set-seed target/component disappeared after commit.", "Retry after checking the target still exists.");
+            var seed = VfxActionToolSupport.SetAndReadRequired(effect, "startSeed", (uint)request.Seed.Value);
+            bool? resetSeedOnPlay = null;
+            if (request.ResetSeedOnPlay.HasValue) resetSeedOnPlay = VfxActionToolSupport.SetAndReadRequired(effect, "resetSeedOnPlay", request.ResetSeedOnPlay.Value);
+            var result = VfxActionToolSupport.BuildControlResult(effect, "vfx.control.set-seed", ctx.LogPath);
+            result.Seed = seed;
+            result.ResetSeedOnPlay = resetSeedOnPlay;
             return new System.Threading.Tasks.ValueTask<VfxControlActionResult>(result);
         }
     }

@@ -34,7 +34,16 @@ test("security policy exactly covers every destructive business tool in the full
   };
   const expected = [...new Set(matrix.entries.filter((entry) => entry.destructiveHint).map((entry) => entry.name))].sort();
   assert.deepEqual(destructiveCommands().map((entry) => entry.command).sort(), expected);
-  assert.deepEqual(matrix.counts, { total: 370, builtIn: 233, extension: 100, tsLocal: 37, destructive: 99, nonDestructive: 271, mismatches: 0 });
+  const expectedCounts = {
+    total: matrix.entries.length,
+    builtIn: matrix.entries.filter((entry) => entry.owner === "built-in").length,
+    extension: matrix.entries.filter((entry) => entry.owner === "extension").length,
+    tsLocal: matrix.entries.filter((entry) => entry.owner === "ts-local").length,
+    destructive: matrix.entries.filter((entry) => entry.destructiveHint).length,
+    nonDestructive: matrix.entries.filter((entry) => !entry.destructiveHint).length,
+    mismatches: 0,
+  };
+  assert.deepEqual(matrix.counts, expectedCounts);
 
   for (const entry of matrix.entries) {
     const source = await readFile(join(process.cwd(), entry.source), "utf8");
@@ -105,10 +114,10 @@ test("destructive dry-run forwards envelope preview without --yes", async () => 
   assert.equal(requests[0].input!.name, "asset.delete");
   assert.equal(requests[0].execution?.dryRun, true);
   assert.equal((requests[0].input!.input as Record<string, unknown>).dryRun, true);
-  assert.equal(requests[0].security?.confirmed, false);
-  assert.equal(requests[0].security?.toolName, "asset.delete");
-  assert.match(requests[0].security?.descriptorFingerprint ?? "", /^[a-f0-9]{64}$/);
-  assert.match(requests[0].security?.inputSha256 ?? "", /^[a-f0-9]{64}$/);
+  assert.equal(requests[0].execution.securityProof?.confirmed, false);
+  assert.equal(requests[0].execution.securityProof?.toolName, "asset.delete");
+  assert.match(requests[0].execution.securityProof?.descriptorFingerprint ?? "", /^[a-f0-9]{64}$/);
+  assert.match(requests[0].execution.securityProof?.inputSha256 ?? "", /^[a-f0-9]{64}$/);
 });
 
 test("Unity wait lifecycle has thread-safe callback terminal state and public PlayMode primitive", async () => {
@@ -131,14 +140,17 @@ test("package.embed uses its one-capability source with cancellable scheduler wa
   assert.doesNotMatch(source, /Thread\.Sleep/);
 });
 
-test("Bridge work lifecycle separates queue deadline, execution timeout and client disconnect cancellation", async () => {
+test("Bridge work lifecycle consumes one absolute deadline and survives client disconnect", async () => {
   const http = await readFile(new URL("../unitypkg/Editor/Bridge/BridgeHttpServer.cs", import.meta.url), "utf8");
   const queue = await readFile(new URL("../unitypkg/Editor/Bridge/BridgeWorkQueue.cs", import.meta.url), "utf8");
-  assert.match(http, /WatchClientDisconnect[\s\S]*OutputStream\.CanWrite[\s\S]*CancelClientDisconnected/);
-  assert.match(http, /WaitHandle\.WaitAny\(new\[\] \{ item\.Started\.WaitHandle, item\.Completed\.WaitHandle \}, 60000\)/);
-  assert.match(http, /E_QUEUE_START_TIMEOUT/);
+  assert.doesNotMatch(http, /WatchClientDisconnect|CancelClientDisconnected|OutputStream\.CanWrite/);
+  assert.match(http, /TryDeadlineRemainingMs\(out queueRemainingMs\)/);
+  assert.match(http, /WaitHandle\.WaitAny\(new\[\] \{ item\.Started\.WaitHandle, item\.Completed\.WaitHandle \}, queueRemainingMs\)/);
+  assert.match(http, /TryDeadlineRemainingMs\(out executionRemainingMs\)/);
+  assert.doesNotMatch(http, /E_QUEUE_START_TIMEOUT|execution\.timeoutMs/);
   assert.match(queue, /Started \{ get; private set; \}/);
-  assert.match(queue, /TryStart\(\)[\s\S]*cancellation\.CancelAfter[\s\S]*Started\.Set\(\)/);
+  assert.match(queue, /TryStart\(\)[\s\S]*TryDeadlineRemainingMs[\s\S]*cancellation\.CancelAfter[\s\S]*Started\.Set\(\)/);
+  assert.doesNotMatch(queue, /ClientDisconnected|E_CLIENT_DISCONNECTED/);
   assert.match(queue, /MaxWorkStartsPerTick = 16/);
   assert.match(queue, /RunningWork\.Add\(item\)[\s\S]*ExecuteWorkItemAsync\(item\)/);
   assert.match(queue, /RunningWork\.Remove\(item\)[\s\S]*item\.Completed\.Set\(\)/);

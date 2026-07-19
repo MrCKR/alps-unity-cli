@@ -65,7 +65,7 @@ test("matrix covers authorization, second example, editor state, concurrency, cl
   const dir = await mkdtemp(join(tmpdir(), "matrix Unicode ")); const cli = await makeMock(dir); const log = join(dir, "calls.log"); process.env.MATRIX_LOG = log;
   const project = join(dir, "Project 空格"), closed = join(dir, "Closed Project");
   await prepareClosedProject(closed);
-  const result = await runMatrix({ cli: process.execPath, cli_args: [cli], project, allow_destructive_project: project, target: "target 空格", endpoint: "http://127.0.0.1", evidence_dir: join(dir, "evidence 空格"), closed_job_project: closed, fixture: fixtures(), timeoutMs: 5000 });
+  const result = await runMatrix({ cli: process.execPath, cli_args: [cli], project, allow_destructive_project: project, target: "target 空格", evidence_dir: join(dir, "evidence 空格"), closed_job_project: closed, fixture: fixtures(), timeoutMs: 5000 });
   assert.equal(result.summary.complete, true, JSON.stringify(result.records.filter((record) => record.assertion?.status !== "PASS"))); const calls = (await readFile(log, "utf8")).trim().split("\n").map(JSON.parse);
   assert.equal(calls.filter((a) => a[0] === "tools" && a[1] === "describe" && a[2] === "asset.write").length, 1);
   assert.ok(calls.some((a) => a[0] === "jobs" && a.includes(closed))); assert.ok(calls.some((a) => a.includes("target 空格")));

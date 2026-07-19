@@ -25,14 +25,19 @@ namespace UnityCli
             if (AnimationToolSupport.FindStateInLayer(sm, r.StateName) != null) throw new UnityCliBridge.BridgeCommandException("E_STATE_EXISTS", "State '" + r.StateName + "' already exists in layer " + layerIndex + ".", "Choose a different state name.");
             AnimationClip clip = null;
             if (!string.IsNullOrEmpty(r.ClipPath)) { clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(SceneToolSupport.NormalizeAssetPath(r.ClipPath)); if (clip == null) throw new UnityCliBridge.BridgeCommandException("E_CLIP_NOT_FOUND", "AnimationClip not found at: " + r.ClipPath, "Create the clip first or omit clipPath."); }
+            ctx.CommitEffect();
             Undo.RecordObject(controller, "Add Animator State");
             var state = sm.AddState(r.StateName);
             if (clip != null) state.motion = clip;
             state.speed = r.Speed ?? 1f;
             var isDefault = r.IsDefault ?? false;
             if (isDefault) sm.defaultState = state;
-            EditorUtility.SetDirty(controller); AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = r.StateName, LayerIndex = layerIndex, HasMotion = state.motion != null, MotionName = state.motion?.name, Speed = state.speed, IsDefault = isDefault, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-state", Path = path, State = r.StateName } } });
+            EditorUtility.SetDirty(controller);
+            var observedController = AnimationToolSupport.ReloadControllerAsset(path);
+            var observedState = observedController == null || layerIndex >= observedController.layers.Length ? null : AnimationToolSupport.FindStateInLayer(observedController.layers[layerIndex].stateMachine, r.StateName);
+            if (observedState == null || !Mathf.Approximately(observedState.speed, r.Speed ?? 1f) || (clip != null && observedState.motion != clip) || (isDefault && observedController.layers[layerIndex].stateMachine.defaultState != observedState))
+                throw AnimationToolSupport.StateMismatch("E_CONTROLLER_ADD_STATE_STATE_MISMATCH", "AnimatorController state");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = observedState.name, LayerIndex = layerIndex, HasMotion = observedState.motion != null, MotionName = observedState.motion?.name, Speed = observedState.speed, IsDefault = observedController.layers[layerIndex].stateMachine.defaultState == observedState, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-state", Path = path, State = observedState.name } } });
         }
     }
 }

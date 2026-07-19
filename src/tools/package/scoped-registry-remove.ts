@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { removeScopedRegistry, validatePackageName } from "../../package-manager.js";
+import { PackageManagerError, removeScopedRegistry, validatePackageName } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
 
 export interface PackageScopedRegistryRemoveRequest {
@@ -11,6 +11,7 @@ export interface PackageScopedRegistryRemoveRequest {
 export interface PackageScopedRegistryRemoveResult {
   projectPath: string;
   manifestPath: string;
+  registryRemoved?: boolean;
   removed?: { name: string; url: string; scopes: string[] };
   matchedPackages?: string[];
   forced?: boolean;
@@ -36,6 +37,12 @@ export default defineTool<PackageScopedRegistryRemoveRequest, PackageScopedRegis
   async execute(request, context) {
     const projectPath = resolve(request.project ?? context.projectPath);
     const name = validatePackageName(request.name);
-    return { projectPath, ...(await removeScopedRegistry(projectPath, name, { force: request.force === true, dryRun: context.execution.dryRun === true })) };
+    const prepared = await removeScopedRegistry(projectPath, name, { force: request.force === true, dryRun: true });
+    if (context.execution.dryRun) return { projectPath, ...prepared };
+    if (prepared.blocked) {
+      throw new PackageManagerError("SCOPED_REGISTRY_IN_USE", `Scoped registry ${name} still matches manifest package(s): ${prepared.matchedPackages.join(", ")}.`, ["Remove or move matching packages first, or pass force=true only when intentional."]);
+    }
+    await context.commitEffect?.();
+    return { projectPath, ...(await removeScopedRegistry(projectPath, name, { force: request.force === true })) };
   }
 });

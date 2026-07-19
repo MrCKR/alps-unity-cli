@@ -14,6 +14,7 @@ import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
 import { summarizeJob } from "./cli-commands/unity-job.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
+import { withInvocationOrigin } from "./invocation-origin.js";
 import { createRequestId, failure, printResult, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
 import { handleToolsCommand } from "./tools/commands.js";
@@ -59,6 +60,23 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       return success(requestId, help());
     }
 
+    if (parsed.flags["bridge-endpoint"] !== undefined || process.env.UNITY_CLI_BRIDGE_ENDPOINT !== undefined) {
+      return failure(requestId, "E_OBSOLETE_OPTION", "Public Bridge endpoint selection has been removed.", [
+        "Pass --instance <instanceId|canonicalProjectPath|alias> or run from the target Unity project directory.",
+        "Remove UNITY_CLI_BRIDGE_ENDPOINT from the process environment.",
+      ]);
+    }
+    if (parsed.flags.retry !== undefined) {
+      return failure(requestId, "E_OBSOLETE_OPTION", "Public transport retry counts have been removed; the session supervisor owns recoverable Unity lifecycle transitions.", [
+        "Remove --retry and use one absolute --timeout-ms budget for the logical request.",
+      ]);
+    }
+    if (parsed.flags.target !== undefined && usesLegacyTargetSelector(group, command)) {
+      return failure(requestId, "E_OBSOLETE_OPTION", "--target is not an instance selector. Use --instance or Unity project CWD.", [
+        "Pass --instance <instanceId|canonicalProjectPath|alias>.",
+      ]);
+    }
+
     ensureWindows();
 
     const cliModule = CLI_COMMANDS.get(group);
@@ -77,7 +95,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, [
       "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor.",
       "Run unity_cli tools group to discover Unity tools, then unity_cli tools run <tool> --input <json>.",
-      "Run unity_cli instances list and unity_cli target set <id|alias> to choose an Editor target.",
+      "Run unity_cli instances list, then pass --instance <id|projectPath|alias> or use a Unity project CWD.",
       "Run unity_cli --help."
     ]);
   } catch (error) {
@@ -109,7 +127,7 @@ async function runJobWorker(flags: Record<string, string | boolean>, requestId: 
   }
 }
 
-/** 顶层 target 控制面：管理默认 Unity 实例与 alias。 */
+/** 顶层 target 控制面只管理 canonical project identity alias。 */
 async function handleTopLevelTarget(
   command: string | undefined,
   args: string[],
@@ -117,21 +135,12 @@ async function handleTopLevelTarget(
   runtime: Runtime,
   requestId: string
 ): Promise<CliResult> {
-  if (!command || command === "current") {
-    return handleTargetCommand("current", [], flags, runtime.dataDir, requestId);
-  }
-  if (command === "set") {
-    return handleTargetCommand("set", args, flags, runtime.dataDir, requestId);
-  }
-  if (command === "clear") {
-    return handleTargetCommand("clear", [], flags, runtime.dataDir, requestId);
-  }
   if (command === "alias") {
     return handleTargetCommand("alias", args, flags, runtime.dataDir, requestId);
   }
-  return failure(requestId, "UNKNOWN_TARGET_COMMAND", "Expected target current, target set <id|alias>, target clear, or target alias set|unset|list.", [
-    "Run unity_cli instances list to inspect registered targets.",
-    "Run unity_cli target alias set <instanceId> <alias> for a stable alias."
+  return failure(requestId, "UNKNOWN_TARGET_COMMAND", "Expected target alias list|set|unset.", [
+    "Run unity_cli target alias list.",
+    "Run unity_cli target alias set <projectPath|instanceId> <alias>."
   ]);
 }
 
@@ -186,7 +195,7 @@ async function handleTopLevelBatch(
   runtime: Runtime,
   requestId: string
 ): Promise<CliResult> {
-  return handleBatch(command, args[0], flags, runtime, requestId);
+  return withInvocationOrigin("batch-frozen", () => handleBatch(command, args[0], flags, runtime, requestId));
 }
 
 /** 将 `jobs status <id>` 形式转换为现有 handler 使用的 `--id`。 */
@@ -195,6 +204,15 @@ function positionalIdFlags(args: string[], flags: Record<string, string | boolea
     return flags;
   }
   return { ...flags, id: args[0] };
+}
+
+/** 业务 Tool input 可拥有 target 字段，但控制面和 discovery 不得把 --target 当 instance selector。 */
+function usesLegacyTargetSelector(group: string, command: string | undefined): boolean {
+  return group === "context"
+    || group === "doctor"
+    || group === "instances"
+    || group === "target"
+    || (group === "tools" && command !== "run");
 }
 
 async function packageVersion(): Promise<string> {
@@ -207,14 +225,14 @@ function help(): Record<string, unknown> {
   return {
     usage: "unity_cli <command> [options]",
     commands: [
-      "tools group [--include-custom] [--instance <id|alias>] [--format json|text]",
-      "tools group list <group> [--include-custom] [--instance <id|alias>] [--format json|text]",
-      "tools describe <tool> [--instance <id|alias>]",
-      "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--artifact-dir <path>] [--runtime] [--instance <id|alias>]",
-      "tools search <keyword> [--instance <id|alias>] [--format json|text]",
-      "context list [--category <cat>] [--include-custom] [--instance <id|alias>] [--format json|text]",
-      "context describe <name> [--instance <id|alias>]",
-      "context read <name> [--input <json>] [--input-file <path>] [--instance <id|alias>] [--bridge-endpoint <url>]",
+      "tools group [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
+      "tools group list <group> [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
+      "tools describe <tool> [--instance <id|projectPath|alias>]",
+      "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--artifact-dir <path>] [--runtime] [--instance <id|projectPath|alias>]",
+      "tools search <keyword> [--instance <id|projectPath|alias>] [--format json|text]",
+      "context list [--category <cat>] [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
+      "context describe <name> [--instance <id|projectPath|alias>]",
+      "context read <name> [--input <json>] [--input-file <path>] [--instance <id|projectPath|alias>]",
       "extensions list [--project <path>] [--format json|text]",
       "extensions install <id|name> [--project <path>]",
       "extensions remove <id|name> [--project <path>]",
@@ -223,23 +241,20 @@ function help(): Record<string, unknown> {
       "init --pkg-only [--project <path>] [--unity <Unity.exe>] [--wait]",
       "init --skill-only --agent <pi|claude|.agents,...> [--project <path>]",
       "init --check [--project <path>] [--agent <pi|claude|.agents,...>]",
-      "target current",
-      "target set <id|alias|projectHash|projectPathPrefix>",
-      "target clear",
       "target alias list",
-      "target alias set <instanceId> <alias> [--force]",
+      "target alias set <projectPath|instanceId> <alias> [--force]",
       "target alias unset <alias>",
       "instances list",
       "instances prune --yes",
       "jobs status|logs|describe|cancel <jobId>",
       "batch schema",
       "batch run <file> [--preflight] [--parallel <n>] [--fail-fast true|false] --yes",
-      "doctor [--project <path>] [--bridge-endpoint <url>]"
+      "doctor [--instance <id|projectPath|alias>] [--project <path>]"
     ],
     options: [
       "--raw  Print the same JSON envelope as compact single-line JSON for pipes and scripts."
     ],
-    note: "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor. Unity capabilities (scene, asset, package, build, test, docs, reflect, editor, physics, profiler, ...) are exposed via `tools run <tool> --input <json>` and `context read <name>`. CLI control-plane state uses `target`, `instances`, `jobs`, `batch`, and `doctor`. `--instance <id|alias>` (alias `--target`) applies to every bridge-backed subcommand: tools group/list/describe/run/search, context list/describe/read, and diagnose.capabilities. When the caller already knows an exact instance, pass `--instance` on every bridge-backed command; do not call `target set`, because it persists mutable global active-target state and adds no binding beyond explicit `--instance`. In multi-instance scenarios prefer an alias set via `target alias set` and pass it through `--instance`. Descriptor `examples[].argv` is a JSON token array, not a shell command string. In PowerShell, wrap inline `--input` JSON in single quotes, or use `--input-file` for complex input."
+    note: "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor. Unity capabilities are exposed through `tools run <tool> --input <json>` and `context read <name>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>` or the nearest Unity project root from CWD. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Descriptor `examples[].argv` is a JSON token array. In PowerShell, wrap inline `--input` JSON in single quotes, or use `--input-file` for complex input."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {

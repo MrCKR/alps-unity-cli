@@ -25,7 +25,11 @@ namespace UnityCli
         // 资产路径规范化:反斜杠转正斜杠并去首尾空白;空返回 null。
         public static string NormalizeAssetPath(string rawPath)
         {
-            return string.IsNullOrEmpty(rawPath) ? null : rawPath.Replace('\\', '/').Trim();
+            if (string.IsNullOrWhiteSpace(rawPath)) return null;
+            var path = rawPath.Replace('\\', '/').Trim();
+            if (path.Split('/').Any(segment => segment == "." || segment == ".."))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_PATH_INVALID", "Asset paths must not contain '.' or '..' segments: " + path, "Pass a canonical Assets/* path without path traversal segments.");
+            return path;
         }
 
         /// <summary>Unity 工程根目录(Assets 的父目录)。</summary>
@@ -37,7 +41,11 @@ namespace UnityCli
         /// <summary>Assets/ 相对路径转工程内绝对路径。</summary>
         public static string AssetFullPath(string assetPath)
         {
-            return Path.Combine(ProjectRoot(), assetPath.Replace('/', Path.DirectorySeparatorChar));
+            var fullPath = Path.GetFullPath(Path.Combine(ProjectRoot(), assetPath.Replace('/', Path.DirectorySeparatorChar)));
+            var dataPath = Path.GetFullPath(UnityEngine.Application.dataPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!string.Equals(fullPath, dataPath, StringComparison.OrdinalIgnoreCase) && !fullPath.StartsWith(dataPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_PATH_INVALID", "Asset path resolves outside Application.dataPath: " + assetPath, "Pass a canonical path under Assets/.");
+            return fullPath;
         }
 
         /// <summary>判断 Assets/ 路径是否存在；历史 GUID 不能代表文件或已加载资产仍存在。</summary>
@@ -50,7 +58,9 @@ namespace UnityCli
         /// <summary>确保资产目录存在,缺失则创建并刷新 AssetDatabase。</summary>
         public static void CreateAssetDirectory(string assetPath)
         {
-            var directory = Path.GetDirectoryName(assetPath);
+            var path = RequireAssetPath(assetPath);
+            AssetFullPath(path); // 创建目录前确认路径仍位于 Assets/ 内。
+            var directory = Path.GetDirectoryName(path);
             if (string.IsNullOrEmpty(directory) || AssetDatabase.IsValidFolder(directory.Replace('\\', '/')))
             {
                 return;
@@ -117,15 +127,16 @@ namespace UnityCli
         /// <summary>写入文本资产文件;已存在且未授权覆盖则报错。写入后刷新 AssetDatabase。</summary>
         public static void WriteTextAsset(string path, string content, bool overwrite)
         {
-            CreateAssetDirectory(path);
+            path = RequireAssetPath(path);
             var fullPath = AssetFullPath(path);
+            CreateAssetDirectory(path);
             if (File.Exists(fullPath) && !overwrite)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Output already exists: " + path, "Pass --overwrite or choose a different asset path.");
             }
             try
             {
-                File.WriteAllText(fullPath, content, new UTF8Encoding(false));
+                File.WriteAllText(fullPath, content ?? string.Empty, new UTF8Encoding(false));
                 AssetDatabase.Refresh();
             }
             catch (Exception exception)
@@ -157,7 +168,7 @@ namespace UnityCli
         {
             if (string.IsNullOrEmpty(rawPath)) return;
             var normalized = NormalizeAssetPath(rawPath);
-            if (!normalized.StartsWith("Assets", StringComparison.OrdinalIgnoreCase) && !normalized.StartsWith("Packages", StringComparison.OrdinalIgnoreCase))
+            if ((!normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) && !string.Equals(normalized, "Assets", StringComparison.OrdinalIgnoreCase)) && (!normalized.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) && !string.Equals(normalized, "Packages", StringComparison.OrdinalIgnoreCase)))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_SEARCH_SCOPE_INVALID", "Asset search scope must be under Assets/ or Packages/: " + rawPath, "Pass filter/query for search text, and use path/searchInFolders only for folder scopes.");
             }

@@ -19,13 +19,14 @@ namespace UnityCli
         {
             Name = "profiler.stop", Summary = "Stop profiler data collection.",
             Description = "Stop Unity Profiler data collection and restore the previous Editor profiling state.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Stop profiler", Input = new Request { } } }
         };
 
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
+            ctx.CommitEffect();
             ProfilerToolSupport.SetProfilerSessionEnabled(false);
             if (ProfilerToolSupport.PreviousProfilerEditorRecording.HasValue)
             {
@@ -33,11 +34,19 @@ namespace UnityCli
                 ProfilerToolSupport.PreviousProfilerEditorRecording = null;
             }
             Profiler.enableBinaryLog = false;
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            var stable = await ctx.Wait.UntilStable(() =>
             {
-                Profiler = ProfilerToolSupport.BuildProfilerState(),
+                var state = ProfilerToolSupport.BuildProfilerState();
+                return !state.Enabled && !state.EnableBinaryLog;
+            }, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct: ct);
+            var observed = ProfilerToolSupport.BuildProfilerState();
+            if (!stable || observed.Enabled || observed.EnableBinaryLog)
+                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_STATE_MISMATCH", "Profiler stop write did not produce the requested stable readback.", "Inspect Profiler availability and Editor session state, then retry.");
+            return new Result
+            {
+                Profiler = observed,
                 PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.stop" } }
-            });
+            };
         }
     }
 }

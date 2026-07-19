@@ -24,7 +24,7 @@ unity_cli instances list
 unity_cli tools group --instance <instanceId-or-alias>
 ```
 
-`target set` 会持久化可变的全局活动目标。调用方已经知道实例时，不要把它当作连接步骤；在 `tools` / `context` 的 discovery、describe 和执行命令上持续传 `--instance`。
+`target` 只管理 canonical project identity alias，不保存全局活动目标。在 `tools` / `context` 的 discovery、describe 和执行命令上持续传 `--instance <full-id|canonical-project-path|alias>`；未传时只从当前 Unity 项目 CWD 解析，不能依赖单实例 fallback。
 
 使用 Tool 前走 group-first 发现链；不确定关键词时先查搜索结果：
 
@@ -112,9 +112,9 @@ Descriptor 常用字段：
 
 ## AI 规则
 
-- 执行前先确认目标实例；多个 ready 实例时不要猜，在当前 discovery、describe 和执行命令上显式传 `--instance`。只有明确需要持久化全局默认值时才使用 `target set`。
-- 不要手动读取 Bridge 注册文件，不要直接 ping endpoint；用 `instances`、`target`、`doctor` 和 `editor.state`。
-- Unity 正在 compile/import/build、PlayMode 切换或 domain reload 时，先用 `tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。
+- 执行前先确认 canonical project identity；在当前 discovery、describe 和执行命令上显式传完整 `--instance`，或从目标 Unity 项目 CWD 调用。
+- 不要读取 Bridge 注册文件、listener、端口或 URL，也不要直接 ping transport；用 `instances`、`doctor` 和 `context read editor.state`。
+- compile/import/domain reload/listener restart 由 session supervisor 在同一 absolute deadline 内透明处理；需要即时状态时读 `context read editor.state --input '{}'`，不要轮询或手工重放 mutation。
 - `destructiveHint:true` 的 Tool 先 `--dry-run`（如果支持），确认计划输出后再加 `--yes`。
 - `playModeSupport:"editor-only"` 不要在 PlayMode 下运行；`runtime-only` 通常需要先进入 PlayMode；遇到 `E_RUNTIME_NOT_READY` 按 `nextActions` 处理。
 - 缺少必填输入会返回 `E_SCHEMA_INVALID`；回到 `describe` 修正 schema，而不是猜字段名。

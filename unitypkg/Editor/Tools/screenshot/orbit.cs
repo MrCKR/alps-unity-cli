@@ -20,6 +20,7 @@ namespace UnityCli
             public float? Radius { get; set; }
             public int? Width { get; set; }
             public int? Height { get; set; }
+            public bool Overwrite { get; set; }
         }
 
         public sealed class Result
@@ -58,10 +59,24 @@ namespace UnityCli
             var height = Math.Max(1, request.Height ?? 512);
             var center = go.transform.position;
             var artifacts = new List<ScreenshotArtifactEntry>();
+            for (var i = 0; i < angleCount; i++)
+            {
+                var candidate = Path.Combine(ScreenshotToolSupport.AssetFullPath(outputDir), "orbit_" + i.ToString("00", CultureInfo.InvariantCulture) + ".png");
+                if (File.Exists(candidate) && !request.Overwrite)
+                    throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + candidate, "Pass overwrite=true or choose another outputDir.");
+            }
 
+            ctx.CommitEffect();
             var cam = Camera.main;
-            if (cam == null) { var tempGo = new GameObject("__unity_cli_orbit_cam__"); cam = tempGo.AddComponent<Camera>(); }
-            var tempCreated = cam.gameObject.name == "__unity_cli_orbit_cam__";
+            var tempCreated = false;
+            if (cam == null)
+            {
+                var tempGo = new GameObject("__unity_cli_orbit_cam__");
+                cam = tempGo.AddComponent<Camera>();
+                tempCreated = true;
+            }
+            var previousPosition = cam.transform.position;
+            var previousRotation = cam.transform.rotation;
             try
             {
                 for (var i = 0; i < angleCount; i++)
@@ -73,12 +88,17 @@ namespace UnityCli
                     var path = Path.Combine(ScreenshotToolSupport.AssetFullPath(outputDir), "orbit_" + i.ToString("00", CultureInfo.InvariantCulture) + ".png");
                     ScreenshotToolSupport.CreateScreenshotDirectory(path);
                     var texture = ScreenshotToolSupport.RenderScreenshotTexture(cam, width, height);
-                    ScreenshotToolSupport.WriteScreenshotBytes(path, texture.EncodeToPNG());
-                    UnityEngine.Object.DestroyImmediate(texture);
-                    artifacts.Add(new ScreenshotArtifactEntry { Source = "orbit", Path = path, Camera = "orbit:" + angle.ToString("F0", CultureInfo.InvariantCulture), Width = width, Height = height, Format = "png" });
+                    ScreenshotArtifactProof proof;
+                    try { proof = ScreenshotToolSupport.WriteScreenshotBytes(path, texture.EncodeToPNG()); }
+                    finally { UnityEngine.Object.DestroyImmediate(texture); }
+                    artifacts.Add(new ScreenshotArtifactEntry { Source = "orbit", Path = path, Camera = "orbit:" + angle.ToString("F0", CultureInfo.InvariantCulture), Width = width, Height = height, Format = "png", SizeBytes = proof.SizeBytes, Sha256 = proof.Sha256 });
                 }
             }
-            finally { if (tempCreated) UnityEngine.Object.DestroyImmediate(cam.gameObject); }
+            finally
+            {
+                if (tempCreated) UnityEngine.Object.DestroyImmediate(cam.gameObject);
+                else { cam.transform.position = previousPosition; cam.transform.rotation = previousRotation; }
+            }
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "screenshot.orbit", Target = go.name, Count = artifacts.Count, Artifacts = artifacts });
         }

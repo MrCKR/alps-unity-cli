@@ -40,7 +40,7 @@ test("object tools are contract-discovered and expose expected live descriptor f
       destructiveHint: false,
       supportsDryRun: true,
       playModeSupport: "session-affecting",
-      inputSchema: { type: "object", properties: { pathPatches: { type: "array" }, jsonPatch: { type: "array" } } }
+      inputSchema: { type: "object", properties: { pathPatches: { type: "array" } } }
     })
   );
 
@@ -71,7 +71,7 @@ test("object tools are contract-discovered and expose expected live descriptor f
   assert.equal(modify.playModeSupport, "session-affecting");
   assert.equal(modify.riskLevel, "high");
   assert.ok(modifyProps.pathPatches);
-  assert.ok(modifyProps.jsonPatch);
+  assert.equal(modifyProps.jsonPatch, undefined);
 });
 
 test("bridge specs resolve for object tools", () => {
@@ -114,6 +114,15 @@ test("object patch accepts only slash-separated member paths", async () => {
   assert.match(source, /path\.Split\('\/'\)/);
   assert.match(source, /pathPatches path must use '\/' between member segments/);
   assert.doesNotMatch(source, /向后兼容|a\.b.*兼容|var sep = path\.IndexOf/);
+});
+
+test("object patch enum verification resolves names and indexes without numeric Convert", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectPatch.cs", import.meta.url), "utf8");
+  const enumSection = source.slice(source.indexOf("private static int GetEnumValueIndex"), source.indexOf("/// <summary>应用 pathPatches"));
+  assert.match(enumSection, /property\.enumNames/);
+  assert.match(enumSection, /int\.TryParse/);
+  assert.match(source, /property\.enumValueIndex == GetEnumValueIndex\(property, value\)/);
+  assert.doesNotMatch(enumSection, /Convert\.ToInt32/);
 });
 
 test("object patch writes nested value types back through their parent chain", async () => {

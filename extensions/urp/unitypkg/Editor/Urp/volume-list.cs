@@ -25,7 +25,7 @@ namespace UnityCli
             RequiresPackages = new[] { "com.unity.render-pipelines.universal" },
             SideEffects = new string[0],
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "List URP volumes", Input = new Request() } }

@@ -58,6 +58,22 @@ namespace UnityCli
         public string[] RequiresPackages { get; set; }
         public ToolExample[] Examples { get; set; }
         public string Fingerprint { get; set; }
+        public ToolCompletionDescriptor Completion { get; set; }
+    }
+
+    /// <summary>
+    /// project/runtime 自定义 Tool 必须显式声明完成语义；built-in 与 Extension 由生成 registry 提供同一契约。
+    /// 这里只接受机器可分支字段，不以自由文本替代 completion driver。
+    /// </summary>
+    public sealed class ToolCompletionDescriptor
+    {
+        public string ExecutionClass { get; set; }
+        public string CompletionPredicate { get; set; }
+        public string ProofSource { get; set; }
+        public string ReloadPolicy { get; set; }
+        public string TimeoutError { get; set; }
+        public string OutcomeUnknownPolicy { get; set; }
+        public string CompletionDriverId { get; set; }
     }
 
     /// <summary>

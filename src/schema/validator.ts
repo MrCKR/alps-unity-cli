@@ -9,7 +9,7 @@ export function validateSchema(schema: unknown, value: unknown, path = "$", root
   if (!isRecord(schema)) return [issue(path, "valid schema", "missing schema")];
   const rule = schema;
   if (rule["x-unityCliAnyJson"] === true) return [];
-  const supportedKeywords = new Set(["$ref", "$defs", "allOf", "oneOf", "anyOf", "const", "enum", "type", "properties", "required", "additionalProperties", "items", "prefixItems", "minItems", "maxItems", "minLength", "maxLength", "minimum", "maximum", "pattern"]);
+  const supportedKeywords = new Set(["$schema", "$id", "title", "$ref", "$defs", "allOf", "oneOf", "anyOf", "const", "enum", "type", "properties", "required", "additionalProperties", "items", "prefixItems", "minItems", "maxItems", "minLength", "maxLength", "minimum", "maximum", "pattern", "format", "uniqueItems"]);
   const unsupported = Object.keys(rule).find((key) => !supportedKeywords.has(key));
   if (unsupported) return [issue(path, "supported schema keyword", `unsupported keyword ${unsupported}`)];
   if (Object.keys(rule).length === 0) return [issue(path, "constrained schema", "unconstrained schema")];
@@ -60,10 +60,12 @@ export function validateSchema(schema: unknown, value: unknown, path = "$", root
       if (rule.items === false) issues.push(issue(`${path}[${index}]`, `tuple with ${prefixItems.length} items`, "additional item"));
       else if (isRecord(rule.items)) issues.push(...validateSchema(rule.items, value[index], `${path}[${index}]`, rootSchema));
     }
+    if (rule.uniqueItems === true && new Set(value.map((item) => JSON.stringify(item))).size !== value.length) issues.push(issue(path, "unique items", "duplicate item"));
     return issues;
   }
 
   if (typeof value === "string") {
+    if (rule.format === "date-time" && !Number.isFinite(Date.parse(value))) return [issue(path, "date-time", value)];
     if (typeof rule.minLength === "number" && value.length < rule.minLength) return [issue(path, `minimum length ${rule.minLength}`, `length ${value.length}`)];
     if (typeof rule.maxLength === "number" && value.length > rule.maxLength) return [issue(path, `maximum length ${rule.maxLength}`, `length ${value.length}`)];
     if (typeof rule.pattern === "string") {

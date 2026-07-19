@@ -32,7 +32,10 @@ export interface PackageBridgeRemoveResult {
 // 执行真正的 Bridge 移除；destructive 确认由 tools run 分发层在进入 defineTool 前完成。
 async function runPackageBridgeRemove(request: PackageBridgeRemoveRequest, context: ToolContext): Promise<PackageBridgeRemoveResult> {
   const projectPath = resolve(request.project ?? context.projectPath);
-  const removal = await removePackageBridge(projectPath, { dryRun: context.execution.dryRun === true });
+  const prepared = await removePackageBridge(projectPath, { dryRun: true });
+  if (context.execution.dryRun) return { action: "bridge-remove", ...prepared };
+  await context.commitEffect?.();
+  const removal = await removePackageBridge(projectPath);
   return { action: "bridge-remove", ...removal };
 }
 

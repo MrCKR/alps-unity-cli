@@ -17,7 +17,7 @@ export interface BuildRunRequest {
   unity?: string;
 }
 
-export interface BuildRunObject {}
+export interface BuildRunObject { [key: string]: AnyJson; }
 
 export interface BuildRunError {
   code: string;
@@ -122,7 +122,7 @@ function assertBuildTarget(target: string, field: "target" | "targets"): BuildTa
   );
 }
 
-// 保留旧 build.run 的 targets 解析语义:字符串逗号分隔,结构化数组也兼容。
+// build.run targets 同时接受逗号分隔字符串和结构化字符串数组。
 function buildTargets(request: BuildRunRequest): BuildTarget[] {
   const rawTargets = (request as { targets?: unknown }).targets;
   if (Array.isArray(rawTargets)) {
@@ -155,8 +155,7 @@ async function startBuildJob(target: string, request: BuildRunRequest, context: 
     dataDir: context.dataDir,
     store: context.jobStore,
     runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute,
-    bridgeEndpoint: context.bridgeEndpoint
+    bridgeExecute: context.bridgeExecute
   }, context.requestId, ["-buildTarget", target, "-executeMethod", "UnityCli.UnityCliBatch.BuildProject", "-unityCliBuildOutput", outputPath], {
     action: "build",
     target,

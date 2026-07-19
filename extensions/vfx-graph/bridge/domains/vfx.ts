@@ -14,7 +14,6 @@ export const vfxBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "vfx", command: "control.reinitialize", bridgeCommand: "project-tool.run", toolName: "vfx.control.reinitialize", buildArgs: vfxTargetArgs },
   { group: "vfx", command: "control.set-rate", bridgeCommand: "project-tool.run", toolName: "vfx.control.set-rate", buildArgs: vfxControlRateArgs },
   { group: "vfx", command: "control.set-seed", bridgeCommand: "project-tool.run", toolName: "vfx.control.set-seed", buildArgs: vfxControlSeedArgs },
-  { group: "vfx", command: "event", bridgeCommand: "project-tool.run", toolName: "vfx.event", buildArgs: vfxEventArgs },
   { group: "vfx", command: "template.list", bridgeCommand: "project-tool.run", toolName: "vfx.template.list", buildArgs: vfxEmptyArgs },
   { group: "vfx", command: "template.create", bridgeCommand: "project-tool.run", toolName: "vfx.template.create", buildArgs: vfxTemplateCreateArgs, destructiveHint: true, supportsDryRun: true },
   { group: "vfx", command: "particle-create", bridgeCommand: "project-tool.run", toolName: "vfx.particle-create", buildArgs: vfxParticleArgs },
@@ -26,7 +25,6 @@ export const vfxBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "vfx", command: "particle.stop", bridgeCommand: "project-tool.run", toolName: "vfx.particle.stop", buildArgs: vfxParticleStopArgs },
   { group: "vfx", command: "particle.pause", bridgeCommand: "project-tool.run", toolName: "vfx.particle.pause", buildArgs: vfxParticleActionArgs },
   { group: "vfx", command: "particle.clear", bridgeCommand: "project-tool.run", toolName: "vfx.particle.clear", buildArgs: vfxParticleActionArgs },
-  { group: "vfx", command: "particle-module", bridgeCommand: "project-tool.run", toolName: "vfx.particle-module", buildArgs: vfxParticleModuleArgs },
   { group: "vfx", command: "line-create", bridgeCommand: "project-tool.run", toolName: "vfx.line-create", buildArgs: vfxLineCreateArgs },
   { group: "vfx", command: "line-positions", bridgeCommand: "project-tool.run", toolName: "vfx.line-positions", buildArgs: vfxLinePositionsArgs },
   { group: "vfx", command: "trail.create", bridgeCommand: "project-tool.run", toolName: "vfx.trail.create", buildArgs: vfxTrailCreateArgs },
@@ -99,19 +97,6 @@ function vfxControlSeedArgs({ flags, positionalTarget }: Parameters<BridgeComman
     target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target),
     seed: numberFlag(flags, "seed") ?? numberValue(structured.seed),
     resetSeedOnPlay: boolFlag(flags, "reset-seed-on-play") ?? boolValue(structured.resetSeedOnPlay)
-  });
-}
-
-function vfxEventArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  const structured = structuredInput(flags);
-  return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target),
-    eventName: stringFlag(flags, "event-name") ?? stringFlag(flags, "name") ?? stringValue(structured.eventName),
-    attributeName: stringFlag(flags, "attribute-name") ?? stringValue(structured.attributeName),
-    attributeX: floatFlag(flags, "attribute-x") ?? numberValue(structured.attributeX),
-    attributeY: floatFlag(flags, "attribute-y") ?? numberValue(structured.attributeY),
-    attributeZ: floatFlag(flags, "attribute-z") ?? numberValue(structured.attributeZ),
-    attributeSize: floatFlag(flags, "attribute-size") ?? numberValue(structured.attributeSize)
   });
 }
 
@@ -213,46 +198,6 @@ function vfxParticleStopArgs({ flags, positionalTarget }: Parameters<BridgeComma
   });
 }
 
-function vfxParticleModuleArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  const structured = structuredInput(flags);
-  return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target),
-    module: stringFlag(flags, "module") ?? stringValue(structured.module),
-    enabled: boolFlag(flags, "enabled") ?? boolValue(structured.enabled),
-    color: stringFlag(flags, "color") ?? stringValue(structured.color),
-    size: floatFlag(flags, "size") ?? numberValue(structured.size),
-    rotation: floatFlag(flags, "rotation") ?? numberValue(structured.rotation),
-    x: floatFlag(flags, "x") ?? numberValue(structured.x),
-    y: floatFlag(flags, "y") ?? numberValue(structured.y),
-    z: floatFlag(flags, "z") ?? numberValue(structured.z),
-    space: stringFlag(flags, "space") ?? stringValue(structured.space),
-    speedModifier: floatFlag(flags, "speed-modifier") ?? numberValue(structured.speedModifier),
-    strength: floatFlag(flags, "strength") ?? numberValue(structured.strength),
-    frequency: floatFlag(flags, "frequency") ?? numberValue(structured.frequency),
-    scrollSpeed: floatFlag(flags, "scroll-speed") ?? numberValue(structured.scrollSpeed),
-    octaveCount: numberFlag(flags, "octave-count") ?? numberValue(structured.octaveCount),
-    quality: stringFlag(flags, "quality") ?? stringValue(structured.quality),
-    collisionType: stringFlag(flags, "collision-type") ?? stringValue(structured.collisionType),
-    collisionMode: stringFlag(flags, "collision-mode") ?? stringValue(structured.collisionMode),
-    dampen: floatFlag(flags, "dampen") ?? numberValue(structured.dampen),
-    bounce: floatFlag(flags, "bounce") ?? numberValue(structured.bounce),
-    lifetimeLoss: floatFlag(flags, "lifetime-loss") ?? numberValue(structured.lifetimeLoss),
-    minKillSpeed: floatFlag(flags, "min-kill-speed") ?? numberValue(structured.minKillSpeed),
-    maxKillSpeed: floatFlag(flags, "max-kill-speed") ?? numberValue(structured.maxKillSpeed),
-    radiusScale: floatFlag(flags, "radius-scale") ?? numberValue(structured.radiusScale),
-    ratio: floatFlag(flags, "ratio") ?? numberValue(structured.ratio),
-    lifetime: floatFlag(flags, "lifetime") ?? numberValue(structured.lifetime),
-    width: floatFlag(flags, "width") ?? numberValue(structured.width),
-    subEmitterAction: stringFlag(flags, "sub-emitter-action") ?? stringValue(structured.subEmitterAction),
-    subEmitterTarget: stringFlag(flags, "sub-emitter-target") ?? stringValue(structured.subEmitterTarget),
-    subEmitterType: stringFlag(flags, "sub-emitter-type") ?? stringValue(structured.subEmitterType),
-    subEmitterProperties: stringFlag(flags, "sub-emitter-properties") ?? stringValue(structured.subEmitterProperties),
-    index: numberFlag(flags, "index") ?? numberValue(structured.index),
-    mode: stringFlag(flags, "mode") ?? stringValue(structured.mode),
-    curve: floatFlag(flags, "curve") ?? numberValue(structured.curve),
-    speed: floatFlag(flags, "speed") ?? numberValue(structured.speed)
-  });
-}
 
 function vfxLineCreateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);

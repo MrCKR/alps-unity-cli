@@ -28,6 +28,7 @@ namespace UnityCli
             if (string.IsNullOrEmpty(r.ClipPath)) throw new UnityCliBridge.BridgeCommandException("E_CLIP_PATH_REQUIRED", "controller.add-blend-tree-child requires clipPath.", "Pass an Assets/*.anim AnimationClip path.");
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(SceneToolSupport.NormalizeAssetPath(r.ClipPath));
             if (clip == null) throw new UnityCliBridge.BridgeCommandException("E_CLIP_NOT_FOUND", "AnimationClip not found at: " + r.ClipPath, "Create the clip first.");
+            ctx.CommitEffect();
             Undo.RecordObject(blendTree, "Add BlendTree Child");
             blendTree.AddChild(clip, r.Threshold ?? 0f);
             if (r.PositionX.HasValue || r.PositionY.HasValue)
@@ -38,8 +39,14 @@ namespace UnityCli
                 children[children.Length - 1] = last;
                 blendTree.children = children;
             }
-            EditorUtility.SetDirty(blendTree); EditorUtility.SetDirty(controller); AssetDatabase.SaveAssets();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = r.StateName, ChildCount = blendTree.children.Length, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-blend-tree-child", Path = path, State = r.StateName } } });
+            EditorUtility.SetDirty(blendTree); EditorUtility.SetDirty(controller);
+            var observedController = AnimationToolSupport.ReloadControllerAsset(path);
+            var observedState = observedController == null ? null : AnimationToolSupport.FindStateInLayer(observedController.layers[layerIndex].stateMachine, r.StateName);
+            var observedTree = observedState == null ? null : observedState.motion as BlendTree;
+            var observedChildren = observedTree == null ? null : observedTree.children;
+            var observedChild = observedChildren == null || observedChildren.Length == 0 ? default(ChildMotion) : observedChildren[observedChildren.Length - 1];
+            if (observedChildren == null || observedChild.motion != clip || (r.Threshold.HasValue && !Mathf.Approximately(observedChild.threshold, r.Threshold.Value)) || (r.PositionX.HasValue && !Mathf.Approximately(observedChild.position.x, r.PositionX.Value)) || (r.PositionY.HasValue && !Mathf.Approximately(observedChild.position.y, r.PositionY.Value))) throw AnimationToolSupport.StateMismatch("E_CONTROLLER_BLEND_TREE_CHILD_STATE_MISMATCH", "BlendTree child");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = observedState.name, ChildCount = observedChildren.Length, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-blend-tree-child", Path = path, State = observedState.name } } });
         }
     }
 }

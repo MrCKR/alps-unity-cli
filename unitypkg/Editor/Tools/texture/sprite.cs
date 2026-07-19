@@ -56,8 +56,14 @@ namespace UnityCli
             var path = TextureToolSupport.ResolveTexturePath(request.Path ?? request.Target);
             TextureToolSupport.LoadTextureAsset(path);
             var importer = TextureToolSupport.RequireTextureImporter(path);
-            importer.textureType = TextureImporterType.Sprite;
             var spriteMode = request.SpriteMode ?? request.Mode;
+            TextureToolSupport.ValidateSpriteRequest(spriteMode, request.PixelsPerUnit, request.PivotX, request.PivotY, request.Slices);
+            var slices = TextureToolSupport.BuildSpriteSlices(request.Slices);
+            var sourceTexture = TextureToolSupport.LoadTextureAsset(path);
+            TextureToolSupport.ValidateSpriteSliceBounds(slices, sourceTexture.width, sourceTexture.height);
+            var sliceOutputs = new List<TextureSliceOutput>();
+            ctx.CommitEffect();
+            importer.textureType = TextureImporterType.Sprite;
             if (!string.IsNullOrEmpty(spriteMode))
             {
                 importer.spriteImportMode = string.Equals(spriteMode, "multiple", System.StringComparison.OrdinalIgnoreCase) ? SpriteImportMode.Multiple : SpriteImportMode.Single;
@@ -70,8 +76,6 @@ namespace UnityCli
             importer.spritePivot = new Vector2(
                 (float)(request.PivotX ?? importer.spritePivot.x),
                 (float)(request.PivotY ?? importer.spritePivot.y));
-            var slices = TextureToolSupport.BuildSpriteSlices(request.Slices);
-            var sliceOutputs = new List<TextureSliceOutput>();
             if (slices.Length > 0)
             {
                 importer.spriteImportMode = SpriteImportMode.Multiple;
@@ -88,15 +92,38 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_IMPORT_FAILED", "Failed to reimport texture as Sprite: " + path + " (" + exception.Message + ")", "Check TextureImporter settings and Unity Console diagnostics.");
             }
-            foreach (var slice in slices)
+            var observedImporter = TextureToolSupport.RequireTextureImporter(path);
+            if (observedImporter.textureType != TextureImporterType.Sprite ||
+                (!string.IsNullOrEmpty(spriteMode) && observedImporter.spriteImportMode != (string.Equals(spriteMode, "multiple", System.StringComparison.OrdinalIgnoreCase) ? SpriteImportMode.Multiple : SpriteImportMode.Single)) ||
+                (pixelsPerUnit > 0 && !Mathf.Approximately(observedImporter.spritePixelsPerUnit, pixelsPerUnit)))
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SPRITE_STATE_MISMATCH", "Texture importer did not retain the requested Sprite settings.", "Inspect the TextureImporter settings and retry after the Editor is idle.");
+            if ((request.PivotX.HasValue && !Mathf.Approximately(observedImporter.spritePivot.x, (float)request.PivotX.Value)) ||
+                (request.PivotY.HasValue && !Mathf.Approximately(observedImporter.spritePivot.y, (float)request.PivotY.Value)))
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SPRITE_STATE_MISMATCH", "Texture importer did not retain the requested Sprite pivot.", "Inspect the TextureImporter settings and retry after the Editor is idle.");
+#pragma warning disable 618
+            var observedSlices = observedImporter.spritesheet;
+#pragma warning restore 618
+            foreach (var slice in observedSlices)
             {
                 sliceOutputs.Add(new TextureSliceOutput { Name = slice.name, X = slice.rect.x, Y = slice.rect.y, Width = slice.rect.width, Height = slice.rect.height });
             }
+            if (slices.Length > 0 && observedSlices.Length != slices.Length)
+                throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SPRITE_STATE_MISMATCH", "Texture importer slice count did not match the requested Sprite sheet.", "Inspect the TextureImporter settings and retry after the Editor is idle.");
+            for (var index = 0; index < slices.Length; index++)
+                if (observedSlices[index].name != slices[index].name ||
+                    !Mathf.Approximately(observedSlices[index].rect.x, slices[index].rect.x) ||
+                    !Mathf.Approximately(observedSlices[index].rect.y, slices[index].rect.y) ||
+                    !Mathf.Approximately(observedSlices[index].rect.width, slices[index].rect.width) ||
+                    !Mathf.Approximately(observedSlices[index].rect.height, slices[index].rect.height) ||
+                    !Mathf.Approximately(observedSlices[index].pivot.x, slices[index].pivot.x) ||
+                    !Mathf.Approximately(observedSlices[index].pivot.y, slices[index].pivot.y) ||
+                    observedSlices[index].alignment != slices[index].alignment)
+                    throw new UnityCliBridge.BridgeCommandException("E_TEXTURE_SPRITE_STATE_MISMATCH", "Texture importer slice did not retain the requested fields: " + slices[index].name, "Inspect the TextureImporter settings and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Texture = TextureToolSupport.BuildTextureInfo(path, TextureToolSupport.LoadTextureAsset(path)),
-                ImportSettings = TextureToolSupport.BuildTextureImportSettings(TextureToolSupport.RequireTextureImporter(path)),
-                SliceCount = slices.Length,
+                ImportSettings = TextureToolSupport.BuildTextureImportSettings(observedImporter),
+                SliceCount = observedSlices.Length,
                 Slices = sliceOutputs,
                 PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.sprite", Path = path, Refresh = true } }
             });

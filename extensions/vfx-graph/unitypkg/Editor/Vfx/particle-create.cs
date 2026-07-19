@@ -47,9 +47,14 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.particle-create");
-            var gameObject = string.IsNullOrWhiteSpace(request.Target)
+            VfxToolSupport.PrepareParticleMainFields(request);
+            var preparedTarget = string.IsNullOrWhiteSpace(request.Target) ? null : GameObjectToolSupport.ResolveUniqueTarget(request.Target, "vfx.particle-create requires target.");
+            ctx.CommitEffect();
+            var gameObject = preparedTarget == null
                 ? VfxToolSupport.CreateSceneObject(string.IsNullOrWhiteSpace(request.Name) ? "ParticleSystem" : request.Name)
-                : GameObjectToolSupport.ResolveUniqueTarget(request.Target, "vfx.particle-create requires target.");
+                : VfxToolSupport.FindGameObjectByTarget(preparedTarget.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (gameObject == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.particle-create target disappeared after commit.", "Retry after checking the target still exists.");
+            var gameObjectId = gameObject.GetInstanceID();
             var particleSystem = gameObject.GetComponent<ParticleSystem>();
             var effects = new List<VfxPlannedEffect>();
             if (particleSystem == null)
@@ -63,12 +68,14 @@ namespace UnityCli
             }
 
             VfxToolSupport.ApplyParticleMainFields(particleSystem, request, "vfx.particle-create", effects);
-            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
-            VfxToolSupport.MarkSceneDirty(gameObject);
+            var observed = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-create");
+            VfxToolSupport.VerifyParticleMainFields(observed, request);
+            UnityCliSceneMutation.MarkSceneObjectDirty(observed);
+            VfxToolSupport.MarkSceneDirty(observed.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
-                ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem),
+                Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
+                ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(observed),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
             });

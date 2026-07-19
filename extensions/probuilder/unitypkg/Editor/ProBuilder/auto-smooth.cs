@@ -55,24 +55,30 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("auto-smooth", "No ProBuilderMesh on target.");
 
-            var angleThreshold = (float)(request.AngleThreshold ?? 30);
+            var angleThreshold = ProBuilderOperationProof.CheckedFloat(request.AngleThreshold ?? 30, "angleThreshold");
             if (angleThreshold < 0 || angleThreshold > 180)
                 throw ProBuilderErrors.SchemaInvalid("angleThreshold must be between 0 and 180 degrees.");
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
             if (faceCount < 1)
                 throw ProBuilderErrors.OperationFailed("auto-smooth", "Target has no readable faces.");
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).Distinct().ToArray();
             if (faceIndices == null || faceIndices.Length == 0)
                 faceIndices = Enumerable.Range(0, faceCount).ToArray();
             if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
                 throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
-
+            var before = ProBuilderOperationProof.Capture(mesh, faceIndices: faceIndices);
+            if (before == null) throw ProBuilderErrors.OperationFailed("auto-smooth", "Requested face geometry is not readable.");
+            ctx.CommitEffect();
             Undo.RecordObject(go, "ProBuilder Auto Smooth");
             if (!ProBuilderReflection.ApplySmoothingGroups(mesh, faceIndices, angleThreshold))
                 throw ProBuilderErrors.OperationFailed("auto-smooth", "ProBuilder 5.x Smoothing.ApplySmoothingGroups failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
+            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
+            var after = ProBuilderOperationProof.Capture(freshMesh, faceIndices: faceIndices);
+            if (!ProBuilderOperationProof.HasChangedSmoothing(before, after))
+                throw ProBuilderErrors.OperationFailed("auto-smooth", "Requested faces did not change readable smoothing groups.");
 
             var smoothed = faceIndices.Length;
             return new System.Threading.Tasks.ValueTask<Result>(new Result { SmoothedFaceCount = smoothed });
