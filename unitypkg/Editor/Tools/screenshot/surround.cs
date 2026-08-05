@@ -26,7 +26,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool DryRun { get; set; }
             public string Target { get; set; }
             public double[] Center { get; set; }
@@ -53,7 +52,6 @@ namespace UnityCli
             Summary = "Capture six fixed-angle screenshots and compose a 3x2 contact sheet; dry-run supported.",
             Description = "Capture six fixed angles (front, back, left, right, top, bird_eye) around a GameObject and compose a 3x2 contact sheet PNG. Supports --dry-run to preview planned artifacts. Editor-only.",
             Group = "screenshot",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
@@ -103,7 +101,7 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "screenshot.surround", DryRun = true, Target = go.name,
+                    DryRun = true, Target = go.name,
                     Center = new double[] { center.x, center.y, center.z }, Radius = radius,
                     ContactSheet = new ScreenshotArtifactEntry { Source = "surround-contact-sheet", Path = contactSheetPath, Width = width * 3, Height = height * 2, Format = "png" },
                     Artifacts = BuildPlannedShots(labels, shotPaths, width, height, positions)
@@ -152,7 +150,7 @@ namespace UnityCli
             var contactProof = ScreenshotToolSupport.VerifyScreenshotArtifact(contactSheetPath, "png");
             var result = new Result
             {
-                Command = "screenshot.surround", Target = go.name,
+                Target = go.name,
                 Center = new double[] { center.x, center.y, center.z }, Radius = radius, Count = 6,
                 ContactSheet = new ScreenshotArtifactEntry { Source = "surround-contact-sheet", Path = contactSheetPath, Width = width * 3, Height = height * 2, Format = "png", SizeBytes = contactProof.SizeBytes, Sha256 = contactProof.Sha256 },
                 Artifacts = artifacts

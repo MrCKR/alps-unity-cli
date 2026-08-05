@@ -44,7 +44,6 @@ namespace UnityCli
             Summary = "Create a texture asset from a source file or a generated solid-color image, then apply import settings.",
             Description = "Create a texture asset at an Assets/ path. With source, copies an existing file (absolute or Assets/ path); otherwise generates a solid-color PNG/JPG from width/height/color. Refuses to overwrite unless overwrite=true. Import settings (textureType/readable/mipmap/sRGB/wrapMode/filterMode/compression/maxTextureSize) are applied after import.",
             Group = "texture",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write", "asset-import" },
             Target = "editor",

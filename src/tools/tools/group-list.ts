@@ -1,16 +1,16 @@
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../../extension-availability.js";
-import { catalogFlags, loadToolCatalog } from "../catalog.js";
+import { catalogFlags, loadToolCatalog, resolveLiveToolRegistrations } from "../catalog.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
-import { supportStatusForTool, toolCliCommand, toolSource } from "../metadata/index.js";
+import { toolAvailabilityScope, toolSource } from "../metadata/index.js";
 
 export interface ToolsGroupListRequest { group: string }
-export interface ToolsGroupListItem { name: string; summary: string; group: string; source: string; destructiveHint: boolean; playModeSupport?: string; supportStatus: string; target: string; requiresPackages?: string[]; cliCommand: string; extensionAvailability?: string; extensionAvailabilityError?: string; extensionId?: string; missingPackageIds?: string[]; nextActions?: string[] }
-export interface ToolsGroupListResult { command: string; group: string; count: number; tools: ToolsGroupListItem[]; nextActions: string[] }
+export interface ToolsGroupListItem { name: string; summary: string; group: string; source: string; destructiveHint: boolean; playModeSupport: string; target: string; availabilityScope: string; available: boolean; unavailableReason?: string; requiresPackages?: string[]; extensionId?: string }
+export interface ToolsGroupListResult { group: string; count: number; tools: ToolsGroupListItem[] }
 
 export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
   name: "tools.group-list",
-  summary: "List tools in a specific group with short routing summaries and support status.",
+  summary: "List direct tools in a specific group with routing summaries and current availability.",
   description: "List tools in a group from the shared TS-local and live Bridge catalog.",
   group: "tools",
   handler: "offline",
@@ -25,8 +25,9 @@ export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
     const catalog = await loadToolCatalog(flags, context, context.requestId);
     if (catalog.ok === false) throw StructuredToolError.from(catalog.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
     const availabilityFlags = await extensionAvailabilityFlags(flags, context);
-    const matches = catalog.tools.filter((tool) => tool.group === request.group);
-    if (matches.length === 0) throw new StructuredToolError("E_TOOL_GROUP_NOT_FOUND", `Tool group not found: ${request.group}.`, ["Run unity_cli tools group to see all tool groups."]);
+    const staticMatches = catalog.tools.filter((tool) => tool.group === request.group);
+    if (staticMatches.length === 0) throw new StructuredToolError("E_TOOL_GROUP_NOT_FOUND", `Tool group not found: ${request.group}.`, ["Run unity_cli tools group to see all tool groups."]);
+    const matches = await resolveLiveToolRegistrations(staticMatches, flags, context, context.requestId);
     const tools = await Promise.all(matches.map(async (tool) => {
       const availability = await checkToolExtensionAvailability(tool, availabilityFlags);
       return {
@@ -35,22 +36,15 @@ export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
         group: tool.group,
         source: toolSource(tool),
         destructiveHint: tool.destructiveHint,
-        playModeSupport: tool.playModeSupport,
-        supportStatus: supportStatusForTool(tool),
+        playModeSupport: tool.playModeSupport ?? "supported",
         target: tool.target ?? "editor",
-        ...(tool.requiresPackages ? { requiresPackages: tool.requiresPackages } : {}),
-        cliCommand: toolCliCommand(tool),
-        ...(availability.extensionId ? {
-          extensionAvailability: availability.available ? availability.availabilityResult?.status ?? "available" : "unavailable",
-          extensionId: availability.extensionId,
-          ...(availability.available ? {} : {
-            extensionAvailabilityError: availability.errorCode,
-            missingPackageIds: availability.availabilityResult?.missingPackageIds ?? tool.requiresPackages ?? [],
-            nextActions: availability.nextActions
-          })
-        } : {})
+        availabilityScope: toolAvailabilityScope(tool),
+        available: availability.available && (tool.available ?? true),
+        ...(!availability.available ? { unavailableReason: `${availability.errorCode}: ${availability.message}` } : tool.unavailableReason ? { unavailableReason: tool.unavailableReason } : {}),
+        ...(tool.requiresPackages?.length ? { requiresPackages: tool.requiresPackages } : {}),
+        ...(availability.extensionId ? { extensionId: availability.extensionId } : {})
       };
     }));
-    return { command: "tools.group.list", group: request.group, count: tools.length, tools, nextActions: ["Run unity_cli tools describe <tool> for full metadata including schema.", "Run unity_cli tools run <tool> to execute a tool."] };
+    return { group: request.group, count: tools.length, tools };
   }
 });

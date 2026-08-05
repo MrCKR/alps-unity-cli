@@ -16,7 +16,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string TypeName { get; set; }
@@ -32,7 +31,6 @@ namespace UnityCli
             Summary = "Return AssetPreview thumbnail metadata (width/height/transient) for an Assets/* asset.",
             Description = "Return terminal AssetPreview thumbnail metadata for an Assets/* asset. A cache miss waits for Editor preview generation; assets without a preview return hasPreview=false as a terminal result. Does not return image bytes; use camera.screenshot or screenshot.scene-view for rendered captures.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "asset-preview-generation", "editor-cache-write" },
             Target = "editor",
@@ -72,7 +70,6 @@ namespace UnityCli
             var hasPreview = preview != null;
             var result = new Result
             {
-                Command = "asset.preview",
                 AssetPath = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 TypeName = asset.GetType().FullName,

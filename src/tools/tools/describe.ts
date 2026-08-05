@@ -1,22 +1,21 @@
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../../extension-availability.js";
-import { catalogFlags, publicToolDescriptor, resolveCatalogTool } from "../catalog.js";
+import { catalogFlags, publicToolDescriptor, resolveCatalogTool, resolveLiveToolRegistration } from "../catalog.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
 import type { AnyJson } from "../../schema/any-json.js";
-import type { ToolExample } from "../metadata/index.js";
 
 export interface ToolsDescribeRequest { name: string; includeCustom?: boolean; project?: string }
 export interface ToolsDescribeResult {
-  command: string; name: string; summary: string; description: string; group: string; inputSchema: Record<string, AnyJson>; outputSchema?: Record<string, AnyJson>;
-  destructiveHint: boolean; sideEffects?: string[]; playModeSupport?: string; supportsDryRun?: boolean; permissions?: string[]; examples?: ToolExample[]; source?: string;
-  riskLevel: string; longRunning?: boolean; cancellation?: string; cliCommand: string; target: string; availabilityScope: string; supportStatus: string; requiresPackages?: string[];
-  extensionAvailability?: string; extensionAvailabilityError?: string; extensionId?: string; missingPackageIds?: string[]; nextActions?: string[];
+  name: string; summary: string; description: string; group: string; inputSchema: Record<string, AnyJson>; outputSchema: Record<string, AnyJson>;
+  destructiveHint: boolean; sideEffects?: string[]; playModeSupport: string; supportsDryRun: boolean; permissions?: string[];
+  examples?: Array<{ description: string; argv: string[] }>; source?: string; target: string; availabilityScope: string; available: boolean;
+  unavailableReason?: string; requiresPackages?: string[]; extensionId?: string;
 }
 
 export default defineTool<ToolsDescribeRequest, ToolsDescribeResult>({
   name: "tools.describe",
-  summary: "Show full metadata for a specific tool: input schema, output schema, support status, risks, and examples.",
-  description: "Describe a tool from the shared TS-local and live Bridge catalog without dropping live security metadata.",
+  summary: "Show one tool's schemas, examples, side effects, target, and availability.",
+  description: "Describe a tool with schemas, examples, effects, target and current availability while keeping internal routing and fingerprints private.",
   group: "tools",
   handler: "offline",
   supportStatus: "cli-only",
@@ -30,18 +29,14 @@ export default defineTool<ToolsDescribeRequest, ToolsDescribeResult>({
     const resolved = await resolveCatalogTool(request.name, flags, context, context.requestId);
     if (resolved.ok === false) throw StructuredToolError.from(resolved.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
     if (!resolved.tool) throw new StructuredToolError("E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${request.name}.`, ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <keyword> to find related tools."]);
-    const data = { command: "tools.describe", ...publicToolDescriptor(resolved.tool) } as unknown as ToolsDescribeResult;
-    const availability = await checkToolExtensionAvailability(resolved.tool, await extensionAvailabilityFlags(flags, context));
+    const currentTool = await resolveLiveToolRegistration(resolved.tool, flags, context, context.requestId);
+    const data = publicToolDescriptor(currentTool) as unknown as ToolsDescribeResult;
+    const availability = await checkToolExtensionAvailability(currentTool, await extensionAvailabilityFlags(flags, context));
     if (!availability.available) {
-      data.extensionAvailability = "unavailable";
-      data.extensionAvailabilityError = availability.errorCode;
-      data.extensionId = availability.extensionId;
-      data.missingPackageIds = availability.availabilityResult?.missingPackageIds ?? resolved.tool.requiresPackages ?? [];
-      data.nextActions = availability.nextActions;
-    } else if (availability.extensionId) {
-      data.extensionAvailability = availability.availabilityResult?.status ?? "available";
-      data.extensionId = availability.extensionId;
+      data.available = false;
+      data.unavailableReason = `${availability.errorCode}: ${availability.message}`;
     }
+    if (availability.extensionId) data.extensionId = availability.extensionId;
     return data;
   }
 });

@@ -12,24 +12,24 @@ namespace UnityCli
     {
         public sealed class Request { }
         public sealed class Response { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "editor.play", Summary = "Enter Unity Play Mode and return only after the Editor reaches a stable playing state.", Description = "Set EditorApplication.isPlaying=true, absorb the PlayMode transition or same-session reload, and return the stable Editor state. Success proves isPlaying=true and the central PlayMode transition flag is false.", Group = "editor", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "session-affecting" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Enter play mode", Input = new Request { } } } };
+        public ToolDescriptor Describe() => new() { Name = "editor.play", Summary = "Enter Unity Play Mode and return only after the Editor reaches a stable playing state.", Description = "Set EditorApplication.isPlaying=true, absorb the PlayMode transition or same-session reload, and return the stable Editor state. Success proves isPlaying=true and the central PlayMode transition flag is false.", Group = "editor",DestructiveHint = false, SideEffects = new[] { "session-affecting" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Enter play mode", Input = new Request { } } } };
         public async System.Threading.Tasks.ValueTask<Response> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var continuation = ctx.ProofOnly ? ctx.RequireProofContinuation("playmode-v1") : ctx.ProofContinuation;
-            object expectedPlaying;
-            object beforePlaying;
-            if (continuation == null
-                || !continuation.TryGetValue("expectedPlaying", out expectedPlaying) || !(expectedPlaying is bool) || !(bool)expectedPlaying
-                || !continuation.TryGetValue("beforePlaying", out beforePlaying) || !(beforePlaying is bool))
-                throw new UnityCliBridge.BridgeCommandException("E_REQUEST_JOURNAL_CORRUPT", "Play Mode continuation is missing or does not target Play Mode.", "Inspect the request journal before submitting a new request.");
-            var before = (bool)beforePlaying;
-            if (!ctx.ProofOnly)
+            // before 采集一次后按 requestId 存 SessionState：PlayMode 过渡触发 domain reload，
+            // 同一请求重跑时 before 必须仍是第一次 effect 前的值，Changed 语义才跨 reload 成立。
+            var beforeKey = "unity-cli.play.before." + ctx.RequestId;
+            var rawBefore = SessionState.GetString(beforeKey, null);
+            bool before;
+            if (string.IsNullOrEmpty(rawBefore))
             {
-                EditorToolSupport.EnsureEditorNotBusy("editor.play");
-                ctx.CommitEffect();
-                EditorApplication.isPaused = false;
-                EditorApplication.isPlaying = true;
+                before = EditorApplication.isPlaying;
+                SessionState.SetString(beforeKey, before ? "1" : "0");
             }
+            else before = rawBefore == "1";
+            EditorToolSupport.EnsureEditorNotBusy("editor.play");
+            ctx.CommitEffect();
+            EditorApplication.isPaused = false;
+            EditorApplication.isPlaying = true;
             var stable = await ctx.Wait.UntilStable(
                 () => EditorApplication.isPlaying && !UnityCliBridge.IsPlayModeChanging(),
                 TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)),

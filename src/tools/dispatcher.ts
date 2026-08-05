@@ -5,26 +5,19 @@ import {
   bridgeCommandRegistry,
   executeBridgeCommand,
   executeBridgePayload,
-  startBridgeCommandJob,
-  type BridgeJobRuntime,
   type BridgeRuntime,
   type BridgeCommandSpec,
-  type BridgeSecurityDescriptor
+  type BridgeDescriptorBinding
 } from "../bridge/index.js";
 import type { BuiltinDocsRuntime } from "../builtin-docs.js";
-import type { JobRunner } from "../job-runner.js";
-import type { JobStore } from "../job-store.js";
 import { failure, success } from "../output.js";
 import { PackageManagerError } from "../package-manager.js";
-import { ProjectIdentityError, resolveProjectIdentity } from "../project-identity.js";
-import { InstanceRegistryError, currentInstanceProjectPath, resolveInstanceJournalIdentity } from "../instances.js";
-import { currentInvocationOrigin } from "../invocation-origin.js";
-import { executeWithLocalRequestJournal } from "../local-request-journal.js";
+import { InstanceRegistryError, resolveInstanceJournalIdentity, selectObservationInstanceForFlags } from "../instances.js";
+import { EditorBlockerObserver, sanitizeEditorBlockers } from "../editor-blocker-observer.js";
 import { defaultDataDir } from "../platform.js";
 import type { ContextCatalogRuntime } from "../contexts/catalog.js";
 import { discoverProjectTools, discoverRuntimeTools, type ProjectToolRuntime } from "../project-tool-discovery.js";
 import type { ContextDescriptor } from "../project-context-discovery.js";
-import { confirmDestructiveExecution } from "../security.js";
 import { validateSchema } from "../schema/validator.js";
 import type { CliResult } from "../types.js";
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../extension-availability.js";
@@ -36,15 +29,13 @@ import { EXTENSION_GROUPS, findToolByName, toolIsMutation, type ToolMetadata } f
 
 export type ToolsRuntime = ProjectToolRuntime & ContextCatalogRuntime & Partial<BridgeRuntime> & Partial<BuiltinDocsRuntime> & {
   dataDir?: string;
-  store?: JobStore;
-  runner?: JobRunner;
 };
 
 type ParsedInput = { ok: true; input: Record<string, unknown> } | { ok: false; error: CliResult };
 
 /**
- * Tool 分发顺序固定为输入解析、catalog 解析、schema 校验、安全确认、目标选择、执行与 envelope。
- * destructive proof 只在确认完成后生成，并始终绑定实际 tool name 与 wrapper bridge command。
+ * Tool 分发顺序固定为输入解析、catalog 解析、schema 校验、目标选择、执行与 envelope。
+ * 调用即授权，只保留 schema、目标与 descriptor 的正确性验证。
  */
 export async function dispatchTool(
   name: string | undefined,
@@ -61,22 +52,6 @@ export async function dispatchTool(
 
   const parsed = await parseTypedInput(flags, requestId);
   if (!parsed.ok) return parsed.error;
-  const invocationContract = generatedToolCompletionContract(name);
-  const frozenDelivery = currentInvocationOrigin() === "batch-frozen" && invocationContract?.frozenDeliveryPolicy === "preserved";
-  const dryRun = getBoolean(flags, "dry-run");
-  const channel = typeof parsed.input.channel === "string" ? parsed.input.channel : getString(flags, "channel");
-  const deferredDelivery = getBoolean(flags, "job") || channel === "batchmode";
-  if (!dryRun && !frozenDelivery && invocationContract?.directInvocationPolicy === "prohibited-unprovable") {
-    return failure(requestId, "E_DIRECT_BUSINESS_PROOF_UNAVAILABLE", `${name} cannot prove arbitrary Unity side effects for direct delivery.`, [
-      "Use a dedicated Tool with a registered business-state readback predicate."
-    ], { toolName: name, delivery: "direct", directInvocationPolicy: invocationContract.directInvocationPolicy });
-  }
-  if (!dryRun && !frozenDelivery && invocationContract?.directInvocationPolicy === "deferred-only" && !deferredDelivery) {
-    return failure(requestId, "E_DIRECT_BUSINESS_PROOF_UNAVAILABLE", `${name} requires deferred delivery because live direct execution cannot independently prove arbitrary Unity side effects.`, [
-      "Use --job or channel=batchmode to retain the frozen deferred execution path.",
-      "Use a dedicated direct Tool when the operation needs a terminal business readback."
-    ], { toolName: name, delivery: "direct", directInvocationPolicy: invocationContract.directInvocationPolicy });
-  }
   const mergedFlags = mergeInputFlags(parsed.input, flags);
   const localTool = findToolByName(name);
   if (localTool) {
@@ -89,7 +64,7 @@ export async function dispatchTool(
   if (coreSpec && runtime.bridgeExecute) return executeCoreBridgeSpec(name, coreSpec, parsed.input, mergedFlags, runtime, requestId, positionalTarget);
 
   const resolved = await resolveCatalogTool(name, mergedFlags, runtime, requestId);
-  if (resolved.ok === false) return resolved;
+  if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, mergedFlags, runtime);
   const tool = resolved.tool;
   if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <keyword> to find related tools."]);
 
@@ -107,13 +82,12 @@ async function dispatchResolvedTool(
 ): Promise<CliResult> {
   const definition = findDefineTool(tool.name);
   let executionTool = tool;
-  const offlineUiRead = tool.name === "ui.document.info" && typeof input.path === "string";
-  if (!definition && !offlineUiRead) {
+  if (!definition) {
     const runtimeTarget = tool.target === "runtime" || (tool.target === "both" && getBoolean(flags, "runtime"));
     const discovered = runtimeTarget
       ? await discoverRuntimeTools(flags, runtime, requestId, { requireBridge: true })
       : await discoverProjectTools(flags, runtime, requestId, { requireBridge: true });
-    if (discovered.ok === false) return discovered;
+    if (discovered.ok === false) return enrichTargetFailureWithDialogBlocker(discovered, flags, runtime);
     const current = discovered.tools.find((candidate) => candidate.name === tool.name);
     if (!current) return failure(requestId, "E_TOOL_UNAVAILABLE", `Tool ${tool.name} is not registered in the selected Unity generation.`, [
       "Run unity_cli tools describe against the installed CLI package to inspect its static requirements.",
@@ -139,17 +113,10 @@ async function dispatchResolvedTool(
     actual: schemaErrors[0].actual,
     errors: schemaErrors
   });
-  const manifestAction = executionTool.sideEffects?.includes("manifest-change") === true ? String(input.action) : undefined;
-  const manifestWrite = manifestAction !== undefined && ["set", "clear", "add", "remove"].includes(manifestAction);
-  const readOnlyManifestAction = manifestAction === "get" || manifestAction === "list";
-  // 启动作业不会降低风险：构建、测试、Package resolve 等会立即产生持久副作用，必须尊重 descriptor。
-  const destructiveHint = manifestWrite || (executionTool.destructiveHint && !readOnlyManifestAction);
-  const confirmation = await confirmDestructiveExecution(flags, { command: executionTool.name, summary: executionTool.summary, destructiveHint, supportsDryRun: executionTool.supportsDryRun, requestId });
-  if (confirmation) return confirmation;
   return definition ? executeDefinition(executionTool, completion, definition, input, flags, runtime, requestId, dispatchStartedAtMs) : executeLiveTool(executionTool, input, flags, runtime, requestId);
 }
 
-/** 已有 core bridge spec 使用统一参数构造与安全门禁，不进入 live custom wrapper。 */
+/** 已有 core bridge spec 使用统一参数构造，不进入 live custom wrapper。 */
 async function executeCoreBridgeSpec(
   name: string,
   spec: BridgeCommandSpec,
@@ -159,38 +126,12 @@ async function executeCoreBridgeSpec(
   requestId: string,
   positionalTarget?: string
 ): Promise<CliResult> {
-  const destructiveHint = spec.destructiveHint === true;
-  const supportsDryRun = spec.supportsDryRun === true;
-  const confirmation = await confirmDestructiveExecution(flags, { command: name, summary: name, destructiveHint, supportsDryRun, requestId });
-  if (confirmation) return confirmation;
-
-  let liveDescriptorFingerprint: string | undefined;
-  const injectedLiveDescriptor = runtime.projectTools?.find((tool) => tool.name === name);
-  if (destructiveHint && !(getBoolean(flags, "dry-run") && supportsDryRun) && (!runtime.bridgeExecute || injectedLiveDescriptor)) {
-    const resolved = await resolveCatalogTool(name, flags, runtime, requestId);
-    if (resolved.ok === false) return resolved;
-    if (!resolved.tool || resolved.tool.destructiveHint !== true || !resolved.tool.liveDescriptorFingerprint) {
-      return failure(requestId, "E_SECURITY_POLICY_MISMATCH", `Live destructive descriptor is unavailable or inconsistent for ${name}.`, [
-        `Run unity_cli tools describe ${name} against the selected Unity instance.`,
-        "Refresh the Bridge registry before retrying the destructive call."
-      ]);
-    }
-    liveDescriptorFingerprint = resolved.tool.liveDescriptorFingerprint;
-  }
-
   let args = await spec.buildArgs({ command: name, flags: bridgeWrapperFlags(flags, input), positionalTarget });
   if (spec.toolName) args = { name: spec.toolName, input: args };
-  const security: BridgeSecurityDescriptor = { name, destructiveHint, supportsDryRun, bridgeCommand: spec.bridgeCommand, ...(liveDescriptorFingerprint ? { liveDescriptorFingerprint } : {}) };
-  if (getBoolean(flags, "job")) {
-    if (spec.supportsJob !== true || !runtime.dataDir || !runtime.store || !runtime.runner) {
-      return failure(requestId, "E_TOOL_JOB_UNSUPPORTED", `Tool does not support a batch Bridge job: ${name}.`, [`Run unity_cli tools describe ${name} to inspect execution support.`]);
-    }
-    return startBridgeCommandJob(requestId, name, spec.bridgeCommand, args, flags, runtime as BridgeJobRuntime, spec);
-  }
-  return executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, security, {
+  return enrichTargetFailureWithDialogBlocker(await executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, undefined, {
     mode: "execute",
     mutation: true,
-  });
+  }), flags, runtime);
 }
 
 async function executeDefinition(
@@ -204,25 +145,19 @@ async function executeDefinition(
   dispatchStartedAtMs: number,
 ): Promise<CliResult> {
   let projectPath = typeof input.project === "string" ? input.project : process.cwd();
-  let journalIdentity: { instanceId: string; canonicalProjectPath: string } | undefined;
-  if (tool.name === "build.cancel" && runtime.store) {
-    const jobId = [input.jobId, input.id, input.job].find((value): value is string => typeof value === "string" && value.length > 0);
-    if (jobId) {
-      const job = await runtime.store.get(jobId);
-      if (job?.projectPath) projectPath = job.projectPath;
-    }
-  }
   const execution = executionFromFlags(flags);
   const absoluteDeadlineMs = dispatchStartedAtMs + Math.max(1, execution.timeoutMs ?? tool.timeoutMs ?? 30_000);
-  const frozenDelivery = (currentInvocationOrigin() === "batch-frozen" && completion.frozenDeliveryPolicy === "preserved")
-    || getBoolean(flags, "job")
-    || completion.directInvocationPolicy === "deferred-only"
-    || definition.handler === "job"
-    || ("deliveryMode" in completion && completion.deliveryMode === "job-deferred");
-  // editor.compile 的 completion journal 由 Bridge root request 持有；TS 只轮询其 terminal。
-  const bridgeRootJournal = tool.name === "editor.compile";
-  const requiresLocalJournal = completion.mutation && completion.journalPolicy === "required" && !execution.dryRun && !frozenDelivery && !bridgeRootJournal;
-  const run = async (commitEffect: () => Promise<void>): Promise<CliResult> => {
+  // 本地 mutation 仍需绑定 --instance 的项目，避免调用方输入跨项目写入；不创建请求记录。
+  try {
+    if (completion.mutation && !execution.dryRun) {
+      const selected = await resolveInstanceJournalIdentity(flags, runtime.dataDir ?? defaultDataDir());
+      if (selected) projectPath = selected.canonicalProjectPath;
+    }
+  } catch (error) {
+    if (error instanceof InstanceRegistryError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    throw error;
+  }
+  const run = async (): Promise<CliResult> => {
     try {
       const data = await definition.execute(input, {
       requestId,
@@ -230,17 +165,15 @@ async function executeDefinition(
       absoluteDeadlineMs,
       execution,
       dataDir: runtime.dataDir,
-      artifactDir: typeof input.artifactDir === "string" ? input.artifactDir : runtime.dataDir ?? projectPath,
+      artifactDir: getString(flags, "artifact-dir") ?? runtime.dataDir ?? projectPath,
       logPath: typeof input.logPath === "string" ? input.logPath : undefined,
       flags,
       projectTools: runtime.projectTools,
       projectContexts: runtime.projectContexts as ContextDescriptor[] | undefined,
       bridgeExecute: runtime.bridgeExecute,
       fetch: runtime.fetch,
-      jobStore: runtime.store,
-      jobRunner: runtime.runner,
-      commitEffect,
-      localJournalActive: requiresLocalJournal
+      // 普通 TS 工具不保留请求级档案；兼容现有 mutation 工具的 effect hook。
+      commitEffect: async () => undefined
     });
     if (!tool.outputSchema) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} has no output schema for terminal proof.`, [
       `Regenerate the Tool schema and completion registry for ${tool.name}.`
@@ -257,7 +190,7 @@ async function executeDefinition(
     if (outputErrors.length > 0) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} result failed output schema validation at ${outputErrors[0].path}.`, [
       "Fix the Tool result or completion driver before retrying."
     ], { toolName: tool.name, errors: outputErrors });
-    validateLocalCompletionProof(tool.name, completion, normalizedData, getBoolean(flags, "job"));
+    validateLocalCompletionProof(tool.name, completion, normalizedData, input);
     return success(requestId, normalizedData);
   } catch (error) {
     if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
@@ -267,40 +200,14 @@ async function executeDefinition(
     }
   };
 
-  if (!requiresLocalJournal) return run(async () => undefined);
   try {
-    // --instance 必须在 journal acceptance 前绑定 registry v2 identity，绝不能由调用 CWD 代替。
-    if (tool.name === "editor.launch-dialog.dismiss") {
-      const selectedProjectPath = await currentInstanceProjectPath(flags, runtime.dataDir ?? defaultDataDir());
-      const identity = resolveProjectIdentity(selectedProjectPath ?? projectPath);
-      journalIdentity = { instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath };
-    } else {
-      journalIdentity = await resolveInstanceJournalIdentity(flags, runtime.dataDir ?? defaultDataDir());
-      if (!journalIdentity) {
-        const identity = resolveProjectIdentity(projectPath);
-        journalIdentity = { instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath };
-      }
-    }
-    projectPath = journalIdentity.canonicalProjectPath;
-    return await executeWithLocalRequestJournal({
-      requestId,
-      toolName: tool.name,
-      input,
-      projectPath,
-      identity: journalIdentity,
-      dataDir: runtime.dataDir ?? defaultDataDir(),
-      absoluteDeadlineMs,
-      executionClass: completion.executionClass,
-      completionDriverId: completion.completionDriverId,
-    }, run);
+    return await run();
   } catch (error) {
     if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
     if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
-    if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);
-    if (error instanceof InstanceRegistryError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
-    return failure(requestId, "E_REQUEST_JOURNAL_IO", error instanceof Error ? error.message : String(error), [
-      "Verify the Unity CLI data directory is writable before retrying."
-    ], { toolName: tool.name });
+    return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
+      `Run unity_cli tools describe ${tool.name} for input requirements and examples.`
+    ]);
   }
 }
 
@@ -309,9 +216,8 @@ export function validateLocalCompletionProof(
   toolName: string,
   completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
   result: unknown,
-  jobMode: boolean,
+  input?: Record<string, unknown>,
 ): void {
-  if (jobMode || isDeferredJobRecord(result) || ("deliveryMode" in completion && completion.deliveryMode === "job-deferred")) return;
   if (completion.executionClass === "atomic" && completion.mutation === false) return;
   const preview = objectRecord(result);
   if (preview?.dryRun === true || preview?.status === "dry_run") return;
@@ -322,7 +228,7 @@ export function validateLocalCompletionProof(
   if (failedStatus) {
     throw invalidCompletionProof(toolName, completion, `returned failed terminal status ${failedStatus}`);
   }
-  const toolSpecificProof = validateKnownLocalTerminal(toolName, completion, result);
+  const toolSpecificProof = validateKnownLocalTerminal(toolName, completion, result, input);
   if (completion.executionClass === "atomic") return;
   if (!toolSpecificProof) {
     throw invalidCompletionProof(toolName, completion, `has no registered Tool-specific ${completion.executionClass} validator`);
@@ -334,20 +240,23 @@ function validateKnownLocalTerminal(
   toolName: string,
   completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
   result: unknown,
+  input?: Record<string, unknown>,
 ): boolean {
   const record = objectRecord(result);
   if (!record) return false;
-  const liveRefresh = objectRecord(record.liveRefresh);
   if (toolName === "package.deploy") {
     if (record.status === "dry_run") return true;
-    if (record.status !== "deployed" || !nonEmptyString(record.targetPath) || !nonEmptyString(record.sourceHash) || typeof record.copiedFileCount !== "number") throw invalidCompletionProof(toolName, completion, "did not prove the deployed package artifact");
-    if (liveRefresh && liveRefresh.status !== "completed" && liveRefresh.status !== "skipped") throw invalidCompletionProof(toolName, completion, "did not reach a terminal package refresh state");
+    const files = objectRecord(record.files);
+    if (record.status !== "deployed" || !nonEmptyString(record.targetPath) || !sha256(record.sourceHash) || !positiveInteger(record.copiedFileCount)
+      || files?.proven !== true || !sha256(files.sourceHash) || !validLivePackageResolve(record.resolve)) throw invalidCompletionProof(toolName, completion, "did not prove deployed files and terminal PackageInfo resolution");
     return true;
   }
   if (toolName === "package.restore") {
     if (record.status === "dry_run") return true;
-    if (record.status !== "restored" || !nonEmptyString(record.targetPath) || typeof record.copiedFileCount !== "number") throw invalidCompletionProof(toolName, completion, "did not prove the restored package artifact");
-    if (liveRefresh && liveRefresh.status !== "completed" && liveRefresh.status !== "skipped") throw invalidCompletionProof(toolName, completion, "did not reach a terminal package refresh state");
+    const files = objectRecord(record.files);
+    if (record.status !== "restored" || !nonEmptyString(record.targetPath) || !nonnegativeInteger(record.copiedFileCount)
+      || files?.proven !== true || typeof files.restoredFromBackup !== "boolean" || typeof files.removedDeployedPackage !== "boolean"
+      || !validLivePackageResolve(record.resolve)) throw invalidCompletionProof(toolName, completion, "did not prove restored files and terminal PackageInfo resolution");
     return true;
   }
   if (toolName === "package.registry.set") {
@@ -368,15 +277,26 @@ function validateKnownLocalTerminal(
     return true;
   }
   if (toolName === "package.install") {
-    if (record.action !== "install" || !nonEmptyString(record.manifestPath) || !nonEmptyString(record.installedVersion) || record.dependencyInstalled !== true) throw invalidCompletionProof(toolName, completion, "did not prove the manifest installation readback");
+    const files = objectRecord(record.files);
+    const dependency = objectRecord(record.dependency);
+    if (record.action !== "install" || !nonEmptyString(record.manifestPath) || !sha256(record.manifestHash)
+      || files?.proven !== true || files.manifestHash !== record.manifestHash
+      || dependency?.present !== true || !nonEmptyString(dependency.name) || !nonEmptyString(dependency.version)
+      || !validLivePackageResolve(record.resolve)) throw invalidCompletionProof(toolName, completion, "did not prove manifest installation and terminal PackageInfo resolution");
     return true;
   }
   if (toolName === "package.remove") {
-    if (record.dryRun !== true && record.status !== "dry_run" && (record.action !== "remove" || !nonEmptyString(record.manifestPath) || record.dependencyRemoved !== true)) throw invalidCompletionProof(toolName, completion, "did not prove the manifest removal readback");
+    if (record.dryRun === true) return true;
+    const files = objectRecord(record.files);
+    const dependency = objectRecord(record.dependency);
+    if (record.action !== "remove" || !nonEmptyString(record.manifestPath) || !sha256(record.manifestHash)
+      || files?.proven !== true || files.manifestHash !== record.manifestHash
+      || dependency?.present !== false || !nonEmptyString(dependency.name)
+      || !validLivePackageResolve(record.resolve)) throw invalidCompletionProof(toolName, completion, "did not prove manifest removal and terminal PackageInfo resolution");
     return true;
   }
   if (toolName === "package.resolve") {
-    if (record.resolve !== "live_bridge_refresh" || liveRefresh?.status !== "completed") throw invalidCompletionProof(toolName, completion, "did not prove terminal Unity package resolution");
+    if (!validLivePackageResolve(record)) throw invalidCompletionProof(toolName, completion, "did not prove terminal Unity PackageManager resolution");
     return true;
   }
   if (toolName === "package.bridge-remove") {
@@ -384,10 +304,42 @@ function validateKnownLocalTerminal(
     return true;
   }
   if (toolName === "code.exec") {
-    const execution = objectRecord(record.execution);
     const compile = objectRecord(record.compile);
     const runtime = objectRecord(record.runtime);
-    if (execution?.exitState !== "completed" || compile?.ok !== true || runtime?.ok !== true) throw invalidCompletionProof(toolName, completion, "did not return a completed frozen Runtime Code terminal");
+    const probeRequested = Object.prototype.hasOwnProperty.call(input ?? {}, "completionProbe");
+    if (!Array.isArray(compile?.diagnostics) || !runtime
+      || !Object.prototype.hasOwnProperty.call(runtime, "returnValue")
+      || typeof runtime.stdout !== "string" || typeof runtime.stderr !== "string") {
+      throw invalidCompletionProof(toolName, completion, "did not return compilation and runtime results");
+    }
+    if (!probeRequested) return true;
+    const readback = objectRecord(record.completion);
+    const assertions = readback?.assertions;
+    if (!Array.isArray(assertions) || assertions.length === 0 || assertions.some((item) => {
+      const assertion = objectRecord(item);
+      return !assertion || !nonEmptyString(assertion.path) || !Object.prototype.hasOwnProperty.call(assertion, "value");
+    })) throw invalidCompletionProof(toolName, completion, "did not return completionProbe fresh readback");
+    return true;
+  }
+  if (toolName === "asset.refresh") {
+    const effects = record.plannedEffects;
+    const effect = Array.isArray(effects) && effects.length === 1 ? objectRecord(effects[0]) : undefined;
+    const requestedPath = input?.path ?? input?.assetPath ?? input?.target;
+    if (!nonEmptyString(requestedPath) || record.path !== requestedPath || record.refreshed !== true || !nonEmptyString(record.options)
+      || !effect || effect.type !== "asset.import" || effect.path !== record.path) {
+      throw invalidCompletionProof(toolName, completion, "did not prove the requested asset reimport and stable path readback");
+    }
+    return true;
+  }
+  if (toolName === "package.embed") {
+    const effects = record.plannedEffects;
+    const effect = Array.isArray(effects) && effects.length === 1 ? objectRecord(effects[0]) : undefined;
+    const packageId = input?.package;
+    const embeddedPath = typeof record.embeddedPath === "string" ? record.embeddedPath.replaceAll("\\", "/") : "";
+    if (!nonEmptyString(packageId) || record.packageId !== packageId || !embeddedPath.endsWith(`/Packages/${packageId}`)
+      || !effect || effect.type !== "package.embed" || effect.path !== packageId) {
+      throw invalidCompletionProof(toolName, completion, "did not prove the requested embedded package and local package path");
+    }
     return true;
   }
   if (toolName === "editor.compile") {
@@ -397,8 +349,50 @@ function validateKnownLocalTerminal(
     if (compile?.completed !== true || compile.errorCount !== 0 || (status !== undefined && status !== "clean" && status !== "warnings")) throw invalidCompletionProof(toolName, completion, "did not prove a clean or warnings-only compile terminal");
     return true;
   }
-  if (toolName === "editor.launch-dialog.dismiss") {
-    if (!["dismissed", "not_found", "dry_run"].includes(String(record.status))) throw invalidCompletionProof(toolName, completion, "did not return an allowed dialog observation terminal");
+  if (toolName === "build.run") {
+    const targets = record.targets;
+    if (!Array.isArray(targets) || targets.length === 0) throw invalidCompletionProof(toolName, completion, "did not return terminal BuildReport targets");
+    for (const target of targets) {
+      const item = objectRecord(target);
+      const artifact = objectRecord(item?.artifact);
+      if (!item || !artifact || item.result !== "Succeeded" || !nonEmptyString(item.target) || !relativePublicPath(item.outputPath)
+        || artifact.exists !== true || artifact.outputPath !== item.outputPath || !relativePublicPath(artifact.outputPath)
+        || !positiveInteger(artifact.fileCount) || !positiveNumber(artifact.size)
+        || !(sha256(artifact.hash) || sha256(artifact.treeHash))) {
+        throw invalidCompletionProof(toolName, completion, "did not prove a successful project-relative BuildReport artifact");
+      }
+    }
+    return true;
+  }
+  if (toolName === "test.run") {
+    const summary = objectRecord(record.summary);
+    const failures = record.failures;
+    if (!summary || !Array.isArray(failures) || !["EditMode", "PlayMode"].includes(String(summary.platform))
+      || summary.status !== "passed" || !nonnegativeInteger(summary.testCount) || !nonnegativeInteger(summary.passed)
+      || !nonnegativeInteger(summary.failed) || !nonnegativeInteger(summary.skipped) || !nonnegativeInteger(summary.inconclusive)
+      || typeof summary.duration !== "number" || summary.duration < 0 || !timestamp(summary.startedAt) || !timestamp(summary.finishedAt)) {
+      throw invalidCompletionProof(toolName, completion, "did not prove a passed RunFinished callback terminal");
+    }
+    if (record.xml !== undefined) {
+      const xml = objectRecord(record.xml);
+      if (!xml || xml.kind !== "nunit-xml" || !nonEmptyString(xml.path) || !sha256(xml.hash) || !positiveInteger(xml.size)) throw invalidCompletionProof(toolName, completion, "did not prove the NUnit XML artifact");
+    }
+    return true;
+  }
+  if (toolName === "editor.refresh") {
+    const editorState = objectRecord(record.editorState);
+    if (typeof record.changed !== "boolean" || typeof record.compilationTriggered !== "boolean"
+      || typeof record.sourceFileCount !== "number" || !Number.isSafeInteger(record.sourceFileCount) || record.sourceFileCount < 0
+      || !sha256(record.sourceFingerprint) || !sha256(record.dependencyVersion)
+      || !editorState || editorState.status !== "ready" || editorState.compile !== false || editorState.import !== false) {
+      throw invalidCompletionProof(toolName, completion, "did not prove a stable source and dependency refresh readback");
+    }
+    return true;
+  }
+  if (toolName === "editor.dialog.click") {
+    if (record.clicked !== true || !nonEmptyString(record.dialogId) || !nonEmptyString(record.title) || !nonEmptyString(record.button)) {
+      throw invalidCompletionProof(toolName, completion, "did not prove a completed dialog click");
+    }
     return true;
   }
   return false;
@@ -422,12 +416,38 @@ function nonEmptyString(value: unknown): boolean {
   return typeof value === "string" && value.length > 0;
 }
 
-function isDeferredJobRecord(value: unknown): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return typeof record.jobId === "string"
-    && typeof record.kind === "string"
-    && typeof record.status === "string";
+function positiveInteger(value: unknown): boolean {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function positiveNumber(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function nonnegativeInteger(value: unknown): boolean {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function timestamp(value: unknown): boolean {
+  return typeof value === "string" && Number.isFinite(Date.parse(value));
+}
+
+function sha256(value: unknown): boolean {
+  return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+}
+
+function relativePublicPath(value: unknown): boolean {
+  return typeof value === "string" && value.length > 0 && !/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value);
+}
+
+function validLivePackageResolve(value: unknown): boolean {
+  const result = objectRecord(value);
+  return !!result && result.status === "resolved" && sha256(result.manifestHash) && sha256(result.lockHash)
+    && sha256(result.packageSnapshotHash) && nonnegativeInteger(result.packageCount) && Array.isArray(result.packages)
+    && result.packages.every((item) => {
+      const pkg = objectRecord(item);
+      return !!pkg && nonEmptyString(pkg.name) && nonEmptyString(pkg.version) && nonEmptyString(pkg.source);
+    });
 }
 
 function containsIntermediateCompletionState(value: unknown): boolean {
@@ -471,24 +491,39 @@ async function executeLiveTool(
 ): Promise<CliResult> {
   const runtimeTarget = tool.target === "runtime" || (tool.target === "both" && getBoolean(flags, "runtime"));
   const wrapper = runtimeTarget ? "runtime-tool.run" : "project-tool.run";
-  const security: BridgeSecurityDescriptor = {
-    name: tool.name,
-    destructiveHint: tool.destructiveHint,
-    supportsDryRun: tool.supportsDryRun === true,
-    bridgeCommand: wrapper,
+  const descriptorBinding: BridgeDescriptorBinding = {
     ...(tool.liveDescriptorFingerprint ? { liveDescriptorFingerprint: tool.liveDescriptorFingerprint } : {})
   };
 
-  if (getBoolean(flags, "job")) {
-    return failure(requestId, "E_TOOL_JOB_UNSUPPORTED", `Live catalog tool does not declare a batch job bridge route: ${tool.name}.`, [`Run unity_cli tools describe ${tool.name} and check cancellation.`]);
-  }
-  // live descriptor 已完成 schema 校验，wrapper 必须直接承载该 typed input；不得再用旧 spec 从 execution flags 重建业务字段。
+  // live descriptor 已完成 schema 校验，wrapper 必须直接承载该 typed input，不能从 execution flags 重建业务字段。
   const mutation = toolIsMutation(tool);
-  return executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, runtime, security, {
+  return enrichTargetFailureWithDialogBlocker(await executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, runtime, descriptorBinding, {
     mode: "execute",
     mutation,
     defaultTimeoutMs: tool.timeoutMs,
-  });
+  }), flags, runtime);
+}
+
+/** Bridge wrappers may discard supervisor details; append one independent read-only modal diagnosis to target failures. */
+export async function enrichTargetFailureWithDialogBlocker(result: CliResult, flags: Record<string, string | boolean>, runtime: ToolsRuntime, observer = new EditorBlockerObserver()): Promise<CliResult> {
+  if (result.ok || (result.error.details && typeof result.error.details === "object" && Array.isArray((result.error.details as Record<string, unknown>).blockers))) return result;
+  try {
+    const deadlineMs = Date.now() + 10_000;
+    const selection = await selectObservationInstanceForFlags(flags, runtime.dataDir ?? defaultDataDir(), Math.max(0, deadlineMs - Date.now()));
+    const instance = selection.instance;
+    const observation = await observer.observe({ instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath }, deadlineMs, instance.activeSession);
+    const blockers = observation.outcome === "observed-blocked" ? sanitizeEditorBlockers(observation.blockers) : [];
+    if (blockers.length === 0) return result;
+    const details = result.error.details && typeof result.error.details === "object" && !Array.isArray(result.error.details) ? result.error.details : {};
+    const title = blockers[0].title;
+    return { ...result, error: { ...result.error, message: `${result.error.message} Modal dialog '${title}' was observed.`, details: { ...details, blockers }, nextActions: [
+      "Run unity_cli context read editor.dialogs to inspect the current modal dialog.",
+      "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
+    ] } };
+  } catch {
+    // An unproven probe must not be represented as an empty blocker list or replace the original failure.
+    return result;
+  }
 }
 
 async function parseTypedInput(flags: Record<string, string | boolean>, requestId: string): Promise<ParsedInput> {
@@ -535,7 +570,7 @@ function requestFromInput(tool: ToolMetadata, input: Record<string, unknown>, fl
     : {};
   if (positionalTarget !== undefined && "positionalTarget" in properties) request.positionalTarget ??= positionalTarget;
   for (const [key, value] of Object.entries(flags)) {
-    if (key.startsWith("__") || ["input", "input-file", "stdin", "yes", "raw"].includes(key)) continue;
+    if (key.startsWith("__") || ["input", "input-file", "stdin", "raw"].includes(key)) continue;
     const property = key.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
     if (property in properties && request[property] === undefined) request[property] = coerceFlagValue(value, properties[property]);
   }
@@ -563,7 +598,7 @@ function mergeInputFlags(input: Record<string, unknown>, flags: Record<string, s
 
 /** execution timeout 是命令控制面；非法值必须在任何 selector、journal 或 effect 前失败。 */
 function validateExecutionTimeoutFlags(flags: Record<string, string | boolean>, requestId: string): CliResult | undefined {
-  for (const name of ["timeout-ms", "wait-timeout-ms"] as const) {
+  for (const name of ["timeout-ms"] as const) {
     const raw = flags[name];
     if (raw === undefined) continue;
     const value = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN;
@@ -580,10 +615,7 @@ function executionFromFlags(flags: Record<string, string | boolean>): ToolContex
   const number = (name: string): number | undefined => typeof flags[name] === "string" && Number.isFinite(Number(flags[name])) ? Number(flags[name]) : undefined;
   return {
     ...(getBoolean(flags, "dry-run") ? { dryRun: true } : {}),
-    ...(getBoolean(flags, "job") ? { job: true } : {}),
-    ...(getBoolean(flags, "wait") ? { wait: true } : {}),
-    ...(number("timeout-ms") !== undefined ? { timeoutMs: number("timeout-ms") } : {}),
-    ...(number("wait-timeout-ms") !== undefined ? { waitTimeoutMs: number("wait-timeout-ms") } : {})
+    ...(number("timeout-ms") !== undefined ? { timeoutMs: number("timeout-ms") } : {})
   };
 }
 

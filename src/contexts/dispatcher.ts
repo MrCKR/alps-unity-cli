@@ -38,7 +38,6 @@ export async function dispatchContext(
     const decorated = await Promise.all(contexts.map((context) => decorateAvailability(context, availabilityFlags)));
     const entries = decorated.map(toContextListEntry);
     const data: Record<string, unknown> = {
-      command: operation === "list" ? "context.list" : "context.search",
       ...(operation === "search" ? { query: name } : {}),
       count: entries.length,
       categories: [...new Set(catalog.contexts.map((context) => context.category))].sort(),
@@ -62,7 +61,7 @@ export async function dispatchContext(
   const descriptor = isEditorState ? resolved.context : await decorateAvailability(resolved.context, availabilityFlags);
 
   if (operation === "describe") {
-    return success(requestId, { command: "context.describe", ...descriptor });
+    return success(requestId, publicContextDescriptor(descriptor));
   }
 
   if (!isEditorState && descriptor.available === false && descriptor.source !== "extension") {
@@ -147,7 +146,7 @@ async function readLocalContext(
     if (issues.length > 0) {
       return failure(requestId, "E_CONTEXT_OUTPUT_SCHEMA_INVALID", `Context ${descriptor.name} returned data that violates its output schema.`, ["Inspect the Context implementation and its generated output schema."], { issues });
     }
-    return success(requestId, { command: "context.read", context: descriptor.name, ...(data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : { data }) });
+    return success(requestId, data);
   } catch (error) {
     if (error instanceof StructuredContextError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
     return failure(requestId, "CONTEXT_READ_FAILED", error instanceof Error ? error.message : String(error), [`Run unity_cli context describe ${descriptor.name} for input requirements and availability.`]);
@@ -187,6 +186,19 @@ function parseInputText(text: string, source: string, requestId: string): Parsed
   } catch (error) {
     return { ok: false, error: failure(requestId, "E_CONTEXT_INPUT_JSON_INVALID", `${source} must be valid JSON. ${error instanceof Error ? error.message : String(error)}`, ["In PowerShell use single quotes around JSON, or use --input-file for complex input."]) };
   }
+}
+
+/** 公开 Context descriptor 不得泄露内部 routing、fingerprint 或 authoring input。 */
+export function publicContextDescriptor(descriptor: ContextDescriptor): Record<string, unknown> {
+  const { name, summary, description, category, source, target, availabilityScope, playModeSupport, inputSchema, outputSchema, available, unavailableReason, requiresPackages, extensionId } = descriptor;
+  return {
+    name, summary, description, category, source, target, availabilityScope, playModeSupport, inputSchema, outputSchema,
+    examples: descriptor.examples.map(({ description: exampleDescription, argv }) => ({ description: exampleDescription, argv })),
+    available: available ?? true,
+    ...(unavailableReason ? { unavailableReason } : {}),
+    ...(requiresPackages?.length ? { requiresPackages } : {}),
+    ...(extensionId ? { extensionId } : {})
+  };
 }
 
 export { validateSchema as validateContextSchema } from "../schema/validator.js";

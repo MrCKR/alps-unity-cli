@@ -111,7 +111,8 @@ test("shader.get-data C# returns diagnostics plus subshader structure", async ()
 
 test("shader delete confirms removal from disk and AssetDatabase", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/shader/delete.cs", import.meta.url), "utf8");
-  assert.match(source, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*AssetPathToGUID\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.match(source, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*!AssetDatabase\.IsValidFolder\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.doesNotMatch(source, /AssetPathToGUID\(path\)/);
   assert.match(source, /E_SHADER_DELETE_PROOF_MISSING/);
 });
 

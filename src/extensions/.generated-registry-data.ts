@@ -220,10 +220,11 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
   "id": "probuilder",
   "name": "ProBuilder",
   "version": "1.0.0",
-  "description": "ProBuilder 3D modeling tools: shape creation, mesh editing, face/edge/vertex operations, smoothing, pivots, repair, and boolean CSG through the ProBuilder package.",
+  "description": "ProBuilder 5.2.4 modeling tools with request-specific terminal proof for fifteen approved operations and typed atomic readback for the remaining mutations.",
   "unityPackages": [
     {
       "packageId": "com.unity.probuilder",
+      "versionRange": "5.2.4",
       "displayName": "ProBuilder"
     }
   ],

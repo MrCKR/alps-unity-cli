@@ -22,7 +22,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool DryRun { get; set; }
             public string OutputPath { get; set; }
             public int Width { get; set; }
@@ -39,7 +38,6 @@ namespace UnityCli
             Summary = "Render a UIDocument visual tree to a PNG file through a temporary target texture; dry-run supported.",
             Description = "Render the current visual tree of a UIDocument GameObject to a PNG through a temporary PanelSettings target texture. Defaults to 1280x720. Refuses to overwrite an existing file unless overwrite=true; dry-run returns the planned output without rendering or writing.",
             Group = "ui",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "file-write" },
@@ -80,7 +78,7 @@ namespace UnityCli
             var effects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.render-preview", Target = request.Target, Path = outputPath } };
             if (ctx.DryRun)
             {
-                return new Result { Command = "ui.render-preview", DryRun = true, OutputPath = outputPath, Width = width, Height = height, PlannedEffects = effects };
+                return new Result { DryRun = true, OutputPath = outputPath, Width = width, Height = height, PlannedEffects = effects };
             }
 
             ctx.CommitEffect();
@@ -109,7 +107,6 @@ namespace UnityCli
                 var artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, "png");
                 return new Result
                 {
-                    Command = "ui.render-preview",
                     DryRun = false,
                     OutputPath = outputPath,
                     Width = width,

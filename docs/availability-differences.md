@@ -14,7 +14,7 @@
 
 | 工具 | Package 依赖 | 不可用时行为 |
 |------|-------------|-------------|
-| ProBuilder 扩展工具（create-shape/extrude-faces/delete-faces 等） | `com.unity.probuilder` | 返回 `E_PROBUILDER_PACKAGE_NOT_FOUND` |
+| ProBuilder 扩展工具（create-shape/extrude-faces/delete-faces 等） | 精确 `com.unity.probuilder@5.2.4` | 缺包或版本不匹配时在 effect 前返回 dependency error |
 | `vfx.graph/vfx.effect` | `com.unity.visualeffectgraph` | 返回 `E_VFX_PACKAGE_MISSING` |
 
 Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
@@ -26,7 +26,7 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 }
 ```
 
-执行前可通过 `tools describe` 检查 `requiresPackages`、`extensionAvailability`、`missingPackageIds`；执行失败时跟随错误里的 `nextActions`。
+执行前可通过 `tools describe` 检查 `available`、`unavailableReason` 和 `requiresPackages`；执行失败时跟随错误里的 `nextActions`。
 
 ### 2. 项目工具注册
 
@@ -44,13 +44,13 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 | `offline` | static catalog 与 TS-local 能力可用；live project custom discovery 不伪造结果 |
 | `conflict` | static catalog 可用；Bridge 调用返回 `E_INSTANCE_CONFLICT` |
 
-离线/CLI-only 能力不受 Bridge 状态影响：
-- `tools run package.list` / `package.info` / `package.search` / `package.install` / `package.remove` / `package.deploy` / `package.restore` / `package.bridge-remove`
-- `batch schema` / `batch run`
+不需要 Unity 连接的能力不受 Bridge 状态影响：
+- `tools run package.list` / `package.info` / `package.search` / `package.bridge-remove`
 - `tools run docs.get` / `docs.search` / `reflect.type` / `reflect.member` / `reflect.search`
-- `jobs status` / `jobs logs` / `jobs cancel`
 - `init --check`, `doctor`, `instances list` / `instances prune`
 - `target alias list` / `target alias set` / `target alias unset`
+
+`package.install`、`package.remove`、`package.resolve`、`package.deploy` 和 `package.restore` 连接已打开的 Unity Editor，并在同一次直接调用中证明文件终态、`Client.Resolve()` 后的显式 `Client.List(false, true)` completion fence、manifest/lock 与 fresh PackageInfo readback。超时或终态前断连统一返回 `E_EXECUTION_TIMEOUT`；调用方负责观察业务状态并判断是否提交新的调用。
 
 ### 4. 编辑器状态（PlayMode）与 Runtime 工具可用性
 
@@ -68,19 +68,15 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 
 ### 5. Domain Reload
 
-Unity domain reload 期间，registry 将 project identity 归约为 `transitioning`，listener generation 可以变化。session supervisor 在同一 logical request 和 absolute deadline 内重新绑定已验证 generation；可恢复 reload 不作为直接调用的最终错误暴露。deadline 耗尽时返回该 completion contract 固定的 timeout 或 outcome-unknown 结果。
-
-### 6. 工具目录 Fingerprint
-
-每个实例携带 `toolCatalogFingerprint` 捕获当前工具目录状态。如果发现与执行之间 fingerprint 变化（如安装了包或发生 domain reload），CLI 可能返回 fingerprint mismatch 警告。`doctor` 命令检查 fingerprint 一致性。
+Unity domain reload 期间，registry 将 project identity 归约为 `transitioning`，listener generation 可以变化。session supervisor 在同一直接调用和 absolute deadline 内重新绑定已验证 generation；可恢复 reload 不作为直接调用的最终错误暴露。deadline 耗尽或终态前断连时返回 `E_EXECUTION_TIMEOUT`。
 
 ## AI Agent 处理方式
 
 1. **先解析项目身份。** 执行任何工具前先 `instances list`，然后在 discovery、describe 和执行命令上显式传 `--instance`；也可以从目标 Unity 项目 CWD 调用
-2. **执行前先 describe。** descriptor 显示 `supportStatus`、`target`、`availabilityScope`、`playModeSupport`
-3. **按结构化终态处理。** Package-not-found、instance conflict、blocker、timeout、outcome unknown 和 `E_RUNTIME_NOT_READY` 都包含 `nextActions`
-4. **能力变化后重新发现。** 安装包或 descriptor fingerprint 改变后，重新 `tools group list custom --include-custom`
-5. **需要即时状态时读取 Context。** 使用 `context read editor.state --input '{}'`；`target: "runtime"` 的 Tool 需先进入 Play Mode
+2. **执行前先 describe。** descriptor 显示 `target`、`availabilityScope`、`playModeSupport`、schema 和副作用。
+3. **按结构化终态处理。** Package-not-found、instance conflict、blocker、`E_EXECUTION_TIMEOUT` 和 `E_RUNTIME_NOT_READY` 都包含 `nextActions`。
+4. **能力变化后重新发现。** 安装包或 domain reload 后，重新 `tools group list custom --include-custom`。
+5. **需要即时状态时读取 Context。** 使用 `context read editor.state --input '{}'`；`target: "runtime"` 的 Tool 需先进入 Play Mode。
 
 ## 交叉引用
 

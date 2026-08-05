@@ -39,7 +39,6 @@ namespace UnityCli
             public string ParameterName { get; set; }
             public string ParameterType { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -48,7 +47,6 @@ namespace UnityCli
             Summary = "Set an exposed VisualEffect parameter by explicit scalar, vector, color, texture, or mesh input.",
             Description = "Set an exposed VisualEffect parameter on a target component using an explicit type, then require matching Has*/Get* APIs to verify its typed readback. Use numberValue, intValue, boolValue, assetPath, or the vector/color axis fields that match the requested type. This tool reflects the package API at runtime and does not require compile-time VFX references.",
             Group = "vfx",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" },
@@ -177,8 +175,7 @@ namespace UnityCli
                 Target = GameObjectToolSupport.BuildGameObjectRef(component.gameObject),
                 ParameterName = request.Name,
                 ParameterType = parameterType,
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
 

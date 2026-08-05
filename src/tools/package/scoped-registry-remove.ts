@@ -23,7 +23,7 @@ export interface PackageScopedRegistryRemoveResult {
 export default defineTool<PackageScopedRegistryRemoveRequest, PackageScopedRegistryRemoveResult>({
   name: "package.scoped-registry.remove",
   summary: "Remove a scoped registry from the project manifest.",
-  description: "Remove a scoped registry from Packages/manifest.json. Requires --yes; matching manifest dependencies require force=true. Supports --dry-run.",
+  description: "Remove a scoped registry from Packages/manifest.json. Matching manifest dependencies require force=true. Supports --dry-run.",
   group: "package",
   destructiveHint: true,
   supportsDryRun: true,

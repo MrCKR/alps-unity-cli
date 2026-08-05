@@ -89,7 +89,7 @@ function normalizeHandler(handler) {
 }
 
 function normalizeSpecHandler(spec) {
-  return spec.supportsJob ? "hybrid" : "bridge";
+  return "bridge";
 }
 
 function csharpHandlerForTool(tool) {

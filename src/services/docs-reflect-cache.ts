@@ -95,13 +95,13 @@ export async function loadDocsCache(root: string): Promise<CacheIndex> {
 export async function loadReflectCache(root: string): Promise<CacheIndex> {
   await assertDirectory(root, "REFLECT_CACHE_MISSING", "Unity reflection cache was not found.", [
     "Pass --reflect-dir <path> or set UNITY_CLI_REFLECT_DIR.",
-    "Generate a reflection index from Unity batchmode or a live bridge context."
+    "Generate a reflection index from the selected Live Editor."
   ]);
   const json = await readFirstJson(root, reflectIndexCandidates);
   if (!json) {
     throw new CacheError("REFLECT_CACHE_MISSING", "Unity reflection cache has no readable index file.", [
       "Add reflect-index.json, unity-reflect.json, reflect.json, or index.json.",
-      "Regenerate the reflection cache from Unity batchmode or a live bridge context."
+      "Regenerate the reflection cache from the selected Live Editor."
     ]);
   }
   return { ...normalizeIndex(json.data, root, "reflect"), root, indexPath: json.path };

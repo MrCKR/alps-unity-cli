@@ -13,7 +13,7 @@ namespace UnityCli
     {
         public sealed class Request { public string RenderPipeline { get; set; } }
         public sealed class Result { public GraphicsSummary Graphics { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.pipeline-settings", Summary = "Set the default render pipeline asset for the project.", Description = "Set GraphicsSettings.defaultRenderPipeline. Pass 'built-in' or 'null' to reset to built-in.", Group = "graphics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set URP pipeline", Input = new Request { RenderPipeline = "Assets/Settings/URP.asset" } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.pipeline-settings", Summary = "Set the default render pipeline asset for the project.", Description = "Set GraphicsSettings.defaultRenderPipeline. Pass 'built-in' or 'null' to reset to built-in.", Group = "graphics",DestructiveHint = true, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set URP pipeline", Input = new Request { RenderPipeline = "Assets/Settings/URP.asset" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var effects = new List<GraphicsPlannedEffect>();

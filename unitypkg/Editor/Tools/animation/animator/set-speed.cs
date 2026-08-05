@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } public float? Speed { get; set; } }
         public sealed class Result { public GameObjectTargetRef Target { get; set; } public double Speed { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "animator.set-speed", Summary = "Set the playback speed of an Animator component.", Description = "Resolve a target with an Animator and set animator.speed. Defaults to 1.0.", Group = "animation", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set speed to 2x", Input = new Request { Target = "Player", Speed = 2f } } } };
+        public ToolDescriptor Describe() => new() { Name = "animator.set-speed", Summary = "Set the playback speed of an Animator component.", Description = "Resolve a target with an Animator and set animator.speed. Defaults to 1.0.", Group = "animation",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set speed to 2x", Input = new Request { Target = "Player", Speed = 2f } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var go = GameObjectToolSupport.ResolveUniqueTarget(r.Target, "Animator set-speed requires --target <go>.");

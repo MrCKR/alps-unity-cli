@@ -10,7 +10,7 @@ namespace UnityCli
         {
             Name = "vfx.control.stop", Summary = "Stop a VisualEffect component.",
             Description = "Stop the VisualEffect and wait until a previously non-empty effect reports aliveParticleCount=0. Fails closed when no observable active particles exist before the call.",
-            Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
+            Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Stop the matrix emitter", Input = new Request { Target = "Effects/Emitter" } } }

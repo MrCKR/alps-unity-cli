@@ -44,12 +44,14 @@ test("shared schema validator rejects nested, tuple, dictionary, and unknown-pro
   assert.ok(issues.some((entry) => entry.path === "$.unknown"));
 });
 
-test("shared schema validator enforces numeric ranges and date-time format", () => {
+test("shared schema validator enforces numeric ranges and supported string formats", () => {
   assert.deepEqual(validateSchema({ type: "integer", minimum: 0, maximum: 10 }, 5), []);
   assert.equal(validateSchema({ type: "integer", minimum: 0 }, -1)[0].expected, ">= 0");
   assert.equal(validateSchema({ type: "integer", maximum: 10 }, 11)[0].expected, "<= 10");
   assert.deepEqual(validateSchema({ type: "string", format: "date-time" }, "2026-07-16T00:00:00.000Z"), []);
   assert.equal(validateSchema({ type: "string", format: "date-time" }, "not-a-date")[0].expected, "date-time");
+  assert.deepEqual(validateSchema({ type: "string", format: "uuid" }, "a9b6e4fa-cabf-4c14-b661-666f623bba2a"), []);
+  assert.equal(validateSchema({ type: "string", format: "uuid" }, "not-a-uuid")[0].expected, "uuid");
 });
 
 test("shared schema validator fails closed on unresolved refs and unconstrained schemas", () => {

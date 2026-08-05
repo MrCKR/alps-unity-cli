@@ -42,8 +42,7 @@ function contextListArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0
 
 function contextDescribeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    name: positionalTarget ?? stringFlag(flags, "name"),
-    fingerprintMode: stringFlag(flags, "fingerprint-mode")
+    name: positionalTarget ?? stringFlag(flags, "name")
   });
 }
 
@@ -65,7 +64,6 @@ function contextReadArgs({ flags, positionalTarget }: Parameters<BridgeCommandSp
     ...inputObject,
     name: positionalTarget ?? stringFlag(flags, "name"),
     input,
-    fingerprintMode: stringFlag(flags, "fingerprint-mode"),
     projectPath: stringFlag(flags, "project-path")
   });
 }

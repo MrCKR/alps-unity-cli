@@ -19,7 +19,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public List<MemorySnapshotEntry> Snapshots { get; set; }
             public List<string> SearchedDirs { get; set; }
         }
@@ -29,7 +28,7 @@ namespace UnityCli
             Name = "profiler.memory-snapshot.list",
             Summary = "List .snap memory snapshot files in the default capture directories or a custom path.",
             Description = "List .snap memory snapshot files in the default capture directories or a custom path. This reads file metadata only and does not open or modify snapshots.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "List snapshots in default dirs", Input = new Request { } } }
         };
@@ -65,7 +64,6 @@ namespace UnityCli
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "profiler.memory-snapshot.list",
                 Snapshots = snapshots,
                 SearchedDirs = dirs
             });

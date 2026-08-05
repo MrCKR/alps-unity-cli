@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -22,13 +23,15 @@ namespace UnityCli.ProBuilder
         public sealed class Result
         {
             public long SmoothedFaceCount { get; set; }
+            public bool Changed { get; set; }
+            public string NoOpReason { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "probuilder.auto-smooth",
             Summary = "Auto-apply smoothing groups to ProBuilder faces by an angle threshold.",
-            Description = "Automatically apply smoothing to faces based on an angle threshold. When faceIndices is omitted, smoothing is applied to all faces of the target mesh.",
+            Description = "Apply ProBuilder 5.2.4 smoothing groups to selected faces. angleThreshold defaults to 30 and is clamped to 0..89.999 degrees; omitted faceIndices selects all faces. Isolated or hard-disconnected selected faces end in smoothing group 0. changed=false means every selected face already had its exact final group.",
             Group = "probuilder",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
@@ -36,8 +39,6 @@ namespace UnityCli.ProBuilder
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
             MaxTimeoutMs = 30000,
-            SupportsJob = true,
-            ArtifactKinds = new[] { "json" },
             Examples = new[]
             {
                 new ToolExample { Description = "以 30 度阈值自动平滑全部面", Input = new Request { Target = "MyCube", AngleThreshold = 30 } }
@@ -49,39 +50,54 @@ namespace UnityCli.ProBuilder
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(request.Target);
+            var target = request.Target;
+            var go = ProBuilderInput.ResolveTarget(target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("auto-smooth", "No ProBuilderMesh on target.");
+            // Canonical snapshot owns the pre-effect identity claim.
 
             var angleThreshold = ProBuilderOperationProof.CheckedFloat(request.AngleThreshold ?? 30, "angleThreshold");
-            if (angleThreshold < 0 || angleThreshold > 180)
-                throw ProBuilderErrors.SchemaInvalid("angleThreshold must be between 0 and 180 degrees.");
+            // Smoothing.ApplySmoothingGroups clamps the threshold before calculating abs(cos).
+            // Keep the request and both proof paths on the exact 5.2.4 domain.
+            angleThreshold = Mathf.Clamp(angleThreshold, 0f, 89.999f);
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
             if (faceCount < 1)
                 throw ProBuilderErrors.OperationFailed("auto-smooth", "Target has no readable faces.");
-            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).Distinct().ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "faceIndices")).ToArray();
             if (faceIndices == null || faceIndices.Length == 0)
                 faceIndices = Enumerable.Range(0, faceCount).ToArray();
-            if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
-                throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
-            var before = ProBuilderOperationProof.Capture(mesh, faceIndices: faceIndices);
-            if (before == null) throw ProBuilderErrors.OperationFailed("auto-smooth", "Requested face geometry is not readable.");
+            ProBuilderOperationProof.ValidateFaceIndices(mesh, faceIndices);
+            var plan = ProBuilderFaceCompletionProof.CaptureAutoSmooth(go, faceIndices, angleThreshold);
+            if (plan == null) throw ProBuilderErrors.OperationFailed("auto-smooth", "Requested faces do not have an unambiguous readable 5.2.4 smoothing plan.");
+            if (ProBuilderFaceCompletionProof.AutoSmoothAlreadyMatches(plan))
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { SmoothedFaceCount = 0, Changed = false, NoOpReason = "already-matches-angle-threshold" });
+            var before = plan.Before;
             ctx.CommitEffect();
+            try
+            {
             Undo.RecordObject(go, "ProBuilder Auto Smooth");
             if (!ProBuilderReflection.ApplySmoothingGroups(mesh, faceIndices, angleThreshold))
-                throw ProBuilderErrors.OperationFailed("auto-smooth", "ProBuilder 5.x Smoothing.ApplySmoothingGroups failed.");
+                throw ProBuilderErrors.OutcomeUnknown("auto-smooth", "invoke", "ProBuilder 5.x Smoothing.ApplySmoothingGroups failed.");
 
-            ProBuilderReflection.RefreshMesh(mesh);
+            if (!ProBuilderReflection.RefreshMesh(mesh))
+                throw ProBuilderErrors.OutcomeUnknown("auto-smooth", "refresh", "ProBuilder mesh refresh failed.");
             EditorSceneManager.MarkSceneDirty(go.scene);
-            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
-            var after = ProBuilderOperationProof.Capture(freshMesh, faceIndices: faceIndices);
-            if (!ProBuilderOperationProof.HasChangedSmoothing(before, after))
-                throw ProBuilderErrors.OperationFailed("auto-smooth", "Requested faces did not change readable smoothing groups.");
+            var freshMesh = CanonicalMeshSnapshot.ResolveFreshMesh(target, before.Identity);
+            if (freshMesh == null)
+                throw ProBuilderErrors.OutcomeUnknown("auto-smooth", "readback", "Fresh target identity could not be resolved.");
+            var after = CanonicalMeshSnapshot.Capture(freshMesh.gameObject, Array.Empty<int>());
+            if (after == null)
+                throw ProBuilderErrors.OutcomeUnknown("auto-smooth", "readback", "Fresh canonical face geometry could not be read.");
+            if (!ProBuilderFaceCompletionProof.AutoSmoothMatches(plan, after))
+                throw ProBuilderErrors.OutcomeUnknown("auto-smooth", "postcondition", "Requested smoothing compatibility was not proven by fresh readback.");
 
-            var smoothed = faceIndices.Length;
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { SmoothedFaceCount = smoothed });
+            var smoothed = ProBuilderFaceCompletionProof.ExpectedSmoothedFaceCount(plan);
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { SmoothedFaceCount = smoothed, Changed = true });
+            }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch (System.Exception exception) { throw ProBuilderErrors.OutcomeUnknown("auto-smooth", "postcondition", exception.Message); }
         }
     }
 }

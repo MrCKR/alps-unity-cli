@@ -33,7 +33,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string TypeName { get; set; }
             public long ComponentInstanceId { get; set; }
             public GameObjectRef GameObject { get; set; }
@@ -46,7 +45,6 @@ namespace UnityCli
             Summary = "Deep-read one Component by GameObject and component selector; use paths/viewQuery for token-safe fields.",
             Description = "Deep-read one Component after selecting a GameObject with go.find/go.inspect or context read scene.gameobject.components. For token safety, pass exact paths or one viewQuery; they are mutually exclusive and skip full fields/props expansion. Use componentIndex/componentInstanceId when duplicate components exist. Keep maxDepth low before expanding MonoBehaviours.",
             Group = "component",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -66,7 +64,6 @@ namespace UnityCli
             var data = UnityCliBridge.ObjectSerializer.Serialize(component, options);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "component.get",
                 TypeName = component.GetType().FullName,
                 ComponentInstanceId = component.GetInstanceID(),
                 GameObject = GameObjectToolSupport.BuildGameObjectRef(component.gameObject),

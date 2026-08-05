@@ -44,7 +44,10 @@ function editorArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
   if (command === "editor.console") {
     return compactArgs({ ...queryArgs(flags), type: stringFlag(flags, "type"), count: numberFlag(flags, "count") ?? numberFlag(flags, "limit"), clear: boolFlag(flags, "clear") });
   }
-  if (command === "editor.play" || command === "editor.pause" || command === "editor.stop" || command === "editor.undo" || command === "editor.redo") {
+  if (command === "editor.undo" || command === "editor.redo") {
+    return compactArgs({ completionProbe: structuredInput(flags).completionProbe });
+  }
+  if (command === "editor.play" || command === "editor.pause" || command === "editor.stop") {
     return compactArgs({ ...queryArgs(flags), timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") });
   }
   if (command === "editor.resolution") {

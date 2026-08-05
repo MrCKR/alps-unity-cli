@@ -10,14 +10,12 @@
  * 核心 CLI 不在编译期依赖任何可选 Unity Package。
  */
 
-import { readFile, writeFile, mkdir, rename, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, rm, open } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
 import { getString } from "../args.js";
 import { failure, success } from "../output.js";
-import { executeWithLocalRequestJournal } from "../local-request-journal.js";
 import { ProjectIdentityError, resolveProjectIdentity } from "../project-identity.js";
-import { defaultDataDir } from "../platform.js";
 import { readUnityManifestDependencies, PackageManagerError } from "../package-manager.js";
 import { StructuredToolError } from "../tools/errors.js";
 import type { CliResult } from "../types.js";
@@ -162,7 +160,6 @@ async function handleExtensionsList(
   });
 
   const data: Record<string, unknown> = {
-    command: "extensions.list",
     projectPath: projectPath ?? process.cwd(),
     projectResolved: projectPath !== undefined,
     count: extensions.length,
@@ -213,21 +210,10 @@ async function handleExtensionsInstall(
   }
 
   const manifest = registry.getExtension(extensionId)!.manifest;
-  const identity = resolveProjectIdentity(projectPath);
+  resolveProjectIdentity(projectPath);
   const absoluteDeadlineMs = Date.now() + Math.max(1, Number(getString(flags, "timeout-ms")) || 60_000);
 
-  return executeWithLocalRequestJournal({
-    identity,
-    requestId,
-    command: "extensions.install",
-    toolName: "extensions.install",
-    input: { extensionId, manifestVersion: manifest.version },
-    projectPath,
-    dataDir: runtime.dataDir ?? defaultDataDir(),
-    absoluteDeadlineMs,
-    executionClass: "atomic",
-    completionDriverId: "extension-install-readback"
-  }, async (commitEffect) => {
+  try {
     // 资源锁后冻结所有会影响 effect 的项目状态，避免并发请求基于旧视图提交。
     try {
       await readUnityManifestDependencies(projectPath);
@@ -244,31 +230,41 @@ async function handleExtensionsInstall(
         `Then run unity_cli extensions install ${extensionId} --project <path>.`
       ]);
     }
-    let installManifest;
-    let enabledBefore;
-    try {
-      installManifest = await readExtensionInstallManifest(projectPath);
-      enabledBefore = await readInstalledExtensions(projectPath);
-    } catch (error) {
-      if (error instanceof ExtensionInstallerError || error instanceof ExtensionStateError) return failure(requestId, error.code, error.message, error.nextActions);
-      throw error;
-    }
-    const alreadyInstalled = installManifest.extensions.some((entry) => entry.extensionId === extensionId);
-    await commitEffect();
-    const installResult = await installExtensionBundleUnchecked(projectPath, manifest);
-    const enabled = new Set(enabledBefore);
-    enabled.add(extensionId);
-    await writeInstalledExtensions(projectPath, enabled);
-    const freshEnabled = await readInstalledExtensions(projectPath);
+    // read-modify-write 必须在互斥锁内完成，否则并发 install 会互相覆盖启用状态。
+    const locked = await withExtensionStateLock(projectPath, absoluteDeadlineMs, async () => {
+      let installManifest;
+      let enabledBefore;
+      try {
+        installManifest = await readExtensionInstallManifest(projectPath);
+        enabledBefore = await readInstalledExtensions(projectPath);
+      } catch (error) {
+        if (error instanceof ExtensionInstallerError || error instanceof ExtensionStateError) return { failureResult: failure(requestId, error.code, error.message, error.nextActions) };
+        throw error;
+      }
+      if (Date.now() >= absoluteDeadlineMs) {
+        return { failureResult: localOutcomeUnknown(requestId, "extensions install", "The deadline elapsed before the filesystem mutation started.") };
+      }
+      const installResult = await installExtensionBundleUnchecked(projectPath, manifest);
+      const enabled = new Set(enabledBefore);
+      enabled.add(extensionId);
+      await writeInstalledExtensions(projectPath, enabled);
+      const freshEnabled = await readInstalledExtensions(projectPath);
+      return { alreadyInstalled: installManifest.extensions.some((entry) => entry.extensionId === extensionId), installResult, freshEnabled };
+    });
+    if (locked.failureResult) return locked.failureResult;
+    const { alreadyInstalled, installResult, freshEnabled } = locked;
     if (!freshEnabled.has(extensionId)) throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", "Installed extension is absent from fresh state readback.");
     return success(requestId, {
-      command: "extensions.install", extensionId, name: manifest.name,
+      extensionId, name: manifest.name,
       status: alreadyInstalled ? "already_installed" : installResult.status, availability: availability.status, projectPath,
       targetRoot: installResult.targetRoot, fileCount: installResult.fileCount, sourceHash: installResult.sourceHash,
       unityPackages: manifest.unityPackages.map((pkg) => ({ packageId: pkg.packageId, displayName: pkg.displayName, installed: availability.packages.find((p) => p.packageId === pkg.packageId)?.installed ?? false })),
       nextActions: [`Extension "${extensionId}" Unity-side directory is installed under Packages/com.unity_cli/Extensions/${extensionId}.`, "Wait for Unity to recompile, then run tools group list/describe/run for provided tools."]
     });
-  });
+  } catch (error) {
+    if (error instanceof ExtensionStateError || error instanceof ExtensionInstallerError || error instanceof PackageManagerError || error instanceof StructuredToolError) throw error;
+    return localOutcomeUnknown(requestId, "extensions install", error instanceof Error ? error.message : String(error));
+  }
 }
 
 // ── extensions remove ─────────────────────────────────────────────────────
@@ -292,13 +288,9 @@ async function handleExtensionsRemove(
     ]);
   }
 
-  const identity = resolveProjectIdentity(projectPath);
+  resolveProjectIdentity(projectPath);
   const absoluteDeadlineMs = Date.now() + Math.max(1, Number(getString(flags, "timeout-ms")) || 60_000);
-  return executeWithLocalRequestJournal({
-    identity, requestId, command: "extensions.remove", toolName: "extensions.remove",
-    input: { extensionId }, projectPath, dataDir: runtime.dataDir ?? defaultDataDir(), absoluteDeadlineMs,
-    executionClass: "atomic", completionDriverId: "extension-remove-readback"
-  }, async (commitEffect) => {
+  try {
     try {
       await readUnityManifestDependencies(projectPath);
     } catch (error) {
@@ -306,27 +298,37 @@ async function handleExtensionsRemove(
       throw error;
     }
     await readInstalledUnityPackages(projectPath);
-    let installManifest;
-    let enabledBefore;
-    try {
-      installManifest = await readExtensionInstallManifest(projectPath);
-      enabledBefore = await readInstalledExtensions(projectPath);
-    } catch (error) {
-      if (error instanceof ExtensionInstallerError || error instanceof ExtensionStateError) return failure(requestId, error.code, error.message, error.nextActions);
-      throw error;
-    }
-    const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
-    if (!entry) return failure(requestId, "EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unity_cli extensions list --project <path> to inspect extension state."]);
-    await commitEffect();
-    const removeResult = await removeExtensionBundle(projectPath, extensionId);
-    const enabled = new Set(enabledBefore);
-    enabled.delete(extensionId);
-    await writeInstalledExtensions(projectPath, enabled);
-    const freshEnabled = await readInstalledExtensions(projectPath);
-    const freshManifest = await readExtensionInstallManifest(projectPath);
+    const locked = await withExtensionStateLock(projectPath, absoluteDeadlineMs, async () => {
+      let installManifest;
+      let enabledBefore;
+      try {
+        installManifest = await readExtensionInstallManifest(projectPath);
+        enabledBefore = await readInstalledExtensions(projectPath);
+      } catch (error) {
+        if (error instanceof ExtensionInstallerError || error instanceof ExtensionStateError) return { failureResult: failure(requestId, error.code, error.message, error.nextActions) };
+        throw error;
+      }
+      const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
+      if (!entry) return { failureResult: failure(requestId, "EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unity_cli extensions list --project <path> to inspect extension state."]) };
+      if (Date.now() >= absoluteDeadlineMs) {
+        return { failureResult: localOutcomeUnknown(requestId, "extensions remove", "The deadline elapsed before the filesystem mutation started.") };
+      }
+      const removeResult = await removeExtensionBundle(projectPath, extensionId);
+      const enabled = new Set(enabledBefore);
+      enabled.delete(extensionId);
+      await writeInstalledExtensions(projectPath, enabled);
+      const freshEnabled = await readInstalledExtensions(projectPath);
+      const freshManifest = await readExtensionInstallManifest(projectPath);
+      return { removeResult, freshEnabled, freshManifest };
+    });
+    if (locked.failureResult) return locked.failureResult;
+    const { removeResult, freshEnabled, freshManifest } = locked;
     if (freshEnabled.has(extensionId) || freshManifest.extensions.some((item) => item.extensionId === extensionId)) throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", "Removed extension remains in fresh state readback.");
-    return success(requestId, { command: "extensions.remove", extensionId, status: removeResult.status, projectPath, targetRoot: removeResult.targetRoot, fileCount: removeResult.fileCount, nextActions: [`Extension "${extensionId}" bundle files listed in the manifest were removed.`, "The required Unity package was not removed."] });
-  });
+    return success(requestId, { extensionId, status: removeResult.status, projectPath, targetRoot: removeResult.targetRoot, fileCount: removeResult.fileCount, nextActions: [`Extension "${extensionId}" bundle files listed in the manifest were removed.`, "The required Unity package was not removed."] });
+  } catch (error) {
+    if (error instanceof ExtensionStateError || error instanceof ExtensionInstallerError || error instanceof PackageManagerError || error instanceof StructuredToolError) throw error;
+    return localOutcomeUnknown(requestId, "extensions remove", error instanceof Error ? error.message : String(error));
+  }
 }
 
 // ── extensions doctor ──────────────────────────────────────────────────────
@@ -418,7 +420,6 @@ async function handleExtensionsDoctor(
   const healthy = allIssues.length === 0;
 
   const data: Record<string, unknown> = {
-    command: "extensions.doctor",
     projectPath,
     healthy,
     summary: {
@@ -457,4 +458,29 @@ async function handleExtensionsDoctor(
 function resolveProject(flags: Record<string, string | boolean>): string | undefined {
   const project = getString(flags, "project");
   return project ? resolve(project) : undefined;
+}
+
+/**
+ * extensions 状态文件的 read-modify-write 互斥锁：锁仅存活于单次操作期间，不留请求级历史。
+ * 并发操作按 deadline 等待；超时返回 E_UNITY_BUSY 由调用方稍后重试。
+ */
+async function withExtensionStateLock<T>(projectPath: string, absoluteDeadlineMs: number, action: () => Promise<T>): Promise<T> {
+  const lockPath = join(projectPath, "Library", "UnityCli", "extensions-state.lock");
+  await mkdir(join(projectPath, "Library", "UnityCli"), { recursive: true });
+  let handle;
+  while (true) {
+    try {
+      handle = await open(lockPath, "wx");
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (Date.now() + 50 >= absoluteDeadlineMs) throw new StructuredToolError("E_UNITY_BUSY", "Another extension state mutation is in progress and the immutable deadline elapsed.", ["Retry after the current extension install/remove finishes."]);
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+    }
+  }
+  try { return await action(); } finally { await handle.close(); await rm(lockPath, { force: true }); }
+}
+
+function localOutcomeUnknown(requestId: string, operation: string, reason: string): CliResult {
+  return failure(requestId, "E_EXECUTION_TIMEOUT", `The ${operation} result cannot be confirmed. Inspect the project business state before retrying.`, ["Check the project business state before submitting the operation again."], { reason });
 }

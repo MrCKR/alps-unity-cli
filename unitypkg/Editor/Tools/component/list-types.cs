@@ -23,7 +23,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public long Count { get; set; }
             public List<ComponentTypeInfo> Types { get; set; }
             public GoPageInfo PageInfo { get; set; }
@@ -35,7 +34,6 @@ namespace UnityCli
             Summary = "Enumerate Component types available in the current project across loaded assemblies.",
             Description = "Enumerate Component types available in the current project across loaded assemblies. Use keyword plus pageSize/cursor to bound token usage before calling component.add/get/set/modify. Returns fullName/name/assembly/namespace and pageInfo.nextCursor.",
             Group = "component",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -72,7 +70,6 @@ namespace UnityCli
             long? nextCursor = cursor + page.Count < total ? (long?)(cursor + page.Count) : null;
             var result = new Result
             {
-                Command = "component.list-types",
                 Count = total,
                 Types = page.ConvertAll(t => new ComponentTypeInfo { FullName = t.FullName, Name = t.Name, Assembly = t.Assembly.GetName().Name, Namespace = t.Namespace }),
                 PageInfo = new GoPageInfo { PageSize = pageSize, Cursor = cursor, NextCursor = nextCursor, Total = total }

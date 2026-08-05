@@ -32,7 +32,7 @@ let currentProcessStartedAtPromise: Promise<string> | undefined;
 /** 读取当前 Node 进程的精确 Windows start time；同一测试进程复用一次 OS 证明。 */
 export async function currentProcessStartedAt(): Promise<string> {
   currentProcessStartedAtPromise ??= (async () => {
-    // 测试夹具允许 PowerShell cold start 重试；产品单次 observation budget 仍固定为 1000ms。
+    // 测试夹具允许 PowerShell cold start 重试；产品单次 observation budget 仍固定为 4000ms。
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const observation = (await probeProcessObservations([process.pid])).get(process.pid);
       if (observation?.state === "alive" && observation.processStartedAt) return observation.processStartedAt;

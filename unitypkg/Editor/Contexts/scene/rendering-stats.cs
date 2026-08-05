@@ -33,12 +33,10 @@ namespace UnityCli.Contexts.Scene
             Summary = "Report UnityStats rendering counters when the internal Editor API is available.",
             Description = "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and nextActions.",
             Category = "scene",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live",
             Examples = new[] { new ContextExample { Description = "Read rendering statistics", Input = new Request { } } }
         };
 

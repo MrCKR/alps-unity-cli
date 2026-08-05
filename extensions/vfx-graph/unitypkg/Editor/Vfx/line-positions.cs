@@ -24,7 +24,6 @@ namespace UnityCli
             public GameObjectRef Target { get; set; }
             public VfxLineRendererInfo Line { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -33,7 +32,6 @@ namespace UnityCli
             Summary = "Replace all LineRenderer positions or patch a single indexed point.",
             Description = "Update a LineRenderer's position set. Provide positions to replace the full array, or provide index plus position to patch one point in place.",
             Group = "vfx",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "line-renderer-edit" },
             Target = "editor",
@@ -96,8 +94,7 @@ namespace UnityCli
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
                 Line = VfxToolSupport.BuildLineRendererInfo(observed),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

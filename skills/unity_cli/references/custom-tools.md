@@ -8,7 +8,7 @@
 
 - 用户要执行动作：生成资源、批量修改场景、修复对象、调用项目逻辑。
 - 能力可能改变场景、资源、ProjectSettings、Package、脚本或 Editor/Play Mode 状态。
-- 需要 dry-run、`--yes`、artifact、长任务或 runtime 执行语义。
+- 需要 dry-run、artifact、长任务或 runtime 执行语义。
 
 ## 注册方式
 
@@ -16,6 +16,8 @@
 
 ```csharp
 #if UNITY_EDITOR
+using System.Threading;
+using System.Threading.Tasks;
 using UnityCli;
 
 namespace MyProject.UnityCLI
@@ -31,7 +33,6 @@ namespace MyProject.UnityCLI
 
         public sealed class Result
         {
-            public string RequestId { get; set; }
             public string Message { get; set; }
             public string Note { get; set; }
         }
@@ -42,10 +43,19 @@ namespace MyProject.UnityCLI
             Summary = "Echo a required message from a project-local Editor tool.",
             Description = "Echoes a message from a Unity project Editor C# tool. Optional note is returned when present.",
             Group = "sample",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
-            PlayModeSupport = "editor-only",
+            PlayModeSupport = "supported",
+            Completion = new ToolCompletionDescriptor
+            {
+                ExecutionClass = "atomic",
+                CompletionPredicate = "typed-business-terminal",
+                ProofSource = "typed-result-and-effect-readback",
+                ReloadPolicy = "same-session-proof-recovery",
+                TimeoutError = "E_EXECUTION_TIMEOUT",
+                OutcomeUnknownPolicy = "fail-closed-no-replay",
+                CompletionDriverId = "atomic-typed-result-v1"
+            },
             Examples = new[]
             {
                 new ToolExample { Description = "回显消息", Input = new Request { Message = "hello" } }
@@ -55,14 +65,14 @@ namespace MyProject.UnityCLI
         /// <summary>
         /// 执行项目侧回显工具。Request/Result schema 由框架从 DTO 派生。
         /// </summary>
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default)
         {
-            return new Result
+            ct.ThrowIfCancellationRequested();
+            return new ValueTask<Result>(new Result
             {
-                RequestId = ctx.RequestId ?? string.Empty,
                 Message = request.Message,
                 Note = request.Note
-            };
+            });
         }
     }
 }
@@ -73,10 +83,11 @@ namespace MyProject.UnityCLI
 
 - `Request` / `Result` 嵌套在 Tool 类内，public 属性派生 `inputSchema` / `outputSchema`。
 - `[UnityCliRequired]` 标记必填输入字段；不要手写 schema 字符串。
-- `Describe()` 只写 `Name`、`Summary`、`Description`、`Group`、风险、target、Play Mode、examples 等人工字段。
-- `Execute(Request, ctx)` 成功返回 Result DTO；失败交给框架转结构化错误 envelope，不要返回伪造的 `{ ok:false }`。
+- `Describe()` 只写 `Name`、`Summary`、`Description`、`Group`、风险、target、Play Mode、completion 和 examples 等人工字段。
+- 自定义 Tool 必须声明完整 `Completion`；driver 必须使用框架已注册的 execution class/driver 对。
+- `ExecuteAsync(Request, ctx, ct)` 返回 `ValueTask<Result>`；失败交给框架转结构化错误 envelope，不要返回伪造的 `{ ok:false }`。
 - mutation Tool 在全部输入、目标、权限和包前置校验后、紧邻首个真实 effect 前必须恰好调用一次 `ctx.CommitEffect()`。漏调而返回成功会被协调器拒绝为 `E_TOOL_COMPLETION_PROOF_INVALID`；重复调用稳定返回 `E_TOOL_EFFECT_BARRIER_DUPLICATE`。只读 Tool、dry-run 与 proof-only recovery 不得调用。
-- `DestructiveHint = true` 的 Tool 必须通过 CLI `--yes` 门禁；能预览的写操作设置 `SupportsDryRun = true`。
+- `DestructiveHint = true` 准确描述可能不可逆效果，但公开 Tool 调用本身即授权；不得引入 CLI 确认、预定义按钮列表或意图门。能预览的写操作设置 `SupportsDryRun = true`。
 - runtime Tool 设置 `Target = "runtime"` 和 `PlayModeSupport = "runtime-only"`；非 Play Mode 时让错误 envelope 提供 `transient`、`retryAfterMs`、`nextActions`。
 
 ## 执行入口
@@ -87,7 +98,7 @@ AI 使用公开 CLI 自发现和执行：
 unity_cli context read tools.custom
 unity_cli tools group list <group> --include-custom
 unity_cli tools describe <custom-tool> --include-custom
-unity_cli tools run <custom-tool> --include-custom --input '<json>'
+unity_cli tools run <custom-tool> --input '<json>' --instance <id|projectPath|alias>
 ```
 
 `<group>` 必须来自 `tools.custom` 或 `tools group list <group> --include-custom` 的真实输出；不要假设所有项目工具都在 `custom` 组。
@@ -97,4 +108,4 @@ unity_cli tools run <custom-tool> --include-custom --input '<json>'
 1. Unity 编译无错误。
 2. `tools group list <group> --include-custom` 能发现 Tool。
 3. `tools describe <tool> --include-custom` 的 schema、风险、target、Play Mode 语义足以让陌生 AI 一次调用成功。
-4. `tools run <tool> --include-custom --input '<json>'` 覆盖默认正向、代表性可选参数和错误路径。
+4. `tools run <tool> --input '<json>' --instance <id|projectPath|alias>` 覆盖默认正向、代表性可选参数和错误路径。

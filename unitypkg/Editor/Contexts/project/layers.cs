@@ -29,12 +29,10 @@ namespace UnityCli.Contexts.Project
             Name = "project.layers",
             Description = "List all layers defined in the project's Tag Manager.",
             Category = "project",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand",
             Examples = new[] { new ContextExample { Description = "List configured project layers", Input = new Request { } } }
         };
 

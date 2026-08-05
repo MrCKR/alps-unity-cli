@@ -67,8 +67,21 @@ namespace UnityCli
                 QueriesHitTriggers = Physics.queriesHitTriggers,
                 QueriesHitBackfaces = Physics.queriesHitBackfaces,
                 QueriesStartInColliders = Physics2D.queriesStartInColliders,
-                AutoSimulation = Physics.autoSimulation
+                AutoSimulation = IsAutoSimulation3D(),
+                SimulationMode2D = Physics2D.simulationMode.ToString()
             };
+        }
+
+        /// <summary>按 Unity 2022.3 SimulationMode 读取旧 autoSimulation 的等价语义。</summary>
+        public static bool IsAutoSimulation3D()
+        {
+            return Physics.simulationMode != SimulationMode.Script;
+        }
+
+        /// <summary>设置 3D 物理自动/脚本模拟模式；自动模式固定恢复为 FixedUpdate。</summary>
+        public static void SetAutoSimulation3D(bool enabled)
+        {
+            Physics.simulationMode = enabled ? SimulationMode.FixedUpdate : SimulationMode.Script;
         }
 
         /// <summary>构造 Rigidbody 摘要 DTO。</summary>
@@ -233,6 +246,7 @@ namespace UnityCli
         public bool QueriesHitBackfaces { get; set; }
         public bool QueriesStartInColliders { get; set; }
         public bool AutoSimulation { get; set; }
+        public string SimulationMode2D { get; set; }
     }
 
     public sealed class RigidbodyInfo

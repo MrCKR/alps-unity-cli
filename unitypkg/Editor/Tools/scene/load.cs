@@ -29,7 +29,6 @@ namespace UnityCli
             Summary = "Load or reload one scene; EditMode reload discards unsaved in-memory scene state.",
             Description = "Load a scene by exact Assets/*.unity path or unique scene asset filename. A name is matched case-insensitively without the .unity suffix and fails when missing or ambiguous. In EditMode this uses OpenSceneMode.Single, replacing the currently open scene state without saving scene assets. When a task started from a clean scene and must discard all temporary in-memory changes, call this Tool once with the exact active scene path after finishing verification and deleting temporary objects; this avoids traversing unrelated shared Undo history. Only call it when discarding every current unsaved scene change is intended. Use scene.list-opened to confirm loaded scenes.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify" },
             Target = "editor",

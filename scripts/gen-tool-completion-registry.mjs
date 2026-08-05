@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
+import { validateProBuilderCompletionScope } from "./lib/probuilder-completion-scope.mjs";
 
 const root = process.cwd();
 const contractPath = path.join(root, "contracts", "tool-completion-contract.json");
@@ -16,6 +17,7 @@ const contractByName = uniqueMap(entries, (entry) => entry.toolName, "completion
 const staticByName = uniqueMap(catalog.tools ?? [], (entry) => entry.name, "static capability catalog");
 for (const name of inventoryByName.keys()) if (!contractByName.has(name)) failures.push(`completion contract missing ${name}`);
 for (const name of contractByName.keys()) if (!inventoryByName.has(name)) failures.push(`orphan completion contract ${name}`);
+failures.push(...validateProBuilderCompletionScope(entries));
 
 const normalized = [];
 for (const tool of inventory) {
@@ -26,8 +28,18 @@ for (const tool of inventory) {
 const csharpEntries = normalized.filter((entry) => entry.descriptorOwner === "built-in" || entry.descriptorOwner.startsWith("extension:"));
 const editorCompile = normalized.find((entry) => entry.toolName === "editor.compile" && entry.descriptorOwner === "ts-local");
 const codeExec = normalized.find((entry) => entry.toolName === "code.exec" && entry.descriptorOwner === "ts-local");
+const buildRun = normalized.find((entry) => entry.toolName === "build.run" && entry.descriptorOwner === "ts-local");
+const editorRefresh = normalized.find((entry) => entry.toolName === "editor.refresh" && entry.descriptorOwner === "ts-local");
+const testRun = normalized.find((entry) => entry.toolName === "test.run" && entry.descriptorOwner === "ts-local");
+const packageOperations = ["resolve", "install", "remove", "deploy", "restore"];
+const packageRoots = packageOperations.map((operation) => normalized.find((entry) => entry.toolName === `package.${operation}` && entry.descriptorOwner === "ts-local"));
 if (!editorCompile) failures.push("TS-owned editor.compile completion contract is required by the private C# coordinator");
 if (!codeExec) failures.push("TS-owned code.exec completion contract is required by the C# coordinator");
+if (!buildRun) failures.push("TS-owned build.run completion contract is required by the private C# coordinator");
+if (!editorRefresh) failures.push("TS-owned editor.refresh completion contract is required by the private C# coordinator");
+if (!testRun) failures.push("TS-owned test.run completion contract is required by the private C# coordinator");
+for (let index = 0; index < packageRoots.length; index += 1)
+  if (!packageRoots[index]) failures.push(`TS-owned package.${packageOperations[index]} completion contract is required by the private C# coordinator`);
 if (failures.length > 0) throw new Error(failures.join("\n"));
 
 const tsOutput = path.join(root, "src", "tools", ".generated-completion-registry.ts");
@@ -35,22 +47,18 @@ const csharpOutput = path.join(root, "unitypkg", "Editor", "Generated", "UnityCl
 fs.mkdirSync(path.dirname(tsOutput), { recursive: true });
 fs.mkdirSync(path.dirname(csharpOutput), { recursive: true });
 fs.writeFileSync(tsOutput, renderTypeScript(normalized), "utf8");
-fs.writeFileSync(csharpOutput, renderCSharp(csharpEntries, editorCompile, codeExec), "utf8");
+fs.writeFileSync(csharpOutput, renderCSharp(csharpEntries, editorCompile, codeExec, buildRun, editorRefresh, testRun, packageOperations, packageRoots), "utf8");
 process.stdout.write(`generated ${path.relative(root, tsOutput)} (${normalized.length} completion contracts)\n`);
 process.stdout.write(`generated ${path.relative(root, csharpOutput)} (${csharpEntries.length} C# completion contracts)\n`);
 
 /** 将人读契约收敛成运行时只能枚举分支的机器字段。 */
 function normalize(tool, completion, descriptor) {
   const executionClass = requiredEnum(completion.executionClass, ["atomic", "observed-state", "resumable", "external"], `${tool.name}.executionClass`);
-  const deliveryMode = requiredEnum(completion.deliveryMode, ["direct-terminal", "job-deferred"], `${tool.name}.deliveryMode`);
+  const deliveryMode = "direct-terminal";
   const completionPredicate = requiredKind(completion.completionPredicate, `${tool.name}.completionPredicate`);
   const proofSource = requiredKind(completion.proofSource, `${tool.name}.proofSource`);
   const reloadPolicy = requiredKind(completion.reloadPolicy, `${tool.name}.reloadPolicy`);
   const outcomeUnknownPolicy = requiredKind(completion.outcomeUnknownPolicy, `${tool.name}.outcomeUnknownPolicy`);
-  const directInvocationPolicy = optionalKind(completion.directInvocationPolicy, "allowed", ["allowed", "deferred-only", "prohibited-unprovable"], `${tool.name}.directInvocationPolicy`);
-  const frozenDeliveryPolicy = optionalKind(completion.frozenDeliveryPolicy, "ordinary", ["ordinary", "preserved"], `${tool.name}.frozenDeliveryPolicy`);
-  if (directInvocationPolicy !== "allowed" && frozenDeliveryPolicy !== "preserved")
-    throw new Error(`${tool.name}: restricted direct invocation requires frozenDeliveryPolicy=preserved`);
   const timeoutError = requiredString(completion.timeoutError, `${tool.name}.timeoutError`);
   if ((tool.descriptorOwner === "built-in" || tool.descriptorOwner.startsWith("extension:")) && !descriptor)
     throw new Error(`static descriptor missing for C# Tool ${tool.name}`);
@@ -65,10 +73,8 @@ function normalize(tool, completion, descriptor) {
     reloadPolicy,
     timeoutError,
     outcomeUnknownPolicy,
-    directInvocationPolicy,
-    frozenDeliveryPolicy,
     completionDriverId: driverId(executionClass),
-    journalPolicy: deliveryMode === "job-deferred" ? "job-frozen" : mutation === true ? "required" : "none",
+    journalPolicy: mutation === true ? "required" : "none",
     mutation: mutation === true,
   };
 }
@@ -98,20 +104,24 @@ function isMutation(descriptor) {
 function driverId(executionClass) {
   if (executionClass === "atomic") return "atomic-typed-result-v1";
   if (executionClass === "observed-state") return "observed-terminal-readback-v1";
-  if (executionClass === "resumable") return "resumable-terminal-readback-v1";
+  if (executionClass === "resumable") return "active-operation-terminal-readback-v1";
   return "external-terminal-readback-v1";
 }
 
 function renderTypeScript(items) {
-  return `// <auto-generated />\n// 由 scripts/gen-tool-completion-registry.mjs 从唯一 completion contract 生成。\n\nexport interface GeneratedToolCompletionContract {\n  toolName: string;\n  descriptorOwner: string;\n  deliveryMode: \"direct-terminal\" | \"job-deferred\";\n  executionClass: \"atomic\" | \"observed-state\" | \"resumable\" | \"external\";\n  completionPredicate: string;\n  proofSource: string;\n  reloadPolicy: string;\n  timeoutError: string;\n  outcomeUnknownPolicy: string;\n  directInvocationPolicy: "allowed" | "deferred-only" | "prohibited-unprovable";\n  frozenDeliveryPolicy: "ordinary" | "preserved";\n  completionDriverId: string;\n  journalPolicy: \"required\" | \"none\" | \"job-frozen\";\n  mutation: boolean;\n}\n\nexport const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompletionContract[] = ${JSON.stringify(items, null, 2)};\n\nconst BY_NAME = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((entry) => [entry.toolName, entry]));\n\n/** public Tool 执行前必须命中唯一 completion contract。 */\nexport function generatedToolCompletionContract(name: string): GeneratedToolCompletionContract | undefined {\n  return BY_NAME.get(name);\n}\n`;
+  return `// <auto-generated />\n// 由 scripts/gen-tool-completion-registry.mjs 从唯一 completion contract 生成。\n\nexport interface GeneratedToolCompletionContract {\n  toolName: string;\n  descriptorOwner: string;\n  deliveryMode: \"direct-terminal\";\n  executionClass: \"atomic\" | \"observed-state\" | \"resumable\" | \"external\";\n  completionPredicate: string;\n  proofSource: string;\n  reloadPolicy: string;\n  timeoutError: string;\n  outcomeUnknownPolicy: string;\n  completionDriverId: string;\n  journalPolicy: \"required\" | \"none\";\n  mutation: boolean;\n}\n\nexport const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompletionContract[] = ${JSON.stringify(items, null, 2)};\n\nconst BY_NAME = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((entry) => [entry.toolName, entry]));\n\n/** public Tool 执行前必须命中唯一 completion contract。 */\nexport function generatedToolCompletionContract(name: string): GeneratedToolCompletionContract | undefined {\n  return BY_NAME.get(name);\n}\n`;
 }
 
-function renderCSharp(items, editorCompile, codeExec) {
-  const contractExpression = (entry) => `new UnityCliToolCompletionContract(${cs(entry.toolName)}, ${cs(entry.descriptorOwner)}, ${cs(entry.deliveryMode)}, ${cs(entry.executionClass)}, ${cs(entry.completionPredicate)}, ${cs(entry.proofSource)}, ${cs(entry.reloadPolicy)}, ${cs(entry.timeoutError)}, ${cs(entry.outcomeUnknownPolicy)}, ${cs(entry.directInvocationPolicy)}, ${cs(entry.frozenDeliveryPolicy)}, ${cs(entry.completionDriverId)}, ${cs(entry.journalPolicy)}, ${entry.mutation ? "true" : "false"})`;
+function renderCSharp(items, editorCompile, codeExec, buildRun, editorRefresh, testRun, packageOperations, packageRoots) {
+  const contractExpression = (entry) => `new UnityCliToolCompletionContract(${cs(entry.toolName)}, ${cs(entry.descriptorOwner)}, ${cs(entry.deliveryMode)}, ${cs(entry.executionClass)}, ${cs(entry.completionPredicate)}, ${cs(entry.proofSource)}, ${cs(entry.reloadPolicy)}, ${cs(entry.timeoutError)}, ${cs(entry.outcomeUnknownPolicy)}, ${cs(entry.completionDriverId)}, ${cs(entry.journalPolicy)}, ${entry.mutation ? "true" : "false"})`;
   const rows = items.map((entry) => `            Add(${contractExpression(entry)});`).join("\n");
   const editorCompileExpression = contractExpression(editorCompile);
   const codeExecExpression = contractExpression(codeExec);
-  return `// <auto-generated />\n// 由 scripts/gen-tool-completion-registry.mjs 从唯一 completion contract 生成。\n#if UNITY_EDITOR\nusing System;\nusing System.Collections.Generic;\n\nnamespace UnityCli\n{\n    internal sealed class UnityCliToolCompletionContract\n    {\n        public UnityCliToolCompletionContract(string toolName, string descriptorOwner, string deliveryMode, string executionClass, string completionPredicate, string proofSource, string reloadPolicy, string timeoutError, string outcomeUnknownPolicy, string directInvocationPolicy, string frozenDeliveryPolicy, string completionDriverId, string journalPolicy, bool mutation)\n        {\n            ToolName = toolName; DescriptorOwner = descriptorOwner; DeliveryMode = deliveryMode; ExecutionClass = executionClass;\n            CompletionPredicate = completionPredicate; ProofSource = proofSource; ReloadPolicy = reloadPolicy; TimeoutError = timeoutError;\n            OutcomeUnknownPolicy = outcomeUnknownPolicy; DirectInvocationPolicy = directInvocationPolicy; FrozenDeliveryPolicy = frozenDeliveryPolicy;\n            CompletionDriverId = completionDriverId; JournalPolicy = journalPolicy; Mutation = mutation;\n        }\n        public string ToolName { get; private set; }\n        public string DescriptorOwner { get; private set; }\n        public string DeliveryMode { get; private set; }\n        public string ExecutionClass { get; private set; }\n        public string CompletionPredicate { get; private set; }\n        public string ProofSource { get; private set; }\n        public string ReloadPolicy { get; private set; }\n        public string TimeoutError { get; private set; }\n        public string OutcomeUnknownPolicy { get; private set; }\n        public string DirectInvocationPolicy { get; private set; }\n        public string FrozenDeliveryPolicy { get; private set; }\n        public string CompletionDriverId { get; private set; }\n        public string JournalPolicy { get; private set; }\n        public bool Mutation { get; private set; }\n    }\n\n    internal static class UnityCliToolCompletionRegistry\n    {\n        private static readonly Dictionary<string, UnityCliToolCompletionContract> Contracts = Create();\n        internal static readonly UnityCliToolCompletionContract EditorCompile = ${editorCompileExpression};\n        internal static readonly UnityCliToolCompletionContract CodeExec = ${codeExecExpression};\n        public static bool TryGet(string toolName, out UnityCliToolCompletionContract contract) => Contracts.TryGetValue(toolName ?? string.Empty, out contract);\n        public static int Count => Contracts.Count;\n\n        private static Dictionary<string, UnityCliToolCompletionContract> Create()\n        {\n            var result = new Dictionary<string, UnityCliToolCompletionContract>(StringComparer.Ordinal);\n            void Add(UnityCliToolCompletionContract contract)\n            {\n                if (result.ContainsKey(contract.ToolName)) throw new InvalidOperationException(\"Duplicate generated completion contract: \" + contract.ToolName);\n                result.Add(contract.ToolName, contract);\n            }\n${rows}\n            return result;\n        }\n    }\n}\n#endif\n`;
+  const buildRunExpression = contractExpression(buildRun);
+  const editorRefreshExpression = contractExpression(editorRefresh);
+  const testRunExpression = contractExpression(testRun);
+  const packageRootRows = packageOperations.map((operation, index) => `            { ${cs(operation)}, ${contractExpression(packageRoots[index])} }`).join(",\n");
+  return `// <auto-generated />\n#if UNITY_EDITOR\nusing System;\nusing System.Collections.Generic;\n\nnamespace UnityCli\n{\n    internal sealed class UnityCliToolCompletionContract\n    {\n        public UnityCliToolCompletionContract(string toolName, string descriptorOwner, string deliveryMode, string executionClass, string completionPredicate, string proofSource, string reloadPolicy, string timeoutError, string outcomeUnknownPolicy, string completionDriverId, string journalPolicy, bool mutation)\n        {\n            ToolName = toolName; DescriptorOwner = descriptorOwner; DeliveryMode = deliveryMode; ExecutionClass = executionClass;\n            CompletionPredicate = completionPredicate; ProofSource = proofSource; ReloadPolicy = reloadPolicy; TimeoutError = timeoutError;\n            OutcomeUnknownPolicy = outcomeUnknownPolicy; CompletionDriverId = completionDriverId; JournalPolicy = journalPolicy; Mutation = mutation;\n        }\n        public string ToolName { get; private set; }\n        public string DescriptorOwner { get; private set; }\n        public string DeliveryMode { get; private set; }\n        public string ExecutionClass { get; private set; }\n        public string CompletionPredicate { get; private set; }\n        public string ProofSource { get; private set; }\n        public string ReloadPolicy { get; private set; }\n        public string TimeoutError { get; private set; }\n        public string OutcomeUnknownPolicy { get; private set; }\n        public string CompletionDriverId { get; private set; }\n        public string JournalPolicy { get; private set; }\n        public bool Mutation { get; private set; }\n    }\n\n    internal static class UnityCliToolCompletionRegistry\n    {\n        private static readonly Dictionary<string, UnityCliToolCompletionContract> Contracts = Create();\n        internal static readonly UnityCliToolCompletionContract EditorCompile = ${editorCompileExpression};\n        internal static readonly UnityCliToolCompletionContract BuildRun = ${buildRunExpression};\n        internal static readonly UnityCliToolCompletionContract EditorRefresh = ${editorRefreshExpression};\n        internal static readonly UnityCliToolCompletionContract CodeExec = ${codeExecExpression};\n        internal static readonly UnityCliToolCompletionContract TestRun = ${testRunExpression};\n        private static readonly Dictionary<string, UnityCliToolCompletionContract> PackageRoots = new Dictionary<string, UnityCliToolCompletionContract>(StringComparer.Ordinal)\n        {\n${packageRootRows}\n        };\n        public static bool TryGet(string toolName, out UnityCliToolCompletionContract contract) => Contracts.TryGetValue(toolName ?? string.Empty, out contract);\n        internal static bool TryGetPackageRoot(string operation, out UnityCliToolCompletionContract contract) => PackageRoots.TryGetValue(operation ?? string.Empty, out contract);\n        public static int Count => Contracts.Count;\n\n        private static Dictionary<string, UnityCliToolCompletionContract> Create()\n        {\n            var result = new Dictionary<string, UnityCliToolCompletionContract>(StringComparer.Ordinal);\n            void Add(UnityCliToolCompletionContract contract)\n            {\n                if (result.ContainsKey(contract.ToolName)) throw new InvalidOperationException(\"Duplicate generated completion contract: \" + contract.ToolName);\n                result.Add(contract.ToolName, contract);\n            }\n${rows}\n            return result;\n        }\n    }\n}\n#endif\n`;
 }
 
 function uniqueMap(items, keyOf, label) {

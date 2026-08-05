@@ -8,7 +8,7 @@ namespace UnityCli
     {
         public sealed class Request { public string ShadingMode { get; set; } public string DrawMode { get; set; } }
         public sealed class Result { public bool SceneViewAvailable { get; set; } public string CurrentDrawMode { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.scene-debug", Summary = "Set the SceneView shading or draw mode for debugging.", Description = "Change the current Editor SceneView camera mode.", Group = "graphics", Version = "1.0.0", SideEffects = new[] { "scene-view-state" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Show SceneView wireframe", Input = new Request { DrawMode = "Wireframe" } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.scene-debug", Summary = "Set the SceneView shading or draw mode for debugging.", Description = "Change the current Editor SceneView camera mode.", Group = "graphics",SideEffects = new[] { "scene-view-state" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Show SceneView wireframe", Input = new Request { DrawMode = "Wireframe" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var view = SceneView.lastActiveSceneView;

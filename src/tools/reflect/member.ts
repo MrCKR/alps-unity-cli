@@ -10,7 +10,6 @@ export interface ReflectMemberRequest {
 }
 
 export interface ReflectMemberResult {
-  command: string;
   mode: string;
   requiresUnity: boolean;
   source: Record<string, AnyJson>;

@@ -24,7 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string TypeName { get; set; }
@@ -37,7 +36,6 @@ namespace UnityCli
             Summary = "Deep-read an Assets/* asset's members via ObjectSerializer; use paths or viewQuery for token-safe fields.",
             Description = "Deep-read an Assets/* asset's members. For token safety, pass exact paths or one viewQuery; they are mutually exclusive and skip full fields/props expansion. Keep maxDepth low before expanding large assets. Arrays/lists/dicts are bounded by maxArrayItems.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -65,7 +63,6 @@ namespace UnityCli
             var data = UnityCliBridge.ObjectSerializer.Serialize(asset, options);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "asset.get-data",
                 AssetPath = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 TypeName = asset.GetType().FullName,

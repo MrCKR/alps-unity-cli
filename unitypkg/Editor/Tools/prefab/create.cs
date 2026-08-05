@@ -34,7 +34,6 @@ namespace UnityCli
             Summary = "Create a new Assets/*.prefab from a source GameObject or an existing prefab asset path.",
             Description = "Create a new Assets/*.prefab. When source is an Assets/*.prefab path, the asset is copied; otherwise source is resolved as a scene GameObject (name, hierarchy path, or instance id) and saved as a prefab. Refuses to overwrite an existing prefab unless overwrite=true.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

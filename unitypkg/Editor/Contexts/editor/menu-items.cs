@@ -27,12 +27,10 @@ namespace UnityCli.Contexts.Editor
             Summary = "Report Editor menu enumeration availability without executing menus.",
             Description = "Attempt to enumerate Unity Editor menu items as read-only discovery. Unity has no stable public API for full menu enumeration, so this context may return an empty items array with diagnostics; executing a menu path remains the destructive Tool editor.menu.",
             Category = "editor",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "static",
             Examples = new[] { new ContextExample { Description = "Search menu item metadata", Input = new Request { Search = "Save" } } }
         };
 

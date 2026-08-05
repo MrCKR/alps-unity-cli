@@ -54,7 +54,18 @@ namespace UnityCli
             }
 
             if (rawType == typeof(object)) throw Unsupported(path, rawType.FullName);
-            if (rawType == typeof(string) || rawType == typeof(char)) return TypeSchema("string");
+            if (rawType == typeof(string))
+            {
+                var stringEnum = member == null ? null : member.GetCustomAttributes(typeof(UnityCliStringEnumAttribute), true).Cast<UnityCliStringEnumAttribute>().SingleOrDefault();
+                if (stringEnum != null)
+                {
+                    if (stringEnum.Values.Length == 0 || stringEnum.Values.Any(string.IsNullOrWhiteSpace) || stringEnum.Values.Distinct(StringComparer.Ordinal).Count() != stringEnum.Values.Length)
+                        throw Unsupported(path, "string enum requires unique non-empty values");
+                    return new Dictionary<string, object> { { "type", "string" }, { "enum", stringEnum.Values } };
+                }
+                return TypeSchema("string");
+            }
+            if (rawType == typeof(char)) return TypeSchema("string");
             if (rawType == typeof(bool)) return TypeSchema("boolean");
             if (IsInteger(rawType)) return IntegerSchema(rawType);
             if (IsNumber(rawType)) return TypeSchema("number");
@@ -115,7 +126,7 @@ namespace UnityCli
             {
                 var name = ToCamelCase(member.Name);
                 properties[name] = BuildSchema(MemberType(member), path + "." + name, definitions, member, false);
-                if (member.IsDefined(typeof(UnityCliRequiredAttribute), true)) required.Add(name);
+                if (member.IsDefined(typeof(UnityCliRequiredAttribute), true) || member.IsDefined(typeof(UnityCliPresenceRequiredAttribute), true)) required.Add(name);
             }
 
             var schema = new Dictionary<string, object>

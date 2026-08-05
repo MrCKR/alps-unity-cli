@@ -32,7 +32,6 @@ namespace UnityCli
             Summary = "Create a new Assets/*.shader (or .shadergraph) asset from source content or a default unlit template.",
             Description = "Create a new Shader asset at an Assets/*.shader path. With no content, a default unlit UnityCli/ shader is generated. For .shadergraph, content is required (pass a ShaderGraph JSON payload). Refuses to overwrite an existing shader unless overwrite=true. Creating a shader triggers recompilation.",
             Group = "shader",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write", "shader-recompile" },
             Target = "editor",

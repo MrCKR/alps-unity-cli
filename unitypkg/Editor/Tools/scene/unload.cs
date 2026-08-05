@@ -36,7 +36,6 @@ namespace UnityCli
             Summary = "Unload an additively-loaded scene from the Editor.",
             Description = "Unload an additively-loaded scene from the Editor. Cannot unload the only open scene. Destructive: removes the scene from the Editor session. Supports --dry-run.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify", "asset-write-when-save-true" },

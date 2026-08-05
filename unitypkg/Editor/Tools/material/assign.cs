@@ -44,7 +44,6 @@ namespace UnityCli
             Summary = "Assign an Assets/*.mat to a GameObject's Renderer (by slot) or UI Graphic component.",
             Description = "Assign an Assets/*.mat to a GameObject. Assigns to a Renderer's sharedMaterials slot (default 0) when present; otherwise assigns to a UnityEngine.UI.Graphic component's material property. Target resolves by name, hierarchy path, or instance id.",
             Group = "material",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify" },
             Target = "editor",

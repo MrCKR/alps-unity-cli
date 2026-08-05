@@ -30,8 +30,6 @@ namespace UnityCli.ProBuilder
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 5000,
             MaxTimeoutMs = 10000,
-            SupportsJob = false,
-            ArtifactKinds = new[] { "json" },
             Examples = new[]
             {
                 new ToolExample { Description = "探测 ProBuilder 可用性", Input = new Request() }

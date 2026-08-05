@@ -11,8 +11,8 @@ namespace UnityCli
     public class UiModifyVisualElementTool : IUnityCliTool<UiModifyVisualElementTool.Request, UiModifyVisualElementTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public string ElementName { get; set; } public string Text { get; set; } public string Display { get; set; } public float? Width { get; set; } public float? Height { get; set; } public string AddClass { get; set; } public string RemoveClass { get; set; } }
-        public sealed class Result { public string Command { get; set; } public bool DryRun { get; set; } public UiVisualElementInfo Element { get; set; } public List<UiPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "ui.modify-visual-element", Summary = "Modify a VisualElement in a live UIDocument by name.", Description = "Find a VisualElement by name in a UIDocument and modify text/display/size/classes. dryRun=true previews.", Group = "ui", Version = "1.0.0", DestructiveHint = false, SupportsDryRun = true, SideEffects = new[] { "ui-document-session-state" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set text", Input = new Request { Target = "UIDocument", ElementName = "label", Text = "Updated" } } } };
+        public sealed class Result { public bool DryRun { get; set; } public UiVisualElementInfo Element { get; set; } public List<UiPlannedEffect> PlannedEffects { get; set; } }
+        public ToolDescriptor Describe() => new() { Name = "ui.modify-visual-element", Summary = "Modify a VisualElement in a live UIDocument by name.", Description = "Find a VisualElement by name in a UIDocument and modify text/display/size/classes. dryRun=true previews.", Group = "ui",DestructiveHint = false, SupportsDryRun = true, SideEffects = new[] { "ui-document-session-state" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set text", Input = new Request { Target = "UIDocument", ElementName = "label", Text = "Updated" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var resolvedGo = UiToolSupport.ResolveGameObjectTarget(r.Target);
@@ -69,7 +69,7 @@ namespace UnityCli
                 element = observed;
             }
             var observedTextElement = element as TextElement;
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.modify-visual-element", DryRun = dryRun, Element = new UiVisualElementInfo { Name = element.name, Text = observedTextElement == null ? null : observedTextElement.text, Display = element.style.display.value.ToString(), Width = element.style.width.value.value, Height = element.style.height.value.value, Classes = new List<string>(element.GetClasses()).ToArray() }, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.modify-visual-element", Target = r.ElementName } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { DryRun = dryRun, Element = new UiVisualElementInfo { Name = element.name, Text = observedTextElement == null ? null : observedTextElement.text, Display = element.style.display.value.ToString(), Width = element.style.width.value.value, Height = element.style.height.value.value, Classes = new List<string>(element.GetClasses()).ToArray() }, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.modify-visual-element", Target = r.ElementName } } });
         }
     }
 }

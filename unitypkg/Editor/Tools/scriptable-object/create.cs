@@ -33,7 +33,6 @@ namespace UnityCli
             Summary = "Create a new ScriptableObject asset at an Assets/*.asset path.",
             Description = "Create a new ScriptableObject asset at an Assets/*.asset path. Resolves the type by full name or class name. Refuses to overwrite an existing asset unless overwrite=true. Supports dry-run.",
             Group = "scriptable-object",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

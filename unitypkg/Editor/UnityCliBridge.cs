@@ -85,8 +85,15 @@ namespace UnityCli
             // AssetImportWorker 不是可寻址 Editor 实例，不得启动 listener 或写入 instance registry。
             if (AssetDatabase.IsAssetImportWorkerProcess()) return;
             WriteRuntimeLoadDiagnostics("static_constructor");
+            UnityCliTransactionLog.RotateForNewSession();
+            UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
             UnityCliCompileCoordinator.Initialize();
+            UnityCliLiveRefreshCoordinator.Initialize();
+            UnityCliAssetRefreshCoordinator.Initialize();
+            UnityCliPackageEmbedCoordinator.Initialize();
+            UnityCliPackageResolveCoordinator.Initialize();
+            UnityCliTestRunCoordinator.Initialize();
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
@@ -127,6 +134,11 @@ namespace UnityCli
             domainReloading = true;
             UnityCliCompilationEventBroker.BeforeReload();
             UnityCliCompileCoordinator.BeforeReload();
+            UnityCliLiveRefreshCoordinator.BeforeReload();
+            UnityCliAssetRefreshCoordinator.BeforeReload();
+            UnityCliPackageEmbedCoordinator.BeforeReload();
+            UnityCliPackageResolveCoordinator.BeforeReload();
+            UnityCliTestRunCoordinator.BeforeReload();
             BridgeLifetime.Cancel();
             CancelQueuedWork();
             CancelPendingWaits("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
@@ -137,8 +149,14 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
+            UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
             UnityCliCompileCoordinator.Initialize();
+            UnityCliLiveRefreshCoordinator.Initialize();
+            UnityCliAssetRefreshCoordinator.Initialize();
+            UnityCliPackageEmbedCoordinator.Initialize();
+            UnityCliPackageResolveCoordinator.Initialize();
+            UnityCliTestRunCoordinator.Initialize();
             WriteLog("bridge_after_assembly_reload restarting listener");
             StopStaleBridgeListeners();
             StartListener();
@@ -152,6 +170,11 @@ namespace UnityCli
         {
             UnityCliCompilationEventBroker.Shutdown();
             UnityCliCompileCoordinator.Shutdown();
+            UnityCliLiveRefreshCoordinator.Shutdown();
+            UnityCliAssetRefreshCoordinator.Shutdown();
+            UnityCliPackageEmbedCoordinator.Shutdown();
+            UnityCliPackageResolveCoordinator.Shutdown();
+            UnityCliTestRunCoordinator.Shutdown();
             BridgeLifetime.Cancel();
             CancelQueuedWork();
             CancelPendingWaits("E_UNITY_QUITTING", "Unity Editor is quitting.", "Restart Unity and retry the request.", 5000);
@@ -169,6 +192,8 @@ namespace UnityCli
                 runtimeSession.Dispose();
                 runtimeSession = new CancellationTokenSource();
             }
+            if (state == PlayModeStateChange.EnteredPlayMode || state == PlayModeStateChange.EnteredEditMode)
+                UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
         }
 
         internal static bool IsPlayModeChanging() { return playModeChanging; }
@@ -209,56 +234,12 @@ namespace UnityCli
             started = false;
         }
 
-        /// <summary>
-        /// 在 batchmode 主线程上执行最终 Bridge 协议，并允许工具通过中央 scheduler 跨帧等待。
-        /// </summary>
-        public static async Task<int> ExecuteBatchCommandAsync(string requestJson)
-        {
-            string response;
-            try
-            {
-                var request = UnityCli.Protocol.BridgeRequest.DeserializeStrict(requestJson);
-                using (var timeout = CreateExecutionTimeout(request))
-                {
-                    response = await Execute(request, timeout.Token);
-                }
-            }
-            catch (FormatException exception)
-            {
-                response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                    string.Empty,
-                    "E_SCHEMA_INVALID",
-                    "Bridge request JSON does not match the protocol schema.",
-                    new Dictionary<string, object> { { "path", "$" }, { "expected", "BridgeRequest" }, { "actual", exception.Message } },
-                    new[] { "Send a complete final BridgeRequest JSON value." }));
-            }
-            catch (BridgeCommandException exception)
-            {
-                response = SerializeBridgeExceptionEnvelope(string.Empty, exception);
-            }
-            catch (Exception exception)
-            {
-                response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                    string.Empty, "E_BRIDGE_COMMAND_FAILED", exception.Message, nextActions: new[] { "Check Unity Console and UnityCliBridge.log." }));
-            }
-            Console.WriteLine("UNITY_CLI_BRIDGE_RESULT " + response);
-            return response.Contains("\"ok\":true") ? 0 : 1;
-        }
-
-        /// <summary>
-        /// 确保 batchmode 已安装中央主线程同步上下文；update 驱动仅由 Bridge 注册一次。
-        /// </summary>
-        internal static void EnsureScheduler()
-        {
-            UnityCliWaitScheduler.EnsureMainThreadSynchronizationContext();
-        }
-
         private static async ValueTask<string> Execute(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             try
             {
                 var data = await ExecuteData(request, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
+                // handler 返回后先让 coordinator 消费 completion evidence；超时后的已证明 mutation 仍可持久化 canonical terminal。
                 return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, data));
             }
             catch (BridgeCommandException exception)
@@ -292,7 +273,7 @@ namespace UnityCli
                 throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", null, new[] { "Wait for domain reload to complete and retry." }, true, 10000);
             }
 
-            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
+            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
             if (EditorApplication.isCompiling && !allowedDuringCompileOrImport)
             {
                 throw new BridgeCommandException("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", null, new[] { "Wait for Unity to finish compiling and retry." }, true, 5000);
@@ -306,7 +287,7 @@ namespace UnityCli
             if (IsPlayModeChanging())
             {
                 // 只在 PlayMode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续操作 Unity。
-                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command)
+                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command)
                     || IsEditorStateSnapshotCommand(request.Command)
                     || request.Command == "editor.console"
                     || request.Command == "editor.pause"
@@ -328,22 +309,8 @@ namespace UnityCli
                 WriteLog("execute_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
             }
 
-            // 动态 Tool 必须先解析 live descriptor，再按实际 tool name 与 wrapper command 校验证明。
-            // 此处仅处理直接任意代码入口，wrapper 的确认由已注册 descriptor 二次门禁。
-            if (RequiresDestructiveSecurityProof(request.Command)
-                && !(request.Execution != null && request.Execution.DryRun == true)
-                && !request.SecurityConfirmed(request.Command, true, true, request.Command))
-            {
-                throw new BridgeCommandException("E_DESTRUCTIVE_CONFIRMATION_REQUIRED", "Destructive command requires CLI confirmation and fingerprint proof: " + request.Command, "Rerun the same tools run command with --yes so the request includes destructive security proof.");
-            }
-
             cancellationToken.ThrowIfCancellationRequested();
             return await CommandRegistry.ExecuteAsync(request, cancellationToken);
-        }
-
-        private static bool RequiresDestructiveSecurityProof(string command)
-        {
-            return string.Equals(command, "code.exec", StringComparison.Ordinal);
         }
 
         private static void CancelPendingWaits(string code, string message, string nextAction, int retryAfterMs)

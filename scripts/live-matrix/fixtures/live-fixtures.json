@@ -1,0 +1,1566 @@
+{
+ "setup": {
+  "assert": {
+   "ready": true
+  },
+  "steps": [
+   {
+    "id": "stop-profiler",
+    "argv": [
+     "tools",
+     "run",
+     "profiler.stop",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.profiler.enabled": false,
+      "data.profiler.profileEditor": false
+     }
+    }
+   },
+   {
+    "id": "load-baseline-scene",
+    "argv": [
+     "tools",
+     "run",
+     "scene.load",
+     "--input",
+     "{\"path\":\"Assets/UnityCLIValidation/MatrixScene.unity\"}"
+    ],
+    "expect": {
+     "equals": {
+      "data.scene.path": "Assets/UnityCLIValidation/MatrixScene.unity",
+      "data.scene.isLoaded": true
+     }
+    }
+   },
+   {
+    "id": "read-proof-before",
+    "argv": [
+     "context",
+     "read",
+     "scene.gameobject",
+     "--input",
+     "{\"target\":\"Main Camera\",\"includeComponents\":false}"
+    ],
+    "expect": {
+     "exists": [
+      "data.gameObject.transform.position.x"
+     ]
+    },
+    "capture": {
+     "proofBefore": "data.gameObject.transform.position.x"
+    }
+   },
+   {
+    "id": "seed-dev-project",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-matrix-setup.cs\",\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":31337,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 31337
+     },
+     "exists": [
+      "data.compile.diagnostics",
+      "data.runtime.returnValue"
+     ]
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0,\"y\":0,\"z\":0}"
+    ],
+    "expect": {
+     "equals": {
+      "data.gameObject.transform.position.x": 0
+     }
+    }
+   },
+   {
+    "id": "save-baseline-scene",
+    "argv": [
+     "tools",
+     "run",
+     "scene.save",
+     "--input",
+     "{}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "seed-vfx-graph",
+    "argv": [
+     "tools",
+     "run",
+     "vfx.graph.create",
+     "--input",
+     "{\"path\":\"Assets/VFX/Explosion.vfx\",\"overwrite\":true}"
+    ],
+    "expect": {
+     "exists": [
+      "data.graph"
+     ]
+    }
+   },
+   {
+    "id": "ready",
+    "argv": [
+     "context",
+     "read",
+     "editor.state",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.status": "ready",
+      "data.state.playMode.known": true,
+      "data.state.playMode.value": "edit"
+     }
+    }
+   }
+  ]
+ },
+ "reset": {
+  "assert": {
+   "ready": true
+  },
+  "steps": [
+   {
+    "id": "stop-profiler",
+    "argv": [
+     "tools",
+     "run",
+     "profiler.stop",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.profiler.enabled": false,
+      "data.profiler.profileEditor": false
+     }
+    }
+   },
+   {
+    "id": "load-baseline-scene",
+    "argv": [
+     "tools",
+     "run",
+     "scene.load",
+     "--input",
+     "{\"path\":\"Assets/UnityCLIValidation/MatrixScene.unity\"}"
+    ],
+    "expect": {
+     "equals": {
+      "data.scene.path": "Assets/UnityCLIValidation/MatrixScene.unity",
+      "data.scene.isLoaded": true
+     }
+    }
+   },
+   {
+    "id": "read-proof-before",
+    "argv": [
+     "context",
+     "read",
+     "scene.gameobject",
+     "--input",
+     "{\"target\":\"Main Camera\",\"includeComponents\":false}"
+    ],
+    "expect": {
+     "exists": [
+      "data.gameObject.transform.position.x"
+     ]
+    },
+    "capture": {
+     "proofBefore": "data.gameObject.transform.position.x"
+    }
+   },
+   {
+    "id": "seed-dev-project",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-matrix-setup.cs\",\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":31337,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 31337
+     },
+     "exists": [
+      "data.compile.diagnostics"
+     ]
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0,\"y\":0,\"z\":0}"
+    ],
+    "expect": {
+     "equals": {
+      "data.gameObject.transform.position.x": 0
+     }
+    }
+   },
+   {
+    "id": "save-baseline-scene",
+    "argv": [
+     "tools",
+     "run",
+     "scene.save",
+     "--input",
+     "{}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "ready",
+    "argv": [
+     "context",
+     "read",
+     "editor.state",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.status": "ready",
+      "data.state.playMode.value": "edit"
+     }
+    }
+   }
+  ]
+ },
+ "cinemachine_pipeline": {
+  "assert": {
+   "cinemachinePipelineReady": true
+  },
+  "steps": [
+   {
+    "id": "aim",
+    "argv": [
+     "tools",
+     "run",
+     "cinemachine.aim",
+     "--input",
+     "{\"aim\":\"CinemachineRotationComposer\",\"target\":\"PlayerCam\"}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "body",
+    "argv": [
+     "tools",
+     "run",
+     "cinemachine.body",
+     "--input",
+     "{\"body\":\"CinemachineFollow\",\"target\":\"PlayerCam\"}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "cinemachine_extension_absent": {
+  "assert": {
+   "cinemachineExtensionAbsent": true
+  },
+  "steps": [
+   {
+    "id": "remove-collider",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"cinemachine-extension-absent\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {
+     "equals": {
+      "data.gameObject.transform.position.x": 0
+     }
+    }
+   }
+  ]
+ },
+ "probuilder_generic": {
+  "assert": {
+   "probuilderGenericReady": true
+  },
+  "steps": [
+   {
+    "id": "rebuild-strict-domains",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"probuilder-generic\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "ui_panel_settings_absent": {
+  "assert": {
+   "panelSettingsOutputAbsent": true
+  },
+  "steps": [
+   {
+    "id": "remove-panel-settings",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-panel-settings-absent\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "vfx_parameter": {
+  "assert": {
+   "vfxParametersReady": true
+  },
+  "steps": [
+   {
+    "id": "rebuild-parameter-graph",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"vfx-parameter\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "scene_create_absent": {
+  "assert": {
+   "sceneOutputAbsent": true
+  },
+  "steps": [
+   {
+    "id": "remove-main-scene",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-create\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "scene_main_open": {
+  "assert": {
+   "sceneOpen": true
+  },
+  "steps": [
+   {
+    "id": "open-main",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-main-open\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "scene_gameplay_open": {
+  "assert": {
+   "sceneOpen": true
+  },
+  "steps": [
+   {
+    "id": "open-gameplay",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-gameplay-open\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "scene_level2_open": {
+  "assert": {
+   "sceneOpen": true
+  },
+  "steps": [
+   {
+    "id": "open-level2",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-level2-open\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "ui_document_absent": {
+  "assert": {
+   "uiDocumentOutputAbsent": true
+  },
+  "steps": [
+   {
+    "id": "remove-ui-assets",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-document-create\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "scriptable_object": {
+  "assert": {
+   "scriptableObjectReady": true
+  },
+  "steps": [
+   {
+    "id": "create-config",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scriptable-object\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "scriptable_object_create_absent": {
+  "assert": {
+   "scriptableObjectOutputAbsent": true
+  },
+  "steps": [
+   {
+    "id": "remove-config",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scriptable-object-create-absent\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "ui_detach_target": {
+  "assert": {
+   "uiDetachTargetReady": true
+  },
+  "steps": [
+   {
+    "id": "attach-document",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-detach-target\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "ui_visual_element": {
+  "assert": {
+   "uiVisualElementReady": true
+  },
+  "steps": [
+   {
+    "id": "create-label",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-visual-element\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "vfx_template": {
+  "assert": {
+   "vfxTemplateReady": true
+  },
+  "steps": [
+   {
+    "id": "list-templates",
+    "argv": [
+     "tools",
+     "run",
+     "vfx.template.list",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "contains": {
+      "data.templates": "SimpleParticleSystem"
+     }
+    }
+   }
+  ]
+ },
+ "vfx_line_target": {
+  "assert": {
+   "lineTargetReady": true
+  },
+  "steps": [
+   {
+    "id": "create-line",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"vfx-line-target\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "prefab_create": {
+  "assert": {
+   "prefabOutputAbsent": true
+  },
+  "steps": [
+   {
+    "id": "remove-output",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"prefab-create\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "prefab_unpack": {
+  "assert": {
+   "prefabInstanceReady": true
+  },
+  "steps": [
+   {
+    "id": "instantiate-player",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"prefab-unpack\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "prefab_stage_open": {
+  "assert": {
+   "prefabStageReady": true
+  },
+  "steps": [
+   {
+    "id": "open",
+    "argv": [
+     "tools",
+     "run",
+     "prefab.stage-open",
+     "--input",
+     "{\"path\":\"Assets/Prefabs/Player.prefab\"}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "verify",
+    "argv": [
+     "context",
+     "read",
+     "prefab.stage",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.isOpen": true,
+      "data.assetPath": "Assets/Prefabs/Player.prefab"
+     }
+    }
+   }
+  ]
+ },
+ "profiler_capture_baseline": {
+  "assert": {
+   "profilerCaptureReady": true
+  },
+  "steps": [
+   {
+    "id": "capture",
+    "argv": [
+     "tools",
+     "run",
+     "profiler.capture",
+     "--input",
+     "{\"path\":\"Artifacts/profiler/baseline.raw\",\"format\":\"raw\",\"frames\":1,\"overwrite\":true}"
+    ],
+    "expect": {
+     "exists": [
+      "data.artifactPath"
+     ]
+    }
+   }
+  ]
+ },
+ "profiler_hierarchy_capture": {
+  "assert": {
+   "profilerHierarchyReady": true
+  },
+  "steps": [
+   {
+    "id": "start",
+    "argv": [
+     "tools",
+     "run",
+     "profiler.start",
+     "--input",
+     "{\"deepProfiling\":false,\"enableCallstacks\":false}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "verify",
+    "argv": [
+     "tools",
+     "run",
+     "profiler.hierarchy",
+     "--input",
+     "{\"frame\":-1,\"thread\":0,\"top\":20,\"depth\":5}"
+    ],
+    "expect": {
+     "exists": [
+      "data.rootItems"
+     ]
+    }
+   }
+  ]
+ },
+ "profiler_snapshots": {
+  "assert": {
+   "profilerSnapshotsReady": true
+  },
+  "steps": [
+   {
+    "id": "write-inputs",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"profiler-snapshots\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 32000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0,\"y\":0,\"z\":0}"
+    ],
+    "expect": {
+     "equals": {
+      "data.gameObject.transform.position.x": 0
+     }
+    }
+   }
+  ]
+ },
+ "profiler_play_paused": {
+  "assert": {
+   "playPaused": true
+  },
+  "steps": [
+   {
+    "id": "pause",
+    "argv": [
+     "tools",
+     "run",
+     "editor.pause",
+     "--input",
+     "{}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "profiler_frame_debugger_enabled": {
+  "assert": {
+   "frameDebuggerEnabled": true
+  },
+  "steps": [
+   {
+    "id": "enable",
+    "argv": [
+     "tools",
+     "run",
+     "profiler.frame-debugger.enable",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.enabled": true
+     }
+    }
+   }
+  ]
+ },
+ "pipeline_urp": {
+  "assert": {
+   "pipelineReady": true
+  },
+  "steps": [
+   {
+    "id": "activate",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"urp\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":33000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 33000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "pipeline_hdrp": {
+  "assert": {
+   "pipelineReady": true
+  },
+  "steps": [
+   {
+    "id": "activate",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"hdrp\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":33000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 33000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "pipeline_restore": {
+  "assert": {
+   "pipelineRestored": true
+  },
+  "steps": [
+   {
+    "id": "read-proof-before",
+    "argv": [
+     "context",
+     "read",
+     "scene.gameobject",
+     "--input",
+     "{\"target\":\"Main Camera\",\"includeComponents\":false}"
+    ],
+    "expect": {
+     "exists": [
+      "data.gameObject.transform.position.x"
+     ]
+    },
+    "capture": {
+     "proofBefore": "data.gameObject.transform.position.x"
+    }
+   },
+   {
+    "id": "restore",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"restore\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":33000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 33000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "package_remove": {
+  "assert": {
+   "packageInstalled": true
+  },
+  "steps": [
+   {
+    "id": "install",
+    "argv": [
+     "tools",
+     "run",
+     "package.install",
+     "--input",
+     "{\"name\":\"com.unity.textmeshpro\",\"version\":\"3.0.7\"}"
+    ],
+    "expect": {
+     "equals": {
+      "data.action": "install",
+      "data.dependency.present": true,
+      "data.dependency.version": "3.0.7"
+     }
+    }
+   }
+  ]
+ },
+ "package_restore": {
+  "assert": {
+   "packageDeploymentReady": true
+  },
+  "steps": [
+   {
+    "id": "deploy",
+    "argv": [
+     "tools",
+     "run",
+     "package.deploy",
+     "--input",
+     "{\"source\":\"./Packages/my-package\"}"
+    ],
+    "expect": {
+     "equals": {
+      "data.status": "deployed",
+      "data.packageName": "com.acme.tool",
+      "data.files.proven": true
+     }
+    }
+   }
+  ]
+ },
+ "package_scoped_registry": {
+  "assert": {
+   "scopedRegistryReady": true
+  },
+  "steps": [
+   {
+    "id": "add",
+    "argv": [
+     "tools",
+     "run",
+     "package.scoped-registry.add",
+     "--input",
+     "{\"name\":\"Acme\",\"url\":\"https://registry.acme.test\",\"scope\":\"com.acme\"}"
+    ],
+    "expect": {
+     "equals": {
+      "data.registry.name": "Acme",
+      "data.registry.url": "https://registry.acme.test"
+     }
+    }
+   }
+  ]
+ },
+ "playmode_fast": {
+  "assert": {
+   "fastPlayMode": true
+  },
+  "steps": [
+   {
+    "id": "enable",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-playmode-options.cs\",\"args\":{\"action\":\"enable\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":34000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 34000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "playmode_restore": {
+  "assert": {
+   "playModeRestored": true
+  },
+  "steps": [
+   {
+    "id": "restore",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-playmode-options.cs\",\"args\":{\"action\":\"restore\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":34000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 34000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "concurrency": {
+  "assert": {
+   "serial": true
+  },
+  "calls": [
+   {
+    "argv": [
+     "tools",
+     "run",
+     "validation.wait",
+     "--input",
+     "{\"marker\":\"matrix-concurrency-a\",\"delayMs\":1200}",
+     "--timeout-ms",
+     "30000"
+    ],
+    "expect": {
+     "equals": {
+      "data.completed": true,
+      "data.marker": "matrix-concurrency-a"
+     }
+    }
+   },
+   {
+    "argv": [
+     "tools",
+     "run",
+     "validation.wait",
+     "--input",
+     "{\"marker\":\"matrix-concurrency-b\",\"delayMs\":1200}",
+     "--timeout-ms",
+     "30000"
+    ],
+    "expect": {
+     "equals": {
+      "data.completed": true,
+      "data.marker": "matrix-concurrency-b"
+     }
+    }
+   }
+  ]
+ },
+ "timeout_cancel": {
+  "assert": {
+   "timeoutOrCancel": true
+  },
+  "steps": [
+   {
+    "id": "timeout",
+    "argv": [
+     "tools",
+     "run",
+     "validation.wait",
+     "--input",
+     "{\"marker\":\"matrix-timeout-final\",\"delayMs\":1500}",
+     "--timeout-ms",
+     "100"
+    ],
+    "expect": {
+     "errorCode": "E_EXECUTION_TIMEOUT"
+    },
+    "delayAfterMs": 1800
+   },
+   {
+    "id": "late-side-effect",
+    "argv": [
+     "context",
+     "read",
+     "validation.wait-status",
+     "--input",
+     "{\"marker\":\"matrix-timeout-final\"}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completed": false,
+      "data.marker": "matrix-timeout-final"
+     }
+    }
+   }
+  ]
+ },
+ "stale_target": {
+  "assert": {
+   "staleTarget": true
+  },
+  "steps": [
+   {
+    "id": "missing-instance",
+    "argv": [
+     "context",
+     "read",
+     "editor.state",
+     "--input",
+     "{}",
+     "--instance",
+     "unity-0000000000000000000000000000000000000000000000000000000000000000"
+    ],
+    "expect": {
+     "errorCode": "E_INSTANCE_NOT_FOUND"
+    }
+   },
+   {
+    "id": "instance-recovery",
+    "argv": [
+     "context",
+     "read",
+     "editor.state",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.status": "ready"
+     }
+    }
+   }
+  ]
+ },
+ "domain_reload": {
+  "assert": {
+   "recoveredAfterReload": true
+  },
+  "steps": [
+   {
+    "id": "write-probe",
+    "argv": [
+     "tools",
+     "run",
+     "code.exec",
+     "--input",
+     "{\"file\":\"scripts/live-matrix/fixtures/live-domain-reload-setup.cs\",\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":35000,\"tolerance\":0.001}]}}"
+    ],
+    "expect": {
+     "equals": {
+      "data.completion.assertions.0.value": 35000
+     }
+    }
+   },
+   {
+    "id": "restore-proof",
+    "argv": [
+     "tools",
+     "run",
+     "go.modify",
+     "--input",
+     "{\"target\":\"Main Camera\",\"x\":0}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "refresh-script",
+    "argv": [
+     "tools",
+     "run",
+     "asset.refresh",
+     "--input",
+     "{\"path\":\"Assets/UnityCLIValidation/MatrixReloadProbe.cs\",\"forceUpdate\":true}"
+    ],
+    "expect": {
+     "equals": {
+      "data.refreshed": true
+     }
+    }
+   },
+   {
+    "id": "ready-after-reload",
+    "argv": [
+     "context",
+     "read",
+     "editor.state",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.status": "ready"
+     }
+    }
+   },
+   {
+    "id": "delete-probe",
+    "argv": [
+     "tools",
+     "run",
+     "asset.delete",
+     "--input",
+     "{\"path\":\"Assets/UnityCLIValidation/MatrixReloadProbe.cs\"}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "ready-after-cleanup",
+    "argv": [
+     "context",
+     "read",
+     "editor.state",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.status": "ready"
+     }
+    }
+   }
+  ]
+ },
+ "shell_quoting": {
+  "assert": {
+   "quotedPath": true
+  },
+  "steps": [
+   {
+    "id": "unicode-quotes-backslashes",
+    "argv": [
+     "tools",
+     "run",
+     "validation.echo",
+     "--input",
+     "{\"text\":\"Unicode 空格 \\\"quoted\\\" \\\\ slash\",\"path\":\"Assets\\\\Matrix Folder\\\\file name.txt\"}"
+    ],
+    "expect": {
+     "equals": {
+      "data.text": "Unicode 空格 \"quoted\" \\ slash",
+      "data.path": "Assets\\Matrix Folder\\file name.txt"
+     }
+    }
+   }
+  ]
+ },
+ "prefab_stage": {
+  "assert": {
+   "prefabStage": true
+  },
+  "steps": [
+   {
+    "id": "open",
+    "argv": [
+     "tools",
+     "run",
+     "prefab.stage-open",
+     "--input",
+     "{\"path\":\"Assets/UnityCLIValidation/Matrix.prefab\"}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "read",
+    "argv": [
+     "context",
+     "read",
+     "prefab.stage",
+     "--input",
+     "{}"
+    ],
+    "expect": {
+     "equals": {
+      "data.isOpen": true,
+      "data.assetPath": "Assets/UnityCLIValidation/Matrix.prefab",
+      "data.prefabRootName": "Matrix"
+     }
+    }
+   },
+   {
+    "id": "close",
+    "argv": [
+     "tools",
+     "run",
+     "prefab.stage-close",
+     "--input",
+     "{}"
+    ],
+    "expect": {}
+   }
+  ]
+ },
+ "ui_cache": {
+  "assert": {
+   "cacheInvalidated": true
+  },
+  "steps": [
+   {
+    "id": "update",
+    "argv": [
+     "tools",
+     "run",
+     "ui.document.update",
+     "--input",
+     "{\"uxml\":\"Assets/UnityCLIValidation/Matrix.uxml\",\"content\":\"<ui:UXML xmlns:ui=\\\"UnityEngine.UIElements\\\"><ui:Label name=\\\"MatrixCacheLabel\\\" text=\\\"cache-final\\\" /></ui:UXML>\"}"
+    ],
+    "expect": {}
+   },
+   {
+    "id": "read-import-cache",
+    "argv": [
+     "context",
+     "read",
+     "validation.ui-cache",
+     "--input",
+     "{\"path\":\"Assets/UnityCLIValidation/Matrix.uxml\",\"elementName\":\"MatrixCacheLabel\"}"
+    ],
+    "expect": {
+     "equals": {
+      "data.assetExists": true,
+      "data.elementFound": true,
+      "data.text": "cache-final"
+     }
+    }
+   }
+  ]
+ }
+}

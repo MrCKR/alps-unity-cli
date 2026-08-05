@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Rotate a GameObject so its forward vector looks at another GameObject.",
             Description = "Rotate a GameObject so its forward vector looks at another GameObject. Prefer hierarchy paths or instance ids for both target and lookAt after create/duplicate operations.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",

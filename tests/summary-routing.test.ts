@@ -74,8 +74,9 @@ test("offline tool summaries stay concise and route-specific", () => {
   assert.match(tools.find((tool) => tool.name === "docs.get")!.summary, /offline|fallback/i);
   assert.match(tools.find((tool) => tool.name === "docs.search")!.summary, /search|offline/i);
   assert.match(tools.find((tool) => tool.name === "reflect.search")!.summary, /search|paged/i);
-  assert.match(tools.find((tool) => tool.name === "code.exec")!.summary, /execute|batchmode|Editor/i);
-  assert.match(tools.find((tool) => tool.name === "tools.describe")!.summary, /metadata|schema|examples/i);
+  assert.match(tools.find((tool) => tool.name === "code.exec")!.summary, /execute|live|Editor/i);
+  assert.doesNotMatch(tools.find((tool) => tool.name === "code.exec")!.summary, /batch|job|headless/i);
+  assert.match(tools.find((tool) => tool.name === "tools.describe")!.summary, /schema|examples/i);
 });
 
 test("local context discovery descriptions are route-specific", () => {

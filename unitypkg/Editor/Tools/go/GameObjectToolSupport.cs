@@ -18,6 +18,15 @@ namespace UnityCli
     /// </summary>
     public static class GameObjectToolSupport
     {
+        private static readonly MethodInfo DisallowMultipleTypeMethod = typeof(Component).Assembly
+            .GetType("UnityEngine.AttributeHelperEngine")?
+            .GetMethod("GetParentTypeDisallowingMultipleInclusion", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+        private static readonly HashSet<Type> NativeSingleInstanceComponentTypes = new HashSet<Type>
+        {
+            typeof(Rigidbody)
+        };
+
         // ─── 深序列化选项构造(component.get 复用) ─────────
 
         /// <summary>从 UnityCli.Protocol.BridgeRequest 构造 ObjectSerializer.Options;paths/viewQuery 互斥。</summary>
@@ -331,6 +340,11 @@ namespace UnityCli
         /// <summary>判断 Component 类型是否允许在同一 GameObject 上添加多个实例。</summary>
         public static bool AllowsMultipleComponents(Type type)
         {
+            // Unity 未公开无副作用的 native AddComponent 预检；显式登记已验证但没有 managed attribute 的单实例类型。
+            if (NativeSingleInstanceComponentTypes.Contains(type))
+                return false;
+            if (DisallowMultipleTypeMethod != null)
+                return DisallowMultipleTypeMethod.Invoke(null, new object[] { type }) == null;
             return type.GetCustomAttributes(typeof(DisallowMultipleComponent), true).Length == 0;
         }
 
@@ -385,7 +399,7 @@ namespace UnityCli
                     type = nullableType;
                 }
                 if (value == null && !type.IsValueType) return null;
-                return UnityCliBridge.ObjectPatch.ConvertValue(value, type);
+                return UnityCliValueConverter.ConvertValue(value, type);
             }
             catch (Exception exception)
             {

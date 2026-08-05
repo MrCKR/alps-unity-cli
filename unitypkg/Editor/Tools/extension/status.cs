@@ -36,7 +36,6 @@ namespace UnityCli
             Summary = "Report optional Unity package availability for CLI extension flows.",
             Description = "Return basic package availability status for CLI-side extension flows. Probes Library/PackageCache for known optional packages (probuilder, cinemachine, visualeffectgraph, URP, HDRP). Install/remove are handled by the CLI command layer.",
             Group = "extension",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

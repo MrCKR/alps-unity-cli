@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, readFile, writeFile, mkdir, rm, stat } from "node:fs/promises";
+import { cp, mkdtemp, readFile, writeFile, mkdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -47,7 +47,8 @@ import {
   extensionSourceRoot,
   installExtensionBundle,
   readExtensionInstallManifest,
-  setAfterProjectionCopyForTest
+  setAfterProjectionCopyForTest,
+  setExtensionSourceRootForTest
 } from "../../src/extensions/installer.js";
 
 // ── Registry: built-in data ────────────────────────────────────────────────
@@ -76,6 +77,7 @@ test("registry getExtension returns manifest for built-in extension", () => {
   assert.equal(ext.manifest.name, "ProBuilder");
   assert.equal(ext.manifest.unityPackages.length, 1);
   assert.equal(ext.manifest.unityPackages[0].packageId, "com.unity.probuilder");
+  assert.equal(ext.manifest.unityPackages[0].versionRange, "5.2.4");
   assert.ok(ext.manifest.contributions.tools!.length > 0);
 });
 
@@ -193,6 +195,16 @@ test("validateManifest rejects unityPackages entry missing displayName", () => {
   );
 });
 
+test("validateManifest rejects a non-exact package version constraint", () => {
+  assert.throws(
+    () => validateManifest({
+      ...PROBUILDER_MANIFEST,
+      unityPackages: [{ packageId: "com.unity.probuilder", displayName: "ProBuilder", versionRange: "^5.2.4" }]
+    }),
+    (err: unknown) => err instanceof ExtensionRegistryError && err.code === "INVALID_MANIFEST"
+  );
+});
+
 test("validateManifest rejects incomplete tool contribution", () => {
   assert.throws(
     () => validateManifest({
@@ -217,14 +229,26 @@ test("validateManifest accepts valid manifest", () => {
 test("resolveAvailability returns available when all packages installed", () => {
   const registry = new ExtensionRegistry();
   const result = registry.resolveAvailability("probuilder", {
-    "com.unity.probuilder": "5.2.0"
+    "com.unity.probuilder": "5.2.4"
   });
   assert.equal(result.status, "available");
   assert.equal(result.missingPackageIds.length, 0);
   assert.equal(result.nextActions.length, 0);
   assert.equal(result.packages.length, 1);
   assert.equal(result.packages[0].installed, true);
-  assert.equal(result.packages[0].version, "5.2.0");
+  assert.equal(result.packages[0].version, "5.2.4");
+});
+
+test("resolveAvailability rejects a present package outside the exact extension profile", () => {
+  const registry = new ExtensionRegistry();
+  const result = registry.resolveAvailability("probuilder", {
+    "com.unity.probuilder": "5.2.3"
+  });
+  assert.equal(result.status, "unavailable");
+  assert.deepEqual(result.missingPackageIds, ["com.unity.probuilder"]);
+  assert.equal(result.packages[0].installed, false);
+  assert.equal(result.packages[0].version, "5.2.3");
+  assert.ok(result.nextActions.some((action) => action.includes("com.unity.probuilder@5.2.4")));
 });
 
 test("resolveAvailability returns unavailable when package missing", () => {
@@ -252,7 +276,7 @@ test("resolveAvailability returns unavailable with empty Map (no packages instal
 
 test("resolveAvailability works with Map input", () => {
   const registry = new ExtensionRegistry();
-  const installed = new Map([["com.unity.probuilder", "5.2.0"]]);
+  const installed = new Map([["com.unity.probuilder", "5.2.4"]]);
   const result = registry.resolveAvailability("probuilder", installed);
   assert.equal(result.status, "available");
 });
@@ -271,7 +295,7 @@ test("resolveAvailability next actions suggest manual package install and extens
 test("resolveAllAvailability resolves all extensions", () => {
   const registry = new ExtensionRegistry();
   const results = registry.resolveAllAvailability({
-    "com.unity.probuilder": "5.2.0",
+    "com.unity.probuilder": "5.2.4",
     "com.unity.visualeffectgraph": "14.0.0"
   });
   assert.equal(results.length, 5);
@@ -288,7 +312,7 @@ test("resolveAllAvailability resolves all extensions", () => {
 test("availableExtensions filters to available only", () => {
   const registry = new ExtensionRegistry();
   const available = registry.availableExtensions({
-    "com.unity.probuilder": "5.2.0",
+    "com.unity.probuilder": "5.2.4",
     "com.unity.visualeffectgraph": "14.0.0"
   });
   assert.equal(available.length, 2);
@@ -298,7 +322,7 @@ test("availableExtensions filters to available only", () => {
 test("unavailableExtensions filters to unavailable only", () => {
   const registry = new ExtensionRegistry();
   const unavailable = registry.unavailableExtensions({
-    "com.unity.probuilder": "5.2.0",
+    "com.unity.probuilder": "5.2.4",
     "com.unity.visualeffectgraph": "14.0.0"
   });
   assert.equal(unavailable.length, 3);
@@ -309,7 +333,7 @@ test("unavailableExtensions filters to unavailable only", () => {
 
 test("resolveExtensionAvailability works without registry", () => {
   const result = resolveExtensionAvailability(PROBUILDER_MANIFEST, {
-    "com.unity.probuilder": "5.2.0"
+    "com.unity.probuilder": "5.2.4"
   });
   assert.equal(result.status, "available");
   assert.equal(result.extensionId, "probuilder");
@@ -326,7 +350,7 @@ test("loadAllExtensionDescriptors loads all five", () => {
 test("loadExtensionDescriptor loads a specific extension", () => {
   const registry = new ExtensionRegistry();
   const desc = loadExtensionDescriptor(registry, "probuilder", {
-    "com.unity.probuilder": "5.2.0"
+    "com.unity.probuilder": "5.2.4"
   });
   assert.equal(desc.manifest.id, "probuilder");
   assert.equal(desc.availability.status, "available");
@@ -341,7 +365,7 @@ test("loadExtensionDescriptor for unavailable extension has unavailable status",
   const registry = new ExtensionRegistry();
   const desc = loadExtensionDescriptor(registry, "probuilder", {});
   assert.equal(desc.availability.status, "unavailable");
-  assert.equal(desc.tools.length, 36); // Tools are still listed
+  assert.equal(desc.tools.length, 36);
   assert.ok(desc.availability.missingPackageIds.length > 0);
 });
 
@@ -356,7 +380,7 @@ test("loadExtensionDescriptor throws for unknown extension", () => {
 test("loadAvailableDescriptors filters to available", () => {
   const registry = new ExtensionRegistry();
   const available = loadAvailableDescriptors(registry, {
-    "com.unity.probuilder": "5.2.0"
+    "com.unity.probuilder": "5.2.4"
   });
   assert.equal(available.length, 1);
   assert.equal(available[0].manifest.id, "probuilder");
@@ -365,7 +389,7 @@ test("loadAvailableDescriptors filters to available", () => {
 test("loadUnavailableDescriptors filters to unavailable", () => {
   const registry = new ExtensionRegistry();
   const unavailable = loadUnavailableDescriptors(registry, {
-    "com.unity.probuilder": "5.2.0"
+    "com.unity.probuilder": "5.2.4"
   });
   assert.ok(unavailable.length > 0);
   assert.ok(unavailable.every((d) => d.availability.status === "unavailable"));
@@ -376,7 +400,7 @@ test("loadUnavailableDescriptors filters to unavailable", () => {
 test("collectAvailableTools returns available extension tools and built-in VFX component tools", () => {
   const registry = new ExtensionRegistry();
   const tools = collectAvailableTools(registry, {
-    "com.unity.probuilder": "5.2.0"
+    "com.unity.probuilder": "5.2.4"
   });
   const toolNames = tools.map((t) => t.name);
   assert.equal(toolNames.filter((name) => name.startsWith("probuilder.")).length, 36);
@@ -411,7 +435,7 @@ test("collectAvailableTools returns built-in VFX component tools when optional p
 test("collectAllTools includes unavailable extension tools with availability flag", () => {
   const registry = new ExtensionRegistry();
   const tools = collectAllTools(registry, {
-    "com.unity.probuilder": "5.2.0"
+    "com.unity.probuilder": "5.2.4"
   });
   assert.ok(tools.length >= 36); // At least ProBuilder's tools
 
@@ -430,7 +454,7 @@ test("collectAllTools includes unavailable extension tools with availability fla
 test("collectAvailableContexts returns implemented contexts from available extensions", () => {
   const registry = new ExtensionRegistry();
   const contexts = collectAvailableContexts(registry, {
-    "com.unity.probuilder": "5.2.0",
+    "com.unity.probuilder": "5.2.4",
     "com.unity.visualeffectgraph": "14.0.0"
   });
   const probuilderScene = contexts.find((c) => c.key === "probuilder.scene");
@@ -441,7 +465,7 @@ test("collectAvailableContexts returns implemented contexts from available exten
 test("collectAvailableCSharpEntries returns entries from available extensions", () => {
   const registry = new ExtensionRegistry();
   const entries = collectAvailableCSharpEntries(registry, {
-    "com.unity.probuilder": "5.2.0",
+    "com.unity.probuilder": "5.2.4",
     "com.unity.visualeffectgraph": "14.0.0"
   });
   assert.ok(entries.some((e) => e.type.startsWith("UnityCli.ProBuilder.")));
@@ -457,7 +481,7 @@ test("collectAvailableCSharpEntries returns entries from available extensions", 
 test("extensionAvailabilitySummary provides correct counts", () => {
   const registry = new ExtensionRegistry();
   const summary = extensionAvailabilitySummary(registry, {
-    "com.unity.probuilder": "5.2.0",
+    "com.unity.probuilder": "5.2.4",
     "com.unity.visualeffectgraph": "14.0.0"
   });
   assert.equal(summary.total, 5);
@@ -486,7 +510,7 @@ test("readInstalledUnityPackages reads manifest and lock from project", async ()
     join(projectDir, "Packages", "manifest.json"),
     JSON.stringify({
       dependencies: {
-        "com.unity.probuilder": "5.2.0",
+        "com.unity.probuilder": "5.2.4",
         "com.unity.visualeffectgraph": "14.0.0"
       }
     })
@@ -543,12 +567,12 @@ test("readInstalledUnityPackages handles BOM in JSON", async () => {
   await writeFile(
     join(projectDir, "Packages", "packages-lock.json"),
     bom + JSON.stringify({
-      dependencies: { "com.unity.probuilder": { version: "5.2.0" } }
+      dependencies: { "com.unity.probuilder": { version: "5.2.4" } }
     })
   );
 
   const packages = await readInstalledUnityPackages(projectDir);
-  assert.equal(packages.get("com.unity.probuilder"), "5.2.0");
+  assert.equal(packages.get("com.unity.probuilder"), "5.2.4");
 });
 
 test("resolveExtensionAvailabilityForProject resolves against real project", async () => {
@@ -558,13 +582,13 @@ test("resolveExtensionAvailabilityForProject resolves against real project", asy
   await writeFile(
     join(projectDir, "Packages", "manifest.json"),
     JSON.stringify({
-      dependencies: { "com.unity.probuilder": "5.2.0" }
+      dependencies: { "com.unity.probuilder": "5.2.4" }
     })
   );
   await writeFile(
     join(projectDir, "Packages", "packages-lock.json"),
     JSON.stringify({
-      dependencies: { "com.unity.probuilder": { version: "5.2.2" } }
+      dependencies: { "com.unity.probuilder": { version: "5.2.4" } }
     })
   );
 
@@ -764,18 +788,22 @@ test("extension source hash and managed files describe the same staged projectio
 
 test("extension install rejects a source mutation before publishing the staging projection", async () => {
   const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-ext-test-"));
-  const sourceFile = join(extensionSourceRoot("vfx-graph"), "extension.json");
+  const sourceRoot = await mkdtemp(join(tmpdir(), "unity-cli-ext-source-"));
+  await cp(extensionSourceRoot("vfx-graph"), sourceRoot, { recursive: true });
+  const sourceFile = join(sourceRoot, "extension.json");
   const original = await readFile(sourceFile, "utf8");
   try {
     await mkdir(join(projectDir, "Packages"), { recursive: true });
     await writeFile(join(projectDir, "Packages", "manifest.json"), JSON.stringify({ dependencies: {} }));
     await writeFile(join(projectDir, "Packages", "packages-lock.json"), JSON.stringify({ dependencies: {} }));
+    setExtensionSourceRootForTest(() => sourceRoot);
     setAfterProjectionCopyForTest(async () => { await writeFile(sourceFile, `${original}\n`, "utf8"); });
     await assert.rejects(() => installExtensionBundle(projectDir, VFX_GRAPH_MANIFEST), { code: "E_EXTENSION_SOURCE_SNAPSHOT_STALE" });
     await assert.rejects(() => stat(extensionInstallRoot(projectDir, "vfx-graph")), { code: "ENOENT" });
   } finally {
     setAfterProjectionCopyForTest(undefined);
-    await writeFile(sourceFile, original, "utf8");
+    setExtensionSourceRootForTest(undefined);
+    await rm(sourceRoot, { recursive: true, force: true });
     await rm(projectDir, { recursive: true, force: true });
   }
 });

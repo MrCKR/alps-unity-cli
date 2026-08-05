@@ -1,51 +1,25 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-
+using UnityEngine.ProBuilder;
+using UnityEngine.ProBuilder.MeshOperations;
 namespace UnityCli.ProBuilder
 {
-    /// <summary>
-    /// probuilder.create-poly-shape — 从多边形点集创建 ProBuilder 网格。
-    /// </summary>
     public class CreatePolyShapeTool : IUnityCliTool<CreatePolyShapeTool.Request, CreatePolyShapeTool.Result>
     {
-        public sealed class Request
-        {
-            [UnityCliRequired] public List<Point3D> Points { get; set; }
-            public double? ExtrudeHeight { get; set; }              // 可选,默认 1
-            public bool FlipNormals { get; set; }                   // 默认 false
-            public string Name { get; set; }                        // 可选,默认 ProBuilder_PolyShape
-        }
-
-        public sealed class Point3D
-        {
-            public double X { get; set; }
-            public double Y { get; set; }
-            public double Z { get; set; }
-        }
-
-        public sealed class Result
-        {
-            public ObjectRef Object { get; set; }
-        }
-
-        public sealed class ObjectRef
-        {
-            public long Id { get; set; }
-            public string Name { get; set; }
-            public string Path { get; set; }
-            public long FaceCount { get; set; }
-            public long VertexCount { get; set; }
-        }
-
+        public sealed class Request { [UnityCliRequired] public List<Point3D> Points { get; set; } public double? ExtrudeHeight { get; set; } public bool FlipNormals { get; set; } public string Name { get; set; } }
+        public sealed class Point3D { public double X { get; set; } public double Y { get; set; } public double Z { get; set; } }
+        public sealed class Result { public ObjectRef Object { get; set; } }
+        public sealed class ObjectRef { public long Id { get; set; } public string Name { get; set; } public string Path { get; set; } public long FaceCount { get; set; } public long VertexCount { get; set; } }
         public ToolDescriptor Describe() => new()
         {
             Name = "probuilder.create-poly-shape",
-            Summary = "Build a ProBuilder mesh by extruding a 2D polygon point set.",
-            Description = "Create a ProBuilder mesh from a set of 2D polygon points extruded to a given height. Requires at least 3 points. Optionally flip normals and name the created GameObject.",
+            Summary = "Create a ProBuilder mesh from an extruded polygon.",
+            Description = "Create a ProBuilder mesh from at least three polygon points, with optional extrusion and normal direction.",
             Group = "probuilder",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
@@ -53,75 +27,29 @@ namespace UnityCli.ProBuilder
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 15000,
             MaxTimeoutMs = 30000,
-            SupportsJob = true,
-            ArtifactKinds = new[] { "json" },
             Examples = new[]
             {
-                new ToolExample { Description = "从四边形点集创建挤出体", Input = new Request { Points = new List<Point3D> { new Point3D { X = 0, Y = 0, Z = 0 }, new Point3D { X = 1, Y = 0, Z = 0 }, new Point3D { X = 1, Y = 0, Z = 1 }, new Point3D { X = 0, Y = 0, Z = 1 } }, ExtrudeHeight = 1 } }
+                new ToolExample { Description = "创建水平三角形", Input = new Request { FlipNormals = false, Name = "ProBuilder_Triangle", Points = new List<Point3D> { new Point3D { X = 0, Y = 0, Z = 0 }, new Point3D { X = 1, Y = 0, Z = 0 }, new Point3D { X = 0, Y = 0, Z = 1 } } } }
             }
         };
-
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            if (!ProBuilderReflection.IsAvailable)
-                throw ProBuilderErrors.PackageNotAvailable();
-
+            if (!ProBuilderReflection.IsAvailable) throw ProBuilderErrors.PackageNotAvailable();
             var name = request.Name ?? "ProBuilder_PolyShape";
-            var height = ProBuilderOperationProof.CheckedFloat(request.ExtrudeHeight ?? 1, "extrudeHeight");
+            var height = ProBuilderOperationProof.CheckedFloat(request.ExtrudeHeight ?? 1d, "extrudeHeight");
             var flipNormals = request.FlipNormals;
-
-            var points = request.Points?.Select(p => ProBuilderOperationProof.CheckedVector3(p.X, p.Y, p.Z, "points")).ToList();
-            if (points == null || points.Count < 3)
-                throw ProBuilderErrors.SchemaInvalid("At least 3 points are required for create-poly-shape.");
-
+            if (string.IsNullOrWhiteSpace(name) || request.Points == null || request.Points.Any(point => point == null)) throw ProBuilderErrors.SchemaInvalid("name must be non-empty and points must be objects.");
+            var points = request.Points.Select(point => ProBuilderOperationProof.CheckedVector3(point.X, point.Y, point.Z, "points")).ToList();
+            if (points.Count < 3) throw ProBuilderErrors.SchemaInvalid("At least 3 points are required for create-poly-shape.");
             ctx.CommitEffect();
-            var go = new GameObject(name);
-            Undo.RegisterCreatedObjectUndo(go, "ProBuilder Create Poly Shape");
-
-            var pbMesh = ProBuilderReflection.AddProBuilderMesh(go);
-            if (pbMesh == null)
-            {
-                UnityEngine.Object.DestroyImmediate(go);
-                throw ProBuilderErrors.OperationFailed("create-poly-shape", "Failed to add ProBuilderMesh component.");
-            }
-
-            var created = ProBuilderReflection.CreateShapeFromPolygon(pbMesh, points, height, flipNormals);
-            if (!created)
-            {
-                UnityEngine.Object.DestroyImmediate(go);
-                throw ProBuilderErrors.OperationFailed("create-poly-shape", "CreateShapeFromPolygon method not found or failed in ProBuilder assembly.");
-            }
-
-            ProBuilderReflection.RefreshMesh(pbMesh);
-            EditorSceneManager.MarkSceneDirty(go.scene);
-            var freshGo = ProBuilderInput.ResolveTarget(go.GetInstanceID().ToString());
-            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
-            if (freshGo == null || freshGo.name != name || !ProBuilderRequestProof.PolyShapeMatchesRequest(freshGo, freshMesh, points, height, flipNormals))
-                throw ProBuilderErrors.OperationFailed("create-poly-shape", "Created polygon did not match requested points, height, and normal orientation.");
-
-            var faceCount = ProBuilderReflection.GetFaceCount(freshMesh);
-            var vertexCount = ProBuilderReflection.GetVertexCount(freshMesh);
-
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
-            {
-                Object = new ObjectRef
-                {
-                    Id = go.GetInstanceID(),
-                    Name = go.name,
-                    Path = HierarchyPath(go),
-                    FaceCount = faceCount,
-                    VertexCount = vertexCount
-                }
-            });
+            GameObject go = null;
+            var id = 0;
+            try { go = new GameObject(name); id = go.GetInstanceID(); Undo.RegisterCreatedObjectUndo(go, "ProBuilder Create Poly Shape"); var mesh = go.AddComponent<ProBuilderMesh>(); var action = AppendElements.CreateShapeFromPolygon(mesh, points, height, flipNormals); if (mesh == null || action == null || action.status != ActionResult.Status.Success) throw ProBuilderErrors.OutcomeUnknown("create-poly-shape", "invoke", "CreateShapeFromPolygon failed."); }
+            catch (UnityCliBridge.BridgeCommandException) { throw; } catch (Exception ex) { throw ProBuilderErrors.OutcomeUnknown("create-poly-shape", "invoke", ex.Message); }
+            try { var mesh = ProBuilderReflection.GetProBuilderMesh(go); if (!ProBuilderReflection.RefreshMesh(mesh)) throw ProBuilderErrors.OutcomeUnknown("create-poly-shape", "readback", "ProBuilder refresh failed."); EditorSceneManager.MarkSceneDirty(go.scene); var fresh = EditorUtility.InstanceIDToObject(id) as GameObject; var freshMesh = ProBuilderReflection.GetProBuilderMesh(fresh); if (fresh == null || fresh.name != name || !ProBuilderAtomicReadback.PolyShapeMatchesRequest(fresh, freshMesh, points, height, flipNormals)) throw ProBuilderErrors.OutcomeUnknown("create-poly-shape", "postcondition", "Created polygon could not be confirmed."); return new System.Threading.Tasks.ValueTask<Result>(new Result { Object = new ObjectRef { Id = fresh.GetInstanceID(), Name = fresh.name, Path = HierarchyPath(fresh), FaceCount = ProBuilderReflection.GetFaceCount(freshMesh), VertexCount = ProBuilderReflection.GetVertexCount(freshMesh) } }); }
+            catch (UnityCliBridge.BridgeCommandException) { throw; } catch (Exception ex) { throw ProBuilderErrors.OutcomeUnknown("create-poly-shape", "readback", ex.Message); }
         }
-
-        private static string HierarchyPath(GameObject go)
-        {
-            var names = new Stack<string>();
-            var current = go.transform;
-            while (current != null) { names.Push(current.name); current = current.parent; }
-            return string.Join("/", names.ToArray());
-        }
+        private static string HierarchyPath(GameObject go) { var names = new Stack<string>(); for (var current = go.transform; current != null; current = current.parent) names.Push(current.name); return string.Join("/", names.ToArray()); }
     }
 }
 #endif

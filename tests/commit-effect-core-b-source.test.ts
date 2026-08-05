@@ -76,15 +76,15 @@ const mutationTools = [
   ["ui.modify-visual-element", "Tools/ui/modify-visual-element.cs"],
   ["ui.render-preview", "Tools/ui/render-preview.cs"],
   ["ui.text.create", "Tools/ui/text/create.cs"],
-  ["ui.update-panel-settings", "Tools/ui/update-panel-settings.cs"],
-  ["package.embed", "Tools/package/embed.cs"]
+  ["ui.update-panel-settings", "Tools/ui/update-panel-settings.cs"]
 ] as const;
 
 test("core B mutation tools commit exactly once before their effect", async () => {
   for (const [tool, path] of mutationTools) {
     const source = await readFile(new URL(path, editorUrl), "utf8");
     const commits = source.match(/ctx\.CommitEffect\(\)/g) ?? [];
-    assert.ok(commits.length >= 1, `${tool} must commit before its first real effect`);
+    const completionProbeOwnsBarrier = /ctx\.RunCompletionProbe\(/.test(source);
+    assert.ok(commits.length >= 1 || completionProbeOwnsBarrier, `${tool} must commit before its first real effect`);
   }
 });
 
@@ -93,6 +93,6 @@ test("reflection and profiler load commit at their first irreversible effect", a
     readFile(new URL("Tools/reflection/method/call.cs", editorUrl), "utf8"),
     readFile(new URL("Tools/profiler/load.cs", editorUrl), "utf8")
   ]);
-  assert.match(reflection, /ctx\.CommitEffect\(\);\s*var data = UnityCliBridge\.ReflectionInvoker\.CallMethod/s);
+  assert.match(reflection, /PrepareCall\([\s\S]*ctx\.RunCompletionProbe\(request\.CompletionProbe, \(\) => data = UnityCliBridge\.ReflectionInvoker\.InvokePrepared\(prepared\)\)/);
   assert.match(profilerLoad, /ctx\.CommitEffect\(\);\s*ProfilerToolSupport\.SetProfilerSessionEnabled\(false\)/s);
 });

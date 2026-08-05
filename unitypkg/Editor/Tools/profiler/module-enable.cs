@@ -13,13 +13,13 @@ namespace UnityCli
     public class ProfilerModuleEnableTool : IUnityCliTool<ProfilerModuleEnableTool.Request, ProfilerModuleEnableTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Module { get; set; } public bool Enabled { get; set; } = true; }
-        public sealed class Result { public string Command { get; set; } public string Module { get; set; } public bool Enabled { get; set; } public bool WasEnabled { get; set; } public bool IsEnabled { get; set; } }
+        public sealed class Result { public string Module { get; set; } public bool Enabled { get; set; } public bool WasEnabled { get; set; } public bool IsEnabled { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "profiler.module-enable", Summary = "Enable or disable a Profiler module (area) by name via Profiler.SetAreaEnabled.",
             Description = "Enable or disable a Profiler module (area) by name via Profiler.SetAreaEnabled. Run profiler.areas to list valid area names.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "profiler-area-state" }, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler",DestructiveHint = false, SideEffects = new[] { "profiler-area-state" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Enable CPU area", Input = new Request { Module = "CPU", Enabled = true } } }
         };
@@ -45,7 +45,7 @@ namespace UnityCli
             var isEnabled = (bool)getAreaMethod.Invoke(null, new object[] { areaValue });
             if (isEnabled != request.Enabled)
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_MODULE_STATE_MISMATCH", "Profiler area did not reach the requested enabled state.", "Inspect the Profiler module state and retry.");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "profiler.module-enable", Module = request.Module, Enabled = isEnabled, WasEnabled = wasEnabled, IsEnabled = isEnabled });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Module = request.Module, Enabled = isEnabled, WasEnabled = wasEnabled, IsEnabled = isEnabled });
         }
     }
 }

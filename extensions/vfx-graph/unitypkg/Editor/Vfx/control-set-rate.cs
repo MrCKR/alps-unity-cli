@@ -10,7 +10,7 @@ namespace UnityCli
         {
             Name = "vfx.control.set-rate", Summary = "Set VisualEffect playback rate.",
             Description = "Set the public playRate property on the existing VisualEffect component and return its verified readback.",
-            Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
+            Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Set half-speed playback", Input = new Request { Target = "Effects/Emitter", Rate = 0.5 } } }

@@ -4,7 +4,6 @@
  * - Envelope serialization/deserialization (success and error)
  * - Error code taxonomy validation
  * - Transient error detection and retryAfterMs
- * - Duration tracking
  * - Timeout clamping
  */
 
@@ -20,7 +19,6 @@ import {
   DEFAULT_TIMEOUT_MS,
   MAX_TIMEOUT_MS,
   clampTimeout,
-  durationMsFrom,
   type CliError,
   type CliResult,
 } from "../src/output.js";
@@ -51,22 +49,27 @@ describe("success envelope", () => {
     assert.deepEqual(result.data, { tools: ["scene.hierarchy"] });
   });
 
-  it("includes optional fields: warnings, logsRef, jobId, durationMs", () => {
-    const requestId = createRequestId();
-    const result = success(requestId, { instances: 1 }, {
-      warnings: ["slow query"],
-      logsRef: "/path/to/log",
-      jobId: "job_abc123",
-      durationMs: 150,
-    });
-    assert.ok(result.ok);
+  it("includes warnings without internal execution metadata", () => {
+    const result = success(createRequestId(), { instances: 1 }, { warnings: ["slow query"] });
     assert.deepEqual(result.warnings, ["slow query"]);
-    assert.equal(result.logsRef, "/path/to/log");
-    assert.equal(result.jobId, "job_abc123");
-    assert.equal(result.durationMs, 150);
+    assert.deepEqual(Object.keys(result).sort(), ["data", "ok", "requestId", "warnings"]);
   });
 
-  it("data can be any object type", () => {
+  it("preserves durationMs when it is part of a business Result DTO", () => {
+    const result = success(createRequestId(), { artifactPath: "capture.raw", durationMs: 1250 });
+    assert.deepEqual(result.data, { artifactPath: "capture.raw", durationMs: 1250 });
+  });
+
+  it("preserves the typed business Result DTO without key-based rewriting", () => {
+    const data = {
+      business: { value: 3, durationMs: 12, endpointLabel: "primary" },
+      items: [{ name: "visible", tool: "Move" }],
+    };
+    const result = success(createRequestId(), data);
+    assert.deepEqual(result.data, data);
+  });
+
+  it("data can carry a package-level version", () => {
     const requestId = createRequestId();
     const result = success(requestId, { version: "0.1.0" });
     assert.deepEqual(result.data, { version: "0.1.0" });
@@ -140,18 +143,37 @@ describe("failure envelope", () => {
   it("keeps details nested and nextActions present", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_EXECUTION_TIMEOUT", "Timed out.", [], {
-      jobId: "job_123",
+      operation: "editor.refresh",
       timeoutMs: 30000,
-      bridgeEndpoint: "http://127.0.0.1:47392",
+      stage: "stable-ready",
     });
     assert.deepEqual(result.error.details, {
-      jobId: "job_123",
+      operation: "editor.refresh",
       timeoutMs: 30000,
-      bridgeEndpoint: "http://127.0.0.1:47392",
+      stage: "stable-ready",
     });
     assert.deepEqual(result.error.nextActions, []);
-    assert.equal("jobId" in result.error, false);
+    assert.equal("operation" in result.error, false);
     assert.equal("requestId" in result.error, false);
+  });
+
+  it("removes transport, native-window, and internal log fields from nested details", () => {
+    const result = failure("req_sensitive", "E_UNITY_BLOCKED", "Blocked.", [], {
+      instanceId: "unity-test",
+      endpoint: "http://127.0.0.1:1",
+      "bridge-endpoint": "http://127.0.0.1:2",
+      listenerGeneration: 2,
+      listener_generation: 3,
+      processId: 123,
+      "owner-hwnd": "0x456",
+      nested: { logPath: "C:/private.log", hwnd: "0x123", processStartedAt: "2026-01-01T00:00:00Z", stage: "readback" },
+      blockers: [{ kind: "unknown-modal", title: "Dialog", message: "Dialog", source: "windows-ui", confidence: "unknown", requiresUserAction: true, canAutoResolve: false }]
+    });
+    assert.deepEqual(result.error.details, {
+      instanceId: "unity-test",
+      nested: { stage: "readback" },
+      blockers: [{ kind: "unknown-modal", title: "Dialog", message: "Dialog", source: "windows-ui", confidence: "unknown", requiresUserAction: true, canAutoResolve: false }]
+    });
   });
 
   it("golden error envelope has only protocol fields", () => {
@@ -170,10 +192,9 @@ describe("failure envelope", () => {
     });
   });
 
-  it("failure envelope includes optional durationMs", () => {
-    const requestId = createRequestId();
-    const result = failure(requestId, "BRIDGE_CONNECTION_FAILED", "Connection failed.", [], undefined, { durationMs: 250 });
-    assert.equal(result.durationMs, 250);
+  it("failure envelope excludes duration metadata", () => {
+    const result = failure(createRequestId(), "BRIDGE_CONNECTION_FAILED", "Connection failed.");
+    assert.equal("durationMs" in result, false);
   });
 });
 
@@ -206,7 +227,7 @@ describe("ERROR_CODES taxonomy", () => {
   });
 
   it("no non-transient codes are in the TRANSIENT_ERROR_CODES set", () => {
-    const nonTransient = ["UNKNOWN_COMMAND", "E_EXECUTION_TIMEOUT", "BRIDGE_CONNECTION_FAILED", "JOB_NOT_FOUND"];
+    const nonTransient = ["UNKNOWN_COMMAND", "E_EXECUTION_TIMEOUT", "BRIDGE_CONNECTION_FAILED"];
     for (const code of nonTransient) {
       assert.ok(!TRANSIENT_ERROR_CODES.has(code as string), `Non-transient code ${code} incorrectly in TRANSIENT_ERROR_CODES`);
     }
@@ -241,27 +262,11 @@ describe("timeout defaults and clamping", () => {
   });
 
   it("DEFAULT_TIMEOUT_MS has entries for all categories", () => {
-    for (const category of ["bridge_read", "bridge_write", "bridge_long", "code_live", "code_batch", "job_wait"]) {
+    for (const category of ["bridge_read", "bridge_write", "bridge_long", "code_live"]) {
       assert.ok(DEFAULT_TIMEOUT_MS[category] > 0, `Missing default timeout for ${category}`);
       assert.ok(MAX_TIMEOUT_MS[category] > 0, `Missing max timeout for ${category}`);
       assert.ok(MAX_TIMEOUT_MS[category] >= DEFAULT_TIMEOUT_MS[category], `Max must be >= default for ${category}`);
     }
-  });
-});
-
-// ─── DurationMs ───
-
-describe("durationMsFrom", () => {
-  it("computes elapsed time from a start timestamp", () => {
-    const startMs = Date.now() - 500;
-    const elapsed = durationMsFrom(startMs);
-    // Allow small variance for test execution
-    assert.ok(elapsed >= 490 && elapsed <= 600, `Expected ~500ms, got ${elapsed}`);
-  });
-
-  it("returns 0 for same timestamp", () => {
-    const now = Date.now();
-    assert.equal(durationMsFrom(now), 0);
   });
 });
 
@@ -272,8 +277,6 @@ describe("envelope serialization round-trip", () => {
     const requestId = createRequestId();
     const result = success(requestId, { tools: ["scene.hierarchy", "camera.list"] }, {
       warnings: ["no custom tools found"],
-      logsRef: "/var/data/logs/req_123.log",
-      durationMs: 42,
     });
     const json = JSON.stringify(result);
     const parsed = JSON.parse(json) as CliResult;
@@ -281,13 +284,13 @@ describe("envelope serialization round-trip", () => {
     assert.equal(parsed.requestId, requestId);
     assert.deepEqual(parsed.data, { tools: ["scene.hierarchy", "camera.list"] });
     assert.deepEqual(parsed.warnings, ["no custom tools found"]);
-    assert.equal(parsed.logsRef, "/var/data/logs/req_123.log");
-    assert.equal(parsed.durationMs, 42);
+    assert.equal("logsRef" in parsed, false);
+    assert.equal("durationMs" in parsed, false);
   });
 
   it("error envelope can be serialized to JSON and back", () => {
     const requestId = createRequestId();
-    const result = failure(requestId, "E_UNITY_COMPILING", "Unity is compiling.", ["Wait and retry."], { jobId: "job_xyz" }, { durationMs: 100 });
+    const result = failure(requestId, "E_UNITY_COMPILING", "Unity is compiling.", ["Wait and retry."], { stage: "compile" });
     const json = JSON.stringify(result);
     const parsed = JSON.parse(json) as CliResult;
     assert.ok(!parsed.ok);
@@ -295,17 +298,15 @@ describe("envelope serialization round-trip", () => {
     assert.equal(parsed.error?.message, "Unity is compiling.");
     assert.equal(parsed.error?.transient, true);
     assert.equal(parsed.error?.retryAfterMs, 5000);
-    assert.equal(parsed.durationMs, 100);
+    assert.equal("durationMs" in parsed, false);
   });
 
   it("timeout error envelope round-trip preserves details", () => {
     const requestId = createRequestId();
-    const result = failure(requestId, "E_EXECUTION_TIMEOUT", "Job timed out.", ["Check job status."], {
-      jobId: "job_abc",
+    const result = failure(requestId, "E_EXECUTION_TIMEOUT", "Direct request timed out.", ["Inspect editor.state before retrying."], {
+      operation: "editor.refresh",
       timeoutMs: 30000,
-      cancelAttempted: true,
-      cancelled: false,
-      processKilled: true,
+      effectStarted: false,
     });
     const json = JSON.stringify(result);
     const parsed = JSON.parse(json) as CliResult;
@@ -315,13 +316,11 @@ describe("envelope serialization round-trip", () => {
     assert.equal(parsed.error?.transient, false);
     assert.equal(parsed.error?.retryAfterMs, 0);
     assert.deepEqual(parsed.error?.details, {
-      jobId: "job_abc",
+      operation: "editor.refresh",
       timeoutMs: 30000,
-      cancelAttempted: true,
-      cancelled: false,
-      processKilled: true,
+      effectStarted: false,
     });
-    assert.deepEqual(parsed.error?.nextActions, ["Check job status."]);
+    assert.deepEqual(parsed.error?.nextActions, ["Inspect editor.state before retrying."]);
   });
 });
 

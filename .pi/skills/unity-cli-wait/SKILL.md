@@ -1,6 +1,6 @@
 ---
 name: unity-cli-wait
-description: unity_cli 异步 Tool/Context、跨帧等待、callback 生命周期、中央 scheduler 及 CLI wait 分层硬规范。涉及 ValueTask、Promise、ctx.Wait、EditorApplication.update、timeout/cancel、job/batch wait 或 PlayMode 跨帧行为时必须先完整读取；修改公开能力时同时加载 unity-cli-capability。
+description: unity_cli 异步 Tool/Context、跨帧等待、callback 生命周期与中央 scheduler 硬规范。涉及 ValueTask、Promise、ctx.Wait、EditorApplication.update、timeout/cancel 或 PlayMode 跨帧行为时必须先完整读取；修改公开能力时同时加载 unity-cli-capability。
 compatibility: 适用于 alps-unity-cli 的 TypeScript CLI 与 Unity C# Bridge。
 ---
 
@@ -28,16 +28,6 @@ compatibility: 适用于 alps-unity-cli 的 TypeScript CLI 与 Unity C# Bridge�
 
 ## 两层 Wait 语义
 
-必须区分命令层 wait 和框架层 wait。
-
-命令层 wait：
-
-- `--wait`
-- `--wait-timeout-ms`
-- `waitReady`
-
-这些参数表达 job、batch 或编排的交付模式，不是 Tool 内部执行模型。
-
 框架层 wait：
 
 - `ctx.Wait.NextFrame(...)`
@@ -47,4 +37,4 @@ compatibility: 适用于 alps-unity-cli 的 TypeScript CLI 与 Unity C# Bridge�
 
 这些 API 表达 Tool 内部跨帧或 callback 执行方式。
 
-禁止把两层 wait 混淆实现，也不得让具体 Tool 重新发明 scheduler、轮询或 callback 清理机制。
+调用方只等待同一次 direct 调用的最终结果；不得让具体 Tool 重新发明 scheduler、轮询或 callback 清理机制。超时或终态前断连返回 `E_EXECUTION_TIMEOUT`，调用方负责判断是否提交新的调用；系统不提供请求级恢复或重放拦截。跨 reload 的同次调用续接可以保留。

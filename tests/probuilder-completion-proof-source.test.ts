@@ -1,106 +1,96 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
 
-const directory = new URL(`${pathToFileURL(join(process.cwd(), "extensions", "probuilder", "unitypkg", "Editor", "ProBuilder")).href}/`);
+const directory = new URL("../extensions/probuilder/unitypkg/Editor/ProBuilder/", import.meta.url);
 
-const predicates: Record<string, string> = {
-  "append-vertices-to-edge.cs": "HasInsertedVertices",
-  "auto-smooth.cs": "HasChangedSmoothing",
-  "bevel-edges.cs": "HasTopologyExpansion",
-  "bridge-edges.cs": "HasTopologyExpansion",
-  "connect-elements.cs": "HasTopologyExpansion",
-  "delete-faces.cs": "HasRemovedRequestedFaces",
-  "detach-faces.cs": "HasRemovedRequestedFaces",
-  "duplicate-and-flip.cs": "HasTopologyExpansion",
-  "extrude-edges.cs": "HasTopologyExpansion",
-  "extrude-faces.cs": "HasInsertedVertices",
-  "flip-normals.cs": "HasFlippedRequestedFaces",
-  "insert-vertex.cs": "HasInsertedVertices",
-  "merge-faces.cs": "HasMergedRequestedFaces",
-  "merge-vertices.cs": "HasMergedVertices",
-  "split-vertices.cs": "HasSplitVertices",
-  "subdivide.cs": "HasSubdividedRequestedFaces"
+const dedicated: Record<string, { capture: RegExp; matches: RegExp }> = {
+  "append-vertices-to-edge.cs": { capture: /ProBuilderAppendCompletionProof\.TryCreate\(/, matches: /ProBuilderAppendCompletionProof\.Matches\(/ },
+  "auto-smooth.cs": { capture: /ProBuilderFaceCompletionProof\.CaptureAutoSmooth\(/, matches: /ProBuilderFaceCompletionProof\.AutoSmoothMatches\(/ },
+  "bevel-edges.cs": { capture: /ProBuilderBevelCompletionProof\.Capture\(/, matches: /ProBuilderBevelCompletionProof\.Matches\(/ },
+  "bridge-edges.cs": { capture: /ProBuilderEdgeCompletionProof\.Capture\(/, matches: /ProBuilderEdgeCompletionProof\.BridgeMatches\(/ },
+  "connect-elements.cs": { capture: /ProBuilderConnectCompletionProof\.Capture\(/, matches: /ProBuilderConnectCompletionProof\.Matches\(/ },
+  "create-shape.cs": { capture: /CaptureCreateShapePlan\(/, matches: /CreatedShapeMismatch\(plan/ },
+  "duplicate-and-flip.cs": { capture: /ProBuilderFlipCompletionProof\.CaptureDuplicateAndFlip\(/, matches: /ProBuilderFlipCompletionProof\.DuplicateAndFlipMatches\(/ },
+  "extrude-edges.cs": { capture: /ProBuilderEdgeCompletionProof\.Capture\(/, matches: /ProBuilderEdgeCompletionProof\.ExtrudeMatches\(/ },
+  "extrude-faces.cs": { capture: /ProBuilderFaceExtrudeCompletionProof\.TryCreate\(/, matches: /ProBuilderFaceExtrudeCompletionProof\.Matches\(/ },
+  "flip-normals.cs": { capture: /ProBuilderFlipCompletionProof\.CaptureFlip\(/, matches: /ProBuilderFlipCompletionProof\.FlipMatches\(/ },
+  "insert-vertex.cs": { capture: /ProBuilderInsertCompletionProof\.Capture\(/, matches: /ProBuilderInsertCompletionProof\.Matches\(/ },
+  "merge-objects.cs": { capture: /ProBuilderVertexObjectCompletionProof\.CaptureMergeObjects\(/, matches: /ProBuilderVertexObjectCompletionProof\.MergeObjectsMatches\(/ },
+  "merge-vertices.cs": { capture: /ProBuilderVertexObjectCompletionProof\.CaptureMergeVertices\(/, matches: /ProBuilderVertexObjectCompletionProof\.MergeVerticesMatches\(/ },
+  "subdivide.cs": { capture: /ProBuilderConnectCompletionProof\.CaptureFace\(/, matches: /ProBuilderConnectCompletionProof\.Matches\(/ },
+  "weld-vertices.cs": { capture: /ProBuilderVertexObjectCompletionProof\.CaptureWeld\(/, matches: /ProBuilderVertexObjectCompletionProof\.WeldMatches\(/ },
 };
 
-test("targeted ProBuilder topology tools use request-specific completion predicates", async () => {
-  for (const [entry, predicate] of Object.entries(predicates)) {
+const atomic = [
+  "center-pivot.cs",
+  "combine-meshes.cs",
+  "convert-to-probuilder.cs",
+  "create-poly-shape.cs",
+  "create-polygon.cs",
+  "delete-faces.cs",
+  "detach-faces.cs",
+  "freeze-transform.cs",
+  "merge-faces.cs",
+  "move-vertices.cs",
+  "repair-mesh.cs",
+  "set-face-color.cs",
+  "set-face-material.cs",
+  "set-face-uvs.cs",
+  "set-pivot.cs",
+  "set-smoothing.cs",
+  "split-vertices.cs",
+];
+
+const removedOwners = /ProBuilder(?:AttributeTransform|ComplexTopology|LocalTopology)CompletionProof|ProBuilderRequestProof/;
+
+test("only the approved fifteen ProBuilder tools use request-specific completion proof", async () => {
+  assert.equal(Object.keys(dedicated).length, 15);
+  for (const [entry, proof] of Object.entries(dedicated)) {
     const source = await readFile(new URL(entry, directory), "utf8");
-    assert.match(source, /ProBuilderOperationProof\.Validate(?:Edges|FaceIndices|VertexIndices)|GetFacesByIndices|vertexIndices\.Any/, `${entry} validates its requested selection before commit`);
-    assert.match(source, /ProBuilderOperationProof\.Capture\(/, `${entry} captures stable requested geometry`);
-    assert.match(source, /ctx\.CommitEffect\(\)/, `${entry} commits only after validation`);
-    assert.ok(
-      /ProBuilderOperationProof\.ResolveFreshMesh\(request\.Target, go\)/.test(source) || /EditorUtility\.InstanceIDToObject\(sourceInstanceId\) as GameObject/.test(source),
-      `${entry} resolves a fresh target mesh after commit`
-    );
-    assert.match(source, new RegExp(`ProBuilderOperationProof\\.${predicate}\\(`), `${entry} uses its operation-specific completion predicate`);
-    assert.doesNotMatch(source, /HasObservedMutation|CaptureMeshState/, `${entry} must not use generic mutation observation`);
+    const commit = source.indexOf("ctx.CommitEffect()");
+    assert.equal((source.match(/ctx\.CommitEffect\(\)/g) ?? []).length, 1, `${entry} has one effect barrier`);
+    assert.ok(source.search(proof.capture) >= 0 && source.search(proof.capture) < commit, `${entry} freezes its request-specific proof before the barrier`);
+    assert.match(source, proof.matches, `${entry} consumes its dedicated fresh readback`);
+    assert.match(source, /ProBuilderErrors\.OutcomeUnknown\(/, `${entry} fails closed after effect uncertainty`);
+    assert.doesNotMatch(source.slice(commit), /\brequest\.[A-Z]/, `${entry} does not read mutable request data after commit`);
   }
 });
 
-test("ProBuilder operation proof captures stable geometry and selection fields", async () => {
-  const source = await readFile(new URL("ProBuilderOperationProof.cs", directory), "utf8");
-  for (const field of ["VertexCount", "FaceCount", "EdgeCount", "Faces", "Edges", "Vertices", "Smoothing", "SharedVertices"]) {
-    assert.match(source, new RegExp(`internal .* ${field}`));
+test("the remaining seventeen ProBuilder mutations use only minimal atomic readback", async () => {
+  assert.equal(atomic.length, 17);
+  for (const entry of atomic) {
+    const source = await readFile(new URL(entry, directory), "utf8");
+    const commit = source.indexOf("ctx.CommitEffect()");
+    assert.equal((source.match(/ctx\.CommitEffect\(\)/g) ?? []).length, 1, `${entry} has one effect barrier in source`);
+    assert.match(source, /ProBuilderAtomicReadback\./, `${entry} uses the shared minimal typed readback owner`);
+    assert.match(source, /ProBuilderErrors\.OutcomeUnknown\(/, `${entry} fails closed after effect uncertainty`);
+    assert.doesNotMatch(source, removedOwners, `${entry} does not retain a removed strict proof owner`);
+    assert.doesNotMatch(source, /CanonicalMeshSnapshot/, `${entry} does not build a full canonical plan`);
+    assert.doesNotMatch(source.slice(commit), /\brequest\.[A-Z]/, `${entry} does not read mutable request data after commit`);
   }
-  for (const method of ["FaceSignature", "EdgeSignature", "VertexSignature", "ResolveFreshMesh", "ValidateFaceIndices", "ValidateVertexIndices", "ValidateEdges"]) {
-    assert.match(source, new RegExp(`${method}\\(`));
-  }
-  assert.doesNotMatch(source, /HasObservedMutation|CaptureMeshState/);
 });
 
-test("detach-faces commits before isolating Undo and proves the detached instance from fresh objects", async () => {
+test("removed ProBuilder proof owners and full-state shape template stay absent", async () => {
+  for (const name of [
+    "ProBuilderAttributeTransformCompletionProof.cs",
+    "ProBuilderComplexTopologyCompletionProof.cs",
+    "ProBuilderLocalTopologyCompletionProof.cs",
+    "ProBuilderRequestProof.cs",
+    "ProBuilderShapeTemplates.g.cs",
+  ]) await assert.rejects(access(new URL(name, directory), constants.F_OK), `${name} must remain absent`);
+});
+
+test("detach-faces keeps one Undo group without rolling back uncertain effects", async () => {
   const source = await readFile(new URL("detach-faces.cs", directory), "utf8");
   const commit = source.indexOf("ctx.CommitEffect()");
-  const increment = source.indexOf("Undo.IncrementCurrentGroup()");
-  const name = source.indexOf('Undo.SetCurrentGroupName("ProBuilder Detach Faces")');
-
-  assert.ok(commit >= 0 && increment > commit && name > increment, "detach-faces must create and name its Undo group after CommitEffect");
-  assert.match(source, /var undoGroup = Undo\.GetCurrentGroup\(\);/);
-  assert.match(source, /Undo\.RevertAllDownToGroup\(undoGroup\);/);
-  assert.ok(source.indexOf("try") < source.indexOf('Undo.RecordObject(go, "ProBuilder Detach Faces")'), "detach-faces must roll back every effect in its dedicated Undo group");
-  assert.doesNotMatch(source, /var undoGroup = Undo\.GetCurrentGroup\(\);[\s\S]{0,200}ctx\.CommitEffect\(\)/);
-  const sourceMeshUndo = source.indexOf("var sourceProBuilderMesh = mesh as UnityEngine.Object;");
-  const detachedMeshUndo = source.indexOf("var detachedProBuilderMesh = detachedMesh as UnityEngine.Object;");
-  const completeUndo = source.indexOf('Undo.RegisterCompleteObjectUndo(undoTargets, "ProBuilder Detach Faces");');
-  const firstDeleteFaces = source.indexOf("ProBuilderReflection.DeleteFaces");
-
-  assert.ok(sourceMeshUndo > name && detachedMeshUndo > sourceMeshUndo, "detach-faces must snapshot both actual ProBuilderMesh components in its dedicated group");
-  assert.match(source, /go\.GetComponent<MeshFilter>\(\)\?\.sharedMesh/);
-  assert.match(source, /detached\.GetComponent<MeshFilter>\(\)\?\.sharedMesh/);
-  assert.ok(completeUndo > detachedMeshUndo && completeUndo < firstDeleteFaces, "detach-faces must register complete topology and Unity Mesh snapshots before its first DeleteFaces call");
-  assert.ok(source.indexOf("Undo.RevertAllDownToGroup(undoGroup)") > completeUndo, "detach-faces rollback must target only the dedicated Undo group after all recorded effects");
-  assert.match(source, /var detachedInstanceId = detached\.GetInstanceID\(\);/);
-  assert.match(source, /EditorUtility\.InstanceIDToObject\(sourceInstanceId\) as GameObject/);
-  assert.match(source, /EditorUtility\.InstanceIDToObject\(detachedInstanceId\) as GameObject/);
-  assert.match(source, /ProBuilderReflection\.GetProBuilderMesh\(freshDetached\)/);
-  assert.match(source, /DetachedObject = new ObjectRef \{ Id = freshDetached\.GetInstanceID\(\), Name = freshDetached\.name, Path = HierarchyPath\(freshDetached\) \}/);
-});
-
-const requestProofs: Record<string, string> = {
-  "center-pivot.cs": "CenteredPivotPreservesWorldGeometry",
-  "combine-meshes.cs": "SourcesWereRemovedAndGeometryIncluded",
-  "convert-to-probuilder.cs": "ConvertedGeometryMatchesSource",
-  "create-poly-shape.cs": "PolyShapeMatchesRequest",
-  "create-polygon.cs": "PolygonWasCreatedFromRequestedVertices",
-  "create-shape.cs": "CreatedShapeMatchesRequest",
-  "freeze-transform.cs": "TransformWasBaked",
-  "move-vertices.cs": "VerticesMovedByRequestedOffset",
-  "repair-mesh.cs": "RepairReducedInvalidGeometry",
-  "set-face-color.cs": "RequestedFacesHaveColor",
-  "set-face-material.cs": "RequestedFacesUseMaterial",
-  "set-face-uvs.cs": "RequestedFacesHaveUv",
-  "set-pivot.cs": "TransformMatchesRequestedPivot",
-  "set-smoothing.cs": "RequestedFacesHaveSmoothingGroup"
-};
-
-test("targeted ProBuilder tools use request-specific fresh readback instead of generic mutation snapshots", async () => {
-  for (const [entry, proof] of Object.entries(requestProofs)) {
-    const source = await readFile(new URL(entry, directory), "utf8");
-    assert.doesNotMatch(source, /HasObserved(?:Object)?Mutation\(/, `${entry} must not use a generic mutation predicate`);
-    assert.match(source, /ProBuilderInput\.ResolveTarget\(/, `${entry} must fresh-resolve the target after commit`);
-    assert.match(source, new RegExp(`ProBuilderRequestProof\\.${proof}`), `${entry} must prove its own request fields`);
-  }
+  assert.ok(source.indexOf("Undo.IncrementCurrentGroup()") > commit);
+  assert.match(source, /Undo\.GetCurrentGroup\(\)/);
+  assert.match(source, /ProBuilderAtomicReadback\.RegisterMeshUndo\(go, mesh/);
+  assert.match(source, /Undo\.RegisterCreatedObjectUndo\(detached/);
+  assert.match(source, /Undo\.CollapseUndoOperations\(undoGroup\)/);
+  assert.doesNotMatch(source, /RevertAllDownToGroup|PerformUndo/);
+  assert.match(source, /EditorUtility\.InstanceIDToObject\(sourceId\) as GameObject/);
+  assert.match(source, /EditorUtility\.InstanceIDToObject\(detachedId\) as GameObject/);
 });

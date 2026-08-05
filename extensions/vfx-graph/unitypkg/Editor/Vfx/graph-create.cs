@@ -9,13 +9,13 @@ namespace UnityCli
     public sealed class VfxGraphCreateTool : IUnityCliTool<VfxGraphCreateTool.Request, VfxGraphCreateTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Path { get; set; } public bool? Overwrite { get; set; } }
-        public sealed class Result { public VfxGraphInfo Graph { get; set; } public bool DryRun { get; set; } public List<VfxPlannedEffect> PlannedEffects { get; set; } public string LogPath { get; set; } }
+        public sealed class Result { public VfxGraphInfo Graph { get; set; } public bool DryRun { get; set; } public List<VfxPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "vfx.graph.create", Summary = "Create a VFX Graph asset.",
             Description = "Create one Assets/*.vfx Visual Effect Graph asset, optionally replacing an existing graph. Supports --dry-run without writing the asset.",
-            Group = "vfx", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true,
+            Group = "vfx",DestructiveHint = true, SupportsDryRun = true,
             RequiresPackages = new[] { "com.unity.visualeffectgraph" }, SideEffects = new[] { "asset-write" },
             Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Create a matrix graph", Input = new Request { Path = "Assets/VFX/UnityCliCreatedExplosion.vfx" } } }
@@ -38,8 +38,7 @@ namespace UnityCli
                 {
                     Graph = new VfxGraphInfo { Path = path, Name = Path.GetFileNameWithoutExtension(path), Type = graphType.Name },
                     DryRun = true,
-                    PlannedEffects = effects,
-                    LogPath = ctx.LogPath
+                    PlannedEffects = effects
                 });
             }
 
@@ -55,8 +54,7 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Graph = VfxToolSupport.BuildGraphInfo(path, created),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

@@ -22,7 +22,6 @@ namespace UnityCli
             Summary = "Return path, guid, root name, asset type, variant source, dependency and nested-prefab summary for an Assets/*.prefab.",
             Description = "Return path, guid, root name, asset type, variant source, dependency and nested-prefab summary for an Assets/*.prefab. Read-only; use prefab.hierarchy for the child/component tree and prefab.modify to edit contents.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

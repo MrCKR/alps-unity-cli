@@ -1,104 +1,126 @@
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { refreshPackageEditor } from "../../cli-commands/package.js";
-import { restoreDeployedPackage } from "../../package-manager.js";
+import { inspectPackageDeploymentFiles, restoreDeployedPackage, type PackageRestoreResult as PackageRestoreFileResult } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
-import { StructuredToolError } from "../errors.js";
-import type { AnyJson } from "../../schema/any-json.js";
+import { runPackageFileMutationWorker } from "./file-mutation-worker.js";
+import { bindLivePackageProject, runLivePackageResolve, type LiveResolveResult, type PackageFileMutationBundle } from "./live-resolve.js";
+import { projectRelativePath, publicPackageEffects } from "./public-result.js";
 
-export interface PackageRestoreRequest {
-  packageName: string;
-  project?: string;
-}
-
-export interface PackageRestorePlannedEffect {
-  type?: string;
-  package?: string;
-  from?: string;
-  to?: string;
-  targetPath?: string;
-  fileCount?: number;
-  reason?: string;
-}
-
-export interface PackageRestoreLiveRefresh {
-  status?: string;
-  reason?: string;
-  command?: string;
-  path?: string;
-  code?: string;
-  message?: string;
-  result?: AnyJson;
-}
-
+export interface PackageRestoreRequest { packageName: string; }
+export interface PackageRestorePlannedEffect { type?: string; package?: string; from?: string; to?: string; targetPath?: string; fileCount?: number; reason?: string; }
+export interface PackageRestoreFilesProof { proven: true; targetPath: string; targetHash?: string; copiedFileCount: number; restoredFromBackup: boolean; removedDeployedPackage: boolean; backupPath?: string; metadataPath: string; metadataHash: string; }
 export interface PackageRestoreResult {
-  action: string;
-  status: string;
-  projectPath: string;
-  manifestPath: string;
-  packageName: string;
-  targetPath: string;
-  backupPath?: string;
-  restoredFromBackup: boolean;
-  removedDeployedPackage: boolean;
-  copiedFileCount: number;
-  dryRun: boolean;
-  plannedEffects: PackageRestorePlannedEffect[];
-  metadataPath: string;
-  liveRefresh?: PackageRestoreLiveRefresh;
-  nextActions?: string[];
+  action: string; status: string; manifestPath: string; packageName: string; targetPath: string;
+  backupPath?: string; restoredFromBackup: boolean; removedDeployedPackage: boolean; copiedFileCount: number; dryRun: boolean;
+  plannedEffects: PackageRestorePlannedEffect[]; metadataPath: string; files?: PackageRestoreFilesProof; resolve?: LiveResolveResult;
+}
+interface RestorePlan extends PackageRestoreFileResult { expectedBackupHash?: string; }
+
+/** restore 删除/还原、UPM fence 与 PackageInfo readback 共用一个公开 root。 */
+async function runPackageRestore(request: PackageRestoreRequest, context: ToolContext): Promise<PackageRestoreResult> {
+  if (context.execution.dryRun) {
+    await bindLivePackageProject(context, "restore");
+    const projectPath = resolve(context.projectPath);
+    const prepared = await restoreDeployedPackage(projectPath, request.packageName, { dryRun: true });
+    return publicRestoreResult(projectPath, "dry_run", prepared);
+  }
+  return runLivePackageResolve<PackageRestoreResult>(context, "restore", { packageName: request.packageName }, {
+    async prepare(signal) {
+      const projectPath = resolve(context.projectPath);
+      signal.throwIfAborted();
+      const prepared = await restoreDeployedPackage(projectPath, request.packageName, { dryRun: true });
+      const observed = await inspectPackageDeploymentFiles(projectPath, prepared.packageName, prepared.targetPath, prepared.backupPath);
+      signal.throwIfAborted();
+      return { ...prepared, expectedBackupHash: observed.backupHash } as unknown as Record<string, unknown>;
+    },
+    async apply(plan, signal, stopAtMs) {
+      const projectPath = resolve(context.projectPath);
+      const expected = restorePlan(plan);
+      const restored = await runPackageFileMutationWorker("restore", projectPath, plan, stopAtMs, signal) as unknown as PackageRestoreFileResult;
+      return restoreBundle(projectPath, expected, restored);
+    },
+    async recover(plan, signal) {
+      const projectPath = resolve(context.projectPath);
+      signal.throwIfAborted();
+      const expected = restorePlan(plan);
+      const bundle = await restoreBundle(projectPath, expected, { ...expected, dryRun: false });
+      signal.throwIfAborted();
+      return bundle;
+    },
+  });
 }
 
-/** 按 package.deploy metadata 还原或删除部署目录；安全确认由统一 dispatcher 完成。 */
-async function runPackageRestore(request: PackageRestoreRequest, context: ToolContext): Promise<PackageRestoreResult> {
-  const projectPath = resolve(request.project ?? context.projectPath);
-  // 文件恢复与 Editor refresh 消耗同一个绝对 deadline，禁止内部重置等待窗口。
-  const absoluteDeadlineMs = context.absoluteDeadlineMs ?? Date.now() + Math.max(1, context.execution.timeoutMs ?? 120_000);
-  const prepared = await restoreDeployedPackage(projectPath, request.packageName, { dryRun: true });
-  if (context.execution.dryRun) return { action: "restore", status: "dry_run", ...prepared };
-  await context.commitEffect?.();
-  const restored = await restoreDeployedPackage(projectPath, request.packageName);
-
-  const refreshRequestId = context.localJournalActive ? `${context.requestId}_package_restore_refresh` : context.requestId;
-  const liveRefresh = await refreshPackageEditor(refreshRequestId, {
-    dataDir: context.dataDir ?? context.projectPath,
-    bridgeExecute: context.bridgeExecute
-  }, projectPath, Math.max(1, absoluteDeadlineMs - Date.now()), absoluteDeadlineMs);
-  if (liveRefresh.status === "failed") {
-    throw new StructuredToolError(
-      typeof liveRefresh.code === "string" ? liveRefresh.code : "E_PACKAGE_REFRESH_FAILED",
-      typeof liveRefresh.message === "string" ? liveRefresh.message : "Unity did not reach a terminal package refresh state after restore.",
-      ["Inspect editor.state and Console diagnostics before retrying; the package files were already restored."],
-      { projectPath, targetPath: restored.targetPath, packageFilesRestored: true }
-    );
+async function restoreBundle(projectPath: string, plan: RestorePlan, restored: PackageRestoreFileResult): Promise<PackageFileMutationBundle> {
+  if (restored.packageName !== plan.packageName || restored.targetPath !== plan.targetPath || restored.restoredFromBackup !== plan.restoredFromBackup) throw new Error("Restored package does not match its durable file plan.");
+  const observed = await inspectPackageDeploymentFiles(projectPath, plan.packageName, plan.targetPath, plan.backupPath);
+  if (observed.record) throw new Error("Package deployment metadata still contains the restored package.");
+  if (plan.restoredFromBackup) {
+    if (!plan.expectedBackupHash || !observed.targetExists || observed.targetHash !== plan.expectedBackupHash || observed.targetFileCount !== plan.copiedFileCount || observed.backupExists) throw new Error("Restored package target does not match the committed backup tree.");
+  } else if (observed.targetExists || observed.backupExists) {
+    throw new Error("Remove-only package restore left a target or backup directory.");
   }
-
+  const manifestHash = await hash(plan.manifestPath);
+  const files: PackageRestoreFilesProof = {
+    proven: true, targetPath: plan.targetPath, copiedFileCount: observed.targetFileCount,
+    restoredFromBackup: plan.restoredFromBackup, removedDeployedPackage: plan.removedDeployedPackage,
+    metadataPath: observed.metadataPath, metadataHash: observed.metadataHash,
+    ...(observed.targetHash ? { targetHash: observed.targetHash } : {}), ...(plan.backupPath ? { backupPath: plan.backupPath } : {}),
+  };
+  // 文件内容已在 files.prove 时由 Editor fresh readback 精确验证；Resolve 后 Unity 可合法生成 .meta。
+  const predicate = plan.restoredFromBackup
+    ? { name: plan.packageName, present: true, resolvedPath: plan.targetPath }
+    : { name: plan.packageName, present: false };
   return {
-    action: "restore",
-    status: "restored",
-    ...restored,
-    liveRefresh,
-    nextActions: liveRefresh.status === "completed"
-      ? ["Wait for Unity to finish importing and compiling, then inspect editor.state or console logs."]
-      : ["Open or refresh the Unity project so it imports the restored package, then inspect console diagnostics."]
+    expectedManifestSha256: manifestHash,
+    predicates: [predicate],
+    filesProof: files as unknown as Record<string, unknown>,
+    publicResultSeed: publicRestoreResult(projectPath, "restored", restored, files) as unknown as Record<string, unknown>,
   };
 }
 
+/** 从内部 durable 文件结果构造公开 DTO；绝对路径只保留在 journal 与完成证明中。 */
+function publicRestoreResult(
+  projectPath: string,
+  status: string,
+  restored: PackageRestoreFileResult,
+  files?: PackageRestoreFilesProof,
+): PackageRestoreResult {
+  const publicFiles = files ? {
+    ...files,
+    targetPath: projectRelativePath(projectPath, files.targetPath, "files.targetPath"),
+    metadataPath: projectRelativePath(projectPath, files.metadataPath, "files.metadataPath"),
+    ...(files.backupPath ? { backupPath: projectRelativePath(projectPath, files.backupPath, "files.backupPath") } : {}),
+  } : undefined;
+  return {
+    action: "restore",
+    status,
+    manifestPath: projectRelativePath(projectPath, restored.manifestPath, "manifestPath"),
+    packageName: restored.packageName,
+    targetPath: projectRelativePath(projectPath, restored.targetPath, "targetPath"),
+    ...(restored.backupPath ? { backupPath: projectRelativePath(projectPath, restored.backupPath, "backupPath") } : {}),
+    restoredFromBackup: restored.restoredFromBackup,
+    removedDeployedPackage: restored.removedDeployedPackage,
+    copiedFileCount: restored.copiedFileCount,
+    dryRun: restored.dryRun,
+    plannedEffects: publicPackageEffects(projectPath, restored.plannedEffects) as PackageRestorePlannedEffect[],
+    metadataPath: projectRelativePath(projectPath, restored.metadataPath, "metadataPath"),
+    ...(publicFiles ? { files: publicFiles } : {}),
+  };
+}
+
+function restorePlan(value: Record<string, unknown>): RestorePlan {
+  for (const key of ["projectPath", "manifestPath", "packageName", "targetPath", "metadataPath"])
+    if (typeof value[key] !== "string") throw new Error(`Durable package.restore file plan is missing ${key}.`);
+  if (typeof value.restoredFromBackup !== "boolean" || typeof value.removedDeployedPackage !== "boolean" || typeof value.copiedFileCount !== "number" || !Array.isArray(value.plannedEffects)) throw new Error("Durable package.restore file plan is corrupt.");
+  return value as unknown as RestorePlan;
+}
+async function hash(path: string): Promise<string> { return createHash("sha256").update(await readFile(path)).digest("hex"); }
+
 export default defineTool<PackageRestoreRequest, PackageRestoreResult>({
-  name: "package.restore",
-  summary: "Restore a package directory from the latest package.deploy backup.",
+  name: "package.restore", summary: "Restore a package directory from the latest package.deploy backup.",
   description: "Restore a package previously deployed by package.deploy. If package.deploy backed up an existing package directory, package.restore replaces Packages/<packageName> with that backup. If deploy created a new package with no previous directory, restore removes the deployed package directory. Destructive: writes/deletes project package files and can trigger Unity import/compile. Supports --dry-run to preview effects without writing.",
-  group: "package",
-  destructiveHint: true,
-  supportsDryRun: true,
-  sideEffects: ["project-file-write", "project-file-delete", "session-affecting"],
-  playModeSupport: "session-affecting",
-  handler: "hybrid",
-  supportStatus: "bridge-job",
-  timeoutMs: 120_000,
-  examples: [
-    { description: "Preview restoring a deployed package", argv: ["tools", "run", "package.restore", "--input", "{\"packageName\":\"com.acme.tool\"}", "--dry-run"] }
-  ],
-  async execute(request, context) {
-    return runPackageRestore(request, context);
-  }
+  group: "package", destructiveHint: true, supportsDryRun: true, sideEffects: ["project-file-write", "project-file-delete", "session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
+  examples: [{ description: "Preview restoring a deployed package", argv: ["tools", "run", "package.restore", "--input", "{\"packageName\":\"com.acme.tool\"}", "--dry-run"] }],
+  async execute(request, context) { return runPackageRestore(request, context); }
 });

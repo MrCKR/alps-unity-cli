@@ -13,9 +13,6 @@ export interface SuccessEnvelope<TData = unknown> {
   requestId: string;
   data: TData;
   warnings?: string[];
-  logsRef?: string;
-  jobId?: string;
-  durationMs?: number;
 }
 
 /** Bridge 失败响应。nextActions 只属于 error。 */
@@ -23,7 +20,6 @@ export interface ErrorEnvelope<TDetails = unknown> {
   ok: false;
   requestId: string;
   error: ToolError<TDetails>;
-  durationMs?: number;
 }
 
 /** CLI ↔ Bridge 唯一响应信封。 */
@@ -56,12 +52,6 @@ export interface ToolError<TDetails = unknown> {
  * CLI → Bridge 的请求信封。command 字符串是天然 kind/discriminator,仅用于路由;
  * 字段取用走反序列化好的 DTO(废除 BridgeRequest 的正则刮 JSON)。
  */
-export interface BridgeSecurity {
-  confirmed: boolean;
-  toolName: string;
-  descriptorFingerprint: string;
-  inputSha256: string;
-}
 
 /** 单个逻辑请求的执行控制；absoluteDeadlineUtc 在首次序列化后不可改变。 */
 export interface BridgeExecution {
@@ -69,7 +59,6 @@ export interface BridgeExecution {
   completionContractVersion: number;
   requestDigestVersion: number;
   dryRun?: boolean;
-  securityProof?: BridgeSecurity;
 }
 
 export interface BridgeRequest<TInput = unknown> {

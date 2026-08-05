@@ -47,7 +47,7 @@ namespace UnityCli
             Name = "physics.force",
             Summary = "Apply force, torque, or explosion force to a target Rigidbody.",
             Description = "Resolve a target GameObject with a Rigidbody, then apply force (x/y/z), torque, or explosion force (forceType=explosion). mode defaults to Force.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "scene-modify" },
+            Group = "physics",DestructiveHint = false, SideEffects = new[] { "scene-modify" },
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Apply upward force", Input = new Request { Target = "Player", Y = 100f } } }
@@ -78,11 +78,18 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_FORCE_TYPE_INVALID", "forceType must be normal or explosion.", "Pass forceType=normal or forceType=explosion.");
             if (rigidbody.isKinematic)
                 throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_FORCE_KINEMATIC", "Cannot prove force on a kinematic Rigidbody.", "Set isKinematic=false with physics.rigidbody before applying force.");
+            var requestedNonZero = forceType == ForceApplicationType.Explosion
+                ? request.ExplosionForce != 0f || (request.TorqueX.HasValue && torque.sqrMagnitude > 0f)
+                : force.sqrMagnitude > 0f || (request.TorqueX.HasValue && torque.sqrMagnitude > 0f);
+            if (!requestedNonZero)
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_FORCE_VALUE_INVALID", "physics.force requires a non-zero force, explosion force, or torque.", "Pass at least one non-zero force component.");
             var targetId = target.GetInstanceID();
             var rigidbodyId = rigidbody.GetInstanceID();
-            var beforeVelocity = rigidbody.velocity;
-            var beforePosition = rigidbody.position;
             ctx.CommitEffect();
+            // AddForce 的速度积分发生在后续 physics step；先强制 sleep，再以同步 wake 状态证明 API 已接受非零请求。
+            rigidbody.Sleep();
+            if (!rigidbody.IsSleeping())
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_FORCE_STATE_UNPROVABLE", "Rigidbody did not enter the proof sleep state before applying force.", "Inspect the target Rigidbody and retry after the Editor is idle.");
             if (forceType == ForceApplicationType.Explosion)
                 rigidbody.AddExplosionForce(request.ExplosionForce, explosionPosition, request.ExplosionRadius, request.UpwardsModifier, mode);
             else rigidbody.AddForce(force, mode);
@@ -97,9 +104,8 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_FORCE_STATE_UNPROVABLE", "Rigidbody could not be freshly resolved after applying force.", "Inspect the target Rigidbody and retry after the Editor is idle.");
             var observedVelocity = observedRigidbody.velocity;
             var observedPosition = observedRigidbody.position;
-            var requestedNonZero = force.sqrMagnitude > 0f || (request.TorqueX.HasValue && torque.sqrMagnitude > 0f) || (forceType == ForceApplicationType.Explosion && request.ExplosionForce != 0f);
-            if (requestedNonZero && observedVelocity == beforeVelocity && observedPosition == beforePosition)
-                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_FORCE_STATE_UNPROVABLE", "Force did not produce an observable Rigidbody velocity or position change in this request.", "Use physics.simulation to advance a controlled physics step, then read the Rigidbody state.");
+            if (observedRigidbody.IsSleeping())
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_FORCE_STATE_UNPROVABLE", "The non-zero force request did not wake the freshly resolved Rigidbody.", "Inspect the target Rigidbody before submitting a new force request.");
             target = observedTarget;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

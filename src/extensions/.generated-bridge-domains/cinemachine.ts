@@ -6,7 +6,7 @@ import type { BridgeCommandSpec } from "../../bridge/types.js";
 
 export const cinemachineBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "cinemachine", command: "ping", bridgeCommand: "project-tool.run", toolName: "cinemachine.ping", buildArgs: cinemachinePingArgs },
-  { group: "cinemachine", command: "create", bridgeCommand: "project-tool.run", toolName: "cinemachine.create", buildArgs: cinemachineCreateArgs, supportsJob: true },
+  { group: "cinemachine", command: "create", bridgeCommand: "project-tool.run", toolName: "cinemachine.create", buildArgs: cinemachineCreateArgs },
   { group: "cinemachine", command: "target", bridgeCommand: "project-tool.run", toolName: "cinemachine.target", buildArgs: cinemachineTargetArgs },
   { group: "cinemachine", command: "lens", bridgeCommand: "project-tool.run", toolName: "cinemachine.lens", buildArgs: cinemachineLensArgs },
   { group: "cinemachine", command: "priority", bridgeCommand: "project-tool.run", toolName: "cinemachine.priority", buildArgs: cinemachinePriorityArgs },

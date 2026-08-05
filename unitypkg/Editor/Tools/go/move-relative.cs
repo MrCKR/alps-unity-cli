@@ -31,7 +31,6 @@ namespace UnityCli
             Summary = "Move a GameObject by a relative XYZ offset without replacing its absolute transform.",
             Description = "Move a GameObject by a relative XYZ offset without replacing its absolute transform. Use go.modify when you need absolute position; prefer hierarchy paths or instance ids after create/duplicate operations.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",

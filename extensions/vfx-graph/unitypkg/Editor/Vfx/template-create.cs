@@ -8,13 +8,13 @@ namespace UnityCli
     public sealed class VfxTemplateCreateTool : IUnityCliTool<VfxTemplateCreateTool.Request, VfxTemplateCreateTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Template { get; set; } [UnityCliRequired] public string Path { get; set; } public bool? Overwrite { get; set; } }
-        public sealed class Result { public VfxGraphInfo Graph { get; set; } public string TemplateName { get; set; } public bool DryRun { get; set; } public List<VfxPlannedEffect> PlannedEffects { get; set; } public string LogPath { get; set; } }
+        public sealed class Result { public VfxGraphInfo Graph { get; set; } public string TemplateName { get; set; } public bool DryRun { get; set; } public List<VfxPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "vfx.template.create", Summary = "Create a VFX Graph from a package template.",
             Description = "Copy one installed VFX Graph template to an Assets/*.vfx destination. Supports --dry-run and explicit overwrite.",
-            Group = "vfx", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true,
+            Group = "vfx",DestructiveHint = true, SupportsDryRun = true,
             RequiresPackages = new[] { "com.unity.visualeffectgraph" }, SideEffects = new[] { "asset-write" },
             Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Create a simple particle graph", Input = new Request { Template = "SimpleParticleSystem", Path = "Assets/VFX/SimpleParticle.vfx", Overwrite = true } } }
@@ -35,7 +35,7 @@ namespace UnityCli
 
             var effects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.template.create", Template = request.Template, Path = destinationPath } };
             if (ctx.DryRun)
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { TemplateName = request.Template, DryRun = true, PlannedEffects = effects, LogPath = ctx.LogPath });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { TemplateName = request.Template, DryRun = true, PlannedEffects = effects });
 
             ctx.CommitEffect();
             AssetToolSupport.CreateAssetDirectory(destinationPath);
@@ -50,7 +50,7 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Graph = VfxToolSupport.BuildGraphInfo(destinationPath, created), TemplateName = request.Template,
-                PlannedEffects = effects, LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

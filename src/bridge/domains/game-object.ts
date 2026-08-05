@@ -15,7 +15,7 @@ export const gameObjectBridgeSpecs: BridgeCommandSpec[] = [
   { group: "component", command: "remove", bridgeCommand: "project-tool.run", toolName: "component.remove", buildArgs: componentArgs },
   { group: "component", command: "set", bridgeCommand: "project-tool.run", toolName: "component.set", buildArgs: componentArgs },
   { group: "component", command: "get", bridgeCommand: "project-tool.run", toolName: "component.get", buildArgs: componentDeepArgs },
-  { group: "component", command: "modify", bridgeCommand: "project-tool.run", toolName: "component.modify", buildArgs: componentDeepArgs, supportsDryRun: true },
+  { group: "component", command: "modify", bridgeCommand: "project-tool.run", toolName: "component.modify", buildArgs: componentDeepArgs, destructiveHint: true, supportsDryRun: true },
   { group: "component", command: "list-types", bridgeCommand: "project-tool.run", toolName: "component.list-types", buildArgs: componentListTypesArgs }
 ];
 

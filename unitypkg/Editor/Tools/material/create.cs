@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Create a new Material asset from a named shader at an Assets/*.mat path.",
             Description = "Create a new Material asset from a named shader at an Assets/*.mat path. Use shader.list or asset.search-built-in to discover a valid shader name first; an unknown shader returns E_SHADER_NOT_FOUND. Refuses to overwrite an existing material unless overwrite=true.",
             Group = "material",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

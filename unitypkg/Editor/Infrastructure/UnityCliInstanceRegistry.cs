@@ -30,6 +30,7 @@ namespace UnityCli
         private const int ErrorInsufficientBuffer = 122;
         private static CanonicalProjectPathResult canonicalIdentity;
         private static string editorSessionId;
+        private static string lastRegistrationSignature;
         private static long listenerGeneration;
 
         /// <summary>当前 listener generation 只用于 transport attestation 与 registry 内部一致性校验。</summary>
@@ -64,7 +65,7 @@ namespace UnityCli
         }
 
         /// <summary>Unity.exe 生命周期 identity；domain reload 不改变，进程重启必然改变。</summary>
-        private static string EditorSessionId()
+        internal static string EditorSessionId()
         {
             if (!string.IsNullOrEmpty(editorSessionId)) return editorSessionId;
             var process = Process.GetCurrentProcess();
@@ -264,7 +265,13 @@ namespace UnityCli
                     var data = RegistryData(revision, sessions);
                     WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(data) + "\n");
                 });
-                WriteLog("instance_registered id=" + InstanceId() + " session=" + EditorSessionId() + " state=" + NormalizeSessionState(requestedState) + " listenerId=" + ListenerId + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture));
+                // 心跳注册每 2 秒发生一次；日志只在状态实质变化时记录，避免心跳撑爆日志。
+                var registrationSignature = NormalizeSessionState(requestedState) + "|" + ListenerId + "|" + listenerGeneration.ToString(CultureInfo.InvariantCulture);
+                if (!string.Equals(registrationSignature, lastRegistrationSignature, StringComparison.Ordinal))
+                {
+                    lastRegistrationSignature = registrationSignature;
+                    WriteLog("instance_registered id=" + InstanceId() + " session=" + EditorSessionId() + " state=" + NormalizeSessionState(requestedState) + " listenerId=" + ListenerId + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture));
+                }
                 return true;
             }
             catch (Exception exception)

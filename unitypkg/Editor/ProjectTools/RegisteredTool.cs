@@ -35,10 +35,8 @@ namespace UnityCli
         public string Description { get; set; }
         public string Group { get; set; }
         public string Source { get; set; }
-        public string Version { get; set; }
         public string InputSchema { get; set; }
         public string OutputSchema { get; set; }
-        public string CapabilityType { get; set; }
         public bool DestructiveHint { get; set; }
         public string[] SideEffects { get; set; }
         public bool SupportsDryRun { get; set; }
@@ -50,8 +48,6 @@ namespace UnityCli
         public string PlayModeSupport { get; set; }
         public int DefaultTimeoutMs { get; set; }
         public int MaxTimeoutMs { get; set; }
-        public bool SupportsJob { get; set; }
-        public string[] ArtifactKinds { get; set; }
         public string[] RequiredInput { get; set; }
         public string RegisteredBy { get; set; }
         public string DescriptorSource { get; set; }
@@ -60,8 +56,10 @@ namespace UnityCli
         public string Fingerprint { get; set; }
         public string PinnedFingerprint { get; set; }
         public string FingerprintStatus { get; set; }
-        public string FingerprintMode { get; set; }
         public string ExpectedFingerprint { get; set; }
+        public string PinnedFingerprintOwner { get; set; }
+        public string PinnedFingerprintAlgorithm { get; set; }
+        public string PinnedFingerprintFormat { get; set; }
         public string FingerprintMessage { get; set; }
         public string DescriptorSha256 { get; set; }
         public string HandlerSha256 { get; set; }

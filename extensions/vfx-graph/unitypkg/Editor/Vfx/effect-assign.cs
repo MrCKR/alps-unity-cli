@@ -12,7 +12,7 @@ namespace UnityCli
         {
             Name = "vfx.effect.assign", Summary = "Assign a VFX Graph to a VisualEffect.",
             Description = "Bind one existing Assets/*.vfx graph to the existing VisualEffect component on the target.",
-            Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
+            Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "scene-modify", "component-reference-edit" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Assign the matrix graph", Input = new Request { Target = "Effects/Emitter", Graph = "Assets/VFX/Explosion.vfx" } } }
@@ -37,8 +37,7 @@ namespace UnityCli
                 Target = GameObjectToolSupport.BuildGameObjectRef(effect.gameObject),
                 Action = "assigned",
                 Effect = VfxToolSupport.BuildEffectInfo(effect),
-                PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.assign", Target = request.Target, Graph = request.Graph } },
-                LogPath = ctx.LogPath
+                PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.assign", Target = request.Target, Graph = request.Graph } }
             });
         }
     }

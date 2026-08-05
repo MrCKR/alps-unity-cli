@@ -21,7 +21,6 @@ namespace UnityCli
         public bool DryRun { get; set; }
         public List<UrpFeatureInfo> Features { get; set; }
         public List<UrpPlannedEffect> PlannedEffects { get; set; }
-        public string LogPath { get; set; }
     }
 
     /// <summary>URP Renderer Feature 单动作 Tool 的共享资产定位与写入实现。</summary>
@@ -32,7 +31,7 @@ namespace UnityCli
             GameObjectToolSupport.EnsureEditorNotBusy("urp.feature.list");
             UrpToolSupport.EnsureUrpAvailable();
             var features = UrpToolSupport.ListRendererFeatures();
-            return new UrpFeatureResult { Count = features.Count, Features = features, LogPath = logPath };
+            return new UrpFeatureResult { Count = features.Count, Features = features};
         }
 
         // 提交前冻结新增所需的资产、类型和可写序列化字段，避免子资产已创建后才暴露版本不兼容。
@@ -95,7 +94,7 @@ namespace UnityCli
         internal static UrpFeatureResult Add(AddMutationPlan plan, bool dryRun, string logPath)
         {
             var effect = new UrpPlannedEffect { Type = "urp.feature.add", FeatureType = plan.FeatureTypeName, RendererIndex = plan.RendererIndex };
-            if (dryRun) return new UrpFeatureResult { FeatureType = plan.FeatureTypeName, RendererIndex = plan.RendererIndex, DryRun = true, PlannedEffects = new List<UrpPlannedEffect> { effect }, LogPath = logPath };
+            if (dryRun) return new UrpFeatureResult { FeatureType = plan.FeatureTypeName, RendererIndex = plan.RendererIndex, DryRun = true, PlannedEffects = new List<UrpPlannedEffect> { effect }};
 
             var feature = ScriptableObject.CreateInstance(plan.FeatureType);
             feature.name = plan.FeatureTypeName;
@@ -119,13 +118,13 @@ namespace UnityCli
             if (index < 0) throw new UnityCliBridge.BridgeCommandException("E_URP_FEATURE_VERIFY_FAILED", "Added renderer feature could not be located in the re-read feature collection.", "Check the renderer feature and retry.");
             var observed = ReadFeature(rendererData, index);
             if (!IsExactFeature(observed, featureGuid, featureLocalId, plan.FeatureType)) throw new UnityCliBridge.BridgeCommandException("E_URP_FEATURE_VERIFY_FAILED", "Added renderer feature could not be read exactly from the reloaded renderer data.", "Check the renderer feature and retry.");
-            return new UrpFeatureResult { FeatureName = observed.name, FeatureType = observed.GetType().FullName, FeatureIndex = index, RendererIndex = plan.RendererIndex, PlannedEffects = new List<UrpPlannedEffect> { effect }, LogPath = logPath };
+            return new UrpFeatureResult { FeatureName = observed.name, FeatureType = observed.GetType().FullName, FeatureIndex = index, RendererIndex = plan.RendererIndex, PlannedEffects = new List<UrpPlannedEffect> { effect }};
         }
 
         internal static UrpFeatureResult Toggle(ToggleMutationPlan plan, bool enabled, bool dryRun, string logPath)
         {
             var effect = new UrpPlannedEffect { Type = "urp.feature.toggle", Index = plan.FeatureIndex, RendererIndex = plan.RendererIndex, Enabled = enabled };
-            if (dryRun) return new UrpFeatureResult { FeatureIndex = plan.FeatureIndex, RendererIndex = plan.RendererIndex, Enabled = enabled, DryRun = true, PlannedEffects = new List<UrpPlannedEffect> { effect }, LogPath = logPath };
+            if (dryRun) return new UrpFeatureResult { FeatureIndex = plan.FeatureIndex, RendererIndex = plan.RendererIndex, Enabled = enabled, DryRun = true, PlannedEffects = new List<UrpPlannedEffect> { effect }};
             if (plan.SetActive != null) plan.SetActive.Invoke(plan.Feature, new object[] { enabled });
             else
             {
@@ -140,7 +139,7 @@ namespace UnityCli
             var observed = ReadFeature(reloadedRendererData, plan.FeatureIndex);
             if (!IsExactFeature(observed, plan.FeatureGuid, plan.FeatureLocalId, plan.FeatureType) || UrpToolSupport.IsFeatureEnabled(observed) != enabled)
                 throw new UnityCliBridge.BridgeCommandException("E_URP_FEATURE_VERIFY_FAILED", "Renderer feature active state did not retain the requested value.", "Check the renderer feature and retry.");
-            return new UrpFeatureResult { FeatureIndex = plan.FeatureIndex, RendererIndex = plan.RendererIndex, Enabled = UrpToolSupport.IsFeatureEnabled(observed), PlannedEffects = new List<UrpPlannedEffect> { effect }, LogPath = logPath };
+            return new UrpFeatureResult { FeatureIndex = plan.FeatureIndex, RendererIndex = plan.RendererIndex, Enabled = UrpToolSupport.IsFeatureEnabled(observed), PlannedEffects = new List<UrpPlannedEffect> { effect }};
         }
 
         internal static UrpFeatureResult Configure(int featureIndex, int rendererIndex, string propertyName, string value, bool dryRun, string logPath)
@@ -171,7 +170,7 @@ namespace UnityCli
                 }
             }
             var effect = new UrpPlannedEffect { Type = "urp.feature.configure", Index = featureIndex, RendererIndex = rendererIndex, Property = propertyName, Value = value };
-            return new UrpFeatureResult { FeatureIndex = featureIndex, RendererIndex = rendererIndex, Property = propertyName, Value = value, DryRun = dryRun, PlannedEffects = new List<UrpPlannedEffect> { effect }, LogPath = logPath };
+            return new UrpFeatureResult { FeatureIndex = featureIndex, RendererIndex = rendererIndex, Property = propertyName, Value = value, DryRun = dryRun, PlannedEffects = new List<UrpPlannedEffect> { effect }};
         }
 
         internal static UrpFeatureResult Remove(int featureIndex, int rendererIndex, bool dryRun, string logPath)
@@ -194,7 +193,7 @@ namespace UnityCli
                 if (ContainsFeature(reloadedRendererData, target.Feature))
                     throw new UnityCliBridge.BridgeCommandException("E_URP_FEATURE_VERIFY_FAILED", "Renderer feature remained in the renderer feature collection after removal.", "Check the renderer feature and retry.");
             }
-            return new UrpFeatureResult { FeatureIndex = featureIndex, RendererIndex = rendererIndex, DryRun = dryRun, PlannedEffects = new List<UrpPlannedEffect> { effect }, LogPath = logPath };
+            return new UrpFeatureResult { FeatureIndex = featureIndex, RendererIndex = rendererIndex, DryRun = dryRun, PlannedEffects = new List<UrpPlannedEffect> { effect }};
         }
 
         // 重新读取 renderer feature collection，按持久化身份确认新增实例已经在集合中。

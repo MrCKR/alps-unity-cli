@@ -3,7 +3,6 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { destructiveCommands } from "../src/security-policy.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 import { contractToolNames, discoverLiveTools, listCsFiles, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
@@ -37,7 +36,7 @@ test("object tools are contract-discovered and expose expected live descriptor f
       summary: "Patch serialized object data.",
       description: "Patch serialized object data.",
       group: "object",
-      destructiveHint: false,
+      destructiveHint: true,
       supportsDryRun: true,
       playModeSupport: "session-affecting",
       inputSchema: { type: "object", properties: { pathPatches: { type: "array" } } }
@@ -66,7 +65,7 @@ test("object tools are contract-discovered and expose expected live descriptor f
 
   const modify = tools.get("object.modify")!;
   const modifyProps = modify.inputSchema.properties as Record<string, unknown>;
-  assert.equal(modify.destructiveHint, false);
+  assert.equal(modify.destructiveHint, true);
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.playModeSupport, "session-affecting");
   assert.equal(modify.riskLevel, "high");
@@ -89,9 +88,9 @@ test("contract entries exist for object tools with present C# handler", () => {
   }
 });
 
-test("object.modify stays out of destructive security policy because it changes scene memory only", () => {
-  const commands = new Set(destructiveCommands().map((entry) => entry.command));
-  assert.equal(commands.has("object.modify"), false);
+test("object.modify exposes destructive metadata because Edit Mode can target persistent assets", () => {
+  const command = bridgeCommandRegistry.lookup("object", "modify");
+  assert.equal(command?.destructiveHint, true);
 });
 
 test("object commands are exposed by typed C# tools", async () => {
@@ -109,11 +108,13 @@ test("C# infrastructure files exist for ObjectRef, serializer and patch", async 
   assert.ok(names.includes("UnityCliObjectPatch.cs"));
 });
 
-test("object patch accepts only slash-separated member paths", async () => {
+test("object patch accepts only directly verifiable SerializedProperty replace operations", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectPatch.cs", import.meta.url), "utf8");
-  assert.match(source, /path\.Split\('\/'\)/);
-  assert.match(source, /pathPatches path must use '\/' between member segments/);
-  assert.doesNotMatch(source, /向后兼容|a\.b.*兼容|var sep = path\.IndexOf/);
+  assert.match(source, /serialized\.FindProperty\(path\)/);
+  assert.match(source, /string\.Equals\(op, "replace", StringComparison\.OrdinalIgnoreCase\)/);
+  assert.match(source, /IsVerifiableProperty\(property\.propertyType\)/);
+  assert.match(source, /Only non-empty pathPatches on directly writable SerializedProperties are supported/);
+  assert.doesNotMatch(source, /path\.Split|NavigationFrame|ApplyMergePatch|ApplyPathPatches/);
 });
 
 test("object patch enum verification resolves names and indexes without numeric Convert", async () => {
@@ -125,14 +126,13 @@ test("object patch enum verification resolves names and indexes without numeric 
   assert.doesNotMatch(enumSection, /Convert\.ToInt32/);
 });
 
-test("object patch writes nested value types back through their parent chain", async () => {
+test("object patch applies one verified serialized write path and proves fresh values", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectPatch.cs", import.meta.url), "utf8");
-  assert.match(source, /List<NavigationFrame>/);
-  assert.match(source, /current\.GetType\(\)\.IsValueType/);
-  assert.match(source, /WriteBackValueType\(frames\[i\]\.Parent, frames\[i\]\.Segment, current, path\)/);
-  assert.match(source, /property\.SetValue\(parent, ConvertValue\(value, property\.PropertyType\), null\)/);
-  assert.match(source, /list\[segment\.Index\] = value/);
-  assert.match(source, /dictionary\[segment\.Name\] = value/);
+  assert.match(source, /ApplyVerifiedSerializedPatches/);
+  assert.match(source, /serialized\.ApplyModifiedPropertiesWithoutUndo\(\)/);
+  assert.match(source, /VerifyFreshSerializedProperties/);
+  assert.match(source, /SerializedValueMatches\(property, GetField\(patch, "value"\)\)/);
+  assert.doesNotMatch(source, /WriteBackValueType|PropertyInfo\.SetValue|dictionary\[segment\.Name\]/);
 });
 
 test("object.modify implements IUnityCliTool with dry-run support", async () => {

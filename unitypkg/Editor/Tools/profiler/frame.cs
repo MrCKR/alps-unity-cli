@@ -19,7 +19,7 @@ namespace UnityCli
         {
             Name = "profiler.frame", Summary = "Read current frame count, timing, module diagnostics and FrameTimingManager CPU/GPU fields.",
             Description = "Capture FrameTimingManager timing, then return current frame count, selected profiler module diagnostics, and CPU/GPU timing fields.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "frame-timing-capture" }, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, SideEffects = new[] { "frame-timing-capture" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read frame timing", Input = new Request { } } }
         };

@@ -1,15 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
+import { validateProBuilderCompletionScope } from "./lib/probuilder-completion-scope.mjs";
 
 const root = process.cwd();
 const strict = process.argv.includes("--strict");
 const contractPath = path.join(root, "contracts", "tool-completion-contract.json");
 const allowedExecutionClasses = new Set(["atomic", "observed-state", "resumable", "external"]);
-const allowedDeliveryModes = new Set(["direct-terminal", "job-deferred"]);
-const allowedDirectInvocationPolicies = new Set(["allowed", "deferred-only", "prohibited-unprovable"]);
-const allowedFrozenDeliveryPolicies = new Set(["ordinary", "preserved"]);
-const requiredJobDeferred = new Set(["build.run", "editor.refresh", "test.run"]);
+const allowedDeliveryModes = new Set(["direct-terminal"]);
 const failures = [];
 
 // 仅允许明确列出的 descriptor 误判项跳过 commit 要求。每项必须是无业务 effect 的 fail-closed
@@ -47,13 +45,8 @@ for (const entry of entries) {
   if (!entry.reloadPolicy?.kind || !entry.reloadPolicy?.description) fail(`${entry.toolName}: reloadPolicy 不完整`);
   if (!/^E_[A-Z0-9_]+$/.test(entry.timeoutError ?? "")) fail(`${entry.toolName}: timeoutError 无效`);
   if (!entry.outcomeUnknownPolicy?.kind || !entry.outcomeUnknownPolicy?.description) fail(`${entry.toolName}: outcomeUnknownPolicy 不完整`);
-  const directInvocationPolicy = entry.directInvocationPolicy?.kind ?? "allowed";
-  const frozenDeliveryPolicy = entry.frozenDeliveryPolicy?.kind ?? "ordinary";
-  if (!allowedDirectInvocationPolicies.has(directInvocationPolicy)) fail(`${entry.toolName}: directInvocationPolicy 无效`);
-  if (!allowedFrozenDeliveryPolicies.has(frozenDeliveryPolicy)) fail(`${entry.toolName}: frozenDeliveryPolicy 无效`);
-  if (directInvocationPolicy !== "allowed" && frozenDeliveryPolicy !== "preserved") fail(`${entry.toolName}: restricted direct invocation 必须绑定 preserved frozen delivery`);
   const publicText = JSON.stringify({ completionPredicate: entry.completionPredicate, proofSource: entry.proofSource });
-  if (/accepted|requested|queued|handler[- ]returned|ExecuteAsync returned/i.test(publicText)) {
+  if (/\baccepted\b|\bqueued\b|handler[- ]returned|ExecuteAsync returned/i.test(publicText)) {
     fail(`${entry.toolName}: completion proof 使用了禁止的中间态或 handler-returned 语义`);
   }
 }
@@ -71,14 +64,10 @@ for (const tool of inventory) {
 for (const entry of entries) {
   if (!inventoryByName.has(entry.toolName)) fail(`orphan completion contract: ${entry.toolName}`);
 }
-
-const actualJobDeferred = new Set(entries.filter((entry) => entry.deliveryMode === "job-deferred").map((entry) => entry.toolName));
-for (const name of requiredJobDeferred) if (!actualJobDeferred.has(name)) fail(`job-deferred contract missing: ${name}`);
-for (const name of actualJobDeferred) if (!requiredJobDeferred.has(name)) fail(`unexpected job-deferred contract: ${name}`);
+for (const failure of validateProBuilderCompletionScope(entries)) fail(failure);
 
 const csharpCommitAudit = auditCSharpCommitEffects(inventory, byName);
 for (const failure of csharpCommitAudit.failures) fail(failure);
-for (const failure of auditRestrictedDirectGate(entries)) fail(failure);
 
 const result = {
   ok: failures.length === 0,
@@ -86,13 +75,6 @@ const result = {
   publicTools: inventory.length,
   completionContracts: entries.length,
   directTerminal: entries.filter((entry) => entry.deliveryMode === "direct-terminal").length,
-  jobDeferred: actualJobDeferred.size,
-  directInvocationPolicies: Object.fromEntries(
-    [...allowedDirectInvocationPolicies].map((kind) => [kind, entries.filter((entry) => (entry.directInvocationPolicy?.kind ?? "allowed") === kind).length]),
-  ),
-  frozenDeliveryPolicies: Object.fromEntries(
-    [...allowedFrozenDeliveryPolicies].map((kind) => [kind, entries.filter((entry) => (entry.frozenDeliveryPolicy?.kind ?? "ordinary") === kind).length]),
-  ),
   executionClasses: Object.fromEntries(
     [...allowedExecutionClasses].map((kind) => [kind, entries.filter((entry) => entry.executionClass === kind).length]),
   ),
@@ -102,30 +84,6 @@ const result = {
 
 console.log(JSON.stringify(result, null, 2));
 if (strict && failures.length > 0) process.exitCode = 1;
-
-/** restricted direct policy 必须在 HTTP Bridge journal/handler 前执行；frozen batch 仅由独立进程内入口持有。 */
-function auditRestrictedDirectGate(contractEntries) {
-  if (!contractEntries.some((entry) => (entry.directInvocationPolicy?.kind ?? "allowed") !== "allowed")) return [];
-  const coordinator = fs.readFileSync(path.join(root, "unitypkg", "Editor", "Infrastructure", "UnityCliOperationCoordinator.cs"), "utf8");
-  const workQueue = fs.readFileSync(path.join(root, "unitypkg", "Editor", "Bridge", "BridgeWorkQueue.cs"), "utf8");
-  const http = fs.readFileSync(path.join(root, "unitypkg", "Editor", "Bridge", "BridgeHttpServer.cs"), "utf8");
-  const supervisor = fs.readFileSync(path.join(root, "src", "bridge", "session-supervisor.ts"), "utf8");
-  const bridge = fs.readFileSync(path.join(root, "unitypkg", "Editor", "UnityCliBridge.cs"), "utf8");
-  const policyIndex = coordinator.indexOf("contract.DirectInvocationPolicy");
-  const journalIndex = coordinator.indexOf("AcceptOrRecover(request");
-  const failures = [];
-  if (policyIndex < 0 || journalIndex < 0 || policyIndex > journalIndex)
-    failures.push("restricted direct policy must be enforced before Bridge journal acceptance");
-  if (/preservedFrozenInvocation|FrozenDeliveryPolicy|Application\.isBatchMode/.test(coordinator.slice(policyIndex, journalIndex)))
-    failures.push("HTTP direct policy must not grant frozen delivery from process mode or caller metadata");
-  if (/PreservedFrozenInvocation|preservedFrozenInvocation/.test(workQueue)
-    || /x-unity-cli-invocation-origin|invocationOrigin/.test(supervisor)
-    || /x-unity-cli-invocation-origin|internalOrigin|invocationOrigin/.test(http))
-    failures.push("HTTP Bridge must not treat caller-controlled invocation origin as a privilege");
-  if (!/ExecuteBatchCommandAsync[\s\S]*response = await Execute\(request, timeout\.Token\)/.test(bridge))
-    failures.push("frozen batch delivery must remain on the independent in-process batch entrypoint");
-  return failures;
-}
 
 /**
  * 从 public inventory 与声明 descriptor 的同一 C# source 分类 mutation，避免由路径、Tool 名称
@@ -207,9 +165,10 @@ function collectCommitHelperSources() {
 /** 仅跟随源码中显式引用的 helper 类型；不按目录或 Tool 名称豁免。 */
 function referencedCommitHelpers(sourceText, helperSources) {
   const helpers = new Set();
-  for (const match of sourceText.matchAll(/\b([A-Z][A-Za-z0-9_]*(?:Support|StateTool))\s*\.\s*[A-Z][A-Za-z0-9_]*\s*\(/g)) {
+  for (const match of sourceText.matchAll(/\b([A-Z][A-Za-z0-9_]*(?:Support|StateTool|CompletionProbe))\s*\.\s*[A-Z][A-Za-z0-9_]*\s*\(/g)) {
     if (helperSources.has(match[1])) helpers.add(match[1]);
   }
+  if (/\bctx\s*\.\s*RunCompletionProbe\s*\(/.test(sourceText) && helperSources.has("UnityCliProjectToolContext")) helpers.add("UnityCliProjectToolContext");
   return [...helpers].sort();
 }
 

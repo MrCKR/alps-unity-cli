@@ -30,7 +30,7 @@ namespace UnityCli
             Name = "physics.material",
             Summary = "Create or update a PhysicMaterial asset at an Assets/*.physicMaterial path.",
             Description = "Create a new PhysicMaterial asset or update an existing one. Path must be under Assets/ and end with .physicMaterial or .asset. Supports dynamicFriction, staticFriction, bounciness.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "asset-write" },
+            Group = "physics",DestructiveHint = true, SideEffects = new[] { "asset-write" },
             Target = "editor", PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Create bouncy material", Input = new Request { Path = "Assets/Physics/Bouncy.physicMaterial", Bounciness = 0.8f } } }

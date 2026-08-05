@@ -24,12 +24,8 @@ test("稳定会话 schema fixture 固定 identity、session、listener 与 absol
   assert.doesNotMatch(request, /retryCount|bridgeEndpoint|port/);
 });
 
-test("request journal schema 固定 durability barrier 且不持久化原始 input", () => {
-  const journal = JSON.stringify(readFixture("request-journal-v1.schema.json"));
+test("request digest fixture binds the exact direct-call bytes", () => {
   const digest = readFixture("request-digest-v1-golden.json") as { algorithm: string; sha256: string };
-  for (const phase of ["received", "accepted_before_effect", "effect_started", "effect_proven", "result_persisted"]) assert.match(journal, new RegExp(phase));
-  for (const field of ["requestDigest", "completionDriverId", "provenEnvelope", "terminalEnvelope"]) assert.match(journal, new RegExp(field));
-  assert.doesNotMatch(journal, /sourceText|securityProof|requestBody|password|token/);
   assert.match(digest.algorithm, /exactRequestBodyBytes/);
   assert.match(digest.sha256, /^[0-9a-f]{64}$/);
 });
@@ -42,29 +38,33 @@ test("editor.state 公开 schema 不泄漏 transport generation", () => {
   assert.doesNotMatch(state, /endpoint|listenerId|actualPort|preferredPort|journalPhase/);
 });
 
-test("editor.state progress and blocker kinds remain extensible non-empty strings", () => {
-  const schema = readFixture("editor-state.schema.json") as { $defs: { progress: { properties: { kind: unknown } }; blocker: { properties: { kind: unknown } } } };
+test("editor.state progress kind remains extensible and blockers are dialog DTOs", () => {
+  const schema = readFixture("editor-state.schema.json") as { $defs: { progress: { properties: { kind: unknown } }; blocker: { properties: { type: unknown; dialogId: unknown } } } };
   assert.deepEqual(schema.$defs.progress.properties.kind, { type: "string", minLength: 1 });
-  assert.deepEqual(schema.$defs.blocker.properties.kind, { type: "string", minLength: 1 });
+  assert.deepEqual(schema.$defs.blocker.properties.type, { const: "dialog" });
+  assert.deepEqual(schema.$defs.blocker.properties.dialogId, { type: "string", minLength: 1 });
 });
 
 test("direct-call semantics 固定 immutable request、单 generation read 与 observeNow", () => {
   const semantics = readFixture("direct-call-semantics.json") as {
     request: { digest: string; redelivery: string };
     contextRead: { ordinary: { journal: boolean; completion: string }; "editor.state": { budgetMs: number; bridgeProbeBudgetMs: number; journal: boolean } };
-    mutationRecovery: { disconnect: string; uncertainEffect: string };
-    deferredDelivery: { commands: string[] };
+    directCall: { terminal: string; timeout: string; replay: string; audit: string };
+    deferredDelivery?: unknown;
   };
   assert.match(semantics.request.digest, /exactRequestBodyBytes/);
-  assert.match(semantics.request.redelivery, /byte-identical/);
+  assert.match(semantics.request.redelivery, /no request-level recovery/);
   assert.equal(semantics.contextRead.ordinary.journal, false);
   assert.match(semantics.contextRead.ordinary.completion, /one validated listener generation/);
-  assert.equal(semantics.contextRead["editor.state"].budgetMs, 1000);
-  assert.equal(semantics.contextRead["editor.state"].bridgeProbeBudgetMs, 300);
+  assert.equal(semantics.contextRead["editor.state"].budgetMs, 4000);
+  assert.equal(semantics.contextRead["editor.state"].bridgeProbeBudgetMs, 3500);
   assert.equal(semantics.contextRead["editor.state"].journal, false);
-  assert.match(semantics.mutationRecovery.disconnect, /does not cancel/);
-  assert.match(semantics.mutationRecovery.uncertainEffect, /E_REQUEST_OUTCOME_UNKNOWN/);
-  assert.deepEqual(semantics.deferredDelivery.commands, ["jobs", "--job", "batch"]);
+  assert.match(semantics.directCall.terminal, /terminal business result/);
+  assert.match(semantics.directCall.timeout, /E_EXECUTION_TIMEOUT/);
+  assert.match(semantics.directCall.replay, /no request-level replay/);
+  assert.match(semantics.directCall.audit, /session-level append log/);
+  assert.equal(semantics.deferredDelivery, undefined);
+  assert.doesNotMatch(JSON.stringify(semantics), /\bjobs\b|--job|\bbatch\b/);
 });
 
 test("removal map 覆盖冻结的旧 selector、state 与 compile 双轨", () => {

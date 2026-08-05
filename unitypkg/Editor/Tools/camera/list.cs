@@ -26,7 +26,6 @@ namespace UnityCli
             Summary = "List active scene Unity Camera components with name, hierarchy path, projection, FOV/ortho size, depth, targetTexture, and pixel size.",
             Description = "List active scene Unity Camera components with name, hierarchy path, projection, FOV/ortho size, depth, targetTexture, and pixel size. Read-only; use paths or ids from this output for camera.info/screenshot/lens/target.",
             Group = "camera",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

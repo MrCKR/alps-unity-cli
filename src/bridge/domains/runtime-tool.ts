@@ -42,7 +42,6 @@ async function runtimeToolRunArgs({ flags, positionalTarget }: Parameters<Bridge
   return compactArgs({
     name: positionalTarget ?? stringFlag(flags, "name"),
     input,
-    fingerprintMode: stringFlag(flags, "fingerprint-mode"),
     playModeSessionId: stringFlag(flags, "play-mode-session-id"),
     timeoutMs: numberFlag(flags, "timeout-ms"),
     artifactDir: stringFlag(flags, "artifact-dir")

@@ -25,7 +25,6 @@ import { textureBridgeSpecs } from "./domains/texture.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
 import { projectToolBridgeSpecs } from "./domains/project-tool.js";
 import { runtimeToolBridgeSpecs } from "./domains/runtime-tool.js";
-import { securityPolicyForCommand } from "../security-policy.js";
 import type { BridgeCommandSpec } from "./types.js";
 
 /**
@@ -79,13 +78,6 @@ export class BridgeCommandRegistry {
    */
   public registerSpecs(specs: BridgeCommandSpec[]): void {
     for (const spec of specs) {
-      // project-tool.run 是内部路由，风险身份由公开 toolName 决定；其余命令直接使用 bridgeCommand。
-      const policy = securityPolicyForCommand(spec.bridgeCommand)
-        ?? (spec.toolName ? securityPolicyForCommand(spec.toolName) : undefined);
-      if (policy) {
-        spec.destructiveHint = policy.destructiveHint;
-        spec.supportsDryRun = policy.supportsDryRun;
-      }
       const cliKey = BridgeCommandRegistry.cliKey(spec.group, spec.command);
       if (this.byCliCommand.has(cliKey)) {
         throw new Error(`Duplicate bridge CLI command registration: ${cliKey}`);

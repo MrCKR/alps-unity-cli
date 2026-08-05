@@ -2,31 +2,23 @@
  * CLI command: doctor
  *
  * Diagnoses CLI → UnityPkg connectivity, instance health,
- * bridge status, and configuration integrity.
- *
- * Checks:
- * 1. Instance registry readable and contains entries
- * 2. At least one healthy instance (non-stale heartbeat)
- * 3. Bridge endpoint reachable (/health endpoint)
- * 4. Bridge capabilities endpoint returns data
- * 5. Job store readable
- * 6. Data directory exists
+ * live Bridge preflight, configuration integrity, and capability discovery.
+ * Transport endpoint and listener identity remain internal to instance selection.
  */
 
 import { builtinContextDescriptors, loadContextCatalog, shouldLoadLiveContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
 import type { ContextDescriptor } from "./contexts/types.js";
-import { getString, getBoolean } from "./args.js";
-import { access, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { getString } from "./args.js";
+import { access, stat } from "node:fs/promises";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { instanceSelectionFailure, obsoleteLocalStatePaths, readInstances, selectInstanceForFlags, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-import { builtinToolMetadata, filterToolsByGroup } from "./tools/metadata/index.js";
+import { EDITOR_STATE_OBSERVATION_BUDGET_MS } from "./bridge/session-supervisor.js";
+import { builtinToolMetadata } from "./tools/metadata/index.js";
 import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
-import { ExtensionRegistry, loadExtensionDescriptor, extensionAvailabilitySummary } from "./extensions/index.js";
+import { ExtensionRegistry, extensionAvailabilitySummary } from "./extensions/index.js";
+import { extensionAvailabilityFlags } from "./extension-availability.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
-import { readInstalledExtensions } from "./cli-commands/extensions.js";
-import { bridgeCommandRegistry } from "./bridge/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -47,7 +39,6 @@ export async function handleDoctorCommand(
   requestId: string
 ): Promise<CliResult> {
   const checks: DoctorCheck[] = [];
-  const jsonFormat = getBoolean(flags, "json");
 
   // Check 1: Instance registry
   const instanceCheck = await checkInstanceRegistry(runtime.dataDir);
@@ -84,10 +75,7 @@ export async function handleDoctorCommand(
   // Check 4: Data directory
   checks.push(await checkDataDirectory(runtime.dataDir));
 
-  // Check 5: Job store
-  checks.push(await checkJobStore(runtime.dataDir));
-
-  // Check 6: Configuration integrity and obsolete local state
+  // Check 5: Configuration integrity and obsolete local state
   checks.push(await checkConfigIntegrity(readyInstances));
   checks.push(await checkObsoleteLocalState(runtime.dataDir));
 
@@ -104,9 +92,8 @@ export async function handleDoctorCommand(
   // Unified CLI/tools discovery surface
   checks.push(await checkUnifiedDiscovery(flags, runtime, requestId, bridgeReachable));
 
-  // Extension package availability and ProBuilder-specific diagnostics.
-  checks.push(await checkExtensionAvailability(flags));
-  checks.push(await checkProBuilderExtension(flags));
+  // Extension package availability comes from physical project state.
+  checks.push(await checkExtensionAvailability(flags, runtime));
 
   // Built-in and project Context discovery diagnostics.
   checks.push(await checkContextDiscovery(flags, runtime, bridgeReachable));
@@ -126,7 +113,6 @@ export async function handleDoctorCommand(
   const summary = hasFailures ? "fail" : hasWarnings ? "warn" : "pass";
 
   const data: Record<string, unknown> = {
-    command: "doctor",
     summary,
     checks,
     suggestions: buildSuggestions(checks)
@@ -211,10 +197,11 @@ async function checkBridgeConnectivity(
       requestId,
       "project-tool.run",
       { name: "diagnose.preflight", input: {} },
-      { instance: instanceId, "timeout-ms": "1000" },
+      { instance: instanceId, "timeout-ms": String(EDITOR_STATE_OBSERVATION_BUDGET_MS) },
       runtime,
       undefined,
-      { mode: "observeNow", mutation: false, defaultTimeoutMs: 1_000 }
+      // connectivity probe 与 editor.state 共享同一即时观察预算，由 supervisor 将 Bridge POST 限制为 3500ms。
+      { mode: "observeNow", mutation: false, defaultTimeoutMs: EDITOR_STATE_OBSERVATION_BUDGET_MS }
     );
 
     if (result.ok) {
@@ -253,22 +240,20 @@ function checkBridgeFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | unde
   if (!bridgeResponse || typeof bridgeResponse !== "object") {
     return undefined;
   }
-  const projectTools = (bridgeResponse as { projectTools?: unknown }).projectTools;
-  const fingerprint = projectTools && typeof projectTools === "object" ? (projectTools as { fingerprint?: unknown }).fingerprint : undefined;
+  const customTools = (bridgeResponse as { customTools?: unknown }).customTools;
+  const fingerprint = customTools && typeof customTools === "object" ? (customTools as { fingerprint?: unknown }).fingerprint : undefined;
   if (!fingerprint || typeof fingerprint !== "object") {
     return undefined;
   }
   const blockedCount = numberProp(fingerprint, "blockedCount") ?? 0;
-  const warnCount = numberProp(fingerprint, "warnCount") ?? 0;
   const toolCount = numberProp(fingerprint, "toolCount") ?? 0;
-  const mode = stringProp(fingerprint, "mode") ?? "unknown";
-  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : warnCount > 0 ? "warn" : "pass";
+  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : "pass";
   return {
     name: "project_tool_fingerprint",
     status,
     message: status === "pass"
-      ? `Custom tool fingerprints match for ${toolCount} tool(s) (mode: ${mode}).`
-      : `Custom tool fingerprint issues: ${blockedCount} blocked, ${warnCount} warning(s) (mode: ${mode}).`,
+      ? `Custom tool fingerprints match for ${toolCount} tool(s).`
+      : `Custom tool fingerprints are blocked for ${blockedCount} of ${toolCount} tool(s).`,
     details: { fingerprint }
   };
 }
@@ -346,36 +331,6 @@ async function checkDataDirectory(dataDir: string): Promise<DoctorCheck> {
   }
 }
 
-async function checkJobStore(dataDir: string): Promise<DoctorCheck> {
-  try {
-    const jobStorePath = join(dataDir, "jobs.json");
-    const raw = await readFile(jobStorePath, "utf8");
-    const parsed = JSON.parse(raw) as { jobs?: unknown[] };
-    const jobCount = Array.isArray(parsed.jobs) ? parsed.jobs.length : 0;
-    return {
-      name: "job_store",
-      status: "pass",
-      message: `Job store contains ${jobCount} job(s).`,
-      details: { jobCount, jobStorePath }
-    };
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError.code === "ENOENT") {
-      return {
-        name: "job_store",
-        status: "pass",
-        message: "Job store not yet created (no jobs run).",
-        details: { jobCount: 0 }
-      };
-    }
-    return {
-      name: "job_store",
-      status: "warn",
-      message: `Job store read issue: ${error instanceof Error ? error.message : String(error)}`
-    };
-  }
-}
-
 async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string, bridgeReachable: boolean): Promise<DoctorCheck> {
   const builtinCount = builtinToolMetadata().length;
   const includeCustom = runtime.projectTools !== undefined || (bridgeReachable && shouldDiscoverProjectTools(flags, runtime));
@@ -428,7 +383,7 @@ async function checkProjectContextDiscovery(flags: Record<string, string | boole
   const projectContexts = liveContexts.filter((context) => context.source === "project");
   const categories = [...new Set(projectContexts.map((context) => context.category))];
   const conflictCount = countContextConflicts(discovery.contexts);
-  const unavailableCount = liveContexts.filter((context) => context.available === false || context.supportStatus === "unavailable").length;
+  const unavailableCount = liveContexts.filter((context) => context.available === false).length;
   const builtInCount = liveContexts.filter((context) => context.source === "built-in").length;
 
   const status: DoctorCheck["status"] = conflictCount > 0 || unavailableCount > 0 ? "warn" : "pass";
@@ -476,17 +431,15 @@ function checkContextFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | und
   }
 
   const blockedCount = numberProp(fingerprint, "blockedCount") ?? 0;
-  const warnCount = numberProp(fingerprint, "warnCount") ?? 0;
   const contextCount = numberProp(fingerprint, "contextCount") ?? 0;
-  const mode = stringProp(fingerprint, "mode") ?? "unknown";
 
-  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : warnCount > 0 ? "warn" : "pass";
+  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : "pass";
   return {
     name: "project_context_fingerprint",
     status,
     message: status === "pass"
-      ? `Custom context fingerprints match for ${contextCount} context(s) (mode: ${mode}).`
-      : `Custom context fingerprint issues: ${blockedCount} blocked, ${warnCount} warning(s) (mode: ${mode}).`,
+      ? `Custom context fingerprints match for ${contextCount} context(s).`
+      : `Custom context fingerprints are blocked for ${blockedCount} of ${contextCount} context(s).`,
     details: { fingerprint }
   };
 }
@@ -534,8 +487,9 @@ async function checkObsoleteLocalState(dataDir: string): Promise<DoctorCheck> {
       };
 }
 
-async function checkExtensionAvailability(flags: Record<string, string | boolean>): Promise<DoctorCheck> {
-  const projectPath = getString(flags, "project");
+async function checkExtensionAvailability(flags: Record<string, string | boolean>, runtime: { dataDir?: string }): Promise<DoctorCheck> {
+  const resolvedFlags = await extensionAvailabilityFlags(flags, runtime);
+  const projectPath = getString(resolvedFlags, "project");
   if (!projectPath) {
     return {
       name: "extension_availability",
@@ -651,122 +605,6 @@ async function checkContextDiscovery(flags: Record<string, string | boolean>, ru
   };
 }
 
-/**
- * ProBuilder extension specific check.
- *
- * Diagnoses the ProBuilder extension specifically: installed status,
- * Unity package present/version, manifest tool count, offline descriptor
- * visibility(现语义固定为 0), bridge command count, and C# handler routing.
- * Used by `doctor` to surface ProBuilder extension health alongside the
- * generic extension_availability check.
- */
-async function checkProBuilderExtension(flags: Record<string, string | boolean>): Promise<DoctorCheck> {
-  const projectPath = getString(flags, "project");
-  const registry = new ExtensionRegistry();
-
-  // Determine whether the ProBuilder extension is registered.
-  if (!registry.hasExtension("probuilder")) {
-    return {
-      name: "extension.probuilder",
-      status: "warn",
-      message: "ProBuilder extension is not registered in the CLI extension registry.",
-      details: { registered: false }
-    };
-  }
-
-  // Determine whether the extension is enabled in the project.
-  let enabled = false;
-  if (projectPath) {
-    const enabledSet = await readInstalledExtensions(projectPath);
-    enabled = enabledSet.has("probuilder");
-  }
-
-  // Resolve Unity package presence/version.
-  let unityPackagePresent = false;
-  let unityPackageVersion: string | undefined;
-  if (projectPath) {
-    try {
-      const installedPackages = await readInstalledUnityPackages(projectPath);
-      unityPackagePresent = installedPackages.has("com.unity.probuilder");
-      unityPackageVersion = installedPackages.get("com.unity.probuilder");
-    } catch {
-      // Cannot read packages — leave present=false
-    }
-  }
-
-  // 新语义下，offline tools metadata 不再暴露 extension tool descriptors；
-  // 数量应固定为 0。工具清单真源来自 manifest，bridge 路由真源来自 registry。
-  const probuilderTools = filterToolsByGroup("probuilder");
-  const descriptorCount = probuilderTools.length;
-  const expectedDescriptorCount = 0;
-  const manifestToolCount = registry.getExtension("probuilder")?.manifest.contributions.tools?.length ?? 0;
-  const bridgeSpecs = bridgeCommandRegistry.specs().filter((s) => s.group === "probuilder");
-  const bridgeCommandCount = bridgeSpecs.length;
-
-  // C# handler availability 以 manifest 工具数和 bridge registry 路由数对齐为准。
-  const csharpHandlerPresent = manifestToolCount > 0 && bridgeCommandCount === manifestToolCount;
-
-  const details: Record<string, unknown> = {
-    registered: true,
-    enabled,
-    extensionId: "probuilder",
-    unityPackage: {
-      packageId: "com.unity.probuilder",
-      present: unityPackagePresent,
-      version: unityPackageVersion
-    },
-    manifestToolCount,
-    descriptorCount,
-    expectedDescriptorCount,
-    bridgeCommandCount,
-    expectedBridgeCommandCount: manifestToolCount,
-    csharpHandlerPresent,
-    projectResolved: projectPath !== undefined
-  };
-
-  // Determine status.
-  const issues: string[] = [];
-
-  if (descriptorCount !== expectedDescriptorCount) {
-    issues.push(`offline descriptor count ${descriptorCount} does not match expected ${expectedDescriptorCount}`);
-  }
-  if (bridgeCommandCount !== manifestToolCount) {
-    issues.push(`bridge command count ${bridgeCommandCount} does not match expected ${manifestToolCount}`);
-  }
-  if (projectPath && !unityPackagePresent && enabled) {
-    issues.push("ProBuilder extension is enabled but com.unity.probuilder is not installed in the project");
-  }
-  if (projectPath && unityPackagePresent && !enabled) {
-    issues.push("com.unity.probuilder is installed but ProBuilder extension is not enabled");
-  }
-
-  if (issues.length > 0) {
-    return {
-      name: "extension.probuilder",
-      status: "fail",
-      message: `ProBuilder extension has ${issues.length} issue(s): ${issues.join("; ")}.`,
-      details: { ...details, issues }
-    };
-  }
-
-  // When no project context, we can only verify code-side counts.
-  if (!projectPath) {
-    return {
-      name: "extension.probuilder",
-      status: "pass",
-      message: `ProBuilder extension registered with ${manifestToolCount} manifest tools, ${descriptorCount} offline descriptors, and ${bridgeCommandCount} bridge commands. Pass --project to verify Unity package availability.`,
-      details
-    };
-  }
-
-  return {
-    name: "extension.probuilder",
-    status: "pass",
-    message: `ProBuilder extension is ${enabled ? "enabled" : "disabled"}; com.unity.probuilder ${unityPackagePresent ? `present (v${unityPackageVersion ?? "unknown"})` : "not installed"}; ${manifestToolCount} manifest tools, ${descriptorCount} offline descriptors, ${bridgeCommandCount} bridge commands.`,
-    details
-  };
-}
-
 function checkExtensionRegistry(): DoctorCheck {
   const extensions = builtinExtensionMetadata();
   const installed = extensions.filter((e) => e.status === "installed").length;
@@ -801,11 +639,11 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           break;
         case "project_tool_fingerprint":
           suggestions.push("Inspect unity_cli doctor fingerprint details, then review project tool descriptor/handler code changes.");
-          suggestions.push("Use tools run --fingerprint-mode warn only for an intentional, audited mismatch.");
+          suggestions.push("Apply the reported rePinValue only after accepting the exact Tool change.");
           break;
         case "project_context_fingerprint":
           suggestions.push("Run unity_cli context list --include-custom to inspect custom context descriptors and fingerprints.");
-          suggestions.push("Run unity_cli context describe <name> to review a specific custom context descriptor and fingerprint.");
+          suggestions.push("Apply the reported rePinValue only after accepting the exact Context change.");
           break;
         case "context_discovery":
           suggestions.push("Run unity_cli context list to see available contexts.");
@@ -833,10 +671,6 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Run 'unity_cli extensions doctor --project <path>' for detailed extension diagnostics.");
           suggestions.push("Run 'unity_cli extensions list --project <path>' to see all extensions and their status.");
           suggestions.push("Install missing Unity packages manually via Unity Package Manager or Packages/manifest.json, then run the matching 'unity_cli extensions install <id> --project <path>'.");
-          break;
-        case "extension.probuilder":
-          suggestions.push("Run 'unity_cli extensions install probuilder --project <path>' to enable the ProBuilder extension.");
-          suggestions.push("Install com.unity.probuilder manually via Unity Package Manager or Packages/manifest.json before installing the ProBuilder extension bundle.");
           break;
       }
     }

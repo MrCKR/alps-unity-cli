@@ -54,7 +54,7 @@ namespace UnityCli
             {
                 Name = "editor.selection", Summary = "Read current Editor selection names and reusable object references without changing selection.",
                 Description = "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns name arrays plus reusable object details: instanceId, type, asset path/GUID, hierarchy path, GameObject reference, transform, and component summaries. It does not select, focus, ping, or modify anything.",
-                Category = "editor", Version = "1.0.0", Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported", RefreshBehavior = "live",
+                Category = "editor",Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported",
                 Examples = new[] { new ContextExample { Description = "Read the current selection", Input = new Request { } } }
             };
 

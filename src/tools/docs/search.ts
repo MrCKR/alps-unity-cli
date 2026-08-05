@@ -21,7 +21,6 @@ export interface DocsSearchPageInfo {
 }
 
 export interface DocsSearchResult {
-  command: string;
   mode: string;
   requiresUnity: boolean;
   source: Record<string, AnyJson>;

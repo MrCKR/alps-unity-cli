@@ -19,8 +19,7 @@
         "absoluteDeadlineUtc": { "type": "string", "format": "date-time" },
         "completionContractVersion": { "const": 1 },
         "requestDigestVersion": { "const": 1 },
-        "dryRun": { "type": "boolean" },
-        "securityProof": { "type": ["object", "null"] }
+        "dryRun": { "type": "boolean" }
       }
     }
   }

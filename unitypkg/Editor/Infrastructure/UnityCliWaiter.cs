@@ -112,16 +112,21 @@ namespace UnityCli
         private static readonly object PendingLock = new object();
         private static readonly List<IPendingWait> Pending = new List<IPendingWait>();
 
-        private sealed class UnityCliMainThreadSynchronizationContext : SynchronizationContext
+        /// <summary>
+        /// 自定义 awaitable 的 continuation 只进入显式主线程队列。
+        /// 不得替换 UnitySynchronizationContext；Unity 2022 BuildPipeline 会强转当前 context。
+        /// </summary>
+        private sealed class UnityCliMainThreadContinuationQueue
         {
             private readonly object queueLock = new object();
-            private readonly Queue<(SendOrPostCallback callback, object state)> queue = new Queue<(SendOrPostCallback callback, object state)>();
+            private readonly Queue<Action> queue = new Queue<Action>();
 
-            public override void Post(SendOrPostCallback d, object state)
+            public void Enqueue(Action continuation)
             {
+                if (continuation == null) return;
                 lock (queueLock)
                 {
-                    queue.Enqueue((d, state));
+                    queue.Enqueue(continuation);
                 }
             }
 
@@ -129,18 +134,18 @@ namespace UnityCli
             {
                 while (true)
                 {
-                    (SendOrPostCallback callback, object state) work;
+                    Action continuation;
                     lock (queueLock)
                     {
                         if (queue.Count == 0) return;
-                        work = queue.Dequeue();
+                        continuation = queue.Dequeue();
                     }
-                    work.callback(work.state);
+                    continuation();
                 }
             }
         }
 
-        private static readonly UnityCliMainThreadSynchronizationContext MainThreadSynchronizationContext = new UnityCliMainThreadSynchronizationContext();
+        private static readonly UnityCliMainThreadContinuationQueue MainThreadContinuations = new UnityCliMainThreadContinuationQueue();
 
         private interface IPendingWait
         {
@@ -517,13 +522,19 @@ namespace UnityCli
             return new UnityCliMainThreadAwaitable<T>(wait);
         }
 
+        private static readonly Dictionary<string, string> CoordinatorFailures = new Dictionary<string, string>(StringComparer.Ordinal);
+
         public static void Tick()
         {
-            EnsureMainThreadSynchronizationContext();
-            // 由既有 Bridge 主循环驱动，compile coordinator 自身不注册 EditorApplication.update。
-            UnityCliCompilationEventBroker.Tick();
-            UnityCliBridge.UnityCliCompileCoordinator.Tick();
-            MainThreadSynchronizationContext.Drain();
+            // 所有跨帧 coordinator 由唯一 Bridge 主循环推进；单个坏 journal 不得中断其他 root 或 heartbeat。
+            TickCoordinator("compilation-events", UnityCliCompilationEventBroker.Tick);
+            TickCoordinator("editor.compile", UnityCliBridge.UnityCliCompileCoordinator.Tick);
+            TickCoordinator("editor.refresh", UnityCliBridge.UnityCliLiveRefreshCoordinator.Tick);
+            TickCoordinator("asset.refresh", UnityCliBridge.UnityCliAssetRefreshCoordinator.Tick);
+            TickCoordinator("package.embed", UnityCliBridge.UnityCliPackageEmbedCoordinator.Tick);
+            TickCoordinator("package.resolve", UnityCliBridge.UnityCliPackageResolveCoordinator.Tick);
+            TickCoordinator("test.run", UnityCliBridge.UnityCliTestRunCoordinator.Tick);
+            MainThreadContinuations.Drain();
             var now = DateTime.UtcNow;
             List<IPendingWait> completed = null;
             List<IPendingWait> snapshot;
@@ -547,7 +558,7 @@ namespace UnityCli
                     }
                 }
             }
-            MainThreadSynchronizationContext.Drain();
+            MainThreadContinuations.Drain();
         }
 
         public static void CancelAll(Exception exception)
@@ -566,15 +577,24 @@ namespace UnityCli
 
         internal static void QueueOnMainThread(Action continuation)
         {
-            if (continuation == null) return;
-            MainThreadSynchronizationContext.Post(_ => continuation(), null);
+            MainThreadContinuations.Enqueue(continuation);
         }
 
-        public static void EnsureMainThreadSynchronizationContext()
+        /// <summary>隔离 durable coordinator 故障；同一错误只记录一次，避免每帧淹没 Editor 日志。</summary>
+        private static void TickCoordinator(string owner, Action tick)
         {
-            if (!ReferenceEquals(SynchronizationContext.Current, MainThreadSynchronizationContext))
+            try
             {
-                SynchronizationContext.SetSynchronizationContext(MainThreadSynchronizationContext);
+                tick();
+                CoordinatorFailures.Remove(owner);
+            }
+            catch (Exception exception)
+            {
+                var failure = exception.GetType().Name + ": " + exception.Message;
+                string previous;
+                if (CoordinatorFailures.TryGetValue(owner, out previous) && string.Equals(previous, failure, StringComparison.Ordinal)) return;
+                CoordinatorFailures[owner] = failure;
+                UnityEngine.Debug.LogError("UnityCli coordinator_tick_failed owner=" + owner + " error=" + failure);
             }
         }
 

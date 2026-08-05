@@ -29,7 +29,6 @@ namespace UnityCli
             Summary = "Copy an existing Assets/ asset to a new Assets/ path, refusing to overwrite the destination.",
             Description = "Copy an existing Assets/ asset to a new Assets/ path through AssetDatabase.CopyAsset. Refuses to overwrite an existing destination; choose a different path or delete it first.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

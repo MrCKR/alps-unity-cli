@@ -12,9 +12,9 @@
  * - create-poly-shape uses CreateShapeFromPolygon
  * - extrude-edges actually selects edges and extrudes via ExtrudeElements
  * - bridge-edges calls AppendElements.Bridge (not just RefreshMesh)
- * - connect-elements calls ConnectElements.Connect
- * - bevel-edges calls Bevel.BevelEdges
- * - duplicate-and-flip calls AppendElements.DuplicateAndFlip
+ * - connect-elements calls typed ConnectElements.Connect with a frozen plan
+ * - bevel-edges calls typed Bevel.BevelEdges with a frozen plan
+ * - duplicate-and-flip calls typed AppendElements.DuplicateAndFlip with a frozen plan
  * - create-polygon calls AppendElements.CreatePolygon
  * - append-vertices-to-edge calls AppendElements.AppendVerticesToEdge
  * - insert-vertex supports edge pairs and face index (not null edge)
@@ -43,6 +43,7 @@ function readPb(name: string): string {
 
 const REFLECTION_SRC = readPb("ProBuilderReflection.cs");
 const INPUT_SRC = readPb("ProBuilderInput.cs");
+const ASMDEF = JSON.parse(readFileSync(join(PB_DIR, "..", "..", "UnityCli.Extensions.ProBuilder.Editor.asmdef"), "utf8"));
 
 // 每个变量读取对应的单工具文件。
 const CREATE_SHAPE_SRC = readPb("create-shape.cs");
@@ -78,7 +79,7 @@ test("ProBuilder production C# contains no compatibility or semantic degradation
     /回退|近似/,
     /\blegacy(?:Method|Fallback|Adapter|Path|Implementation)\b/i,
     /Mesh\.CombineMeshes|CreatePrimitive|InsertVertexOnEdge\([^\r\n]*null/,
-    /hasColors|sharedMaterials\s*=/
+    /sharedMaterials\s*=(?!=)/
   ];
 
   for (const { name, source } of sources) {
@@ -90,16 +91,24 @@ test("ProBuilder production C# contains no compatibility or semantic degradation
 
 // ─── Reflection helper coverage ────────────────────────────────────────
 
+test("ProBuilder extension fails closed outside the exact 5.2.4 package profile", () => {
+  assert.match(REFLECTION_SRC, /SupportedPackageVersion = "5\.2\.4"/);
+  assert.match(REFLECTION_SRC, /#if UNITY_CLI_PROBUILDER_5_2_4[\s\S]*return SupportedPackageVersion;[\s\S]*#else[\s\S]*return null;/);
+  assert.doesNotMatch(REFLECTION_SRC, /PackageInfo|FindForAssembly|installedPackageVersion|PackageVersionGate/);
+  assert.match(REFLECTION_SRC, /ProBuilderMeshType\.Value != null && string\.Equals\(InstalledPackageVersion, SupportedPackageVersion, StringComparison\.Ordinal\)/);
+  assert.deepEqual(ASMDEF.versionDefines, [{
+    name: "com.unity.probuilder",
+    expression: "[5.2.4,5.2.5)",
+    define: "UNITY_CLI_PROBUILDER_5_2_4"
+  }]);
+});
+
 test("ProBuilderReflection resolves all MeshOperations types used by reference project", () => {
   // 这些类型是实际 ProBuilder 操作的基础，必须通过可重试 resolver 调用真实 API。
   const requiredTypes = [
     "ExtrudeElementsType",
-    "BevelType",
     "DeleteElementsType",
     "AppendElementsType",
-    "ConnectElementsType",
-    "MergeElementsType",
-    "SubdivisionType",
     "CombineMeshesType",
     "VertexEditingType",
     "MeshImporterType",
@@ -130,12 +139,8 @@ test("ProBuilderReflection exposes edge resolution helpers", () => {
 test("ProBuilderReflection exposes real ProBuilder API call wrappers", () => {
   // These wrappers call the real ProBuilder API methods, not stubs.
   const requiredWrappers = [
-    "ExtrudeEdgesBySelection",
-    "BevelEdges",
-    "BridgeEdges",
-    "ConnectElements",
-    "CreateShapeFromPolygon",
-    "DuplicateAndFlip",
+    "TryExtrudeFrozenEdges",
+    "TryBridgeFrozenEdges",
     "CreatePolygon",
     "AppendVerticesToEdge",
     "InsertVertexOnEdgeByPair",
@@ -151,8 +156,6 @@ test("ProBuilderReflection exposes real ProBuilder API call wrappers", () => {
     "ConvertToProBuilderMesh",
     "CombineMeshesViaReflection",
     "DeleteFaces",
-    "MergeFaces",
-    "SubdivideFaces",
     "SelectFaces",
     "SetFaceColor",
     "SetFaceMaterial",
@@ -165,6 +168,9 @@ test("ProBuilderReflection exposes real ProBuilder API call wrappers", () => {
       REFLECTION_SRC.includes(`public static`) && REFLECTION_SRC.includes(wrapper),
       `ProBuilderReflection must expose ${wrapper} wrapper`
     );
+  }
+  for (const removed of ["MergeFaces", "FaceUvMatches", "HasPolygonNormalOrientation", "CaptureMeshState", "HasObservedMutation", "CaptureObjectState", "HasObservedObjectMutation"]) {
+    assert.doesNotMatch(REFLECTION_SRC, new RegExp(removed), `${removed} is an obsolete weak or unused wrapper`);
   }
 });
 
@@ -202,33 +208,17 @@ test("create-shape rejects unsupported shapeType without semantic degradation", 
     "create-shape must validate shapeType before calling ProBuilder API"
   );
   assert.doesNotMatch(CREATE_SHAPE_SRC, /CreatePrimitive|CreateUnityPrimitive|NormalizeShape/);
-  assert.match(CREATE_SHAPE_SRC, /ProBuilder 5\.x ShapeGenerator\.CreateShape failed/);
+  assert.match(CREATE_SHAPE_SRC, /ProBuilder 5\.2\.4 ShapeGenerator\.CreateShape failed/);
 });
 
 // ─── create-poly-shape: must use CreateShapeFromPolygon, not cube ──────
 
-test("create-poly-shape uses CreateShapeFromPolygon instead of cube fallback", () => {
-  // The OLD implementation created a Unity cube primitive and scaled it.
-  // The NEW implementation must use AppendElements.CreateShapeFromPolygon.
-  assert.ok(
-    CREATE_POLY_SHAPE_SRC.includes("CreateShapeFromPolygon"),
-    "create-poly-shape must call CreateShapeFromPolygon via reflection"
-  );
-  // create-poly-shape 必须不使用 CreatePrimitive(cube 回退)
-  assert.ok(
-    !CREATE_POLY_SHAPE_SRC.includes("CreatePrimitive"),
-    "create-poly-shape must NOT use CreatePrimitive (cube fallback)"
-  );
-  // 必须校验 points >= 3
-  assert.ok(
-    CREATE_POLY_SHAPE_SRC.includes("points.Count < 3"),
-    "create-poly-shape must validate at least 3 points"
-  );
-  // 点集来自 typed request.Points。
-  assert.ok(
-    CREATE_POLY_SHAPE_SRC.includes("request.Points"),
-    "create-poly-shape must parse points from request"
-  );
+test("create-poly-shape uses typed 5.2.4 polygon creation with atomic business readback", () => {
+  assert.match(CREATE_POLY_SHAPE_SRC, /AppendElements\.CreateShapeFromPolygon\(mesh, points, height, flipNormals\)/);
+  assert.match(CREATE_POLY_SHAPE_SRC, /ProBuilderAtomicReadback\.PolyShapeMatchesRequest\(fresh, freshMesh, points, height, flipNormals\)/);
+  assert.match(CREATE_POLY_SHAPE_SRC, /request\.Points == null \|\| request\.Points\.Any\(point => point == null\)/);
+  assert.match(CREATE_POLY_SHAPE_SRC, /request\.ExtrudeHeight \?\? 1d/);
+  assert.doesNotMatch(CREATE_POLY_SHAPE_SRC, /ProBuilderComplexTopologyCompletionProof|CreatePrimitive|ProBuilderReflection\.CreateShapeFromPolygon/);
 });
 
 // ─── extrude-edges: must select edges and extrude via real API ─────────
@@ -237,8 +227,8 @@ test("extrude-edges selects edges and calls ExtrudeElements.Extrude", () => {
   // OLD: counted faces*3/2 as fake edge count, only called RefreshMesh.
   // NEW: must resolve edges from input and call the real Extrude API.
   assert.ok(
-    EXTRUDE_EDGES_SRC.includes("ExtrudeEdgesBySelection"),
-    "extrude-edges must call ExtrudeEdgesBySelection"
+    EXTRUDE_EDGES_SRC.includes("TryExtrudeFrozenEdges"),
+    "extrude-edges must call TryExtrudeFrozenEdges with the frozen typed selection"
   );
   // typed request.Edges 转为 ProBuilderInput.EdgePair。
   assert.ok(
@@ -261,11 +251,12 @@ test("extrude-edges selects edges and calls ExtrudeElements.Extrude", () => {
 
 test("bridge-edges calls AppendElements.Bridge instead of stub", () => {
   // OLD: just called RefreshMesh and returned newFaceCount: 1.
-  // NEW: must call BridgeEdges with edgeA and edgeB vertex pairs.
+  // effect 必须消费 pre-effect 冻结的 typed edge，不能在 barrier 后重新解析 request。
   assert.ok(
-    BRIDGE_EDGES_SRC.includes("ProBuilderReflection.BridgeEdges"),
-    "bridge-edges must call ProBuilderReflection.BridgeEdges"
+    BRIDGE_EDGES_SRC.includes("ProBuilderReflection.TryBridgeFrozenEdges"),
+    "bridge-edges must call TryBridgeFrozenEdges"
   );
+  assert.ok(BRIDGE_EDGES_SRC.includes("frozenEdgeA") && BRIDGE_EDGES_SRC.includes("frozenEdgeB"));
   // 两条边来自 typed request.EdgeA/EdgeB。
   assert.ok(
     BRIDGE_EDGES_SRC.includes("request.EdgeA"),
@@ -279,20 +270,22 @@ test("bridge-edges calls AppendElements.Bridge instead of stub", () => {
 
 // ─── connect-elements: must call ConnectElements.Connect ───────────────
 
-test("connect-elements calls ConnectElements.Connect instead of stub", () => {
-  assert.ok(
-    CONNECT_ELEMENTS_SRC.includes("ProBuilderReflection.ConnectElements"),
-    "connect-elements must call ProBuilderReflection.ConnectElements"
-  );
+test("connect-elements consumes the frozen plan with typed ConnectElements.Connect", () => {
+  assert.match(CONNECT_ELEMENTS_SRC, /ConnectElements\.Connect\(typedMesh, \(UnityEngine\.ProBuilder\.(?:Face|Edge)\[\]\)plan\.Frozen(?:Faces|Edges)\)/);
+  assert.ok(CONNECT_ELEMENTS_SRC.includes("ProBuilderConnectCompletionProof.Capture"));
+  assert.ok(CONNECT_ELEMENTS_SRC.indexOf("ProBuilderConnectCompletionProof.Capture") < CONNECT_ELEMENTS_SRC.indexOf("ctx.CommitEffect()"));
+  assert.equal((CONNECT_ELEMENTS_SRC.match(/ctx\.CommitEffect\(\)/g) ?? []).length, 1);
+  assert.match(CONNECT_ELEMENTS_SRC, /ProBuilderConnectCompletionProof\.Matches\(plan, after\)/);
+  assert.match(CONNECT_ELEMENTS_SRC, /ProBuilderErrors\.OutcomeUnknown\(/);
+  assert.doesNotMatch(CONNECT_ELEMENTS_SRC, /ProBuilderReflection\.ConnectElements/);
 });
 
 // ─── bevel-edges: must call Bevel.BevelEdges ────────────────────────────
 
-test("bevel-edges calls Bevel.BevelEdges instead of stub", () => {
-  assert.ok(
-    BEVEL_EDGES_SRC.includes("ProBuilderReflection.BevelEdges"),
-    "bevel-edges must call ProBuilderReflection.BevelEdges"
-  );
+test("bevel-edges consumes the frozen plan with typed Bevel.BevelEdges", () => {
+  assert.ok(BEVEL_EDGES_SRC.includes("Bevel.BevelEdges(typedMesh, plan.FrozenEdges, amount)"));
+  assert.ok(BEVEL_EDGES_SRC.includes("ProBuilderBevelCompletionProof.Capture"));
+  assert.doesNotMatch(BEVEL_EDGES_SRC, /ProBuilderReflection\.BevelEdges/);
   // Must NOT return hardcoded "modifiedEdgeCount", 1
   assert.ok(
     !BEVEL_EDGES_SRC.includes(".Prop(\"modifiedEdgeCount\", 1)"),
@@ -302,42 +295,45 @@ test("bevel-edges calls Bevel.BevelEdges instead of stub", () => {
 
 // ─── duplicate-and-flip: must call DuplicateAndFlip ────────────────────
 
-test("duplicate-and-flip calls AppendElements.DuplicateAndFlip", () => {
-  // OLD: only flipped normals (no duplication).
-  // NEW: must call DuplicateAndFlip.
-  assert.ok(
-    DUPLICATE_AND_FLIP_SRC.includes("ProBuilderReflection.DuplicateAndFlip"),
-    "duplicate-and-flip must call ProBuilderReflection.DuplicateAndFlip"
-  );
+test("duplicate-and-flip consumes the frozen plan with typed AppendElements API", () => {
+  assert.ok(DUPLICATE_AND_FLIP_SRC.includes("AppendElements.DuplicateAndFlip(typedMesh, plan.FrozenFaces)"));
+  assert.ok(DUPLICATE_AND_FLIP_SRC.includes("ProBuilderFlipCompletionProof.CaptureDuplicateAndFlip"));
+  assert.doesNotMatch(DUPLICATE_AND_FLIP_SRC, /ProBuilderReflection\.DuplicateAndFlip/);
 });
 
 // ─── combine-meshes / merge-objects: must use CombineMeshes.Combine ────
 
-test("combine-meshes uses ProBuilder CombineMeshes.Combine", () => {
-  assert.ok(
-    COMBINE_MESHES_SRC.includes("CombineMeshesViaReflection"),
-    "combine-meshes must call CombineMeshesViaReflection"
-  );
+test("combine-meshes uses ProBuilder Combine and removes every absorbed source through Undo", () => {
+  assert.match(COMBINE_MESHES_SRC, /CombineMeshesViaReflection\(meshes, meshes\[0\]\)/);
+  assert.match(COMBINE_MESHES_SRC, /targets\.Skip\(1\)[\s\S]*Undo\.DestroyObjectImmediate\(source\)/);
+  assert.match(COMBINE_MESHES_SRC, /ProBuilderAtomicReadback\.SourcesWereRemovedAndGeometryIncluded/);
+  assert.match(COMBINE_MESHES_SRC, /totalVertices >= ProBuilderMesh\.maxVertexCount/);
+  assert.doesNotMatch(COMBINE_MESHES_SRC, /ProBuilderComplexTopologyCompletionProof/);
 });
 
-test("merge-objects uses ProBuilder CombineMeshes with auto-convert", () => {
+test("merge-objects uses ProBuilder CombineMeshes with exact existing-ProBuilder proof", () => {
   assert.ok(
     MERGE_OBJECTS_SRC.includes("CombineMeshesViaReflection"),
     "merge-objects must call CombineMeshesViaReflection"
   );
   assert.ok(
-    MERGE_OBJECTS_SRC.includes("ConvertToProBuilderMesh"),
-    "merge-objects must auto-convert non-ProBuilder objects"
+    MERGE_OBJECTS_SRC.includes("CaptureMergeObjects"),
+    "merge-objects must freeze an exact merge plan before its effect"
+  );
+  assert.ok(
+    !MERGE_OBJECTS_SRC.includes("ConvertToProBuilderMesh"),
+    "merge-objects must reject regular meshes rather than auto-convert them"
   );
 });
 
 // ─── create-polygon: must call AppendElements.CreatePolygon ─────────────
 
-test("create-polygon calls AppendElements.CreatePolygon", () => {
+test("create-polygon calls AppendElements.CreatePolygon and verifies the distinct vertex set", () => {
   assert.ok(
     CREATE_POLYGON_SRC.includes("ProBuilderReflection.CreatePolygon"),
     "create-polygon must call ProBuilderReflection.CreatePolygon"
   );
+  assert.match(CREATE_POLYGON_SRC, /ProBuilderAtomicReadback\.PolygonWasCreatedFromRequestedVertices/);
 });
 
 // ─── append-vertices-to-edge: must call AppendElements.AppendVerticesToEdge ──
@@ -351,7 +347,8 @@ test("append-vertices-to-edge calls AppendElements.AppendVerticesToEdge", () => 
     APPEND_VERTICES_SRC.includes("ProBuilderOperationProof.ValidateEdges"),
     "append-vertices-to-edge must validate requested edges and capture fresh operation proof"
   );
-  assert.ok(APPEND_VERTICES_SRC.includes("ResolveFreshMesh"), "append-vertices-to-edge must read back from a freshly resolved mesh");
+  assert.ok(APPEND_VERTICES_SRC.includes("ProBuilderAppendCompletionProof.TryCreate"), "append-vertices-to-edge must freeze an exact plan");
+  assert.ok(APPEND_VERTICES_SRC.includes("ProBuilderAppendCompletionProof.Matches"), "append-vertices-to-edge must prove fresh terminal state");
 });
 
 // ─── insert-vertex: must support edge pairs and face index ─────────────
@@ -415,11 +412,13 @@ test("weld-vertices uses VertexEditing.WeldVertices with radius", () => {
   );
 });
 
-test("split-vertices uses VertexEditing.SplitVertices with IList overload", () => {
+test("split-vertices uses VertexEditing.SplitVertices with a typed partition claim", () => {
   assert.ok(
     SPLIT_VERTICES_SRC.includes("SplitVerticesWithList"),
     "split-vertices must call SplitVerticesWithList"
   );
+  assert.match(SPLIT_VERTICES_SRC, /CaptureSplitVertexClaim\(mesh, indices\)/);
+  assert.match(SPLIT_VERTICES_SRC, /SplitVerticesMatch\(fresh, plan\)/);
 });
 
 // ─── set-face-color: must use SetFaceColor (not ProBuilder.Color) ───────
@@ -442,19 +441,13 @@ test("set-face-color uses ProBuilderMesh.SetFaceColor and nullable white default
 
 // ─── set-face-uvs: must modify Face.uv fields ──────────────────────────
 
-test("set-face-uvs modifies Face.uv fields (not just RefreshMesh)", () => {
-  assert.ok(
-    SET_FACE_UVS_SRC.includes("uvProperty"),
-    "set-face-uvs must access the Face.uv property"
-  );
-  assert.ok(
-    SET_FACE_UVS_SRC.includes("autoUnwrapType"),
-    "set-face-uvs must resolve the AutoUnwrapSettings type"
-  );
-  assert.ok(
-    SET_FACE_UVS_SRC.includes("RefreshUV"),
-    "set-face-uvs must call RefreshUV after modifying UV settings"
-  );
+test("set-face-uvs modifies Face.uv fields and replays RefreshUV", () => {
+  assert.match(SET_FACE_UVS_SRC, /GetProperty\("uv", BindingFlags\.Instance \| BindingFlags\.Public\)/);
+  assert.match(SET_FACE_UVS_SRC, /\(AutoUnwrapSettings\)uv\.GetValue\(face\)/);
+  assert.match(SET_FACE_UVS_SRC, /uv\.SetValue\(face, value\)/);
+  assert.match(SET_FACE_UVS_SRC, /GetMethod\("RefreshUV"/);
+  assert.match(SET_FACE_UVS_SRC, /ProBuilderAtomicReadback\.RequestedFacesHaveUv/);
+  assert.doesNotMatch(SET_FACE_UVS_SRC, /ProBuilderAttributeTransformCompletionProof/);
 });
 
 // ─── select-faces: must support direction-based selection ──────────────
@@ -496,21 +489,11 @@ test("convert-to-probuilder uses the exact MeshImporter path", () => {
 
 // ─── freeze-transform: must bake positions into vertices ───────────────
 
-test("freeze-transform bakes transform into vertex positions", () => {
-  // OLD: just reset transform to identity without baking positions.
-  // NEW: must read positions, transform to world space, reset, write back.
-  assert.ok(
-    FREEZE_TRANSFORM_SRC.includes("TransformPoint"),
-    "freeze-transform must use TransformPoint to bake positions into world space"
-  );
-  assert.ok(
-    FREEZE_TRANSFORM_SRC.includes("GetPositions"),
-    "freeze-transform must read positions via GetPositions"
-  );
-  assert.ok(
-    FREEZE_TRANSFORM_SRC.includes("posList[i] = go.transform.TransformPoint(posList[i])"),
-    "freeze-transform must transform each vertex to world space before resetting transform"
-  );
+test("freeze-transform uses the exact 5.2.4 scale-only operation and typed bake claim", () => {
+  assert.match(FREEZE_TRANSFORM_SRC, /ProBuilderAtomicReadback\.CaptureScaleBake\(go, mesh\)/);
+  assert.match(FREEZE_TRANSFORM_SRC, /mesh\.FreezeScaleTransform\(\)/);
+  assert.match(FREEZE_TRANSFORM_SRC, /ProBuilderAtomicReadback\.ScaleWasBaked\(freshGo, fresh, plan\)/);
+  assert.doesNotMatch(FREEZE_TRANSFORM_SRC, /ProBuilderAttributeTransformCompletionProof|position = Vector3\.zero|rotation = Quaternion\.identity/);
 });
 
 // ─── mesh-info: must use real face/vertex count properties ─────────────

@@ -24,7 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool DryRun { get; set; }
             public bool Changed { get; set; }
             public ScriptableObjectInfo ScriptableObject { get; set; }
@@ -37,7 +36,6 @@ namespace UnityCli
             Summary = "Modify a ScriptableObject asset by single property or SerializedObject patches[].",
             Description = "Modify a ScriptableObject asset at an Assets/*.asset path. Supports a single property/value pair or patches[] with SerializedObject propertyPath/value entries (op=set or array_resize). Validates all patches before applying; any failure means no changes. Supports dry-run.",
             Group = "scriptable-object",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
@@ -93,7 +91,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_PROPERTY_READBACK_FAILED", "ScriptableObject member did not persist the exact requested value: " + property, "Inspect the target asset and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "scriptable-object.modify",
                 Changed = true,
                 ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, observedAsset)
             });
@@ -122,7 +119,7 @@ namespace UnityCli
             if (hasFailure)
                 throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_PATCH_FAILED", "One or more ScriptableObject patches could not be applied.", "Fix failed patch propertyPath/value entries and retry; no changes were applied.");
             if (ctx.DryRun)
-                return new Result { Command = "scriptable-object.modify", DryRun = true, Changed = false, ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, asset), PatchResults = validationResults };
+                return new Result { DryRun = true, Changed = false, ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, asset), PatchResults = validationResults };
 
             ctx.CommitEffect();
             Undo.RecordObject(asset, "unity_cli tools run scriptable-object.modify patches");
@@ -151,7 +148,6 @@ namespace UnityCli
             VerifyObservedPatches(observedSerialized, patchItems);
             return new Result
             {
-                Command = "scriptable-object.modify",
                 Changed = changed,
                 ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, observedAsset),
                 PatchResults = appliedResults
@@ -194,12 +190,12 @@ namespace UnityCli
                 case SerializedPropertyType.Boolean: return property.boolValue == System.Convert.ToBoolean(value, System.Globalization.CultureInfo.InvariantCulture);
                 case SerializedPropertyType.Float: return Mathf.Approximately(property.floatValue, System.Convert.ToSingle(value, System.Globalization.CultureInfo.InvariantCulture));
                 case SerializedPropertyType.String: return property.stringValue == (value == null ? null : System.Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture));
-                case SerializedPropertyType.Color: return property.colorValue == (Color)UnityCliBridge.ObjectPatch.ConvertValue(value, typeof(Color));
-                case SerializedPropertyType.ObjectReference: return property.objectReferenceValue == UnityCliBridge.ObjectPatch.ConvertValue(value, typeof(UnityEngine.Object)) as UnityEngine.Object;
-                case SerializedPropertyType.Vector2: return property.vector2Value == (Vector2)UnityCliBridge.ObjectPatch.ConvertValue(value, typeof(Vector2));
-                case SerializedPropertyType.Vector3: return property.vector3Value == (Vector3)UnityCliBridge.ObjectPatch.ConvertValue(value, typeof(Vector3));
-                case SerializedPropertyType.Vector4: return property.vector4Value == (Vector4)UnityCliBridge.ObjectPatch.ConvertValue(value, typeof(Vector4));
-                case SerializedPropertyType.Quaternion: return property.quaternionValue == (Quaternion)UnityCliBridge.ObjectPatch.ConvertValue(value, typeof(Quaternion));
+                case SerializedPropertyType.Color: return property.colorValue == (Color)UnityCliValueConverter.ConvertValue(value, typeof(Color));
+                case SerializedPropertyType.ObjectReference: return property.objectReferenceValue == UnityCliValueConverter.ConvertValue(value, typeof(UnityEngine.Object)) as UnityEngine.Object;
+                case SerializedPropertyType.Vector2: return property.vector2Value == (Vector2)UnityCliValueConverter.ConvertValue(value, typeof(Vector2));
+                case SerializedPropertyType.Vector3: return property.vector3Value == (Vector3)UnityCliValueConverter.ConvertValue(value, typeof(Vector3));
+                case SerializedPropertyType.Vector4: return property.vector4Value == (Vector4)UnityCliValueConverter.ConvertValue(value, typeof(Vector4));
+                case SerializedPropertyType.Quaternion: return property.quaternionValue == (Quaternion)UnityCliValueConverter.ConvertValue(value, typeof(Quaternion));
                 case SerializedPropertyType.Enum:
                     var requested = System.Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
                     var expectedIndex = int.TryParse(requested, out var numeric) ? numeric : System.Array.FindIndex(property.enumNames, name => string.Equals(name, requested, System.StringComparison.OrdinalIgnoreCase));

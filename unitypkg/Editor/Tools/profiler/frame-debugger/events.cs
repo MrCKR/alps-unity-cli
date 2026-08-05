@@ -16,7 +16,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public long TotalEvents { get; set; }
             public long PageSize { get; set; }
             public long Cursor { get; set; }
@@ -45,7 +44,7 @@ namespace UnityCli
             Name = "profiler.frame-debugger.events",
             Summary = "Read draw call events captured by the Frame Debugger, paginated.",
             Description = "Read draw call events captured by the Frame Debugger, paginated. Returns shaderName, vertexCount, indexCount and similar fields per event when available.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read first page of events", Input = new Request { PageSize = 50, Cursor = 0 } } }
         };
@@ -66,7 +65,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "profiler.frame-debugger.events",
                     TotalEvents = 0,
                     PageSize = pageSize,
                     Cursor = cursor,
@@ -136,7 +134,6 @@ namespace UnityCli
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "profiler.frame-debugger.events",
                 TotalEvents = totalEvents,
                 PageSize = pageSize,
                 Cursor = cursor,

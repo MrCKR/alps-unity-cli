@@ -3,22 +3,16 @@ import type { AnyJson } from "../../schema/any-json.js";
 export interface ToolExample {
   description: string;
   argv: string[];
+  /** 内部 authoring 输入；公开投影只返回 description 与 argv。 */
   input?: AnyJson;
-  execution?: ToolExampleExecution;
+  execution?: { dryRun?: boolean; timeoutMs?: number };
   output?: string;
 }
 
-/** 示例执行提示属于 CLI 命令层，不属于业务 inputSchema。 */
-export interface ToolExampleExecution {
-  dryRun?: boolean;
-  timeoutMs?: number;
-}
-
-export type ToolHandler = "bridge" | "bridge-runtime" | "job" | "offline" | "hybrid";
-export type ToolSupportStatus = "live-bridge" | "live-bridge-runtime" | "bridge-job" | "batch-job" | "cli-only" | "planned";
-export type ToolSource = "built-in" | "project" | "extension";
+export type ToolHandler = "bridge" | "bridge-runtime" | "offline" | "hybrid";
 export type ToolRiskLevel = "safe" | "low" | "medium" | "high" | "critical";
-export type ToolCancellation = "none" | "cooperative" | "job";
+export type ToolSupportStatus = "live-bridge" | "live-bridge-runtime" | "cli-only" | "planned";
+export type ToolSource = "built-in" | "project" | "extension";
 export type PlayModeSupport = "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
 
 export interface ToolCompletionContract {
@@ -28,10 +22,8 @@ export interface ToolCompletionContract {
   reloadPolicy: string;
   timeoutError: string;
   outcomeUnknownPolicy: string;
-  directInvocationPolicy?: "allowed" | "deferred-only" | "prohibited-unprovable";
-  frozenDeliveryPolicy?: "ordinary" | "preserved";
   completionDriverId: string;
-  journalPolicy: "required" | "none" | "job-frozen";
+  journalPolicy: "required" | "none";
   mutation: boolean;
 }
 
@@ -56,11 +48,14 @@ export interface ToolMetadata {
   examples?: ToolExample[];
   /** Internal execution route override. Omit when the route can be inferred from the bridge registry or tool name. */
   handler?: ToolHandler;
+  /** 内部强类型路由状态，不进入公开 descriptor。 */
   supportStatus?: ToolSupportStatus;
   /** Execution target: "editor" (default), "runtime", or "both". */
   target?: string;
   /** Whether the tool is currently available based on session state (runtime tools: only in Play Mode). */
   available?: boolean;
+  /** 当前不可用的可执行原因；仅在 available=false 时公开。 */
+  unavailableReason?: string;
   /** Unity package names required by this tool at runtime. When absent the tool has no package prerequisites. */
   requiresPackages?: string[];
   /** Live Bridge 计算的 handler+descriptor 指纹；破坏性 proof 必须绑定此值。 */
@@ -73,9 +68,7 @@ export type ResolvedToolMetadata = ToolMetadata & {
   source: ToolSource;
   handler: ToolHandler;
   playModeSupport: PlayModeSupport;
-  supportStatus: ToolSupportStatus;
-  cliCommand: string;
   availabilityScope: string;
-  riskLevel: ToolRiskLevel;
-  longRunning?: boolean;
+  /** 仅供内部安全与路由计算使用，公开 catalog 不会投影。 */
+  riskLevel?: ToolRiskLevel;
 };

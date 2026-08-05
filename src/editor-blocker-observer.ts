@@ -1,0 +1,46 @@
+/** 编辑器 blocker 的公开投影；任何 transport 或窗口内部标识都不得越过这里。 */
+import { inspectProjectProcessClaims, type ProjectProcessClaimInspection, type RegistryIdentity, type RegistrySession } from "./instances.js";
+import { probeWindowsEditorState, type WindowsEditorStateProbe } from "./windows-editor-state.js";
+import { dialogId, normalizeDialogButton } from "./editor-dialogs.js";
+
+export interface EditorBlocker {
+  type: "dialog";
+  dialogId: string;
+  title: string;
+  message: string;
+  buttons: string[];
+  requiresUserAction: true;
+  source: "windows-ui";
+  confidence: "exact";
+}
+/** 唯一 sanitizer：只投影 blocker DTO 的允许字段，递归输入永不直接公开。 */
+export function sanitizeEditorBlockers(value: unknown): EditorBlocker[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): EditorBlocker[] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    if (record.type !== "dialog" || typeof record.dialogId !== "string" || typeof record.title !== "string" || typeof record.message !== "string" || !Array.isArray(record.buttons) || !record.buttons.every((button) => typeof button === "string") || record.requiresUserAction !== true || record.source !== "windows-ui" || record.confidence !== "exact") return [];
+    return [{ type: "dialog", dialogId: record.dialogId, title: record.title, message: record.message, buttons: record.buttons as string[], requiresUserAction: true, source: "windows-ui", confidence: "exact" }];
+  });
+}
+/** Windows observation 只把可见 modal 转换为公开 blocker，绝不泄露 handle/PID。 */
+export function windowBlockers(value: Array<{ modal: boolean; hwnd: string; title: string; message: string; buttons: Array<{ label: string }> }>, processId: number, processStartedAt: string): EditorBlocker[] {
+  return value.filter((window) => window.modal).map((window) => ({ type: "dialog", dialogId: dialogId(processId, processStartedAt, window.hwnd), title: window.title, message: window.message, buttons: window.buttons.map((button) => normalizeDialogButton(button.label)), requiresUserAction: true, source: "windows-ui", confidence: "exact" }));
+}
+export type EditorBlockerObservationOutcome = "observed-empty" | "observed-blocked" | "unproven" | "conflict" | "unsupported" | "offline";
+export interface EditorBlockerObservation { outcome: EditorBlockerObservationOutcome; blockers: EditorBlocker[]; processId?: number; processStartedAt?: string; reason?: string; }
+export interface EditorBlockerObserverDependencies { inspect(identity: RegistryIdentity, timeoutMs: number): Promise<ProjectProcessClaimInspection>; probe(processId: number, timeoutMs: number): Promise<WindowsEditorStateProbe>; now(): number; }
+/** canonical project identity 的唯一有界 blocker observer。 */
+export class EditorBlockerObserver {
+  private readonly dependencies: EditorBlockerObserverDependencies;
+  public constructor(dependencies: Partial<EditorBlockerObserverDependencies> = {}) { this.dependencies = { inspect: dependencies.inspect ?? inspectProjectProcessClaims, probe: dependencies.probe ?? ((processId, timeoutMs) => probeWindowsEditorState(processId, { timeoutMs })), now: dependencies.now ?? Date.now }; }
+  /** deadline 由调用者冻结；只在唯一可归因 PID 上读取 Windows UI。 */
+  public async observe(identity: RegistryIdentity, deadlineMs: number, session?: Pick<RegistrySession, "processId" | "processStartedAt">): Promise<EditorBlockerObservation> {
+    const remaining = Math.max(0, deadlineMs - this.dependencies.now()); if (remaining < 1) return { outcome: "unproven", blockers: [], reason: "deadline" };
+    const claims = await this.dependencies.inspect(identity, remaining); if (claims.verification === "unsupported") return { outcome: "unsupported", blockers: [] }; if (claims.verification !== "verified") return { outcome: "conflict", blockers: [], reason: "process-claims-unverifiable" }; if (claims.processIds.length === 0) return { outcome: "offline", blockers: [] }; if (claims.processIds.length !== 1) return { outcome: "conflict", blockers: [], reason: "multiple-process-claims" };
+    const processId = claims.processIds[0]; const claim = claims.processClaims?.find((item) => item.processId === processId); if (!claim) return { outcome: "unproven", blockers: [], processId, reason: "process-start-unproven" }; if (session && (session.processId !== processId || Date.parse(session.processStartedAt) !== Date.parse(claim.processStartedAt))) return { outcome: "conflict", blockers: [], reason: "session-process-mismatch" };
+    const probe = await this.dependencies.probe(processId, Math.max(1, deadlineMs - this.dependencies.now())); if (probe.outcome === "unsupported") return { outcome: "unsupported", blockers: [], processId, processStartedAt: claim.processStartedAt }; if (probe.outcome === "unproven") return { outcome: "unproven", blockers: [], processId, processStartedAt: claim.processStartedAt, ...(probe.reason ? { reason: probe.reason } : {}) };
+    const blockers = probe.outcome === "observed-blocked" ? windowBlockers(probe.windows, processId, claim.processStartedAt) : [];
+    return { outcome: blockers.length > 0 ? "observed-blocked" : "observed-empty", blockers, processId, processStartedAt: claim.processStartedAt };
+  }
+}

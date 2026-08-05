@@ -63,7 +63,7 @@ test("VFX Burst, renderer, parameter, and action proofs use bounded fresh observ
   assert.match(support, /key\.Time <= previousTime\.Value/);
   assert.match(support, /stop\.Time <= previousTime\.Value/);
   assert.match(support, /colorKeys\.Count < 2/);
-  assert.match(support, /UnityEditor\.VFX\.VisualEffectAssetEditorUtility/);
+  assert.match(support, /UnityEditor\.VisualEffectAssetEditorUtility/);
   assert.doesNotMatch(support, /WriteMinimalVfxGraphYaml|VisualEffectResource|guid: [0-9a-f]{32}/);
   assert.match(support, /emission\.GetBursts\(actual\)/);
   assert.match(support, /CurveEquals/);

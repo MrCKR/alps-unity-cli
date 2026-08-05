@@ -30,8 +30,9 @@ test("core A mutation Tools own a commit-effect boundary", async () => {
   for (const { file, source } of mutations) {
     const body = executeBody(source);
     const usesSharedBuildScene = /BuildSceneStateTool\.Execute/.test(body);
-    assert.ok(/ctx\.CommitEffect\(\)/.test(body) || usesSharedBuildScene, `${file.pathname} has no commit-effect boundary`);
-    if (/SupportsDryRun\s*=\s*true/.test(source) && !usesSharedBuildScene) {
+    const usesCompletionProbe = /ctx\.RunCompletionProbe\(/.test(body);
+    assert.ok(/ctx\.CommitEffect\(\)/.test(body) || usesSharedBuildScene || usesCompletionProbe, `${file.pathname} has no commit-effect boundary`);
+    if (/SupportsDryRun\s*=\s*true/.test(source) && !usesSharedBuildScene && !usesCompletionProbe) {
       const dryRun = body.indexOf("ctx.DryRun");
       const commit = body.indexOf("ctx.CommitEffect()");
       assert.ok(dryRun < 0 || commit > dryRun, `${file.pathname} commits before its dry-run guard`);

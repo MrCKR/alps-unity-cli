@@ -12,7 +12,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } public string Parent { get; set; } public int? PageSize { get; set; } }
         public sealed class Result { public List<UiHierarchyItem> Items { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "ui.hierarchy", Summary = "List uGUI and UI Toolkit elements in the scene hierarchy.", Description = "Find Canvas, UIDocument, and visual element GameObjects. Optionally filter by target/parent.", Group = "ui", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "List UI hierarchy", Input = new Request { } } } };
+        public ToolDescriptor Describe() => new() { Name = "ui.hierarchy", Summary = "List uGUI and UI Toolkit elements in the scene hierarchy.", Description = "Find Canvas, UIDocument, and visual element GameObjects. Optionally filter by target/parent.", Group = "ui",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "List UI hierarchy", Input = new Request { } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var items = new List<UiHierarchyItem>();

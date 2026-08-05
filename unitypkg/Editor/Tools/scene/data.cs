@@ -42,7 +42,6 @@ namespace UnityCli
             Summary = "Deep-read active scene hierarchy with maxDepth/nameFilter; prefer scene.hierarchy for paged navigation.",
             Description = "Parameterized deep read of the active scene hierarchy: maxDepth, nameFilter, includeComponents, maxResults. Read-only; for paged lightweight state use scene.hierarchy or context read scene.*.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

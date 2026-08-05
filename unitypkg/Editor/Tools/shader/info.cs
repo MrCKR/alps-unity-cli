@@ -26,7 +26,6 @@ namespace UnityCli
             Summary = "Return path, guid, name, asset type, size and compile diagnostics for an Assets/*.shader or *.shadergraph.",
             Description = "Return path, guid, name, asset type, ShaderGraph flag, byte size and compile diagnostics for an Assets/*.shader or *.shadergraph. Read-only; use shader.read for source text and shader.get-data for properties/subshader structure.",
             Group = "shader",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

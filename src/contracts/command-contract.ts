@@ -1,19 +1,33 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { BridgeCommandRegistry, BridgeCommandSpec } from "../bridge/index.js";
-import { toolCliCommand } from "../tools/metadata/derived.js";
+import { toolPublicRoute } from "../tools/metadata/derived.js";
 import { toolHandler } from "../tools/metadata/status.js";
 import type { ToolMetadata } from "../tools/metadata/types.js";
 import type { ExtensionManifest } from "../extensions/types.js";
 
-export type CommandHandlerType = "bridge" | "hybrid" | "job" | "offline" | "cli_only";
+export type CommandHandlerType = "bridge" | "hybrid" | "offline" | "cli_only";
 
 /** Bridge 内部路由的唯一清单；这些 command 永远不得进入 public command contract。 */
 export const PRIVATE_BRIDGE_COMMANDS: ReadonlySet<string> = new Set([
-  "bridge.package.refresh",
   "internal.editor.state.snapshot",
   "internal.editor.compile.start",
   "internal.editor.compile.status",
+  "internal.build.run.start",
+  "internal.editor.refresh.start",
+  "internal.editor.refresh.status",
+  "internal.asset.refresh.start",
+  "internal.asset.refresh.status",
+  "internal.package.embed.start",
+  "internal.package.embed.status",
+  "internal.package.resolve.start",
+  "internal.package.resolve.status",
+  "internal.package.files.claim",
+  "internal.package.files.commit",
+  "internal.package.files.prove",
+  "internal.package.files.fail",
+  "internal.test.run.start",
+  "internal.test.run.status",
 ]);
 
 export interface CommandContractEntry {
@@ -98,15 +112,14 @@ export function validateToolMetadataContracts(tools: ToolMetadata[], registry: B
       throw new Error(`Tool metadata requiresPackages mismatch for ${tool.name}: metadata=${JSON.stringify(tool.requiresPackages ?? [])} contract=${JSON.stringify(contract.requires_packages ?? [])}`);
     }
     if (handler === "bridge" || handler === "hybrid") {
-      const cliCommand = toolCliCommand(tool);
-      // cliCommand 现为 "tools run <name>" 形态(README Project Baseline)。
-      const trMatch = /^tools run (.+)$/.exec(cliCommand);
+      const publicRoute = toolPublicRoute(tool);
+      const trMatch = /^tools run (.+)$/.exec(publicRoute);
       if (trMatch) {
         const toolName = trMatch[1];
         const spec = registry.specs().find((s) => s.toolName === toolName || s.bridgeCommand === toolName) as BridgeCommandSpec | undefined;
         const resolvedCommand = spec?.toolName ?? spec?.bridgeCommand;
         if (spec && resolvedCommand !== tool.name) {
-          throw new Error(`Tool metadata contract mismatch: ${tool.name} uses cliCommand="${cliCommand}" but registry resolves ${resolvedCommand}`);
+          throw new Error(`Tool metadata contract mismatch: ${tool.name} uses public route "${publicRoute}" but registry resolves ${resolvedCommand}`);
         }
       }
       // 非 "tools run" 形态(如 tools group/describe、init)跳过 bridge 交叉校验。

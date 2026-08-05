@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } }
         public sealed class Result { public string Sun { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.skybox-set-sun", Summary = "Set the directional Light used as the scene sun for RenderSettings.", Description = "Set RenderSettings.sun from a target GameObject with a Light component. Pass null/empty to clear.", Group = "graphics", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set sun light", Input = new Request { Target = "DirectionalLight" } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.skybox-set-sun", Summary = "Set the directional Light used as the scene sun for RenderSettings.", Description = "Set RenderSettings.sun from a target GameObject with a Light component. Pass null/empty to clear.", Group = "graphics",DestructiveHint = false, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set sun light", Input = new Request { Target = "DirectionalLight" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             Light sun = null;

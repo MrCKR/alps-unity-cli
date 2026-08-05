@@ -43,7 +43,6 @@ namespace UnityCli
             Summary = "Create a scene GameObject, optionally as a Unity primitive, parented under another object, and with simple transform/tag/layer/active values.",
             Description = "Create a scene GameObject, optionally as a Unity primitive, parented under another object, and with simple transform/tag/layer/active values. When parenting under an object created earlier in the workflow, use the returned hierarchy path or instance id instead of a plain name.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",

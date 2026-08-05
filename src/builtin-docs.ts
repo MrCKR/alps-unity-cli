@@ -1,5 +1,6 @@
 import { getString } from "./args.js";
-import { allRegisteredToolMetadata, supportStatusForTool, toolCliCommand, toolDocsTopic, type ToolMetadata } from "./tools/metadata/index.js";
+import { staticBridgeToolMetadata, uniqueByName } from "./tools/catalog.js";
+import { allRegisteredToolMetadata, toolDocsTopic, type ToolMetadata } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -24,13 +25,13 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "tool-discovery": {
     title: "Tool Discovery",
-    summary: "Group-first tool discovery surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes `target`, `availabilityScope`, `supportStatus`, and `playModeSupport` for runtime-aware routing.",
+    summary: "Group-first tool discovery surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes schemas, side effects, `target`, `availabilityScope`, and `playModeSupport` for runtime-aware routing.",
     guide: "Run `tools group` to list all tool groups, then `tools group list <group>` to see tools in a group. Use `tools search <keyword>` when you know the domain. Always `tools describe <name>` before executing."
   },
   "tool-execution": {
     title: "Tool Execution",
-    summary: "Execute tools via `tools run <name>` — the unified entry point. Execution channels: bridge (live Editor), bridge-runtime (Play Mode runtime), hybrid (bridge + job), job (batch), or offline (no Unity). Target=editor|runtime|both determines internal routing; runtime is not a separate command group.",
-    guide: "Use `tools run <name>` to execute any tool. Read the `handler`, `supportStatus`, `target`, and `availabilityScope` from `tools describe` to know the execution channel. Use `--dry-run` for destructive tools that support it. Verify results by re-calling read tools or checking `plannedEffects`."
+    summary: "Execute tools via `tools run <name>` — the unified entry point. Unity Tools connect only to an open Editor and return final business data in the same direct call. Target=editor|runtime|both determines routing; runtime is not a separate command group.",
+    guide: "Use `tools run <name>` to execute any tool. Read `target`, `availabilityScope`, schemas, and side effects from `tools describe`. Use `--dry-run` for destructive tools that support it. Verify results by re-calling read tools or checking `plannedEffects`."
   },
   "availability-differences": {
     title: "Availability Differences",
@@ -44,133 +45,129 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "risk-and-side-effects": {
     title: "Risk and Side Effects",
-    summary: "Risk model expressed through unified tool descriptors: destructiveHint, supportsDryRun, --yes confirmation gate, plannedEffects preview, and fingerprint integrity.",
-    guide: "Always `tools describe` first. For destructive tools, use `--dry-run` if supported, then `--yes`. Check `doctor` for fingerprint status."
+    summary: "Risk model expressed through unified tool descriptors: destructiveHint, supportsDryRun, permissions, and plannedEffects preview.",
+    guide: "Always `tools describe` first. Use `--dry-run` when a destructive tool supports a planned-effects preview. Use `doctor` for diagnostics."
   },
   scene: {
     title: "Scene Commands",
-    summary: "Query and modify Unity scenes: hierarchy, active scene, build settings, screenshots, create/load/save. Handler: bridge. Target: editor.",
-    guide: "Start with `scene hierarchy` to list objects. Use `scene screenshot` for visual verification."
+    summary: "Query and modify hierarchy, active scene, build settings, and loaded scenes in the selected open Unity Editor. Target: editor.",
+    guide: "Start with `tools run scene.hierarchy --input '{\"pageSize\":50}'` and use the returned business readback to verify later scene edits."
   },
   camera: {
     title: "Camera Commands",
-    summary: "Inspect cameras and capture camera-specific screenshots. Handler: bridge. Target: editor.",
+    summary: "Inspect cameras and capture camera-specific screenshots in the selected open Unity Editor. Target: editor.",
     guide: "Use `tools run camera.list` to find camera names, then `tools run camera.info --input '{\"target\":\"<camera>\"}'` for details."
   },
   go: {
     title: "GameObject Commands",
-    summary: "Find, inspect, create, modify and delete GameObjects in the current scene/session. Handler: bridge. Target: editor.",
-    guide: "Use `go find --name <name>` to locate objects in the active scene hierarchy."
+    summary: "Find, inspect, create, modify and delete GameObjects in the selected scene/session. Target: editor.",
+    guide: "Use `tools run go.find --input '{\"name\":\"<name>\"}'` to locate objects in the active scene hierarchy."
   },
   component: {
     title: "Component Commands",
-    summary: "Add, remove and set properties on Unity components in the current scene/session. Handler: bridge. Target: editor.",
+    summary: "Add, remove and set properties on Unity components in the selected scene/session. Target: editor.",
   },
   asset: {
     title: "Asset Commands",
-    summary: "Search, inspect and manage project assets. Handler: bridge. Target: editor. `asset.delete` is destructive (supports --dry-run, requires --yes).",
+    summary: "Search, inspect and manage assets through the selected open Unity Editor. Target: editor. `asset.delete` is destructive and supports --dry-run.",
   },
   prefab: {
     title: "Prefab Commands",
-    summary: "Create, inspect and edit Unity prefabs. Handler: bridge. Target: editor.",
+    summary: "Create, inspect and edit Unity prefabs through the selected open Unity Editor. Target: editor.",
   },
   material: {
     title: "Material Commands",
-    summary: "Create, inspect and modify materials. Handler: bridge. Target: editor.",
+    summary: "Create, inspect and modify materials through the selected open Unity Editor. Target: editor.",
   },
   graphics: {
     title: "Graphics Commands",
-    summary: "Query and modify graphics quality and rendering settings. Handler: bridge. Target: editor.",
+    summary: "Query and modify graphics quality and rendering settings through the selected open Unity Editor. Target: editor.",
   },
   physics: {
     title: "Physics Commands",
-    summary: "Query physics settings, perform raycasts and step simulation. Handler: bridge. Target: editor/runtime.",
+    summary: "Query physics settings, perform raycasts and step simulation through the selected open Unity Editor. Target: editor/runtime.",
   },
   profiler: {
     title: "Profiler Commands",
-    summary: "Control the Unity profiler, read counters, query memory and export frame data. Handler: bridge + hybrid (capture). Target: editor.",
-    guide: "Start with `profiler status`, then `profiler start`, run your workload, inspect `profiler counter` / `profiler memory`, and `profiler export <path>`."
+    summary: "Control the Unity profiler, read counters, query memory and export frame data through the selected open Unity Editor. Target: editor.",
+    guide: "Start with `tools run profiler.status --input '{}'`, then use `tools run profiler.start --input '{}'`, inspect counters or memory with their named Tools, and finish with `tools run profiler.export --input '{\"path\":\"<path>\"}'`."
   },
   probuilder: {
     title: "ProBuilder Commands",
-    summary: "Create and edit ProBuilder meshes, including CSG boolean operations. Handler: hybrid (bridge + job). Target: editor. Requires com.unity.probuilder package. Availability depends on target instance packages.",
-    guide: "Use `--job --wait` when you want durable batch/job execution for supported ProBuilder commands."
+    summary: "Create and edit ProBuilder meshes, including CSG boolean operations. Runs direct-final against an open Unity Editor. Target: editor. Requires com.unity.probuilder package. Availability depends on target instance packages.",
+    guide: "Run ProBuilder tools against an open Unity Editor and use their terminal mesh readback to verify the requested edit."
   },
   shader: {
     title: "Shader Commands",
-    summary: "Inspect, create and update shader assets. Handler: bridge. Target: editor.",
+    summary: "Inspect, create and update shader assets through the selected open Unity Editor. Target: editor.",
   },
   texture: {
     title: "Texture Commands",
-    summary: "Inspect, create and configure texture assets. Handler: bridge. Target: editor.",
+    summary: "Inspect, create and configure texture assets through the selected open Unity Editor. Target: editor.",
   },
   animation: {
     title: "Animation Commands",
-    summary: "Query and control animation clips and states. Handler: bridge. Target: editor/runtime.",
+    summary: "Query and control animation clips and states through the selected open Unity Editor. Target: editor/runtime.",
   },
   vfx: {
     title: "VFX Commands",
-    summary: "Manage Visual Effect graphs and instances. Handler: bridge. Target: editor. Requires com.unity.visualeffectgraph package. Availability depends on target instance packages.",
+    summary: "Manage Visual Effect graphs and instances through the selected open Unity Editor. Target: editor. Requires com.unity.visualeffectgraph package. Availability depends on target instance packages.",
   },
   ui: {
     title: "UI Commands",
-    summary: "Create and inspect UI elements (Canvas, Text, Button, Image, UI Document). Handler: bridge + offline fallback. Target: editor.",
+    summary: "Create and inspect UI elements and UI document assets through the selected open Unity Editor. Target: editor.",
   },
   editor: {
     title: "Editor Commands",
-    summary: "Control the Unity Editor: play mode, console, menu items, durable compile requests, refresh jobs, and Windows launch-dialog dismiss. Handlers: bridge (state/play/pause/stop/menu/console), hybrid (compile), job (refresh), offline (launch-dialog.dismiss). Target: editor. `editor.menu` is destructive (requires --yes).",
+    summary: "Control and observe the Unity Editor: play mode, console, menu items, compile, refresh, and current desktop dialogs. Use `editor.dialogs` to read the current dialog and `editor.dialog.click` with its returned dialogId and enabled button label to act on it. Unity actions run direct-final against the open Editor. Target: editor. `editor.menu` is destructive.",
   },
   diagnose: {
     title: "Diagnose Commands",
-    summary: "Run project and bridge health checks. Handler: bridge. Target: editor.",
+    summary: "Run project and selected Editor health checks. Target: editor.",
   },
   screenshot: {
     title: "Screenshot Commands",
-    summary: "Capture game-view screenshots. Handler: bridge. Target: editor.",
+    summary: "Capture game-view screenshots from the selected open Unity Editor. Target: editor.",
   },
   code: {
     title: "Code Execution",
-    summary: "Execute C# code in the Unity Editor. Handler: hybrid (live bridge + batch/job). Target: editor|runtime|both. Destructive (supports --dry-run, requires --yes). Channel: --channel live|batchmode.",
-    guide: "Use `--channel live` for quick snippets, `--channel batchmode` for larger scripts. Always pass `--timeout-ms` for intentionally long-running code."
+    summary: "Execute C# code in the selected open Unity Editor. Target: editor|runtime|both. Destructive and supports --dry-run.",
+    guide: "Pass `--timeout-ms` for intentionally long-running code. completionProbe is optional; provide it with a read-only business-state assertion when an Editor state change needs proof."
   },
   cli: {
     title: "CLI Management Commands",
-    summary: "Project initialization, package management, batch execution, and offline tools. Handler: offline. Target: none (no Unity required).",
+    summary: "Project initialization, package management, and offline tools. Target: none when no Unity action is required.",
   },
   init: {
     title: "Project Initialization",
-    summary: "Deploy the Unity CLI Bridge package into a project. Handler: offline. Target: none.",
+    summary: "Deploy the Unity CLI package into a project from the local CLI. Target: none.",
   },
   package: {
     title: "Package Management",
-    summary: "List, search, install, remove, deploy and restore Unity packages from the CLI. Handlers: offline (list/info/search/registry/deploy/restore), hybrid (install/remove/resolve). Target: editor for resolve and refresh. `package.install`, `package.remove`, `package.deploy`, `package.restore`, and `package.bridge-remove` are destructive; deploy/restore support --dry-run.",
-  },
-  batch: {
-    title: "Batch Execution",
-    summary: "Execute a JSON file containing multiple CLI commands in sequence or parallel. Handler: offline. Target: routed per-step. `batch run` is destructive (supports --preflight dry-run, requires --yes).",
+    summary: "List, search, install, remove, deploy and restore Unity packages from the CLI. Package actions that refresh Unity run direct-final against the open Editor. `package.install`, `package.remove`, `package.deploy`, `package.restore`, and `package.bridge-remove` are destructive; deploy/restore support --dry-run.",
   },
   docs: {
     title: "Built-in and Offline Documentation",
-    summary: "Read built-in CLI topic docs, or query/search the offline Unity API documentation cache with `tools run docs.get` / `tools run docs.search`. Handler: offline. Target: none.",
+    summary: "Read built-in CLI topic docs, or query/search the offline Unity API documentation cache with `tools run docs.get` / `tools run docs.search`. Target: none.",
     guide: "Run `unity_cli tools run docs.list` to list built-in topics. Use `unity_cli tools run docs.get --input '{\"api\":\"UnityEngine.Camera\",\"docsDir\":\"<path>\"}'` when querying a populated Unity API cache."
   },
   reflect: {
     title: "Offline Reflection",
-    summary: "Query the offline C# reflection cache for types and members. Handler: offline. Target: none.",
-    guide: "Populate the reflect cache first, then query with `reflect type <name>` or `reflect search <query>`."
+    summary: "Query the offline C# reflection cache for types and members. Target: none.",
+    guide: "Populate the reflection cache first, then query it with `tools run reflect.type --input '{\"name\":\"<name>\"}'` or `tools run reflect.search --input '{\"query\":\"<query>\"}'`."
   },
   test: {
     title: "Test Commands",
-    summary: "Run Unity tests as jobs. Inspect or cancel them with top-level `jobs status/logs/cancel`. Handler: job (run). Target: editor (batch job).",
+    summary: "Run Unity tests direct-final against an open Unity Editor. The same call returns the final test business result.",
   },
   build: {
     title: "Build Commands",
-    summary: "Run Unity builds as jobs. Inspect or cancel them with top-level `jobs status/logs/cancel`. Handler: job (run). Target: editor (batch job).",
+    summary: "Run Unity builds direct-final against an open Unity Editor. The same call returns the final build business result.",
   },
   "project-tool": {
     title: "Project Tools (Custom)",
-    summary: "Tools registered by Unity project C# code via IUnityCliTool<TReq,TRes>. Discovered through `tools group` and `tools group list <group> --include-custom`. Executed via `tools run <name>`. Handler: bridge or bridge-runtime. Target: editor or runtime. Availability depends on target instance and PlayMode state. Fingerprint-protected.",
-    guide: "Use `tools group` to list groups, then `tools group list <group> --include-custom` to discover project tools. Use `tools describe <name>` for full schema, risk hints, and target/availability. Use `tools run <name>` to execute."
+    summary: "Tools registered by Unity project C# code via IUnityCliTool<TReq,TRes>. Discovered through `tools group` and `tools group list <group> --include-custom`. Executed direct-final via `tools run <name>` against an open Editor. Target: editor or runtime. Availability depends on target instance and PlayMode state.",
+    guide: "Use `tools group` to list groups, then `tools group list <group> --include-custom` to discover project tools. Use `tools describe <name>` for schemas, side effects, and target/availability. Use `tools run <name>` to execute."
   }
 };
 
@@ -202,9 +199,6 @@ export function listBuiltinDocs(
     .sort((a, b) => a.key.localeCompare(b.key));
   const format = getString(flags, "format");
   const data: Record<string, unknown> = {
-    command: "docs.list",
-    mode: "builtin",
-    requiresUnity: false,
     count: topics.length,
     topics
   };
@@ -235,9 +229,6 @@ export function getBuiltinDocTopic(
 
   const format = getString(flags, "format");
   const data: Record<string, unknown> = {
-    command: "docs.topic",
-    mode: "builtin",
-    requiresUnity: false,
     topic: doc.key,
     title: doc.title,
     summary: doc.summary,
@@ -263,9 +254,10 @@ export function getBuiltinDocTopic(
   return success(requestId, data);
 }
 
+/** 合并离线可发现的 TS/C#/Extension catalog 与当前项目 Tool，确保 topic inventory 自足且按名称唯一。 */
 export function buildTopics(projectTools: ToolMetadata[] = []): DocTopic[] {
   const byTopic = new Map<string, ToolMetadata[]>();
-  for (const tool of [...allRegisteredToolMetadata(), ...projectTools]) {
+  for (const tool of uniqueByName([...allRegisteredToolMetadata(), ...staticBridgeToolMetadata(), ...projectTools])) {
     const topic = toolDocsTopic(tool);
     const tools = byTopic.get(topic) ?? [];
     tools.push(tool);
@@ -288,15 +280,9 @@ export function buildTopics(projectTools: ToolMetadata[] = []): DocTopic[] {
   }).sort((a, b) => a.key.localeCompare(b.key));
 }
 
+/** Topic 只列 Tool 名称；详细 descriptor 由 tools describe 单独按需读取。 */
 function toolLine(tool: ToolMetadata): string {
-  const status = supportStatusForTool(tool);
-  const target = tool.target ?? "editor";
-  const notes = [
-    `supportStatus:${status}`,
-    tool.destructiveHint ? "destructive" : undefined,
-    `target:${target}`
-  ].filter(Boolean).join(", ");
-  return `${tool.name} (${toolCliCommand(tool)}) - ${tool.summary}; ${notes}.`;
+  return tool.name;
 }
 
 function titleFromKey(key: string): string {

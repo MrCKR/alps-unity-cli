@@ -12,13 +12,13 @@
     "deadline": "one absolute deadline frozen before lifecycle waiting",
     "digestVersion": 1,
     "digest": "SHA256(UTF8('unity-cli-request-v1') + NUL + UTF8(instanceId) + NUL + exactRequestBodyBytes)",
-    "redelivery": "same root requestId, same absolute deadline and byte-identical body only"
+    "redelivery": "a disconnected or timed-out direct call has no request-level recovery or replay guarantee; the caller decides whether to submit a new call"
   },
   "toolExecution": {
     "success": "terminal business success proven by the tool's unique completion contract",
     "failure": "terminal structured failure with stable code, details and nextActions",
     "forbiddenSuccessSignals": ["accepted", "requested", "queued", "started", "operation handle", "listener recovery", "transport success"],
-    "successEnvelopeFields": ["ok", "requestId", "data", "durationMs", "logsRef"],
+    "successEnvelopeFields": ["ok", "requestId", "data"],
     "forbiddenSuccessFields": ["bridgeEndpoint", "port", "listenerId", "journalPhase", "transitionTimeline", "internalOperationId"]
   },
   "contextRead": {
@@ -31,8 +31,8 @@
     "editor.state": {
       "mode": "observeNow",
       "completion": "one immediate read-only registry, Bridge and Windows observation",
-      "budgetMs": 1000,
-      "bridgeProbeBudgetMs": 300,
+      "budgetMs": 4000,
+      "bridgeProbeBudgetMs": 3500,
       "transitionPolicy": "never wait for state change",
       "journal": false
     }
@@ -41,12 +41,11 @@
     "transparent": ["domain reload", "script compile", "asset import/update", "listener restart", "endpoint fallback", "supported PlayMode transition", "waitable Unity progress"],
     "failClosed": ["external modal blocker", "identity conflict", "process exit before terminal", "request ID digest conflict", "schema failure", "security failure"]
   },
-  "mutationRecovery": {
-    "states": ["created", "accepted", "running", "completed", "failed", "cancelled", "outcome_unknown"],
-    "barriers": ["received", "accepted_before_effect", "effect_started", "effect_proven", "result_persisted"],
-    "disconnect": "does not cancel an accepted mutation",
-    "terminalPersistence": "terminal envelope is durable before HTTP response",
-    "uncertainEffect": "E_REQUEST_OUTCOME_UNKNOWN and no automatic replay"
+  "directCall": {
+    "terminal": "each direct call returns a proven terminal business result or terminal structured failure",
+    "timeout": "timeout or disconnect returns E_EXECUTION_TIMEOUT; the caller decides whether and how to retry",
+    "replay": "the system provides no request-level replay interception or outcome recovery",
+    "audit": "audit is a session-level append log"
   },
   "compile": {
     "publicOwner": "src/tools/editor/compile.ts",
@@ -55,7 +54,7 @@
     "forbiddenInputFields": ["waitReady"],
     "proof": "owned CompilationPipeline cycle terminal, zero compiler errors, import/compile/reload stable and Editor ready",
     "diagnostics": ["CompilationPipeline.assemblyCompilationFinished", "CompilationPipeline.compilationFinished"],
-    "errors": ["E_UNITY_COMPILE_FAILED", "E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "E_COMPILE_CYCLE_UNATTRIBUTED", "E_EXECUTION_TIMEOUT", "E_UNITY_TRANSITION_TIMEOUT", "E_REQUEST_OUTCOME_UNKNOWN"]
+    "errors": ["E_UNITY_COMPILE_FAILED", "E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "E_COMPILE_CYCLE_UNATTRIBUTED", "E_EXECUTION_TIMEOUT", "E_UNITY_TRANSITION_TIMEOUT"]
   },
   "errors": [
     "E_INSTANCE_REQUIRED",
@@ -75,14 +74,9 @@
     "E_EDITOR_SESSION_REPLACED",
     "E_TOOL_COMPLETION_PROOF_INVALID",
     "E_REQUEST_ID_REUSED",
-    "E_REQUEST_OUTCOME_UNKNOWN",
     "E_UNITY_COMPILE_FAILED",
     "E_UNITY_COMPILE_REQUIRES_EDIT_MODE",
     "E_COMPILE_CYCLE_UNATTRIBUTED",
     "E_OBSOLETE_LOCAL_STATE"
-  ],
-  "deferredDelivery": {
-    "commands": ["jobs", "--job", "batch"],
-    "rule": "public delivery semantics remain byte-for-byte baseline-equivalent and cannot satisfy direct-call acceptance"
-  }
+  ]
 }

@@ -18,7 +18,9 @@ test("ProBuilder target resolution fails closed for ambiguous and batch targets"
 });
 
 test("multi-target ProBuilder mutations reject partial resolution", async () => {
-  for (const source of await Promise.all([combine, merge].map((file) => readFile(file, "utf8")))) {
-    assert.match(source, /request\.Targets == null \|\| targets == null \|\| targets\.Length != request\.Targets\.Count \|\| targets\.Length < 2/);
-  }
+  const [combineSource, mergeSource] = await Promise.all([combine, merge].map((file) => readFile(file, "utf8")));
+  assert.match(combineSource, /targets == null \|\| request\.Targets == null \|\| targets\.Length != request\.Targets\.Count \|\| targets\.Length < 2/);
+  assert.match(combineSource, /targets\.Select\(value => value\.GetInstanceID\(\)\)\.Distinct\(\)\.Count\(\) != targets\.Length/);
+  assert.doesNotMatch(combineSource.slice(combineSource.indexOf("ctx.CommitEffect()")), /\brequest\./);
+  assert.match(mergeSource, /request\.Targets == null \|\| targets == null \|\| targets\.Length != request\.Targets\.Count \|\| targets\.Length < 2/);
 });

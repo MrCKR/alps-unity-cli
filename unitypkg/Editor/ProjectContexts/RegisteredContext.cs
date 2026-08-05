@@ -11,7 +11,6 @@ namespace UnityCli
         public string Summary { get; set; }
         public string Description { get; set; }
         public string Category { get; set; }
-        public string Version { get; set; }
 
         public string InputSchema { get; set; }
         public string OutputSchema { get; set; }
@@ -20,7 +19,6 @@ namespace UnityCli
         public string Target { get; set; }
         public string AvailabilityScope { get; set; }
         public string PlayModeSupport { get; set; }
-        public string RefreshBehavior { get; set; }
         public ContextExample[] Examples { get; set; }
 
         public string[] RequiresPackages { get; set; }
@@ -32,8 +30,10 @@ namespace UnityCli
         public string Fingerprint { get; set; }
         public string PinnedFingerprint { get; set; }
         public string FingerprintStatus { get; set; }
-        public string FingerprintMode { get; set; }
         public string ExpectedFingerprint { get; set; }
+        public string PinnedFingerprintOwner { get; set; }
+        public string PinnedFingerprintAlgorithm { get; set; }
+        public string PinnedFingerprintFormat { get; set; }
         public string FingerprintMessage { get; set; }
         public string DescriptorSha256 { get; set; }
         public string HandlerSha256 { get; set; }
@@ -42,6 +42,7 @@ namespace UnityCli
         public Type RequestType { get; set; }
         public Type ResultType { get; set; }
         public Func<object, UnityCliProjectToolContext, CancellationToken, ValueTask<object>> ReadAsync { get; set; }
+        public Func<object, UnityCliProofResourceClaim> ResolveProofResource { get; set; }
     }
 }
 #endif

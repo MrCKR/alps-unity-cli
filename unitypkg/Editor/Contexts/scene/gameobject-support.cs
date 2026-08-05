@@ -32,6 +32,29 @@ namespace UnityCli
             return gameObject;
         }
 
+        /// <summary>构造同 session 内稳定的场景资源 claim；GlobalObjectId 不可用时绑定 scene handle 与 instance id。</summary>
+        private static UnityCliProofResourceClaim SceneProofResource(GameObject gameObject, Component component = null)
+        {
+            if (gameObject == null || !gameObject.scene.IsValid())
+                throw new BridgeCommandException("E_COMPLETION_PROBE_RESOURCE_INVALID", "completionProbe requires a live scene GameObject resource.", "Pass a scene.gameobject Context input that resolves one scene object.");
+            var objectGlobalId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject).ToString();
+            var objectIdentity = string.IsNullOrWhiteSpace(objectGlobalId)
+                ? "scene:" + gameObject.scene.handle.ToString(CultureInfo.InvariantCulture) + ":instance:" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture)
+                : objectGlobalId;
+            var observed = component == null ? (UnityEngine.Object)gameObject : component;
+            var observedGlobalId = GlobalObjectId.GetGlobalObjectIdSlow(observed).ToString();
+            var observedIdentity = string.IsNullOrWhiteSpace(observedGlobalId)
+                ? objectIdentity + ":instance:" + observed.GetInstanceID().ToString(CultureInfo.InvariantCulture)
+                : observedGlobalId;
+            return new UnityCliProofResourceClaim
+            {
+                ResourceKey = "scene-object:" + objectIdentity,
+                Identity = observedIdentity,
+                InstanceId = observed.GetInstanceID(),
+                SceneHandle = gameObject.scene.handle
+            };
+        }
+
         // 读取单个组件的公开属性预览；getter 失败时跳过该属性。
         private static Dictionary<string, object> SceneContextComponentReadableProperties(Component component)
         {

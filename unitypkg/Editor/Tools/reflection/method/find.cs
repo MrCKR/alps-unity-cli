@@ -21,7 +21,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string TypeName { get; set; }
             public long Count { get; set; }
             public List<UnityCliBridge.ReflectionMethodDescriptor> Methods { get; set; }
@@ -33,7 +32,6 @@ namespace UnityCli
             Summary = "Find C# methods on a type by name; does not limit public/private/static/instance scope.",
             Description = "Find methods on a live C# type. Does not limit public/private/static/instance scope. Use the returned signatures to construct reflection.method.call calls. Read-only.",
             Group = "reflection",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -66,7 +64,6 @@ namespace UnityCli
             var methods = UnityCliBridge.ReflectionInvoker.FindMethods(request.TypeName, request.MethodName, bindings);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "reflection.method.find",
                 TypeName = request.TypeName,
                 Count = methods.Count,
                 Methods = methods

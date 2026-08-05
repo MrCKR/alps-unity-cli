@@ -10,9 +10,6 @@ namespace UnityCli.Protocol
         public string RequestId { get; set; }
         public object Data { get; set; }
         public System.Collections.Generic.List<string> Warnings { get; set; }
-        public string LogsRef { get; set; }
-        public string JobId { get; set; }
-        public double? DurationMs { get; set; }
     }
 
     public sealed partial class ErrorEnvelope
@@ -20,7 +17,6 @@ namespace UnityCli.Protocol
         public bool Ok { get; set; }
         public string RequestId { get; set; }
         public ToolError Error { get; set; }
-        public double? DurationMs { get; set; }
     }
 
     public sealed partial class ToolError
@@ -33,21 +29,12 @@ namespace UnityCli.Protocol
         public double RetryAfterMs { get; set; }
     }
 
-    public sealed partial class BridgeSecurity
-    {
-        public bool Confirmed { get; set; }
-        public string ToolName { get; set; }
-        public string DescriptorFingerprint { get; set; }
-        public string InputSha256 { get; set; }
-    }
-
     public sealed partial class BridgeExecution
     {
         public string AbsoluteDeadlineUtc { get; set; }
         public double CompletionContractVersion { get; set; }
         public double RequestDigestVersion { get; set; }
         public bool? DryRun { get; set; }
-        public BridgeSecurity SecurityProof { get; set; }
     }
 
     public sealed partial class BridgeRequest

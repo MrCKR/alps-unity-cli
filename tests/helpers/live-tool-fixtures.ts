@@ -2,8 +2,9 @@ import type { ToolMetadata } from "../../src/tools/metadata/index.js";
 
 /** 构造 live bridge 发现返回的工具 descriptor，供行为测试复用。 */
 export function makeLiveTool(overrides: Partial<ToolMetadata> & Pick<ToolMetadata, "name" | "summary" | "description" | "group">): ToolMetadata {
-  return {
-    inputSchema: { type: "object", properties: {} },
+  const tool: ToolMetadata = {
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object", properties: {}, additionalProperties: false },
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
@@ -11,6 +12,13 @@ export function makeLiveTool(overrides: Partial<ToolMetadata> & Pick<ToolMetadat
     target: "editor",
     source: "built-in",
     ...overrides
+  };
+  return {
+    ...tool,
+    examples: tool.examples ?? [{
+      description: `Run ${tool.name}.`,
+      argv: ["tools", "run", tool.name, "--input", "{}"]
+    }]
   };
 }
 

@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Render a single GameObject in isolation with a temporary camera to a PNG/JPG file.",
             Description = "Render a single GameObject in isolation using a temporary camera with a solid background. Resolves the target by hierarchy path/name. Editor-only (creates a temporary Camera).",
             Group = "screenshot",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

@@ -8,14 +8,35 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
+        // Bridge 日志位于项目临时根 Library/UnityCli/，超上限滚动一次，只保留当前与上一段，大小有界。
+        private const long BridgeLogMaxBytes = 10L * 1024 * 1024;
+
         private static string LogPath()
         {
-            return Path.Combine(ProjectRoot(), "Logs", "UnityCliBridge.log");
+            return Path.Combine(UnityCliTempRoot(), "UnityCliBridge.log");
         }
 
         private static string RuntimeDiagnosticsPath()
         {
-            return Path.Combine(ProjectRoot(), "Logs", "UnityCliBridgeRuntime.json");
+            return Path.Combine(UnityCliTempRoot(), "UnityCliBridgeRuntime.json");
+        }
+
+        /// <summary>项目内临时根：Library/UnityCli/（AGENTS.md《临时文件与机制状态》约定的项目临时区）。</summary>
+        internal static string UnityCliTempRoot()
+        {
+            return Path.Combine(ProjectRoot(), "Library", "UnityCli");
+        }
+
+        // 写入前超上限则把当前日志滚动为 .old（覆盖上一段），保持总量常数有界。
+        private static void RollBridgeLogIfNeeded(string path)
+        {
+            try
+            {
+                if (!File.Exists(path) || new FileInfo(path).Length < BridgeLogMaxBytes) return;
+                File.Copy(path, path + ".old", true);
+                File.WriteAllText(path, string.Empty);
+            }
+            catch { }
         }
 
         private static void WriteRuntimeLoadDiagnostics(string phase)
@@ -51,6 +72,7 @@ namespace UnityCli
             {
                 var path = LogPath();
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
+                RollBridgeLogIfNeeded(path);
                 File.AppendAllText(path, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " " + line + Environment.NewLine);
             }
             catch { }

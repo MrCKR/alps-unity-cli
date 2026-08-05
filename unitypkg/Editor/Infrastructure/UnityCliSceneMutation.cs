@@ -12,6 +12,24 @@ namespace UnityCli
     {
         private static bool IsPlaying => EditorApplication.isPlaying;
 
+        /// <summary>为一个 Tool 请求建立独立 Undo group，避免跨 Bridge 请求合并。</summary>
+        public static int BeginUndoGroup(string name)
+        {
+            if (IsPlaying) return -1;
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(name);
+            return group;
+        }
+
+        /// <summary>折叠并关闭当前 Tool 的 Undo group；下一请求不能继续写入该 entry。</summary>
+        public static void EndUndoGroup(int group)
+        {
+            if (group < 0) return;
+            Undo.CollapseUndoOperations(group);
+            Undo.IncrementCurrentGroup();
+        }
+
         // Edit Mode 记录 Undo；Play Mode 仅修改当前运行时实例。
         public static void RecordObject(UnityEngine.Object target, string name)
         {

@@ -31,7 +31,7 @@ namespace UnityCli
             Name = "physics.collision-matrix",
             Summary = "Read or update the Unity 32-layer physics collision matrix, optionally ignoring a single layer pair.",
             Description = "Read the full 32-layer collision matrix by default. Pass layerA and layerB with ignore=true/false to update a single pair. Layer names or numeric indexes are accepted.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "settings-write" },
+            Group = "physics",DestructiveHint = true, SideEffects = new[] { "settings-write" },
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read full collision matrix", Input = new Request { } } }

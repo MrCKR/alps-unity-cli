@@ -28,7 +28,6 @@ namespace UnityCli
             Summary = "Render a PNG/JPG artifact from one specific Camera; use screenshot.* for view-based captures.",
             Description = "Render a screenshot from a specific Camera into a PNG/JPG artifact file. Defaults return artifact paths only; inlineBase64 must be explicit and is omitted when the image exceeds the bridge inline limit. Restores camera render state after capture.",
             Group = "camera",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "artifact-write", "render-texture" },
             Target = "editor",

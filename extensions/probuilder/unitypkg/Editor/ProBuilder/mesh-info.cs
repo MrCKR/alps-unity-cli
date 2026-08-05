@@ -55,8 +55,6 @@ namespace UnityCli.ProBuilder
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
             MaxTimeoutMs = 30000,
-            SupportsJob = false,
-            ArtifactKinds = new[] { "json" },
             Examples = new[]
             {
                 new ToolExample { Description = "读取网格信息", Input = new Request { Target = "MyCube" } }

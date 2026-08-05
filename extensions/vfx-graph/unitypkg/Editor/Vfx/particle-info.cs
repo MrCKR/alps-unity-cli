@@ -15,7 +15,6 @@ namespace UnityCli
         {
             public GameObjectRef Target { get; set; }
             public VfxParticleSystemInfo ParticleSystem { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -24,7 +23,6 @@ namespace UnityCli
             Summary = "Read ParticleSystem main, emission, shape, and module state for a target or the first scene particle system.",
             Description = "Read a ParticleSystem summary without changing the scene. When target is omitted, the first ParticleSystem found in the loaded scenes is used.",
             Group = "vfx",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -51,8 +49,7 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
-                ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem),
-                LogPath = ctx.LogPath
+                ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem)
             });
         }
     }

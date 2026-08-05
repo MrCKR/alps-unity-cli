@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { ensurePackageBridge, checkPackageBridge, deployPackageSource, preparePackageBridgeInstall, restoreDeployedPackage } from "../src/package-manager.js";
+import { ensurePackageBridge, checkPackageBridge, deployPackageSource, preparePackageBridgeInstall, restoreDeployedPackage, searchRegistry } from "../src/package-manager.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -16,6 +16,20 @@ async function makeUnityProject(): Promise<string> {
   }, null, 2), "utf8");
   return project;
 }
+
+test("searchRegistry projects only the declared public package fields", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    objects: [{ package: { name: "com.acme.tool", version: "1.2.3", description: "Tool", author: { name: "Private" }, links: { npm: "https://example.invalid" } } }]
+  }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  try {
+    assert.deepEqual(await searchRegistry("https://registry.example.test", "acme"), [
+      { name: "com.acme.tool", version: "1.2.3", description: "Tool" }
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", async () => {
   const project = await makeUnityProject();
@@ -85,6 +99,18 @@ test("ensurePackageBridge skips copy when version and hash match existing instal
   assert.equal(secondMtime, firstMtime);
 });
 
+test("ensurePackageBridge removes a proven stale publish sibling before idempotent success", async () => {
+  const project = await makeUnityProject();
+  const first = await ensurePackageBridge(project);
+  const stale = `${first.bridgePath}.previous-123-456`;
+  await mkdir(stale, { recursive: true });
+  await writeFile(join(stale, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.1.0" }), "utf8");
+
+  const second = await ensurePackageBridge(project);
+  assert.equal(second.installTime, first.installTime);
+  await assert.rejects(() => stat(stale), { code: "ENOENT" });
+});
+
 test("ensurePackageBridge overwrites when version or hash changes", async () => {
   const project = await makeUnityProject();
 
@@ -104,6 +130,75 @@ test("ensurePackageBridge overwrites when version or hash changes", async () => 
   // Verify the metadata was corrected
   const updatedMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as { packageVersion: string };
   assert.equal(updatedMetadata.packageVersion, "0.1.0");
+});
+
+test("ensurePackageBridge retries transient Windows rename failures before publishing", async () => {
+  const project = await makeUnityProject();
+  const first = await ensurePackageBridge(project);
+  const managedFile = join(first.bridgePath, "Editor", "UnityCliBridge.cs");
+  await writeFile(managedFile, "// force fresh projection", "utf8");
+  const plan = await preparePackageBridgeInstall(project);
+  let publishAttempts = 0;
+
+  const result = await ensurePackageBridge(project, plan, {
+    absoluteDeadlineMs: Date.now() + 5_000,
+    publishRetryDelayMs: 1,
+    renameDirectory: async (source, target) => {
+      if (target === plan.bridgePath && String(source).includes(".staging-") && publishAttempts++ < 2) {
+        throw Object.assign(new Error("transient publish lock"), { code: "EPERM" });
+      }
+      await rename(source, target);
+    },
+  });
+
+  assert.equal(publishAttempts, 3);
+  assert.equal((await checkPackageBridge(project)).sourceHash, result.sourceHash);
+});
+
+test("ensurePackageBridge publish window honors the caller immutable deadline instead of a hidden 5s clamp", async () => {
+  const project = await makeUnityProject();
+  const first = await ensurePackageBridge(project);
+  const managedFile = join(first.bridgePath, "Editor", "UnityCliBridge.cs");
+  await writeFile(managedFile, "// force fresh projection", "utf8");
+  const plan = await preparePackageBridgeInstall(project);
+  let publishAttempts = 0;
+
+  // 24 次 ~250ms 的 transient 失败 ≈ 6s：超过旧 5s 隐性 clamp，但远在 caller 60s deadline 之内。
+  const result = await ensurePackageBridge(project, plan, {
+    absoluteDeadlineMs: Date.now() + 60_000,
+    publishRetryDelayMs: 250,
+    renameDirectory: async (source, target) => {
+      if (target === plan.bridgePath && String(source).includes(".staging-") && publishAttempts++ < 24) {
+        throw Object.assign(new Error("defender scan lock"), { code: "EPERM" });
+      }
+      await rename(source, target);
+    },
+  });
+
+  assert.equal(publishAttempts, 25);
+  assert.equal((await checkPackageBridge(project)).sourceHash, result.sourceHash);
+});
+
+test("ensurePackageBridge restores the previous target when staged publish exhausts its deadline", async () => {
+  const project = await makeUnityProject();
+  const first = await ensurePackageBridge(project);
+  const managedFile = join(first.bridgePath, "Editor", "UnityCliBridge.cs");
+  const previousContent = "// previous target must survive";
+  await writeFile(managedFile, previousContent, "utf8");
+  const plan = await preparePackageBridgeInstall(project);
+
+  await assert.rejects(() => ensurePackageBridge(project, plan, {
+    absoluteDeadlineMs: Date.now() + 30,
+    publishRetryDelayMs: 5,
+    renameDirectory: async (source, target) => {
+      if (target === plan.bridgePath && String(source).includes(".staging-")) {
+        throw Object.assign(new Error("persistent publish lock"), { code: "EPERM" });
+      }
+      await rename(source, target);
+    },
+  }), { code: "EPERM" });
+
+  assert.equal(await readFile(managedFile, "utf8"), previousContent);
 });
 
 test("ensurePackageBridge preserves user-added files in target directory", async () => {

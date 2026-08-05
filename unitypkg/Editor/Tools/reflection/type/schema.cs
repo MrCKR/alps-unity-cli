@@ -17,7 +17,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string TypeName { get; set; }
             [UnityCliAnyJson] public object Schema { get; set; }
         }
@@ -28,7 +27,6 @@ namespace UnityCli
             Summary = "Generate a JSON Schema for a live C# type with $defs.",
             Description = "Generate a JSON Schema (with $defs) for a live C# or Unity type. Read-only. Use the schema to understand the structure of objects before calling object.get-data or object.modify.",
             Group = "reflection",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -51,7 +49,6 @@ namespace UnityCli
             var schema = UnityCliBridge.TypeSchemaGenerator.Generate(request.TypeName, request.MaxDepth);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "type.schema",
                 TypeName = request.TypeName,
                 Schema = schema
             });

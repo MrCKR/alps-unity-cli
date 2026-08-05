@@ -17,7 +17,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string Target { get; set; }
             public bool Valid { get; set; }
             public List<string> Issues { get; set; }
@@ -31,7 +30,7 @@ namespace UnityCli
             Name = "physics.validate",
             Summary = "Validate Rigidbody and Collider configuration on a target GameObject.",
             Description = "Check a GameObject's physics setup for common issues: Rigidbody without Collider, mixed 2D/3D bodies, kinematic body with only trigger colliders.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false,
+            Group = "physics",DestructiveHint = false,
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Validate Player", Input = new Request { Target = "Player" } } }
@@ -60,7 +59,7 @@ namespace UnityCli
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "physics.validate", Target = go.name, Valid = issues.Count == 0, Issues = issues,
+                Target = go.name, Valid = issues.Count == 0, Issues = issues,
                 HasRigidbody = rb != null, HasRigidbody2D = rb2d != null, ColliderCount = colliders.Length + colliders2d.Length
             });
         }

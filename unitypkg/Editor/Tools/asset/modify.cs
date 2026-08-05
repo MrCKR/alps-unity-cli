@@ -28,7 +28,6 @@ namespace UnityCli
             Summary = "Overwrite a text-like asset file with new content and force-reimport it.",
             Description = "Overwrite a text-like asset file with new content and force-reimport it. The asset must already exist. Use asset.create for new files and asset.import for binary source files.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write", "asset-import" },
             Target = "editor",

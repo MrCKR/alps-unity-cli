@@ -89,8 +89,7 @@
               "outputSchema": { "type": "object" },
               "target": { "type": "string", "enum": ["editor", "runtime", "both"] },
               "availabilityScope": { "type": "string", "enum": ["editorSession", "playModeSession", "always"] },
-              "playModeSupport": { "type": "string", "enum": ["supported", "runtime-only", "session-affecting", "editor-only", "unknown"] },
-              "refreshBehavior": { "type": "string" }
+              "playModeSupport": { "type": "string", "enum": ["supported", "runtime-only", "session-affecting", "editor-only", "unknown"] }
             },
             "additionalProperties": false
           },

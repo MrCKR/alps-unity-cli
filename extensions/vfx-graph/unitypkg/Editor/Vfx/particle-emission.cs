@@ -26,7 +26,6 @@ namespace UnityCli
             public GameObjectRef Target { get; set; }
             public VfxParticleEmissionInfo Emission { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -35,7 +34,6 @@ namespace UnityCli
             Summary = "Update ParticleSystem emission enablement, rates, and optional burst definitions.",
             Description = "Update the emission module of an existing ParticleSystem. Supports enabled, rateOverTime, rateOverDistance, burstCount, and an optional bursts array with time/count/cycles/repeatInterval entries.",
             Group = "vfx",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "particle-emission-edit" },
             Target = "editor",
@@ -122,8 +120,7 @@ namespace UnityCli
                     RateOverDistance = observed.emission.rateOverDistance.constant,
                     BurstCount = observed.emission.burstCount
                 },
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

@@ -24,7 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string Path { get; set; }
             public long SizeBytes { get; set; }
             public List<ProfilerPlannedEffect> PlannedEffects { get; set; }
@@ -35,7 +34,7 @@ namespace UnityCli
             Name = "profiler.memory-snapshot.take",
             Summary = "Capture a memory snapshot (.snap) via MemoryProfiler using the unified callback wait path.",
             Description = "Capture a memory snapshot (.snap) via MemoryProfiler. Requires package com.unity.memoryprofiler. The tool waits for TakeSnapshot's future-frame callback through the framework wait scheduler instead of a custom deferred interface.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "memory-snapshot-write" }, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = true, SideEffects = new[] { "memory-snapshot-write" }, Target = "editor", PlayModeSupport = "supported",
             RequiresPackages = new[] { "com.unity.memoryprofiler" },
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Take a memory snapshot to a custom path", Input = new Request { Path = "Artifacts/snap1.snap" } } }
@@ -109,7 +108,6 @@ namespace UnityCli
                         }
                         complete(new Result
                         {
-                            Command = "profiler.memory-snapshot.take",
                             Path = finalPath,
                             SizeBytes = info.Length,
                             PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.memory-snapshot.take", Path = finalPath } }

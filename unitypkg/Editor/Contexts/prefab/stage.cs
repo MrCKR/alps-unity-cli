@@ -27,12 +27,10 @@ namespace UnityCli.Contexts.Prefab
             Name = "prefab.stage",
             Description = "Read current Prefab editing stage state: whether a prefab is being edited, its path, and dirty status. This observes Prefab Stage only and does not open, save, close, or modify it.",
             Category = "prefab",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live",
             Examples = new[] { new ContextExample { Description = "Read the current Prefab Stage", Input = new Request { } } }
         };
 

@@ -2,7 +2,8 @@
     "name": "UnityCli.Editor",
     "rootNamespace": "UnityCli",
     "references": [
-        "Unity.ugui"
+        "Unity.ugui",
+        "UnityEditor.TestRunner"
     ],
     "includePlatforms": [
         "Editor"

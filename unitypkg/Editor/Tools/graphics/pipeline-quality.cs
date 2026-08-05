@@ -8,7 +8,7 @@ namespace UnityCli
     {
         public sealed class Request { public string QualityLevel { get; set; } }
         public sealed class Result { public QualitySettingsInfo QualitySettings { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.pipeline-quality", Summary = "Set the active quality level by name or index.", Description = "Set QualitySettings quality level.", Group = "graphics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Select a quality level by name", Input = new Request { QualityLevel = "Medium" } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.pipeline-quality", Summary = "Set the active quality level by name or index.", Description = "Set QualitySettings quality level.", Group = "graphics",DestructiveHint = true, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Select a quality level by name", Input = new Request { QualityLevel = "Medium" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(r.QualityLevel)) return new System.Threading.Tasks.ValueTask<Result>(new Result { QualitySettings = GraphicsToolSupport.BuildQualitySettings(), PlannedEffects = new List<GraphicsPlannedEffect>() });

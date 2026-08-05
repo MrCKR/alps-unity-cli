@@ -24,7 +24,6 @@ namespace UnityCli
             Summary = "Get one scene Camera's serializable settings by name, path, or instance id.",
             Description = "Get one Camera's serializable settings. Resolves by Camera name, hierarchy path, or instance id; returns E_CAMERA_NOT_FOUND with recovery guidance when missing.",
             Group = "camera",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

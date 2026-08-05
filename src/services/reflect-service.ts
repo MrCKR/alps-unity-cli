@@ -45,7 +45,6 @@ export async function getReflectType(request: ReflectTypeRequest, runtime: Refle
   const type = publicType(matches[0], true);
   const format = outputFormat(request.format);
   return {
-    command: "reflect.type",
     mode: "offline",
     requiresUnity: false,
     source: cacheSource(cache) as ReflectTypeResult["source"],
@@ -82,14 +81,13 @@ export async function getReflectMember(request: ReflectMemberRequest, runtime: R
   }
   if (matches.length > 1) {
     throw new StructuredToolError("REFLECT_MEMBER_AMBIGUOUS", `Multiple members matched: ${request.member}.`, [
-      "Use a fully-qualified type name or inspect overload signatures with reflect type."
+      "Use a fully-qualified type name or inspect overload signatures with tools run reflect.type --input '{\"name\":\"<type>\"}'."
     ]);
   }
   const type = publicType(matches[0].type, false);
   const member = publicMember(matches[0].member, matches[0].type);
   const format = outputFormat(request.format);
   return {
-    command: "reflect.member",
     mode: "offline",
     requiresUnity: false,
     source: cacheSource(cache) as ReflectMemberResult["source"],
@@ -113,7 +111,6 @@ export async function searchReflect(request: ReflectSearchRequest, runtime: Refl
   const page = paginate(items, request);
   const format = outputFormat(request.format);
   return {
-    command: "reflect.search",
     mode: "offline",
     requiresUnity: false,
     source: cacheSource(cache) as ReflectSearchResult["source"],
@@ -134,7 +131,7 @@ async function readCache(reflectDir: string | undefined, requestedVersion: strin
     const cache = filterVersion(await loadReflectCache(reflectCacheDir(reflectDir, runtime.dataDir)), requestedVersion, "REFLECT_VERSION_NOT_FOUND");
     if (cache.entries.length === 0 && assemblyDiagnostics(cache).some((diagnostic) => diagnostic.level === "error")) {
       throw new StructuredToolError("REFLECT_ASSEMBLY_LOAD_FAILED", "Reflection cache contains only failed assembly loads.", [
-        "Regenerate the reflection cache from Unity batchmode or a live bridge context.",
+        "Regenerate the reflection cache from the selected Live Editor.",
         "Check assembly paths and Unity compilation errors."
       ]);
     }

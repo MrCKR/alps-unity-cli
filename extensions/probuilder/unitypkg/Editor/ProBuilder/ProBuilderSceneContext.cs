@@ -55,11 +55,9 @@ namespace UnityCli.ProBuilder
             Name = "probuilder.scene",
             Description = "Read ProBuilder mesh objects, face/edge/vertex selection context, and editable mesh state in the current scene without modifying Unity state.",
             Category = "probuilder",
-            Version = "1.0.0",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "onDemand",
             Examples = new[] { new ContextExample { Description = "List ProBuilder scene meshes", Input = new Request { PageSize = 50 } }, new ContextExample { Description = "Filter ProBuilder meshes by name", Input = new Request { NamePattern = "Cube", PageSize = 50 } } },
             RequiresPackages = new[] { "com.unity.probuilder" }
         };

@@ -16,7 +16,9 @@ test("direct tool completion proof waits for terminal preview and deletion state
 
   for (const path of ["Tools/asset/delete.cs", "Tools/shader/delete.cs", "Tools/texture/delete.cs"]) {
     const source = await readTool(path);
-    assert.match(source, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*AssetPathToGUID\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+    assert.match(source, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*!AssetDatabase\.IsValidFolder\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+    // Unity 可能保留 deleted path 的 stale GUID，不能把 GUID 空值当删除终态。
+    assert.doesNotMatch(source, /AssetPathToGUID\(path\)/);
     assert.match(source, /DELETE_PROOF_MISSING/);
   }
 });

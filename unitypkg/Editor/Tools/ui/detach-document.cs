@@ -11,8 +11,8 @@ namespace UnityCli
     public class UiDetachDocumentTool : IUnityCliTool<UiDetachDocumentTool.Request, UiDetachDocumentTool.Result>
     {
         public sealed class Request { public string Target { get; set; } }
-        public sealed class Result { public string Command { get; set; } public UiElementRef Target { get; set; } public bool Attached { get; set; } public List<UiPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "ui.detach-document", Summary = "Remove a UIDocument component from a target GameObject.", Description = "Remove UIDocument component. Only affects current scene session. dryRun=true previews.", Group = "ui", Version = "1.0.0", DestructiveHint = false, SupportsDryRun = true, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Detach UIDocument", Input = new Request { Target = "Player" } } } };
+        public sealed class Result { public UiElementRef Target { get; set; } public bool Attached { get; set; } public List<UiPlannedEffect> PlannedEffects { get; set; } }
+        public ToolDescriptor Describe() => new() { Name = "ui.detach-document", Summary = "Remove a UIDocument component from a target GameObject.", Description = "Remove UIDocument component. Only affects current scene session. dryRun=true previews.", Group = "ui",DestructiveHint = false, SupportsDryRun = true, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Detach UIDocument", Input = new Request { Target = "Player" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             UiToolSupport.EnsureEditorNotBusy("ui.detach-document");
@@ -34,7 +34,7 @@ namespace UnityCli
             }
             if (go == null) throw new UnityCliBridge.BridgeCommandException("E_UI_DOCUMENT_READBACK_FAILED", "Target GameObject could not be re-resolved after detach: " + r.Target, "Check Unity Console for scene mutation errors.");
             var observed = go.GetComponent<UIDocument>();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.detach-document", Target = UiToolSupport.BuildUiElementRef(go, "UIDocument"), Attached = observed != null, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.detach-document", Target = GameObjectToolSupport.HierarchyPath(go) } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = UiToolSupport.BuildUiElementRef(go, "UIDocument"), Attached = observed != null, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.detach-document", Target = GameObjectToolSupport.HierarchyPath(go) } } });
         }
     }
 }

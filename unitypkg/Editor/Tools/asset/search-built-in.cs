@@ -21,7 +21,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public long Count { get; set; }
             public List<BuiltInAsset> Assets { get; set; }
         }
@@ -39,7 +38,6 @@ namespace UnityCli
             Summary = "Find built-in Unity assets under Resources/ and Packages/ by keyword and optional type.",
             Description = "Find built-in Unity assets (Resources/ and Packages/ paths) by keyword and optional main-asset type name. Read-only; use this to discover built-in shaders, textures, or defaults before creating materials or assigning assets.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -83,7 +81,6 @@ namespace UnityCli
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "asset.search-built-in",
                 Count = results.Count,
                 Assets = results
             });

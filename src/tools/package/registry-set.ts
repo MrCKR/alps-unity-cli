@@ -19,7 +19,7 @@ export interface PackageRegistrySetResult {
 export default defineTool<PackageRegistrySetRequest, PackageRegistrySetResult>({
   name: "package.registry.set",
   summary: "Set the primary registry URL in the project manifest.",
-  description: "Set the primary registry URL in Packages/manifest.json. Requires --yes and supports --dry-run.",
+  description: "Set the primary registry URL in Packages/manifest.json. Supports --dry-run.",
   group: "package",
   destructiveHint: true,
   supportsDryRun: true,

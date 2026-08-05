@@ -7,11 +7,34 @@ namespace UnityCli
     /// <summary>editor.undo — 执行 Undo。</summary>
     public class EditorUndoTool : IUnityCliTool<EditorUndoTool.Request, EditorUndoTool.Result>
     {
-        public sealed class Request { }
-        public sealed class Result { public bool Performed { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "editor.undo", Summary = "Perform exactly one entry from the shared Unity Editor Undo stack.", Description = "Call Undo.PerformUndo() exactly once against the shared Editor Undo stack. performed=true proves Unity raised undoRedoPerformed for this operation. Verify the returned state and required business effect. Do not repeat this Tool based on an assumed operation count when pre-existing Undo history is unknown. To discard all temporary in-memory scene changes and restore a clean scene from disk without saving, use scene.load once with the exact active scene path instead.", Group = "editor", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "undo-redo-replay", "undo-stack" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Undo exactly one shared Editor entry", Input = new Request { } } } };
+        public sealed class Request { [UnityCliRequired] public UnityCliCompletionProbe CompletionProbe { get; set; } }
+        public sealed class Result { public bool Performed { get; set; } public EditorStateInfo State { get; set; } public UnityCliCompletionProbeReadback Completion { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
+        public ToolDescriptor Describe() => new()
+        {
+            Name = "editor.undo", Summary = "Perform one shared Undo entry and prove the declared object state.",
+            Description = "Call Undo.PerformUndo() exactly once. completionProbe must identify an eligible read-only Context and a before/after state for the affected resource; the Undo callback alone is not completion proof.",
+            Group = "editor", DestructiveHint = false, SideEffects = new[] { "undo-redo-replay", "undo-stack" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
+            Examples = new[]
+            {
+                new ToolExample
+                {
+                    Description = "Undo an Undo-recorded Main Camera x move from 1 to 0.",
+                    Input = new Request
+                    {
+                        CompletionProbe = new UnityCliCompletionProbe
+                        {
+                            Context = "scene.gameobject", Input = new Dictionary<string, object> { { "target", "Main Camera" } },
+                            Assertions = new List<UnityCliCompletionAssertion>
+                            {
+                                new UnityCliCompletionAssertion { Path = "/gameObject/transform/position/x", Operator = "approx", Before = 1.0, After = 0.0, Tolerance = 0.0001 }
+                            }
+                        }
+                    }
+                }
+            }
+        };
 
-        public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             EditorToolSupport.EnsureEditorNotBusy("editor.undo");
             var performed = false;
@@ -19,17 +42,14 @@ namespace UnityCli
             Undo.undoRedoPerformed += callback;
             try
             {
-                ctx.CommitEffect();
-                Undo.PerformUndo();
+                var completion = ctx.RunCompletionProbe(r == null ? null : r.CompletionProbe, () =>
+                {
+                    Undo.PerformUndo();
+                    if (!performed) throw new UnityCliBridge.BridgeCommandException("E_UNDO_NOT_PERFORMED", "Unity did not perform an Undo operation.", "Ensure the shared Undo stack contains an entry, then retry.");
+                });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Performed = true, State = EditorToolSupport.BuildEditorState(), Completion = completion, PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "undo-redo-replay", Action = "undo" } } });
             }
-            finally
-            {
-                Undo.undoRedoPerformed -= callback;
-            }
-            if (!performed)
-                throw new UnityCliBridge.BridgeCommandException("E_UNDO_NOT_PERFORMED", "Unity did not perform an Undo operation.", "Ensure the shared Undo stack contains an entry, then retry.");
-            await ctx.Wait.NextFrame(1, ct);
-            throw new UnityCliBridge.BridgeCommandException("E_UNDO_BUSINESS_PROOF_UNAVAILABLE", "Undo changed shared Editor history, but this request cannot attribute an affected business state to itself.", "Use scene.load with the exact scene path to discard a known clean-scene fixture, or inspect the affected object with its read Context.");
+            finally { Undo.undoRedoPerformed -= callback; }
         }
     }
 }

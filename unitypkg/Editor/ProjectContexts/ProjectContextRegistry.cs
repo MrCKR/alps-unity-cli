@@ -25,8 +25,7 @@ namespace UnityCli
     {
         // ── Constants ──
 
-        private const string ContextFingerprintAlgorithm = "unity-cli-project-context-fingerprint-v1";
-        private const string ContextFingerprintDefaultMode = "block";
+        private const string ContextFingerprintAlgorithm = "unity-cli-project-context-fingerprint-v2";
 
         // ── Forbidden write-semantic tokens for source guard ──
 
@@ -59,9 +58,7 @@ namespace UnityCli
 
         private static readonly string[] ContextForbiddenDescriptorFields = new[]
         {
-            "DestructiveHint",
-            "SupportsJob",
-            "ArtifactKinds"
+            "DestructiveHint"
         };
 
         private static readonly Dictionary<string, RegisteredContext> Contexts =
@@ -80,13 +77,11 @@ namespace UnityCli
             if (target.ContainsKey(definition.Name)) throw new InvalidOperationException("Duplicate context registration: " + definition.Name);
 
             definition.Category = string.IsNullOrEmpty(definition.Category) ? "custom" : definition.Category;
-            definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
             if (string.IsNullOrWhiteSpace(definition.InputSchema) || string.IsNullOrWhiteSpace(definition.OutputSchema))
                 throw new ArgumentException("Context registration requires schemas derived from request/result types: " + definition.Name);
             definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
             definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
             definition.PlayModeSupport = NormalizeProjectContextPlayModeSupport(definition.PlayModeSupport, definition.Target);
-            definition.RefreshBehavior = string.IsNullOrEmpty(definition.RefreshBehavior) ? "onDemand" : definition.RefreshBehavior;
             definition.RequiresPackages = definition.RequiresPackages ?? Array.Empty<string>();
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
             definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "IUnityCliContext" : definition.DescriptorSource;
@@ -96,7 +91,7 @@ namespace UnityCli
             {
                 var violation = ProjectContextSourceGuardCheck(ProjectContextHandlerSource(definition), definition.Name);
                 if (violation != null) throw new ArgumentException("Custom context " + definition.Name + " contains forbidden write-semantic token: " + violation, violation);
-                RefreshProjectContextFingerprint(definition, null);
+                RefreshProjectContextFingerprint(definition);
             }
             target.Add(definition.Name, definition);
             WriteLog("context_registered name=" + definition.Name + " source=" + definition.Source);
@@ -153,21 +148,22 @@ namespace UnityCli
         private static void RegisterTypedContext<TReq, TRes>(object instance, ContextDescriptor descriptor, Assembly assembly, Type implementationType)
         {
             var context = (IUnityCliContext<TReq, TRes>)instance;
+            var proofObserver = instance as IUnityCliProofObserver<TReq>;
             var source = registryOwnership.Resolve(implementationType);
+            if (proofObserver != null && !string.Equals(source, "built-in", StringComparison.Ordinal))
+                throw new InvalidOperationException("Only built-in Contexts may register completion proof observers.");
             RegisterContext(new RegisteredContext
             {
                 Name = descriptor.Name,
                 Summary = string.IsNullOrEmpty(descriptor.Summary) ? descriptor.Description : descriptor.Summary,
                 Description = descriptor.Description,
                 Category = string.IsNullOrEmpty(descriptor.Category) ? (source == "built-in" ? "built-in" : "custom") : descriptor.Category,
-                Version = string.IsNullOrEmpty(descriptor.Version) ? "1.0.0" : descriptor.Version,
                 InputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
                 OutputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
                 Source = source,
                 Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
                 AvailabilityScope = descriptor.AvailabilityScope,
                 PlayModeSupport = descriptor.PlayModeSupport,
-                RefreshBehavior = descriptor.RefreshBehavior,
                 Examples = descriptor.Examples ?? Array.Empty<ContextExample>(),
                 RequiresPackages = descriptor.RequiresPackages ?? Array.Empty<string>(),
                 RegisteredBy = source == "extension" ? "extension-manifest" : "unity-editor-package",
@@ -180,7 +176,8 @@ namespace UnityCli
                 Descriptor = descriptor,
                 RequestType = typeof(TReq),
                 ResultType = typeof(TRes),
-                ReadAsync = async (request, executionContext, cancellationToken) => (object)await context.ReadAsync((TReq)request, executionContext, cancellationToken)
+                ReadAsync = async (request, executionContext, cancellationToken) => (object)await context.ReadAsync((TReq)request, executionContext, cancellationToken),
+                ResolveProofResource = proofObserver == null ? null : (Func<object, UnityCliProofResourceClaim>)(request => proofObserver.ResolveProofResource((TReq)request))
             });
         }
 
@@ -240,10 +237,19 @@ namespace UnityCli
         private sealed class ProjectContextFingerprintCheck
         {
             public bool Blocked;
-            public bool Warn;
             public string Expected;
             public string Actual;
             public string Message;
+        }
+
+        private sealed class ProjectContextPinnedFingerprint
+        {
+            public string Owner;
+            public string Value;
+            public string Algorithm;
+            public string Format;
+            public string Sha256;
+            public bool HardMismatch;
         }
 
         /// <summary>计算当前 handler+descriptor fingerprint，不读写 project pin state。</summary>
@@ -259,49 +265,75 @@ namespace UnityCli
         }
 
         private static ProjectContextFingerprintCheck RefreshProjectContextFingerprint(
-            RegisteredContext definition, string requestedMode)
+            RegisteredContext definition)
         {
             ComputeProjectContextFingerprint(definition);
-            var isPinned = !string.IsNullOrEmpty(definition.PinnedFingerprint);
-            if (isPinned)
+            ProjectContextPinnedFingerprint pin;
+            if (string.Equals(definition.Source, "project", StringComparison.Ordinal) && !string.IsNullOrEmpty(definition.PinnedFingerprint))
             {
-                definition.ExpectedFingerprint = definition.PinnedFingerprint;
+                pin = ParseProjectContextPinnedFingerprint("descriptor", definition.PinnedFingerprint);
+            }
+            else if (string.Equals(definition.Source, "project", StringComparison.Ordinal))
+            {
+                var baseline = LoadProjectContextExpectedFingerprint(definition.Name);
+                if (string.IsNullOrEmpty(baseline))
+                {
+                    // 首次 project baseline 只能写入携带算法的 v2 pin，无算法 pin 绝不生成。
+                    baseline = FormatProjectContextFingerprint(definition.Fingerprint);
+                    SaveProjectContextExpectedFingerprint(definition.Name, baseline);
+                }
+                pin = ParseProjectContextPinnedFingerprint("project-baseline", baseline);
             }
             else
             {
-                definition.ExpectedFingerprint = definition.Fingerprint;
-                SaveProjectContextExpectedFingerprint(definition.Name, definition.Fingerprint);
+                // Built-in 与 Extension 的 expected 由当前安装包生成，不写项目 baseline。
+                pin = ParseProjectContextPinnedFingerprint("installed-package", FormatProjectContextFingerprint(definition.Fingerprint));
             }
 
-            definition.FingerprintMode = NormalizeProjectContextFingerprintMode(requestedMode);
-            var matches = string.Equals(definition.ExpectedFingerprint, definition.Fingerprint,
-                StringComparison.OrdinalIgnoreCase);
-            definition.FingerprintStatus = matches ? "match"
-                : (definition.FingerprintMode == "warn" ? "warn" : "blocked");
+            definition.PinnedFingerprintOwner = pin.Owner;
+            definition.PinnedFingerprintAlgorithm = pin.Algorithm;
+            definition.PinnedFingerprintFormat = pin.Format;
+            definition.ExpectedFingerprint = pin.Value;
+            var matches = !pin.HardMismatch && string.Equals(pin.Sha256, definition.Fingerprint, StringComparison.OrdinalIgnoreCase);
+            // 任一 pin 格式、算法或内容不匹配都使用同一阻断路径。
+            definition.FingerprintStatus = matches ? "match" : "blocked";
             definition.FingerprintMessage = matches
                 ? "Custom context fingerprint matches handler code + descriptor."
-                : "Custom context fingerprint mismatch for " + definition.Name +
-                  ": expected " + definition.ExpectedFingerprint +
-                  " but computed " + definition.Fingerprint + ".";
+                : pin.HardMismatch
+                    ? "Custom context fingerprint pin uses an unsupported algorithm or format and must be re-pinned."
+                    : "Custom context fingerprint content differs from its v2 pin.";
 
             return new ProjectContextFingerprintCheck
             {
-                Blocked = !matches && definition.FingerprintMode == "block",
-                Warn = !matches && definition.FingerprintMode == "warn",
+                Blocked = !matches,
                 Expected = definition.ExpectedFingerprint,
                 Actual = definition.Fingerprint,
                 Message = definition.FingerprintMessage
             };
         }
 
-        private static string NormalizeProjectContextFingerprintMode(string requestedMode)
+        /// <summary>解析 project Context pin；裸 SHA、未知算法和畸形值都不能被当作 v2 expected。</summary>
+        private static ProjectContextPinnedFingerprint ParseProjectContextPinnedFingerprint(string owner, string value)
         {
-            if (string.Equals(requestedMode, "warn", StringComparison.OrdinalIgnoreCase)) return "warn";
-            if (string.Equals(requestedMode, "block", StringComparison.OrdinalIgnoreCase)) return "block";
-            var environment = Environment.GetEnvironmentVariable("UNITY_CLI_PROJECT_CONTEXT_FINGERPRINT_MODE");
-            if (string.Equals(environment, "warn", StringComparison.OrdinalIgnoreCase)) return "warn";
-            if (string.Equals(environment, "block", StringComparison.OrdinalIgnoreCase)) return "block";
-            return ContextFingerprintDefaultMode;
+            var pin = new ProjectContextPinnedFingerprint { Owner = owner, Value = value ?? string.Empty, Format = "malformed" };
+            var match = Regex.Match(pin.Value, "^([^:]+):([0-9a-fA-F]{64})$");
+            if (!match.Success)
+            {
+                pin.Format = Regex.IsMatch(pin.Value, "^[0-9a-fA-F]{64}$") ? "bare-sha256" : "malformed";
+                pin.Algorithm = pin.Format == "bare-sha256" ? "none" : "invalid";
+                pin.HardMismatch = true;
+                return pin;
+            }
+            pin.Algorithm = match.Groups[1].Value;
+            pin.Sha256 = match.Groups[2].Value.ToLowerInvariant();
+            pin.Format = string.Equals(pin.Algorithm, ContextFingerprintAlgorithm, StringComparison.Ordinal) ? "valid-v2" : "algorithm-mismatch";
+            pin.HardMismatch = !string.Equals(pin.Algorithm, ContextFingerprintAlgorithm, StringComparison.Ordinal);
+            return pin;
+        }
+
+        private static string FormatProjectContextFingerprint(string sha256)
+        {
+            return ContextFingerprintAlgorithm + ":" + (sha256 ?? string.Empty).ToLowerInvariant();
         }
 
         private static string ProjectContextDescriptorFingerprintMaterial(RegisteredContext definition)
@@ -310,16 +342,15 @@ namespace UnityCli
                 + "\nsummary=" + (definition.Summary ?? definition.Description ?? string.Empty)
                 + "\ndescription=" + (definition.Description ?? string.Empty)
                 + "\ncategory=" + (definition.Category ?? string.Empty)
-                + "\nversion=" + (definition.Version ?? string.Empty)
                 + "\ninputSchema=" + NormalizeFingerprintJson(definition.InputSchema)
                 + "\noutputSchema=" + NormalizeFingerprintJson(definition.OutputSchema)
                 + "\nsource=" + (definition.Source ?? string.Empty)
                 + "\ntarget=" + (definition.Target ?? string.Empty)
                 + "\navailabilityScope=" + (definition.AvailabilityScope ?? string.Empty)
                 + "\nplayModeSupport=" + (definition.PlayModeSupport ?? string.Empty)
-                + "\nrefreshBehavior=" + (definition.RefreshBehavior ?? string.Empty)
                 + "\nrequiresPackages=" + string.Join(",", (definition.RequiresPackages ?? new string[0])
                     .OrderBy(value => value, StringComparer.Ordinal).ToArray())
+                + "\nexamples=" + NormalizeFingerprintJson(UnityCliSerializer.Serialize(definition.Examples ?? Array.Empty<ContextExample>()))
                 + "\ndescriptorSource=" + (definition.DescriptorSource ?? string.Empty);
         }
 
@@ -372,8 +403,8 @@ namespace UnityCli
 
         private static string ProjectContextExpectedFingerprintPath(string name)
         {
-            return Path.Combine(ProjectRoot(),
-                "Library", "UnityCliProjectContextFingerprints",
+            return Path.Combine(UnityCliTempRoot(),
+                "fingerprints", "contexts",
                 SafeProjectContextFingerprintFileName(name) + ".sha256");
         }
 
@@ -384,7 +415,24 @@ namespace UnityCli
 
         private static Dictionary<string, object> ProjectContextFingerprintData(RegisteredContext definition)
         {
-            return new Dictionary<string, object> { { "algorithm", ContextFingerprintAlgorithm }, { "value", definition.Fingerprint }, { "expected", definition.ExpectedFingerprint }, { "status", definition.FingerprintStatus }, { "mode", definition.FingerprintMode }, { "message", definition.FingerprintMessage }, { "descriptorSha256", definition.DescriptorSha256 }, { "handlerSha256", definition.HandlerSha256 } };
+            return new Dictionary<string, object>
+            {
+                { "currentAlgorithm", ContextFingerprintAlgorithm }, { "actualSha256", definition.Fingerprint },
+                { "pinnedOwner", definition.PinnedFingerprintOwner }, { "pinnedAlgorithm", definition.PinnedFingerprintAlgorithm },
+                { "pinnedFormat", definition.PinnedFingerprintFormat }, { "pinnedValue", definition.ExpectedFingerprint },
+                { "status", definition.FingerprintStatus }, { "message", definition.FingerprintMessage },
+                { "rePinValue", FormatProjectContextFingerprint(definition.Fingerprint) },
+                { "rePinSteps", ProjectContextFingerprintRePinSteps(definition) },
+                { "descriptorSha256", definition.DescriptorSha256 }, { "handlerSha256", definition.HandlerSha256 }
+            };
+        }
+
+        private static string[] ProjectContextFingerprintRePinSteps(RegisteredContext definition)
+        {
+            var value = FormatProjectContextFingerprint(definition.Fingerprint);
+            return definition.PinnedFingerprintOwner == "descriptor"
+                ? new[] { "Review the Context change.", "Set ContextDescriptor.Fingerprint to " + value + ".", "Run the Context again." }
+                : new[] { "Review the Context change.", "Replace the persisted project Context fingerprint with " + value + ".", "Run the Context again." };
         }
 
         // ── Bridge commands: context.list, context.describe, context.read ──
@@ -424,7 +472,6 @@ namespace UnityCli
         {
             public string Name { get; set; }
             [UnityCliAnyJson] public object Input { get; set; }
-            public string FingerprintMode { get; set; }
             public string ExpectedDescriptorFingerprint { get; set; }
             public string ProjectPath { get; set; }
         }
@@ -444,7 +491,7 @@ namespace UnityCli
             RegisteredContext definition;
             if (!Contexts.TryGetValue(args.Name, out definition))
                 throw new BridgeCommandException("E_CONTEXT_NOT_FOUND", "Context not found: " + args.Name, "Run context.list to see available contexts.");
-            if (definition.Source == "project") RefreshProjectContextFingerprint(definition, args.FingerprintMode);
+            if (definition.Source == "project") RefreshProjectContextFingerprint(definition);
             return ContextDescriptorData(definition);
         }
 
@@ -467,9 +514,9 @@ namespace UnityCli
 
             if (definition.Source == "project")
             {
-                var fingerprint = RefreshProjectContextFingerprint(definition, args.FingerprintMode);
+                var fingerprint = RefreshProjectContextFingerprint(definition);
                 if (fingerprint.Blocked)
-                    throw new BridgeCommandException("E_CONTEXT_FINGERPRINT_MISMATCH", fingerprint.Message, ContextFingerprintDetails(definition), new[] { "Review the registered context code, then update its fingerprint or use warn mode when policy allows." });
+                    throw new BridgeCommandException("E_CONTEXT_FINGERPRINT_MISMATCH", fingerprint.Message, ContextFingerprintDetails(definition), ProjectContextFingerprintRePinSteps(definition));
             }
             if (!string.IsNullOrEmpty(args.ExpectedDescriptorFingerprint)
                 && !string.Equals(args.ExpectedDescriptorFingerprint, definition.Fingerprint, StringComparison.Ordinal))
@@ -485,7 +532,6 @@ namespace UnityCli
             var schemaError = ValidateTypedInput(definition.RequestType, inputJson);
             if (schemaError != null) throw SchemaValidationException(schemaError);
             object result;
-            var startedAt = DateTime.UtcNow;
             try
             {
                 var typedInput = UnityCliSerializer.Deserialize(inputJson, definition.RequestType);
@@ -512,14 +558,15 @@ namespace UnityCli
                 throw new BridgeCommandException("E_CONTEXT_HANDLER_FAILED", exception.GetType().Name + ": " + exception.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
 
-            return new Dictionary<string, object>
-            {
-                { "command", "context.read" },
-                { "context", new Dictionary<string, object> { { "name", args.Name }, { "version", definition.Version }, { "source", definition.Source } } },
-                { "execution", new Dictionary<string, object> { { "channel", "live" }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) }, { "exitState", "completed" } } },
-                { "result", result },
-                { "logs", new Dictionary<string, object> { { "bridge", LogPath() } } }
-            };
+            var outputError = ValidateTypedInput(definition.ResultType, UnityCliSerializer.Serialize(result));
+            if (outputError != null)
+                throw new BridgeCommandException(
+                    "E_CONTEXT_OUTPUT_SCHEMA_INVALID",
+                    "Context result failed its derived output schema at " + outputError.Path + ".",
+                    new Dictionary<string, object> { { "contextName", definition.Name }, { "path", outputError.Path }, { "expected", outputError.Expected }, { "actual", outputError.Actual } },
+                    new[] { "Fix the Context Result DTO before submitting another read." });
+            WriteLog("context_read_completed requestId=" + request.RequestId + " name=" + args.Name);
+            return new Dictionary<string, object> { { "result", result } };
         }
 
         // ── JSON serialization helpers ──
@@ -532,21 +579,17 @@ namespace UnityCli
                 { "summary", string.IsNullOrEmpty(definition.Summary) ? definition.Description : definition.Summary },
                 { "description", definition.Description },
                 { "category", definition.Category },
-                { "version", definition.Version },
                 { "inputSchema", UnityCliSerializer.Parse(definition.InputSchema) },
                 { "outputSchema", UnityCliSerializer.Parse(definition.OutputSchema) },
                 { "source", definition.Source },
                 { "target", definition.Target },
                 { "availabilityScope", definition.AvailabilityScope },
                 { "playModeSupport", definition.PlayModeSupport },
-                { "refreshBehavior", definition.RefreshBehavior },
                 { "examples", definition.Examples },
-                { "requiresPackages", definition.RequiresPackages },
-                { "supportStatus", "live-bridge" },
-                { "cliCommand", "context read " + definition.Name },
-                { "descriptorFingerprint", definition.Fingerprint }
+                { "internalDescriptorFingerprint", definition.Fingerprint },
+                { "available", true }
             };
-            if (definition.Source == "project") data["fingerprint"] = ProjectContextFingerprintData(definition);
+            if (definition.RequiresPackages != null && definition.RequiresPackages.Length > 0) data["requiresPackages"] = definition.RequiresPackages;
             return data;
         }
 
@@ -569,28 +612,15 @@ namespace UnityCli
         {
             var items = new List<object>();
             var blocked = 0;
-            var warn = 0;
             foreach (var pair in Contexts.Where(pair => pair.Value.Source == "project"))
             {
                 var definition = pair.Value;
-                RefreshProjectContextFingerprint(definition, null);
+                RefreshProjectContextFingerprint(definition);
                 if (definition.FingerprintStatus == "blocked") blocked++;
-                if (definition.FingerprintStatus == "warn") warn++;
                 items.Add(new Dictionary<string, object>
                 {
                     { "name", definition.Name },
-                    { "fingerprint", new Dictionary<string, object>
-                        {
-                            { "algorithm", ContextFingerprintAlgorithm },
-                            { "value", definition.Fingerprint },
-                            { "expected", definition.ExpectedFingerprint },
-                            { "status", definition.FingerprintStatus },
-                            { "mode", definition.FingerprintMode },
-                            { "message", definition.FingerprintMessage },
-                            { "descriptorSha256", definition.DescriptorSha256 },
-                            { "handlerSha256", definition.HandlerSha256 }
-                        }
-                    }
+                    { "fingerprint", ProjectContextFingerprintData(definition) }
                 });
             }
             items.Sort((left, right) => StringComparer.Ordinal.Compare(
@@ -599,10 +629,8 @@ namespace UnityCli
             return new Dictionary<string, object>
             {
                 { "algorithm", ContextFingerprintAlgorithm },
-                { "mode", NormalizeProjectContextFingerprintMode(null) },
                 { "contextCount", (long)Contexts.Values.Count(context => context.Source == "project") },
                 { "blockedCount", (long)blocked },
-                { "warnCount", (long)warn },
                 { "contexts", items }
             };
         }

@@ -22,6 +22,10 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 }
 ```
 
+`error` 只允许上述协议字段；`details` 仅承载业务诊断，不公开内部日志、审计、endpoint、port、listener/process identity、native window handle 或 Windows command line。blocker 使用固定公开 DTO。
+
+普通 Tool 或 Context 在业务 effect 前确认阻断时返回 `E_UNITY_BLOCKED`，同一响应的 `details.blockers` 包含已清洗 blocker。调用在超时或断连后统一返回 `E_EXECUTION_TIMEOUT`；调用方应先观察业务状态，再自行决定是否提交新的调用。系统不提供请求级重放拦截。
+
 ## 错误分类
 
 ### Project Identity / Instance 错误
@@ -50,15 +54,13 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
 | `E_TOOL_NOT_FOUND_FOR_TARGET` | 工具在目标不可用 | `tools describe` 检查可用性 |
-| `E_TOOL_FINGERPRINT_MISMATCH` | handler 代码变更 | 审计后 `--fingerprint-mode warn` |
-| `E_INPUT_VALIDATION_FAILED` | 输入不符合 schema | 查看 `tools describe` 的 inputSchema |
+| `E_SCHEMA_INVALID` | 输入不符合 schema | 查看 `tools describe` 的 inputSchema |
 
-### 安全确认错误
+### 可选预览错误
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | 破坏性工具未确认 | 添加 `--yes` |
-| `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 直接用 `--yes` 确认 |
+| `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 去除可选 `--dry-run` 后直接调用 |
 
 ### Scene / Asset / Prefab 错误
 
@@ -80,7 +82,6 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 |
 |--------|------|
 | `E_PACKAGE_NOT_FOUND` | 包未安装 |
-| `E_PROBUILDER_PACKAGE_NOT_FOUND` | ProBuilder 包未安装 |
 | `E_VFX_PACKAGE_MISSING` | VFX Graph 包未安装 |
 | `E_CINEMACHINE_PRESET_INVALID` | `cinemachine.create` 的 preset 不在 descriptor 声明的集合中 |
 
@@ -92,16 +93,15 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_METHOD_AMBIGUOUS` | 多个 overload 与参数数量匹配 | 将选中签名的 `parameterType` 数组作为 `parameterTypes` 重试 |
 | `E_TYPE_NOT_FOUND` | 目标类型或参数类型不存在 | 使用完整 C# type name |
 
-### 执行与 durable terminal 错误
+### 执行错误
 
 | 错误码 | 含义 |
 |--------|------|
-| `E_UNITY_BLOCKED` | 已证明存在需要外部处理的 Unity/UI blocker |
+| `E_UNITY_BLOCKED` | effect 前已证明 Unity/UI blocker；原错误的 `details.blockers` 含结构化弹窗摘要 |
 | `E_UNITY_TRANSITION_TIMEOUT` | 可恢复 lifecycle transition 未在 absolute deadline 内稳定 |
 | `E_CONTEXT_READ_TIMEOUT` | Context 未在同一 validated generation 上完成读取 |
-| `E_EXECUTION_TIMEOUT` | Tool 业务 operation 在 effect 前或其契约 deadline 内未完成 |
+| `E_EXECUTION_TIMEOUT` | Tool 未在调用 deadline 内返回终态，或连接在终态前断开；调用方负责观察状态并判断是否重试，系统不做请求级重放拦截 |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
-| `E_REQUEST_OUTCOME_UNKNOWN` | effect 已可能发生，但 durable terminal proof 不可用；禁止 blind replay |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
 | `E_UNITY_COMPILE_FAILED` | owned compilation cycle 完成且包含 compiler error；details 带本次 diagnostics |
@@ -113,7 +113,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 1. 读取 `error.code` 确定错误类别
 2. 检查 `transient` 和 `retryAfterMs`；只有错误明确允许时才提交新的逻辑请求
-3. `E_REQUEST_OUTCOME_UNKNOWN` 必须先独立观察业务状态，不能原样 blind replay
+3. `E_EXECUTION_TIMEOUT` 后先独立观察业务状态，再由调用方决定是否提交新的调用
 4. 遵循 `nextActions`；可恢复 compile/import/reload/listener transition 已由 supervisor 内部处理
 
 ### nextActions 规则
@@ -121,6 +121,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 - Instance 错误的 `nextActions` 必须指向 `instances list`、显式 `--instance`、项目路径或关闭重复 Editor
 - Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
 - Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search` 或 `tools describe`
+- 弹窗 blocker 的 `nextActions` 必须指向先 `context read editor.dialogs`，再 `tools run editor.dialog.click`；不得要求人工处理、预定义按钮列表、launch-only 入口或额外确认
 - 诊断错误的 `nextActions` 必须指向 `doctor` 或 `tools run diagnose.preflight`
 
 ## JSON 字段命名
@@ -129,4 +130,4 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 - `nextActions`
 - `retryAfterMs`
 
-不要使用旧的 snake_case 字段名；错误恢复逻辑必须读取上述 camelCase 字段。
+错误恢复逻辑必须读取上述 camelCase 字段。

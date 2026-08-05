@@ -14,7 +14,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Type { get; set; } public int? Count { get; set; } }
         public sealed class Result { public bool Cleared { get; set; } public string Type { get; set; } public List<ConsoleEntry> Items { get; set; } public PageInfo PageInfo { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "editor.console", Summary = "Read recent Unity Console log entries.", Description = "Read-only: returns recent Console entries filtered by type. Use console.clear to clear.", Group = "editor", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read console", Input = new Request { Count = 20 } } } };
+        public ToolDescriptor Describe() => new() { Name = "editor.console", Summary = "Read recent Unity Console log entries.", Description = "Read-only: returns recent Console entries filtered by type. Use console.clear to clear.", Group = "editor",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read console", Input = new Request { Count = 20 } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var count = Math.Max(1, Math.Min(r.Count ?? 50, 500));

@@ -33,7 +33,10 @@ test("named core atomic tools prevalidate, commit, and return independently obse
   assert.match(assign, /E_PHYSICS_ASSIGN_MATERIAL_STATE_MISMATCH/);
   assert.match(collision, /Physics\.GetIgnoreLayerCollision\(layerA, layerB\) != request\.Ignore\.Value/);
   assert.match(collision, /E_PHYSICS_COLLISION_MATRIX_STATE_MISMATCH/);
-  assert.match(force, /var beforeVelocity = rigidbody\.velocity/);
+  assert.match(force, /rigidbody\.Sleep\(\)/);
+  assert.match(force, /if \(!rigidbody\.IsSleeping\(\)\)/);
+  assert.match(force, /if \(observedRigidbody\.IsSleeping\(\)\)/);
+  assert.doesNotMatch(force, /Physics\.Simulate/);
   assert.match(force, /var rigidbodyId = rigidbody\.GetInstanceID\(\)/);
   assert.match(force, /candidate\.GetInstanceID\(\) == rigidbodyId/);
   assert.match(force, /var observedVelocity = observedRigidbody\.velocity/);
@@ -44,7 +47,9 @@ test("named core atomic tools prevalidate, commit, and return independently obse
   assert.match(jointAdd, /EditorUtility\.InstanceIDToObject\(targetId\) as GameObject/);
   assert.match(jointAdd, /var observedJoint = observedTarget == null \? null : observedTarget\.GetComponent\(type\) as Joint/);
   assert.match(jointAdd, /E_PHYSICS_JOINT_ADD_STATE_MISMATCH/);
-  assert.match(simulation, /E_PHYSICS_SIMULATION_PROOF_UNAVAILABLE/);
+  assert.match(simulation, /\[UnityCliRequired\] public UnityCliCompletionProbe CompletionProbe/);
+  assert.match(simulation, /completion = ctx\.RunCompletionProbe\(request\.CompletionProbe/);
+  assert.doesNotMatch(simulation, /Physics\.Simulate\(deltaTime\)[\s\S]*ctx\.CommitEffect\(\)/);
 
   assert.match(prefabCreate, /var observedCopy = string\.IsNullOrEmpty\(observedPath\) \? null : PrefabToolSupport\.LoadPrefabAsset\(observedPath\)/);
   assert.match(prefabCreate, /E_PREFAB_CREATE_PROOF_MISSING/);
@@ -58,8 +63,15 @@ test("named core atomic tools prevalidate, commit, and return independently obse
   assert.match(load, /E_SCENE_LOAD_STATE_MISMATCH/);
   assert.match(save, /E_SCENE_SAVE_STATE_MISMATCH/);
   assert.match(unload, /E_SCENE_UNLOAD_STATE_MISMATCH/);
-  assert.match(frame, /E_SCENE_VIEW_FRAME_STATE_MISMATCH/);
-  assert.match(frame, /E_SCENE_VIEW_FRAME_PROOF_UNAVAILABLE/);
+  assert.match(frame, /ReadTargetBounds/);
+  assert.match(frame, /ReadAllBounds/);
+  assert.match(frame, /GeometryUtility\.CalculateFrustumPlanes/);
+  assert.match(frame, /BoundsContained/);
+  assert.match(frame, /ctx\.Wait\.NextFrame/);
+  assert.match(frame, /ctx\.Wait\.UntilStable/);
+  assert.match(frame, /SameBounds/);
+  assert.match(frame, /target-bounds-already-contained/);
+  assert.match(frame, /E_EXECUTION_TIMEOUT/);
   assert.match(resolution, /var observedWidth = PlayerSettings\.defaultScreenWidth/);
   assert.match(resolution, /E_EDITOR_RESOLUTION_STATE_MISMATCH/);
 
@@ -69,14 +81,20 @@ test("named core atomic tools prevalidate, commit, and return independently obse
   assert.doesNotMatch(preflight, /SideEffects\s*=/);
 });
 
-test("shared undo and redo do not report direct business success without attribution", async () => {
-  const [undo, redo] = await Promise.all([
+test("shared undo and redo require request-specific Context readback", async () => {
+  const [undo, redo, bridge] = await Promise.all([
     source("Tools/editor/undo.cs"),
     source("Tools/editor/redo.cs"),
+    readFile(new URL("../src/bridge/domains/editor.js", import.meta.url), "utf8"),
   ]);
 
-  assert.match(undo, /E_UNDO_BUSINESS_PROOF_UNAVAILABLE/);
-  assert.match(redo, /E_REDO_BUSINESS_PROOF_UNAVAILABLE/);
-  assert.doesNotMatch(undo, /return new Result \{ Performed = true/);
-  assert.doesNotMatch(redo, /return new Result \{ Performed = true/);
+  for (const [name, tool] of [["UNDO", undo], ["REDO", redo]] as const) {
+    assert.match(tool, /\[UnityCliRequired\] public UnityCliCompletionProbe CompletionProbe/);
+    assert.match(tool, /ctx\.RunCompletionProbe\(/);
+    assert.match(tool, new RegExp(`E_${name}_NOT_PERFORMED`));
+    assert.match(tool, /Completion = completion/);
+    assert.doesNotMatch(tool, /BUSINESS_PROOF_UNAVAILABLE/);
+  }
+  assert.match(bridge, /command === "editor\.undo" \|\| command === "editor\.redo"/);
+  assert.match(bridge, /completionProbe: structuredInput\(flags\)\.completionProbe/);
 });

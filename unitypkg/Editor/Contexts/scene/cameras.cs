@@ -23,12 +23,10 @@ namespace UnityCli.Contexts.Scene
             Summary = "List active scene cameras with hierarchy paths, projection, lens, depth, and pixel size.",
             Description = "List all active scene cameras with stable GameObject path, tag, enabled state, projection, FOV/orthographic size, depth, target texture, and pixel size. Read-only camera inventory.",
             Category = "scene",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand",
             Examples = new[] { new ContextExample { Description = "List scene cameras", Input = new Request { } } }
         };
 

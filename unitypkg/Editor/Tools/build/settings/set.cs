@@ -20,8 +20,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "build.settings.set", Summary = "Update persistent Unity PlayerSettings build configuration, with dry-run support.",
-            Description = "Updates provided PlayerSettings fields: productName, bundleVersion, companyId, applicationIdentifier, scriptingBackend, and apiCompatibilityLevel. Requires --yes because it writes ProjectSettings. dryRun=true previews without writing. Available in Edit and Play mode.",
-            Group = "build", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true,
+            Description = "Updates provided PlayerSettings fields: productName, bundleVersion, companyId, applicationIdentifier, scriptingBackend, and apiCompatibilityLevel. dryRun=true previews without writing. Available in Edit and Play mode.",
+            Group = "build",DestructiveHint = true, SupportsDryRun = true,
             SideEffects = new[] { "player-settings-write" }, Target = "editor", PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Set product name", Input = new Request { ProductName = "My Game" }, Execution = new ToolExampleExecution { DryRun = true } } }

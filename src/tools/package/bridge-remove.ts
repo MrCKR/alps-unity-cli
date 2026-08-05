@@ -51,7 +51,7 @@ export default defineTool<PackageBridgeRemoveRequest, PackageBridgeRemoveResult>
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Preview Bridge package removal", argv: ["tools", "run", "package.bridge-remove", "--project", ".", "--dry-run"] }
+    { description: "Preview Bridge package removal", argv: ["tools", "run", "package.bridge-remove", "--input", "{\"project\":\".\"}", "--dry-run"] }
   ],
   async execute(request, context) {
     return runPackageBridgeRemove(request, context);

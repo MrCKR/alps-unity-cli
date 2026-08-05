@@ -12,7 +12,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Kind { get; set; } public int? PageSize { get; set; } }
         public sealed class Result { public List<UiDocumentAssetInfo> Items { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "ui.list-documents", Summary = "List UXML and USS assets in the project.", Description = "Search AssetDatabase for .uxml and .uss assets. kind=uxml or uss to filter.", Group = "ui", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "List UXML assets", Input = new Request { Kind = "uxml" } } } };
+        public ToolDescriptor Describe() => new() { Name = "ui.list-documents", Summary = "List UXML and USS assets in the project.", Description = "Search AssetDatabase for .uxml and .uss assets. kind=uxml or uss to filter.", Group = "ui",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "List UXML assets", Input = new Request { Kind = "uxml" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var items = new List<UiDocumentAssetInfo>();

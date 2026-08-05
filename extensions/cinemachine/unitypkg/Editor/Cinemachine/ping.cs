@@ -11,7 +11,6 @@ namespace UnityCli.Cinemachine
         public sealed class Result
         {
             public CinemachinePackageStatus Cinemachine { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -20,7 +19,6 @@ namespace UnityCli.Cinemachine
             Summary = "Check Cinemachine package availability and reflected camera/brain API status.",
             Description = "Check Cinemachine package availability and reflected camera/brain API status without changing the scene. Returns whether Cinemachine camera, brain, extension, and brain override APIs are available in the current Unity session.",
             Group = "cinemachine",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.cinemachine" },
             Target = "editor",
@@ -37,8 +35,7 @@ namespace UnityCli.Cinemachine
         {
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
-                LogPath = ctx.LogPath
+                Cinemachine = CinemachineToolSupport.BuildPackageStatus()
             });
         }
     }

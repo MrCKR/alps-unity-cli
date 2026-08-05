@@ -21,7 +21,6 @@ namespace UnityCli
             public GameObjectRef Target { get; set; }
             public VfxParticleSystemInfo ParticleSystem { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -30,7 +29,6 @@ namespace UnityCli
             Summary = "Create or initialize a ParticleSystem on a target GameObject and apply main module defaults.",
             Description = "Create a new GameObject when target is omitted, ensure a ParticleSystem and ParticleSystemRenderer exist, and apply any provided main module fields such as duration, startLifetime, startSpeed, size, color, looping, and simulation space.",
             Group = "vfx",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-object-create", "component-add", "particle-main-edit" },
             Target = "editor",
@@ -76,8 +74,7 @@ namespace UnityCli
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
                 ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(observed),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

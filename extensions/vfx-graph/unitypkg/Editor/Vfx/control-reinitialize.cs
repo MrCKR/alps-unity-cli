@@ -10,7 +10,7 @@ namespace UnityCli
         {
             Name = "vfx.control.reinitialize", Summary = "Reinitialize a VisualEffect component.",
             Description = "Invoke Reinit and prove the reset by observing a transition from a positive aliveParticleCount to zero. Fails closed when no observable active particles exist before the call.",
-            Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
+            Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Reinitialize the matrix emitter", Input = new Request { Target = "Effects/Emitter" } } }

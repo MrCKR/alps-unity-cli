@@ -38,7 +38,7 @@ namespace UnityCli
         {
             Name = "graphics.quality", Summary = "Read and update Unity QualitySettings (quality level, vSync, anti-aliasing, shadows, LOD).",
             Description = "Read or update QualitySettings. Pass qualityLevel (name or index) and individual settings to update; omit all to read current values.",
-            Group = "graphics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "settings-write" },
+            Group = "graphics",DestructiveHint = true, SideEffects = new[] { "settings-write" },
             Target = "editor", PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read quality settings", Input = new Request { } } }

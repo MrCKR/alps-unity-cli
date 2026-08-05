@@ -19,7 +19,7 @@ namespace UnityCli
         {
             Name = "profiler.export", Summary = "Export a profiler snapshot artifact in JSON or raw profiler format.",
             Description = "Export a profiler snapshot artifact in JSON or raw profiler format to the requested path. Single-frame synchronous export.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "persistent-artifact-write" }, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler",DestructiveHint = true, SideEffects = new[] { "persistent-artifact-write" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Export profiler JSON", Input = new Request { Path = "profile.json", Overwrite = true } } }
         };

@@ -19,18 +19,12 @@ export function extractConditionalToolDescriptor(root, inventoryEntry) {
   const target = optionalStringField(source, "Target") ?? "editor";
   const playModeSupport = optionalStringField(source, "PlayModeSupport") ?? "supported";
   return {
-    artifactKinds: [],
     availabilityScope: target === "runtime" ? "playModeSession" : "editorSession",
-    capabilityType: "project-write",
-    cliCommand: `tools run ${name}`,
-    defaultTimeoutMs: numberField(source, "DefaultTimeoutMs", 30_000),
     description: stringField(source, "Description"),
     destructiveHint: booleanField(source, "DestructiveHint"),
     examples,
     group: stringField(source, "Group"),
-    handler: "bridge",
     inputSchema: schemaFromClassBody(requestBody, `${inventoryEntry.source}:Request`),
-    maxTimeoutMs: numberField(source, "MaxTimeoutMs", 600_000),
     name,
     outputSchema: schemaFromClassBody(resultBody, `${inventoryEntry.source}:${resultType}`),
     permissions: stringArrayField(source, "Permissions"),
@@ -39,11 +33,8 @@ export function extractConditionalToolDescriptor(root, inventoryEntry) {
     sideEffects: stringArrayField(source, "SideEffects"),
     source: inventoryEntry.descriptorOwner.startsWith("extension:") ? "extension" : "built-in",
     summary: stringField(source, "Summary"),
-    supportStatus: "live-bridge",
     supportsDryRun: booleanField(source, "SupportsDryRun"),
-    supportsJob: false,
     target,
-    version: optionalStringField(source, "Version") ?? "1.0.0",
   };
 }
 
@@ -170,11 +161,6 @@ function optionalStringField(source, field) {
 
 function booleanField(source, field) {
   return new RegExp(`\\b${escapeRegex(field)}\\s*=\\s*true\\b`).test(source);
-}
-
-function numberField(source, field, fallback) {
-  const match = new RegExp(`\\b${escapeRegex(field)}\\s*=\\s*(\\d+)`).exec(source);
-  return match ? Number(match[1]) : fallback;
 }
 
 function stringArrayField(source, field) {

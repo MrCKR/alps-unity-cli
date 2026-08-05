@@ -24,7 +24,6 @@ namespace UnityCli.Cinemachine
             public CinemachinePackageStatus Cinemachine { get; set; }
             public CinemachineObjectInfo Object { get; set; }
             public List<CinemachinePlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -33,7 +32,6 @@ namespace UnityCli.Cinemachine
             Summary = "Add, configure, or remove a CinemachineBasicMultiChannelPerlin noise component on a virtual camera.",
             Description = "Add, configure, or remove a CinemachineBasicMultiChannelPerlin noise component on a Cinemachine virtual camera. remove=true deletes the noise component from the target camera.",
             Group = "cinemachine",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.cinemachine" },
             SideEffects = new[] { "scene-modify" },
@@ -83,7 +81,7 @@ namespace UnityCli.Cinemachine
                     throw new UnityCliBridge.BridgeCommandException("E_CINEMACHINE_NOISE_VERIFY_FAILED", "Cinemachine noise component still exists after removal.", "Inspect the virtual camera before retrying.");
                 CinemachineToolSupport.MarkDirty(removedTarget);
                 effects.Add(new CinemachinePlannedEffect { Type = "cinemachine.noise.remove", Target = GameObjectToolSupport.HierarchyPath(removedTarget) });
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Cinemachine = CinemachineToolSupport.BuildPackageStatus(), Object = CinemachineToolSupport.BuildObjectInfo(removedTarget), PlannedEffects = effects, LogPath = ctx.LogPath });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Cinemachine = CinemachineToolSupport.BuildPackageStatus(), Object = CinemachineToolSupport.BuildObjectInfo(removedTarget), PlannedEffects = effects });
             }
 
             if (existing == null) CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Noise", noiseType);
@@ -120,8 +118,7 @@ namespace UnityCli.Cinemachine
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

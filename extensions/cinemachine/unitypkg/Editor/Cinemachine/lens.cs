@@ -24,7 +24,6 @@ namespace UnityCli.Cinemachine
             public CinemachinePackageStatus Cinemachine { get; set; }
             public CinemachineObjectInfo Object { get; set; }
             public List<CinemachinePlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -33,7 +32,6 @@ namespace UnityCli.Cinemachine
             Summary = "Get or set Cinemachine virtual camera lens properties via SerializedObject-backed fields.",
             Description = "Set Cinemachine virtual camera lens properties through SerializedObject so the tool remains resilient across internal field renames. Supported fields are fieldOfView, nearClipPlane, farClipPlane, orthographicSize, and dutch.",
             Group = "cinemachine",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.cinemachine" },
             SideEffects = new[] { "scene-modify" },
@@ -136,8 +134,7 @@ namespace UnityCli.Cinemachine
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

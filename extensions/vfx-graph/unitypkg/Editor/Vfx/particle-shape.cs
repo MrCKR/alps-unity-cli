@@ -31,7 +31,6 @@ namespace UnityCli
             public GameObjectRef Target { get; set; }
             public VfxParticleShapeInfo Shape { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -40,7 +39,6 @@ namespace UnityCli
             Summary = "Update ParticleSystem shape type, dimensions, and random direction settings.",
             Description = "Update the shape module of an existing ParticleSystem. Supports enabled, shapeType, radius, angle, arc, length, box axes, and randomDirection.",
             Group = "vfx",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "particle-shape-edit" },
             Target = "editor",
@@ -122,8 +120,8 @@ namespace UnityCli
             }
             if (request.RandomDirection.HasValue)
             {
-                shape.randomDirection = request.RandomDirection.Value;
-                effects.Add(VfxToolSupport.Effect("vfx.particle-shape", "randomDirection", VfxToolSupport.Bool(shape.randomDirection)));
+                shape.randomDirectionAmount = request.RandomDirection.Value ? 1f : 0f;
+                effects.Add(VfxToolSupport.Effect("vfx.particle-shape", "randomDirection", VfxToolSupport.Bool(request.RandomDirection.Value)));
             }
 
             var observed = VfxToolSupport.ResolveObservedComponent<ParticleSystem>(gameObjectId, "vfx.particle-shape");
@@ -142,10 +140,9 @@ namespace UnityCli
                     Arc = observed.shape.arc,
                     Length = observed.shape.length,
                     Box = new Vector3Data(observed.shape.scale),
-                    RandomDirection = observed.shape.randomDirection
+                    RandomDirection = observed.shape.randomDirectionAmount > 0f
                 },
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

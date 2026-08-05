@@ -33,10 +33,11 @@ test("extension atomic mutations return observed state or fail closed", async ()
   assert.match(particleClear, /particleSystem\.Clear\(withChildren\)/);
   assert.match(particleClear, /await VfxActionToolSupport\.RequireParticleState\(particleSystem, withChildren, system => system\.particleCount == 0/);
 
-  assert.match(bevel, /beforeVertexCount = ProBuilderReflection\.GetVertexCount\(mesh\)/);
-  assert.match(bevel, /freshMesh = ProBuilderOperationProof\.ResolveFreshMesh/);
-  assert.match(bevel, /afterVertexCount = ProBuilderReflection\.GetVertexCount\(freshMesh\)/);
-  assert.match(bevel, /afterFaceCount = ProBuilderReflection\.GetFaceCount\(freshMesh\)/);
-  assert.match(bevel, /afterEdgeCount = ProBuilderReflection\.GetEdgeCount\(freshMesh\)/);
-  assert.match(bevel, /Bevel did not produce observable mesh topology changes/);
+  assert.match(bevel, /var plan = ProBuilderBevelCompletionProof\.Capture\(go, typedMesh, frozenEdges, amount\)/);
+  assert.match(bevel, /var target = request\.Target/);
+  assert.match(bevel, /freshMesh = CanonicalMeshSnapshot\.ResolveFreshMesh\(target, plan\.Before\.Identity\)/);
+  assert.doesNotMatch(bevel.slice(bevel.indexOf("ctx.CommitEffect()")), /\brequest\./);
+  assert.match(bevel, /ProBuilderBevelCompletionProof\.Matches\(plan, after\)/);
+  assert.match(bevel, /Fresh mesh does not equal the frozen 5\.2\.4 bevel terminal plan/);
+  assert.doesNotMatch(bevel, /ProBuilderEdgeCompletionProof/);
 });

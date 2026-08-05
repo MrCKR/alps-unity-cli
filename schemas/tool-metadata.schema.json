@@ -1,156 +1,86 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unity-cli.local/schemas/tool-metadata.schema.json",
-  "title": "Unity CLI Tool Metadata",
-  "description": "Describes a single tool exposed by the Unity CLI, including identity, schemas, behavioral hints, permissions, examples and documentation references.",
+  "title": "Unity CLI Public Tool Descriptor",
+  "description": "Public direct Tool descriptor used for discovery and first-call routing.",
   "type": "object",
-  "required": ["name", "summary", "description", "group", "inputSchema", "destructiveHint"],
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "summary",
+    "description",
+    "group",
+    "inputSchema",
+    "outputSchema",
+    "destructiveHint",
+    "supportsDryRun",
+    "target",
+    "availabilityScope",
+    "playModeSupport",
+    "available"
+  ],
   "properties": {
     "name": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$",
-      "description": "Dotted tool identifier, e.g. 'scene.hierarchy'. Must be unique across the CLI."
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$"
     },
-    "summary": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Short routing summary used by tools group/list/search/describe so an AI can select the right tool during discovery."
-    },
-    "description": {
-      "type": "string",
-      "minLength": 1,
-      "description": "One-paragraph explanation of what the tool does."
-    },
-    "kind": {
-      "type": "string",
-      "const": "tool",
-      "description": "Discriminator: always 'tool' for ToolMetadata. Distinguishes from ContextMetadata (kind='context')."
-    },
-    "source": {
-      "type": "string",
-      "enum": ["built-in", "project", "extension"],
-      "description": "Origin: built-in (shipped with CLI), project (custom tool in Unity project), extension (from extension package)."
-    },
-    "group": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Logical grouping field used by tools group/list/describe/run discovery."
-    },
-    "inputSchema": {
-      "type": "object",
-      "description": "JSON Schema for the tool's input parameters. Built-in TS tools provide this through defineTool metadata; C# tools derive it from the Request DTO."
-    },
-    "outputSchema": {
-      "type": "object",
-      "description": "JSON Schema for the tool's successful output. Built-in TS tools provide this through defineTool metadata; C# tools derive it from the Result DTO."
-    },
-    "destructiveHint": {
-      "type": "boolean",
-      "default": false,
-      "description": "True if the tool may irreversibly modify or delete data."
-    },
+    "summary": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "group": { "type": "string", "minLength": 1 },
+    "inputSchema": { "type": "object" },
+    "outputSchema": { "type": "object" },
+    "destructiveHint": { "type": "boolean" },
     "sideEffects": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Side effect categories this tool may produce, e.g. ['file-write', 'scene-modify']."
-    },
-    "riskLevel": {
-      "type": "string",
-      "enum": ["safe", "low", "medium", "high", "critical"],
-      "description": "Risk level classification for safety disclosure."
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
     },
     "playModeSupport": {
       "type": "string",
-      "enum": ["supported", "runtime-only", "session-affecting", "editor-only", "unknown"],
-      "description": "Play Mode execution semantics: supported, runtime-only, session-affecting, editor-only, or unknown."
+      "enum": ["supported", "runtime-only", "session-affecting", "editor-only", "unknown"]
     },
-    "equivalentUnityMcp": {
-      "type": "string",
-      "description": "Mapping to equivalent unity-mcp tool name, for parity tracking."
-    },
-    "longRunning": {
-      "type": "boolean",
-      "default": false,
-      "description": "True if the tool typically takes more than a few seconds."
-    },
-    "requiresMainThread": {
-      "type": "boolean",
-      "default": true,
-      "description": "True if the tool must run on the Unity main thread."
-    },
-    "supportsDryRun": {
-      "type": "boolean",
-      "default": false,
-      "description": "True if the tool accepts a dry-run / preflight flag."
-    },
-    "timeoutMs": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "Suggested timeout in milliseconds."
-    },
+    "supportsDryRun": { "type": "boolean" },
     "permissions": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Permission tokens required, e.g. ['bridge:connect', 'file:write']."
-    },
-    "cancellationSemantics": {
-      "type": "string",
-      "description": "How cancellation behaves for long-running commands: immediate process kill, cooperative cancellation, or marker-only waiting for the underlying operation to finish."
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
     },
     "examples": {
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["description", "argv"],
         "properties": {
-          "description": { "type": "string" },
+          "description": { "type": "string", "minLength": 1 },
           "argv": {
             "type": "array",
+            "minItems": 1,
             "items": { "type": "string" }
-          },
-          "output": { "description": "Expected partial output for documentation." }
+          }
         }
-      },
-      "description": "Representative invocations."
+      }
     },
-    "docsTopic": {
+    "source": {
       "type": "string",
-      "description": "Topic key for 'unity_cli docs <topic>'."
-    },
-    "handler": {
-      "type": "string",
-      "enum": ["bridge", "bridge-runtime", "job", "offline", "hybrid"],
-      "description": "Execution mode: bridge (live Unity Editor), bridge-runtime (runtime tool via Bridge with Play Mode validation), job (batch mode), offline (no Unity), hybrid (bridge with job fallback)."
-    },
-    "supportStatus": {
-      "type": "string",
-      "enum": ["live-bridge", "live-bridge-runtime", "bridge-job", "batch-job", "cli-only", "planned"],
-      "description": "User-facing command support status: live Bridge executable, live Bridge runtime (Play Mode) executable, live Bridge plus batch/job executable, batch/job only, CLI-only offline, or declared/planned for future coverage."
-    },
-    "cliCommand": {
-      "type": "string",
-      "description": "The CLI argv prefix, e.g. 'scene hierarchy'."
+      "enum": ["built-in", "project", "extension"]
     },
     "target": {
       "type": "string",
-      "enum": ["editor", "runtime", "both"],
-      "default": "editor",
-      "description": "Execution target: 'editor' (default, edit-mode APIs), 'runtime' (Play Mode APIs, requires Play Mode active), or 'both' (router checks editorState to decide)."
+      "enum": ["editor", "runtime", "both"]
     },
     "availabilityScope": {
       "type": "string",
-      "description": "Availability scope for the tool. 'editorSession' (default) for editor-domain tools, 'playModeSession' for runtime tools that are only available when Unity is in Play Mode."
+      "enum": ["editorSession", "playModeSession", "always"]
     },
-    "available": {
-      "type": "boolean",
-      "description": "Whether the tool is currently available based on the resolved target's session state. Runtime tools are only available when Play Mode is active. Populated by discovery responses at runtime, not in static metadata."
-    },
+    "available": { "type": "boolean" },
+    "unavailableReason": { "type": "string", "minLength": 1 },
     "requiresPackages": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Unity package names required by this tool at runtime (e.g. 'com.unity.visualeffectgraph'). When absent the tool has no package prerequisites. Tools with requiresPackages that are executed against a project lacking the package will return a package-not-found error (e.g. E_VFX_PACKAGE_MISSING, E_PROBUILDER_PACKAGE_NOT_FOUND)."
-    }
-  },
-  "additionalProperties": false
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "extensionId": { "type": "string", "minLength": 1 }
+  }
 }

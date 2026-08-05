@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding } from "../../bridge/types.js";
-import { readEditorState, type EditorStateResult } from "../../contexts/editor/state.js";
+import type { EditorStateResult } from "../../contexts/editor/state.js";
 import { defineTool, type ToolContext } from "../define.js";
-import { StructuredToolError } from "../errors.js";
+import { waitForEditorTransitionEnd } from "./readiness.js";
+import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 import type { ToolError } from "../../protocol/envelope.js";
 
 export interface EditorCompileRequest {
@@ -78,6 +79,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
   target: "editor",
   destructiveHint: false,
   supportsDryRun: true,
+  timeoutMs: 120_000,
   playModeSupport: "editor-only",
   sideEffects: ["asset-refresh", "script-compile", "domain-reload"],
   handler: "hybrid",
@@ -85,9 +87,6 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
   examples: [{ description: "Refresh and compile the current Editor.", argv: ["tools", "run", "editor.compile"] }],
   async execute(request, context) {
     if (request.path !== undefined && request.path.length === 0) throw new StructuredToolError("E_SCHEMA_INVALID", "editor.compile path must be a non-empty Unity asset path.", ["Omit path to refresh the project, or pass an existing Assets-relative path."]);
-    if (context.execution.job) {
-      throw new StructuredToolError("E_TOOL_JOB_UNSUPPORTED", "editor.compile requires a live Unity Editor session and does not support --job.", ["Run editor.refresh for a closed-project batch refresh."]);
-    }
     const plannedEffects = compilePlannedEffects(request);
     if (context.execution.dryRun) return { dryRun: true, plannedEffects };
 
@@ -95,7 +94,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
     if (Date.now() >= absoluteDeadlineMs) throw compileTimeout();
     let state: EditorStateResult;
     try {
-      state = await readEditorState({ requestId: compileChildRequestId(context.requestId, "_compile_state"), flags: context.flags, dataDir: context.dataDir, bridgeExecute: context.bridgeExecute, observationAbsoluteDeadlineMs: absoluteDeadlineMs } as never);
+      state = await waitForEditorTransitionEnd(context, compileChildRequestId(context.requestId, "_compile_state"), absoluteDeadlineMs);
     } catch (error) {
       if (Date.now() >= absoluteDeadlineMs) throw compileTimeout();
       throw error;
@@ -128,13 +127,14 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
 
     const statusId = compileChildRequestId(context.requestId, "_compile_status");
     for (;;) {
-      if (Date.now() >= absoluteDeadlineMs) throw compileOutcomeUnknown("E_EXECUTION_TIMEOUT");
+      if (Date.now() >= absoluteDeadlineMs) throw compileTimeout();
       await delay(Math.min(100, Math.max(1, absoluteDeadlineMs - Date.now())));
       let status: { data?: unknown };
       try {
         status = await bridge(statusId, "internal.editor.compile.status", { rootRequestId: context.requestId }, boundContext, statusInvocation);
       } catch (error) {
-        throw compileOutcomeUnknown(error instanceof StructuredToolError ? error.code : "BRIDGE_CONNECTION_FAILED");
+        const cause = error instanceof StructuredToolError ? error : undefined;
+        throw compileTimeout(cause?.code, cause?.details);
       }
       const data = record(status.data);
       if (data.terminal !== true) continue;
@@ -239,8 +239,10 @@ function compilePlannedEffects(request: EditorCompileRequest): EditorCompilePlan
 }
 /** 长 root 使用完整内容 hash 派生 child ID，避免共享前缀的并发请求碰撞。 */
 export function compileChildRequestId(root: string, suffix: string): string { if (root.length + suffix.length <= 200) return `${root}${suffix}`; const digest = createHash("sha256").update(root, "utf8").digest("hex").slice(0, 24); return `${root.slice(0, 160)}_${digest}${suffix}`; }
-function compileTimeout(): StructuredToolError { return new StructuredToolError("E_EXECUTION_TIMEOUT", "editor.compile did not reach a terminal result before the request deadline.", ["Inspect editor.state and retry after Unity is responsive."]); }
-function compileOutcomeUnknown(causeCode: string): StructuredToolError { return new StructuredToolError("E_REQUEST_OUTCOME_UNKNOWN", "editor.compile was accepted but its durable root terminal could not be retrieved before the deadline.", ["Inspect editor.state and the Unity compiler state before deciding whether to submit a new request."], { causeCode }, false, 0); }
+function compileTimeout(causeCode?: string, details?: RecordValue): StructuredToolError {
+  const blockers = blockersFromDetails(details);
+  return new StructuredToolError("E_EXECUTION_TIMEOUT", blockerTimeoutMessage("editor.compile", blockers), blockers ? blockerNextActions() : ["Inspect editor.state and the Unity compiler state before deciding whether to submit a new request."], { ...(causeCode ? { causeCode } : {}), ...(blockers ? { blockers } : {}) }, false, 0);
+}
 function containsPrivateCompileField(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   if (Array.isArray(value)) return value.some(containsPrivateCompileField);

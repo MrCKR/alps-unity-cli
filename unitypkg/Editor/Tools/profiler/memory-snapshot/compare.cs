@@ -20,7 +20,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public MemorySnapshotEntry SnapshotA { get; set; }
             public MemorySnapshotEntry SnapshotB { get; set; }
             public SnapshotDelta Delta { get; set; }
@@ -32,7 +31,7 @@ namespace UnityCli
             Name = "profiler.memory-snapshot.compare",
             Summary = "Compare two .snap memory snapshots at file-level metadata (size delta, time delta).",
             Description = "Compare two .snap memory snapshots at file-level metadata (size delta, time delta). For object-level diff, open both in the Memory Profiler window.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Compare two snapshots", Input = new Request { SnapshotA = "snap1.snap", SnapshotB = "snap2.snap" } } }
         };
@@ -64,7 +63,6 @@ namespace UnityCli
             var fiB = new FileInfo(snapshotBPath);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "profiler.memory-snapshot.compare",
                 SnapshotA = MemorySnapshotEntry.FromFileInfo(fiA),
                 SnapshotB = MemorySnapshotEntry.FromFileInfo(fiB),
                 Delta = new SnapshotDelta

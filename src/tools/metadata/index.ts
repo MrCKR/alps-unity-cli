@@ -1,11 +1,11 @@
 /**
  * Tool metadata index for TS-local tools.
  *
- * 设计原则(2026-07-08 修正):
- * - 无 bridge = 不显示 C# 工具
- * - TS 本地工具(metadata 真源 = defineTool registry)离线可发现/describe/search
- * - C# built-in / extension / project 工具 descriptor 运行时从 bridge 取
- * - 不再保留任何 C# 工具的 TS 手写重复 metadata
+ * 设计原则:
+ * - TS local Tool 的 metadata 真源是 defineTool registry。
+ * - C# built-in / Extension descriptor 来自已验证的 static catalog，可离线发现。
+ * - Project-defined descriptor 只从选定的 Live Editor 读取。
+ * - 每项能力只有一个 descriptor owner，不维护 TS 手写重复 metadata。
  */
 
 import { bridgeCommandRegistry } from "../../bridge/index.js";
@@ -15,29 +15,25 @@ import "../.generated-registry.js";
 import { defineToolMetadata } from "../define.js";
 import { builtinExtensionGroupNames } from "../../extensions/tool-manifest.js";
 import type { PlayModeSupport, ResolvedToolMetadata, ToolMetadata, ToolSource } from "./types.js";
-import { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCliCommand, toolSource } from "./derived.js";
+import { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolPublicRoute, toolSource } from "./derived.js";
 import { supportStatusForTool, toolHandler } from "./status.js";
 
 export { supportStatusForTool, toolHandler } from "./status.js";
-export { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCancellation, toolCliCommand, toolDocsTopic, toolIsMutation, toolSource } from "./derived.js";
-export type { PlayModeSupport, ResolvedToolMetadata, ToolCancellation, ToolCompletionContract, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
+export { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolDocsTopic, toolIsMutation, toolPublicRoute, toolSource } from "./derived.js";
+export type { PlayModeSupport, ResolvedToolMetadata, ToolCompletionContract, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
 
 /** Extension groups are discovered from extension manifests, not TS tool metadata. */
 export const EXTENSION_GROUPS = new Set(builtinExtensionGroupNames());
 
 /** Normalize a ToolMetadata entry to include generated source and Play Mode defaults. */
 export function normalizeToolMetadata(tool: ToolMetadata, source: ToolSource = "built-in"): ResolvedToolMetadata {
-  const longRunning = isLongRunningTool(tool);
   const normalized: ResolvedToolMetadata = {
     ...tool,
     source: toolSource(tool, source),
     handler: toolHandler(tool),
     playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool),
-    supportStatus: supportStatusForTool(tool),
-    cliCommand: toolCliCommand(tool),
     availabilityScope: toolAvailabilityScope(tool),
     riskLevel: inferToolRiskLevel(tool),
-    ...(longRunning ? { longRunning: true } : {})
   };
   return normalized;
 }
@@ -46,7 +42,7 @@ export function normalizeToolMetadata(tool: ToolMetadata, source: ToolSource = "
 export function inferPlayModeSupport(tool: ToolMetadata): PlayModeSupport {
   const handler = toolHandler(tool);
   if (tool.target === "runtime" || handler === "bridge-runtime") return "runtime-only";
-  if (handler === "job" || handler === "offline") return "editor-only";
+  if (handler === "offline") return "editor-only";
   if (isLongRunningTool(tool) || tool.sideEffects?.some((effect) => ["asset-import", "file-write", "package-modify"].includes(effect))) return "session-affecting";
   if (tool.destructiveHint || tool.supportsDryRun) return "runtime-only";
   return "supported";
@@ -128,17 +124,17 @@ function validateBuiltinTools(tools: ToolMetadata[], skipCliCommandBridgeCheck: 
     names.add(tool.name);
 
     if (!skipCliCommandBridgeCheck && toolHandler(tool) === "bridge" && tool.supportStatus !== "planned") {
-      const cliCommand = toolCliCommand(tool);
-      const match = /^tools run (.+)$/.exec(cliCommand);
+      const publicRoute = toolPublicRoute(tool);
+      const match = /^tools run (.+)$/.exec(publicRoute);
       if (match) {
         const toolName = match[1];
         const spec = bridgeCommandRegistry.specs().find((s) => s.toolName === toolName || s.bridgeCommand === toolName);
         if (!spec) {
-          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${cliCommand}" but no bridge spec resolves toolName/bridgeCommand="${toolName}"`);
+          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses public route "${publicRoute}" but no bridge spec resolves toolName/bridgeCommand="${toolName}"`);
         }
         const resolved = spec.toolName ?? spec.bridgeCommand;
         if (resolved !== tool.name) {
-          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${cliCommand}" but bridge registry resolves ${resolved}`);
+          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses public route "${publicRoute}" but bridge registry resolves ${resolved}`);
         }
       }
     }

@@ -83,9 +83,11 @@ test("PlayMode scene tools use the mutation helper instead of unsafe Editor APIs
   }
 
   const prefab = await source("unitypkg/Editor/Tools/prefab/instantiate.cs");
-  assert.match(prefab, /EditorApplication\.isPlaying/);
-  assert.match(prefab, /UnityEngine\.Object\.Instantiate\(prefab\)/);
+  // PlayMode 也必须经 PrefabUtility.InstantiatePrefab 建立 prefab 连接，
+  // 否则终态 readback 的 GetCorrespondingObjectFromSource 断言必然把合法调用判成 outcome-unknown。
   assert.match(prefab, /PrefabUtility\.InstantiatePrefab/);
+  assert.match(prefab, /GetCorrespondingObjectFromSource/);
+  assert.doesNotMatch(prefab, /UnityEngine\.Object\.Instantiate\(prefab\)/);
 
   const objectModify = await source("unitypkg/Editor/Tools/object/modify.cs");
   assert.match(objectModify, /E_TOOL_PLAYMODE_UNAVAILABLE/);
@@ -117,15 +119,15 @@ test("temporary EditMode cleanup descriptors avoid shared Undo probing", async (
   assert.match(deleteSource, /EditMode stays dirty, and final PlayMode proof requires reading editor\.state/);
   assert.match(deleteSource, /call scene\.load once with the exact active scene path/);
   assert.match(deleteSource, /do not probe or repeat editor\.undo/);
-  assert.match(deleteSource, /effects\.playModeChanged is a per-call side-effect delta, not the current mode/);
+  assert.doesNotMatch(deleteSource, /effects\.playModeChanged/);
   assert.match(deleteSource, /read the editor\.state Context after cleanup/);
 
   const undoSource = await source("unitypkg/Editor/Tools/editor/undo.cs");
-  assert.match(undoSource, /exactly one entry from the shared Unity Editor Undo stack/);
-  assert.match(undoSource, /performed=true proves Unity raised undoRedoPerformed for this operation/);
-  assert.match(undoSource, /Undo\.undoRedoPerformed \+= callback[\s\S]*Undo\.PerformUndo\(\)[\s\S]*Undo\.undoRedoPerformed -= callback[\s\S]*if \(!performed\)/);
+  assert.match(undoSource, /Call Undo\.PerformUndo\(\) exactly once/);
+  assert.match(undoSource, /completionProbe must identify an eligible read-only Context/);
+  assert.match(undoSource, /Undo\.undoRedoPerformed \+= callback[\s\S]*ctx\.RunCompletionProbe\([\s\S]*Undo\.PerformUndo\(\)[\s\S]*if \(!performed\)[\s\S]*Undo\.undoRedoPerformed -= callback/);
   assert.match(undoSource, /SideEffects = new\[\] \{ "undo-redo-replay", "undo-stack" \}/);
-  assert.match(undoSource, /use scene\.load once with the exact active scene path instead/);
+  assert.doesNotMatch(undoSource, /performed=true proves|business success without attribution/);
 });
 
 test("persistent writes are explicitly editor-only", async () => {

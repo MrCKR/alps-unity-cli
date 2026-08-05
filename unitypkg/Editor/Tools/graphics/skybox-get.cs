@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request { }
         public sealed class Result { public SkyboxInfo Skybox { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.skybox-get", Summary = "Read skybox material, sun, ambient, fog and reflection environment settings.", Description = "Read-only: returns RenderSettings skybox, sun, ambient mode/intensity/color, fog settings, and reflection settings.", Group = "graphics", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read skybox settings", Input = new Request { } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.skybox-get", Summary = "Read skybox material, sun, ambient, fog and reflection environment settings.", Description = "Read-only: returns RenderSettings skybox, sun, ambient mode/intensity/color, fog settings, and reflection settings.", Group = "graphics",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read skybox settings", Input = new Request { } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var skybox = RenderSettings.skybox;

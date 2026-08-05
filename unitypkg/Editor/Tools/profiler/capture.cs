@@ -13,7 +13,7 @@ namespace UnityCli
 {
     /// <summary>
     /// profiler.capture — 采集 Profiler 帧数据到文件。
-    /// 多帧/跨帧采集通过统一 wait scheduler 驱动，不再暴露 deferred 子接口。
+    /// 多帧/跨帧采集通过统一 wait scheduler 驱动，并在同一次公开调用中返回最终结果。
     /// </summary>
     public class ProfilerCaptureTool : IUnityCliTool<ProfilerCaptureTool.Request, ProfilerCaptureTool.Result>
     {
@@ -47,10 +47,10 @@ namespace UnityCli
         {
             Name = "profiler.capture",
             Summary = "Capture profiler frame data to a file (single-frame or cross-frame) via the unified wait scheduler.",
-            Description = "Capture profiler frame data to a file. format=raw with durationMs>0 or frames>1 performs cross-frame capture through the framework wait scheduler; single-frame captures complete synchronously. startFrame/endFrame report Time.frameCount at the beginning and end of capture, so they advance naturally in Play Mode and may stay unchanged when Unity is only idling in the Editor. Pass captureTag to also write a <path>.metadata.json sidecar for archival and correlation.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "persistent-artifact-write" }, Target = "editor", PlayModeSupport = "session-affecting",
+            Description = "Capture profiler frame data to a file. format=raw with durationMs>0 or frames>1 performs cross-frame capture through the framework wait scheduler; single-frame captures complete synchronously. Multi-frame raw artifacts can be large, so start with frames=1 and increase deliberately. startFrame/endFrame report Time.frameCount at the beginning and end of capture, so they advance naturally in Play Mode and may stay unchanged when Unity is only idling in the Editor. Pass captureTag to also write a <path>.metadata.json sidecar for archival and correlation.",
+            Group = "profiler",DestructiveHint = true, SideEffects = new[] { "persistent-artifact-write" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
-            Examples = new[] { new ToolExample { Description = "Capture 30 raw frames with tag", Input = new Request { Path = "baseline.raw", Format = "raw", Frames = 30, CaptureTag = "baseline-before-opt" } } }
+            Examples = new[] { new ToolExample { Description = "Capture one raw profiler snapshot with tag", Input = new Request { Path = "baseline.raw", Format = "raw", Frames = 1, CaptureTag = "baseline-before-opt" } } }
         };
 
         public async ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default)

@@ -46,6 +46,9 @@ test("URP and VFX mutations validate inputs before commit and return observed st
   assert.match(particleMain, /VerifyParticleMainFields\(observed, request\)/);
   assert.match(particleEmission, /VerifyParticleEmissionFields/);
   assert.match(particleShape, /VerifyParticleShapeFields/);
+  assert.match(particleShape, /shape\.randomDirectionAmount = request\.RandomDirection\.Value \? 1f : 0f/);
+  assert.match(vfxSupport, /Mathf\.Approximately\(shape\.randomDirectionAmount, randomDirection\.Value \? 1f : 0f\)/);
+  assert.doesNotMatch(particleShape + vfxSupport, /shape\.randomDirection(?:\s|=|\)|,)/);
 });
 
 test("URP Volume plans inspect only non-mutating profiles and mutate a fresh runtime profile", async () => {
@@ -59,6 +62,8 @@ test("URP Volume plans inspect only non-mutating profiles and mutate a fresh run
   assert.match(validate, /GetProfileForPlanning\(volume\)/);
   assert.doesNotMatch(validate, /GetVolumeProfile\(/);
   assert.match(support, /m_InternalProfile/);
+  // sharedProfile 是 Core RP 14 的 public 字段：规划读回必须字段优先，否则 PlayMode 重载后永远命中不了。
+  assert.match(support, /GetField\("sharedProfile", BindingFlags\.Instance \| BindingFlags\.Public \| BindingFlags\.NonPublic\)/);
   assert.match(support, /PlanningProfileId/);
   assert.match(support, /SharedProfileId/);
   assert.doesNotMatch(support, /public static SetVolumeResult Set\(string target/);

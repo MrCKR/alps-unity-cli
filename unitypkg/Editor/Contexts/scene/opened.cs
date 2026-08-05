@@ -25,7 +25,6 @@ namespace UnityCli.Contexts.Scene
             public List<OpenedScene> Scenes { get; set; }
             public long Count { get; set; }
             public string ActiveScene { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ContextDescriptor Describe() => new ContextDescriptor
@@ -34,12 +33,10 @@ namespace UnityCli.Contexts.Scene
             Summary = "List currently loaded Editor scenes with active, loaded, dirty, and build index state.",
             Description = "List currently loaded scenes in the Editor with name, path, build index, loaded state, dirty state, and active scene. Read-only; does not load, unload, save, or switch scenes.",
             Category = "scene",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live",
             Examples = new[] { new ContextExample { Description = "List open scenes", Input = new Request { } } }
         };
 
@@ -66,8 +63,7 @@ namespace UnityCli.Contexts.Scene
             {
                 Scenes = scenes,
                 Count = SceneManager.sceneCount,
-                ActiveScene = SceneManager.GetActiveScene().name,
-                LogPath = ctx.LogPath
+                ActiveScene = SceneManager.GetActiveScene().name
             });
         }
     }

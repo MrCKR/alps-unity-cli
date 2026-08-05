@@ -46,12 +46,13 @@
     "observation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["live", "sources", "observedAt", "elapsedMs", "freshness", "lastHeartbeatAt", "dataObservedAt", "dataAgeMs", "unknownFields"],
+      "required": ["live", "sources", "windowsUi", "observedAt", "elapsedMs", "freshness", "lastHeartbeatAt", "dataObservedAt", "dataAgeMs", "unknownFields"],
       "properties": {
         "live": { "type": "boolean" },
         "sources": { "type": "array", "items": { "enum": ["bridge", "registry", "windows-ui", "process"] }, "uniqueItems": true },
+        "windowsUi": { "enum": ["not-observed", "observed-empty", "observed-blocked", "unproven", "unsupported"] },
         "observedAt": { "type": "string", "format": "date-time" },
-        "elapsedMs": { "type": "integer", "minimum": 0, "maximum": 1100 },
+        "elapsedMs": { "type": "integer", "minimum": 0 },
         "freshness": { "enum": ["live", "fresh", "stale", "unknown"] },
         "lastHeartbeatAt": { "type": ["string", "null"], "format": "date-time" },
         "dataObservedAt": { "type": ["string", "null"], "format": "date-time" },
@@ -76,16 +77,16 @@
     "blocker": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "title", "message", "requiresUserAction", "canAutoResolve", "source", "confidence"],
+      "required": ["type", "dialogId", "title", "message", "buttons", "requiresUserAction", "source", "confidence"],
       "properties": {
-        "kind": { "type": "string", "minLength": 1 },
+        "type": { "const": "dialog" },
+        "dialogId": { "type": "string", "minLength": 1 },
         "title": { "type": "string" },
         "message": { "type": "string" },
-        "requiresUserAction": { "type": "boolean" },
-        "canAutoResolve": { "const": false },
-        "source": { "enum": ["unity", "registry", "windows-ui"] },
-        "confidence": { "enum": ["exact", "inferred", "unknown"] },
-        "buttons": { "type": "array", "items": { "type": "string" } }
+        "buttons": { "type": "array", "items": { "type": "string" } },
+        "requiresUserAction": { "const": true },
+        "source": { "const": "windows-ui" },
+        "confidence": { "const": "exact" }
       }
     },
     "observedField": {

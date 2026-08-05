@@ -1,11 +1,10 @@
 #if UNITY_EDITOR
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Reflection;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.ProBuilder;
 
 namespace UnityCli.ProBuilder
 {
@@ -38,33 +37,54 @@ namespace UnityCli.ProBuilder
             return new Vector3(CheckedFloat(x, name + ".x"), CheckedFloat(y, name + ".y"), CheckedFloat(z, name + ".z"));
         }
 
-        internal sealed class Selection
+        // effect 前冻结 Unity 对象身份；readback 只能与这份 claim 比较，不能重新生成前态。
+        internal sealed class ObjectIdentityClaim
         {
-            internal int VertexCount;
-            internal int FaceCount;
-            internal int EdgeCount;
-            internal string[] Faces;
-            internal string[] Edges;
-            internal string[] Vertices;
-            internal string[] Smoothing;
-            internal string[] SharedVertices;
+            internal int InstanceId;
+            internal string GlobalObjectId;
+            internal int SceneHandle;
+        }
+
+        internal static ObjectIdentityClaim CaptureIdentity(GameObject go)
+        {
+            if (go == null || !go.scene.IsValid() || !go.scene.isLoaded) return null;
+            return new ObjectIdentityClaim
+            {
+                InstanceId = go.GetInstanceID(),
+                GlobalObjectId = GlobalObjectId.GetGlobalObjectIdSlow(go).ToString(),
+                SceneHandle = go.scene.handle
+            };
+        }
+
+        /// <summary>委托给 canonical snapshot 捕获 effect 前的完整 raw/shared/face/edge 闭集；touched 面可限制退化检查范围。</summary>
+        internal static CanonicalMeshSnapshot CaptureCanonicalSnapshot(GameObject go, int[] touchedFaceOccurrences = null)
+        {
+            return CanonicalMeshSnapshot.Capture(go, touchedFaceOccurrences);
+        }
+
+        /// <summary>委托 canonical identity claim 做 fresh 组件解析；禁止用 effect 后对象重新 claim 身份。</summary>
+        internal static UnityEngine.ProBuilder.ProBuilderMesh ResolveFreshCanonicalMesh(string target, CanonicalMeshSnapshot.ObjectIdentityClaim claim)
+        {
+            return CanonicalMeshSnapshot.ResolveFreshMesh(target, claim);
         }
 
         internal static void ValidateFaceIndices(object mesh, int[] indices)
         {
-            if (indices == null || indices.Length == 0 || ProBuilderReflection.GetFacesByIndices(mesh, indices) == null)
+            if (indices == null || indices.Length == 0 || indices.Distinct().Count() != indices.Length || ProBuilderReflection.GetFacesByIndices(mesh, indices) == null)
                 throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
         }
 
         internal static void ValidateVertexIndices(object mesh, int[] indices)
         {
             var count = ProBuilderReflection.GetVertexCount(mesh);
-            if (indices == null || indices.Length == 0 || count < 0 || indices.Any(index => index < 0 || index >= count))
+            if (indices == null || indices.Length == 0 || indices.Distinct().Count() != indices.Length || count < 0 || indices.Any(index => index < 0 || index >= count))
                 throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
         }
 
         internal static Array ValidateEdges(object mesh, int[] edgeIndices, ProBuilderInput.EdgePair[] pairs)
         {
+            if (edgeIndices != null && edgeIndices.Length > 0 && pairs != null && pairs.Length > 0)
+                throw ProBuilderErrors.SchemaInvalid("Pass exactly one of edgeIndices or edges.");
             var edges = ProBuilderReflection.ResolveEdges(mesh, edgeIndices, pairs);
             if (edges == null || edges.Length == 0 || (edgeIndices != null && edgeIndices.Length > 0 && edges.Length != edgeIndices.Length)
                 || (pairs != null && pairs.Length > 0 && edges.Length != pairs.Length))
@@ -72,80 +92,46 @@ namespace UnityCli.ProBuilder
             return edges;
         }
 
-        internal static Selection Capture(object mesh, int[] faceIndices = null, Array edges = null, int[] vertexIndices = null)
+        /// <summary>effect 后、tangent refresh 前为新增 quad 写入固定非退化 UV0；先完整验证范围，再一次性修改。</summary>
+        internal static bool ApplyDeterministicQuadUvs(object value, int firstFaceIndex, int faceCount)
         {
-            var positions = ProBuilderReflection.GetPositions(mesh);
-            var faces = faceIndices == null ? null : ProBuilderReflection.GetFacesByIndices(mesh, faceIndices);
-            if (positions == null || (faceIndices != null && faces == null)) return null;
-            return new Selection
+            var mesh = value as ProBuilderMesh; var faces = mesh == null ? null : mesh.faces; var textures = mesh?.textures?.ToArray();
+            if (mesh == null || faces == null || textures == null || textures.Length != mesh.vertexCount || firstFaceIndex < 0 || faceCount < 1 || firstFaceIndex + faceCount > faces.Count) return false;
+            var targets = new List<Tuple<Face, int>>();
+            for (var index = 0; index < faceCount; index++)
             {
-                VertexCount = ProBuilderReflection.GetVertexCount(mesh),
-                FaceCount = ProBuilderReflection.GetFaceCount(mesh),
-                EdgeCount = ProBuilderReflection.GetEdgeCount(mesh),
-                Faces = faces == null ? Array.Empty<string>() : faces.Cast<object>().Select(face => FaceSignature(face, positions, false)).ToArray(),
-                Edges = edges == null ? Array.Empty<string>() : edges.Cast<object>().Select(edge => EdgeSignature(edge, positions)).ToArray(),
-                Vertices = vertexIndices == null ? Array.Empty<string>() : vertexIndices.Select(index => VertexSignature(positions, index)).ToArray(),
-                Smoothing = faces == null ? Array.Empty<string>() : faces.Cast<object>().Select(SmoothingSignature).ToArray(),
-                SharedVertices = SharedVertexSignatures(mesh, vertexIndices)
-            };
+                var face = faces[firstFaceIndex + index]; var stream = face?.indexes?.ToArray();
+                if (stream == null || stream.Length != 6) return false;
+                var raw = stream.Distinct().OrderBy(item => item).ToArray();
+                if (raw.Length != 4 || raw[3] != raw[0] + 3) return false;
+                var edgeOrBridge = new[] { raw[0] + 2, raw[0] + 1, raw[0], raw[0] + 2, raw[0] + 3, raw[0] + 1 };
+                var faceExtrude = new[] { raw[0], raw[0] + 1, raw[0] + 2, raw[0] + 1, raw[0] + 3, raw[0] + 2 };
+                if (!stream.SequenceEqual(edgeOrBridge) && !stream.SequenceEqual(faceExtrude)) return false;
+                targets.Add(Tuple.Create(face, raw[0]));
+            }
+            var layout = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f) };
+            foreach (var target in targets)
+            {
+                target.Item1.manualUV = true; target.Item1.textureGroup = -1;
+                for (var offset = 0; offset < layout.Length; offset++) textures[target.Item2 + offset] = layout[offset];
+            }
+            mesh.textures = textures;
+            return true;
         }
 
-        internal static object ResolveFreshMesh(string target, GameObject expected)
+        internal static GameObject ResolveFreshObject(string target, ObjectIdentityClaim claim)
         {
             var fresh = ProBuilderInput.ResolveTarget(target);
-            if (fresh == null || expected == null || fresh.GetInstanceID() != expected.GetInstanceID()) return null;
-            return ProBuilderReflection.GetProBuilderMesh(fresh);
+            if (fresh == null || claim == null || fresh.GetInstanceID() != claim.InstanceId || !fresh.scene.IsValid() || !fresh.scene.isLoaded || fresh.scene.handle != claim.SceneHandle)
+                return null;
+            return string.Equals(GlobalObjectId.GetGlobalObjectIdSlow(fresh).ToString(), claim.GlobalObjectId, StringComparison.Ordinal) ? fresh : null;
         }
 
-        internal static bool HasInsertedVertices(Selection before, Selection after) => Readable(before, after) && after.VertexCount > before.VertexCount;
-        internal static bool HasTopologyExpansion(Selection before, Selection after) => Readable(before, after) && (after.VertexCount > before.VertexCount || after.FaceCount > before.FaceCount || after.EdgeCount > before.EdgeCount);
-        internal static bool HasRemovedRequestedFaces(Selection before, Selection after) => Readable(before, after) && before.Faces.Length > 0 && before.Faces.All(face => !after.Faces.Contains(face)) && after.FaceCount < before.FaceCount;
-        internal static bool HasMergedRequestedFaces(Selection before, Selection after) => Readable(before, after) && after.FaceCount < before.FaceCount && before.Faces.Length > 1 && before.Faces.All(face => !after.Faces.Contains(face));
-        internal static bool HasSubdividedRequestedFaces(Selection before, Selection after) => Readable(before, after) && after.FaceCount > before.FaceCount && before.Faces.Any(face => !after.Faces.Contains(face));
-        internal static bool HasFlippedRequestedFaces(Selection before, object mesh, int[] faceIndices)
+        internal static object ResolveFreshMesh(string target, ObjectIdentityClaim claim)
         {
-            var positions = ProBuilderReflection.GetPositions(mesh);
-            var faces = ProBuilderReflection.GetFacesByIndices(mesh, faceIndices);
-            return Readable(before, Capture(mesh, faceIndices)) && positions != null && faces != null
-                && faces.Cast<object>().Select(face => FaceSignature(face, positions, true)).Any(after => before.Faces.Contains(after));
-        }
-        internal static bool HasChangedSmoothing(Selection before, Selection after) => Readable(before, after) && before.Smoothing.Length > 0 && !before.Smoothing.SequenceEqual(after.Smoothing);
-        internal static bool HasMergedVertices(Selection before, Selection after) => Readable(before, after) && (after.VertexCount < before.VertexCount || before.Vertices.Any(vertex => !after.Vertices.Contains(vertex)));
-        internal static bool HasSplitVertices(Selection before, Selection after) => Readable(before, after) && before.SharedVertices.Length > 0 && !before.SharedVertices.SequenceEqual(after.SharedVertices);
-        internal static bool ContainsFaceSignatures(object mesh, IEnumerable<string> signatures)
-        {
-            var positions = ProBuilderReflection.GetPositions(mesh);
-            var faces = ProBuilderReflection.GetAllFaces(mesh);
-            return positions != null && faces != null && signatures.All(signature => faces.Cast<object>().Any(face => FaceSignature(face, positions, false) == signature));
+            return ProBuilderReflection.GetProBuilderMesh(ResolveFreshObject(target, claim));
         }
 
-        private static bool Readable(Selection before, Selection after) => before != null && after != null && before.VertexCount >= 0 && after.VertexCount >= 0 && before.FaceCount >= 0 && after.FaceCount >= 0;
-        private static string VertexSignature(IList<Vector3> positions, int index) => index >= 0 && index < positions.Count ? Describe(positions[index]) : null;
-        private static string EdgeSignature(object edge, IList<Vector3> positions)
-        {
-            var a = ProBuilderReflection.GetEdgeVertexA(edge);
-            var b = ProBuilderReflection.GetEdgeVertexB(edge);
-            var ends = new[] { VertexSignature(positions, a), VertexSignature(positions, b) };
-            Array.Sort(ends, StringComparer.Ordinal);
-            return string.Join("|", ends);
-        }
-        private static string FaceSignature(object face, IList<Vector3> positions, bool reverse)
-        {
-            var indexes = face.GetType().GetProperty("indexes")?.GetValue(face) as IEnumerable;
-            if (indexes == null) return null;
-            var vertices = indexes.Cast<object>().Select(value => VertexSignature(positions, Convert.ToInt32(value, CultureInfo.InvariantCulture))).ToArray();
-            if (reverse) Array.Reverse(vertices);
-            return string.Join("|", vertices);
-        }
-        private static string SmoothingSignature(object face) => Convert.ToString(face.GetType().GetProperty("smoothingGroup")?.GetValue(face), CultureInfo.InvariantCulture);
-        private static string[] SharedVertexSignatures(object mesh, int[] indices)
-        {
-            var groups = mesh.GetType().GetProperty("sharedVertices")?.GetValue(mesh) as IEnumerable;
-            if (groups == null || indices == null) return Array.Empty<string>();
-            return indices.Select(index => groups.Cast<object>().Select(group => group as IEnumerable).FirstOrDefault(group => group != null && group.Cast<object>().Any(value => Convert.ToInt32(value, CultureInfo.InvariantCulture) == index)))
-                .Select(group => group == null ? null : string.Join(",", group.Cast<object>().Select(value => Convert.ToString(value, CultureInfo.InvariantCulture)).OrderBy(value => value, StringComparer.Ordinal))).ToArray();
-        }
-        private static string Describe(Vector3 value) => string.Format(CultureInfo.InvariantCulture, "{0:R},{1:R},{2:R}", value.x, value.y, value.z);
     }
 }
 #endif

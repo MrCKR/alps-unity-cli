@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Rename an existing Assets/ asset file in place, without path separators.",
             Description = "Rename an existing Assets/ asset file in place. The name must not include path separators; use asset.move to change directories.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

@@ -15,7 +15,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Name { get; set; } }
         public sealed class Result { public UiElementRef Element { get; set; } public List<UiPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "ui.canvas.create", Summary = "Create a uGUI Canvas with CanvasScaler and GraphicRaycaster.", Description = "Create a ScreenSpaceOverlay Canvas with ScaleWithScreenSize mode (1920x1080 reference).", Group = "ui", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Create Canvas", Input = new Request { Name = "MainCanvas" } } } };
+        public ToolDescriptor Describe() => new() { Name = "ui.canvas.create", Summary = "Create a uGUI Canvas with CanvasScaler and GraphicRaycaster.", Description = "Create a ScreenSpaceOverlay Canvas with ScaleWithScreenSize mode (1920x1080 reference).", Group = "ui",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Create Canvas", Input = new Request { Name = "MainCanvas" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var name = string.IsNullOrEmpty(r.Name) ? "Canvas" : r.Name;

@@ -3,7 +3,6 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { destructiveCommands } from "../src/security-policy.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 import { contractToolNames, discoverLiveTools, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
@@ -14,7 +13,7 @@ test("reflection group tools exist with correct live descriptor hints", async ()
 
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "reflection.method.find", summary: "Find reflected methods.", description: "Find reflected methods.", group: "reflection" }),
-    makeLiveTool({ name: "reflection.method.call", summary: "Invoke a reflected method.", description: "Invoke a reflected method with --dry-run or --yes confirmation.", group: "reflection", destructiveHint: true, supportsDryRun: true, permissions: ["arbitrary-method-invocation"] })
+    makeLiveTool({ name: "reflection.method.call", summary: "Invoke a reflected method.", description: "Invoke a reflected method; --dry-run previews supported calls.", group: "reflection", destructiveHint: true, supportsDryRun: true, permissions: ["arbitrary-method-invocation"] })
   );
 
   const find = tools.get("reflection.method.find")!;
@@ -25,7 +24,7 @@ test("reflection group tools exist with correct live descriptor hints", async ()
   assert.equal(call.riskLevel, "critical");
   assert.equal(call.supportsDryRun, true);
   assert.ok(call.description.includes("--dry-run"));
-  assert.ok(call.description.includes("--yes"));
+  assert.doesNotMatch(call.description, /securityProof/i);
 });
 
 test("type.schema tool exists as live-discovered read-only bridge descriptor", async () => {
@@ -49,12 +48,12 @@ test("type.schema tool exists as live-discovered read-only bridge descriptor", a
   assert.match(JSON.stringify(schema.outputSchema), /definitionCount/);
 });
 
-test("reflection.method.call supports instanceRef and confirmation flow", async () => {
+test("reflection.method.call supports instanceRef without confirmation state", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({
       name: "reflection.method.call",
       summary: "Invoke a reflected method.",
-      description: "Invoke a reflected method with --dry-run or --yes confirmation.",
+      description: "Invoke a reflected method; --dry-run previews supported calls.",
       group: "reflection",
       destructiveHint: true,
       supportsDryRun: true,
@@ -73,6 +72,8 @@ test("reflection.method.call example is executable and overload selection is exp
   const reflection = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliReflection.cs", import.meta.url), "utf8");
   assert.match(source, /TypeName = "UnityEngine\.Mathf", MethodName = "Abs"/);
   assert.match(source, /ParameterTypes = new List<string> \{ "System\.Single" \}/);
+  assert.match(source, /CompletionProbe = new UnityCliCompletionProbe/);
+  assert.match(source, /Execution = new ToolExampleExecution \{ DryRun = true \}/);
   assert.match(source, /public List<string> ParameterTypes/);
   assert.match(source, /request\.Args, request\.ParameterTypes, request\.InstanceRef/);
   assert.match(reflection, /private static MethodInfo ResolveCallMethod/);
@@ -82,11 +83,19 @@ test("reflection.method.call example is executable and overload selection is exp
   assert.match(reflection, /E_METHOD_INVOCATION_FAILED/);
   assert.doesNotMatch(reflection, /audit\["ok"\] = false/);
   assert.doesNotMatch(reflection, /type\.GetMethod\(methodName, bindings\)/);
+  const bridge = await readFile(new URL("../src/bridge/domains/reflection.js", import.meta.url), "utf8");
+  assert.match(bridge, /parameterTypes: structured\.parameterTypes/);
+  assert.match(bridge, /completionProbe: structured\.completionProbe/);
+  assert.doesNotMatch(bridge, /security: structured\.security/);
   assert.doesNotMatch(source, /MethodName = "Translate"/);
+  assert.doesNotMatch(source, /public (?:string Command|bool Confirmed|bool RequiresConfirmation|string RiskLevel|bool DestructiveHint)/);
+  assert.doesNotMatch(reflection, /\{ "command", "reflection\.method\.call" \}/);
 });
 
 test("reflection probe bake requires Unity output and a readable cubemap artifact", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/graphics/bake-reflection-probe.cs", import.meta.url), "utf8");
+  assert.match(source, /E_GRAPHICS_ASSET_DIRECTORY_NOT_FOUND/);
+  assert.ok(source.indexOf("E_GRAPHICS_ASSET_DIRECTORY_NOT_FOUND") < source.indexOf("ctx.CommitEffect()"));
   assert.match(source, /E_REFLECTION_PROBE_BAKE_FAILED/);
   assert.match(source, /E_REFLECTION_PROBE_BAKE_ARTIFACT_MISSING/);
   assert.match(source, /AssetDatabase\.ImportAsset\(probePath, ImportAssetOptions\.ForceSynchronousImport\)/);
@@ -114,9 +123,9 @@ test("contract entries exist for reflection and type tools with present C# handl
   }
 });
 
-test("destructive security policy covers reflection.method.call", () => {
-  const commands = new Set(destructiveCommands().map((entry) => entry.command));
-  assert.ok(commands.has("reflection.method.call"));
+test("reflection.method.call exposes destructive metadata", () => {
+  const command = bridgeCommandRegistry.lookup("reflection", "method-call");
+  assert.equal(command?.destructiveHint, true);
 });
 
 test("reflection and type commands are exposed by typed C# tools", async () => {
@@ -125,7 +134,9 @@ test("reflection and type commands are exposed by typed C# tools", async () => {
     assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose the public tool name through IUnityCliTool`);
   }
   assert.match(allSource, /ReflectionInvoker\.FindMethods\(/);
-  assert.match(allSource, /ReflectionInvoker\.CallMethod\(/);
+  assert.match(allSource, /ReflectionInvoker\.PrepareCall\(/);
+  assert.match(allSource, /ReflectionInvoker\.InvokePrepared\(/);
+  assert.doesNotMatch(allSource, /ReflectionInvoker\.CallMethod\(/);
   assert.match(allSource, /TypeSchemaGenerator\.Generate\(/);
   assert.match(allSource, /schema\["\$defs"\] = context\.Definitions/);
   assert.match(allSource, /new Dictionary<string, object> \{ \{ "\$ref", "#\/\$defs\/" \+ key \} \}/);

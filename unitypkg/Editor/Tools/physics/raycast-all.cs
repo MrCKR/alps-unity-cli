@@ -25,7 +25,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string Mode { get; set; }
             public long HitCount { get; set; }
             public List<RaycastHitInfo> Hits { get; set; }
@@ -36,7 +35,7 @@ namespace UnityCli
             Name = "physics.raycast-all",
             Summary = "Cast a 3D or 2D ray and return all hits along the path.",
             Description = "Cast a ray and return all collider hits, sorted by distance (3D). mode=3d (default) or 2d.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false,
+            Group = "physics",DestructiveHint = false,
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "All hits forward", Input = new Request { OriginY = 1f, DirectionZ = 1f } } }
@@ -54,7 +53,7 @@ namespace UnityCli
                 var hits = Physics2D.RaycastAll(origin, direction, distance, layerMask);
                 var hitList = new List<RaycastHitInfo>();
                 foreach (var h in hits) hitList.Add(PhysicsToolSupport.BuildRaycast2DHit(h));
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "physics.raycast-all", Mode = "2d", HitCount = hits.Length, Hits = hitList });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "2d", HitCount = hits.Length, Hits = hitList });
             }
             var origin3d = new Vector3(request.OriginX, request.OriginY, request.OriginZ);
             var direction3d = PhysicsToolSupport.NormalizeVector3(new Vector3(request.DirectionX, request.DirectionY, request.DirectionZ));
@@ -62,7 +61,7 @@ namespace UnityCli
             Array.Sort(hits3d, (a, b) => a.distance.CompareTo(b.distance));
             var list = new List<RaycastHitInfo>();
             foreach (var h in hits3d) list.Add(PhysicsToolSupport.BuildRaycast3DHit(h));
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "physics.raycast-all", Mode = "3d", HitCount = hits3d.Length, Hits = list });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "3d", HitCount = hits3d.Length, Hits = list });
         }
     }
 }

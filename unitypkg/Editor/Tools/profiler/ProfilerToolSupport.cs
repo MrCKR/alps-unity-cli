@@ -177,8 +177,7 @@ namespace UnityCli
                 ProfileEditor = GetProfilerEditorRecording(),
                 IsPaused = EditorApplication.isPaused,
                 Supported = Profiler.supported,
-                MaxUsedMemoryBytes = (long)Profiler.maxUsedMemory,
-                HandlerFingerprint = "profiler-driver-session-v2"
+                MaxUsedMemoryBytes = (long)Profiler.maxUsedMemory
             };
         }
 
@@ -435,10 +434,9 @@ namespace UnityCli
         public string SidecarVersion { get; set; }
     }
 
-    /// <summary>profiler.hierarchy 错误详情 DTO，保持 command/frame/thread shape。</summary>
+    /// <summary>profiler.hierarchy 错误详情 DTO，返回帧、线程和录制状态。</summary>
     public sealed class ProfilerHierarchyDetails
     {
-        public string Command { get; set; }
         public long Frame { get; set; }
         public long Thread { get; set; }
         public bool ProfilerRecording { get; set; }
@@ -454,7 +452,6 @@ namespace UnityCli
         public bool IsPaused { get; set; }
         public bool Supported { get; set; }
         public long MaxUsedMemoryBytes { get; set; }
-        public string HandlerFingerprint { get; set; }
     }
 
     public sealed class ProfilerMemory

@@ -34,7 +34,7 @@ test("animation, component, and controller mutations prove completion through co
   assert.match(componentRemove, /E_COMPONENT_REMOVE_STATE_MISMATCH/);
   assert.match(componentRemove, /ctx\.CommitEffect\(\);\n                foreach/);
 
-  for (const text of [controllerCreate, addLayer, addParameter, addState, addTransition, blend1d, blend2d, blendChild]) {
+  for (const text of [controllerCreate, addLayer, addParameter, addState, addTransition, blend1d, blend2d]) {
     assert.match(text, /ReloadControllerAsset\(path\)/);
     assert.match(text, /STATE_MISMATCH/);
   }
@@ -52,11 +52,21 @@ test("animation, component, and controller mutations prove completion through co
   assert.match(layerWeight, /E_LAYER_WEIGHT_INVALID/);
   assert.ok(layerWeight.indexOf("E_LAYER_WEIGHT_INVALID") < layerWeight.indexOf("ctx.CommitEffect()"));
   assert.match(layerWeight, /ReloadControllerAsset\(path, controllerGuid\)/);
-  assert.match(blendChild, /observedChild\.motion != clip/);
+  assert.match(blendChild, /ReloadControllerAsset\(path, controllerGuid\)/);
+  assert.match(blendChild, /observedChildren\.Length != beforeChildren\.Length \+ 1/);
+  assert.match(blendChild, /observedMatches != beforeMatches \+ 1/);
+  assert.match(blendChild, /blendTree\.useAutomaticThresholds = false/);
+  assert.ok(blendChild.indexOf("E_BLEND_TREE_CHILD_INPUT_CONFLICT") < blendChild.indexOf("ctx.CommitEffect()"));
   assert.match(assign, /observedTarget = EditorUtility\.InstanceIDToObject/);
   const crossfade = await source("Tools/animation/animator/crossfade.cs");
   assert.match(crossfade, /AnimatorCrossfadeTool/);
-  assert.match(crossfade, /Ordinary direct invocation is refused/);
-  assert.match(crossfade, /frozen batch delivery/);
+  assert.match(crossfade, /FindStateInLayer/);
+  assert.match(crossfade, /Animator\.StringToHash\(controllerLayers\[targetLayer\]\.name/);
+  assert.match(crossfade, /GetCurrentAnimatorStateInfo/);
+  assert.match(crossfade, /GetNextAnimatorStateInfo/);
+  assert.match(crossfade, /IsInTransition/);
+  assert.match(crossfade, /normalizedTime/);
+  assert.match(crossfade, /ctx\.Wait\.UntilStable/);
+  assert.match(crossfade, /E_EXECUTION_TIMEOUT/);
   assert.match(crossfade, /ctx\.CommitEffect\(\)/);
 });

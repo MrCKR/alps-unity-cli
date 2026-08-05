@@ -32,7 +32,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string TypeName { get; set; }
             public long InstanceId { get; set; }
             [UnityCliAnyJson] public object Data { get; set; }
@@ -44,7 +43,6 @@ namespace UnityCli
             Summary = "Read deep serialized data from any Unity Object by instanceId, assetPath, guid or path.",
             Description = "Read deep serialized data from any UnityEngine.Object. Resolves the target by instanceId, assetPath/guid, or path/name. Supports maxDepth, maxArrayItems, includeFields, includeProperties, deepSerialization, paths (exact member reads) and viewQuery (filtered subtree). Read-only.",
             Group = "object",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -63,7 +61,6 @@ namespace UnityCli
             var data = UnityCliBridge.ObjectSerializer.Serialize(target, options);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "object.get-data",
                 TypeName = target.GetType().FullName,
                 InstanceId = target.GetInstanceID(),
                 Data = data

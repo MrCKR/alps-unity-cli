@@ -32,7 +32,6 @@ namespace UnityCli
             Summary = "Add a Unity Component to a GameObject, optionally setting simple public fields/properties from a properties object after the component is created.",
             Description = "Add a Unity Component to a GameObject, optionally setting simple public fields/properties from a properties object after the component is created. Use component.list-types first when the exact type name is unclear.",
             Group = "component",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "component-add", "scene-modify" },
             Target = "editor",
@@ -41,7 +40,7 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Add Rigidbody with initial properties", Input = new Request { Target = "ComponentTarget", Component = "Rigidbody", Properties = new Dictionary<string, object> { { "mass", 2L }, { "useGravity", false } } } }
+                new ToolExample { Description = "Add AudioSource with initial properties", Input = new Request { Target = "ComponentTarget", Component = "AudioSource", Properties = new Dictionary<string, object> { { "volume", 0.5d }, { "playOnAwake", false } } } }
             }
         };
 

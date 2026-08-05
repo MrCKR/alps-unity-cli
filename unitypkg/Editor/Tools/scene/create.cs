@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Create a new empty scene at an Assets/*.unity path and optionally load it.",
             Description = "Create a new empty scene at an Assets/*.unity path and optionally load it. Refuses to overwrite an existing scene asset.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "scene-modify", "asset-write" },
             Target = "editor",

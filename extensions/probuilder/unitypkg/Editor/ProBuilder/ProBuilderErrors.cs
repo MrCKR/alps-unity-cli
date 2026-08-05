@@ -1,17 +1,12 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
-using UnityEditor;
-using UnityEditor.SceneManagement;
-using UnityEngine;
-
 namespace UnityCli.ProBuilder
 {
     /// <summary>
     /// ProBuilder 工具 handler 的结构化错误工厂。
     /// 统一返回 <see cref="UnityCliBridge.BridgeCommandException"/>，由调用处 throw 出去，
     /// 经 project-tool.run / runtime-tool.run 的 catch 块转成标准错误 envelope。
-    /// 错误码沿用 E_EXTENSION_DEPENDENCY_MISSING / E_PROBUILDER_PACKAGE_NOT_FOUND /
-    /// E_TARGET_NOT_FOUND / E_SCHEMA_INVALID / E_PROBUILDER_OPERATION_FAILED，
+    /// 错误码统一使用当前 extension dependency、target、schema、operation 与 outcome unknown 契约，
     /// details 与多个 nextActions 通过 exception 字段透传。
     /// </summary>
     internal static class ProBuilderErrors
@@ -21,13 +16,15 @@ namespace UnityCli.ProBuilder
             var details = UnityCliSerializer.Serialize(new Dictionary<string, object>
             {
                 { "packageName", "com.unity.probuilder" },
+                { "expectedVersion", ProBuilderReflection.SupportedPackageVersion },
+                { "actualVersion", ProBuilderReflection.InstalledPackageVersion ?? "" },
                 { "available", false }
             });
             return new UnityCliBridge.BridgeCommandException(
                 "E_EXTENSION_DEPENDENCY_MISSING",
-                "ProBuilder package (com.unity.probuilder) is not installed or not available.",
+                "ProBuilder package com.unity.probuilder must be installed at the exact supported version " + ProBuilderReflection.SupportedPackageVersion + ".",
                 details,
-                new[] { "install_com_unity_probuilder_via_package_manager", "run_unity_cli_extensions_doctor_to_verify_setup" });
+                new[] { "install_com_unity_probuilder_5_2_4_via_package_manager", "run_unity_cli_extensions_doctor_to_verify_setup" });
         }
 
         public static UnityCliBridge.BridgeCommandException TargetNotFound(string target)
@@ -66,17 +63,20 @@ namespace UnityCli.ProBuilder
                 new[] { "check_unity_console_for_errors", "verify_probuilder_mesh_is_valid", "try_repair_mesh_before_operation" });
         }
 
-        public static UnityCliBridge.BridgeCommandException PackageNotFound(string message)
+        /// <summary>effect 已提交后，调用、读回或后置条件不能证明时禁止自动重放。</summary>
+        public static UnityCliBridge.BridgeCommandException OutcomeUnknown(string operation, string stage, string reason)
         {
             var details = UnityCliSerializer.Serialize(new Dictionary<string, object>
             {
-                { "packageName", "com.unity.probuilder" }
+                { "operation", operation ?? "unknown" },
+                { "stage", stage ?? "postcondition" },
+                { "reason", reason ?? "unknown" }
             });
             return new UnityCliBridge.BridgeCommandException(
-                "E_PROBUILDER_PACKAGE_NOT_FOUND",
-                message ?? "Unity ProBuilder package is not installed.",
+                "E_REQUEST_OUTCOME_UNKNOWN",
+                "ProBuilder operation '" + (operation ?? "unknown") + "' may have changed the mesh but its final result was not proven.",
                 details,
-                new[] { "install_com_unity_probuilder_with_unity_cli_package_install" });
+                new[] { "inspect_the_target_mesh_before_submitting_a_new_request" });
         }
     }
 }

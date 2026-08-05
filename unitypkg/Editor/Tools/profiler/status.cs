@@ -19,7 +19,7 @@ namespace UnityCli
         {
             Name = "profiler.status", Summary = "Check whether the Unity profiler is currently active, with max-used memory and platform support.",
             Description = "Read the current Unity Profiler state, available modules, max-used memory and platform support.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Check profiler status", Input = new Request { } } }
         };

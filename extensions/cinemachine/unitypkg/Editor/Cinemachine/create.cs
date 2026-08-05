@@ -28,7 +28,6 @@ namespace UnityCli.Cinemachine
             public CinemachinePackageStatus Cinemachine { get; set; }
             public CinemachineObjectInfo Object { get; set; }
             public List<CinemachinePlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -37,7 +36,6 @@ namespace UnityCli.Cinemachine
             Summary = "Create a Cinemachine virtual camera with an optional preset that configures Body and Aim pipeline components.",
             Description = "Create a Cinemachine virtual camera with an optional preset. preset supports follow, third_person, freelook, dolly, static, top_down, and side_scroller. The tool can also set parent, follow, lookAt, position, and priority during creation.",
             Group = "cinemachine",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.cinemachine" },
             SideEffects = new[] { "scene-modify", "undo-stack" },
@@ -45,7 +43,6 @@ namespace UnityCli.Cinemachine
             PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
-            SupportsJob = true,
             Examples = new[]
             {
                 new ToolExample { Description = "创建跟随相机", Input = new Request { Preset = "follow", Name = "MatrixCreatedCamera", Follow = "Player" } },
@@ -142,8 +139,7 @@ namespace UnityCli.Cinemachine
                         Preset = preset,
                         Target = GameObjectToolSupport.HierarchyPath(observedObject)
                     }
-                },
-                LogPath = ctx.LogPath
+                }
             });
         }
     }

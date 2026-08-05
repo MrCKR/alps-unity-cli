@@ -39,8 +39,6 @@ namespace UnityCli.ProBuilder
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
             MaxTimeoutMs = 30000,
-            SupportsJob = false,
-            ArtifactKinds = new[] { "json" },
             Examples = new[]
             {
                 new ToolExample { Description = "选择朝上的面", Input = new Request { Target = "MyCube", Direction = "up" } },

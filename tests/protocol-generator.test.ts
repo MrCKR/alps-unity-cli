@@ -14,6 +14,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { validateSchema } from "../src/schema/validator.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // 测试编译到 dist/tests/,项目根在 ../..
@@ -78,8 +79,26 @@ test("生成的 BridgeRequest 类字段映射正确", () => {
   assert.match(cs, /public string AbsoluteDeadlineUtc \{ get; set; \}/);
   assert.match(cs, /public double CompletionContractVersion \{ get; set; \}/);
   assert.match(cs, /public double RequestDigestVersion \{ get; set; \}/);
-  assert.match(cs, /public BridgeSecurity SecurityProof \{ get; set; \}/);
-  assert.doesNotMatch(cs, /public BridgeSecurity Security \{ get; set; \}/);
+  assert.doesNotMatch(cs, /SecurityProof|BridgeSecurity/);
+});
+
+test("published request schema accepts only the immutable BridgeRequest v2 shape", () => {
+  const schema = JSON.parse(readSrc("schemas/request-envelope.schema.json"));
+  const request = {
+    protocolVersion: 2,
+    instanceId: `unity-${"a".repeat(64)}`,
+    command: "project-tool.run",
+    requestId: "req_protocol_schema",
+    input: { name: "go.find", input: { name: "Player" } },
+    execution: {
+      absoluteDeadlineUtc: "2026-07-21T00:00:00.000Z",
+      completionContractVersion: 1,
+      requestDigestVersion: 1,
+    },
+  };
+  assert.deepEqual(validateSchema(schema, request), []);
+  assert.ok(validateSchema(schema, { requestId: request.requestId, command: request.command, args: {} }).length > 0);
+  assert.doesNotMatch(JSON.stringify(schema), /"args"|"timeoutMs"/);
 });
 
 test("生成器不新增 ts-morph 依赖(用已装 typescript Compiler API)", () => {

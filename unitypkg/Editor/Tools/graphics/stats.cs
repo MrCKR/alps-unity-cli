@@ -10,7 +10,7 @@ namespace UnityCli
     {
         public sealed class Request { }
         public sealed class Result { public RenderStatsInfo Stats { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.stats", Summary = "Read current render statistics (draw calls, batches, triangles, vertices, memory).", Description = "Read-only: returns a unified render stats snapshot from RenderStats (Unity 6) or UnityStats (2022.3).", Group = "graphics", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read render stats", Input = new Request { } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.stats", Summary = "Read current render statistics (draw calls, batches, triangles, vertices, memory).", Description = "Read-only: returns a unified render stats snapshot from RenderStats (Unity 6) or UnityStats (2022.3).", Group = "graphics",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read render stats", Input = new Request { } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default) => new System.Threading.Tasks.ValueTask<Result>(new Result { Stats = GraphicsToolSupport.BuildRenderStats() });
     }
 }

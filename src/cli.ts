@@ -8,19 +8,12 @@ import { registerBuiltinExtensionContributions } from "./extensions/index.js";
 import { handleExtensionsCommand } from "./cli-commands/extensions.js";
 import { handleContextCommand } from "./contexts/commands.js";
 import { handleInit } from "./cli-commands/package.js";
-import { handleBatch } from "./cli-commands/batch.js";
-import { handleJob } from "./cli-commands/job.js";
 import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
-import { summarizeJob } from "./cli-commands/unity-job.js";
-import { JobRunner } from "./job-runner.js";
-import { JobStore } from "./job-store.js";
-import { withInvocationOrigin } from "./invocation-origin.js";
 import { createRequestId, failure, printResult, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
 import { handleToolsCommand } from "./tools/commands.js";
 import { handleDoctorCommand } from "./doctor.js";
 import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
-import { confirmDestructiveExecution } from "./security.js";
 import type { CliResult } from "./types.js";
 
 /**
@@ -34,8 +27,6 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["init", { run: ({ flags, runtime, requestId }) => handleInit(flags, runtime, requestId) }],
   ["target", { run: ({ command, args, flags, runtime, requestId }) => handleTopLevelTarget(command, args, flags, runtime, requestId) }],
   ["instances", { run: ({ command, flags, runtime, requestId }) => handleTopLevelInstances(command, flags, runtime, requestId) }],
-  ["jobs", { run: ({ command, args, flags, runtime, requestId }) => handleTopLevelJobs(command, args, flags, runtime, requestId) }],
-  ["batch", { run: ({ command, args, flags, runtime, requestId }) => handleTopLevelBatch(command, args, flags, runtime, requestId) }],
   ["doctor", { run: ({ flags, runtime, requestId }) => handleDoctorCommand(flags, runtime, requestId) }]
 ]);
 
@@ -48,16 +39,20 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
   const [group, command] = parsed.positional;
 
   try {
-    if (group === "__run-job") {
-      return runJobWorker(parsed.flags, requestId);
-    }
-
     if (getBoolean(parsed.flags, "version")) {
       return success(requestId, { version: await packageVersion() });
     }
 
     if (!group || getBoolean(parsed.flags, "help")) {
       return success(requestId, help());
+    }
+
+    const removedExecutionOption = ["job", "wait", "wait-timeout-ms"].find((option) => parsed.flags[option] !== undefined);
+    if (removedExecutionOption) {
+      return failure(requestId, "E_OBSOLETE_OPTION", `--${removedExecutionOption} has been removed; every Tool call is direct and terminal.`, [
+        `Remove --${removedExecutionOption} from the command.`,
+        "Use the same tools run invocation and inspect its final success or error envelope."
+      ]);
     }
 
     if (parsed.flags["bridge-endpoint"] !== undefined || process.env.UNITY_CLI_BRIDGE_ENDPOINT !== undefined) {
@@ -93,7 +88,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     // Bridge registry 是内部能力路由，公开 Unity 能力统一从 tools run 进入。
     return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, [
-      "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor.",
+      "Top-level commands are: tools, context, extensions, init, target, instances, doctor.",
       "Run unity_cli tools group to discover Unity tools, then unity_cli tools run <tool> --input <json>.",
       "Run unity_cli instances list, then pass --instance <id|projectPath|alias> or use a Unity project CWD.",
       "Run unity_cli --help."
@@ -106,26 +101,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
   }
 }
 
-function createRuntime(dataDir = defaultDataDir()): Runtime {
-  const store = new JobStore(dataDir);
-  return { dataDir, store, runner: new JobRunner(store, dataDir) };
-}
-
-async function runJobWorker(flags: Record<string, string | boolean>, requestId: string): Promise<CliResult> {
-  const id = getString(flags, "id");
-  const dataDir = getString(flags, "data-dir");
-  if (!id || !dataDir) {
-    return failure(requestId, "WORKER_ARGS_REQUIRED", "Internal job worker requires --id and --data-dir.");
-  }
-
-  try {
-    const runtime = createRuntime(dataDir);
-    const job = await runtime.runner.runWorker(id);
-    return success(requestId, await summarizeJob(job));
-  } catch (error) {
-    return failure(requestId, "WORKER_FAILED", error instanceof Error ? error.message : String(error));
-  }
-}
+function createRuntime(dataDir = defaultDataDir()): Runtime { return { dataDir }; }
 
 /** 顶层 target 控制面只管理 canonical project identity alias。 */
 async function handleTopLevelTarget(
@@ -152,58 +128,7 @@ async function handleTopLevelInstances(
   requestId: string
 ): Promise<CliResult> {
   const subCommand = command ?? "list";
-  if (subCommand === "prune") {
-    const confirmation = await confirmDestructiveExecution(flags, {
-      command: "instances.prune",
-      summary: "Prune Unity Instances",
-      destructiveHint: true,
-      supportsDryRun: false,
-      requestId
-    });
-    if (confirmation) return confirmation;
-  }
   return handleInstancesCommand(subCommand, flags, runtime.dataDir, requestId);
-}
-
-/** 顶层 jobs 控制面：管理 CLI job runner 队列与日志。 */
-async function handleTopLevelJobs(
-  command: string | undefined,
-  args: string[],
-  flags: Record<string, string | boolean>,
-  runtime: Runtime,
-  requestId: string
-): Promise<CliResult> {
-  const mergedFlags = positionalIdFlags(args, flags);
-  if (command === "cancel") {
-    const confirmation = await confirmDestructiveExecution(mergedFlags, {
-      command: "jobs.cancel",
-      summary: "Cancel Job",
-      destructiveHint: true,
-      supportsDryRun: false,
-      requestId
-    });
-    if (confirmation) return confirmation;
-  }
-  return handleJob(command, mergedFlags, runtime, requestId);
-}
-
-/** 顶层 batch 控制面：执行 CLI batch 文件或输出 batch schema。 */
-async function handleTopLevelBatch(
-  command: string | undefined,
-  args: string[],
-  flags: Record<string, string | boolean>,
-  runtime: Runtime,
-  requestId: string
-): Promise<CliResult> {
-  return withInvocationOrigin("batch-frozen", () => handleBatch(command, args[0], flags, runtime, requestId));
-}
-
-/** 将 `jobs status <id>` 形式转换为现有 handler 使用的 `--id`。 */
-function positionalIdFlags(args: string[], flags: Record<string, string | boolean>): Record<string, string | boolean> {
-  if (flags.id !== undefined || flags.job !== undefined || !args[0]) {
-    return flags;
-  }
-  return { ...flags, id: args[0] };
 }
 
 /** 业务 Tool input 可拥有 target 字段，但控制面和 discovery 不得把 --target 当 instance selector。 */
@@ -228,33 +153,31 @@ function help(): Record<string, unknown> {
       "tools group [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
       "tools group list <group> [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
       "tools describe <tool> [--instance <id|projectPath|alias>]",
-      "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--artifact-dir <path>] [--runtime] [--instance <id|projectPath|alias>]",
+      "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--artifact-dir <path>] [--runtime] [--instance <id|projectPath|alias>]",
       "tools search <keyword> [--instance <id|projectPath|alias>] [--format json|text]",
       "context list [--category <cat>] [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
+      "context search <keyword> [--category <cat>] [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
       "context describe <name> [--instance <id|projectPath|alias>]",
       "context read <name> [--input <json>] [--input-file <path>] [--instance <id|projectPath|alias>]",
       "extensions list [--project <path>] [--format json|text]",
       "extensions install <id|name> [--project <path>]",
       "extensions remove <id|name> [--project <path>]",
       "extensions doctor [--project <path>] [--format json|text]",
-      "init [--project <path>] [--agent <pi|claude|.agents>] [--unity <Unity.exe>] [--wait]  # auto-installs Skill when .pi/.claude/.agents exists",
-      "init --pkg-only [--project <path>] [--unity <Unity.exe>] [--wait]",
+      "init [--project <path>] [--agent <pi|claude|.agents>]  # auto-installs Skill when .pi/.claude/.agents exists",
+      "init --pkg-only [--project <path>]",
       "init --skill-only --agent <pi|claude|.agents,...> [--project <path>]",
       "init --check [--project <path>] [--agent <pi|claude|.agents,...>]",
       "target alias list",
       "target alias set <projectPath|instanceId> <alias> [--force]",
       "target alias unset <alias>",
       "instances list",
-      "instances prune --yes",
-      "jobs status|logs|describe|cancel <jobId>",
-      "batch schema",
-      "batch run <file> [--preflight] [--parallel <n>] [--fail-fast true|false] --yes",
+      "instances prune",
       "doctor [--instance <id|projectPath|alias>] [--project <path>]"
     ],
     options: [
       "--raw  Print the same JSON envelope as compact single-line JSON for pipes and scripts."
     ],
-    note: "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor. Unity capabilities are exposed through `tools run <tool> --input <json>` and `context read <name>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>` or the nearest Unity project root from CWD. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Descriptor `examples[].argv` is a JSON token array. In PowerShell, wrap inline `--input` JSON in single quotes, or use `--input-file` for complex input."
+    note: "Top-level commands are: tools, context, extensions, init, target, instances, doctor. Unity capabilities are exposed through `tools run <tool> --input <json>` and `context read <name>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>` or the nearest Unity project root from CWD. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Descriptor `examples[].argv` is a JSON token array. In PowerShell, wrap inline `--input` JSON in single quotes, or use `--input-file` for complex input."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {

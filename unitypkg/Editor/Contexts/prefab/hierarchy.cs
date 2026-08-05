@@ -27,7 +27,7 @@ namespace UnityCli
             {
                 Name = "prefab.hierarchy", Summary = "Read a paged Prefab asset hierarchy without opening or modifying Prefab Stage.",
                 Description = "Read-only paged hierarchy for one Assets/*.prefab path. Loads the Prefab contents only for inspection, returns the Prefab summary, hierarchy item page, and pageInfo cursor data, then unloads the temporary contents. Does not open Prefab Stage, save assets, or modify the Prefab.",
-                Category = "prefab", Version = "1.0.0", Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported", RefreshBehavior = "on-demand",
+                Category = "prefab",Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported",
                 Examples = new[] { new ContextExample { Description = "Read the first Prefab hierarchy page", Input = new Request { Path = "Assets/Prefabs/Player.prefab", PageSize = 50 } }, new ContextExample { Description = "Read a later Prefab hierarchy page", Input = new Request { Path = "Assets/Prefabs/Player.prefab", PageSize = 50, Cursor = 50 } } }
             };
 

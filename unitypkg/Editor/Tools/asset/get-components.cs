@@ -28,7 +28,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string MainObjectType { get; set; }
@@ -66,7 +65,6 @@ namespace UnityCli
             Summary = "List Prefab/GameObject asset component summaries with paging and name/path/component-type filters.",
             Description = "List component summaries for a Prefab/GameObject asset without deep-reading the whole object graph. Filters: query/nameFilter/pathFilter match GameObject name or relative path; componentType matches a component type name. Results are paged via cursor/pageSize.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -113,7 +111,6 @@ namespace UnityCli
             long? nextCursor = cursor + page.Count < rows.Count ? (long?)(cursor + page.Count) : null;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "asset.get-components",
                 AssetPath = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 MainObjectType = asset == null ? null : asset.GetType().FullName,

@@ -13,8 +13,8 @@ namespace UnityCli
     public class EditorActiveToolSetTool : IUnityCliTool<EditorActiveToolSetTool.Request, EditorActiveToolSetTool.Result>
     {
         public sealed class Request { public string Tool { get; set; } }
-        public sealed class Result { public string Command { get; set; } public string Tool { get; set; } public string EditorTool { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "editor.active-tool.set", Summary = "Set the active Unity Editor tool (Move, Rotate, Scale, etc.).", Description = "Set the current Editor session tool through Tools.current. Accepts View, Move, Rotate, Scale, Rect, Transform.", Group = "editor", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "editor-tool-state" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set Move tool", Input = new Request { Tool = "Move" } } } };
+        public sealed class Result { public string Tool { get; set; } public string EditorTool { get; set; } }
+        public ToolDescriptor Describe() => new() { Name = "editor.active-tool.set", Summary = "Set the active Unity Editor tool (Move, Rotate, Scale, etc.).", Description = "Set the current Editor session tool through Tools.current. Accepts View, Move, Rotate, Scale, Rect, Transform.", Group = "editor",DestructiveHint = false, SideEffects = new[] { "editor-tool-state" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set Move tool", Input = new Request { Tool = "Move" } } } };
         // 设置工具后从 Unity 读取当前工具，避免返回请求回显。
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -26,7 +26,7 @@ namespace UnityCli
             var observedTool = Tools.current;
             if (observedTool != editorTool)
                 throw new UnityCliBridge.BridgeCommandException("E_EDITOR_ACTIVE_TOOL_STATE_MISMATCH", "Unity did not apply the requested active Editor tool.", "Inspect the active Editor tool and retry.");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "editor.active-tool.set", Tool = observedTool.ToString(), EditorTool = observedTool.ToString() });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Tool = observedTool.ToString(), EditorTool = observedTool.ToString() });
         }
     }
 }

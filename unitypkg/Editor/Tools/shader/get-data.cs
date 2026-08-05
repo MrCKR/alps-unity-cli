@@ -27,7 +27,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string Name { get; set; }
             public long RenderQueue { get; set; }
             public bool IsSupported { get; set; }
@@ -45,7 +44,6 @@ namespace UnityCli
             Summary = "Read shader properties, subshaders/passes and compile diagnostics; resolve by path or Shader.Find name.",
             Description = "Read structured shader data: render queue, supported flag, pass count, properties (with type/flags/range/attributes), subshader/pass structure via ShaderUtil reflection, and compile diagnostics. Resolve by path/assetPath or by name (Shader.Find). includeSourceCode is opt-in (default false). Keep maxSubshaders/maxPasses bounded.",
             Group = "shader",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -111,7 +109,6 @@ namespace UnityCli
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "shader.get-data",
                 Name = shader.name,
                 RenderQueue = shader.renderQueue,
                 IsSupported = shader.isSupported,

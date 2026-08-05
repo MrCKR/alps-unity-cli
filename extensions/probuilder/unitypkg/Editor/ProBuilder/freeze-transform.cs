@@ -1,103 +1,44 @@
 #if UNITY_EDITOR
-using System.Collections.Generic;
-using System.Reflection;
+using System;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-
+using UnityEngine.ProBuilder;
+using UnityEngine.ProBuilder.MeshOperations;
 namespace UnityCli.ProBuilder
 {
-    /// <summary>
-    /// probuilder.freeze-transform — 将变换烘焙到网格顶点并重置变换。
-    /// </summary>
+    /// <summary>probuilder.freeze-transform — 将变换烘焙到网格顶点并重置变换。</summary>
     public class FreezeTransformTool : IUnityCliTool<FreezeTransformTool.Request, FreezeTransformTool.Result>
     {
-        public sealed class Request
-        {
-            [UnityCliRequired] public string Target { get; set; }
-        }
-
-        public sealed class Result
-        {
-            public long BakedVertexCount { get; set; }
-        }
-
-        public ToolDescriptor Describe() => new()
-        {
-            Name = "probuilder.freeze-transform",
-            Summary = "Bake a ProBuilder mesh transform into vertex positions, resetting the transform to identity.",
-            Description = "Bake the current transform into the ProBuilder mesh vertices, then reset the transform to identity (position zero, rotation identity, scale one). Vertex positions are transformed to world space before the reset.",
-            Group = "probuilder",
-            DestructiveHint = false,
-            SideEffects = new[] { "scene-modify", "undo-stack" },
-            Target = "editor",
-            PlayModeSupport = "editor-only",
-            DefaultTimeoutMs = 10000,
-            MaxTimeoutMs = 30000,
-            SupportsJob = true,
-            ArtifactKinds = new[] { "json" },
-            Examples = new[]
-            {
-                new ToolExample { Description = "烘焙变换到顶点", Input = new Request { Target = "MyCube" } }
-            }
-        };
-
+        public sealed class Request { [UnityCliRequired] public string Target { get; set; } }
+        public sealed class Result { public long BakedVertexCount { get; set; } }
+        public ToolDescriptor Describe() => new() { Name = "probuilder.freeze-transform", Summary = "Bake a ProBuilder mesh scale into vertex positions and reset localScale.", Description = "Call ProBuilder 5.2.4 FreezeScaleTransform on a root object: bake localScale into every referenced raw vertex while preserving position and rotation, then set localScale to one.", Group = "probuilder", DestructiveHint = false, SideEffects = new[] { "scene-modify", "undo-stack" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 10000, MaxTimeoutMs = 30000, Examples = new[] { new ToolExample { Description = "烘焙变换到顶点", Input = new Request { Target = "MyCube" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            if (!ProBuilderReflection.IsAvailable)
-                throw ProBuilderErrors.PackageNotAvailable();
-
-            var go = ProBuilderInput.ResolveTarget(request.Target);
-            if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
-
-            var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) throw ProBuilderErrors.OperationFailed("freeze-transform", "No ProBuilderMesh on target.");
-
-            var beforePositions = ProBuilderRequestProof.CapturePositions(mesh);
-            var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
-            if (beforePositions == null || (go.transform.position == Vector3.zero && go.transform.rotation == Quaternion.identity && go.transform.localScale == Vector3.one))
-                throw ProBuilderErrors.OperationFailed("freeze-transform", "Target transform is already identity and has no transform to bake.");
+            if (!ProBuilderReflection.IsAvailable) throw ProBuilderErrors.PackageNotAvailable(); var target = request.Target; var go = ProBuilderInput.ResolveTarget(target); if (go == null) throw ProBuilderErrors.TargetNotFound(target); var mesh = ProBuilderReflection.GetProBuilderMesh(go) as ProBuilderMesh; if (mesh == null) throw ProBuilderErrors.OperationFailed("freeze-transform", "No ProBuilderMesh on target."); var count = mesh.vertexCount;
+            if (mesh.vertexCount < 1) throw ProBuilderErrors.OperationFailed("freeze-transform", "Mesh has no vertices.");
+            if (go.transform.localScale == Vector3.one) return new System.Threading.Tasks.ValueTask<Result>(new Result { BakedVertexCount = 0 });
+            var plan = ProBuilderAtomicReadback.CaptureScaleBake(go, mesh);
+            if (plan == null) throw ProBuilderErrors.OperationFailed("freeze-transform", "Scale bake inputs are unreadable or non-finite.");
+            var instanceId = go.GetInstanceID();
             ctx.CommitEffect();
-            Undo.RecordObject(go, "ProBuilder Freeze Transform");
-
-            // 将顶点位置变换到世界空间,重置变换,再写回(此时 local = world)
             try
             {
-                var positions = ProBuilderReflection.GetPositions(mesh);
-                if (positions != null)
-                {
-                    var posList = new List<Vector3>(positions);
-                    for (int i = 0; i < posList.Count; i++)
-                        posList[i] = go.transform.TransformPoint(posList[i]);
-
-                    // 重置变换
-                    go.transform.position = Vector3.zero;
-                    go.transform.rotation = Quaternion.identity;
-                    go.transform.localScale = Vector3.one;
-
-                    // 写回位置(变换为 identity 后 local = world)
-                    var positionsProp = ProBuilderReflection.GetProBuilderMeshType()?.GetProperty("positions");
-                    if (positionsProp != null && positionsProp.CanWrite)
-                        positionsProp.SetValue(mesh, posList);
-                    else
-                    {
-                        var setPositionsMethod = ProBuilderReflection.GetProBuilderMeshType()?.GetMethod("SetPositions",
-                            BindingFlags.Instance | BindingFlags.Public);
-                        if (setPositionsMethod != null)
-                            setPositionsMethod.Invoke(mesh, new object[] { posList.ToArray() });
-                    }
-                }
+                ProBuilderAtomicReadback.RegisterMeshUndo(go, mesh, "ProBuilder Freeze Transform", true);
+                mesh.FreezeScaleTransform();
+                mesh.ToMesh();
+                mesh.Refresh();
+                EditorSceneManager.MarkSceneDirty(go.scene);
+                var freshGo = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+                var fresh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+                if (fresh == null) throw ProBuilderErrors.OutcomeUnknown("freeze-transform", "readback", "Fresh target mesh is unreadable.");
+                if (!ProBuilderAtomicReadback.ScaleWasBaked(freshGo, fresh, plan)) throw ProBuilderErrors.OutcomeUnknown("freeze-transform", "postcondition", "Scale was not baked into readable geometry.");
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { BakedVertexCount = count });
             }
-            catch (System.Exception) { }
-
-            ProBuilderReflection.RefreshMesh(mesh);
-            EditorSceneManager.MarkSceneDirty(go.scene);
-            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
-            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
-            if (!ProBuilderRequestProof.TransformWasBaked(freshGo, freshMesh, beforePositions))
-                throw ProBuilderErrors.OperationFailed("freeze-transform", "Transform was not baked into mesh positions and reset to identity.");
-
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { BakedVertexCount = vertexCount });
+            catch (Exception exception) when (!(exception is UnityCliBridge.BridgeCommandException))
+            {
+                throw ProBuilderErrors.OutcomeUnknown("freeze-transform", "invoke", exception.Message);
+            }
         }
     }
 }

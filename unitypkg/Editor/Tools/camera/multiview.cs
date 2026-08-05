@@ -34,7 +34,6 @@ namespace UnityCli
             Summary = "Capture one PNG/JPG artifact per named Camera into an output directory for multiview review.",
             Description = "Capture one PNG/JPG artifact per named Camera into an output directory for side-by-side scene review. Returns artifact paths instead of inline image bytes; keep target count and resolution small for token and disk efficiency.",
             Group = "camera",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "artifact-write", "render-texture" },
             Target = "editor",

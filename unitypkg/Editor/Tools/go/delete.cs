@@ -15,7 +15,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public GameObjectRef Target { get; set; }
             public GameObjectRef Deleted { get; set; }
@@ -27,9 +26,8 @@ namespace UnityCli
         {
             Name = "go.delete",
             Summary = "Delete one scene GameObject; EditMode stays dirty, and final PlayMode proof requires reading editor.state.",
-            Description = "Delete one GameObject from the current scene/session and recursively remove its children. Dry-run returns target with destroyed=false. Live execution returns deleted with destroyed=true only after the target no longer exists; Play Mode scene instances are destroyed synchronously before the command returns. In EditMode, deletion adds shared Undo history and intentionally leaves the scene dirty. If a task started from a clean scene and must discard all temporary in-memory changes without saving, finish business verification, delete the temporary object, then call scene.load once with the exact active scene path; do not probe or repeat editor.undo when pre-existing Undo history is unknown. The common envelope audit field effects.playModeChanged is a per-call side-effect delta, not the current mode; when final PlayMode is a task requirement, read the editor.state Context after cleanup. Prefer hierarchy paths or instance ids when plain names may be ambiguous.",
+            Description = "Delete one GameObject from the current scene/session and recursively remove its children. Dry-run returns target with destroyed=false. Live execution returns deleted with destroyed=true only after the target no longer exists; Play Mode scene instances are destroyed synchronously before the command returns. In EditMode, deletion adds shared Undo history and intentionally leaves the scene dirty. If a task started from a clean scene and must discard all temporary in-memory changes without saving, finish business verification, delete the temporary object, then call scene.load once with the exact active scene path; do not probe or repeat editor.undo when pre-existing Undo history is unknown. When final PlayMode is a task requirement, read the editor.state Context after cleanup. Prefer hierarchy paths or instance ids when plain names may be ambiguous.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify", "undo-stack", "recursive-delete" },
@@ -57,7 +55,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "go.delete",
                     DryRun = true,
                     Target = targetRef,
                     Destroyed = false,

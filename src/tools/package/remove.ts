@@ -1,118 +1,73 @@
-import { resolve } from "node:path";
-import { resolvePackageChanges } from "../../cli-commands/package.js";
-import { PackageManagerError, removePackage, validatePackageName } from "../../package-manager.js";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { PackageManagerError, readUnityManifestDependencies, removePackage, validatePackageName } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
-import type { AnyJson } from "../../schema/any-json.js";
+import { runPackageFileMutationWorker } from "./file-mutation-worker.js";
+import { bindLivePackageProject, runLivePackageResolve, type LiveResolveResult, type PackageFileMutationBundle } from "./live-resolve.js";
+import { projectRelativePath } from "./public-result.js";
 
-export interface PackageRemoveRequest {
-  name: string;
-  force?: boolean;
-  project?: string;
-  unity?: string;
-}
+export interface PackageRemoveRequest { name: string; force?: boolean; }
+export interface PackageRemoveResult { action: "remove"; package: string; manifestPath: string; manifestHash: string; dependency: { name: string; present: false }; files: { proven: true; manifestPath: string; manifestHash: string }; resolve: LiveResolveResult; }
+export interface PackageRemovePlannedEffect { type: string; package: string; removedVersion?: string; dependents: Array<{ name: string; requiredVersion?: string }>; forced: boolean; blocked: boolean; }
+export interface PackageRemoveDryRunResult { action: "remove"; package: string; status: "dry_run" | "blocked"; dryRun: true; blocked: boolean; dependents: Array<{ name: string; requiredVersion?: string }>; forced: boolean; plannedEffects: PackageRemovePlannedEffect[]; }
+interface RemovePlan { name: string; force: boolean; manifestPath: string; }
 
-export interface PackageRemoveDependent {
-  name?: string;
-  requiredVersion?: string;
-}
-
-export interface PackageRemovePlannedEffect {
-  type?: string;
-  package?: string;
-  removedVersion?: string;
-  dependents?: PackageRemoveDependent[];
-  forced?: boolean;
-  blocked?: boolean;
-}
-
-export interface PackageRemoveObject { [key: string]: AnyJson; }
-
-export interface PackageRemoveResult {
-  action?: string;
-  package?: string;
-  projectPath?: string;
-  manifestPath?: string;
-  dependencyRemoved?: boolean;
-  removedVersion?: string;
-  dependents?: PackageRemoveDependent[];
-  forced?: boolean;
-  dryRun?: boolean;
-  blocked?: boolean;
-  plannedEffects?: PackageRemovePlannedEffect[];
-  status?: string;
-  resolve?: string;
-  liveRefresh?: PackageRemoveObject;
-  nextActions?: string[];
-  bridge?: PackageRemoveObject;
-  jobId?: string;
-  kind?: string;
-  requestId?: string;
-  unityPath?: string;
-  logPath?: string;
-  pid?: number;
-  exitCode?: number;
-  createdAt?: string;
-  updatedAt?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  command?: string[];
-  result?: PackageRemoveObject;
-  error?: PackageRemoveObject;
-  cancellation?: PackageRemoveObject;
-  logTail?: string[];
-}
-
-/** 删除 manifest dependency；dry-run 返回计划，实际删除后执行 resolve。 */
-async function runPackageRemove(request: PackageRemoveRequest, context: ToolContext): Promise<PackageRemoveResult> {
-  const projectPath = resolve(request.project ?? context.projectPath);
+/** manifest 删除与 UPM 终态共享一个 root，redelivery 只读验证删除结果。 */
+async function runPackageRemove(request: PackageRemoveRequest, context: ToolContext): Promise<PackageRemoveResult | PackageRemoveDryRunResult> {
   const name = validatePackageName(request.name);
-  const removal = await removePackage(projectPath, name, { force: request.force === true, dryRun: true });
   if (context.execution.dryRun) {
-    return {
-      action: "remove",
-      package: name,
-      projectPath,
-      ...removal,
-      status: removal.blocked ? "blocked" : "dry_run"
-    };
+    await bindLivePackageProject(context, "remove");
+    const plan = await removePackage(context.projectPath, name, { force: request.force === true, dryRun: true });
+    return { action: "remove", package: name, status: plan.blocked ? "blocked" : "dry_run", dryRun: true, blocked: plan.blocked, dependents: plan.dependents, forced: plan.forced, plannedEffects: (plan.plannedEffects ?? []) as unknown as PackageRemovePlannedEffect[] };
   }
-  if (removal.blocked) {
-    throw new PackageManagerError("PACKAGE_DEPENDENTS_BLOCKED", `Package ${name} is required by: ${removal.dependents.map((entry) => entry.name).join(", ")}.`, ["Remove dependent packages first, or pass force=true only when the dependency break is intentional."]);
-  }
-
-  await context.commitEffect?.();
-  const committedRemoval = await removePackage(projectPath, name, { force: request.force === true });
-  const resolveRequestId = context.localJournalActive ? `${context.requestId}_package_remove_resolve` : context.requestId;
-  return resolvePackageChanges("remove", {
-    projectPath,
-    unity: request.unity,
-    wait: context.execution.wait,
-    waitTimeoutMs: context.execution.waitTimeoutMs,
-    timeoutMs: context.execution.timeoutMs,
-    absoluteDeadlineMs: context.absoluteDeadlineMs,
-    job: context.execution.job
-  }, {
-    dataDir: context.dataDir ?? context.projectPath,
-    runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute
-  }, resolveRequestId, { action: "remove", package: name, ...committedRemoval }) as Promise<PackageRemoveResult>;
+  return runLivePackageResolve<PackageRemoveResult>(context, "remove", { name, force: request.force === true }, {
+    async prepare(signal) {
+      signal.throwIfAborted();
+      const prepared = await removePackage(context.projectPath, name, { force: request.force === true, dryRun: true });
+      signal.throwIfAborted();
+      if (prepared.blocked) throw new PackageManagerError("PACKAGE_DEPENDENTS_BLOCKED", `Package ${name} is required by dependent packages.`, ["Remove dependents first or explicitly pass force=true."]);
+      return { name, force: request.force === true, manifestPath: prepared.manifestPath } as unknown as Record<string, unknown>;
+    },
+    async apply(plan, signal, stopAtMs) {
+      const expected = removePlan(plan);
+      await runPackageFileMutationWorker("remove", context.projectPath, plan, stopAtMs, signal);
+      return removeBundle(context.projectPath, expected, expected.manifestPath);
+    },
+    async recover(plan, signal) {
+      signal.throwIfAborted();
+      const expected = removePlan(plan);
+      const bundle = await removeBundle(context.projectPath, expected, expected.manifestPath);
+      signal.throwIfAborted();
+      return bundle;
+    },
+  });
 }
 
-export default defineTool<PackageRemoveRequest, PackageRemoveResult>({
-  name: "package.remove",
-  summary: "Remove a package from the project manifest and optionally resolve.",
-  description: "Remove a package from the project manifest and optionally resolve. Destructive: manifest change + possible Unity resolve/domain reload. Requires explicit confirmation; inspect with package.list first. By default it blocks when packages-lock.json shows other packages depending on the target; pass force=true only when you intentionally want Unity PackageManager to resolve that dependency break. Supports --dry-run to return plannedEffects without writing manifest.json.",
-  group: "package",
-  destructiveHint: true,
-  supportsDryRun: true,
-  sideEffects: ["manifest-change", "session-affecting"],
-  playModeSupport: "session-affecting",
-  handler: "hybrid",
-  supportStatus: "bridge-job",
-  examples: [
-    { description: "Preview removing a package", argv: ["tools", "run", "package.remove", "--input", "{\"name\":\"com.unity.textmeshpro\"}", "--dry-run"] }
-  ],
-  async execute(request, context) {
-    return runPackageRemove(request, context);
-  }
+async function removeBundle(projectPath: string, plan: RemovePlan, manifestPath: string): Promise<PackageFileMutationBundle> {
+  const dependencies = await readUnityManifestDependencies(projectPath);
+  if (Object.prototype.hasOwnProperty.call(dependencies, plan.name)) throw new Error(`Manifest dependency ${plan.name} remains after the committed remove plan.`);
+  const manifestHash = await hash(manifestPath);
+  const files = { proven: true as const, manifestPath, manifestHash };
+  const publicManifestPath = projectRelativePath(projectPath, manifestPath, "manifestPath");
+  const publicFiles = { ...files, manifestPath: publicManifestPath };
+  return {
+    expectedManifestSha256: manifestHash,
+    predicates: [{ name: plan.name, present: false }],
+    filesProof: files,
+    publicResultSeed: { action: "remove", package: plan.name, manifestPath: publicManifestPath, manifestHash, dependency: { name: plan.name, present: false }, files: publicFiles },
+  };
+}
+
+function removePlan(value: Record<string, unknown>): RemovePlan {
+  if (typeof value.name !== "string" || typeof value.force !== "boolean" || typeof value.manifestPath !== "string") throw new Error("Durable package.remove file plan is corrupt.");
+  return { name: value.name, force: value.force, manifestPath: value.manifestPath };
+}
+async function hash(path: string): Promise<string> { return createHash("sha256").update(await readFile(path)).digest("hex"); }
+
+export default defineTool<PackageRemoveRequest, PackageRemoveResult | PackageRemoveDryRunResult>({
+  name: "package.remove", summary: "Remove a package and prove it absent through the open Unity Editor.",
+  description: "Writes a prevalidated manifest removal once, then requires a terminal live PackageInfo resolve proof.",
+  group: "package", destructiveHint: true, supportsDryRun: true, sideEffects: ["manifest-change", "session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
+  examples: [{ description: "Remove a package.", argv: ["tools", "run", "package.remove", "--input", "{\"name\":\"com.unity.textmeshpro\"}"] }],
+  async execute(request, context) { return runPackageRemove(request, context); }
 });

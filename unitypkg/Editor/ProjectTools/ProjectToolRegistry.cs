@@ -29,7 +29,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private const string ProjectToolFingerprintDefaultMode = "block";
+        private const string ProjectToolFingerprintAlgorithm = "unity-cli-project-tool-fingerprint-v2";
         private static readonly Dictionary<string, RegisteredTool> ProjectTools = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
         private static Dictionary<string, RegisteredTool> discoveryTools;
         private static RegistryOwnershipResolver registryOwnership;
@@ -46,17 +46,11 @@ namespace UnityCli
             {
                 throw new ArgumentException("Tool registration requires request/result types and derived schemas: " + definition.Name);
             }
-            if (definition.ArtifactKinds == null)
-            {
-                definition.ArtifactKinds = new[] { "json", "log", "file", "image" };
-            }
             if (definition.RequiredInput == null)
             {
                 definition.RequiredInput = new string[0];
             }
             definition.Group = string.IsNullOrEmpty(definition.Group) ? ProjectToolGroupFromName(definition.Name) : definition.Group;
-            definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
-            definition.CapabilityType = string.IsNullOrEmpty(definition.CapabilityType) ? "project-write" : definition.CapabilityType;
             definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
             definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
             definition.PlayModeSupport = NormalizeProjectToolPlayModeSupport(definition.PlayModeSupport, definition.Target);
@@ -64,7 +58,7 @@ namespace UnityCli
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
             definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "runtime-registration" : definition.DescriptorSource;
-            RefreshProjectToolFingerprint(definition, null);
+            RefreshProjectToolFingerprint(definition);
             target.Add(definition.Name, definition);
         }
 
@@ -198,10 +192,8 @@ namespace UnityCli
                 Group = string.IsNullOrEmpty(descriptor.Group) ? "custom" : descriptor.Group,
                 Descriptor = descriptor,
                 Source = source,
-                Version = string.IsNullOrEmpty(descriptor.Version) ? "1.0.0" : descriptor.Version,
                 InputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
                 OutputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
-                CapabilityType = string.IsNullOrEmpty(descriptor.CapabilityType) ? "project-write" : descriptor.CapabilityType,
                 DestructiveHint = descriptor.DestructiveHint,
                 SideEffects = descriptor.SideEffects ?? Array.Empty<string>(),
                 SupportsDryRun = descriptor.SupportsDryRun,
@@ -212,8 +204,6 @@ namespace UnityCli
                 PlayModeSupport = string.IsNullOrEmpty(descriptor.PlayModeSupport) ? "editor-only" : descriptor.PlayModeSupport,
                 DefaultTimeoutMs = descriptor.DefaultTimeoutMs <= 0 ? 30000 : descriptor.DefaultTimeoutMs,
                 MaxTimeoutMs = descriptor.MaxTimeoutMs <= 0 ? 600000 : descriptor.MaxTimeoutMs,
-                SupportsJob = descriptor.SupportsJob,
-                ArtifactKinds = descriptor.ArtifactKinds ?? Array.Empty<string>(),
                 RequiredInput = Array.Empty<string>(),
                 RegisteredBy = "unity-editor-package",
                 DescriptorSource = "IUnityCliTool",
@@ -268,7 +258,7 @@ namespace UnityCli
             return new UnityCliToolCompletionContract(
                 descriptor.Name, "project", "direct-terminal", custom.ExecutionClass, custom.CompletionPredicate,
                 custom.ProofSource, custom.ReloadPolicy, custom.TimeoutError, custom.OutcomeUnknownPolicy,
-                "allowed", "ordinary", custom.CompletionDriverId, mutation ? "required" : "none", mutation);
+                custom.CompletionDriverId, mutation ? "required" : "none", mutation);
         }
 
         /// <summary>operation coordinator 在主线程解析自定义 Tool 的真实 contract。</summary>
@@ -301,7 +291,6 @@ namespace UnityCli
         {
             public string Name { get; set; }
             [UnityCliAnyJson] public object Input { get; set; }
-            public string FingerprintMode { get; set; }
             public string ExpectedDescriptorFingerprint { get; set; }
             public string ArtifactDir { get; set; }
             public string ProjectPath { get; set; }
@@ -314,12 +303,12 @@ namespace UnityCli
             var name = args.Name;
             if (string.IsNullOrEmpty(name) || !ProjectTools.ContainsKey(name))
             {
-                throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli tools list --include-custom to inspect registered tools.");
+                throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli tools group --include-custom --instance <id|projectPath|alias> or tools search <keyword> to inspect registered tools.");
             }
 
             var definition = ProjectTools[name];
             // 门禁前刷新 live handler+descriptor 指纹，旧 discovery proof 在 domain reload/descriptor 变化后必须失效。
-            var fingerprintCheck = RefreshProjectToolFingerprint(definition, args.FingerprintMode);
+            var fingerprintCheck = RefreshProjectToolFingerprint(definition);
             if (!string.IsNullOrEmpty(args.ExpectedDescriptorFingerprint)
                 && !string.Equals(args.ExpectedDescriptorFingerprint, definition.Fingerprint, StringComparison.Ordinal))
             {
@@ -329,17 +318,6 @@ namespace UnityCli
                     new Dictionary<string, object> { { "toolName", name }, { "expectedFingerprint", args.ExpectedDescriptorFingerprint }, { "actualFingerprint", definition.Fingerprint } },
                     new[] { "Run tools describe again against the selected Unity generation before constructing a new request." });
             }
-            var dryRun = request.Execution != null && request.Execution.DryRun == true;
-            if (definition.DestructiveHint
-                && !(dryRun && definition.SupportsDryRun)
-                && !request.SecurityConfirmed(name, true, definition.SupportsDryRun, "project-tool.run", definition.Fingerprint))
-            {
-                throw new BridgeCommandException(
-                    "E_DESTRUCTIVE_CONFIRMATION_REQUIRED",
-                    "Destructive tool requires a security proof bound to its descriptor and input: " + name,
-                    "Review the live descriptor, then rerun the same tools run command with --yes.");
-            }
-
             if (EditorApplication.isPlaying && string.Equals(definition.PlayModeSupport, "editor-only", StringComparison.OrdinalIgnoreCase))
             {
                 throw new BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE",
@@ -361,35 +339,22 @@ namespace UnityCli
                     new Dictionary<string, object> { { "toolName", name }, { "toolTarget", definition.Target } },
                     new[] { "Use runtime-tool.run <name> or tools run <name> with a runtime target to execute this tool in Play Mode." });
             }
+            var dryRun = request.Execution != null && request.Execution.DryRun == true;
             if (fingerprintCheck.Blocked)
             {
                 WriteLog("custom_tool_fingerprint_blocked requestId=" + request.RequestId + " name=" + name + " expected=" + fingerprintCheck.Expected + " actual=" + fingerprintCheck.Actual);
-                throw new BridgeCommandException("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message, ProjectToolFingerprintDetails(definition), new[] { "Review the registered custom tool descriptor/handler code, then update the expected fingerprint or rerun with --fingerprint-mode warn if policy allows." });
+                throw new BridgeCommandException("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message, ProjectToolFingerprintDetails(definition), ProjectToolFingerprintRePinSteps(definition));
             }
-            if (fingerprintCheck.Warn)
-            {
-                WriteLog("custom_tool_fingerprint_warn requestId=" + request.RequestId + " name=" + name + " expected=" + fingerprintCheck.Expected + " actual=" + fingerprintCheck.Actual);
-            }
-
             var timeoutMs = request.ExecutionTimeoutMs(definition.DefaultTimeoutMs, definition.MaxTimeoutMs);
 
             var inputJson = request.RawJsonArg("input") ?? "{}";
             var schemaError = ValidateProjectToolInput(definition, inputJson);
             if (schemaError != null) throw SchemaValidationException(schemaError);
 
-            var startedAt = DateTime.UtcNow;
-            var artifactDir = ResolveArtifactDir(args.ArtifactDir, request.RequestId);
-            try
-            {
-                Directory.CreateDirectory(artifactDir);
-            }
-            catch (Exception exception)
-            {
-                throw new BridgeCommandException("E_ARTIFACT_WRITE_FAILED", "Failed to create artifact directory: " + exception.Message, "Pass --artifact-dir to a writable directory.");
-            }
-
+            var artifactDir = string.IsNullOrWhiteSpace(args.ArtifactDir) ? null : ResolveArtifactDir(args.ArtifactDir);
             object result;
             object parsedInput;
+            UnityCliProjectToolContext executionContext = null;
             try
             {
                 WriteLog("custom_tool_run requestId=" + request.RequestId + " name=" + name + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
@@ -398,27 +363,28 @@ namespace UnityCli
                     toolTimeout.CancelAfter(timeoutMs);
                     parsedInput = UnityCliSerializer.Deserialize(inputJson, definition.RequestType);
                     var effectPreparation = PrepareToolEffect(request, definition.CompletionContract, parsedInput);
-                    result = await definition.InvokeAsync(parsedInput, new UnityCliProjectToolContext
+                    executionContext = new UnityCliProjectToolContext
                     {
                         RequestId = request.RequestId,
                         ProjectPath = args.ProjectPath ?? ProjectRoot(),
                         ArtifactDir = artifactDir,
                         LogPath = LogPath(),
                         DryRun = dryRun,
-                        ProofOnly = IsProofRecoveryRequest(request.RequestId),
-                        ProofContinuation = effectPreparation == null ? null : effectPreparation.Value,
                         CommitEffectAction = () => CommitToolEffect(request, definition.CompletionContract, effectPreparation),
-                        ListenerGeneration = CurrentListenerGeneration(),
                         TimeoutMs = timeoutMs,
                         Wait = CreateWaiter(request.RequestId, name),
                         CancellationToken = toolTimeout.Token
-                    }, toolTimeout.Token);
-                    toolTimeout.Token.ThrowIfCancellationRequested();
+                    };
+                    result = await definition.InvokeAsync(parsedInput, executionContext, toolTimeout.Token);
+                    if (toolTimeout.IsCancellationRequested && !executionContext.EffectCommitted)
+                        throw new OperationCanceledException(toolTimeout.Token);
                 }
             }
             catch (BridgeCommandException bce)
             {
                 WriteLog("custom_tool_error requestId=" + request.RequestId + " name=" + name + " error=" + bce.Code);
+                if (executionContext != null && executionContext.EffectCommitted && bce.Code != "E_EXECUTION_TIMEOUT")
+                    throw PostEffectExecutionTimeout(name, "invoke", bce.Code + ": " + bce.Message);
                 throw;
             }
             catch (TargetInvocationException exception)
@@ -427,237 +393,196 @@ namespace UnityCli
                 var innerBce = inner as BridgeCommandException;
                 if (innerBce != null) throw innerBce;
                 if (inner is OperationCanceledException)
+                {
+                    if (executionContext != null && executionContext.EffectCommitted)
+                        throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed after the Tool crossed its effect barrier.", new Dictionary<string, object> { { "stage", "wait" }, { "effectStarted", true } }, new[] { "Inspect the affected business state before submitting a new request." });
                     throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed before the Tool reached its terminal proof.", "Inspect editor.state before submitting a new request.");
+                }
+                if (executionContext != null && executionContext.EffectCommitted)
+                    throw PostEffectExecutionTimeout(name, "invoke", inner.GetType().Name + ": " + inner.Message);
                 throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
             catch (OperationCanceledException)
             {
+                if (executionContext != null && executionContext.EffectCommitted)
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed after the Tool crossed its effect barrier.", new Dictionary<string, object> { { "stage", "wait" }, { "effectStarted", true } }, new[] { "Inspect the affected business state before submitting a new request." });
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed before the Tool reached its terminal proof.", "Inspect editor.state before submitting a new request.");
             }
             catch (Exception exception)
             {
+                if (executionContext != null && executionContext.EffectCommitted)
+                    throw PostEffectExecutionTimeout(name, "invoke", exception.GetType().Name + ": " + exception.Message);
                 throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", exception.GetType().Name + ": " + exception.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
             var outputJson = UnityCliSerializer.Serialize(result);
             var outputError = ValidateTypedInput(definition.ResultType, outputJson);
             if (outputError != null)
+            {
+                if (executionContext != null && executionContext.EffectCommitted)
+                    throw PostEffectExecutionTimeout(name, "postcondition", "Tool result failed its derived output schema at " + outputError.Path + ".");
                 throw new BridgeCommandException(
                     "E_TOOL_COMPLETION_PROOF_INVALID",
                     "Tool result failed its derived output schema at " + outputError.Path + ".",
                     new Dictionary<string, object> { { "toolName", definition.Name }, { "path", outputError.Path }, { "expected", outputError.Expected }, { "actual", outputError.Actual } },
                     new[] { "Fix the Tool result DTO or completion driver before retrying." });
-            var terminalData = CompleteProjectToolSuccess(request, definition, artifactDir, parsedInput, timeoutMs, startedAt, result);
-            RecordToolCompletionEvidence(request, definition, result, terminalData);
+            }
+            var terminalData = CompleteProjectToolSuccess(request, definition, result);
+            try { RecordToolCompletionEvidence(request, definition, result, terminalData); }
+            catch (BridgeCommandException exception)
+            {
+                if (executionContext != null && executionContext.EffectCommitted)
+                    throw PostEffectExecutionTimeout(name, "postcondition", exception.Code + ": " + exception.Message);
+                throw;
+            }
             return terminalData;
         }
 
-        private static Dictionary<string, object> ProjectToolDescriptorData(RegisteredTool definition)
-        {
-            var runtimeTarget = string.Equals(definition.Target, "runtime", StringComparison.OrdinalIgnoreCase);
-            return new Dictionary<string, object>
-            {
-                { "name", definition.Name }, { "summary", definition.Summary }, { "description", definition.Description },
-                { "group", definition.Group }, { "source", definition.Source }, { "version", definition.Version },
-                { "inputSchema", UnityCliSerializer.Parse(definition.InputSchema) }, { "outputSchema", UnityCliSerializer.Parse(definition.OutputSchema) },
-                { "capabilityType", definition.CapabilityType }, { "destructiveHint", definition.DestructiveHint },
-                { "sideEffects", definition.SideEffects }, { "supportsDryRun", definition.SupportsDryRun },
-                { "permissions", definition.Permissions }, { "requiresPackages", definition.RequiresPackages }, { "examples", definition.Examples },
-                { "target", definition.Target }, { "availabilityScope", definition.AvailabilityScope }, { "playModeSupport", definition.PlayModeSupport },
-                { "defaultTimeoutMs", definition.DefaultTimeoutMs }, { "maxTimeoutMs", definition.MaxTimeoutMs }, { "supportsJob", definition.SupportsJob },
-                { "artifactKinds", definition.ArtifactKinds }, { "handler", runtimeTarget ? "bridge-runtime" : "bridge" },
-                { "supportStatus", runtimeTarget ? "live-bridge-runtime" : "live-bridge" }, { "cliCommand", "tools run " + definition.Name },
-                { "completionContract", CompletionContractData(definition.CompletionContract) },
-                { "fingerprint", ProjectToolFingerprintData(definition) }
-            };
-        }
-
+        /// <summary>内部 raw discovery 需要 completion contract；公开投影与 static capture 会移除此字段。</summary>
         private static Dictionary<string, object> CompletionContractData(UnityCliToolCompletionContract contract)
         {
             return new Dictionary<string, object>
             {
-                { "executionClass", contract.ExecutionClass }, { "completionPredicate", contract.CompletionPredicate },
-                { "proofSource", contract.ProofSource }, { "reloadPolicy", contract.ReloadPolicy },
-                { "timeoutError", contract.TimeoutError }, { "outcomeUnknownPolicy", contract.OutcomeUnknownPolicy },
-                { "directInvocationPolicy", contract.DirectInvocationPolicy }, { "frozenDeliveryPolicy", contract.FrozenDeliveryPolicy },
-                { "completionDriverId", contract.CompletionDriverId }, { "journalPolicy", contract.JournalPolicy },
+                { "executionClass", contract.ExecutionClass },
+                { "completionPredicate", contract.CompletionPredicate },
+                { "proofSource", contract.ProofSource },
+                { "reloadPolicy", contract.ReloadPolicy },
+                { "timeoutError", contract.TimeoutError },
+                { "outcomeUnknownPolicy", contract.OutcomeUnknownPolicy },
+                { "completionDriverId", contract.CompletionDriverId },
+                { "journalPolicy", contract.JournalPolicy },
                 { "mutation", contract.Mutation }
             };
         }
 
-        private static object CompleteProjectToolSuccess(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, string artifactDir, object input, int timeoutMs, DateTime startedAt, object result)
+        /// <summary>effect 后无法确认终态的异常统一收敛为执行超时。</summary>
+        private static BridgeCommandException PostEffectExecutionTimeout(string toolName, string stage, string reason)
         {
-            var endedAt = DateTime.UtcNow;
-            var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
-            var manifest = UnityCliSerializer.Serialize(ProjectToolManifestData(request.RequestId, definition, artifactDir, startedAt, endedAt));
-            try
-            {
-                File.WriteAllText(Path.Combine(artifactDir, "manifest.json"), manifest);
-            }
-            catch (Exception exception)
-            {
-                throw new BridgeCommandException("E_ARTIFACT_WRITE_FAILED", "Failed to write artifact manifest: " + exception.Message, "Pass --artifact-dir to a writable directory.");
-            }
-            if (durationMs > timeoutMs)
-            {
-                WriteLog("custom_tool_timeout requestId=" + request.RequestId + " name=" + definition.Name + " durationMs=" + durationMs.ToString(CultureInfo.InvariantCulture) + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
-                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Tool exceeded timeoutMs after completion: " + durationMs.ToString(CultureInfo.InvariantCulture) + "ms > " + timeoutMs.ToString(CultureInfo.InvariantCulture) + "ms.", "Inspect bridge logs and artifact manifest with the returned requestId before retrying.");
-            }
+            return new BridgeCommandException(
+                "E_EXECUTION_TIMEOUT",
+                "The Tool crossed its effect barrier but did not produce a proven terminal result.",
+                new Dictionary<string, object> { { "toolName", toolName }, { "stage", stage }, { "reason", reason } },
+                new[] { "Inspect the affected business state before submitting a new request." });
+        }
 
-            return new Dictionary<string, object>
+        private static Dictionary<string, object> ProjectToolDescriptorData(RegisteredTool definition)
+        {
+            var data = new Dictionary<string, object>
             {
-                { "command", "project-tool.run" },
-                { "tool", new Dictionary<string, object> { { "name", definition.Name }, { "version", definition.Version } } },
-                { "execution", new Dictionary<string, object> { { "channel", "live" }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) }, { "endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture) }, { "durationMs", durationMs }, { "exitState", "completed" } } },
-                { "result", result },
-                { "artifacts", new List<object> { new Dictionary<string, object> { { "id", "manifest" }, { "kind", "json" }, { "path", Path.Combine(artifactDir, "manifest.json") }, { "description", "project-tool artifact manifest" } } } },
-                { "audit", ProjectToolAuditData(request, definition, artifactDir, input, result, timeoutMs, startedAt, endedAt, "completed") },
-                { "logs", new Dictionary<string, object> { { "bridge", LogPath() } } }
+                { "name", definition.Name }, { "summary", definition.Summary }, { "description", definition.Description },
+                { "group", definition.Group }, { "source", definition.Source },
+                { "inputSchema", UnityCliSerializer.Parse(definition.InputSchema) }, { "outputSchema", UnityCliSerializer.Parse(definition.OutputSchema) },
+                { "destructiveHint", definition.DestructiveHint },
+                { "supportsDryRun", definition.SupportsDryRun },
+                { "target", definition.Target }, { "availabilityScope", definition.AvailabilityScope }, { "playModeSupport", definition.PlayModeSupport },
+                { "examples", definition.Examples },
+                { "defaultTimeoutMs", definition.DefaultTimeoutMs },
+                { "completionContract", CompletionContractData(definition.CompletionContract) },
+                { "internalDescriptorFingerprint", definition.Fingerprint },
+                { "available", true }
             };
+            if (definition.SideEffects != null && definition.SideEffects.Length > 0) data["sideEffects"] = definition.SideEffects;
+            if (definition.Permissions != null && definition.Permissions.Length > 0) data["permissions"] = definition.Permissions;
+            if (definition.RequiresPackages != null && definition.RequiresPackages.Length > 0) data["requiresPackages"] = definition.RequiresPackages;
+            return data;
         }
 
-        private static Dictionary<string, object> ProjectToolManifestData(string requestId, RegisteredTool definition, string artifactDir, DateTime startedAt, DateTime endedAt)
+        private static object CompleteProjectToolSuccess(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, object result)
         {
-            return new Dictionary<string, object>
-            {
-                { "requestId", requestId }, { "command", "project-tool.run" }, { "tool", new Dictionary<string, object> { { "name", definition.Name }, { "version", definition.Version } } },
-                { "artifact", new List<object> { new Dictionary<string, object> { { "id", "manifest" }, { "kind", "json" }, { "relativePath", "manifest.json" }, { "producer", "unity-editor-package" } } } },
-                { "createdAt", endedAt.ToString("O", CultureInfo.InvariantCulture) }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) }, { "root", artifactDir }
-            };
-        }
-
-        private static Dictionary<string, object> ProjectToolAuditData(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, string artifactDir, object input, object result, int timeoutMs, DateTime startedAt, DateTime endedAt, string exitState)
-        {
-            return new Dictionary<string, object>
-            {
-                { "requestId", request.RequestId }, { "command", "project-tool.run" },
-                { "projectPath", request.StringArg("projectPath") ?? ProjectRoot() }, { "instanceId", request.StringArg("instanceId") },
-                { "unityVersion", Application.unityVersion }, { "bridgeVersion", "com.unity_cli" },
-                { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) }, { "endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture) },
-                { "durationMs", (long)(endedAt - startedAt).TotalMilliseconds },
-                { "initiator", new Dictionary<string, object> { { "cliUser", "local" }, { "cwd", Directory.GetCurrentDirectory() } } },
-                { "input", new Dictionary<string, object> { { "sourceKind", "typed" }, { "sizeBytes", Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(input)) } } },
-                { "execution", new Dictionary<string, object> { { "channel", "live" }, { "timeoutMs", timeoutMs }, { "exitState", exitState } } },
-                { "effects", ProjectToolEffectsData(definition, result) },
-                { "artifacts", new List<object> { new Dictionary<string, object> { { "kind", "json" }, { "path", Path.Combine(artifactDir, "manifest.json") } } } },
-                { "tool", new Dictionary<string, object> { { "name", definition.Name }, { "capabilityType", definition.CapabilityType }, { "fingerprint", ProjectToolFingerprintData(definition) } } }
-            };
-        }
-
-        // 组合 Result 的 planned effects 与 descriptor 类别，避免把普通目标路径误报为持久化文件写入。
-        private static Dictionary<string, object> ProjectToolEffectsData(RegisteredTool definition, object result)
-        {
-            var declared = definition.SideEffects ?? Array.Empty<string>();
-            var plannedEffects = ProjectToolPlannedEffects(result);
-            var hasPlannedEffects = plannedEffects.Count > 0;
-            var refreshed = ProjectToolResultBool(result, "Refreshed");
-            var fileWritesDeclared = hasPlannedEffects && declared.Any(effect => effect == "file-write" || effect == "asset-write" || effect == "asset-delete" || effect == "package-write" || effect == "project-settings-write" || effect == "persistent-artifact-write" || effect == "memory-snapshot-write" || effect == "settings-write");
-            var fileWrites = fileWritesDeclared ? ProjectToolEffectPaths(plannedEffects) : Array.Empty<string>();
-            var assetRefresh = refreshed || (hasPlannedEffects && declared.Any(effect => effect == "asset-import"));
-            var domainReload = hasPlannedEffects && declared.Any(effect => effect == "shader-recompile" || effect == "package-write" || effect == "build-target-switch");
-            var playModeChanged = hasPlannedEffects && (definition.Name == "editor.play" || definition.Name == "editor.stop");
-            var packagesChanged = hasPlannedEffects && declared.Contains("package-write");
-            return new Dictionary<string, object>
-            {
-                { "fileWrites", fileWrites }, { "fileWritesDeclared", fileWritesDeclared },
-                { "assetRefresh", assetRefresh }, { "domainReload", domainReload },
-                { "playModeChanged", playModeChanged }, { "packagesChanged", packagesChanged },
-                { "plannedEffectCount", plannedEffects.Count }, { "declaredSideEffects", declared }
-            };
-        }
-
-        // 返回 Result.PlannedEffects；缺失或非集合时按无副作用证据处理。
-        private static List<object> ProjectToolPlannedEffects(object result)
-        {
-            var value = ProjectToolResultMember(result, "PlannedEffects") as System.Collections.IEnumerable;
-            var effects = new List<object>();
-            if (value == null) return effects;
-            foreach (var item in value) if (item != null) effects.Add(item);
-            return effects;
-        }
-
-        // 收集 planned effect 中可审计的项目/资产输出路径。
-        private static string[] ProjectToolEffectPaths(IEnumerable<object> effects)
-        {
-            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var effect in effects)
-            {
-                foreach (var name in new[] { "Path", "OutputPath", "AssetPath", "Destination" })
-                {
-                    var value = ProjectToolResultMember(effect, name) as string;
-                    if (!string.IsNullOrWhiteSpace(value)) paths.Add(value);
-                }
-            }
-            return paths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
-        }
-
-        // 读取 typed Result 的 bool 成员；不存在时返回 false。
-        private static bool ProjectToolResultBool(object result, string name)
-        {
-            var value = ProjectToolResultMember(result, name);
-            return value is bool && (bool)value;
-        }
-
-        // 使用大小写不敏感反射读取 Result/PlannedEffect 公共属性或字段。
-        private static object ProjectToolResultMember(object value, string name)
-        {
-            if (value == null) return null;
-            var type = value.GetType();
-            var property = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
-            if (property != null && property.CanRead) return property.GetValue(value, null);
-            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
-            return field == null ? null : field.GetValue(value);
+            WriteLog("custom_tool_completed requestId=" + request.RequestId + " name=" + definition.Name);
+            return new Dictionary<string, object> { { "result", result } };
         }
 
         private sealed class ProjectToolFingerprintCheck
         {
             public bool Blocked;
-            public bool Warn;
             public string Expected;
             public string Actual;
             public string Message;
         }
 
-        private static ProjectToolFingerprintCheck RefreshProjectToolFingerprint(RegisteredTool definition, string requestedMode)
+        private sealed class ProjectToolPinnedFingerprint
+        {
+            public string Owner;
+            public string Value;
+            public string Algorithm;
+            public string Format;
+            public string Sha256;
+            public bool HardMismatch;
+        }
+
+        private static ProjectToolFingerprintCheck RefreshProjectToolFingerprint(RegisteredTool definition)
         {
             var descriptor = ProjectToolDescriptorFingerprintMaterial(definition);
             definition.DescriptorSha256 = Sha256Hex(descriptor);
             definition.HandlerSha256 = Sha256Hex(ProjectToolHandlerFingerprintMaterial(definition));
-            definition.Fingerprint = Sha256Hex("unity-cli-project-tool-fingerprint-v1\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
+            definition.Fingerprint = Sha256Hex(ProjectToolFingerprintAlgorithm + "\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
 
-            // When the attribute has an explicit Fingerprint (pinned by the developer),
-            // enforce strict matching. When it is not pinned (null/empty), auto-accept
-            // the current computed fingerprint as the new baseline — this allows
-            // built-in sample tools to evolve without manual fingerprint updates.
-            var isPinned = !string.IsNullOrEmpty(definition.PinnedFingerprint);
-            if (isPinned)
+            ProjectToolPinnedFingerprint pin;
+            if (string.Equals(definition.Source, "project", StringComparison.Ordinal) && !string.IsNullOrEmpty(definition.PinnedFingerprint))
             {
-                definition.ExpectedFingerprint = definition.PinnedFingerprint;
+                pin = ParseProjectToolPinnedFingerprint("descriptor", definition.PinnedFingerprint);
+            }
+            else if (string.Equals(definition.Source, "project", StringComparison.Ordinal))
+            {
+                var baseline = LoadProjectToolExpectedFingerprint(definition.Name);
+                if (string.IsNullOrEmpty(baseline))
+                {
+                    // 首次 project baseline 只能写入携带算法的 v2 pin，无算法 pin 绝不生成。
+                    baseline = FormatProjectToolFingerprint(definition.Fingerprint);
+                    SaveProjectToolExpectedFingerprint(definition.Name, baseline);
+                }
+                pin = ParseProjectToolPinnedFingerprint("project-baseline", baseline);
             }
             else
             {
-                // Not pinned: always accept current fingerprint as expected.
-                // Update the persisted baseline so mismatch is detectable if
-                // the user later pins the fingerprint.
-                definition.ExpectedFingerprint = definition.Fingerprint;
-                SaveProjectToolExpectedFingerprint(definition.Name, definition.Fingerprint);
+                // Built-in 与 Extension 的 expected 由当前安装包生成，不写项目 baseline。
+                pin = ParseProjectToolPinnedFingerprint("installed-package", FormatProjectToolFingerprint(definition.Fingerprint));
             }
 
-            definition.FingerprintMode = NormalizeProjectToolFingerprintMode(requestedMode);
-            var matches = string.Equals(definition.ExpectedFingerprint, definition.Fingerprint, StringComparison.OrdinalIgnoreCase);
-            definition.FingerprintStatus = matches ? "match" : (definition.FingerprintMode == "warn" ? "warn" : "blocked");
+            definition.PinnedFingerprintOwner = pin.Owner;
+            definition.PinnedFingerprintAlgorithm = pin.Algorithm;
+            definition.PinnedFingerprintFormat = pin.Format;
+            definition.ExpectedFingerprint = pin.Value;
+            var matches = !pin.HardMismatch && string.Equals(pin.Sha256, definition.Fingerprint, StringComparison.OrdinalIgnoreCase);
+            // 任一 pin 格式、算法或内容不匹配都使用同一阻断路径。
+            definition.FingerprintStatus = matches ? "match" : "blocked";
             definition.FingerprintMessage = matches
                 ? "Custom tool fingerprint matches handler code + descriptor."
-                : "Custom tool fingerprint mismatch for " + definition.Name + ": expected " + definition.ExpectedFingerprint + " but computed " + definition.Fingerprint + ".";
+                : pin.HardMismatch
+                    ? "Custom tool fingerprint pin uses an unsupported algorithm or format and must be re-pinned."
+                    : "Custom tool fingerprint content differs from its v2 pin.";
             return new ProjectToolFingerprintCheck
             {
-                Blocked = !matches && definition.FingerprintMode == "block",
-                Warn = !matches && definition.FingerprintMode == "warn",
+                Blocked = !matches,
                 Expected = definition.ExpectedFingerprint,
                 Actual = definition.Fingerprint,
                 Message = definition.FingerprintMessage
             };
+        }
+
+        /// <summary>解析 project Tool pin；裸 SHA、未知算法和畸形值都不能被当作 v2 expected。</summary>
+        private static ProjectToolPinnedFingerprint ParseProjectToolPinnedFingerprint(string owner, string value)
+        {
+            var pin = new ProjectToolPinnedFingerprint { Owner = owner, Value = value ?? string.Empty, Format = "malformed" };
+            var match = Regex.Match(pin.Value, "^([^:]+):([0-9a-fA-F]{64})$");
+            if (!match.Success)
+            {
+                pin.Format = Regex.IsMatch(pin.Value, "^[0-9a-fA-F]{64}$") ? "bare-sha256" : "malformed";
+                pin.Algorithm = pin.Format == "bare-sha256" ? "none" : "invalid";
+                pin.HardMismatch = true;
+                return pin;
+            }
+            pin.Algorithm = match.Groups[1].Value;
+            pin.Sha256 = match.Groups[2].Value.ToLowerInvariant();
+            pin.Format = string.Equals(pin.Algorithm, ProjectToolFingerprintAlgorithm, StringComparison.Ordinal) ? "valid-v2" : "algorithm-mismatch";
+            pin.HardMismatch = !string.Equals(pin.Algorithm, ProjectToolFingerprintAlgorithm, StringComparison.Ordinal);
+            return pin;
+        }
+
+        private static string FormatProjectToolFingerprint(string sha256)
+        {
+            return ProjectToolFingerprintAlgorithm + ":" + (sha256 ?? string.Empty).ToLowerInvariant();
         }
 
 
@@ -691,22 +616,12 @@ namespace UnityCli
 
         private static string ProjectToolExpectedFingerprintPath(string name)
         {
-            return Path.Combine(ProjectRoot(), "Library", "UnityCliProjectToolFingerprints", SafeProjectToolFingerprintFileName(name) + ".sha256");
+            return Path.Combine(UnityCliTempRoot(), "fingerprints", "tools", SafeProjectToolFingerprintFileName(name) + ".sha256");
         }
 
         private static string SafeProjectToolFingerprintFileName(string name)
         {
             return Regex.Replace(name ?? "project-tool", "[^A-Za-z0-9_.-]", "_");
-        }
-
-        private static string NormalizeProjectToolFingerprintMode(string requestedMode)
-        {
-            if (string.Equals(requestedMode, "warn", StringComparison.OrdinalIgnoreCase)) return "warn";
-            if (string.Equals(requestedMode, "block", StringComparison.OrdinalIgnoreCase)) return "block";
-            var environment = Environment.GetEnvironmentVariable("UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE");
-            if (string.Equals(environment, "warn", StringComparison.OrdinalIgnoreCase)) return "warn";
-            if (string.Equals(environment, "block", StringComparison.OrdinalIgnoreCase)) return "block";
-            return ProjectToolFingerprintDefaultMode;
         }
 
         private static string ProjectToolDescriptorFingerprintMaterial(RegisteredTool definition)
@@ -715,22 +630,34 @@ namespace UnityCli
                 + "\nsummary=" + (definition.Summary ?? string.Empty)
                 + "\ndescription=" + (definition.Description ?? string.Empty)
                 + "\ngroup=" + (definition.Group ?? string.Empty)
-                + "\nversion=" + (definition.Version ?? string.Empty)
                 + "\ninputSchema=" + NormalizeFingerprintJson(definition.InputSchema)
                 + "\noutputSchema=" + NormalizeFingerprintJson(definition.OutputSchema)
-                + "\ncapabilityType=" + (definition.CapabilityType ?? string.Empty)
                 + "\ndestructiveHint=" + Bool(definition.DestructiveHint)
                 + "\nsupportsDryRun=" + Bool(definition.SupportsDryRun)
                 + "\nsideEffects=" + string.Join(",", (definition.SideEffects ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
                 + "\npermissions=" + string.Join(",", (definition.Permissions ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
                 + "\nrequiresPackages=" + string.Join(",", (definition.RequiresPackages ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+                + "\ntarget=" + (definition.Target ?? string.Empty)
+                + "\navailabilityScope=" + (definition.AvailabilityScope ?? string.Empty)
                 + "\nplayModeSupport=" + (definition.PlayModeSupport ?? string.Empty)
                 + "\ndefaultTimeoutMs=" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture)
                 + "\nmaxTimeoutMs=" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture)
-                + "\nsupportsJob=" + Bool(definition.SupportsJob)
-                + "\nartifactKinds=" + string.Join(",", (definition.ArtifactKinds ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
                 + "\nrequiredInput=" + string.Join(",", (definition.RequiredInput ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+                + "\nexamples=" + NormalizeFingerprintJson(UnityCliSerializer.Serialize(definition.Examples ?? Array.Empty<ToolExample>()))
+                + "\ncompletion=" + CompletionFingerprintMaterial(definition.CompletionContract)
                 + "\ndescriptorSource=" + (definition.DescriptorSource ?? string.Empty);
+        }
+
+        /// <summary>把 sealed completion contract 纳入 descriptor integrity proof。</summary>
+        private static string CompletionFingerprintMaterial(UnityCliToolCompletionContract contract)
+        {
+            if (contract == null) return string.Empty;
+            return string.Join("|", new[]
+            {
+                contract.ExecutionClass, contract.CompletionPredicate, contract.ProofSource,
+                contract.ReloadPolicy, contract.TimeoutError, contract.OutcomeUnknownPolicy,
+                contract.CompletionDriverId, contract.JournalPolicy, contract.Mutation ? "mutation" : "read-only"
+            }.Select(value => value ?? string.Empty).ToArray());
         }
 
         private static string NormalizeProjectToolPlayModeSupport(string value, string target)
@@ -804,7 +731,24 @@ namespace UnityCli
 
         private static Dictionary<string, object> ProjectToolFingerprintData(RegisteredTool definition)
         {
-            return new Dictionary<string, object> { { "algorithm", "sha256-handler-code-plus-descriptor-v1" }, { "value", definition.Fingerprint }, { "expected", definition.ExpectedFingerprint }, { "status", definition.FingerprintStatus }, { "mode", definition.FingerprintMode }, { "message", definition.FingerprintMessage }, { "descriptorSha256", definition.DescriptorSha256 }, { "handlerSha256", definition.HandlerSha256 } };
+            return new Dictionary<string, object>
+            {
+                { "currentAlgorithm", ProjectToolFingerprintAlgorithm }, { "actualSha256", definition.Fingerprint },
+                { "pinnedOwner", definition.PinnedFingerprintOwner }, { "pinnedAlgorithm", definition.PinnedFingerprintAlgorithm },
+                { "pinnedFormat", definition.PinnedFingerprintFormat }, { "pinnedValue", definition.ExpectedFingerprint },
+                { "status", definition.FingerprintStatus }, { "message", definition.FingerprintMessage },
+                { "rePinValue", FormatProjectToolFingerprint(definition.Fingerprint) },
+                { "rePinSteps", ProjectToolFingerprintRePinSteps(definition) },
+                { "descriptorSha256", definition.DescriptorSha256 }, { "handlerSha256", definition.HandlerSha256 }
+            };
+        }
+
+        private static string[] ProjectToolFingerprintRePinSteps(RegisteredTool definition)
+        {
+            var value = FormatProjectToolFingerprint(definition.Fingerprint);
+            return definition.PinnedFingerprintOwner == "descriptor"
+                ? new[] { "Review the Tool change.", "Set ToolDescriptor.Fingerprint to " + value + ".", "Run the Tool again." }
+                : new[] { "Review the Tool change.", "Replace the persisted project Tool fingerprint with " + value + ".", "Run the Tool again." };
         }
 
 
@@ -812,28 +756,15 @@ namespace UnityCli
         {
             var items = new List<object>();
             var blocked = 0;
-            var warn = 0;
             foreach (var pair in ProjectTools)
             {
                 var definition = pair.Value;
-                RefreshProjectToolFingerprint(definition, null);
+                RefreshProjectToolFingerprint(definition);
                 if (definition.FingerprintStatus == "blocked") blocked++;
-                if (definition.FingerprintStatus == "warn") warn++;
                 items.Add(new Dictionary<string, object>
                 {
                     { "name", definition.Name },
-                    { "fingerprint", new Dictionary<string, object>
-                        {
-                            { "algorithm", "sha256-handler-code-plus-descriptor-v1" },
-                            { "value", definition.Fingerprint },
-                            { "expected", definition.ExpectedFingerprint },
-                            { "status", definition.FingerprintStatus },
-                            { "mode", definition.FingerprintMode },
-                            { "message", definition.FingerprintMessage },
-                            { "descriptorSha256", definition.DescriptorSha256 },
-                            { "handlerSha256", definition.HandlerSha256 }
-                        }
-                    }
+                    { "fingerprint", ProjectToolFingerprintData(definition) }
                 });
             }
             items.Sort((left, right) => StringComparer.Ordinal.Compare(
@@ -841,11 +772,9 @@ namespace UnityCli
                 ((Dictionary<string, object>)right)["name"] as string));
             return new Dictionary<string, object>
             {
-                { "algorithm", "sha256-handler-code-plus-descriptor-v1" },
-                { "mode", NormalizeProjectToolFingerprintMode(null) },
+                { "algorithm", ProjectToolFingerprintAlgorithm },
                 { "toolCount", (long)ProjectTools.Count },
                 { "blockedCount", (long)blocked },
-                { "warnCount", (long)warn },
                 { "tools", items }
             };
         }

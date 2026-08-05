@@ -13,9 +13,6 @@ export interface DocsListTopic {
 }
 
 export interface DocsListResult {
-  command: string;
-  mode: string;
-  requiresUnity: boolean;
   count: number;
   topics: DocsListTopic[];
   text?: string;
@@ -40,9 +37,6 @@ export default defineTool<DocsListRequest, DocsListResult>({
       .map((topic) => ({ key: topic.key, title: topic.title, summary: topic.summary, toolCount: topic.tools.length }))
       .sort((a, b) => a.key.localeCompare(b.key));
     const data: DocsListResult = {
-      command: "docs.list",
-      mode: "builtin",
-      requiresUnity: false,
       count: topics.length,
       topics
     };

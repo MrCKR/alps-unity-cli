@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Property { get; set; } public string Value { get; set; } }
         public sealed class Result { public string Skybox { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.skybox-set-properties", Summary = "Set a shader property on the current skybox material.", Description = "Set a float or color property on RenderSettings.skybox. Requires a skybox to be assigned first.", Group = "graphics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set exposure", Input = new Request { Property = "_Exposure", Value = "1.5" } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.skybox-set-properties", Summary = "Set a shader property on the current skybox material.", Description = "Set a float or color property on RenderSettings.skybox. Requires a skybox to be assigned first.", Group = "graphics",DestructiveHint = true, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set exposure", Input = new Request { Property = "_Exposure", Value = "1.5" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var skybox = RenderSettings.skybox;
@@ -34,10 +34,11 @@ namespace UnityCli
                 if (!color.HasValue && !number.HasValue && !isInt) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_PROPERTY_TYPE_UNSUPPORTED", "Skybox property " + r.Property + " has unsupported shader type " + pt + ".", "Only Color, Float, Range, and Int properties can be set by this command.");
                 var skyboxPath = AssetDatabase.GetAssetPath(skybox);
                 var skyboxGuid = string.IsNullOrEmpty(skyboxPath) ? null : AssetDatabase.AssetPathToGUID(skyboxPath);
-                if (string.IsNullOrEmpty(skyboxPath) || string.IsNullOrEmpty(skyboxGuid)) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_ASSET_PATH_INVALID", "Skybox material must be a persisted asset for verified property writes.", "Assign an Assets/*.mat skybox material first.");
+                if (string.IsNullOrEmpty(skyboxPath) || string.IsNullOrEmpty(skyboxGuid) || !skyboxPath.StartsWith("Assets/", System.StringComparison.OrdinalIgnoreCase)) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_ASSET_PATH_INVALID", "Skybox material must be a writable Assets/ material for verified property writes.", "Assign an Assets/*.mat skybox material first.");
                 ctx.CommitEffect();
                 if (color.HasValue) skybox.SetColor(r.Property, color.Value); else if (number.HasValue) skybox.SetFloat(r.Property, number.Value); else skybox.SetInt(r.Property, parsedInt);
                 EditorUtility.SetDirty(skybox);
+                AssetDatabase.SaveAssetIfDirty(skybox);
                 var observed = GraphicsToolSupport.ReloadAsset<Material>(skyboxPath, skyboxGuid);
                 if (observed == null || (color.HasValue && !GraphicsToolSupport.SameColor(observed.GetColor(r.Property), color.Value)) || (number.HasValue && !Mathf.Approximately(observed.GetFloat(r.Property), number.Value)) || (isInt && observed.GetInt(r.Property) != parsedInt)) throw new UnityCliBridge.BridgeCommandException("E_SKYBOX_PROPERTY_STATE_MISMATCH", "Skybox property readback did not match the request.", "Retry after the editor is idle.");
                 skybox = observed;

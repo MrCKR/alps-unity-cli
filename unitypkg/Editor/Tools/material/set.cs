@@ -33,7 +33,6 @@ namespace UnityCli
             Summary = "Set a Material asset property (color, float, vector or texture) by shader property name.",
             Description = "Set a Material asset property by shader property name. Pass the property value as value; the value type is inferred from the shader property when possible or overridden with type. Inspect properties with material.info first.",
             Group = "material",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

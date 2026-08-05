@@ -66,7 +66,7 @@ test("command contract keeps representative TS-local, C# built-in, and extension
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
 
   assert.equal(contracts.get("tools.group")?.handler_type, "offline");
-  assert.equal(contracts.get("build.run")?.handler_type, "job");
+  assert.equal(contracts.get("build.run")?.handler_type, "hybrid");
   assert.equal(contracts.get("scene.hierarchy")?.handler_type, "bridge");
   assert.equal(contracts.get("probuilder.ping")?.handler_type, "bridge");
   assert.equal(contracts.get("cinemachine.ping")?.group, "cinemachine");
@@ -110,7 +110,7 @@ test("command contract marks representative routing correctly", () => {
 
   assert.ok(assetRefresh);
   assert.equal(assetRefresh.handler_type, "hybrid");
-  assert.equal(assetRefresh.csharp_handler, "present");
+  assert.equal(assetRefresh.csharp_handler, "none");
   assert.equal(assetRefresh.destructive, false);
 
   assert.ok(editorCompile);
@@ -148,7 +148,7 @@ test("C# registry extraction ignores similar comments and strings", () => {
 
 test("registered C# command inventory agrees with command contracts", async () => {
   // editor.state 是 TS-owned Context；Unity 只注册不可发现的私有快照命令。
-  assert.deepEqual([...PRIVATE_BRIDGE_COMMANDS].sort(), ["bridge.package.refresh", "internal.editor.compile.start", "internal.editor.compile.status", "internal.editor.state.snapshot"]);
+  assert.deepEqual([...PRIVATE_BRIDGE_COMMANDS].sort(), ["internal.asset.refresh.start", "internal.asset.refresh.status", "internal.build.run.start", "internal.editor.compile.start", "internal.editor.compile.status", "internal.editor.refresh.start", "internal.editor.refresh.status", "internal.editor.state.snapshot", "internal.package.embed.start", "internal.package.embed.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.fail", "internal.package.files.prove", "internal.package.resolve.start", "internal.package.resolve.status", "internal.test.run.start", "internal.test.run.status"]);
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
   const csharpCommands = await registeredCsharpCommands(editorUrl);
   const extensionCsharpCommands = await registeredExtensionCsharpCommands();

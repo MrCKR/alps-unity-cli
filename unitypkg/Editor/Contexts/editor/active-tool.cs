@@ -44,12 +44,10 @@ namespace UnityCli.Contexts.Editor
             Name = "editor.active-tool",
             Description = "Read the currently active Unity Editor transform/tool handle plus pivot mode, pivot rotation, handle position, and handle rotation. Does not change the active tool.",
             Category = "editor",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live",
             Examples = new[] { new ContextExample { Description = "Read the active Editor tool", Input = new Request { } } }
         };
 

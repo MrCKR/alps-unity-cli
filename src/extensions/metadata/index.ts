@@ -1,9 +1,9 @@
 /**
  * Static built-in extension metadata for the Unity CLI.
  *
- * 注意:这里只提供 extension 本身的离线 metadata(标题/描述/providesTools 名单),
- * 不再重复声明 extension tool 的完整 descriptor/schema。extension tool 的完整 descriptor
- * 运行时从 live bridge 获取。
+ * 此处只提供 Extension package 的离线 metadata（标题、描述和 providesTools 名单）。
+ * Extension Tool 的完整 descriptor/schema 由成功编译的 Live Editor 捕获到 static catalog，
+ * 执行前仍以当前 Live Editor registration 为准。
  */
 
 import { BUILTIN_EXTENSION_MANIFESTS } from "../.generated-registry-data.js";

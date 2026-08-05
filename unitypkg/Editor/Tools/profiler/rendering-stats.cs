@@ -16,7 +16,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool Available { get; set; }
             public RenderingStats Stats { get; set; }
             public string Diagnostics { get; set; }
@@ -40,7 +39,7 @@ namespace UnityCli
             Name = "profiler.rendering-stats",
             Summary = "Read UnityStats rendering counters (batches, triangles, vertices, setPassCalls) for the current frame, with an available flag when stats are null (non-rendering frame).",
             Description = "Read rendering sample statistics from UnityEditor.UnityStats (batches, triangles, vertices, setPassCalls, screenRes, usedTextureMemory, renderTextureCount). These fields are only populated while the Game View is actively rendering; the response includes an `available` flag and diagnostics explaining when values are null, so callers do not mistake empty samples for data loss.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read rendering stats", Input = new Request { } } }
         };
@@ -53,7 +52,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "profiler.rendering-stats",
                     Available = false,
                     Diagnostics = "UnityStats type is not available in this Unity version.",
                     NextActions = new List<string>
@@ -77,7 +75,6 @@ namespace UnityCli
 
             var result = new Result
             {
-                Command = "profiler.rendering-stats",
                 Available = anyValue,
                 Stats = stats
             };

@@ -200,11 +200,15 @@ export function resolveExtensionAvailability(
     return { installed: version !== undefined, version };
   };
 
-  const packages = requiredPackages.map((pkg) => ({
-    packageId: pkg.packageId,
-    displayName: pkg.displayName,
-    ...getPackage(pkg.packageId)
-  }));
+  const packages = requiredPackages.map((pkg) => {
+    const resolved = getPackage(pkg.packageId);
+    return {
+      packageId: pkg.packageId,
+      displayName: pkg.displayName,
+      version: resolved.version,
+      installed: resolved.installed && (pkg.versionRange === undefined || resolved.version === pkg.versionRange)
+    };
+  });
 
   const missingPackageIds = packages
     .filter((p) => !p.installed)
@@ -250,8 +254,11 @@ function buildNextActions(
 ): string[] {
   const actions: string[] = [];
 
+  const requirements = requiredUnityPackagesForManifest(manifest)
+    .filter((pkg) => missingPackageIds.includes(pkg.packageId))
+    .map((pkg) => pkg.versionRange ? `${pkg.packageId}@${pkg.versionRange}` : pkg.packageId);
   actions.push(
-    `Install the required Unity package(s) manually via Unity Package Manager, or run package.install with explicit package versions: ${missingPackageIds.join(", ")}.`
+    `Install the required Unity package(s) manually via Unity Package Manager, or run package.install with explicit package versions: ${requirements.join(", ")}.`
   );
 
   actions.push(
@@ -336,6 +343,13 @@ export function validateManifest(manifest: ExtensionManifest): void {
         "INVALID_MANIFEST",
         `Extension '${manifest.id}' has a unityPackages entry missing 'displayName'.`,
         [`Each unityPackages entry must have a displayName, e.g. 'ProBuilder'.`]
+      );
+    }
+    if (pkg.versionRange !== undefined && (typeof pkg.versionRange !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(pkg.versionRange))) {
+      throw new ExtensionRegistryError(
+        "INVALID_MANIFEST",
+        `Extension '${manifest.id}' has an invalid exact package version for '${pkg.packageId}'.`,
+        ["Use an exact SemVer such as 5.2.4, or omit versionRange to accept any installed version."]
       );
     }
   }

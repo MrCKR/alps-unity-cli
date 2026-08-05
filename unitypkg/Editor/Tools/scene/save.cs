@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Save the active scene to disk.",
             Description = "Save the active scene to disk. Requires --path for unsaved scenes. Destructive: writes the .unity asset. Supports --dry-run to preview.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "asset-write", "scene-modify" },

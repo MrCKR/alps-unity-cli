@@ -202,7 +202,7 @@ namespace UnityCli
             catch (Exception exception)
             {
                 WriteLog("handle_http_unhandled " + exception.GetType().Name + ": " + exception.Message);
-                TryWriteSerializeErrorEnvelope(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled bridge error: " + exception.Message, "Check UnityCliBridge.log for details.");
+                TryWriteSerializeErrorEnvelope(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled Bridge error.", "Run unity_cli instances list and inspect editor.state before retrying.");
             }
         }
 
@@ -240,10 +240,14 @@ namespace UnityCli
             var expectedExecuteSessionId = context.Request.Headers["x-unity-cli-expected-editor-session-id"];
             var expectedExecuteListenerId = context.Request.Headers["x-unity-cli-expected-listener-id"];
             var expectedExecuteGeneration = context.Request.Headers["x-unity-cli-expected-listener-generation"];
-            if ((!string.IsNullOrEmpty(expectedExecuteInstanceId) && !string.Equals(expectedExecuteInstanceId, InstanceId(), StringComparison.Ordinal))
-                || (!string.IsNullOrEmpty(expectedExecuteSessionId) && !string.Equals(expectedExecuteSessionId, EditorSessionId(), StringComparison.Ordinal))
-                || (!string.IsNullOrEmpty(expectedExecuteListenerId) && !string.Equals(expectedExecuteListenerId, ListenerId, StringComparison.Ordinal))
-                || (!string.IsNullOrEmpty(expectedExecuteGeneration) && !string.Equals(expectedExecuteGeneration, CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)))
+            if (string.IsNullOrEmpty(expectedExecuteInstanceId)
+                || string.IsNullOrEmpty(expectedExecuteSessionId)
+                || string.IsNullOrEmpty(expectedExecuteListenerId)
+                || string.IsNullOrEmpty(expectedExecuteGeneration)
+                || !string.Equals(expectedExecuteInstanceId, InstanceId(), StringComparison.Ordinal)
+                || !string.Equals(expectedExecuteSessionId, EditorSessionId(), StringComparison.Ordinal)
+                || !string.Equals(expectedExecuteListenerId, ListenerId, StringComparison.Ordinal)
+                || !string.Equals(expectedExecuteGeneration, CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
             {
                 WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                     string.Empty,
@@ -263,7 +267,7 @@ namespace UnityCli
             catch (Exception exception)
             {
                 WriteLog("read_body_failed " + exception.GetType().Name + ": " + exception.Message);
-                WriteJson(context, SerializeErrorEnvelope("E_BRIDGE_READ_BODY_FAILED", "Failed to read request body: " + exception.Message, "The request stream may have been closed due to a domain reload. Retry the request."), 200);
+                WriteJson(context, SerializeErrorEnvelope("E_BRIDGE_READ_BODY_FAILED", "Failed to read the Bridge request body.", "Inspect editor.state and retry only after the selected Editor is stable."), 200);
                 return;
             }
             UnityCli.Protocol.BridgeRequest request;
@@ -317,7 +321,7 @@ namespace UnityCli
                 WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
                 return;
             }
-            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
+            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
             if (cachedIsCompiling && !allowedDuringCompileOrImport)
             {
                 WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000), 200);
@@ -332,7 +336,7 @@ namespace UnityCli
             {
                 // 只在 PlayMode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续入队执行。
                 // 这里必须与 UnityCliBridge.Execute() 的切换期 allowlist 保持一致。
-                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command)
+                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command)
                     || IsEditorStateSnapshotCommand(request.Command)
                     || request.Command == "editor.console"
                     || request.Command == "editor.pause"
@@ -409,41 +413,24 @@ namespace UnityCli
                 return;
             }
 
-            WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request completed without a response.", "Check UnityCliBridge.log before retrying.", 1000), 200);
+            WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request completed without a response.", "Inspect editor.state before deciding whether to submit a new request.", 1000), 200);
         }
 
-        /// <summary>已开始请求的 timeout 只能由 response、durable terminal 或 effect barrier 裁决。</summary>
+        /// <summary>已开始请求的 timeout 由内存 response 与接受状态裁决，不创建请求级持久记录。</summary>
         private static string ResolveStartedTimeoutResponse(BridgeWorkItem item, UnityCli.Protocol.BridgeRequest request, string reason)
         {
             var response = item.Response;
             if (response != null) return response;
 
-            string terminal;
-            if (TryGetRequestJournalTerminal(request.RequestId, out terminal)) return terminal;
-
             // CompleteWorkItem/Response 可能恰好在上述读取后发生；再读一次避免丢失已完成结果。
             if (item.Completed.Wait(0) && item.Response != null) return item.Response;
-            if (TryGetRequestJournalTerminal(request.RequestId, out terminal)) return terminal;
 
-            if (item.IsMutation)
-            {
-                var beforeEffectTimeout = UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                    request.RequestId,
-                    "E_EXECUTION_TIMEOUT",
-                    reason + " No durable effect barrier was crossed.",
-                    nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." });
-                object timeoutTerminal;
-                if (TryPersistTimeoutByEffectBarrier(request.RequestId, beforeEffectTimeout, out timeoutTerminal))
-                    return UnityCliSerializer.Serialize(timeoutTerminal);
-                if (item.CancelBeforeJournalAcceptance()) return UnityCliSerializer.Serialize(beforeEffectTimeout);
-                // acceptance 与 record 创建共享 journal mutex；若 cancellation 输掉，重读必然看到 record 或已确定的创建失败。
-                return UnityCliSerializer.Serialize(TryPersistTimeoutByEffectBarrier(request.RequestId, beforeEffectTimeout, out timeoutTerminal) ? timeoutTerminal : beforeEffectTimeout);
-            }
-
+            // 接受后的请求继续执行；只有 timeout 在接受前获胜时才取消执行 token。
+            item.CancelBeforeAcceptance();
             return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                 request.RequestId,
                 "E_EXECUTION_TIMEOUT",
-                reason + " No durable effect barrier was crossed.",
+                reason + " The result cannot be confirmed; inspect the business state before deciding whether to retry.",
                 nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." }));
         }
     }

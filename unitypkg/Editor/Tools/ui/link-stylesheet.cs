@@ -11,15 +11,15 @@ namespace UnityCli
     public class UiLinkStylesheetTool : IUnityCliTool<UiLinkStylesheetTool.Request, UiLinkStylesheetTool.Result>
     {
         public sealed class Request { public string Path { get; set; } public string Uss { get; set; } public string StyleSheet { get; set; } }
-        public sealed class Result { public string Command { get; set; } public bool DryRun { get; set; } public string Path { get; set; } public string Uss { get; set; } public List<UiPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "ui.link-stylesheet", Summary = "Link a .uss stylesheet to a .uxml document by appending a Style element.", Description = "Append <Style src=\"...\" /> to the .uxml file. dryRun=true previews.", Group = "ui", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true, SideEffects = new[] { "asset-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Link stylesheet", Input = new Request { Path = "Assets/UI/Main.uxml", Uss = "Assets/UI/Main.uss" } } } };
+        public sealed class Result { public bool DryRun { get; set; } public string Path { get; set; } public string Uss { get; set; } public List<UiPlannedEffect> PlannedEffects { get; set; } }
+        public ToolDescriptor Describe() => new() { Name = "ui.link-stylesheet", Summary = "Link a .uss stylesheet to a .uxml document by appending a Style element.", Description = "Append <Style src=\"...\" /> to the .uxml file. dryRun=true previews.", Group = "ui",DestructiveHint = true, SupportsDryRun = true, SideEffects = new[] { "asset-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Link stylesheet", Input = new Request { Path = "Assets/UI/Main.uxml", Uss = "Assets/UI/Main.uss" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var uxmlPath = SceneToolSupport.NormalizeAssetPath(r.Path);
             var ussPath = SceneToolSupport.NormalizeAssetPath(r.Uss ?? r.StyleSheet);
             if (string.IsNullOrEmpty(uxmlPath) || string.IsNullOrEmpty(ussPath)) throw new UnityCliBridge.BridgeCommandException("E_UI_PATH_REQUIRED", "ui.link-stylesheet requires --path (uxml) and --uss.", "Pass both uxml and uss paths.");
             var dryRun = ctx.DryRun;
-            if (dryRun) return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.link-stylesheet", DryRun = true, Path = uxmlPath, Uss = ussPath, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.link-stylesheet", Path = uxmlPath, Uss = ussPath } } });
+            if (dryRun) return new System.Threading.Tasks.ValueTask<Result>(new Result { DryRun = true, Path = uxmlPath, Uss = ussPath, PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.link-stylesheet", Path = uxmlPath, Uss = ussPath } } });
             var uxmlFullPath = SceneToolSupport.AssetFullPath(uxmlPath);
             var requestedStyleSheet = UiToolSupport.LoadStyleSheet(ussPath);
             var content = File.ReadAllText(uxmlFullPath);
@@ -47,7 +47,7 @@ namespace UnityCli
                 if (element.Name.LocalName == "Style" && source != null && source.Value == expectedSource) { linked = true; break; }
             }
             if (observedDocument == null || observedStyleSheet == null || !linked) throw new UnityCliBridge.BridgeCommandException("E_UI_STYLESHEET_READBACK_FAILED", "Stylesheet link could not be verified: " + uxmlPath, "Check Unity Console for UXML import errors.");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "ui.link-stylesheet", DryRun = false, Path = AssetDatabase.GetAssetPath(observedDocument), Uss = AssetDatabase.GetAssetPath(observedStyleSheet), PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.link-stylesheet", Path = uxmlPath, Uss = ussPath } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { DryRun = false, Path = AssetDatabase.GetAssetPath(observedDocument), Uss = AssetDatabase.GetAssetPath(observedStyleSheet), PlannedEffects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.link-stylesheet", Path = uxmlPath, Uss = ussPath } } });
         }
     }
 }

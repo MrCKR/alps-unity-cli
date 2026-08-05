@@ -19,7 +19,7 @@ namespace UnityCli
         {
             Name = "profiler.start", Summary = "Begin profiler data collection with optional deep profiling, binary log file and allocation callstacks.",
             Description = "Begin Unity Profiler data collection in the Editor session. May enable deep profiling, binary logging or allocation callstacks.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler",DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Start profiler", Input = new Request { } } }
         };

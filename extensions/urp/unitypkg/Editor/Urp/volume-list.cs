@@ -9,9 +9,7 @@ namespace UnityCli
         public sealed class Request { }
         public sealed class Result
         {
-            public string Command { get; set; }
             public List<VolumeInfo> Volumes { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -20,7 +18,6 @@ namespace UnityCli
             Summary = "List scene-session URP Volume components and their in-memory profiles.",
             Description = "Lists URP Volume components in loaded scenes with their global state, priority, weight, and current in-memory profile reference. Requires com.unity.render-pipelines.universal and an active UniversalRenderPipelineAsset. Does not save scenes or assets.",
             Group = "urp",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.render-pipelines.universal" },
             SideEffects = new string[0],
@@ -35,7 +32,7 @@ namespace UnityCli
         {
             GameObjectToolSupport.EnsureEditorNotBusy("urp.volume.list");
             UrpToolSupport.EnsureUrpAvailable();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "urp.volume.list", Volumes = UrpToolSupport.ListVolumes(null), LogPath = ctx.LogPath });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Volumes = UrpToolSupport.ListVolumes(null)});
         }
     }
 }

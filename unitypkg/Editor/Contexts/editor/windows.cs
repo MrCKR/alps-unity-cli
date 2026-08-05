@@ -42,12 +42,10 @@ namespace UnityCli.Contexts.Editor
             Name = "editor.windows",
             Description = "Read currently open Unity EditorWindow instances with title, type names, focused state, and instance IDs. This observes editor UI state without opening, closing, focusing, or moving windows.",
             Category = "editor",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand",
             Examples = new[] { new ContextExample { Description = "List open Editor windows", Input = new Request { } } }
         };
 

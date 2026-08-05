@@ -10,7 +10,7 @@ namespace UnityCli
     {
         public sealed class Request { }
         public sealed class Result { public List<GraphicsPlannedEffect> Counters { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.stats-counters", Summary = "Read render stats as a flat counter list (drawCalls, batches, triangles, vertices, setPass, renderTextures).", Description = "Read-only: returns render stats as key-value counter entries.", Group = "graphics", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read counters", Input = new Request { } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.stats-counters", Summary = "Read render stats as a flat counter list (drawCalls, batches, triangles, vertices, setPass, renderTextures).", Description = "Read-only: returns render stats as key-value counter entries.", Group = "graphics",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read counters", Input = new Request { } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var s = GraphicsToolSupport.BuildRenderStats();

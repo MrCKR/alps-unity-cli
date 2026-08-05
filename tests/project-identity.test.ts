@@ -46,6 +46,25 @@ test("CanonicalPath v1 对 root、深层目录、尾分隔符与大小写返回�
   }
 });
 
+test("CanonicalPath v1 的同步与异步 helper 保留非 ASCII project path", async () => {
+  const base = await mkdtemp(path.join(tmpdir(), "unity-cli-identity-unicode-"));
+  const project = path.join(base, "中文项目");
+  await createUnityProject(project);
+  try {
+    clearProjectIdentityCache();
+    const syncIdentity = resolveProjectIdentity(project);
+    clearProjectIdentityCache();
+    const asyncIdentity = await resolveProjectIdentityAsync(project, { timeoutMs: 15_000 });
+    assert.equal(asyncIdentity.instanceId, syncIdentity.instanceId);
+    assert.equal(asyncIdentity.canonicalProjectPath, syncIdentity.canonicalProjectPath);
+    assert.match(syncIdentity.displayProjectPath, /中文项目/);
+    assert.doesNotMatch(syncIdentity.displayProjectPath, /�/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+    clearProjectIdentityCache();
+  }
+});
+
 test("CanonicalPath v1 先解析 junction 与 directory symlink 再发现项目 root", async () => {
   const base = await mkdtemp(path.join(tmpdir(), "unity-cli-identity-reparse-"));
   const project = path.join(base, "PhysicalProject");

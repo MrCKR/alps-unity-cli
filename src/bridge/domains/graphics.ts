@@ -3,14 +3,14 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const graphicsBridgeSpecs: BridgeCommandSpec[] = [
   { group: "graphics", command: "quality", bridgeCommand: "project-tool.run", toolName: "graphics.quality", buildArgs: graphicsArgs, destructiveHint: true },
-  { group: "graphics", command: "settings", bridgeCommand: "project-tool.run", toolName: "graphics.settings", buildArgs: graphicsArgs },
+  { group: "graphics", command: "settings", bridgeCommand: "project-tool.run", toolName: "graphics.settings", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "volume", bridgeCommand: "project-tool.run", toolName: "graphics.volume", buildArgs: graphicsArgs },
   { group: "graphics", command: "bake-start", bridgeCommand: "project-tool.run", toolName: "graphics.bake-start", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "bake-cancel", bridgeCommand: "project-tool.run", toolName: "graphics.bake-cancel", buildArgs: graphicsArgs },
   { group: "graphics", command: "bake-status", bridgeCommand: "project-tool.run", toolName: "graphics.bake-status", buildArgs: graphicsArgs },
   { group: "graphics", command: "bake-clear", bridgeCommand: "project-tool.run", toolName: "graphics.bake-clear", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "bake-reflection-probe", bridgeCommand: "project-tool.run", toolName: "graphics.bake-reflection-probe", buildArgs: graphicsArgs, destructiveHint: true },
-  { group: "graphics", command: "bake-settings", bridgeCommand: "project-tool.run", toolName: "graphics.bake-settings", buildArgs: graphicsArgs },
+  { group: "graphics", command: "bake-settings", bridgeCommand: "project-tool.run", toolName: "graphics.bake-settings", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "light-probe-group", bridgeCommand: "project-tool.run", toolName: "graphics.light-probe-group", buildArgs: graphicsArgs },
   { group: "graphics", command: "reflection-probe", bridgeCommand: "project-tool.run", toolName: "graphics.reflection-probe", buildArgs: graphicsArgs },
   { group: "graphics", command: "probe-positions", bridgeCommand: "project-tool.run", toolName: "graphics.probe-positions", buildArgs: graphicsArgs },

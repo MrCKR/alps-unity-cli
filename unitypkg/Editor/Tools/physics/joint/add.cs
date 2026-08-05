@@ -22,7 +22,6 @@ namespace UnityCli
             Summary = "Add or configure a Joint component on a scene GameObject.",
             Description = "Adds the requested Joint type to target, or configures its existing first component with connectedBody. This changes scene memory only, supports dryRun=true, and is available in Edit and Play mode.",
             Group = "physics",
-            Version = "1.0.0",
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify" },
             Target = "editor",

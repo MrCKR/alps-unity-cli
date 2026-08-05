@@ -67,7 +67,7 @@ async function makeProjectDir(installedPackages: Record<string, string> = {}, en
 // ── extensions list ────────────────────────────────────────────────────────
 
 test("extensions list returns all five extensions with availability", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     const result = await handleExtensionsCommand("list", [], { project }, emptyRuntime, requestId);
     assert.ok(result.ok);
@@ -84,7 +84,7 @@ test("extensions list returns all five extensions with availability", async () =
 
 test("extensions list marks enabled extensions", async () => {
   const project = await makeProjectDir(
-    { "com.unity.probuilder": "5.2.0" },
+    { "com.unity.probuilder": "5.2.4" },
     ["probuilder"]
   );
   try {
@@ -131,7 +131,7 @@ test("extensions list includes nextActions for unavailable extensions", async ()
 // ── extensions install ─────────────────────────────────────────────────────
 
 test("extensions install enables an extension and writes state", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     assert.ok(result.ok);
@@ -148,7 +148,7 @@ test("extensions install enables an extension and writes state", async () => {
 });
 
 test("extensions install rejects a malformed Unity manifest before the effect barrier", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     await writeFile(join(project, "Packages", "manifest.json"), JSON.stringify({ dependencies: [] }));
     const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
@@ -160,7 +160,7 @@ test("extensions install rejects a malformed Unity manifest before the effect ba
 });
 
 test("concurrent extension installs retain both enabled states", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     const [probuilder, vfx] = await Promise.all([
       handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, `${requestId}_concurrent_a`),
@@ -176,7 +176,7 @@ test("concurrent extension installs retain both enabled states", async () => {
 });
 
 test("extensions install on already-installed returns already_installed", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, `${requestId}_second`);
@@ -190,7 +190,7 @@ test("extensions install on already-installed returns already_installed", async 
 
 
 test("extensions install creates a Unity extension directory package", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     assert.ok(result.ok);
@@ -266,33 +266,10 @@ test("extensions install with missing Unity dep fails without copying bundle", a
   }
 });
 
-test("extensions install preserves structured journal timeout error metadata", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
-  try {
-    const { resolveProjectIdentity } = await import("../../src/project-identity.js");
-    const identity = resolveProjectIdentity(project);
-    const requestDir = join(emptyRuntime.dataDir, "requests", identity.instanceId);
-    await mkdir(requestDir, { recursive: true });
-    const lockPath = join(requestDir, ".instance-resource.lock");
-    await writeFile(lockPath, JSON.stringify({ pid: process.pid, token: "live-owner" }));
-    const result = await handleExtensionsCommand("install", ["probuilder"], { project, "timeout-ms": "50" }, emptyRuntime, `${requestId}_structured_timeout`);
-    assert.ok(!result.ok);
-    assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
-    assert.deepEqual(result.error.nextActions, ["Wait for the current local operation to finish, then submit a new request."]);
-    assert.equal((result.error.details as { lockPath: string }).lockPath, lockPath);
-    assert.match((result.error.details as { absoluteDeadlineUtc: string }).absoluteDeadlineUtc, /^\d{4}-\d{2}-\d{2}T/);
-    assert.equal(result.error.transient, false);
-    assert.equal(result.error.retryAfterMs, 0);
-    await rm(lockPath, { force: true });
-  } finally {
-    await rm(project, { recursive: true, force: true });
-  }
-});
-
 // ── extensions remove ──────────────────────────────────────────────────────
 
 test("extensions remove disables an installed extension", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     const result = await handleExtensionsCommand("remove", ["probuilder"], { project }, emptyRuntime, `${requestId}_remove`);
@@ -339,7 +316,7 @@ test("extensions remove without project fails with PROJECT_PATH_REQUIRED", async
 // ── extensions doctor ───────────────────────────────────────────────────────
 
 test("extensions doctor reports healthy when all consistent", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     const result = await handleExtensionsCommand("doctor", [], { project }, emptyRuntime, requestId);
@@ -371,7 +348,7 @@ test("extensions doctor flags enabled extension with missing Unity deps", async 
 });
 
 test("extensions doctor flags available extension not enabled", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     const result = await handleExtensionsCommand("doctor", [], { project }, emptyRuntime, requestId);
     assert.ok(result.ok);
@@ -418,8 +395,9 @@ test("extensions with no command defaults to list", async () => {
   try {
     const result = await handleExtensionsCommand(undefined, [], { project }, emptyRuntime, requestId);
     assert.ok(result.ok);
-    const data = result.data as { command: string };
-    assert.equal(data.command, "extensions.list");
+    const data = result.data as { count: number; command?: string };
+    assert.equal(typeof data.count, "number");
+    assert.equal(data.command, undefined);
   } finally {
     await rm(project, { recursive: true, force: true });
   }

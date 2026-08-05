@@ -24,7 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public GameObjectRef Target { get; set; }
             public string Property { get; set; }
@@ -39,7 +38,6 @@ namespace UnityCli
             Summary = "Set a Renderer instance color via MaterialPropertyBlock without changing the shared material; supports --dry-run.",
             Description = "Set a Renderer instance color through a MaterialPropertyBlock, leaving the shared Material asset untouched. Target must have a Renderer. property defaults to _Color; slot optionally targets a sub-material. Supports --dry-run to preview the planned color.",
             Group = "material",
-            Version = "1.0.0",
             DestructiveHint = false,
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify", "renderer-property-block" },
@@ -82,7 +80,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "material.set-renderer-color",
                     DryRun = true,
                     Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                     Property = propertyName,
@@ -107,7 +104,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_RENDERER_COLOR_STATE_MISMATCH", "Renderer color did not match the requested property value.", "Inspect the Renderer property block and retry.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "material.set-renderer-color",
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 Property = propertyName,
                 Slot = slot,

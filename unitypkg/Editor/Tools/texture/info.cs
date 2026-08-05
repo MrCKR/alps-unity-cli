@@ -24,7 +24,6 @@ namespace UnityCli
             Summary = "Return path, guid, dimensions, format, byte size and TextureImporter settings for an Assets/ texture.",
             Description = "Return path, guid, name, width, height, format, byte size and the full TextureImporter settings for an Assets/ texture. Read-only; use texture.import-settings to change importer fields and texture.modify to edit pixels.",
             Group = "texture",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

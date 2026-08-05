@@ -19,7 +19,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public TextureInfo Texture { get; set; }
             public List<TexturePlannedEffect> PlannedEffects { get; set; }
@@ -31,7 +30,6 @@ namespace UnityCli
             Summary = "Delete an Assets/ texture asset; destructive, supports --dry-run preview.",
             Description = "Delete an Assets/ texture asset through AssetDatabase. Destructive: removes a persisted texture. Supports --dry-run to preview the planned deletion without removing anything.",
             Group = "texture",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "asset-delete" },
@@ -53,7 +51,6 @@ namespace UnityCli
             {
                 return new Result
                 {
-                    Command = "texture.delete",
                     DryRun = true,
                     Texture = TextureToolSupport.BuildTextureInfo(path, TextureToolSupport.LoadTextureAsset(path)),
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.delete", Path = path } }
@@ -69,13 +66,13 @@ namespace UnityCli
             var deleted = await ctx.Wait.Until(
                 () => !File.Exists(fullPath)
                     && !Directory.Exists(fullPath)
-                    && string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path))
+                    && !AssetDatabase.IsValidFolder(path)
                     && AssetDatabase.LoadMainAssetAtPath(path) == null,
                 TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)),
                 ct);
             var observedExists = File.Exists(fullPath)
                 || Directory.Exists(fullPath)
-                || !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path))
+                || AssetDatabase.IsValidFolder(path)
                 || AssetDatabase.LoadMainAssetAtPath(path) != null;
             if (!deleted || observedExists)
             {
@@ -83,7 +80,6 @@ namespace UnityCli
             }
             return new Result
             {
-                Command = "texture.delete",
                 Texture = new TextureInfo { Path = path, SizeBytes = 0 },
                 PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.delete", Path = path } }
             };

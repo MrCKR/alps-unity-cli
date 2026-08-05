@@ -15,17 +15,9 @@ unity_cli tools run camera.screenshot --input-file params.json
 echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
 ```
 
-## 执行通道
+## 执行路由
 
-`tools run` 根据 descriptor 的 `handler` 和 `target` 自动路由。TS 工具由 `defineTool.execute` 返回业务数据；C# 工具由 `IUnityCliTool<TReq,TRes>.Execute(Request, ctx)` 返回 Result DTO；CLI/Bridge 负责把结果包装成统一 JSON envelope。
-
-| Handler | 通道 | 说明 |
-|---------|------|------|
-| `bridge` | `POST /bridge/execute` | 实时编辑器命令 |
-| `bridge-runtime` | Bridge + Play Mode guard | 运行时工具，需 Play Mode |
-| `hybrid` | Bridge 或 job | 支持 `--job` 标志切换为 job 模式 |
-| `job` | Unity batchmode | 测试、构建等长时间操作 |
-| `offline` | 本地 CLI | 包管理、文档、反射等 |
+`tools run` 根据公开 descriptor 的 `target` 自动路由。离线 Tool 由本地 CLI 返回业务数据；Unity Tool 只连接用户已打开并由 `--instance` 唯一选中的 Editor，在同一次 direct 调用中返回已证明的终态业务结果。内部 listener 和 transport 由 CLI 管理，不是用户可调用接口。
 
 ### Target 路由
 
@@ -56,7 +48,7 @@ unity_cli tools run camera.screenshot --input '{}'
 
 Bridge-backed Tool 由 Unity Editor 主线程执行。session supervisor 在调用的单一 absolute deadline 内透明吸收 compile、import、domain reload 和 listener restart，并在恢复后的 validated generation 上继续同一逻辑请求。调用方不需要轮询 listener 或手动重试 transport。
 
-直接 Tool 只返回已证明的 terminal business success 或 terminal structured failure。mutation 在首个真实 effect 前持久化 effect barrier；effect 后若 durable proof 丢失，返回 `E_REQUEST_OUTCOME_UNKNOWN` 且禁止 blind replay。要即时观察进度、freshness 和 blocker，使用 `context read editor.state --input '{}'`；它不会等待 ready、创建 request journal 或触发 Unity 副作用。
+直接 Tool 只返回已证明的 terminal business success 或 terminal structured failure。超时或终态前断连统一返回 `E_EXECUTION_TIMEOUT`，调用方负责先观察业务状态并判断是否提交新的调用；系统不做请求级重放拦截。要即时观察进度、freshness 和 blocker，使用 `context read editor.state --input '{}'`；它不会等待 ready 或触发 Unity 副作用。
 
 ### `editor.compile`
 
@@ -66,76 +58,25 @@ Bridge-backed Tool 由 Unity Editor 主线程执行。session supervisor 在调�
 unity_cli tools run editor.compile --input '{"refresh":true,"includeWarnings":true}' --timeout-ms 120000
 ```
 
-accepted、queued、phase、run ID、listener 和 journal 字段仅属于内部 coordinator，不会成为公开成功。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh、compile 或 journal。
+accepted、queued、phase、run ID 和 listener 字段仅属于内部 coordinator，不会成为公开成功。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh 或 compile。
 
-## Fingerprint 保护
+## 项目 Tool 完整性
 
-项目自定义工具有 handler 代码 + descriptor 的 SHA256 指纹。执行前会校验指纹：
+项目自定义 Tool 在执行前经过内部完整性校验。正常 descriptor 与成功 envelope 只提供调用所需信息；校验不匹配时，结构化错误会提供恢复步骤。
 
-- 指纹匹配 → 正常执行
-- 指纹不匹配 → 默认返回 `E_TOOL_FINGERPRINT_MISMATCH`（阻止执行）
-- `--fingerprint-mode warn` → 警告但继续执行
-- `UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE=warn` → 环境变量覆盖
+## 风险元数据与可选预览
 
-```powershell
-# 默认 block 模式
-unity_cli tools run my.custom-tool --input '{}'
-
-# 警告模式（仅用于审计后的有意修改）
-unity_cli tools run my.custom-tool --input '{}' --fingerprint-mode warn
-```
-
-## 破坏性工具确认
-
-`destructiveHint: true` 的工具需要额外确认：
+公开 Tool 与 CLI 控制面调用本身即授权。`destructiveHint`、`sideEffects` 和 `supportsDryRun` 只描述效果，不引入额外确认、预定义按钮列表或意图复核。
 
 ```powershell
-# 1. 先 dry-run 预览（如工具支持）
+# 可选：支持时预览 plannedEffects，不执行 mutation
 unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
 
-# 2. 查看 plannedEffects
-# 输出中会包含 plannedEffects 字段，说明将要执行的操作
-
-# 3. 确认执行
-unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
+# 公开调用即授权并执行
+unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
 ```
 
-不支持 `--dry-run` 的破坏性工具，使用 `--dry-run` 时返回 `E_DRY_RUN_UNSUPPORTED`。
-
-## Batch 输入
-
-`batch run` 的 step 可用 `input` 字段传结构化 JSON，CLI 会自动追加为 `--input <json>`。这比在 `args` 里手写 `--input` 字符串更适合 Windows 路径和嵌套对象；如果 step 的 `args` 已经包含 `--input`、`--input-file` 或 `--stdin`，显式输入来源优先生效。对 `tools run` step，`job:true` 会追加 `--job`，用于 descriptor 标记 `bridge-job` 的工具。
-
-```json
-{
-  "steps": [
-    {
-      "id": "capture",
-      "command": ["tools", "run", "profiler.capture"],
-      "job": true,
-      "input": { "path": "Artifacts/profile.json", "format": "json", "overwrite": true }
-    }
-  ]
-}
-```
-
-## Job 模式
-
-`handler: "hybrid"` 且声明 job 支持的工具可用 `--job` 标志切换为 batchmode/job 执行。`--job` 不需要 live Bridge endpoint，但需要可用 Unity 可执行文件和未被 Editor 打开的项目；项目已打开时返回 `UNITY_BUSY`，不会先部署 Bridge 包。未声明 job 支持的 bridge/hybrid 工具会返回 `E_TOOL_JOB_UNSUPPORTED`。
-
-```powershell
-# 实时 Bridge 执行（默认）
-unity_cli tools run profiler.capture --input '{"path":"profile.json"}'
-
-# Job 模式
-unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --project . --unity "<path-to-Unity.exe>"
-
-# 等待并取回 Bridge envelope 摘要
-unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --wait --project . --unity "<path-to-Unity.exe>"
-
-# 查看任务状态
-unity_cli jobs status <jobId>
-```
+不支持 `--dry-run` 的 Tool 使用该选项时返回 `E_DRY_RUN_UNSUPPORTED`；直接调用不受影响。
 
 ## 大响应治理
 
@@ -169,7 +110,7 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 |----------|---------|
 | 只读工具 | 检查输出数据是否符合预期 |
 | 修改工具 | 重新调用只读工具确认变更 |
-| Job 工具 | 检查 job status + logs |
+| Live Editor Tool | 读取能力自己的终态业务数据，必要时用只读 Context 验证 |
 | 诊断工具 | 检查 doctor 或 preflight |
 
 ## 错误处理
@@ -179,40 +120,35 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 | `E_TOOL_NOT_FOUND_FOR_TARGET` | 工具在目标不可用 | 检查 requiresPackages 和 available |
 | `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play`，transient 可重试 |
 | `E_SCHEMA_INVALID` | 输入缺少 inputSchema.required 字段 | 查看 `tools describe` 的 inputSchema |
-| `E_TOOL_FINGERPRINT_MISMATCH` | handler 代码变更 | 审计后 `--fingerprint-mode warn` |
-| `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 直接使用 `--yes` 确认 |
-| `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | 破坏性工具未确认 | 添加 `--yes` 标志 |
+| `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 去除可选 `--dry-run` 后直接调用 |
 | `E_INSTANCE_CONFLICT` | 同一 canonical project 存在多个 Unity Editor process/session claim | 关闭重复 Editor，只保留目标 session |
 | `E_INSTANCE_NOT_RUNNING` | 选定项目没有可验证的运行中 Editor | 检查 `instances list` 并打开该项目 |
-| `E_REQUEST_OUTCOME_UNKNOWN` | effect 已可能发生但 terminal proof 不可用 | 先观察业务状态；不要原样盲重放 |
+| `E_UNITY_BLOCKED` | effect 前已确认 Unity/UI blocker | 读取同一响应的 `details.blockers` 并处理对应窗口 |
+| `E_EXECUTION_TIMEOUT` | 调用在终态前超时或断连 | 先读取业务状态，再由调用方决定是否提交新的调用 |
 | `E_UNITY_TRANSITION_TIMEOUT` | lifecycle transition 未在 absolute deadline 内稳定 | 检查 `editor.state` 的 progress/blockers |
 
-## 深度修改与 patch 语义
+弹窗 blocker 在原错误的 `details.blockers` 中结构化返回。其 DTO 包含 `type`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 和 `confidence`。使用只读 `context read editor.dialogs` 获取当前 dialogId、`observedAt`、modal 状态和按钮；无弹窗时返回空数组，Windows 读取失败返回 `E_DIALOG_OBSERVATION_FAILED`。再以 `tools run editor.dialog.click` 精确传入 dialogId 与规范化 button label。该 Tool 会重新验证选中 Unity 的 PID/processStartedAt、dialogId 和唯一 enabled button，并证明原 dialog 已消失或不再 modal；不匹配分别返回 stale、not-found 或 ambiguous 错误，无法证明点击结果返回 `E_DIALOG_CLICK_UNPROVEN`。任意当前可见 modal 的任意 enabled button 都可点击，不设预定义按钮列表、确认或人工处理门。
 
-`object.modify` / `component.modify` / `asset.modify` 共享同一套 patch 引擎（底层 `ObjectPatch`），支持三个修改面，执行顺序对齐 IvanMurzak ReflectorNet：`jsonPatch` → `pathPatches` → `objectDiff`/`componentDiff`。
+## Object 与 Component 修改
 
-- `pathPatches`：`[{"path":"...","value":...}]`，路径使用 `/` 分隔：`fieldName`、`nested/field`、`arrayField/[i]`、`dictField/[key]`，并可带 `#/` 前缀。
-- `jsonPatch`：JSON Merge Patch (RFC 7396) 对象。
-- `objectDiff`/`componentDiff`：SerializedMember 风格的完整 diff（等价 jsonPatch merge 语义）。
+`object.modify` 和 `component.modify` 只接受非空 `pathPatches`。每一项必须是可由 Unity `SerializedObject.FindProperty` 定位并 fresh readback 的 direct `replace`；不提供 merge、add、remove、reflection member path 或 diff 旁路。支持的值类型以当前 `inputSchema` 和错误 `nextActions` 为准。
+
+`path` 使用 Unity serialized property path，例如 `m_Name`、`m_LocalPosition.x` 或数组的 `Array.data[0]`。它不是 `/` 分隔的 C# member path。`asset.modify` 是独立的文本资产覆写 Tool，不使用 ObjectPatch。
 
 ```powershell
-# pathPatches 示例
-unity_cli tools run component.modify --input '{"path":"Player","component":"Transform","pathPatches":[{"path":"localPosition","value":{"x":1,"y":2,"z":3}}]}'
-
-# jsonPatch 示例
-unity_cli tools run object.modify --input '{"instanceId":123,"jsonPatch":{"m_Color":{"r":1,"g":0,"b":0}}}'
-
-# 先读后改（推荐）
+# 先读后改
 unity_cli tools run component.get --input '{"path":"Player","component":"Rigidbody"}'
-unity_cli tools run component.modify --input '{"path":"Player","component":"Rigidbody","jsonPatch":{"mass":10}}'
+unity_cli tools run component.modify --input '{"path":"Player","component":"Rigidbody","pathPatches":[{"path":"m_Mass","op":"replace","value":10}]}'
+
+unity_cli tools run object.modify --input '{"path":"Player","pathPatches":[{"path":"m_Name","op":"replace","value":"PlayerModified"}]}'
 ```
 
-## reflection.method.call 安全确认流
+## reflection.method.call
 
-`reflection.method.call` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），分类为 `riskLevel: critical`、`destructiveHint: true`。先用 `reflection.method.find` 获取签名；存在同名 overload 时，将选中签名的 `parameterType` 数组作为 `parameterTypes`。执行必须传 `--yes`：
+`reflection.method.call` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），且 `destructiveHint: true`。先用 `reflection.method.find` 获取签名；存在同名 overload 时，将选中签名的 `parameterType` 数组作为 `parameterTypes`。公开调用即授权：
 
 ```powershell
-unity_cli tools run reflection.method.call --yes --input '{
+unity_cli tools run reflection.method.call --input '{
   "typeName":"UnityEngine.Transform",
   "methodName":"Translate",
   "parameterTypes":["UnityEngine.Vector3","UnityEngine.Space"],
@@ -221,7 +157,7 @@ unity_cli tools run reflection.method.call --yes --input '{
 }'
 ```
 
-`--dry-run` 返回 `plannedEffects` 且不执行方法；未确认时返回 `E_DESTRUCTIVE_CONFIRMATION_REQUIRED`。无法唯一选择 overload 时返回 `E_METHOD_AMBIGUOUS` 和候选签名。确认后返回参数、结果序列化、异常（如有）与结构化 audit。
+`--dry-run` 返回 `plannedEffects` 且不执行方法；它是可选预览。无法唯一选择 overload 时返回 `E_METHOD_AMBIGUOUS` 和候选签名。调用后只返回方法调用的业务结果和已声明 completion readback；内部审计不进入公开成功响应。
 
 ## asset.get-data 复用 serializer
 

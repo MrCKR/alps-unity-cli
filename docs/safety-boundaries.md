@@ -8,21 +8,18 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `destructiveHint` | boolean | true = 有破坏性，执行前需要确认 |
-| `supportsDryRun` | boolean | true = 支持 `--dry-run` 预览 |
-| `longRunning` | boolean | true = 可能长时间运行 |
+| `destructiveHint` | boolean | true = 可能有不可逆效果的描述信息，不构成执行门 |
+| `supportsDryRun` | boolean | true = 支持可选的 `--dry-run` 预览 |
 | `permissions` | string[] | 执行所需权限 |
-| `cancellation` | string | 长任务取消语义：`cooperative` 或 `job`，无特殊取消语义时省略 |
+| `target` | string | Tool 可执行的 Editor 目标 |
+| `availabilityScope` | string | Tool 的可用性范围 |
 | `playModeSupport` | string | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
 
 ## Tool 安全规则
 
 ### 破坏性工具
 
-`destructiveHint: true` 的工具执行前必须：
-1. 先 `tools describe` 确认风险
-2. 如支持 `--dry-run`，先预览 `plannedEffects`
-3. 使用 `--yes` 确认执行
+公开 Tool 与 CLI 控制面调用本身即授权。`destructiveHint`、`sideEffects` 与 `supportsDryRun` 准确描述风险、效果和可选预览，但不得触发额外确认、预定义按钮列表或意图复核，也不得阻止执行。
 
 当前标记为破坏性的工具包括：
 
@@ -35,30 +32,33 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `tools run texture.modify` | 修改 Texture 资产 |
 | `tools run texture.delete` | 删除 Texture 资产 |
 | `tools run shader.delete` | 删除 Shader 资产 |
-| `tools run object.modify` | 深度修改对象/资产数据 |
-| `tools run probuilder.delete-faces` | ProBuilder Delete Faces |
-| `tools run probuilder.combine-meshes` | ProBuilder Combine Meshes |
-| `tools run probuilder.merge-objects` | ProBuilder Merge Objects |
+| `tools run object.modify` | 修改场景对象或持久资产数据 |
+| `tools run component.modify` | 修改场景组件或持久 Prefab/资产组件 |
+| `tools run texture.import-settings` | 持久化 TextureImporter 设置 |
+| `tools run texture.sprite` | 持久化 Sprite importer 与切片设置 |
+| `tools run graphics.settings` | 持久化 GraphicsSettings/QualitySettings |
+| `tools run graphics.bake-settings` | 持久化 LightingSettings 与场景绑定 |
+| `tools run build.platform.set` | 持久切换 active BuildTarget |
+| `tools run build.profile.switch` | 持久切换 active Build Profile |
 | `tools run editor.menu` | 执行编辑器菜单项 |
 | `tools run package.install` | 安装包 |
 | `tools run package.remove` | 移除包 |
 | `tools run package.deploy` | 复制本地 package 源到项目 Packages 目录 |
 | `tools run package.restore` | 从 package.deploy 备份恢复或移除部署目录 |
 | `tools run package.bridge-remove` | 移除 init 复制的 Bridge 包 |
-| `tools run code.exec` | 执行代码 |
-| `jobs cancel` | 取消测试/构建/刷新等后台任务 |
+| `tools run code.exec` | 在已打开的 Unity Editor 中执行代码 |
 
-### 确认流程
+### 可选预览
 
-```
-tools describe <tool>        → 确认 destructiveHint 和 supportsDryRun
+```text
+tools describe <tool>        -> 了解 destructiveHint、sideEffects 和 supportsDryRun
        ↓
---dry-run（如支持）           → 查看 plannedEffects
+--dry-run（如支持且需要预览） -> 查看 plannedEffects
        ↓
---yes                         → 确认执行
+tools run <tool>             -> 公开调用即授权并执行
 ```
 
-未确认时返回 `E_DESTRUCTIVE_CONFIRMATION_REQUIRED`。
+未使用 dry-run 不会产生确认错误。
 
 ### Play Mode 支持
 
@@ -66,7 +66,7 @@ tools describe <tool>        → 确认 destructiveHint 和 supportsDryRun
 - `runtime-only`：Play Mode 下可执行，但只影响当前运行会话，退出 Play Mode 后不持久。
 - `session-affecting`：允许执行，但可能触发 asset import、compile、domain reload 或 Play Mode 状态变化。
 - `editor-only`：没有合理运行态语义，Play Mode 下返回 `E_TOOL_PLAYMODE_UNAVAILABLE`。
-- `unknown`：迁移期状态，应逐步消除。
+- `unknown`：当前安装无法证明该状态，调用方必须先重新发现或检查可用性。
 
 ## Context 只读硬边界
 
@@ -86,38 +86,14 @@ Context 不得：
 |------|------|
 | 必须有 descriptor | 通过 `IUnityCliTool<TReq,TRes>.Describe()` 提供人工字段，schema 由 Request/Result 派生，不可省略 |
 | 必须通过 envelope | 输入输出必须遵循统一 JSON envelope 格式 |
-| Fingerprint 校验 | handler 代码变更时默认阻止执行 |
+| 内部完整性校验 | handler 代码变更时默认阻止执行 |
 | 不可绕过 registry | 不允许直接调用未注册的方法 |
 | 不可提供反射 escape hatch | 不允许通过自定义工具绕过安全检查 |
 
-## Fingerprint 完整性
+## 项目 Tool 完整性
 
-项目自定义工具的 fingerprint 机制：
+项目自定义 Tool 在 `tools run` 前经过内部完整性校验。正常 descriptor 和成功 envelope 不公开校验材料；不匹配时返回结构化错误及恢复步骤。`unity_cli doctor` 可用于诊断项目 Tool 状态。
 
-- **计算方式**：`sha256(handler-code + descriptor-v1)`
-- **存储位置**：工具 descriptor 中的 `fingerprint` 字段
-- **校验时机**：`tools run` 执行前
-- **校验失败行为**：
-  - 默认 `block`：返回 `E_TOOL_FINGERPRINT_MISMATCH`
-  - `warn` 模式：输出警告但继续执行
+## 正确性边界
 
-```powershell
-# 检查 fingerprint 状态
-unity_cli doctor
-# doctor 会报告 project_tool_fingerprint 检查结果
-```
-
-## 安全确认证明（Security Proof）
-
-破坏性 Bridge 命令的请求 payload 包含 `security` 证明对象：
-
-```json
-{
-  "security": {
-    "confirmationFingerprint": "destructive-safety-v1",
-    "dryRunPreview": { ... }
-  }
-}
-```
-
-这确保确认请求无法被伪造或重放。
+schema、目标 instance、canonical project identity、PID/processStartedAt、session、deadline、stale identity、terminal proof、mutation lease 和审计用于确保调用落到正确对象并返回真实结果。它们是正确性约束，不是授权门。

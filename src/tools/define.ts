@@ -5,8 +5,6 @@
 
 import type { BridgeRuntime } from "../bridge/index.js";
 import type { BuiltinDocsRuntime } from "../builtin-docs.js";
-import type { JobRunner } from "../job-runner.js";
-import type { JobStore } from "../job-store.js";
 import type { ToolMetadata, PlayModeSupport, ToolHandler } from "./metadata/types.js";
 
 // ─── 工具定义输入(defineTool 接收的形态)────────────────────────────────
@@ -24,7 +22,7 @@ export interface ToolDefinition<TReq = unknown, TRes = unknown> {
   supportsDryRun?: boolean;
   timeoutMs?: number;
   permissions?: string[];
-  /** 执行路由:bridge/bridge-runtime/job/offline/hybrid。 */
+  /** 执行路由:bridge/bridge-runtime/offline/hybrid。 */
   handler?: ToolHandler;
   supportStatus?: import("./metadata/types.js").ToolSupportStatus;
   target?: string;
@@ -44,11 +42,8 @@ export interface ToolContext {
   execution: {
     dryRun?: boolean;
     timeoutMs?: number;
-    job?: boolean;
-    wait?: boolean;
-    waitTimeoutMs?: number;
   };
-  /** CLI data 目录,用于离线 cache 与 job store。 */
+  /** CLI data 目录,用于离线 cache。 */
   dataDir?: string;
   /** TS mutation 在全部前置校验后、首个业务 effect 前调用；dispatcher 注入 durable barrier。 */
   commitEffect?: () => Promise<void>;
@@ -68,10 +63,6 @@ export interface ToolContext {
   bridgeExecute?: BridgeRuntime["bridgeExecute"];
   /** 测试或宿主注入的文档抓取器,用于 docs online fallback,避免工具内部直接绑定全局网络。 */
   fetch?: BuiltinDocsRuntime["fetch"];
-  /** CLI job store,供 build/test/job 类 defineTool 读取持久化 job 状态。 */
-  jobStore?: JobStore;
-  /** CLI job runner,供 build/test/job 类 defineTool 执行取消或等待等 job 控制。 */
-  jobRunner?: JobRunner;
 }
 
 // ─── registry(收集 defineTool 注册的工具)──────────────────────────────

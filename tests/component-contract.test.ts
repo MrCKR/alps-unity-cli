@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { destructiveCommands } from "../src/security-policy.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 import { contractToolNames, discoverLiveTools, listCsFiles, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
@@ -76,6 +75,7 @@ test("component tools are contract-discovered and expose expected live descripto
       summary: "Patch serialized component data.",
       description: "Patch serialized component data.",
       group: "component",
+      destructiveHint: true,
       supportsDryRun: true,
       playModeSupport: "session-affecting",
       inputSchema: { type: "object", properties: { pathPatches: { type: "array" } } }
@@ -124,7 +124,7 @@ test("component tools are contract-discovered and expose expected live descripto
 
   const modify = tools.get("component.modify")!;
   const modifyProps = modify.inputSchema.properties as Record<string, unknown>;
-  assert.equal(modify.destructiveHint, false);
+  assert.equal(modify.destructiveHint, true);
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.playModeSupport, "session-affecting");
   assert.ok(modifyProps.pathPatches);
@@ -156,15 +156,15 @@ test("contract entries exist for component tools with present C# handler", () =>
   }
 });
 
-test("component.modify is not in the destructive security policy", () => {
-  const commands = new Set(destructiveCommands().map((entry) => entry.command));
-  assert.equal(commands.has("component.modify"), false);
+test("component.modify exposes destructive metadata because Edit Mode can target persistent Prefab components", () => {
+  const command = bridgeCommandRegistry.lookup("component", "modify");
+  assert.equal(command?.destructiveHint, true);
 });
 
-test("component.modify descriptor example uses slash patch paths", async () => {
+test("component.modify descriptor example uses a verifiable SerializedProperty path", async () => {
   const source = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/modify.cs", import.meta.url), "utf8");
-  assert.match(source, /\{ "path", "localPosition\/x" \}/);
-  assert.doesNotMatch(source, /\{ "path", "localPosition\.x" \}/);
+  assert.match(source, /\{ "path", "m_LocalPosition\.x" \}/);
+  assert.doesNotMatch(source, /\{ "path", "localPosition\/x" \}/);
 });
 
 test("C# handlers exist for component deep commands (RegisterCommand or IUnityCliTool)", async () => {
@@ -183,12 +183,20 @@ test("C# component lifecycle handlers support properties and indexed duplicate c
   assert.match(toolSource, /\[UnityCliAnyJson\]\s+public Dictionary<string, object> Properties/);
   assert.match(setSource, /\[UnityCliAnyJson\]\s+public object Value/);
   assert.match(supportSource, /BuildComponentPropertyChanges\(Type componentType, Dictionary<string, object> properties\)/);
-  assert.match(supportSource, /ObjectPatch\.ConvertValue\(value, type\)/);
+  assert.match(supportSource, /UnityCliValueConverter\.ConvertValue\(value, type\)/);
   assert.doesNotMatch(supportSource, /JsonRawProperty|ComponentPropertiesJson|ParseJsonToObject/);
   assert.match(setSource, /ComponentIndex/);
   assert.match(supportSource, /ResolveComponent\(GameObject gameObject, string componentName, int\? componentIndex\)/);
   assert.match(supportSource, /AllowsMultipleComponents/);
+  assert.match(supportSource, /GetParentTypeDisallowingMultipleInclusion/);
+  assert.match(supportSource, /BindingFlags\.Static \| BindingFlags\.Public \| BindingFlags\.NonPublic/);
+  assert.match(supportSource, /NativeSingleInstanceComponentTypes[\s\S]*typeof\(Rigidbody\)/);
+  assert.ok(supportSource.indexOf("NativeSingleInstanceComponentTypes.Contains(type)") < supportSource.indexOf("DisallowMultipleTypeMethod.Invoke"));
   assert.match(supportSource, /DisallowMultipleComponent/);
+  const executeBody = toolSource.slice(toolSource.indexOf("public System.Threading.Tasks.ValueTask<Result> ExecuteAsync"));
+  assert.ok(executeBody.indexOf("E_COMPONENT_EXISTS") < executeBody.indexOf("ctx.CommitEffect()"));
+  assert.match(toolSource, /Add AudioSource with initial properties/);
+  assert.match(toolSource, /Component = "AudioSource"/);
   assert.match(toolSource, /type\.IsInstanceOfType\(component\)/);
   assert.match(toolSource, /E_COMPONENT_ADD_FAILED/);
   assert.match(toolSource, /GetComponents\(type\)/);
@@ -196,6 +204,15 @@ test("C# component lifecycle handlers support properties and indexed duplicate c
   assert.doesNotMatch(toolSource.slice(toolSource.indexOf("VerifyComponentReadback")), /GetComponent\(type\)/);
   assert.match(supportSource, /E_COMPONENT_INDEX_OUT_OF_RANGE/);
   assert.match(toolSource, /ChangedProperties/);
+});
+
+test("component.remove validates RequireComponent dependencies before its effect barrier", async () => {
+  const source = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/remove.cs", import.meta.url), "utf8");
+  assert.match(source, /EnsureDependenciesRemain\(gameObject, targets\)[\s\S]*ctx\.CommitEffect\(\)/);
+  assert.match(source, /GetCustomAttributes\(typeof\(RequireComponent\), true\)/);
+  assert.match(source, /E_COMPONENT_REMOVE_DEPENDENCY/);
+  assert.match(source, /targetIds\.Any\(id => EditorUtility\.InstanceIDToObject\(id\) != null\)/);
+  assert.doesNotMatch(source, /observedSingleTarget\.GetComponent\(componentName\) != null/);
 });
 
 test("C# component deep handlers return typed Result via IUnityCliTool", async () => {

@@ -18,6 +18,8 @@
 
 ```csharp
 #if UNITY_EDITOR
+using System.Threading;
+using System.Threading.Tasks;
 using UnityCli;
 using UnityEditor;
 using UnityEngine;
@@ -48,31 +50,38 @@ namespace MyProject.UnityCLI
             Summary = "Read project version, active scene, render pipeline, and build target.",
             Description = "Returns a read-only project summary without modifying scenes, assets, packages, ProjectSettings, imports, compilation, or Play Mode.",
             Category = "sample",
-            Version = "1.0.0",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "onDemand"
+            Examples = new[]
+            {
+                new ContextExample
+                {
+                    Description = "Read the project summary",
+                    Input = new Request { IncludeDisabled = false }
+                }
+            }
         };
 
         /// <summary>
         /// 读取项目状态摘要。只读访问 Editor 状态，不写文件、不改场景、不触发导入或 Play Mode。
         /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+        public ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             var activeScene = SceneManager.GetActiveScene();
             var renderPipeline = GraphicsSettings.currentRenderPipeline != null
                 ? GraphicsSettings.currentRenderPipeline.name
                 : "Built-in";
 
-            return new Result
+            return new ValueTask<Result>(new Result
             {
                 UnityVersion = Application.unityVersion,
                 ActiveScene = activeScene.path ?? string.Empty,
                 RenderPipeline = renderPipeline,
                 BuildTarget = EditorUserBuildSettings.activeBuildTarget.ToString(),
                 IncludeDisabled = request != null && request.IncludeDisabled
-            };
+            });
         }
     }
 }
@@ -82,9 +91,9 @@ namespace MyProject.UnityCLI
 ## 关键规则
 
 - `Request` / `Result` 嵌套在 Context 类内，public 属性派生 `inputSchema` / `outputSchema`。
-- `Describe()` 只写人工字段：`Name`、`Summary`、`Description`、`Category`、target、availability、Play Mode、refresh 等。
-- `Read(Request, ctx)` 必须只读；不要命名为 `Execute` 或 `Run`。
-- Context 不写 destructive、side effects、dry-run、artifact 或 job 语义。
+- `Describe()` 只写人工字段：`Name`、`Summary`、`Description`、`Category`、target、availability、Play Mode、package requirements 和 examples。
+- `ReadAsync(Request, ctx, ct)` 必须只读并返回 `ValueTask<TRes>`；不要命名为 `Execute` 或 `Run`。
+- Context 不写 destructive、side effects、dry-run 或 artifact 语义。
 - 输出要结构化、稳定、可分页/筛选，避免大对象默认全量返回。
 
 ## 读取入口

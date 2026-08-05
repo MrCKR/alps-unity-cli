@@ -42,7 +42,6 @@ namespace UnityCli
             Summary = "List prefab child/component summaries with parent, query and componentType filters, paged.",
             Description = "List prefab child/component summaries. With no parent, returns the root; with parent, returns that parent's children. Filter by query/nameFilter on name or path, and componentType on a component type name. Results are paged via cursor/pageSize.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

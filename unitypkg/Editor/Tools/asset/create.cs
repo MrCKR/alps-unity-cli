@@ -31,7 +31,6 @@ namespace UnityCli
             Summary = "Create a text asset file or folder under Assets/, refusing to overwrite unless overwrite=true.",
             Description = "Create a text asset file or folder under Assets/. When type=folder (or the path has no extension) a folder is created; otherwise a text file is written and imported. Refuses to overwrite an existing asset unless overwrite=true.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

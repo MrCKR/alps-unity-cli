@@ -65,7 +65,7 @@ namespace UnityCli
             cachedIsPlaying = EditorApplication.isPlaying;
             cachedIsBuilding = BuildPipeline.isBuildingPlayer;
             cachedIsPlayModeChanging = IsPlayModeChanging();
-            UnityCliWaitScheduler.EnsureMainThreadSynchronizationContext();
+            UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
             UnityCliWaitScheduler.Tick();
 
             if (started && EditorApplication.timeSinceStartup >= nextHeartbeatAt)
@@ -113,7 +113,7 @@ namespace UnityCli
             try
             {
                 WriteLog("bridge_request_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
-                item.Response = await ExecuteCoordinatedRequest(item.Request, item.RawRequestBytes, item.TryAcceptJournal, item.Token);
+                item.Response = await ExecuteCoordinatedRequest(item.Request, item.RawRequestBytes, item.TryAccept, item.Token);
                 WriteLog("bridge_request_finished requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " ok=" + Bool(item.Response != null && item.Response.Contains("\"ok\":true")));
             }
             catch (BridgeCommandException exception)
@@ -145,7 +145,7 @@ namespace UnityCli
         /// <summary>同 root request 的并发 redelivery 只附着一个 work item；不同 bytes 立即 fail closed。</summary>
         private static BridgeWorkItem EnqueueOrAttach(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, out bool created, out int queueDepth)
         {
-            var digest = ComputeRequestDigest(rawRequestBytes, request.InstanceId);
+            var digest = UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId);
             lock (QueueLock)
             {
                 BridgeWorkItem existing;
@@ -169,6 +169,10 @@ namespace UnityCli
         /// <summary>完成信号与 active-request map 在同一锁内更新，attach 不会观察到半完成 item。</summary>
         private static void CompleteWorkItem(BridgeWorkItem item)
         {
+            UnityCliTransactionLog.Append(item.Request.RequestId, item.Request.Command, Encoding.UTF8.GetString(item.RawRequestBytes), item.Response ?? UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                item.Request.RequestId,
+                "E_BRIDGE_COMMAND_FAILED",
+                "Bridge request completed without a response.")));
             lock (QueueLock)
             {
                 RunningWork.Remove(item);
@@ -184,8 +188,8 @@ namespace UnityCli
             private readonly object StateLock = new object();
             private bool cancelled;
             private bool started;
-            private bool journalAccepted;
-            private bool journalAcceptanceCancelled;
+            private bool accepted;
+            private bool acceptanceCancelled;
             private readonly CancellationTokenSource cancellation;
 
             public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest)
@@ -244,24 +248,24 @@ namespace UnityCli
                 }
             }
 
-            /// <summary>仅在 journal mutex 内调用，使 acceptance 与 durable record 创建保持同一裁决顺序。</summary>
-            public bool TryAcceptJournal()
+            /// <summary>StateLock 使接受与 HTTP 超时取消使用同一内存裁决顺序。</summary>
+            public bool TryAccept()
             {
                 lock (StateLock)
                 {
-                    if (journalAcceptanceCancelled) return false;
-                    journalAccepted = true;
+                    if (acceptanceCancelled) return false;
+                    accepted = true;
                     return true;
                 }
             }
 
             /// <summary>HTTP timeout 仅能取消尚未被 coordinator 接受的 mutation。</summary>
-            public bool CancelBeforeJournalAcceptance()
+            public bool CancelBeforeAcceptance()
             {
                 lock (StateLock)
                 {
-                    if (journalAccepted) return false;
-                    journalAcceptanceCancelled = true;
+                    if (accepted) return false;
+                    acceptanceCancelled = true;
                     cancellation.Cancel();
                     return true;
                 }
@@ -272,7 +276,6 @@ namespace UnityCli
                 lock (StateLock)
                 {
                     TimedOut = true;
-                    cancellation.Cancel();
                 }
             }
 

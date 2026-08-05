@@ -8,6 +8,7 @@ export const ERROR_CODES = {
   BRIDGE_ENDPOINT_REQUIRED: "BRIDGE_ENDPOINT_REQUIRED",
   BRIDGE_CONNECTION_FAILED: "BRIDGE_CONNECTION_FAILED",
   BRIDGE_COMMAND_FAILED: "BRIDGE_COMMAND_FAILED",
+  E_BRIDGE_RESPONSE_INVALID: "E_BRIDGE_RESPONSE_INVALID",
   BRIDGE_COMMAND_UNSUPPORTED: "BRIDGE_COMMAND_UNSUPPORTED",
   BRIDGE_REQUEST_EXPIRED: "BRIDGE_REQUEST_EXPIRED",
   BRIDGE_COMPILE_FAILED: "BRIDGE_COMPILE_FAILED",
@@ -20,12 +21,15 @@ export const ERROR_CODES = {
   E_UNITY_IMPORTING: "E_UNITY_IMPORTING",
   E_UNITY_DOMAIN_RELOAD: "E_UNITY_DOMAIN_RELOAD",
   E_UNITY_PLAY_MODE: "E_UNITY_PLAY_MODE",
+  E_UNITY_BLOCKED: "E_UNITY_BLOCKED",
 
   // ─── Timeout ───
   E_EXECUTION_TIMEOUT: "E_EXECUTION_TIMEOUT",
+  E_CONTEXT_READ_TIMEOUT: "E_CONTEXT_READ_TIMEOUT",
 
   // ─── Instance ───
   E_INSTANCE_NOT_FOUND: "E_INSTANCE_NOT_FOUND",
+  E_INSTANCE_CONFLICT: "E_INSTANCE_CONFLICT",
   E_INSTANCE_AMBIGUOUS: "E_INSTANCE_AMBIGUOUS",
   E_TARGET_AMBIGUOUS: "E_TARGET_AMBIGUOUS",
   E_TARGET_ALIAS_CONFLICT: "E_TARGET_ALIAS_CONFLICT",
@@ -34,11 +38,6 @@ export const ERROR_CODES = {
   E_RUNTIME_SESSION_STALE: "E_RUNTIME_SESSION_STALE",
   E_RUNTIME_TOOL_TARGET_MISMATCH: "E_RUNTIME_TOOL_TARGET_MISMATCH",
   E_RUNTIME_TIMEOUT: "E_RUNTIME_TIMEOUT",
-
-  // ─── Job ───
-  JOB_NOT_FOUND: "JOB_NOT_FOUND",
-  JOB_ID_REQUIRED: "JOB_ID_REQUIRED",
-  JOB_CANCEL_FAILED: "JOB_CANCEL_FAILED",
 
   // ─── Schema / validation ───
   E_SCHEMA_INVALID: "E_SCHEMA_INVALID",
@@ -80,8 +79,6 @@ export const ERROR_CODES = {
 
   // ─── Unity / environment ───
   UNITY_NOT_FOUND: "UNITY_NOT_FOUND",
-  UNITY_SPAWN_FAILED: "UNITY_SPAWN_FAILED",
-  UNITY_BATCHMODE_FAILED: "UNITY_BATCHMODE_FAILED",
   UNITY_BUSY: "UNITY_BUSY",
   PACKAGE_NOT_FOUND: "PACKAGE_NOT_FOUND",
   PACKAGE_VERSION_CONFLICT: "PACKAGE_VERSION_CONFLICT",
@@ -99,16 +96,11 @@ export const ERROR_CODES = {
 
   // ─── Generic ───
   UNKNOWN_COMMAND: "UNKNOWN_COMMAND",
-  UNKNOWN_BATCH_COMMAND: "UNKNOWN_BATCH_COMMAND",
-  UNKNOWN_JOB_COMMAND: "UNKNOWN_JOB_COMMAND",
   UNKNOWN_INSTANCES_COMMAND: "UNKNOWN_INSTANCES_COMMAND",
   UNKNOWN_PACKAGE_COMMAND: "UNKNOWN_PACKAGE_COMMAND",
   UNKNOWN_CODE_COMMAND: "UNKNOWN_CODE_COMMAND",
   UNKNOWN_GROUP_COMMAND: "UNKNOWN_GROUP_COMMAND",
   COMMAND_FAILED: "COMMAND_FAILED",
-  BATCH_FILE_REQUIRED: "BATCH_FILE_REQUIRED",
-  WORKER_ARGS_REQUIRED: "WORKER_ARGS_REQUIRED",
-  WORKER_FAILED: "WORKER_FAILED",
   E_SCENE_VIEW_NOT_AVAILABLE: "E_SCENE_VIEW_NOT_AVAILABLE",
   E_OUTPUT_EXISTS: "E_OUTPUT_EXISTS",
   E_PROFILER_FORMAT_UNSUPPORTED: "E_PROFILER_FORMAT_UNSUPPORTED",
@@ -146,8 +138,6 @@ export const DEFAULT_TIMEOUT_MS: Record<string, number> = {
   bridge_write: 30_000,
   bridge_long: 65_000,
   code_live: 60_000,
-  code_batch: 300_000,
-  job_wait: 600_000,
 };
 
 /** Maximum allowed timeouts by category. */
@@ -156,8 +146,6 @@ export const MAX_TIMEOUT_MS: Record<string, number> = {
   bridge_write: 120_000,
   bridge_long: 600_000,
   code_live: 600_000,
-  code_batch: 1_800_000,
-  job_wait: 3_600_000,
 };
 
 /** 与 protocol.ToolError 保持同一类型来源。 */
@@ -170,8 +158,8 @@ export function createRequestId(): string {
   return `req_${randomUUID()}`;
 }
 
-/** Create a success envelope. */
-export function success<T>(requestId: string, data: T, options?: { warnings?: string[]; logsRef?: string; jobId?: string; durationMs?: number }): SuccessEnvelope<T> {
+/** 构造公开成功 envelope；调用方必须先完成 generic terminal 到业务 DTO 的投影。 */
+export function success<T>(requestId: string, data: T, options?: { warnings?: string[] }): SuccessEnvelope<T> {
   return {
     ok: true,
     requestId,
@@ -188,7 +176,7 @@ export function failure(
   message: string,
   nextActions: string[] = [],
   details?: unknown,
-  options?: { durationMs?: number; transient?: boolean; retryAfterMs?: number }
+  options?: { transient?: boolean; retryAfterMs?: number }
 ): ErrorEnvelope {
   const isTransient = options?.transient ?? TRANSIENT_ERROR_CODES.has(code);
   const retryAfterMs = isTransient ? options?.retryAfterMs ?? DEFAULT_RETRY_AFTER_MS[code] ?? 5000 : 0;
@@ -196,7 +184,7 @@ export function failure(
     code,
     message,
     nextActions,
-    ...(details !== undefined ? { details } : {}),
+    ...(details !== undefined ? { details: publicErrorDetails(details) } : {}),
     transient: isTransient,
     retryAfterMs,
   };
@@ -205,21 +193,28 @@ export function failure(
     ok: false,
     requestId,
     error,
-    ...options,
   };
 }
 
-/** Compute wall-clock durationMs from a start timestamp. */
-export function durationMsFrom(startMs: number): number {
-  return Date.now() - startMs;
+const FORBIDDEN_ERROR_DETAIL_KEYS = new Set([
+  "actualport", "audit", "bridgeendpoint", "bridgeendpointurl", "bridgelogpath", "bridgeurl",
+  "commandline", "endpoint", "endpointurl", "hwnd", "listenergeneration", "listenerid", "logpath",
+  "logs", "ownerhwnd", "port", "preferredport", "processid", "processstartedat", "requestid",
+  "sourcelistenergeneration", "windowscommandline"
+]);
+
+/** 错误 details 保留业务诊断，但递归删除 transport、process、native window 与内部日志字段。 */
+function publicErrorDetails(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(publicErrorDetails);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => !FORBIDDEN_ERROR_DETAIL_KEYS.has(normalizeErrorDetailKey(key)))
+    .map(([key, nested]) => [key, publicErrorDetails(nested)]));
 }
 
-/** Wrap an async CLI handler to automatically measure durationMs. */
-export async function withDuration<T>(requestId: string, fn: () => Promise<CliResult<T>>): Promise<CliResult<T>> {
-  const startMs = Date.now();
-  const result = await fn();
-  result.durationMs = durationMsFrom(startMs);
-  return result;
+/** 与 C# factory 一致地忽略分隔符和大小写，防止同义 key 绕过公开投影。 */
+function normalizeErrorDetailKey(key: string): string {
+  return key.replace(/[^a-z0-9]/gi, "").toLowerCase();
 }
 
 export function printJson(result: CliResult): void {

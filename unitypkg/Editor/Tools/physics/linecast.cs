@@ -24,7 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string Mode { get; set; }
             public bool Hit { get; set; }
             public RaycastHitInfo HitInfo { get; set; }
@@ -35,7 +34,7 @@ namespace UnityCli
             Name = "physics.linecast",
             Summary = "Check if a 3D or 2D line segment between two points is blocked by a collider.",
             Description = "Cast a line from start to end and report whether any collider blocks the path. mode=3d (default) or 2d.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false,
+            Group = "physics",DestructiveHint = false,
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Linecast between two points", Input = new Request { StartX = 0, EndX = 10 } } }
@@ -50,11 +49,11 @@ namespace UnityCli
             if (mode == "2d")
             {
                 var hit = Physics2D.Linecast(new Vector2(start.x, start.y), new Vector2(end.x, end.y), layerMask);
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "physics.linecast", Mode = "2d", Hit = hit.collider != null });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "2d", Hit = hit.collider != null });
             }
             RaycastHit hit3d;
             var found = Physics.Linecast(start, end, out hit3d, layerMask);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "physics.linecast", Mode = "3d", Hit = found, HitInfo = found ? PhysicsToolSupport.BuildRaycast3DHit(hit3d) : null });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "3d", Hit = found, HitInfo = found ? PhysicsToolSupport.BuildRaycast3DHit(hit3d) : null });
         }
     }
 }

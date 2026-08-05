@@ -33,7 +33,6 @@ namespace UnityCli
             Summary = "List scenes registered in the Editor Build Settings (enabled scenes and their paths).",
             Description = "List scenes registered in the Editor Build Settings (enabled scenes and their paths). Read-only; use build.scene.add or build.scene.remove to change the build list.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

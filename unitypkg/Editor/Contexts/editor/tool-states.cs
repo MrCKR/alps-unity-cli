@@ -44,12 +44,10 @@ namespace UnityCli.Contexts.Editor
             Summary = "Read Editor transform, pivot, snap, and grid tool state.",
             Description = "Read Unity Editor transform tool settings, pivot mode/rotation, snap settings, and grid availability. This is not MCP tool discovery; it observes editor tool configuration only.",
             Category = "editor",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live",
             Examples = new[] { new ContextExample { Description = "Read transform tool and snap settings", Input = new Request { } } }
         };
 

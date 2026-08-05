@@ -49,7 +49,6 @@ namespace UnityCli
             Summary = "Search GameObjects by name, tag, layer, component, hierarchy path, or instance id; optionally prefer an open Prefab Stage.",
             Description = "Search GameObjects by name, tag, layer, component, hierarchy path, or instance id. Results are lightweight and paged. Pass preferPrefabStage=true to first match inside an open Prefab Stage (prefabContentsRoot), then merge scene matches.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

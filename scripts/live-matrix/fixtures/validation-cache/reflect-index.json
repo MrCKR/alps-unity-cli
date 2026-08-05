@@ -1,0 +1,30 @@
+{
+  "unityVersion": "2022.3",
+  "entries": [
+    {
+      "name": "Camera",
+      "fullName": "UnityEngine.Camera",
+      "namespace": "UnityEngine",
+      "kind": "class",
+      "assembly": "UnityEngine.CoreModule",
+      "signature": "public sealed class Camera : Behaviour",
+      "summary": "Renders scenes.",
+      "members": [
+        {
+          "name": "Render",
+          "kind": "method",
+          "signature": "public void Render()",
+          "returnType": "void",
+          "parameters": [],
+          "summary": "Renders the camera."
+        }
+      ]
+    }
+  ],
+  "assemblies": [
+    {
+      "name": "UnityEngine.CoreModule",
+      "status": "loaded"
+    }
+  ]
+}

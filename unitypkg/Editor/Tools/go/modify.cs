@@ -45,7 +45,6 @@ namespace UnityCli
             Summary = "Modify one or more GameObjects' name, active state, tag, layer, absolute transform values, or parent.",
             Description = "Modify one or more GameObjects' name, active state, tag, layer, absolute transform values, or parent. Pass target for one object or targets[] to apply the same mutation to multiple objects in one all-or-none call; every target must resolve uniquely before any scene object is changed.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
@@ -78,29 +77,34 @@ namespace UnityCli
                 }
             }
             ctx.CommitEffect();
-            var details = new List<GameObjectDetail>();
-            var effects = new List<GameObjectPlannedEffect>();
-            foreach (var plan in plans)
+            var undoGroup = UnityCliSceneMutation.BeginUndoGroup("go.modify");
+            try
             {
-                var gameObject = EditorUtility.InstanceIDToObject(plan.Id) as GameObject;
-                if (gameObject == null) throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject disappeared before modification.", "Retry after the Editor is idle.");
-                UnityCliSceneMutation.RecordObject(gameObject.transform, "go.modify");
-                UnityCliSceneMutation.RecordObject(gameObject, "go.modify");
-                GameObjectToolSupport.ApplyGameObjectMutations(gameObject, request.NewName, request.Active, request.TagValue, request.LayerValue,
-                    request.X, request.Y, request.Z, request.RotationX, request.RotationY, request.RotationZ, request.ScaleX, request.ScaleY, request.ScaleZ);
-                if (parent != null) gameObject.transform.SetParent(parent.transform, true);
-                UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+                var details = new List<GameObjectDetail>();
+                var effects = new List<GameObjectPlannedEffect>();
+                foreach (var plan in plans)
+                {
+                    var gameObject = EditorUtility.InstanceIDToObject(plan.Id) as GameObject;
+                    if (gameObject == null) throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject disappeared before modification.", "Retry after the Editor is idle.");
+                    UnityCliSceneMutation.RecordObject(gameObject.transform, "go.modify");
+                    UnityCliSceneMutation.RecordObject(gameObject, "go.modify");
+                    GameObjectToolSupport.ApplyGameObjectMutations(gameObject, request.NewName, request.Active, request.TagValue, request.LayerValue,
+                        request.X, request.Y, request.Z, request.RotationX, request.RotationY, request.RotationZ, request.ScaleX, request.ScaleY, request.ScaleZ);
+                    if (parent != null) gameObject.transform.SetParent(parent.transform, true);
+                    UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+                }
+                foreach (var plan in plans)
+                {
+                    var observed = EditorUtility.InstanceIDToObject(plan.Id) as GameObject;
+                    if (observed == null || !MatchesRequest(observed, request) || (request.Parent != null && (observed.transform.parent == null || observed.transform.parent.GetInstanceID() != parentId)))
+                        throw new UnityCliBridge.BridgeCommandException("E_GO_MODIFY_STATE_MISMATCH", "GameObject did not satisfy the requested mutation after write.", "Inspect the scene object and retry after the Editor is idle.");
+                    details.Add(GameObjectToolSupport.BuildGameObjectDetail(observed));
+                    effects.Add(new GameObjectPlannedEffect { Type = "go.modify", Target = GameObjectToolSupport.HierarchyPath(observed) });
+                }
+                if (details.Count == 1) return new System.Threading.Tasks.ValueTask<Result>(new Result { GameObject = details[0], ModifiedCount = 1, PlannedEffects = effects });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { GameObjects = details, ModifiedCount = details.Count, PlannedEffects = effects });
             }
-            foreach (var plan in plans)
-            {
-                var observed = EditorUtility.InstanceIDToObject(plan.Id) as GameObject;
-                if (observed == null || !MatchesRequest(observed, request) || (request.Parent != null && (observed.transform.parent == null || observed.transform.parent.GetInstanceID() != parentId)))
-                    throw new UnityCliBridge.BridgeCommandException("E_GO_MODIFY_STATE_MISMATCH", "GameObject did not satisfy the requested mutation after write.", "Inspect the scene object and retry after the Editor is idle.");
-                details.Add(GameObjectToolSupport.BuildGameObjectDetail(observed));
-                effects.Add(new GameObjectPlannedEffect { Type = "go.modify", Target = GameObjectToolSupport.HierarchyPath(observed) });
-            }
-            if (details.Count == 1) return new System.Threading.Tasks.ValueTask<Result>(new Result { GameObject = details[0], PlannedEffects = effects });
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { GameObjects = details, ModifiedCount = details.Count, PlannedEffects = effects });
+            finally { UnityCliSceneMutation.EndUndoGroup(undoGroup); }
         }
 
         // go.modify 支持 targets[] 批量修改;先完整解析,避免部分写入

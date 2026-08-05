@@ -12,7 +12,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } }
         public sealed class Result { public List<VolumeInfo> Volumes { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.volume", Summary = "List Volume components in the scene, optionally filtered by target.", Description = "Find Volume components (URP/HDRP) via reflection. Filter by GameObject name or hierarchy path.", Group = "graphics", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "List all volumes", Input = new Request { } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.volume", Summary = "List Volume components in the scene, optionally filtered by target.", Description = "Find Volume components (URP/HDRP) via reflection. Filter by GameObject name or hierarchy path.", Group = "graphics",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "List all volumes", Input = new Request { } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var volumes = new List<VolumeInfo>();

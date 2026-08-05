@@ -40,5 +40,5 @@ function objectArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): R
 
 export const objectBridgeSpecs: BridgeCommandSpec[] = [
   { group: "object", command: "get-data", bridgeCommand: "project-tool.run", toolName: "object.get-data", buildArgs: objectArgs },
-  { group: "object", command: "modify", bridgeCommand: "project-tool.run", toolName: "object.modify", buildArgs: objectArgs, supportsDryRun: true }
+  { group: "object", command: "modify", bridgeCommand: "project-tool.run", toolName: "object.modify", buildArgs: objectArgs, destructiveHint: true, supportsDryRun: true }
 ];

@@ -33,6 +33,61 @@ namespace UnityCli
         ValueTask<TRes> ReadAsync(TReq request, UnityCliProjectToolContext ctx, CancellationToken ct = default);
     }
 
+    /// <summary>只有显式实现本接口的纯只读 Context 才能承担 completionProbe 资源归因。</summary>
+    public interface IUnityCliProofObserver<TReq>
+    {
+        UnityCliProofResourceClaim ResolveProofResource(TReq request);
+    }
+
+    /// <summary>proof observer 的内部 canonical resource claim；不会投影到公开成功响应。</summary>
+    public sealed class UnityCliProofResourceClaim
+    {
+        public string ResourceKey { get; set; }
+        public string Identity { get; set; }
+        public long InstanceId { get; set; }
+        public int SceneHandle { get; set; }
+    }
+
+    /// <summary>高风险同步动作的声明式完成条件。</summary>
+    public sealed class UnityCliCompletionProbe
+    {
+        [UnityCliRequired]
+        [UnityCliStringEnum("scene.gameobject", "scene.gameobject.component")]
+        public string Context { get; set; }
+        [UnityCliRequired, UnityCliAnyJson]
+        public object Input { get; set; }
+        [UnityCliRequired]
+        public List<UnityCliCompletionAssertion> Assertions { get; set; }
+    }
+
+    /// <summary>单条 JSON Pointer 断言；before/after 都按 JSON 类型严格比较。</summary>
+    public sealed class UnityCliCompletionAssertion
+    {
+        [UnityCliRequired]
+        public string Path { get; set; }
+        [UnityCliRequired]
+        [UnityCliStringEnum("equals", "notEquals", "approx", "exists", "lengthEquals", "contains")]
+        public string Operator { get; set; }
+        [UnityCliPresenceRequired, UnityCliAnyJson]
+        public object Before { get; set; }
+        [UnityCliPresenceRequired, UnityCliAnyJson]
+        public object After { get; set; }
+        public double? Tolerance { get; set; }
+    }
+
+    /// <summary>成功时只公开调用方声明路径的 fresh after 值。</summary>
+    public sealed class UnityCliCompletionProbeReadback
+    {
+        public List<UnityCliCompletionAssertionReadback> Assertions { get; set; }
+    }
+
+    public sealed class UnityCliCompletionAssertionReadback
+    {
+        public string Path { get; set; }
+        [UnityCliAnyJson]
+        public object Value { get; set; }
+    }
+
     /// <summary>
     /// 工具 desc 的人写字段(不含 schema,schema 由框架从 TReq/TRes 派生)。
     /// 字段集对齐 AGENTS.md descriptor 质量门槛与 TS ToolMetadata。
@@ -43,17 +98,13 @@ namespace UnityCli
         public string Summary { get; set; }
         public string Description { get; set; }
         public string Group { get; set; }
-        public string Version { get; set; }
         public bool DestructiveHint { get; set; }
         public string[] SideEffects { get; set; }
         public string Target { get; set; }
         public string PlayModeSupport { get; set; }
-        public string CapabilityType { get; set; }
         public bool SupportsDryRun { get; set; }
         public int DefaultTimeoutMs { get; set; }
         public int MaxTimeoutMs { get; set; }
-        public bool SupportsJob { get; set; }
-        public string[] ArtifactKinds { get; set; }
         public string[] Permissions { get; set; }
         public string[] RequiresPackages { get; set; }
         public ToolExample[] Examples { get; set; }
@@ -77,7 +128,7 @@ namespace UnityCli
     }
 
     /// <summary>
-    /// Context desc 的人写字段。比 ToolDescriptor 去掉写入相关字段,加 RefreshBehavior。
+    /// Context descriptor 的人写字段；只保留公开只读契约和内部指纹。
     /// </summary>
     public sealed class ContextDescriptor
     {
@@ -85,18 +136,16 @@ namespace UnityCli
         public string Summary { get; set; }
         public string Description { get; set; }
         public string Category { get; set; }
-        public string Version { get; set; }
         public string Source { get; set; }
         public string Target { get; set; }
         public string AvailabilityScope { get; set; }
         public string PlayModeSupport { get; set; }
-        public string RefreshBehavior { get; set; }
         public string[] RequiresPackages { get; set; }
         public ContextExample[] Examples { get; set; }
         public string Fingerprint { get; set; }
     }
 
-    /// <summary>调用示例。Input 是 Request DTO 实例，框架序列化后展示给 AI。</summary>
+    /// <summary>调用示例的内部 typed input，公开投影只保留 argv。</summary>
     public sealed class ToolExample
     {
         public string Description { get; set; }
@@ -104,14 +153,13 @@ namespace UnityCli
         public ToolExampleExecution Execution { get; set; }
     }
 
-    /// <summary>示例的命令层执行提示；不得进入 Tool Request DTO 或 inputSchema。</summary>
     public sealed class ToolExampleExecution
     {
         public bool? DryRun { get; set; }
         public int? TimeoutMs { get; set; }
     }
 
-    /// <summary>Context 调用示例。Input 仅包含 Context Request DTO 字段。</summary>
+    /// <summary>Context 示例内部保留 typed input，公开投影只保留 argv。</summary>
     public sealed class ContextExample
     {
         public string Description { get; set; }
@@ -125,10 +173,22 @@ namespace UnityCli
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false, Inherited = true)]
     public sealed class UnityCliRequiredAttribute : Attribute { }
 
+    /// <summary>字段必须出现，但允许 JSON null；用于把 null 作为业务断言值。</summary>
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false, Inherited = true)]
+    public sealed class UnityCliPresenceRequiredAttribute : Attribute { }
+
     /// <summary>
     /// 显式声明字段承载任意 JSON。未标记的 object 或动态 object 集合会让 schema 派生失败。
     /// </summary>
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false, Inherited = true)]
     public sealed class UnityCliAnyJsonAttribute : Attribute { }
+
+    /// <summary>为 string 协议字段声明闭集 enum，serializer 仍按普通 string 读写。</summary>
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false, Inherited = true)]
+    public sealed class UnityCliStringEnumAttribute : Attribute
+    {
+        public UnityCliStringEnumAttribute(params string[] values) { Values = values ?? Array.Empty<string>(); }
+        public string[] Values { get; private set; }
+    }
 }
 #endif

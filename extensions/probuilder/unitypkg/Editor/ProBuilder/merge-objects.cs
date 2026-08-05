@@ -16,7 +16,6 @@ namespace UnityCli.ProBuilder
         {
             [UnityCliRequired] public List<string> Targets { get; set; }
             public string Name { get; set; }                         // 可选,默认 ProBuilder_Merged
-            public bool? AutoConvert { get; set; }                  // 可选,默认 true
         }
 
         public sealed class Result
@@ -35,7 +34,7 @@ namespace UnityCli.ProBuilder
         {
             Name = "probuilder.merge-objects",
             Summary = "Merge multiple GameObjects into a single ProBuilder mesh object.",
-            Description = "Merge multiple GameObjects into exactly one ProBuilder object with the ProBuilder 5.x CombineMeshes API. Requires at least 2 targets and can import regular meshes before merging when autoConvert is true.",
+            Description = "Merge at least two existing ProBuilderMesh objects into the first requested object with the ProBuilder 5.2.4 CombineMeshes API. Every source must already have ProBuilderMesh and no UV1; convert regular meshes with probuilder.convert-to-probuilder before calling this Tool. UV1 is rejected because ToMesh clears it. All target-local projections and the complete merged refresh arithmetic must be finite and bounded before mutation.",
             Group = "probuilder",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
@@ -43,8 +42,6 @@ namespace UnityCli.ProBuilder
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 15000,
             MaxTimeoutMs = 60000,
-            SupportsJob = true,
-            ArtifactKinds = new[] { "json" },
             Examples = new[]
             {
                 new ToolExample { Description = "合并两个对象", Input = new Request { Targets = new List<string> { "Cube1", "Cube2" }, Name = "Merged" } }
@@ -61,76 +58,64 @@ namespace UnityCli.ProBuilder
                 throw ProBuilderErrors.SchemaInvalid("At least 2 unique, unambiguous targets required for merge-objects.");
 
             var name = request.Name ?? "ProBuilder_Merged";
-            var autoConvert = request.AutoConvert ?? true;
-            if (!autoConvert && targets.Any(target => ProBuilderReflection.GetProBuilderMesh(target) == null))
-                throw ProBuilderErrors.SchemaInvalid("autoConvert=false requires every target to already have a ProBuilderMesh component.");
-            var sourceIds = targets.Select(target => target.GetInstanceID()).ToArray();
-            var minimumFaceCount = targets.Sum(target =>
-            {
-                var sourceMesh = ProBuilderReflection.GetProBuilderMesh(target);
-                var faceCount = sourceMesh == null ? 0 : ProBuilderReflection.GetFaceCount(sourceMesh);
-                if (faceCount < 0) throw ProBuilderErrors.OperationFailed("merge-objects", "A source mesh has unreadable face topology.");
-                return faceCount;
-            });
+            if (string.IsNullOrWhiteSpace(name)) throw ProBuilderErrors.SchemaInvalid("name must be non-empty.");
+            if (targets.Select(target => target.GetInstanceID()).Distinct().Count() != targets.Length)
+                throw ProBuilderErrors.SchemaInvalid("merge-objects does not accept duplicate source identities.");
+            if (targets.Any(left => targets.Any(right => left != right && (left.transform.IsChildOf(right.transform) || right.transform.IsChildOf(left.transform)))))
+                throw ProBuilderErrors.SchemaInvalid("merge-objects does not accept ancestor/descendant sources.");
+            if (targets.Any(target => ProBuilderReflection.GetProBuilderMesh(target) == null))
+                throw ProBuilderErrors.SchemaInvalid("merge-objects requires every target to already have a ProBuilderMesh component; call probuilder.convert-to-probuilder first for regular meshes.");
+            if (targets.Any(target => target.scene.handle != targets[0].scene.handle || !target.scene.isLoaded || target.transform.childCount != 0 && target != targets[0]))
+                throw ProBuilderErrors.SchemaInvalid("All sources must be in the same loaded scene and non-first sources must not have children.");
+            if (targets.Any(target => !FiniteInvertible(target.transform.localToWorldMatrix) || !FiniteInvertible(target.transform.worldToLocalMatrix)))
+                throw ProBuilderErrors.SchemaInvalid("Every source transform must be finite and invertible.");
+            var plan = ProBuilderVertexObjectCompletionProof.CaptureMergeObjects(targets, name);
+            if (plan == null)
+                throw ProBuilderErrors.SchemaInvalid("merge-objects requires strict canonical ProBuilder sources, complete sharedTextures, absent UV1, closed non-null material slots, deterministic contributor UVs, and fewer than 65535 raw vertices.");
 
-            // 收集或转换 ProBuilder 网格
-            var pbMeshes = new List<object>();
-            var nonPbObjects = new List<GameObject>();
-
-            foreach (var go in targets)
-            {
-                var pbMesh = ProBuilderReflection.GetProBuilderMesh(go);
-                if (pbMesh != null)
-                {
-                    pbMeshes.Add(pbMesh);
-                }
-                else if (autoConvert)
-                {
-                    nonPbObjects.Add(go);
-                }
-                else
-                {
-                    throw ProBuilderErrors.OperationFailed("merge-objects", $"GameObject '{go.name}' does not have a ProBuilderMesh component and autoConvert is disabled.");
-                }
-            }
-
-            // Conversion mutates its source objects, so all preconditions above are complete.
+            var pbMeshes = targets.Select(ProBuilderReflection.GetProBuilderMesh).ToArray();
             ctx.CommitEffect();
-            // 转换非 ProBuilder 对象
-            foreach (var go in nonPbObjects)
+            try
             {
-                var converted = ProBuilderReflection.ConvertToProBuilderMesh(go);
-                if (converted == null)
-                    throw ProBuilderErrors.OperationFailed("merge-objects", $"Failed to convert '{go.name}' to ProBuilder mesh.");
-                pbMeshes.Add(converted);
+                Undo.RecordObject(targets[0], "ProBuilder Merge Objects");
+                if (!ProBuilderReflection.CombineMeshesViaReflection(pbMeshes, pbMeshes[0])) throw ProBuilderErrors.OutcomeUnknown("merge-objects", "invoke", "ProBuilder 5.x CombineMeshes.Combine did not return exactly one mesh.");
             }
-
-            if (pbMeshes.Count < 2)
-                throw ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required after conversion.");
-            Undo.RecordObject(targets[0], "ProBuilder Merge Objects");
-
-            var merged = ProBuilderReflection.CombineMeshesViaReflection(pbMeshes.ToArray(), pbMeshes[0]);
-            if (!merged)
-                throw ProBuilderErrors.OperationFailed("merge-objects", "ProBuilder 5.x CombineMeshes.Combine did not return exactly one mesh.");
-
-            ProBuilderReflection.RefreshMesh(pbMeshes[0]);
-            var firstGo = targets[0];
-            if (!string.IsNullOrEmpty(name)) firstGo.name = name;
-            EditorSceneManager.MarkSceneDirty(firstGo.scene);
-            var freshGo = ProBuilderInput.ResolveTarget(sourceIds[0].ToString());
-            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
-            if (freshGo == null || freshGo.name != name || !ProBuilderRequestProof.SourcesWereRemovedAndGeometryIncluded(freshGo, freshMesh, sourceIds, minimumFaceCount))
-                throw ProBuilderErrors.OperationFailed("merge-objects", "Sources did not disappear into a result containing their geometry.");
-
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch (System.Exception exception) { throw ProBuilderErrors.OutcomeUnknown("merge-objects", "invoke", exception.Message); }
+            GameObject freshGo;
+            object freshMesh;
+            try
             {
-                MergedObject = new ObjectRef
-                {
-                    Id = firstGo.GetInstanceID(),
-                    Name = firstGo.name,
-                    Path = HierarchyPath(firstGo)
-                }
-            });
+                if (!ProBuilderReflection.RefreshMesh(pbMeshes[0])) throw ProBuilderErrors.OutcomeUnknown("merge-objects", "readback", "ProBuilder mesh refresh failed after the effect.");
+                for (var index = 1; index < targets.Length; index++) Undo.DestroyObjectImmediate(targets[index]);
+                targets[0].name = name;
+                EditorSceneManager.MarkSceneDirty(targets[0].scene);
+                freshGo = EditorUtility.InstanceIDToObject(plan.Sources[0].Identity.GameObjectInstanceId) as GameObject;
+                freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
+                if (freshGo == null || freshMesh == null) throw ProBuilderErrors.OutcomeUnknown("merge-objects", "readback", "Result identity or mesh could not be resolved.");
+            }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch (System.Exception exception) { throw ProBuilderErrors.OutcomeUnknown("merge-objects", "readback", exception.Message); }
+            try
+            {
+                if (!ProBuilderVertexObjectCompletionProof.MergeObjectsMatches(plan, freshGo, freshMesh as UnityEngine.ProBuilder.ProBuilderMesh)) throw ProBuilderErrors.OutcomeUnknown("merge-objects", "postcondition", "The complete ProBuilder 5.2.4 combine terminal state was not proven by fresh readback.");
+            }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch (System.Exception exception) { throw ProBuilderErrors.OutcomeUnknown("merge-objects", "postcondition", exception.Message); }
+            try
+            {
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { MergedObject = new ObjectRef { Id = freshGo.GetInstanceID(), Name = freshGo.name, Path = HierarchyPath(freshGo) } });
+            }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch (System.Exception exception) { throw ProBuilderErrors.OutcomeUnknown("merge-objects", "postcondition", exception.Message); }
+        }
+
+        /// <summary>矩阵必须有限且可逆，避免 contributor world 到 target local 变换不可复演。</summary>
+        private static bool FiniteInvertible(Matrix4x4 matrix)
+        {
+            if (Mathf.Abs(matrix.determinant) <= Mathf.Epsilon) return false;
+            for (var index = 0; index < 16; index++) if (float.IsNaN(matrix[index]) || float.IsInfinity(matrix[index])) return false;
+            return true;
         }
 
         private static string HierarchyPath(GameObject go)

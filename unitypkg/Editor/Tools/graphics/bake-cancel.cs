@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request { }
         public sealed class Result { public bool Baking { get; set; } public bool Cancelled { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.bake-cancel", Summary = "Cancel a running lightmap bake.", Description = "Cancel the active Lightmapping job if one is running. Returns cancelled=true only when a bake was in progress.", Group = "graphics", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "lightmapping-bake-cancel" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Cancel bake", Input = new Request { } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.bake-cancel", Summary = "Cancel a running lightmap bake.", Description = "Cancel the active Lightmapping bake if one is running. Returns cancelled=true only when a bake was in progress.", Group = "graphics",DestructiveHint = false, SideEffects = new[] { "lightmapping-bake-cancel" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Cancel bake", Input = new Request { } } } };
         public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var wasRunning = Lightmapping.isRunning;

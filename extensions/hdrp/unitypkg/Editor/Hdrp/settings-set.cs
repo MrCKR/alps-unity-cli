@@ -10,13 +10,13 @@ namespace UnityCli
     public sealed class HdrpSettingsSetTool : IUnityCliTool<HdrpSettingsSetTool.Request, HdrpSettingsSetTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Property { get; set; } [UnityCliRequired] public string Value { get; set; } }
-        public sealed class Result { public string Command { get; set; } public string Property { get; set; } public string ObservedValue { get; set; } [UnityCliAnyJson] public Dictionary<string, object> Settings { get; set; } public bool DryRun { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } public string LogPath { get; set; } }
+        public sealed class Result { public string Property { get; set; } public string ObservedValue { get; set; } [UnityCliAnyJson] public Dictionary<string, object> Settings { get; set; } public bool DryRun { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "hdrp.settings.set", Summary = "Set one active HDRP pipeline asset setting.",
             Description = "Set one public property or SerializedProperty on the active HDRenderPipelineAsset. Supports --dry-run without saving the asset.",
-            Group = "hdrp", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true,
+            Group = "hdrp",DestructiveHint = true, SupportsDryRun = true,
             RequiresPackages = new[] { "com.unity.render-pipelines.high-definition" }, SideEffects = new[] { "asset-write", "render-pipeline-settings" },
             Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Rename the HDRP asset", Input = new Request { Property = "name", Value = "Matrix HDRP" } } }
@@ -40,7 +40,7 @@ namespace UnityCli
                 observedValue = HdrpToolSupport.VerifySettingReadback(plan, AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(pipelinePath));
             }
             var observedPipeline = ctx.DryRun ? pipeline : HdrpToolSupport.GetActivePipelineAsset();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "hdrp.settings.set", Property = request.Property, ObservedValue = observedValue, Settings = HdrpToolSupport.ReadSettings(observedPipeline), DryRun = ctx.DryRun, PlannedEffects = effects, LogPath = ctx.LogPath });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Property = request.Property, ObservedValue = observedValue, Settings = HdrpToolSupport.ReadSettings(observedPipeline), DryRun = ctx.DryRun, PlannedEffects = effects});
         }
     }
 }

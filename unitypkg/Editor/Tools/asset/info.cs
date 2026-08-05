@@ -23,7 +23,6 @@ namespace UnityCli
             Summary = "Return path, guid, name, type, extension, folder flag, existence, and byte size for an Assets/* asset.",
             Description = "Return path, guid, name, type, extension, folder flag, existence, and byte size for an Assets/* asset. Read-only; use asset.get-data for deep member reads and asset.get-components for Prefab/GameObject component summaries.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

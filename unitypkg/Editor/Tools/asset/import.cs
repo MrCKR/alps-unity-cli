@@ -35,7 +35,6 @@ namespace UnityCli
             Summary = "Import a file into an Assets/ path from a source file or inline content, then force-import it.",
             Description = "Import a file into an Assets/ path. When source is set, the source file (absolute or Assets/ path) is copied to the destination; otherwise inline content is written. The destination is force-imported, compile/import/reload is absorbed, and success proves the recovered AssetDatabase resolves the destination GUID. Refuses to overwrite unless overwrite=true.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "asset-write", "asset-import" },
@@ -51,7 +50,7 @@ namespace UnityCli
 
         public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            if (!ctx.ProofOnly) AssetToolSupport.EnsureEditorNotBusy("asset.import");
+            AssetToolSupport.EnsureEditorNotBusy("asset.import");
             var path = AssetToolSupport.RequireAssetPath(request.Path ?? request.Destination);
             var source = request.Source;
             var overwrite = request.Overwrite ?? false;
@@ -66,15 +65,7 @@ namespace UnityCli
                     PlannedEffects = effects
                 };
             }
-            if (ctx.ProofOnly)
-            {
-                var recoveredReady = await ctx.Wait.UntilEditorReady(TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
-                var recovered = AssetToolSupport.BuildAssetDetail(path);
-                VerifyContentProof(ctx, path);
-                if (!recoveredReady || !recovered.Exists || string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
-                    throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_PROOF_MISSING", "The imported asset is not resolvable after session recovery: " + path, "Inspect import/compile diagnostics before submitting a new request.");
-                return new Result { Asset = recovered, Source = source, PlannedEffects = effects };
-            }
+
             if (!string.IsNullOrEmpty(source))
             {
                 var normalizedSource = AssetToolSupport.NormalizeAssetPath(source);
@@ -106,32 +97,27 @@ namespace UnityCli
                 ctx.CommitEffect();
                 AssetToolSupport.WriteTextAsset(path, request.Content, overwrite);
             }
+            // effect 落盘后、ImportAsset 前采集目标字节哈希，用于证明 import 过程未篡改内容。
+            var destFullPath = AssetToolSupport.AssetFullPath(path);
+            var expectedHash = File.Exists(destFullPath) ? FileSha256(destFullPath) : null;
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             var ready = await ctx.Wait.UntilEditorReady(TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
             if (!ready)
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_TIMEOUT", "The Editor did not reach a stable ready state after importing " + path + ".", "Inspect editor.state and compile diagnostics before submitting a new request.");
             var asset = AssetToolSupport.BuildAssetDetail(path);
-            VerifyContentProof(ctx, path);
+            VerifyContentProof(path, expectedHash);
             if (!asset.Exists || string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_PROOF_MISSING", "The imported asset is not resolvable after import: " + path, "Inspect import/compile diagnostics before submitting a new request.");
             return new Result { Asset = asset, Source = source, PlannedEffects = effects };
         }
 
-        /// <summary>按 durable continuation 校验 destination bytes，避免把预存资产误当成本次 import proof。</summary>
-        private static void VerifyContentProof(UnityCliProjectToolContext ctx, string path)
+        /// <summary>校验 import 后目标文件字节仍与 effect 落盘时一致，避免把预存资产误当成本次 import proof。</summary>
+        private static void VerifyContentProof(string path, string expectedHash)
         {
-            var continuation = ctx.ProofOnly ? ctx.RequireProofContinuation("asset-content-sha256-v1") : ctx.ProofContinuation;
-            object expectedPath;
-            object expectedHash;
-            if (continuation == null
-                || !continuation.TryGetValue("path", out expectedPath)
-                || !continuation.TryGetValue("contentSha256", out expectedHash)
-                || !string.Equals(expectedPath as string, path, StringComparison.Ordinal))
-                throw new UnityCliBridge.BridgeCommandException("E_REQUEST_JOURNAL_CORRUPT", "Asset import continuation does not match the destination path.", "Inspect the request journal before submitting a new request.");
             var fullPath = AssetToolSupport.AssetFullPath(path);
             var actualHash = File.Exists(fullPath) ? FileSha256(fullPath) : null;
-            if (!string.Equals(actualHash, expectedHash as string, StringComparison.Ordinal))
-                throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_PROOF_MISSING", "Imported destination bytes do not match the immutable pre-effect content digest.", "Inspect the source and destination files before submitting a new request.");
+            if (!string.Equals(actualHash, expectedHash, StringComparison.Ordinal))
+                throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_PROOF_MISSING", "Imported destination bytes do not match the content digest captured before import.", "Inspect the source and destination files before submitting a new request.");
         }
 
         private static string FileSha256(string path)

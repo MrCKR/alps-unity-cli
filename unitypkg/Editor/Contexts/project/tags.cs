@@ -22,12 +22,10 @@ namespace UnityCli.Contexts.Project
             Name = "project.tags",
             Description = "List all tags defined in the project's Tag Manager.",
             Category = "project",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand",
             Examples = new[] { new ContextExample { Description = "List configured project tags", Input = new Request { } } }
         };
 

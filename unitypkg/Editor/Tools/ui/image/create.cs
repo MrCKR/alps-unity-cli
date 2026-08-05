@@ -15,7 +15,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Name { get; set; } public string Parent { get; set; } public string Sprite { get; set; } public string Color { get; set; } public float? Width { get; set; } public float? Height { get; set; } public float? X { get; set; } public float? Y { get; set; } }
         public sealed class Result { public UiElementRef Element { get; set; } public List<UiPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "ui.image.create", Summary = "Create a uGUI Image element with optional sprite.", Description = "Create an Image element. Pass --sprite for an Assets/* sprite path.", Group = "ui", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Create Image", Input = new Request { Parent = "Canvas" } } } };
+        public ToolDescriptor Describe() => new() { Name = "ui.image.create", Summary = "Create a uGUI Image element with optional sprite.", Description = "Create an Image element. Pass --sprite for an Assets/* sprite path.", Group = "ui",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Create Image", Input = new Request { Parent = "Canvas" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var parent = UiToolSupport.ResolveUiParent(r.Parent);

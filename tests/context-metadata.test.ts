@@ -23,15 +23,14 @@ test("TS context metadata has one authoritative plural source", async () => {
 
 test("offline context catalog merges TS-owned and packaged C# descriptors", () => {
   const contexts = builtinContextDescriptors();
-  assert.equal(contexts.length, 25);
+  assert.equal(contexts.length, 26);
   assert.ok(contexts.some((context) => context.name === "editor.state" && context.source === "built-in"));
   assert.ok(contexts.some((context) => context.name === "probuilder.scene" && context.source === "extension"));
-  assert.deepEqual(defineContextMetadata().map((context) => context.name).sort(), ["editor.state", "tools.custom", "tools.groups"]);
-  assert.equal(findBuiltinContextByName("editor.state")?.supportStatus, "hybrid");
+  assert.deepEqual(defineContextMetadata().map((context) => context.name).sort(), ["editor.dialogs", "editor.state", "tools.custom", "tools.groups"]);
 });
 
 test("offline context descriptors keep public descriptor hygiene", () => {
-  const forbidden = ["title", "kind", "resourceUri", "destructiveHint", "bridgeCommand"];
+  const forbidden = ["title", "kind", "resourceUri", "destructiveHint", "bridgeCommand", "cliCommand", "supportStatus", "refreshBehavior", "version", "fingerprint"];
   for (const ctx of builtinContextDescriptors()) {
     assert.ok(ctx.name, "name required");
     assert.ok(ctx.summary, `${ctx.name} summary required`);
@@ -42,9 +41,10 @@ test("offline context descriptors keep public descriptor hygiene", () => {
     assert.ok(ctx.examples?.length, `${ctx.name} must expose at least one example`);
     for (const example of ctx.examples ?? []) {
       assert.deepEqual(example.argv.slice(0, 3), ["context", "read", ctx.name], `${ctx.name} example argv`);
-      assert.deepEqual(validateSchema(ctx.inputSchema, example.input ?? {}), [], `${ctx.name} example input must satisfy inputSchema`);
+      const inputIndex = example.argv.indexOf("--input");
+      const input = inputIndex >= 0 ? JSON.parse(example.argv[inputIndex + 1]) : {};
+      assert.deepEqual(validateSchema(ctx.inputSchema, input), [], `${ctx.name} example input must satisfy inputSchema`);
     }
-    assert.ok(ctx.cliCommand.startsWith("context read "), `${ctx.name} cliCommand must be context read form`);
     for (const field of forbidden) {
       assert.equal(field in ctx, false, `${ctx.name} must not expose ${field}`);
     }
@@ -54,14 +54,12 @@ test("offline context descriptors keep public descriptor hygiene", () => {
 test("tools.groups remains offline and tools.custom remains live bridge backed", () => {
   const toolsGroups = findBuiltinContextByName("tools.groups");
   assert.ok(toolsGroups, "tools.groups must exist");
-  assert.equal(toolsGroups.supportStatus, "cli-only");
   assert.equal(toolsGroups.availabilityScope, "always");
   assert.ok((toolsGroups.outputSchema.properties as Record<string, unknown>).groups, "tools.groups must expose groups array");
 
   const toolsCustom = findBuiltinContextByName("tools.custom");
   assert.ok(toolsCustom, "tools.custom must exist");
-  assert.equal(toolsCustom.supportStatus, "live-bridge");
-  assert.equal(toolsCustom.refreshBehavior, "on-demand");
+  assert.equal(toolsCustom.availabilityScope, "editorSession");
   assert.ok((toolsCustom.outputSchema.properties as Record<string, unknown>).tools, "tools.custom must expose tools array");
 });
 

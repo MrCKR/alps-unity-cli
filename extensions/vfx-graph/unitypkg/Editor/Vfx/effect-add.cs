@@ -13,7 +13,7 @@ namespace UnityCli
         {
             Name = "vfx.effect.add", Summary = "Add a VisualEffect component.",
             Description = "Ensure one VisualEffect component exists on the target and optionally assign an initial existing VFX Graph. Repeated calls are idempotent.",
-            Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
+            Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "scene-modify", "component-add", "component-reference-edit" },
             Target = "editor", PlayModeSupport = "session-affecting", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[]
@@ -48,8 +48,7 @@ namespace UnityCli
                 Target = GameObjectToolSupport.BuildGameObjectRef(observedObject),
                 Action = added ? "added" : "already-present",
                 Effect = VfxToolSupport.BuildEffectInfo(effect),
-                PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Graph = request.Graph } },
-                LogPath = ctx.LogPath
+                PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Graph = request.Graph } }
             });
         }
     }

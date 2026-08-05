@@ -29,7 +29,7 @@ namespace UnityCli
             {
                 Name = "prefab.info", Summary = "Read Prefab asset metadata, dependencies, variant data, and nested Prefab references.",
                 Description = "Read-only Prefab asset metadata for one Assets/*.prefab path: GUID, root name, Prefab asset type, instance status, variant source, dependency summary, and nested Prefab references. Does not open Prefab Stage, save assets, or modify the Prefab.",
-                Category = "prefab", Version = "1.0.0", Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported", RefreshBehavior = "on-demand",
+                Category = "prefab",Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported",
                 Examples = new[] { new ContextExample { Description = "Read Prefab metadata", Input = new Request { Path = "Assets/Prefabs/Player.prefab" } } }
             };
 

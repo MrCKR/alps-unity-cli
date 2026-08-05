@@ -1,0 +1,23 @@
+{
+  "unityVersion": "2022.3",
+  "entries": [
+    {
+      "name": "UnityEngine.Camera",
+      "title": "Camera",
+      "summary": "Renders scenes from a point of view.",
+      "content": "# Camera\n\nCamera renders scenes from a point of view.",
+      "url": "https://docs.unity3d.com/ScriptReference/Camera.html",
+      "kind": "class",
+      "namespace": "UnityEngine",
+      "version": "2022.3"
+    },
+    {
+      "name": "UnityEngine.Camera.Render",
+      "title": "Camera.Render",
+      "summary": "Renders the camera.",
+      "kind": "method",
+      "namespace": "UnityEngine",
+      "version": "2022.3"
+    }
+  ]
+}

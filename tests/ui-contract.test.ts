@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import { dispatchTool } from "../src/tools/dispatcher.js";
 import { contractToolNames, discoverLiveTools, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
+import { createUnityProject } from "./helpers/instance-registry-v2.js";
+import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 
 const UI_COMMANDS = [
   "ui.attach-document",
@@ -88,8 +92,32 @@ test("ui live descriptors expose representative safety and schema semantics", as
 
   for (const name of ["ui.document.update", "ui.document.delete", "ui.create-panel-settings", "ui.update-panel-settings", "ui.link-stylesheet", "ui.render-preview"]) {
     const tool = tools.get(name)!;
-    assert.equal(tool.destructiveHint, true, `${name} should require confirmation`);
+    assert.equal(tool.destructiveHint, true, `${name} should expose destructiveHint`);
     assert.equal(tool.playModeSupport, "session-affecting");
+  }
+});
+
+test("ui.document.info descriptor states that every mode uses the selected open Editor", async () => {
+  const source = await readFile("unitypkg/Editor/Tools/ui/document/info.cs", "utf8");
+  assert.match(source, /Both modes execute through the selected open Editor\./);
+});
+
+test("ui.document.info cannot read a local file when the selected Unity Editor is offline", async () => {
+  const root = await mkdtemp(join(tmpdir(), "unity-cli-ui-document-live-only-"));
+  const project = join(root, "Project");
+  const dataDir = join(root, "data");
+  const arbitraryFile = join(root, "readable.txt");
+  try {
+    await createUnityProject(project);
+    await writeFile(arbitraryFile, "private local content\n", "utf8");
+    const result = await dispatchTool("ui.document.info", undefined, {
+      input: JSON.stringify({ path: arbitraryFile }),
+      instance: project,
+    }, { dataDir }, "req_ui_document_live_only");
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error.code, "E_INSTANCE_NOT_RUNNING");
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

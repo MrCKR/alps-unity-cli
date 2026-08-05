@@ -13,14 +13,14 @@ namespace UnityCli
     public class ProfilerFrameDebuggerEnableTool : IUnityCliTool<ProfilerFrameDebuggerEnableTool.Request, ProfilerFrameDebuggerEnableTool.Result>
     {
         public sealed class Request { }
-        public sealed class Result { public string Command { get; set; } public bool Enabled { get; set; } public long EventCount { get; set; } }
+        public sealed class Result { public bool Enabled { get; set; } public long EventCount { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "profiler.frame-debugger.enable",
             Summary = "Enable the Unity Frame Debugger to capture draw call events.",
             Description = "Enable the Unity Frame Debugger to capture draw call events for the current Editor session. In Play Mode the game must be paused first with editor.pause; this opens the Frame Debugger window and returns the captured event count.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "frame-debugger-state", "editor-window-state" }, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler",DestructiveHint = false, SideEffects = new[] { "frame-debugger-state", "editor-window-state" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Enable Frame Debugger", Input = new Request { } } }
         };
@@ -57,7 +57,6 @@ namespace UnityCli
             var eventCount = FrameDebuggerReflection.GetEventCount();
             return new Result
             {
-                Command = "profiler.frame-debugger.enable",
                 Enabled = enabled,
                 EventCount = eventCount
             };

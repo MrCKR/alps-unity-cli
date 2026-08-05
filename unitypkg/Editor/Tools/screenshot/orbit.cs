@@ -25,7 +25,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string Target { get; set; }
             public long Count { get; set; }
             public List<ScreenshotArtifactEntry> Artifacts { get; set; }
@@ -37,7 +36,6 @@ namespace UnityCli
             Summary = "Capture N orbital screenshots around a GameObject at evenly spaced angles.",
             Description = "Capture N orbital screenshots (default 8, max 36) around a target GameObject at evenly spaced angles. Saves individual PNGs to an output directory. Editor-only.",
             Group = "screenshot",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
@@ -100,7 +98,7 @@ namespace UnityCli
                 else { cam.transform.position = previousPosition; cam.transform.rotation = previousRotation; }
             }
 
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "screenshot.orbit", Target = go.name, Count = artifacts.Count, Artifacts = artifacts });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = go.name, Count = artifacts.Count, Artifacts = artifacts });
         }
     }
 }

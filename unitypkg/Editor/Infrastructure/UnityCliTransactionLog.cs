@@ -1,0 +1,77 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using UnityEditor;
+using UnityEngine;
+
+namespace UnityCli
+{
+    /// <summary>记录当前 Editor session 内已完成请求的追加式审计日志。</summary>
+    internal static class UnityCliTransactionLog
+    {
+        private const string SessionRotatedKey = "UnityCli.TransactionLog.Rotated";
+        private const string LogFileName = "unity-cli-transactions.log";
+        private const string OldLogFileName = "unity-cli-transactions.old.log";
+
+        /// <summary>
+        /// 请求完成时调用，将原始 request/response JSON 作为嵌入节点追加到 JSONL 文件。
+        /// 任意日志失败只能告警，绝不影响请求处理。
+        /// </summary>
+        internal static void Append(string requestId, string command, string requestJson, string responseJson)
+        {
+            try
+            {
+                var entry = new Dictionary<string, object>
+                {
+                    { "time", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) },
+                    { "requestId", requestId },
+                    { "command", command },
+                    { "request", UnityCliSerializer.Parse(requestJson) },
+                    { "response", UnityCliSerializer.Parse(responseJson) }
+                };
+                var path = Path.Combine(GetTransactionLogDirectory(), LogFileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.AppendAllText(path, UnityCliSerializer.Serialize(entry) + Environment.NewLine);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("Unity CLI transaction log write failed: " + exception.Message);
+            }
+        }
+
+        /// <summary>
+        /// Editor 启动路径的主线程调用。SessionState 跨 domain reload 保留，因此同一 session 只轮转一次。
+        /// </summary>
+        internal static void RotateForNewSession()
+        {
+            try
+            {
+                if (SessionState.GetBool(SessionRotatedKey, false)) return;
+
+                var logsDirectory = GetTransactionLogDirectory();
+                Directory.CreateDirectory(logsDirectory);
+                var logPath = Path.Combine(logsDirectory, LogFileName);
+                if (File.Exists(logPath))
+                {
+                    var oldPath = Path.Combine(logsDirectory, OldLogFileName);
+                    if (File.Exists(oldPath)) File.Delete(oldPath);
+                    File.Move(logPath, oldPath);
+                }
+                SessionState.SetBool(SessionRotatedKey, true);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("Unity CLI transaction log rotation failed: " + exception.Message);
+            }
+        }
+
+        /// <summary>transactions 日志目录：项目临时根 Library/UnityCli/。</summary>
+        private static string GetTransactionLogDirectory()
+        {
+            return Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Library", "UnityCli");
+        }
+    }
+}
+#endif

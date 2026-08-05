@@ -10,7 +10,7 @@ namespace UnityCli
     {
         public sealed class Request { }
         public sealed class Response { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "editor.pause", Summary = "Toggle Play Mode pause state and return its observed terminal readback.", Description = "Toggle EditorApplication.isPaused and succeed only when the readback is the inverse of the pre-call state.", Group = "editor", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "session-affecting" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Toggle pause", Input = new Request { } } } };
+        public ToolDescriptor Describe() => new() { Name = "editor.pause", Summary = "Toggle Play Mode pause state and return its observed terminal readback.", Description = "Toggle EditorApplication.isPaused and succeed only when the readback is the inverse of the pre-call state.", Group = "editor",DestructiveHint = false, SideEffects = new[] { "session-affecting" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Toggle pause", Input = new Request { } } } };
 
         public async System.Threading.Tasks.ValueTask<Response> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {

@@ -1,77 +1,83 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import test from "node:test";
 
-const directory = new URL("../extensions/probuilder/unitypkg/Editor/ProBuilder/", import.meta.url);
+const contractUrl = new URL("../contracts/tool-completion-contract.json", import.meta.url);
+const generatedTsPath = resolve(process.cwd(), "src/tools/.generated-completion-registry.ts");
+const generatedCsPath = resolve(process.cwd(), "unitypkg/Editor/Generated/UnityCliToolCompletionRegistry.g.cs");
 
-const unprovableSelectionTools = [
-  "append-vertices-to-edge.cs",
-  "auto-smooth.cs",
-  "bevel-edges.cs",
-  "bridge-edges.cs",
-  "connect-elements.cs",
-  "duplicate-and-flip.cs",
-  "extrude-edges.cs",
-  "extrude-faces.cs",
-  "flip-normals.cs",
-  "insert-vertex.cs",
-  "subdivide.cs"
+const requestSpecific = new Map([
+  ["probuilder.append-vertices-to-edge", "request-edge-chain-readback"],
+  ["probuilder.auto-smooth", "request-smoothing-compatibility-readback"],
+  ["probuilder.bevel-edges", "request-bevel-rail-readback"],
+  ["probuilder.bridge-edges", "request-bridge-face-readback"],
+  ["probuilder.connect-elements", "request-connect-topology-readback"],
+  ["probuilder.create-shape", "request-shape-topology-record-readback"],
+  ["probuilder.duplicate-and-flip", "request-duplicate-flipped-face-readback"],
+  ["probuilder.extrude-edges", "request-edge-extrusion-readback"],
+  ["probuilder.extrude-faces", "request-face-extrusion-readback"],
+  ["probuilder.flip-normals", "request-face-winding-readback"],
+  ["probuilder.insert-vertex", "request-insert-vertex-readback"],
+  ["probuilder.merge-objects", "request-world-triangle-material-union-readback"],
+  ["probuilder.merge-vertices", "request-shared-vertex-remap-readback"],
+  ["probuilder.subdivide", "request-face-child-union-readback"],
+  ["probuilder.weld-vertices", "request-weld-cluster-remap-readback"],
+]);
+
+const atomicMutations = [
+  "probuilder.center-pivot",
+  "probuilder.combine-meshes",
+  "probuilder.convert-to-probuilder",
+  "probuilder.create-poly-shape",
+  "probuilder.create-polygon",
+  "probuilder.delete-faces",
+  "probuilder.detach-faces",
+  "probuilder.freeze-transform",
+  "probuilder.merge-faces",
+  "probuilder.move-vertices",
+  "probuilder.repair-mesh",
+  "probuilder.set-face-color",
+  "probuilder.set-face-material",
+  "probuilder.set-face-uvs",
+  "probuilder.set-pivot",
+  "probuilder.set-smoothing",
+  "probuilder.split-vertices",
 ];
 
-test("unprovable ProBuilder selections are direct-prohibited while frozen handlers remain executable", async () => {
-  const contract = JSON.parse(await readFile(new URL("../contracts/tool-completion-contract.json", import.meta.url), "utf8")) as {
-    tools: Array<{ toolName: string; directInvocationPolicy?: { kind: string }; frozenDeliveryPolicy?: { kind: string } }>;
-  };
-  const byName = new Map(contract.tools.map((entry) => [entry.toolName, entry]));
-  for (const entry of unprovableSelectionTools) {
-    const source = await readFile(new URL(entry, directory), "utf8");
-    const toolName = `probuilder.${entry.slice(0, -3)}`;
-    assert.equal(byName.get(toolName)?.directInvocationPolicy?.kind, "prohibited-unprovable");
-    assert.equal(byName.get(toolName)?.frozenDeliveryPolicy?.kind, "preserved");
-    assert.match(source, /ctx\.CommitEffect\(\)/, `${entry} retains frozen batch execution`);
-    assert.doesNotMatch(source, /SelectionProofUnavailable|CS0162/);
-    assert.match(source, /Checked(?:Int|Float|Vector3)\(/, `${entry} validates narrowing conversions before effect`);
+test("completion contract exposes exactly fifteen request-specific ProBuilder tools", async () => {
+  const contract = JSON.parse(await readFile(contractUrl, "utf8")) as { tools: Array<Record<string, any>> };
+  const probuilder = contract.tools.filter((entry) => typeof entry.toolName === "string" && entry.toolName.startsWith("probuilder."));
+  const observed = probuilder.filter((entry) => entry.executionClass === "observed-state");
+  assert.equal(requestSpecific.size, 15);
+  assert.deepEqual(observed.map((entry) => entry.toolName).sort(), [...requestSpecific.keys()].sort());
+
+  for (const [toolName, predicate] of requestSpecific) {
+    const entry = probuilder.find((candidate) => candidate.toolName === toolName);
+    assert.ok(entry, `${toolName} has a contract`);
+    assert.equal(entry.executionClass, "observed-state");
+    assert.equal(entry.completionPredicate.kind, predicate);
+    assert.equal(entry.proofSource.kind, "fresh-request-specific-readback");
   }
 });
 
-test("exact readback paths preserve pivot geometry and do not hide UV reflection failures", async () => {
-  const [pivot, uvs, merge, requestProof, operationProof] = await Promise.all([
-    readFile(new URL("center-pivot.cs", directory), "utf8"),
-    readFile(new URL("set-face-uvs.cs", directory), "utf8"),
-    readFile(new URL("merge-objects.cs", directory), "utf8"),
-    readFile(new URL("ProBuilderRequestProof.cs", directory), "utf8"),
-    readFile(new URL("ProBuilderOperationProof.cs", directory), "utf8")
-  ]);
-
-  assert.match(pivot, /CenteredPivotPreservesWorldGeometry/);
-  assert.match(pivot, /InverseTransformPoint/);
-  assert.match(uvs, /Required ProBuilder 5\.2\.4 UV members are unavailable/);
-  assert.match(uvs, /typeof\(IEnumerable<>\)\.MakeGenericType\(faceType\)/);
-  assert.match(uvs, /new\[\] \{ refreshUvParameterType \}/);
-  assert.match(uvs, /refreshUvMethod\.ReturnType != typeof\(void\)/);
-  assert.doesNotMatch(uvs, /catch \(Exception\) \{ \}/);
-  assert.match(merge, /!autoConvert && targets\.Any/);
-  assert.match(requestProof, /indexes\.Count == requested\.Length && requested\.All\(indexes\.Contains\)/);
-  assert.match(operationProof, /before\.Faces\.All\(face => !after\.Faces\.Contains\(face\)\)/);
+test("the seventeen ordinary ProBuilder mutations remain atomic typed readbacks", async () => {
+  const contract = JSON.parse(await readFile(contractUrl, "utf8")) as { tools: Array<Record<string, any>> };
+  assert.equal(atomicMutations.length, 17);
+  for (const toolName of atomicMutations) {
+    const entry = contract.tools.find((candidate) => candidate.toolName === toolName);
+    assert.ok(entry, `${toolName} has a contract`);
+    assert.equal(entry.executionClass, "atomic");
+    assert.equal(entry.completionPredicate.kind, "typed-business-terminal");
+    assert.equal(entry.proofSource.kind, "typed-result-and-effect-readback");
+  }
 });
 
-test("ProBuilder request narrowing is range-checked and directional face selection fails closed", async () => {
-  const narrowed = [
-    "create-polygon.cs", "delete-faces.cs", "detach-faces.cs", "merge-faces.cs", "merge-vertices.cs",
-    "set-face-material.cs", "set-smoothing.cs", "split-vertices.cs", "select-faces.cs"
-  ];
-  for (const entry of narrowed) {
-    const source = await readFile(new URL(entry, directory), "utf8");
-    assert.match(source, /ProBuilderOperationProof\.CheckedInt\(/, `${entry} range-checks request integers`);
-    assert.doesNotMatch(source, /(?:Select|ConvertAll)\([^\n]*=> \(int\)/, `${entry} has no unchecked request narrowing`);
-  }
-
-  const selectFaces = await readFile(new URL("select-faces.cs", directory), "utf8");
-  assert.match(selectFaces, /using System\.Linq;/);
-  assert.match(selectFaces, /normal == Vector3\.zero/);
-  assert.match(selectFaces, /Could not read a non-zero normal/);
-  for (const entry of ["delete-faces.cs", "detach-faces.cs", "merge-faces.cs", "subdivide.cs"]) {
-    const source = await readFile(new URL(entry, directory), "utf8");
-    assert.match(source, /using System;/, `${entry} imports System for checked count arithmetic`);
-  }
+test("generated registries carry the topology-record predicate for create-shape", async () => {
+  const [typescript, csharp] = await Promise.all([readFile(generatedTsPath, "utf8"), readFile(generatedCsPath, "utf8")]);
+  const expected = "request-shape-topology-record-readback";
+  assert.match(typescript, new RegExp(`"probuilder\\.create-shape"[\\s\\S]{0,500}"completionPredicate": "${expected}"`));
+  assert.match(csharp, new RegExp(`"probuilder\\.create-shape"[^\\n]+"${expected}"`));
+  assert.doesNotMatch(typescript, /request-shape-fingerprint-readback/);
+  assert.doesNotMatch(csharp, /request-shape-fingerprint-readback/);
 });

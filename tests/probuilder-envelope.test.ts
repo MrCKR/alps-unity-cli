@@ -56,7 +56,7 @@ test("Execute is the single success and error envelope boundary", () => {
 });
 
 test("ProBuilder error factories create BridgeCommandException with machine-readable details and actions", () => {
-  for (const method of ["PackageNotAvailable", "TargetNotFound", "SchemaInvalid", "OperationFailed", "PackageNotFound"]) {
+  for (const method of ["PackageNotAvailable", "TargetNotFound", "SchemaInvalid", "OperationFailed", "OutcomeUnknown"]) {
     assert.match(errors, new RegExp(`public static UnityCliBridge\\.BridgeCommandException ${method}\\(`));
   }
   assert.match(errors, /new Dictionary<string, object>/);
@@ -84,7 +84,7 @@ test("ProBuilder reflection matches the installed 5.x shape and collection APIs"
 });
 
 test("ProBuilder tools throw errors and return bare typed results", () => {
-  const errorMethods = ["PackageNotAvailable", "TargetNotFound", "SchemaInvalid", "OperationFailed", "PackageNotFound"];
+  const errorMethods = ["PackageNotAvailable", "TargetNotFound", "SchemaInvalid", "OperationFailed", "OutcomeUnknown"];
   for (const { file, source } of toolSources) {
     for (const method of errorMethods) {
       assert.ok(!source.includes(`return ProBuilderErrors.${method}(`), `${file}: structured errors must be thrown`);

@@ -39,6 +39,9 @@ test("core graphics requests validate immutable plans before one commit and read
   assert.match(material, /AssetPathToGUID/);
   assert.match(sun, /LightType\.Directional/);
   assert.match(sun, /GetInstanceID\(\) != expectedId/);
+  assert.match(bakeProbe, /The parent Assets folder must already exist/);
+  assert.match(bakeProbe, /E_GRAPHICS_ASSET_DIRECTORY_NOT_FOUND/);
+  assert.ok(bakeProbe.indexOf("E_GRAPHICS_ASSET_DIRECTORY_NOT_FOUND") < bakeProbe.indexOf("ctx.CommitEffect()"));
   assert.match(bakeProbe, /oldExists/);
   assert.match(bakeProbe, /oldDigest/);
   assert.match(bakeProbe, /File\.ReadAllBytes/);

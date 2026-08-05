@@ -22,7 +22,6 @@ namespace UnityCli.Cinemachine
             public CinemachinePackageStatus Cinemachine { get; set; }
             public CinemachineObjectInfo Object { get; set; }
             public List<CinemachinePlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -31,7 +30,6 @@ namespace UnityCli.Cinemachine
             Summary = "Swap or configure the Cinemachine Aim pipeline component on a virtual camera.",
             Description = "Swap the Aim pipeline component on a Cinemachine virtual camera, or configure a writable public/serialized member on the current Aim component. aim may be omitted when property and value target the existing Aim component.",
             Group = "cinemachine",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.cinemachine" },
             SideEffects = new[] { "scene-modify" },
@@ -90,8 +88,7 @@ namespace UnityCli.Cinemachine
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

@@ -35,7 +35,7 @@ namespace UnityCli
         {
             Name = "graphics.settings", Summary = "Read and update graphics settings including render pipeline asset and quality fields.",
             Description = "Read or update QualitySettings fields and GraphicsSettings.defaultRenderPipeline. renderPipeline='built-in' or 'null' resets to built-in.",
-            Group = "graphics", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "settings-write" },
+            Group = "graphics", DestructiveHint = true, SideEffects = new[] { "settings-write" },
             Target = "editor", PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read graphics settings", Input = new Request { } } }

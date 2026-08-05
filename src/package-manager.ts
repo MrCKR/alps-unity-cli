@@ -1,6 +1,7 @@
 import { realpath, readFile, readdir, stat, mkdir, copyFile, rename, rm, open } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join, relative, resolve, win32, dirname, posix, isAbsolute } from "node:path";
+import { basename, join, relative, resolve, win32, dirname, posix, isAbsolute } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 export interface UnityManifest {
@@ -98,6 +99,8 @@ export interface RemovePackageBridgeOptions {
 export interface DeployPackageOptions {
   packageName?: string;
   dryRun?: boolean;
+  /** durable worker 只能使用 prepare 阶段冻结的备份路径，不得在 effect 后重新生成。 */
+  plannedBackupPath?: string;
 }
 
 export interface RestorePackageOptions {
@@ -368,6 +371,12 @@ export interface UnityCliPackageInstall {
   fileManifestPath: string;
 }
 
+export interface PackageBridgeInstallRuntime {
+  absoluteDeadlineMs?: number;
+  publishRetryDelayMs?: number;
+  renameDirectory?: typeof rename;
+}
+
 /** 在任何 init filesystem effect 前冻结 Bridge 源、目标与哈希。 */
 export async function preparePackageBridgeInstall(projectPath: string): Promise<UnityCliPackageInstallPlan> {
   const paths = packagePaths(projectPath);
@@ -388,7 +397,7 @@ export async function preparePackageBridgeInstall(projectPath: string): Promise<
   };
 }
 
-export async function ensurePackageBridge(projectPath: string, prepared?: UnityCliPackageInstallPlan): Promise<UnityCliPackageInstall> {
+export async function ensurePackageBridge(projectPath: string, prepared?: UnityCliPackageInstallPlan, runtime: PackageBridgeInstallRuntime = {}): Promise<UnityCliPackageInstall> {
   const paths = packagePaths(projectPath);
   const sourcePath = packageSourcePath();
   const plan = prepared ?? await preparePackageBridgeInstall(paths.projectPath);
@@ -407,6 +416,7 @@ export async function ensurePackageBridge(projectPath: string, prepared?: UnityC
   const existing = await readExistingInstallMetadata(installMetadataPath).catch(() => undefined);
   if (existing && existing.packageVersion === packageManifest.version && existing.sourceHash === sourceHash && existing.projectHash === projectHash
     && await managedPackageFilesMatch(sourcePath, targetPath, fileManifestPath)) {
+    await cleanupPublishedPackageSiblings(targetPath);
     return {
       manifestPath: paths.manifestPath,
       bridgePath: targetPath,
@@ -423,26 +433,37 @@ export async function ensurePackageBridge(projectPath: string, prepared?: UnityC
   }
 
   // 完整投影先写入同级 staging 目录，再以 rename 发布；不会暴露半复制的 Bridge 包。
-  const stagingPath = `${targetPath}.staging-${process.pid}-${Date.now()}`;
-  const backupPath = `${targetPath}.previous-${process.pid}-${Date.now()}`;
+  const publishNonce = `${process.pid}-${Date.now()}`;
+  const stagingPath = `${targetPath}.staging-${publishNonce}`;
+  const backupPath = `${targetPath}.previous-${publishNonce}`;
   const targetExists = await directoryExists(targetPath);
+  // publish 阶段（复制+rename）必须尊重调用方 immutable deadline；未传时才用 5s 默认窗口。
+  // Defender/索引器常短暂持有新复制文件的句柄，隐性 5s clamp 会系统性误判为 publish 失败。
+  const publishDeadlineMs = runtime.absoluteDeadlineMs ?? Date.now() + 5_000;
   try {
     await rm(stagingPath, { recursive: true, force: true });
     if (targetExists) await copyDirRecursive(targetPath, stagingPath, targetPath, []);
     await removeStaleManagedFiles(stagingPath, fileManifestPath);
     const managedFiles = await copyPackageContents(sourcePath, stagingPath);
     await writeFileManifest(join(stagingPath, fileManifestFileName), managedFiles);
-    if (targetExists) await rename(targetPath, backupPath);
-    await rename(stagingPath, targetPath);
-    await rm(backupPath, { recursive: true, force: true });
+    if (targetExists) await renamePackageDirectory(targetPath, backupPath, publishDeadlineMs, runtime);
+    await renamePackageDirectory(stagingPath, targetPath, publishDeadlineMs, runtime);
+    // Unity 会扫描 Packages 下的每个 package.json；遗留 sibling 会形成重复 embedded package，必须纳入终态证明。
+    await cleanupPublishedPackageSiblings(targetPath);
   } catch (error) {
-    // 发布未完成时保留原目标；已跨 effect barrier 的 init 会报告 outcome unknown。
+    // 发布未完成时必须在同一 deadline 内恢复原目标；rollback 失败不得被吞掉。
     if (targetExists && !(await directoryExists(targetPath)) && await directoryExists(backupPath)) {
-      await rename(backupPath, targetPath).catch(() => undefined);
+      try {
+        await renamePackageDirectory(backupPath, targetPath, publishDeadlineMs, runtime);
+      } catch {
+        throw new PackageManagerError("INIT_ROLLBACK_FAILED", "Bridge package publish failed and the previous package directory could not be restored.", [
+          "Inspect Packages/com.unity_cli and its sibling .previous directory before submitting a new init request."
+        ]);
+      }
     }
     throw error;
   } finally {
-    await rm(stagingPath, { recursive: true, force: true }).catch(() => undefined);
+    await removePackagePublishDirectory(stagingPath, "INIT_STAGING_CLEANUP_FAILED");
   }
 
   const installTime = new Date().toISOString();
@@ -480,6 +501,56 @@ export async function ensurePackageBridge(projectPath: string, prepared?: UnityC
     installMetadataPath,
     fileManifestPath
   };
+}
+
+/** 只清理 Core 发布器拥有的 sibling 命名空间，并以 fresh directory readback 证明终态。 */
+async function cleanupPublishedPackageSiblings(targetPath: string): Promise<void> {
+  const parent = dirname(targetPath);
+  const prefix = `${basename(targetPath)}.`;
+  const entries = await readdir(parent, { withFileTypes: true });
+  const owned = entries
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith(prefix)
+      && /\.(?:previous|staging)-\d+-\d+$/.test(entry.name))
+    .map((entry) => join(parent, entry.name));
+  for (const path of owned) await removePackagePublishDirectory(path, "INIT_BACKUP_CLEANUP_FAILED");
+}
+
+/** rm 返回后再次读取目录；清理失败不能被当作 package publish 成功。 */
+async function removePackagePublishDirectory(path: string, code: string): Promise<void> {
+  try {
+    await rm(path, { recursive: true, force: true });
+  } catch (error) {
+    throw new PackageManagerError(code, `Unity package publish cleanup failed: ${path}`, [
+      "Close file handles that own the generated package sibling, then submit init again."
+    ]);
+  }
+  if (await directoryExists(path)) {
+    throw new PackageManagerError(code, `Unity package publish cleanup could not prove directory absence: ${path}`, [
+      "Inspect the generated package sibling before submitting init again."
+    ]);
+  }
+}
+
+/** Windows 文件观察器可能短暂占用 package 目录；只重试明确的 transient rename 错误。 */
+async function renamePackageDirectory(source: string, target: string, absoluteDeadlineMs: number, runtime: PackageBridgeInstallRuntime): Promise<void> {
+  const renameDirectory = runtime.renameDirectory ?? rename;
+  let retryDelayMs = Math.max(1, runtime.publishRetryDelayMs ?? 25);
+  while (true) {
+    try {
+      await renameDirectory(source, target);
+      return;
+    } catch (error) {
+      if (!isTransientRenameError(error) || Date.now() + retryDelayMs >= absoluteDeadlineMs) throw error;
+      await delay(retryDelayMs);
+      retryDelayMs = Math.min(250, retryDelayMs * 2);
+    }
+  }
+}
+
+/** 仅 Windows 常见的短时占用错误允许 retry；目标冲突和路径错误继续 fail closed。 */
+function isTransientRenameError(error: unknown): boolean {
+  const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : "";
+  return code === "EPERM" || code === "EBUSY" || code === "EACCES";
 }
 
 export async function checkPackageBridge(projectPath: string): Promise<UnityCliPackageInstall> {
@@ -602,7 +673,18 @@ export async function deployPackageSource(projectPath: string, sourcePath: strin
   if (currentRecord !== undefined) {
     assertDeploymentRecordSafe(paths.projectPath, packageName, currentRecord);
   }
-  const backupPath = currentRecord?.backupPath ?? (existingTarget ? deploymentBackupPath(paths.projectPath, packageName, new Date()) : undefined);
+  const derivedBackupPath = currentRecord
+    ? currentRecord.backupPath
+    : (existingTarget ? deploymentBackupPath(paths.projectPath, packageName, new Date()) : undefined);
+  const backupPath = options.plannedBackupPath ?? derivedBackupPath;
+  if (options.plannedBackupPath !== undefined) {
+    if (!existingTarget || !isPathInside(deploymentRootPath(paths.projectPath), options.plannedBackupPath)
+      || (currentRecord !== undefined && !isSameOptionalResolvedPath(options.plannedBackupPath, currentRecord.backupPath))) {
+      throw new PackageManagerError("PACKAGE_DEPLOY_PLAN_INVALID", "Package deploy backup path does not match the frozen durable file plan.", [
+        "Inspect the canonical request journal and package deployment metadata before retrying; do not redeploy blindly."
+      ]);
+    }
+  }
   const repeatedDeployment = currentRecord !== undefined;
   const copiedFileCount = await countPackageFiles(resolvedSource);
   const plannedEffects: Array<Record<string, unknown>> = [];
@@ -791,9 +873,15 @@ export async function searchRegistry(registry: string, query: string): Promise<A
     throw new PackageManagerError("REGISTRY_UNREACHABLE", `Registry returned HTTP ${response.status}.`, ["Check the registry URL and credentials."]);
   }
   const payload = (await response.json()) as { objects?: Array<{ package?: { name?: string; version?: string; description?: string } }> };
-  return (payload.objects ?? [])
-    .map((entry) => entry.package)
-    .filter((entry): entry is { name: string; version?: string; description?: string } => typeof entry?.name === "string");
+  return (payload.objects ?? []).flatMap((entry) => {
+    const candidate = entry.package;
+    if (typeof candidate?.name !== "string") return [];
+    return [{
+      name: candidate.name,
+      ...(typeof candidate.version === "string" ? { version: candidate.version } : {}),
+      ...(typeof candidate.description === "string" ? { description: candidate.description } : {}),
+    }];
+  });
 }
 
 export class PackageManagerError extends Error {
@@ -945,6 +1033,47 @@ async function copyDirRecursive(dir: string, targetRoot: string, sourceRoot: str
   }
 }
 
+export async function hashPackageTree(sourcePath: string): Promise<string> {
+  return hashSourcePath(sourcePath);
+}
+
+export interface PackageDeploymentFileReadback {
+  targetExists: boolean;
+  targetHash?: string;
+  targetFileCount: number;
+  backupExists: boolean;
+  backupHash?: string;
+  metadataPath: string;
+  metadataHash: string;
+  record?: PackageDeploymentRecord;
+}
+
+/** 仅重算 package.deploy/restore 的文件与 metadata 终态，供单 root redelivery 恢复。 */
+export async function inspectPackageDeploymentFiles(projectPath: string, packageName: string, targetPath: string, backupPath?: string): Promise<PackageDeploymentFileReadback> {
+  const paths = packagePaths(projectPath);
+  assertSafePackageDirectoryName(packageName);
+  const expectedTarget = join(paths.projectPath, "Packages", packageName);
+  if (resolve(targetPath) !== resolve(expectedTarget)) throw new PackageManagerError("PACKAGE_DEPLOY_READBACK_FAILED", "Package target path does not match the project package root.");
+  if (backupPath) {
+    const backupRoot = `${resolve(deploymentRootPath(paths.projectPath))}${win32.sep}`.toLowerCase();
+    if (!`${resolve(backupPath)}${win32.sep}`.toLowerCase().startsWith(backupRoot)) throw new PackageManagerError("PACKAGE_DEPLOY_READBACK_FAILED", "Package backup path is outside the deployment backup root.");
+  }
+  const metadataPath = deploymentMetadataPath(paths.projectPath);
+  const metadata = await readDeploymentMetadata(metadataPath);
+  const targetExists = await directoryExists(targetPath);
+  const backupExists = backupPath ? await directoryExists(backupPath) : false;
+  return {
+    targetExists,
+    targetHash: targetExists ? await hashSourcePath(targetPath) : undefined,
+    targetFileCount: targetExists ? await countPackageFiles(targetPath) : 0,
+    backupExists,
+    backupHash: backupExists && backupPath ? await hashSourcePath(backupPath) : undefined,
+    metadataPath,
+    metadataHash: createHash("sha256").update(await readFile(metadataPath)).digest("hex"),
+    record: metadata[packageName]
+  };
+}
+
 async function hashSourcePath(sourcePath: string): Promise<string> {
   const hash = createHash("sha256");
   await hashDirectory(hash, sourcePath, sourcePath);
@@ -953,8 +1082,8 @@ async function hashSourcePath(sourcePath: string): Promise<string> {
 
 async function hashDirectory(hash: ReturnType<typeof createHash>, dir: string, root: string): Promise<void> {
   const entries = await readdir(dir, { withFileTypes: true });
-  // Sort for deterministic hash
-  const sorted = entries.sort((a, b) => a.name.localeCompare(b.name));
+  // 与 C# StringComparer.Ordinal 一致，禁止 locale 改变 package tree proof。
+  const sorted = entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
   for (const entry of sorted) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -1062,6 +1191,12 @@ function assertDeploymentRecordSafe(projectPath: string, packageName: string, re
 
 function isSameResolvedPath(left: string, right: string): boolean {
   return relative(resolve(left), resolve(right)) === "";
+}
+
+/** 可选路径只有同时缺失或解析后相等才属于同一 frozen plan。 */
+function isSameOptionalResolvedPath(left?: string, right?: string): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return isSameResolvedPath(left, right);
 }
 
 function isPathInside(rootPath: string, candidatePath: string): boolean {

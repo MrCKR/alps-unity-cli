@@ -31,7 +31,6 @@ export async function handlePackageInfoCommand(
   const format = getString(flags, "format");
 
   const data: Record<string, unknown> = {
-    command: "package",
     npm: {
       name: npmPackage.name ?? "@alps_ckr/unity_cli",
       version: npmPackage.version ?? "0.0.0",

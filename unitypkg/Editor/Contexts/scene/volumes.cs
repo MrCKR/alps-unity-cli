@@ -25,7 +25,7 @@ namespace UnityCli
             {
                 Name = "scene.volumes", Summary = "List Volume components in the active scene with target object, profile reference, and pagination metadata.",
                 Description = "Read Volume components in the active scene with target GameObject reference, enabled state, global flag, priority, weight, profile reference, count, and pageInfo. Optional target filters by GameObject name or hierarchy path. Returns an empty list when UnityEngine.Rendering.Volume is unavailable. This context is read-only and does not modify render settings or Volume profiles.",
-                Category = "scene", Version = "1.0.0", Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported", RefreshBehavior = "on-demand",
+                Category = "scene",Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported",
                 Examples = new[] { new ContextExample { Description = "List scene Volumes", Input = new Request { PageSize = 50 } }, new ContextExample { Description = "Filter Volumes by target", Input = new Request { Target = "Main Camera", PageSize = 50 } } }
             };
 

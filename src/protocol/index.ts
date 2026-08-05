@@ -7,7 +7,6 @@
 export type {
   BridgeExecution,
   BridgeRequest,
-  BridgeSecurity,
   Envelope,
   ErrorEnvelope,
   SuccessEnvelope,

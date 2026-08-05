@@ -25,7 +25,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public string Path { get; set; }
             public long Width { get; set; }
@@ -41,7 +40,6 @@ namespace UnityCli
             Summary = "Generate a procedural PNG texture (solid/gradient/radial/noise/checkerboard/stripes/dots/grid/brick); destructive, supports --dry-run.",
             Description = "Generate a procedural PNG texture at an Assets/*.png path. Patterns: solid, gradient (linear along x), radial (center outward), noise (Perlin), checkerboard, stripes, dots, grid, brick. color/color2 lerp endpoints; patternSize controls cell size for the tiled patterns. Destructive: writes a new asset file.",
             Group = "texture",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "asset-write", "asset-import" },
@@ -74,7 +72,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "texture.generate",
                     DryRun = true,
                     Path = path,
                     Width = width,
@@ -119,7 +116,6 @@ namespace UnityCli
             var sizeBytes = new FileInfo(fullPath).Length;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "texture.generate",
                 Path = path,
                 Width = importedTexture.width,
                 Height = importedTexture.height,

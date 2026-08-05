@@ -11,12 +11,7 @@ import type { CliResult } from "../types.js";
 import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "./.generated-completion-registry.js";
 import {
   builtinToolMetadata,
-  inferToolRiskLevel,
-  isLongRunningTool,
-  supportStatusForTool,
   toolAvailabilityScope,
-  toolCancellation,
-  toolCliCommand,
   toolSource,
   type ToolMetadata
 } from "./metadata/index.js";
@@ -24,13 +19,18 @@ import {
 export type ToolCatalogRuntime = ProjectToolRuntime & { dataDir?: string };
 export type ToolCatalogResult = { ok: true; tools: ToolMetadata[] } | (CliResult & { ok: false });
 
+const STATIC_BRIDGE_TOOL_NAMES = new Set(GENERATED_TOOL_COMPLETION_CONTRACTS
+  .filter((contract) => contract.descriptorOwner === "built-in" || contract.descriptorOwner.startsWith("extension:"))
+  .map((contract) => contract.toolName));
+
 /** package snapshot 中的 C# built-in/Extension descriptor；ownership 不匹配或结构异常时 fail closed。 */
 export function staticBridgeToolMetadata(): ToolMetadata[] {
-  const bridgeOwners = new Set(GENERATED_TOOL_COMPLETION_CONTRACTS
+  const bridgeContracts = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS
     .filter((contract) => contract.descriptorOwner === "built-in" || contract.descriptorOwner.startsWith("extension:"))
-    .map((contract) => contract.toolName));
-  return staticCapabilityCatalog().tools.filter((descriptor) => bridgeOwners.has(String(descriptor.name ?? ""))).map((descriptor) => {
-    const tool = projectDescriptorToToolMetadata(descriptor);
+    .map((contract) => [contract.toolName, contract]));
+  return staticCapabilityCatalog().tools.filter((descriptor) => bridgeContracts.has(String(descriptor.name ?? ""))).map((descriptor) => {
+    const name = String(descriptor.name ?? "");
+    const tool = projectDescriptorToToolMetadata({ ...descriptor, completionContract: bridgeContracts.get(name) });
     if (!tool) throw new Error(`Malformed static Tool descriptor: ${String(descriptor.name ?? "unknown")}`);
     return tool;
   });
@@ -65,6 +65,58 @@ export async function loadToolCatalog(
     tools.push(...runtimeTools.tools);
   }
   return { ok: true, tools: uniqueByName(tools) };
+}
+
+/**
+ * 显式选中 Live Editor 时，用该 generation 的真实 registry 覆盖静态条件 Tool 可用性。
+ * 静态 descriptor 仍负责跨版本发现；当前版本未注册时必须在执行前暴露 available=false。
+ */
+export async function resolveLiveToolRegistration(
+  tool: ToolMetadata,
+  flags: Record<string, string | boolean>,
+  runtime: ToolCatalogRuntime,
+  requestId: string,
+): Promise<ToolMetadata> {
+  return (await resolveLiveToolRegistrations([tool], flags, runtime, requestId))[0];
+}
+
+/** 为 group/search 批量投影当前 generation；每类 registry 最多读取一次。 */
+export async function resolveLiveToolRegistrations(
+  tools: ToolMetadata[],
+  flags: Record<string, string | boolean>,
+  runtime: ToolCatalogRuntime,
+  requestId: string,
+): Promise<ToolMetadata[]> {
+  const conditional = tools.filter((tool) => STATIC_BRIDGE_TOOL_NAMES.has(tool.name));
+  if (conditional.length === 0 || !await hasLiveCatalogTarget(flags, runtime)) return tools;
+
+  const isRuntimeTarget = (tool: ToolMetadata) => tool.target === "runtime" || (tool.target === "both" && getBoolean(flags, "runtime"));
+  const editorTools = conditional.filter((tool) => !isRuntimeTarget(tool));
+  const runtimeTools = conditional.filter(isRuntimeTarget);
+  const editor = editorTools.length > 0 ? await discoverProjectTools(flags, runtime, `${requestId}_editor`, { requireBridge: true }) : undefined;
+  const runtimeCatalog = runtimeTools.length > 0 ? await discoverRuntimeTools(flags, runtime, `${requestId}_runtime`, { requireBridge: true }) : undefined;
+
+  return tools.map((tool) => {
+    if (!STATIC_BRIDGE_TOOL_NAMES.has(tool.name)) return tool;
+    const discovered = isRuntimeTarget(tool) ? runtimeCatalog : editor;
+    if (!discovered || discovered.ok === false) {
+      const error = discovered?.ok === false ? discovered.error : undefined;
+      const code = error?.code ?? "E_TOOL_UNAVAILABLE";
+      const message = error?.message ?? `Tool ${tool.name} availability could not be verified in the selected Unity generation.`;
+      return { ...tool, available: false, unavailableReason: `${code}: ${message}` };
+    }
+    return discovered.tools.find((candidate) => candidate.name === tool.name) ?? {
+      ...tool,
+      available: false,
+      unavailableReason: `E_TOOL_UNAVAILABLE: Tool ${tool.name} is not registered in the selected Unity generation.`,
+    };
+  });
+}
+
+async function hasLiveCatalogTarget(flags: Record<string, string | boolean>, runtime: ToolCatalogRuntime): Promise<boolean> {
+  return runtime.projectTools !== undefined
+    || runtime.bridgeExecute !== undefined
+    || (typeof runtime.dataDir === "string" && await hasInstanceForFlags(flags, runtime.dataDir));
 }
 
 /** 按名称解析 catalog descriptor，并在需要时加载 live catalog。 */
@@ -102,32 +154,29 @@ export function uniqueByName(tools: ToolMetadata[]): ToolMetadata[] {
   return [...result.values()];
 }
 
-/** 输出完整公开 descriptor，保留 live Bridge 提供的安全和 schema 字段。 */
+/** 输出完整公开 descriptor；内部 routing、fingerprint 与展示级状态不会越过此边界。 */
 export function publicToolDescriptor(tool: ToolMetadata): Record<string, unknown> {
-  const longRunning = isLongRunningTool(tool);
-  const cancellation = toolCancellation(tool);
+  if (!tool.outputSchema) throw new Error(`Tool ${tool.name} is missing outputSchema.`);
+  const available = tool.available ?? true;
   return {
     name: tool.name,
     summary: tool.summary,
     description: tool.description,
     group: tool.group,
     inputSchema: tool.inputSchema,
-    ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+    outputSchema: tool.outputSchema,
     destructiveHint: tool.destructiveHint,
-    ...(tool.sideEffects ? { sideEffects: tool.sideEffects } : {}),
-    ...(tool.playModeSupport ? { playModeSupport: tool.playModeSupport } : {}),
-    ...(tool.supportsDryRun !== undefined ? { supportsDryRun: tool.supportsDryRun } : {}),
-    ...(tool.permissions ? { permissions: tool.permissions } : {}),
-    ...(tool.examples ? { examples: tool.examples } : {}),
+    ...(tool.sideEffects?.length ? { sideEffects: tool.sideEffects } : {}),
+    playModeSupport: tool.playModeSupport ?? "supported",
+    supportsDryRun: tool.supportsDryRun ?? false,
+    ...(tool.permissions?.length ? { permissions: tool.permissions } : {}),
+    ...(tool.examples?.length ? { examples: tool.examples.map(({ description, argv }) => ({ description, argv })) } : {}),
     source: toolSource(tool),
-    riskLevel: inferToolRiskLevel(tool),
-    ...(longRunning ? { longRunning: true } : {}),
-    ...(cancellation !== "none" ? { cancellation } : {}),
-    cliCommand: toolCliCommand(tool),
     target: tool.target ?? "editor",
     availabilityScope: toolAvailabilityScope(tool),
-    supportStatus: supportStatusForTool(tool),
-    ...(tool.requiresPackages ? { requiresPackages: tool.requiresPackages } : {})
+    available,
+    ...(!available && tool.unavailableReason ? { unavailableReason: tool.unavailableReason } : {}),
+    ...(tool.requiresPackages?.length ? { requiresPackages: tool.requiresPackages } : {})
   };
 }
 

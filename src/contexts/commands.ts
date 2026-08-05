@@ -13,6 +13,8 @@ export async function handleContextCommand(
   runtime: ContextRuntime,
   requestId: string
 ): Promise<CliResult> {
+  const flagError = rejectUnknownContextFlags(command, flags, requestId);
+  if (flagError) return flagError;
   if (!command || command === "list") return dispatchContext("list", undefined, flags, runtime, requestId);
   if (command === "search") return dispatchContext("search", positional[0] ?? getString(flags, "keyword") ?? getString(flags, "query"), flags, runtime, requestId);
   if (command === "describe" || command === "read") return dispatchContext(command, positional[0] ?? getString(flags, "name"), flags, runtime, requestId);
@@ -20,4 +22,27 @@ export async function handleContextCommand(
     "Run unity_cli context list to see available contexts.",
     "Run unity_cli context describe <name> for full context metadata."
   ]);
+}
+
+/** Context 只接受结构化 input、selector 与 discovery 控制项。 */
+function rejectUnknownContextFlags(
+  command: string | undefined,
+  flags: Record<string, string | boolean>,
+  requestId: string
+): CliResult | undefined {
+  const common = ["instance", "raw"];
+  const allowed = !command || command === "list"
+    ? [...common, "category", "include-custom", "format"]
+    : command === "search"
+      ? [...common, "category", "include-custom", "format"]
+      : command === "describe"
+        ? [...common, "include-custom"]
+        : command === "read"
+          ? [...common, "input", "input-file", "stdin", "timeout-ms"]
+          : common;
+  const unknown = Object.keys(flags).find((flag) => !allowed.includes(flag));
+  if (!unknown) return undefined;
+  return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for context ${command ?? "list"}: --${unknown}.`, [
+    command === "read" ? "Put Context fields inside --input <json>." : "Run unity_cli --help for the supported options."
+  ], { option: `--${unknown}`, command: `context ${command ?? "list"}` });
 }

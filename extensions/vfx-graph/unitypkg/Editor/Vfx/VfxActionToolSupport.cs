@@ -205,8 +205,7 @@ namespace UnityCli
                 Action = action,
                 IsPaused = ReadBool(effect, "pause"),
                 AliveParticleCount = ReadLong(effect, "aliveParticleCount"),
-                PlannedEffects = new List<VfxPlannedEffect> { VfxToolSupport.Effect(action, "action", action) },
-                LogPath = logPath
+                PlannedEffects = new List<VfxPlannedEffect> { VfxToolSupport.Effect(action, "action", action) }
             };
         }
 
@@ -219,8 +218,7 @@ namespace UnityCli
                 IsPlaying = particleSystem.isPlaying,
                 IsPaused = particleSystem.isPaused,
                 IsEmitting = particleSystem.isEmitting,
-                PlannedEffects = new List<VfxPlannedEffect> { VfxToolSupport.Effect(action, "action", action) },
-                LogPath = logPath
+                PlannedEffects = new List<VfxPlannedEffect> { VfxToolSupport.Effect(action, "action", action) }
             };
         }
     }
@@ -235,7 +233,6 @@ namespace UnityCli
         public long? Seed { get; set; }
         public bool? ResetSeedOnPlay { get; set; }
         public List<VfxPlannedEffect> PlannedEffects { get; set; }
-        public string LogPath { get; set; }
     }
 
     public sealed class VfxEffectActionResult
@@ -244,7 +241,6 @@ namespace UnityCli
         public string Action { get; set; }
         public VfxEffectInfo Effect { get; set; }
         public List<VfxPlannedEffect> PlannedEffects { get; set; }
-        public string LogPath { get; set; }
     }
 
     public sealed class VfxParticleActionResult
@@ -255,7 +251,6 @@ namespace UnityCli
         public bool IsPaused { get; set; }
         public bool IsEmitting { get; set; }
         public List<VfxPlannedEffect> PlannedEffects { get; set; }
-        public string LogPath { get; set; }
     }
 }
 #endif

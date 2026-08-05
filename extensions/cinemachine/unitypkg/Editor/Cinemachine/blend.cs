@@ -22,7 +22,6 @@ namespace UnityCli.Cinemachine
             public CinemachineObjectInfo Object { get; set; }
             public CinemachineBrainInfo Brain { get; set; }
             public List<CinemachinePlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -31,7 +30,6 @@ namespace UnityCli.Cinemachine
             Summary = "Get or set the DefaultBlend style and duration on a CinemachineBrain.",
             Description = "Set the DefaultBlend style and duration on a CinemachineBrain. target is optional; when omitted the first scene brain is used.",
             Group = "cinemachine",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.cinemachine" },
             SideEffects = new[] { "scene-modify" },
@@ -134,8 +132,7 @@ namespace UnityCli.Cinemachine
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(brainOwner),
                 Brain = CinemachineToolSupport.BuildBrainInfo(brain),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

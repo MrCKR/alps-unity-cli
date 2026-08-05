@@ -8,9 +8,6 @@ export interface DocsTopicRequest {
 }
 
 export interface DocsTopicResult {
-  command: string;
-  mode: string;
-  requiresUnity: boolean;
   topic: string;
   title: string;
   summary: string;
@@ -48,9 +45,6 @@ export default defineTool<DocsTopicRequest, DocsTopicResult>({
     }
 
     const data: DocsTopicResult = {
-      command: "docs.topic",
-      mode: "builtin",
-      requiresUnity: false,
       topic: doc.key,
       title: doc.title,
       summary: doc.summary,

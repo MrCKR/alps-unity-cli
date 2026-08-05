@@ -1,14 +1,45 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using UnityEditor;
 using UnityEditor.Compilation;
+using UnityEngine;
 
 namespace UnityCli
 {
     /// <summary>编译事件唯一订阅点；回调只采样并立即交给 durable coordinator。</summary>
     internal static class UnityCliCompilationEventBroker
     {
+        /// <summary>跨 domain reload 连续递增的编译事件序列，durable 存于 Library/UnityCli。</summary>
+        private static string SequencePath()
+        {
+            var projectRoot = Path.GetDirectoryName(Application.dataPath);
+            return Path.Combine(projectRoot, "Library", "UnityCli", "compile-event-sequence.txt");
+        }
+
+        /// <summary>读取 durable 序列；文件缺失视为 0，损坏立即失败（不得静默继续）。</summary>
+        internal static long CurrentCompilationEventSequence()
+        {
+            var path = SequencePath();
+            if (!File.Exists(path)) return 0;
+            var text = File.ReadAllText(path).Trim();
+            if (!long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var current) || current < 0 || text != current.ToString(CultureInfo.InvariantCulture))
+                throw new InvalidDataException("Compilation event sequence sidecar is corrupt.");
+            return current;
+        }
+
+        /// <summary>分配下一个 durable 序列并立即落盘，reload 后从这里续接。</summary>
+        internal static long NextCompilationEventSequence()
+        {
+            var next = CurrentCompilationEventSequence() + 1;
+            var path = SequencePath();
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllText(path, next.ToString(CultureInfo.InvariantCulture));
+            return next;
+        }
+
         internal sealed class Snapshot
         {
             public long Sequence;
@@ -27,7 +58,7 @@ namespace UnityCli
         internal static void Initialize()
         {
             if (initialized) return;
-            sequence = UnityCliBridge.CurrentCompilationEventSequence();
+            sequence = CurrentCompilationEventSequence();
             cycle = UnityCliBridge.UnityCliCompileCoordinator.CurrentOwnedCycle();
             snapshot.Sequence = sequence;
             snapshot.Cycle = cycle;
@@ -61,7 +92,7 @@ namespace UnityCli
 
         private static void OnCompilationStarted(object context)
         {
-            sequence = UnityCliBridge.NextCompilationEventSequence();
+            sequence = NextCompilationEventSequence();
             // A start sequence is globally unique, so it is also a durable cycle identity.
             cycle = sequence;
             snapshot.Sequence = sequence;
@@ -74,14 +105,14 @@ namespace UnityCli
 
         private static void OnAssemblyCompilationFinished(string assemblyPath, CompilerMessage[] messages)
         {
-            sequence = UnityCliBridge.NextCompilationEventSequence();
+            sequence = NextCompilationEventSequence();
             snapshot.Sequence = sequence;
             UnityCliBridge.UnityCliCompileCoordinator.OnAssemblyCompilationFinished(snapshot.Cycle, snapshot.Sequence, assemblyPath, ToDiagnostics(assemblyPath, messages));
         }
 
         private static void OnCompilationFinished(object context)
         {
-            sequence = UnityCliBridge.NextCompilationEventSequence();
+            sequence = NextCompilationEventSequence();
             snapshot.Sequence = sequence;
             snapshot.Finished = true;
             snapshot.Started = false;

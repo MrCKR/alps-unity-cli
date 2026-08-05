@@ -17,6 +17,8 @@ import { builtinToolMetadata, builtinToolGroups, EXTENSION_GROUPS } from "../src
 import { builtinExtensionMetadata } from "../src/extensions/metadata/index.js";
 import { builtinExtensionToolContributions, findBuiltinExtensionToolContribution, requiredPackagesForContribution } from "../src/extensions/tool-manifest.js";
 import { probuilderDeleteFacesTool, probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
+import { makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v2.js";
+import type { ToolMetadata } from "../src/tools/metadata/index.js";
 
 test("URP and HDRP Volume capabilities use one action-free source per tool", async () => {
   for (const pipeline of ["urp", "hdrp"] as const) {
@@ -68,14 +70,30 @@ const emptyRuntime: ToolsRuntime = {};
 async function makeFakeProject(packages: Record<string, string> = {}): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "unity_cli-p5t04-"));
   const pkgDir = join(dir, "Packages");
-  await mkdir(pkgDir, { recursive: true });
-  await writeFile(join(pkgDir, "manifest.json"), JSON.stringify({ dependencies: packages }, null, 2));
+  await Promise.all([
+    mkdir(pkgDir, { recursive: true }),
+    mkdir(join(dir, "Assets"), { recursive: true }),
+    mkdir(join(dir, "ProjectSettings"), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(join(pkgDir, "manifest.json"), JSON.stringify({ dependencies: packages }, null, 2)),
+    writeFile(join(dir, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 2022.3.61f1\n"),
+  ]);
   const lockDeps: Record<string, { version: string }> = {};
   for (const [id, version] of Object.entries(packages)) {
     lockDeps[id] = { version };
   }
   await writeFile(join(pkgDir, "packages-lock.json"), JSON.stringify({ dependencies: lockDeps }, null, 2));
   return dir;
+}
+
+/** Tool 级 routing 只接受 instance；测试 registry 将该 instance 绑定到真实临时项目。 */
+async function selectedProject(projectPath: string, projectTools: ToolMetadata[]): Promise<{ flags: Record<string, string>; runtime: ToolsRuntime }> {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-p5t04-registry-"));
+  const identity = registryIdentity(projectPath);
+  const session = await makeRegistrySession("http://127.0.0.1:65534");
+  await writeRegistry(dataDir, makeRegistry(identity, [session]));
+  return { flags: { instance: identity.instanceId }, runtime: { dataDir, projectTools } };
 }
 
 test("concurrent extension installs preserve every manifest entry", async () => {
@@ -119,31 +137,40 @@ test("extension manifest contributions expose tool names and required packages",
 
 test("tools describe resolves extension availability against live-discovered extension descriptors", async () => {
   const projectPath = await makeFakeProject();
-  const runtime: ToolsRuntime = {
-    projectTools: [probuilderPingTool()],
-    bridgeExecute: async (payload) => ({ ok: true as const, requestId: payload.requestId, data: { installed: true } })
-  };
+  const selected = await selectedProject(projectPath, [probuilderPingTool()]);
 
-  const describe = await handleToolsCommand("describe", ["probuilder.ping"], { project: projectPath }, runtime, requestId);
+  const describe = await handleToolsCommand("describe", ["probuilder.ping"], selected.flags, selected.runtime, requestId);
   assert.ok(describe.ok);
   const describeData = describe.data as Record<string, unknown>;
-  assert.equal(describeData.extensionAvailability, "unavailable");
+  assert.equal(describeData.available, false);
   assert.equal(describeData.extensionId, "probuilder");
-  assert.ok((describeData.missingPackageIds as string[]).includes("com.unity.probuilder"));
+  assert.match(String(describeData.unavailableReason), /E_EXTENSION_DEPENDENCY_MISSING/);
+  assert.ok((describeData.requiresPackages as string[]).includes("com.unity.probuilder"));
 });
 
 test("tools describe requires a healthy physical extension installation", async () => {
-  const projectPath = await makeFakeProject({ "com.unity.probuilder": "5.0.0" });
+  const projectPath = await makeFakeProject({ "com.unity.probuilder": "5.2.4" });
   const registry = new ExtensionRegistry();
   await installExtensionBundle(projectPath, registry.getExtension("probuilder")!.manifest);
-  const runtime: ToolsRuntime = { projectTools: [probuilderPingTool()] };
+  const selected = await selectedProject(projectPath, [probuilderPingTool()]);
 
-  const result = await handleToolsCommand("describe", ["probuilder.ping"], { project: projectPath }, runtime, requestId);
+  const result = await handleToolsCommand("describe", ["probuilder.ping"], selected.flags, selected.runtime, requestId);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
-  assert.equal(data.extensionAvailability, "available");
+  assert.equal(data.available, true);
   assert.equal(data.extensionId, "probuilder");
-  assert.equal(data.missingPackageIds, undefined);
+  assert.equal(data.unavailableReason, undefined);
+});
+
+test("tools describe reports the exact expected and actual package profile", async () => {
+  const projectPath = await makeFakeProject({ "com.unity.probuilder": "5.2.3" });
+  const selected = await selectedProject(projectPath, [probuilderPingTool()]);
+
+  const result = await handleToolsCommand("describe", ["probuilder.ping"], selected.flags, selected.runtime, requestId);
+  assert.ok(result.ok);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.available, false);
+  assert.match(String(data.unavailableReason), /com\.unity\.probuilder@5\.2\.4 \(actual 5\.2\.3\)/);
 });
 
 test("tools describe without --project reports physical state as unknown", async () => {
@@ -152,23 +179,24 @@ test("tools describe without --project reports physical state as unknown", async
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "probuilder.ping");
-  assert.equal(data.extensionAvailability, "unavailable");
-  assert.equal(data.extensionAvailabilityError, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN");
+  assert.equal(data.available, false);
+  assert.match(String(data.unavailableReason), /E_EXTENSION_PHYSICAL_STATE_UNKNOWN/);
 });
 
 test("non-extension live-discovered descriptors are unaffected by package checks", async () => {
   const projectPath = await makeFakeProject();
-  const runtime: ToolsRuntime = { projectTools: [sceneHierarchyTool()] };
-  const result = await handleToolsCommand("describe", ["scene.hierarchy"], { project: projectPath }, runtime, requestId);
+  const selected = await selectedProject(projectPath, [sceneHierarchyTool()]);
+  const result = await handleToolsCommand("describe", ["scene.hierarchy"], selected.flags, selected.runtime, requestId);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
-  assert.equal(data.extensionAvailability, undefined);
+  assert.equal(data.available, true);
+  assert.equal(data.unavailableReason, undefined);
   assert.equal(data.extensionId, undefined);
 });
 
 test("checkToolExtensionAvailability works with constructed live descriptors", async () => {
   const missingProject = await makeFakeProject();
-  const availableProject = await makeFakeProject({ "com.unity.probuilder": "5.0.0" });
+  const availableProject = await makeFakeProject({ "com.unity.probuilder": "5.2.4" });
 
   const unavailable = await checkToolExtensionAvailability(probuilderPingTool(), { project: missingProject });
   const packageOnly = await checkToolExtensionAvailability(probuilderPingTool(), { project: availableProject });

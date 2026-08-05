@@ -12,7 +12,7 @@ namespace UnityCli
         {
             Name = "vfx.particle.stop", Summary = "Stop a ParticleSystem.",
             Description = "Stop the existing ParticleSystem with optional child propagation and stop behavior.",
-            Group = "vfx", Version = "1.0.0", SideEffects = new[] { "particle-playback-edit" },
+            Group = "vfx",SideEffects = new[] { "particle-playback-edit" },
             Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[]
             {

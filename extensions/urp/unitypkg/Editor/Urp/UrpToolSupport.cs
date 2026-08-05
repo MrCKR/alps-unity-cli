@@ -159,8 +159,12 @@ namespace UnityCli
         internal static UnityEngine.Object GetProfileForPlanning(Component volumeComponent)
         {
             if (s_volumeType == null || volumeComponent == null) return null;
-            var shared = s_volumeType.GetProperty("sharedProfile", BindingFlags.Instance | BindingFlags.Public)?.GetValue(volumeComponent, null) as UnityEngine.Object;
+            // Volume.sharedProfile 在 Core RP 14 里是 public 字段而非属性：GetProperty 永远命中不了，
+            // PlayMode 重载后 m_InternalProfile 不被序列化，必须字段优先读回 sharedProfile。
+            var shared = s_volumeType.GetField("sharedProfile", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(volumeComponent) as UnityEngine.Object;
             if (shared != null) return shared;
+            var sharedProperty = s_volumeType.GetProperty("sharedProfile", BindingFlags.Instance | BindingFlags.Public)?.GetValue(volumeComponent, null) as UnityEngine.Object;
+            if (sharedProperty != null) return sharedProperty;
             return s_volumeType.GetField("m_InternalProfile", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(volumeComponent) as UnityEngine.Object;
         }
 

@@ -6,36 +6,16 @@ import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
 import type { AnyJson } from "../../schema/any-json.js";
 
-export interface DiagnoseCapabilitiesRequest {
-  json?: boolean;
-  format?: string;
-  project?: string;
-  includeCustom?: boolean;
-}
+export interface DiagnoseCapabilitiesRequest {}
 
 export interface DiagnoseCapabilitiesObject { [key: string]: AnyJson; }
 
 export interface DiagnoseCapabilitiesResult {
-  command: string;
-  mode: string;
-  requiresUnity: boolean;
-  static: DiagnoseCapabilitiesObject;
+  catalog: DiagnoseCapabilitiesObject;
   projectTools?: DiagnoseCapabilitiesObject;
   customContexts?: DiagnoseCapabilitiesObject;
   runtime?: DiagnoseCapabilitiesObject;
-  runtimeCustomContexts?: DiagnoseCapabilitiesObject;
-  contextDiscovery: DiagnoseCapabilitiesObject;
-  toolsGroupFirstDiscovery: boolean;
   extensions: DiagnoseCapabilitiesObject;
-}
-
-function requestFlags(request: DiagnoseCapabilitiesRequest, base: Record<string, string | boolean> = {}): Record<string, string | boolean> {
-  const flags: Record<string, string | boolean> = { ...base };
-  if (request.json !== undefined) flags.json = request.json;
-  if (request.format !== undefined) flags.format = request.format;
-  if (request.project !== undefined) flags.project = request.project;
-  if (request.includeCustom !== undefined) flags["include-custom"] = request.includeCustom;
-  return flags;
 }
 
 export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResult>({
@@ -53,7 +33,7 @@ export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResul
   ],
   /** 复用既有 capabilities 状态机,保持 offline/live/custom discovery 语义一致。 */
   async execute(request, ctx) {
-    const flags = requestFlags(request, ctx.flags);
+    const flags = { ...ctx.flags };
     const runtime: BridgeRuntime & ProjectToolRuntime & ContextCatalogRuntime = {
       dataDir: ctx.dataDir,
       bridgeExecute: ctx.bridgeExecute,

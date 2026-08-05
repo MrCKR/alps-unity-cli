@@ -7,3 +7,5 @@ dist/
 Dev/
 .codegraph/
 .plan/evidence/
+.plan/**/evidence/
+temp/

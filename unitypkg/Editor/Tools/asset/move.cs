@@ -29,7 +29,6 @@ namespace UnityCli
             Summary = "Move an existing Assets/ asset to a new Assets/ path.",
             Description = "Move an existing Assets/ asset to a new Assets/ path through AssetDatabase.MoveAsset. Use asset.rename to change only the filename within the same directory.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

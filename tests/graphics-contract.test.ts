@@ -48,8 +48,9 @@ test("graphics live descriptors expose representative play mode semantics", asyn
     makeLiveTool({ name: "graphics.stats-memory", summary: "Read graphics memory stats.", description: "Read graphics memory stats.", group: "graphics" }),
     makeLiveTool({ name: "graphics.bake-status", summary: "Read bake status.", description: "Read bake status.", group: "graphics" }),
     makeLiveTool({ name: "graphics.volume", summary: "Read volume profile state.", description: "Read volume profile state.", group: "graphics" }),
+    makeLiveTool({ name: "graphics.bake-settings", summary: "Read or update bake settings.", description: "Read or update persistent LightingSettings.", group: "graphics", destructiveHint: true, playModeSupport: "editor-only", sideEffects: ["scene-modify"] }),
     makeLiveTool({ name: "graphics.quality", summary: "Mutate quality settings.", description: "Mutate quality settings.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
-    makeLiveTool({ name: "graphics.settings", summary: "Mutate graphics settings.", description: "Mutate graphics settings.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
+    makeLiveTool({ name: "graphics.settings", summary: "Mutate graphics settings.", description: "Mutate graphics settings.", group: "graphics", destructiveHint: true, playModeSupport: "editor-only", sideEffects: ["settings-write"] }),
     makeLiveTool({ name: "graphics.pipeline-quality", summary: "Mutate pipeline quality settings.", description: "Mutate pipeline quality settings.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
     makeLiveTool({ name: "graphics.pipeline-settings", summary: "Mutate pipeline settings.", description: "Mutate pipeline settings.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] })
   );
@@ -57,9 +58,16 @@ test("graphics live descriptors expose representative play mode semantics", asyn
   for (const name of ["graphics.pipeline-info", "graphics.skybox-get", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.bake-status", "graphics.volume"]) {
     assert.equal(tools.get(name)?.playModeSupport, "supported", `${name} should be supported`);
   }
-  for (const name of ["graphics.quality", "graphics.settings", "graphics.pipeline-quality", "graphics.pipeline-settings"]) {
+  for (const name of ["graphics.quality", "graphics.pipeline-quality", "graphics.pipeline-settings"]) {
     assert.equal(tools.get(name)?.playModeSupport, "session-affecting", `${name} should disclose graphics settings writes`);
   }
+  const settings = tools.get("graphics.settings")!;
+  assert.equal(settings.destructiveHint, true);
+  assert.equal(settings.playModeSupport, "editor-only");
+  assert.ok(settings.sideEffects?.includes("settings-write"));
+  const bakeSettings = tools.get("graphics.bake-settings")!;
+  assert.equal(bakeSettings.destructiveHint, true);
+  assert.equal(bakeSettings.playModeSupport, "editor-only");
 });
 
 test("bridge specs resolve for all graphics tools", () => {
@@ -100,6 +108,12 @@ test("graphics bridge spec forwards structured --input fields", async () => {
   assert.match(spec, /boolField\(s, "enabled"\)/, "bridge should forward structured enabled");
   assert.match(spec, /numberField\(s, "bounces"\)/, "bridge should forward structured bounces");
   assert.match(spec, /stringField\(s, "material"\)/, "bridge should forward structured material");
+});
+
+test("skybox property writes reject non-Assets materials and persist before readback", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/graphics/skybox-set-properties.cs", import.meta.url), "utf8");
+  assert.match(source, /!skyboxPath\.StartsWith\("Assets\/", System\.StringComparison\.OrdinalIgnoreCase\)/, "builtin and package materials must fail before the effect barrier");
+  assert.match(source, /E_SKYBOX_ASSET_PATH_INVALID[\s\S]*ctx\.CommitEffect\(\)[\s\S]*EditorUtility\.SetDirty\(skybox\)[\s\S]*AssetDatabase\.SaveAssetIfDirty\(skybox\)[\s\S]*ReloadAsset<Material>/, "skybox writes must persist the exact asset before fresh readback");
 });
 
 test("graphics C# keeps current pipeline/quality/bake implementation details", async () => {

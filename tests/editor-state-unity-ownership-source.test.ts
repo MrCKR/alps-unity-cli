@@ -51,11 +51,11 @@ test("private editor-state snapshot is explicitly registered but absent from pub
   assert.match(instanceRegistry, /"lastUnitySnapshot", SampleEditorStateSnapshot\(now\)/, "heartbeat registry publication must contain only the private sampler result");
   assert.match(instanceRegistry, /"progress", SnapshotProgress\(\)/, "heartbeat progress must remain a session field");
   assert.match(instanceRegistry, /"blockers", new List<object>\(\)/, "heartbeat blockers must remain a session field");
-  assert.match(http, /UnityCliCompileCoordinator\.IsCommand\(request\.Command\) \|\| IsEditorStateSnapshotCommand\(request\.Command\)/);
-  assert.match(http, /var allowedDuringPlayModeTransition = UnityCliCompileCoordinator\.IsCommand\(request\.Command\)/);
+  assert.match(http, /var allowedDuringCompileOrImport =[\s\S]*IsEditorStateSnapshotCommand\(request\.Command\)/);
+  assert.match(http, /var allowedDuringPlayModeTransition =[\s\S]*IsEditorStateSnapshotCommand\(request\.Command\)/);
   assert.doesNotMatch(http, /x-unity-cli-invocation-origin|internalOrigin|invocationOrigin/);
-  assert.match(bridge, /UnityCliCompileCoordinator\.IsCommand\(request\.Command\) \|\| IsEditorStateSnapshotCommand\(request\.Command\)/);
-  assert.match(bridge, /var allowedDuringPlayModeTransition = UnityCliCompileCoordinator\.IsCommand\(request\.Command\)/);
+  assert.match(bridge, /var allowedDuringCompileOrImport =[\s\S]*IsEditorStateSnapshotCommand\(request\.Command\)/);
+  assert.match(bridge, /var allowedDuringPlayModeTransition =[\s\S]*IsEditorStateSnapshotCommand\(request\.Command\)/);
   assert.match(bridge, /OnBeforeAssemblyReload[\s\S]*?StopListener\(\);/, "domain reload must close the listener for natural fallback");
   assert.doesNotMatch(capability, new RegExp(escape(privateCommand)));
   assert.doesNotMatch(preflight, new RegExp(escape(privateCommand)));

@@ -8,7 +8,7 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "counter", bridgeCommand: "project-tool.run", toolName: "profiler.counter", buildArgs: profilerArgs },
   { group: "profiler", command: "memory", bridgeCommand: "project-tool.run", toolName: "profiler.memory", buildArgs: profilerArgs },
   { group: "profiler", command: "frame", bridgeCommand: "project-tool.run", toolName: "profiler.frame", buildArgs: profilerArgs },
-  { group: "profiler", command: "capture", bridgeCommand: "project-tool.run", toolName: "profiler.capture", buildArgs: profilerArgs, supportsJob: true, destructiveHint: true },
+  { group: "profiler", command: "capture", bridgeCommand: "project-tool.run", toolName: "profiler.capture", buildArgs: profilerArgs, destructiveHint: true },
   { group: "profiler", command: "export", bridgeCommand: "project-tool.run", toolName: "profiler.export", buildArgs: profilerArgs, destructiveHint: true },
   { group: "profiler", command: "status", bridgeCommand: "project-tool.run", toolName: "profiler.status", buildArgs: profilerArgs },
   { group: "profiler", command: "modules", bridgeCommand: "project-tool.run", toolName: "profiler.modules", buildArgs: profilerArgs },

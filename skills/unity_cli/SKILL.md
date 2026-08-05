@@ -1,6 +1,6 @@
 ---
 name: unity_cli
-description: 当任务涉及 Unity Editor 或 Unity 时都优先使用本 Skill。该 Skill 支持通过 `unity_cli` 连接并读取和操作 Unity，包括但不限于查看/修改场景、GameObject、Prefab、日志、资源、Package 和项目设置，读取项目上下文，运行测试、构建、截图，诊断 Bridge/target/instance/job，以及处理项目自定义 Tool/Context。触发词包括 Unity、Editor、Scene、GameObject、Prefab、Asset、Build、Test、GameView、SceneView、Bridge、target、instance、job、截图、打包、场景修改、资源检查。
+description: 当任务涉及 Unity Editor 或 Unity 时都优先使用本 Skill。该 Skill 支持通过 `unity_cli` 连接并读取和操作已打开的 Unity Editor，包括但不限于查看/修改场景、GameObject、Prefab、日志、资源、Package 和项目设置，读取项目上下文，运行测试、构建、截图，诊断 Bridge、target 和 instance，以及处理项目自定义 Tool/Context。触发词包括 Unity、Editor、Scene、GameObject、Prefab、Asset、Build、Test、GameView、SceneView、Bridge、target、instance、截图、打包、场景修改、资源检查。
 ---
 
 # unity_cli — AI 操作 Unity 的入口
@@ -44,7 +44,7 @@ unity_cli context describe <context>
 unity_cli context read <context> --input '<json>'
 ```
 
-不要猜 `scene`、`asset`、`package`、`build`、`test`、`editor` 等 Unity 能力域是顶层命令；Unity 能力通过 `tools run <tool>` 或 `context read <context>` 暴露。CLI 控制面才使用 `init`、`extensions`、`target`、`instances`、`jobs`、`batch`、`doctor`。扩展管理使用 `extensions list`、`extensions install`、`extensions remove`、`extensions doctor`。
+不要猜 `scene`、`asset`、`package`、`build`、`test`、`editor` 等 Unity 能力域是顶层命令；Unity 能力通过 `tools run <tool>` 或 `context read <context>` 暴露。CLI 控制面只使用 `init`、`extensions`、`target`、`instances`、`doctor`。扩展管理使用 `extensions list`、`extensions install`、`extensions remove`、`extensions doctor`。
 
 ## 工具地图
 
@@ -66,21 +66,17 @@ unity_cli tools group list <group>
 unity_cli tools describe <tool>
 ```
 
-不要从工具名猜输入字段与参数。`describe` 里看清楚 `inputSchema.required`、示例、风险字段、PlayMode 支持和返回结构后再构造 `--input`。
+不要从工具名猜输入字段与参数。`describe` 里看清楚 `inputSchema.required`、示例、副作用、PlayMode 支持和返回结构后再构造 `--input`。
 
 ## 通用协议
 
 CLI 输出统一是 JSON envelope。
 
-成功时重点看：
+成功 envelope 只包含：
 
 - `ok`：是否成功。
-- `requestId`：本次调用 ID，用于排查日志。
-- `data`：业务结果。
-- `warnings`：非阻断警告。
-- `logsRef`：日志引用。
-- `jobId`：长任务 ID，后续用 `jobs status/logs/cancel`。
-- `durationMs`：执行耗时。
+- `requestId`：本次调用 ID。
+- `data`：最终业务结果。
 
 失败时重点看：
 
@@ -94,12 +90,11 @@ Descriptor 常用字段：
 
 - `source`：`built-in`、`extension` 或 `project`。
 - `inputSchema` / `outputSchema`：输入输出契约。
-- `destructiveHint`：为 `true` 时需要 `--yes`。
-- `supportsDryRun`：是否可先 `--dry-run` 预览。
-- `sideEffects` / `riskLevel`：副作用和风险等级。
+- `destructiveHint`：可能不可逆效果的描述信息，不构成执行门。
+- `supportsDryRun`：是否支持可选的 `--dry-run` 预览。
+- `sideEffects`：副作用说明。
 - `playModeSupport`：`supported`、`session-affecting`、`editor-only`、`runtime-only`、`unknown`。
 - `target` / `availabilityScope`：作用于 Editor、Runtime 还是两者，以及可用范围。
-- `supportStatus`：实现形态，如 `live-bridge`、`bridge-job`、`batch-job`、`cli-only`。
 - `requiresPackages`：需要的 Unity package 或扩展依赖。
 
 大输出协议：
@@ -115,17 +110,18 @@ Descriptor 常用字段：
 - 执行前先确认 canonical project identity；在当前 discovery、describe 和执行命令上显式传完整 `--instance`，或从目标 Unity 项目 CWD 调用。
 - 不要读取 Bridge 注册文件、listener、端口或 URL，也不要直接 ping transport；用 `instances`、`doctor` 和 `context read editor.state`。
 - compile/import/domain reload/listener restart 由 session supervisor 在同一 absolute deadline 内透明处理；需要即时状态时读 `context read editor.state --input '{}'`，不要轮询或手工重放 mutation。
-- `destructiveHint:true` 的 Tool 先 `--dry-run`（如果支持），确认计划输出后再加 `--yes`。
+- 公开 Tool 与 CLI 控制面调用本身即授权。`destructiveHint`、`sideEffects` 和 `supportsDryRun` 描述效果与可选预览，不能阻止执行；需要预览时才使用 `--dry-run`。
 - `playModeSupport:"editor-only"` 不要在 PlayMode 下运行；`runtime-only` 通常需要先进入 PlayMode；遇到 `E_RUNTIME_NOT_READY` 按 `nextActions` 处理。
 - 缺少必填输入会返回 `E_SCHEMA_INVALID`；回到 `describe` 修正 schema，而不是猜字段名。
-- 能用内置 Tool 或 Context 解决时，不要绕过 CLI；一次性 Unity 侧代码执行才考虑 `code.exec --yes`。
-- 长任务返回 `jobId` 时，用 `unity_cli jobs status <jobId>`、`unity_cli jobs logs <jobId>`、`unity_cli jobs cancel <jobId> --yes` 管理。
+- 弹窗 blocker 出现在原错误的 `details.blockers` 时，先读只读 Context `editor.dialogs`，再用 `editor.dialog.click` 传入返回的 dialogId 和规范化 button label；任意当前可见 modal 的任意 enabled button 都可操作。
+- 能用内置 Tool 或 Context 解决时，不要绕过 CLI；一次性 Unity 侧代码执行才考虑 `code.exec`。
+- 所有需要 Unity 执行的 Tool 都通过已打开的 Editor direct-final 返回结果；`build.run`、`test.run`、`editor.refresh`、`code.exec` 和需要刷新 Editor 的 Package Tool 会在同一次调用中等待最终业务结果。
 
 ## 自定义 Tool / Context
 
 当内置能力不够时，按这个顺序决策：
 
-1. 一次性 Unity 侧操作：使用 `tools run code.exec --yes` 动态执行 C#。
+1. 一次性 Unity 侧操作：使用 `tools run code.exec` 动态执行 C#。
 2. 反复需要的只读信息：创建自定义 Context，实现 `IUnityCliContext<TReq,TRes>`，必须声明 `Description` 和只读边界。
 3. 反复需要的操作能力：创建自定义 Tool，实现 `IUnityCliTool<TReq,TRes>`，必须声明 `Summary`、风险和 Play Mode 语义。
 
@@ -141,7 +137,7 @@ Descriptor 常用字段：
 unity_cli context read tools.custom
 unity_cli tools group list <real-group> --include-custom
 unity_cli tools describe <custom-tool> --include-custom
-unity_cli tools run <custom-tool> --include-custom --input '<json>'
+unity_cli tools run <custom-tool> --input '<json>' --instance <id|projectPath|alias>
 
 unity_cli context list --include-custom
 unity_cli context describe <custom-context> --include-custom

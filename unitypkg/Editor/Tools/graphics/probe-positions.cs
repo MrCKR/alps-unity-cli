@@ -12,7 +12,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } public string Type { get; set; } public string Positions { get; set; } }
         public sealed class Result { public GameObjectTargetRef Target { get; set; } public string ProbeType { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.probe-positions", Summary = "Read or update probe positions for a ReflectionProbe or LightProbeGroup.", Description = "Resolve a probe component by type (reflection or light), then optionally set positions.", Group = "graphics", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read probe positions", Input = new Request { Target = "Probes" } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.probe-positions", Summary = "Read or update probe positions for a ReflectionProbe or LightProbeGroup.", Description = "Resolve a probe component by type (reflection or light), then optionally set positions.", Group = "graphics",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read probe positions", Input = new Request { Target = "Probes" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var probeType = r.Type ?? "reflection";

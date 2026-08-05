@@ -29,7 +29,6 @@ namespace UnityCli
             Summary = "Delete an Assets/ asset file or folder; destructive, supports --dry-run preview.",
             Description = "Delete an Assets/ asset file or folder through AssetDatabase. Destructive: removes a persisted asset. Supports --dry-run to preview the planned deletion without removing anything.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "asset-delete" },
@@ -62,18 +61,17 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_DELETE_FAILED", "Failed to delete asset: " + path, "Check Unity Console and file permissions.");
             }
-            AssetDatabase.Refresh();
             var fullPath = AssetToolSupport.AssetFullPath(path);
             var deleted = await ctx.Wait.Until(
                 () => !File.Exists(fullPath)
                     && !Directory.Exists(fullPath)
-                    && string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path))
+                    && !AssetDatabase.IsValidFolder(path)
                     && AssetDatabase.LoadMainAssetAtPath(path) == null,
                 TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)),
                 ct);
             var observedExists = File.Exists(fullPath)
                 || Directory.Exists(fullPath)
-                || !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path))
+                || AssetDatabase.IsValidFolder(path)
                 || AssetDatabase.LoadMainAssetAtPath(path) != null;
             if (!deleted || observedExists)
             {

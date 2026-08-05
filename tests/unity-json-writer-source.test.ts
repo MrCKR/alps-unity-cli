@@ -1,68 +1,49 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const editorUrl = new URL("../../unitypkg/Editor/", import.meta.url);
-const removedWriterUrl = new URL("Infrastructure/UnityCliJsonWriter.cs", editorUrl);
-const serializerUrl = new URL("Infrastructure/UnityCliSerializer.cs", editorUrl);
-const envelopeFactoryUrl = new URL("Protocol/ProtocolEnvelopeFactory.cs", editorUrl);
-const protocolEnvelopeUrl = new URL("Protocol/envelope.cs", editorUrl);
-const jsonUrl = new URL("Infrastructure/UnityCliJson.cs", editorUrl);
-const bridgeHttpUrl = new URL("Bridge/BridgeHttpServer.cs", editorUrl);
-const bridgeUrl = new URL("UnityCliBridge.cs", editorUrl);
-const batchUrl = new URL("UnityCliBatch.cs", editorUrl);
-const projectToolsUrl = new URL("ProjectTools/ProjectToolRegistry.cs", editorUrl);
-
-test("UnityCliSerializer is the only strict JSON implementation", async () => {
-  await assert.rejects(access(removedWriterUrl));
-  const serializer = await readFile(serializerUrl, "utf8");
-  assert.match(serializer, /public static class UnityCliSerializer/);
-  assert.match(serializer, /public static string Serialize\(object value\)/);
-  assert.match(serializer, /public static T Deserialize<T>\(string json\)/);
-  assert.match(serializer, /public static object Parse\(string json\)/);
-  assert.match(serializer, /JSON payload contains trailing tokens/);
-  assert.match(serializer, /JSON does not support non-finite numbers/);
-  assert.match(serializer, /entries\.Sort\(\(left, right\) => string\.CompareOrdinal/);
-  assert.doesNotMatch(serializer, /UnityCliJsonWriter/);
+test("UnityCliSerializer is the one strict JSON reader and writer", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliSerializer.cs", import.meta.url), "utf8");
+  assert.match(source, /public static string Serialize\(object value\)/);
+  assert.match(source, /public static object Deserialize\(string json, Type targetType\)/);
+  assert.match(source, /if \(index != json\.Length\) throw new FormatException\("JSON payload contains trailing tokens\."\)/);
+  assert.match(source, /double\.IsNaN\(value\) \|\| double\.IsInfinity\(value\)/);
+  assert.match(source, /float\.IsNaN\(single\) \|\| float\.IsInfinity\(single\)/);
+  assert.match(source, /Canonical JSON does not support non-finite numbers/);
+  assert.doesNotMatch(source, /UnityCliJsonWriter|JavaScriptSerializer|JsonUtility/);
 });
 
-test("ProtocolEnvelopeFactory owns success and structured error construction", async () => {
-  const [factory, protocol, serializer] = await Promise.all([
-    readFile(envelopeFactoryUrl, "utf8"), readFile(protocolEnvelopeUrl, "utf8"), readFile(serializerUrl, "utf8")
+test("Bridge HTTP and protocol envelopes serialize through UnityCliSerializer only", async () => {
+  const [http, protocol, bridge] = await Promise.all([
+    readFile(new URL("../unitypkg/Editor/Bridge/BridgeHttpServer.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/Protocol/ProtocolEnvelopeFactory.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/UnityCliBridge.cs", import.meta.url), "utf8"),
   ]);
-
-  assert.match(factory, /internal static class ProtocolEnvelopeFactory/);
-  assert.match(factory, /public static SuccessEnvelope Success\(string requestId, object data/);
-  assert.match(factory, /public static ErrorEnvelope Error\([\s\S]*object details = null,[\s\S]*IEnumerable<string> nextActions = null/);
-  assert.match(factory, /Details = details/);
-  assert.match(factory, /NextActions = \(nextActions \?\? Array\.Empty<string>\(\)\)/);
-  assert.match(protocol, /class SuccessEnvelope/);
-  assert.match(protocol, /class ErrorEnvelope/);
-  assert.match(protocol, /class ToolError/);
-  assert.match(serializer, /public static class UnityCliSerializer/);
-  assert.match(serializer, /public static string Serialize\(object value\)/);
-  assert.match(serializer, /public static object Deserialize\(string json, Type targetType\)/);
+  assert.match(http, /BridgeRequest\.DeserializeStrict\(DecodeRequestBody\(rawBody\)\)/);
+  assert.match(http, /UnityCliSerializer\.Serialize\(UnityCli\.Protocol\.ProtocolEnvelopeFactory\.(?:Success|Error)/);
+  assert.match(bridge, /UnityCliSerializer\.Serialize\(/);
+  assert.match(protocol, /public static SuccessEnvelope Success/);
+  assert.match(protocol, /ErrorEnvelope/);
+  assert.doesNotMatch(`${http}\n${bridge}`, /UnityCliJsonWriter/);
 });
 
-test("UnityCliSerializer is the protocol envelope serialization boundary", async () => {
-  const [json, bridgeHttp, bridge, batch, projectTools] = await Promise.all([
-    readFile(jsonUrl, "utf8"), readFile(bridgeHttpUrl, "utf8"), readFile(bridgeUrl, "utf8"),
-    readFile(batchUrl, "utf8"), readFile(projectToolsUrl, "utf8")
+test("Bridge fallback errors do not expose exception text or depend on internal logs", async () => {
+  const http = await readFile(new URL("../unitypkg/Editor/Bridge/BridgeHttpServer.cs", import.meta.url), "utf8");
+  assert.doesNotMatch(http, /Unhandled bridge error:\s*"?\s*\+\s*exception\.Message/);
+  assert.doesNotMatch(http, /Check UnityCliBridge\.log/);
+  assert.match(http, /WriteLog\("handle_http_unhandled " \+ exception\.GetType\(\)\.Name \+ ": " \+ exception\.Message\)/);
+  assert.match(http, /"Unhandled Bridge error\."/);
+});
+
+test("typed Tool and Context schemas use the shared serializer value tree", async () => {
+  const [tools, contexts, schema] = await Promise.all([
+    readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolSchemaValidator.cs", import.meta.url), "utf8"),
   ]);
-  const combined = [json, bridgeHttp, bridge, batch].join("\n");
-
-  assert.match(json, /UnityCliSerializer\.Serialize\(UnityCli\.Protocol\.ProtocolEnvelopeFactory\.Success/);
-  assert.match(json, /UnityCliSerializer\.Serialize\(UnityCli\.Protocol\.ProtocolEnvelopeFactory\.Error/);
-  assert.match(bridgeHttp, /BridgeHealthJson\(\)[\s\S]*UnityCliSerializer\.Serialize\(UnityCli\.Protocol\.ProtocolEnvelopeFactory\.Success/);
-  assert.match(bridgeHttp, /E_BRIDGE_ROUTE_NOT_FOUND[\s\S]*ProtocolEnvelopeFactory\.Error/);
-  assert.match(bridge, /ProtocolEnvelopeFactory\.Success\(request\.RequestId, data\)/);
-  assert.match(batch, /ProtocolEnvelopeFactory\.Success/);
-  assert.match(batch, /ProtocolEnvelopeFactory\.Error/);
-  assert.doesNotMatch(combined, /UnityCliEnvelope/);
-
-  assert.match(projectTools, /InputSchema = UnityCliSchemaDeriver\.DeriveSchema\(typeof\(TReq\)\)/);
-  assert.match(projectTools, /OutputSchema = UnityCliSchemaDeriver\.DeriveSchema\(typeof\(TRes\)\)/);
-  assert.match(projectTools, /var terminalData = CompleteProjectToolSuccess/);
-  assert.match(projectTools, /RecordToolCompletionEvidence\(request, definition, result, terminalData\)/);
-  assert.doesNotMatch(projectTools, /ProtocolEnvelopeFactory\.(?:Success|Error)/);
+  assert.match(tools, /UnityCliSerializer\.Parse\(definition\.InputSchema\)/);
+  assert.match(tools, /UnityCliSerializer\.Parse\(definition\.OutputSchema\)/);
+  assert.match(contexts, /UnityCliSerializer\.Parse\(definition\.InputSchema\)/);
+  assert.match(contexts, /UnityCliSerializer\.Parse\(definition\.OutputSchema\)/);
+  assert.match(schema, /UnityCliSerializer\.(?:Deserialize|Parse)/);
 });

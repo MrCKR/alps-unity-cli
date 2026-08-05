@@ -15,7 +15,7 @@ Tool 用于动作，Context 用于观察。
 Tool 必须满足：
 
 - 任何可能修改 Unity 状态、项目文件、资源、Package、场景、GameObject、Component、PlayMode 状态或产生 artifact 的能力，都必须设计为 Tool。
-- descriptor 必须暴露 AI 调用所需的 `name`、`summary`、`description`、`group`、`inputSchema`、`outputSchema`、`destructiveHint`、`supportStatus`、`target`、`availabilityScope`、`playModeSupport`；内部路由字段不得混入公开 descriptor。
+- descriptor 必须暴露 AI 调用所需的 `name`、`summary`、`description`、`group`、`inputSchema`、`outputSchema`、`destructiveHint`、`supportsDryRun`、`target`、`availabilityScope`、`playModeSupport`；内部路由和完成策略字段不得混入公开 descriptor。
 - 输出必须机器可读并返回稳定业务字段，不得只返回自然语言说明。
 - 错误必须结构化，包含稳定的 `error.code`、`message`、`transient`、`retryAfterMs`、`nextActions`。
 
@@ -56,8 +56,8 @@ Context 必须满足：
 - `inputSchema` 字段具体、必填项准确、字段名稳定。
 - `outputSchema` 描述主要成功业务字段。
 - examples 可直接指导典型输入构造。
-- 风险字段准确：`destructiveHint`、`supportsDryRun`、`sideEffects`、`riskLevel`、`permissions`。
-- 执行状态字段准确：`handler`、`supportStatus`、`target`、`availabilityScope`、`playModeSupport`、`requiresPackages`。
+- 风险字段准确：`destructiveHint`、`supportsDryRun`、`sideEffects`、`permissions`。
+- 可用性字段准确：`target`、`availabilityScope`、`playModeSupport`、`requiresPackages`；`handler`、support status 和 completion contract 只允许内部使用。
 - 错误路径提供明确 `nextActions`，不能让 AI 猜。
 
 ### Summary 路由字段
@@ -78,7 +78,7 @@ Tool summary 必须：
 
 - 描述单一动作、作用对象和主要结果，让 AI 能在同 group 内选对 Tool。
 - 与邻近 Tool 区分关键语义，如 source text / structured data、asset / scene object、offline cache / live reflection、summary read / deep read。
-- 对影响路由的风险或执行模式给出短提示，如 `executes C#`、`writes asset files`、`requires --yes`、`dry-run supported`、`runtime-only`。
+- 对影响路由的风险或执行模式给出短提示，如 `executes C#`、`writes asset files`、`dry-run supported`、`runtime-only`。
 - 不列完整参数；参数、边界、错误路径和副作用属于 `description`、schema 和 examples。
 - 不承诺未支持的状态、对象、持久化结果或副作用。
 - 不写 `Run <tool>`、`Manage <domain>`、`Tool for <name>` 等同义反复。
@@ -110,7 +110,7 @@ Describe 必须按需覆盖：
 - 对象、动作范围和主要成功结果。
 - 必填输入、默认行为、互斥字段、字段优先级、路径或目标解析顺序。
 - 相邻工具选择，特别是 alias、兼容入口、fallback 和推荐主入口。
-- 持久化、副作用、PlayMode、session-affecting、`--yes`、`--dry-run` 语义。
+- 持久化、副作用、PlayMode、session-affecting 与 `--dry-run` 语义。
 - 大输出的分页、截断、continuation、artifact path、`inlineBase64` 等控制。
 - Context 的只读边界，不得暗示刷新、修改或触发 Unity 状态变化。
 
@@ -148,20 +148,28 @@ Describe 不得包含：
 - 只修改场景内存或会话状态，如 GameObject/Component 增删改、Console/Profiler 清空、选择与编辑器工具切换、Prefab unpack、场景卸载。
 - 新建场景内存对象，如 GameObject、Canvas、UI 元素。
 
-`--yes` 与 `--dry-run`：
+调用授权与 `--dry-run`：
 
-- `destructiveHint: true` 的 Tool 必须要求 `--yes`。
-- destructive Tool 鼓励支持 `--dry-run`，并返回机器可读的 planned effects。
-- 非 destructive Tool 也可以支持 `--dry-run` 预览内存修改，这与 `destructiveHint` 无关。
+- 调用公开 Tool 或 CLI 控制面即为授权。CLI 不得因 `destructiveHint`、`sideEffects`、任意代码或持久化效果而要求额外确认、预定义按钮列表或意图复核。
+- `destructiveHint`、`sideEffects` 与 `supportsDryRun` 是准确、机器可读的描述信息，不得阻止执行。
+- Tool 可以支持 `--dry-run` 并返回机器可读的 planned effects；调用方可选用它预览，不能以未使用 dry-run 拒绝实际调用。
 - 不得用模糊描述隐藏副作用。
 
-破坏性声明必须三层一致：
+破坏性描述必须三层一致：
 
 1. Bridge spec `destructiveHint`：`src/bridge/domains/*.ts`。
 2. CLI 安全策略：`src/security-policy.ts`。
 3. C# descriptor / registry：`ToolDescriptor.DestructiveHint` 或运行时 descriptor。
 
-任一层声明 destructive，业务 Tool 就必须要求 `--yes`；修改时三层必须同步。CLI 路径和 C# `RegisterCommand` 的真实执行语义不得冲突。
+任一层声明 destructive 时三层必须同步；该声明不构成授权门。CLI 路径和 C# `RegisterCommand` 的真实执行语义不得冲突。
+
+## 临时文件与机制状态
+
+能力（Tool、Context、Bridge handler、Extension）产生的所有临时文件与机制状态必须遵守 AGENTS.md《临时文件与机制状态》三条铁律：
+
+- 机制状态（互斥锁、进行中标记、会话标记）只对 Unity 本次启动有效，必须携带本次启动标识，重启作废。
+- 临时文件数量与大小不得随调用次数和时间无限增长：状态文件一类一个固定路径、终态即删；产物（artifacts）保留最新 100 个；日志按大小滚动并保留最近 2 个。禁止一请求一文件。
+- 临时文件位置：用户级 `%LOCALAPPDATA%\UnityCli\.temp\`；项目内 `Library\UnityCli\`。新增能力不得在其他位置写临时文件。
 
 ## 输出与错误
 
@@ -172,7 +180,8 @@ Describe 不得包含：
 - `ok: true`
 - `requestId`
 - `data`
-- 必要时包含 `warnings`、`logsRef`、`jobId`、`durationMs`
+- 必要时包含 `warnings`
+- `data` 只包含业务 Result DTO；内部日志、审计、proof、通用耗时和执行状态不得公开
 
 失败：
 
@@ -183,6 +192,11 @@ Describe 不得包含：
 - `error.transient`
 - `error.retryAfterMs`
 - `error.nextActions`
+- 仅在需要机器分支时包含业务 `error.details`
+
+`error` 对象是闭集，不得重复 `requestId` 或附加日志、审计、endpoint、port、listener identity、native window handle、Windows command line。blocker 只能使用公开 DTO；弹窗 blocker 使用 `type="dialog"`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 与 `confidence`。
+
+超时或终态前断连统一使用 `E_EXECUTION_TIMEOUT`。调用方负责观察业务状态并判断是否提交新的调用；系统不提供请求级恢复或重放拦截。跨 reload 的同次调用续接可以保留。审计只记录 session 级 append 日志。
 
 禁止：
 

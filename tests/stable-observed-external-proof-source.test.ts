@@ -58,7 +58,7 @@ test("VFX actions use stable observable state and profiler artifacts retain exte
     source("../unitypkg/Editor/Tools/profiler/capture.cs"),
     source("../unitypkg/Editor/Tools/profiler/export.cs"),
     source("../unitypkg/Editor/Tools/profiler/load.cs"),
-    source("../unitypkg/Editor/Tools/asset/refresh.cs"),
+    source("../unitypkg/Editor/Infrastructure/UnityCliAssetRefreshCoordinator.cs"),
     source("../unitypkg/Editor/Tools/editor/menu.cs")
   ]);
 
@@ -72,7 +72,11 @@ test("VFX actions use stable observable state and profiler artifacts retain exte
   assert.match(load, /ProfilerToolSupport\.FileSha256/);
   assert.match(load, /Wait\.UntilStable/);
   assert.match(assetRefresh, /asset\.refresh requires one asset path/);
-  assert.match(assetRefresh, /Wait\.UntilStable/);
+  assert.match(assetRefresh, /waiting_stable/);
+  const assetRefreshPersistIndex = assetRefresh.indexOf('Update(x => x["phase"] = "waiting_stable")');
+  const assetRefreshEffectIndex = assetRefresh.indexOf("AssetDatabase.ImportAsset");
+  assert.ok(assetRefreshPersistIndex >= 0 && assetRefreshPersistIndex < assetRefreshEffectIndex, "asset.refresh must persist the post-dispatch phase before ImportAsset can reload the domain.");
+  assert.match(assetRefresh, /AssetDatabase\.AssetPathToGUID/);
   assert.doesNotMatch(assetRefresh, /AssetDatabase\.Refresh\(/);
   assert.match(menu, /if \(!saveScene\)/);
   assert.match(menu, /Wait\.UntilStable/);

@@ -45,7 +45,6 @@ export async function getDocs(request: DocsGetRequest, runtime: DocsServiceRunti
       const doc = await hydrateContent(matches[0], cache.root);
       const format = outputFormat(request.format);
       return {
-        command: "docs.get",
         mode: "offline",
         requiresUnity: false,
         source: cacheSource(cache) as DocsGetResult["source"],
@@ -81,7 +80,6 @@ export async function searchDocs(request: DocsSearchRequest, runtime: DocsServic
     const page = paginate(items, request);
     const format = outputFormat(request.format);
     return {
-      command: "docs.search",
       mode: "offline",
       requiresUnity: false,
       source: cacheSource(cache) as DocsSearchResult["source"],
@@ -124,7 +122,6 @@ async function getDocsOnline(request: DocsGetRequest, runtime: DocsServiceRuntim
     const format = outputFormat(request.format);
     const doc = { name: request.api, title, summary: firstSentence(content), content, url, kind: "online" };
     return {
-      command: "docs.get",
       mode: "online",
       requiresUnity: false,
       source: { kind: "online", url, offlineFallbackFrom: offlineError.code },
@@ -155,7 +152,6 @@ async function searchDocsOnline(request: DocsSearchRequest, runtime: DocsService
   const page = paginate(extractSearchItems(await response.text(), request.query), request);
   const format = outputFormat(request.format);
   return {
-    command: "docs.search",
     mode: "online",
     requiresUnity: false,
     source: { kind: "online", url, offlineFallbackFrom: offlineError.code },

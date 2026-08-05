@@ -456,7 +456,7 @@ namespace UnityCli
                 Token child;
                 if (!token.ObjectValue.TryGetValue(pair.Key, out child))
                 {
-                    if (pair.Value.IsDefined(typeof(UnityCliRequiredAttribute), true)) throw new FormatException("Missing required JSON field for " + type.Name + ": " + pair.Key + ".");
+                    if (pair.Value.IsDefined(typeof(UnityCliRequiredAttribute), true) || pair.Value.IsDefined(typeof(UnityCliPresenceRequiredAttribute), true)) throw new FormatException("Missing required JSON field for " + type.Name + ": " + pair.Key + ".");
                     continue;
                 }
                 if (child.Type == TokenType.Null && pair.Value.IsDefined(typeof(UnityCliRequiredAttribute), true))

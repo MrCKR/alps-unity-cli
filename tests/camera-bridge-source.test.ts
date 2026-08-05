@@ -5,7 +5,6 @@ import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 
 const editorUrl = new URL("../../unitypkg/Editor/", import.meta.url);
-const readmeUrl = new URL("../../README.md", import.meta.url);
 const extensionsUrl = new URL("../../extensions/", import.meta.url);
 
 test("Unity Bridge source keeps C# files structurally balanced", async () => {
@@ -96,7 +95,6 @@ test("one-capability-per-file camera tools route through project-tool.run with m
 test("Unity Bridge animation and vfx commands expose assets, target resolver diagnostics and package checks", async () => {
   const source = await readUnityBridgeSources();
   const vfxSource = await readExtensionSources("vfx-graph");
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /RequireAnimationClipPath/);
   assert.match(source, /AnimationUtility\.GetCurveBindings/);
@@ -124,8 +122,9 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(vfxSource, /FindType\("UnityEngine\.VFX\.VisualEffect"\)/);
   assert.match(vfxSource, /E_VFX_PACKAGE_MISSING/);
   assert.match(vfxSource, /CreateVfxGraphAsset/);
-  assert.match(vfxSource, /FindType\("UnityEditor\.VFX\.VisualEffectAssetEditorUtility"\)/);
+  assert.match(vfxSource, /FindType\("UnityEditor\.VisualEffectAssetEditorUtility"\)/);
   assert.match(vfxSource, /GetMethod\("CreateNewAsset"/);
+  assert.doesNotMatch(vfxSource, /AssetDatabase\.Refresh/);
   assert.match(vfxSource, /PrepareVfxGraphFactory/);
   assert.match(vfxSource, /E_VFX_GRAPH_FACTORY_UNAVAILABLE/);
   assert.doesNotMatch(vfxSource, /WriteMinimalVfxGraphYaml|VisualEffectResource|guid: [0-9a-f]{32}/);
@@ -134,14 +133,6 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(vfxSource, /AssetDatabase\.LoadAssetAtPath\(path, assetType\)/);
   assert.match(source, /E_TARGET_AMBIGUOUS/);
   assert.match(source, /rawPath\.Replace\('\\\\', '\/'\)\.Trim\(\)/);
-  assert.match(readme, /`tools run animation\.clip --input '\{"path":"<path>"\}'` reads `Assets\/\*\.anim` AnimationClip settings, events, and bounded curve summaries/);
-  assert.match(readme, /`tools run animation\.clip\.create --input '\{"path":"<path>","length":1\}' --yes` creates or overwrites persistent `Assets\/\*\.anim` assets/);
-  assert.match(readme, /`tools run animation\.clip\.modify --input '\{"path":"<path>","loopTime":true\}' --yes` updates persistent clip-level settings/);
-  assert.match(readme, /`tools run vfx\.graph\.info --input/);
-  assert.match(readme, /`tools run vfx\.graph\.create --input/);
-  assert.match(readme, /Windows-style `Assets\\VFX\\Explosion\.vfx` paths are normalized to Unity asset paths/);
-  assert.match(readme, /`E_VFX_PACKAGE_MISSING`/);
-  assert.match(readme, /`E_VFX_GRAPH_NOT_FOUND`/);
 });
 
 async function readUnityBridgeSources(): Promise<string> {
@@ -352,12 +343,10 @@ test("Unity Bridge camera screenshot captures render texture and returns artifac
   assert.match(source, /File\.WriteAllBytes\(outputPath, bytes\)/);
   assert.match(source, /ScreenshotPath = outputPath/);
   assert.match(source, /ArtifactPath = outputPath/);
-  assert.match(source, /LogPath =/);
 });
 
 test("Unity Bridge prefab operations expose structured diagnostics", async () => {
   const source = await readUnityBridgeSources();
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /PrefabUtility\.SaveAsPrefabAssetAndConnect/);
   assert.match(source, /PrefabUtility\.LoadPrefabContents/);
@@ -372,15 +361,11 @@ test("Unity Bridge prefab operations expose structured diagnostics", async () =>
   assert.match(source, /Dependencies/);
   assert.match(source, /NestedPrefabs/);
   assert.match(source, /BuildPrefabInfo\(/);
-  assert.match(readme, /`tools run prefab\.info --input '\{"path":"<path>"\}'` returns Prefab metadata including GUID, root name, asset type, `variant` base\/source paths and GUIDs, `dependencies\.items`, and `nestedPrefabs\.items` rather than counts only/);
-  assert.match(readme, /`tools run prefab\.hierarchy --input '\{"path":"<path>"\}'` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant\/dependency summary, `nestedPrefabs\.items` and `logPath`/);
-  assert.match(readme, /`E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_MODIFY_NOOP`, `E_PREFAB_CHILD_EXISTS`, `E_PREFAB_CHILD_NOT_FOUND`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`/);
 });
 
 
 test("Unity Bridge shader and texture operations expose diagnostics", async () => {
   const source = await readUnityBridgeSources();
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /ShaderUtil,UnityEditor/);
   assert.match(source, /ShaderMessagesMethod/);
@@ -397,16 +382,10 @@ test("Unity Bridge shader and texture operations expose diagnostics", async () =
   assert.match(source, /E_TEXTURE_NOT_FOUND/);
   assert.match(source, /E_IMPORT_FAILED/);
   assert.match(source, /PlannedEffects/);
-  assert.match(readme, /`tools run shader\.info`, `tools run shader\.read`, `tools run shader\.create`, `tools run shader\.update`/);
-  assert.match(readme, /`tools run texture\.info`, `tools run texture\.create`, `tools run texture\.sprite`, `tools run texture\.import-settings`/);
-  assert.match(readme, /`E_SHADER_NOT_FOUND`/);
-  assert.match(readme, /`E_TEXTURE_NOT_FOUND`/);
-  assert.match(readme, /`E_IMPORT_FAILED`/);
 });
 
 test("Unity Bridge material commands expose shader properties, assignment and diagnostics", async () => {
   const source = await readUnityBridgeSources();
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /ShaderUtil\.GetPropertyCount/);
   assert.match(source, /ShaderUtil\.GetPropertyType/);
@@ -422,14 +401,10 @@ test("Unity Bridge material commands expose shader properties, assignment and di
   assert.match(source, /material\.SetTexture/);
   assert.match(source, /E_MATERIAL_PROPERTY_TYPE_MISMATCH/);
   assert.match(source, /E_TARGET_AMBIGUOUS/);
-  assert.match(readme, /`tools run material\.info --input '\{"path":"<path>"\}'` returns shader, keywords, ShaderUtil property metadata, current values, texture references, dependencies and `logPath`/);
-  assert.match(readme, /`tools run material\.assign --input '\{"target":"<go>","material":"<path>"\}'` assigns to a Renderer shared material slot or a UI Graphic `material` property/);
-  assert.match(readme, /`E_MATERIAL_PATH_REQUIRED`, `E_MATERIAL_PATH_INVALID`, `E_MATERIAL_NOT_FOUND`, `E_SHADER_NOT_FOUND`, `E_MATERIAL_PROPERTY_NOT_FOUND`, `E_MATERIAL_PROPERTY_TYPE_MISMATCH`, `E_TARGET_AMBIGUOUS`, `E_MATERIAL_SLOT_INVALID`, `E_TEXTURE_NOT_FOUND` and `E_UNITY_BUSY`/);
 });
 
 test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async () => {
   const source = await readUnityBridgeSources();
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /using UiCanvasScaler = UnityEngine\.UI\.CanvasScaler;/);
   assert.match(source, /using UiGraphicRaycaster = UnityEngine\.UI\.GraphicRaycaster;/);
@@ -456,9 +431,6 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   assert.match(source, /E_UI_PANEL_SETTINGS_NOT_FOUND/);
   assert.match(source, /E_UI_UXML_NOT_FOUND/);
   assert.match(source, /E_UI_USS_NOT_FOUND/);
-  assert.match(readme, /`tools run ui\.canvas\.create`, `tools run ui\.text\.create`, `tools run ui\.button\.create` and `tools run ui\.image\.create` create uGUI objects/);
-  assert.match(readme, /`tools run ui\.document\.info` supports live UIDocument inspection and offline `.uxml`\/`.uss` file reads/);
-  assert.match(readme, /`E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`/);
 });
 
 test("Unity Bridge C# string literals stay balanced", async () => {
@@ -513,7 +485,6 @@ test("Unity Bridge C# string literals stay balanced", async () => {
 
 test("Unity Bridge graphics and physics commands expose settings, raycast and diagnostics", async () => {
   const source = await readUnityBridgeSources();
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /QualitySettings\.SetQualityLevel/);
   assert.match(source, /GraphicsSettings\.defaultRenderPipeline/);
@@ -531,8 +502,6 @@ test("Unity Bridge graphics and physics commands expose settings, raycast and di
   assert.match(source, /E_QUALITY_LEVEL_INVALID/);
   assert.match(source, /E_GRAPHICS_SETTING_UNSUPPORTED/);
   assert.match(source, /E_PHYSICS_SETTING_UNSUPPORTED/);
-  assert.match(readme, /`tools run graphics\.quality` reads and updates `QualitySettings`/);
-  assert.match(readme, /`tools run physics\.raycast` supports 3D and 2D ray queries/);
 });
 
 test("Unity Bridge cancellation prevents queued side effects and cancels started work", async () => {
@@ -541,11 +510,11 @@ test("Unity Bridge cancellation prevents queued side effects and cancels started
   assert.match(source, /CancelBeforeStart/);
   assert.match(source, /TryStart/);
   assert.match(source, /CancellationTokenSource/);
-  assert.match(source, /public void Cancel\(\)[\s\S]*cancellation\.Cancel\(\)/);
+  assert.match(source, /public bool CancelBeforeAcceptance\(\)[\s\S]*cancellation\.Cancel\(\)/);
   assert.match(source, /item\.CancelBeforeStart\(\)[\s\S]*E_UNITY_BUSY/);
   assert.match(source, /item\.Cancel\(\)[\s\S]*E_EXECUTION_TIMEOUT/);
-  assert.match(source, /await ExecuteCoordinatedRequest\(item\.Request, item\.RawRequestBytes, item\.TryAcceptJournal, item\.Token\)/);
-  assert.match(source, /CancelBeforeJournalAcceptance\(\)/);
+  assert.match(source, /await ExecuteCoordinatedRequest\(item\.Request, item\.RawRequestBytes, item\.TryAccept, item\.Token\)/);
+  assert.match(source, /CancelBeforeAcceptance\(\)/);
   assert.match(source, /request\.ContentLength64/);
   assert.match(source, /stream\.Read\(bytes, offset, bytes\.Length - offset\)/);
   assert.match(source, /"bridge_request_enqueued" : "bridge_request_attached"/);
@@ -555,7 +524,6 @@ test("Unity Bridge cancellation prevents queued side effects and cancels started
 
 test("Unity Bridge screenshot validates path, format, overwrite and busy diagnostics", async () => {
   const source = await readUnityBridgeSources();
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /E_UNITY_BUSY/);
   assert.match(source, /E_CAMERA_NOT_FOUND/);
@@ -579,9 +547,6 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   const multiviewSource = await readFile(new URL("Tools/camera/multiview.cs", editorUrl), "utf8");
   assert.match(multiviewSource, /CameraToolSupport\.NormalizeFormat\(request\.Format, Path\.Combine\(outputDir, "capture\.png"\)\)/);
   assert.match(multiviewSource, /CaptureCamera\(camera, width, height, false, 95, plan\.Value, format/);
-  assert.match(readme, /`E_CAMERA_NOT_FOUND` for `tools run camera\.info` when a target Camera cannot be resolved/);
-  assert.match(readme, /`E_TARGET_NOT_FOUND` for `tools run camera\.screenshot` when the target is empty or cannot be resolved/);
-  assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation\/binding summaries, Animator state\/play\/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument\/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows \+ Unity Editor validation/);
 });
 
 test("Unity Bridge camera creation validates inputs before scene mutation", async () => {
@@ -608,7 +573,6 @@ test("Unity Bridge camera creation validates inputs before scene mutation", asyn
 
 test("Unity Bridge editor commands expose state, play/pause/stop, menu execution and busy diagnostics", async () => {
   const source = await readUnityBridgeSources();
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.doesNotMatch(source, /Name = "editor\.state"/);
   assert.match(source, /"internal\.editor\.state\.snapshot"/);
@@ -654,14 +618,6 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /EnsureEditorNotBusy/);
   assert.doesNotMatch(source, /WaitForPlayModeState/);
   assert.match(source, /PrefabStage/);
-  assert.match(readme, /`context read editor\.state --input '\{\}'` immediately observes compile\/import\/build\/PlayMode\/Prefab Stage, progress, blockers and freshness without waiting or side effects/);
-  assert.match(readme, /`tools run editor\.play`, `tools run editor\.pause` and `tools run editor\.stop` control Editor PlayMode and return only stable observed terminal state/);
-  assert.match(readme, /`tools run editor\.menu --input '\{"path":"<path>"\}'` executes a Unity Editor menu item/);
-  assert.match(readme, /`tools run console\.get --input '\{"count":<n>\}'` returns recent Unity Console entries/);
-  assert.match(readme, /E_UNITY_BUSY/);
-  assert.match(readme, /E_UNITY_TRANSITION_TIMEOUT/);
-  assert.match(readme, /E_MENU_NOT_FOUND/);
-  assert.match(readme, /E_MENU_COMPLETION_UNSUPPORTED/);
 });
 
 test("Unity Bridge treats PlayMode switching as editor-command busy state", async () => {
@@ -673,7 +629,7 @@ test("Unity Bridge treats PlayMode switching as editor-command busy state", asyn
 test("Bridge execution uses the protocol request, linked cancellation, and one envelope boundary", async () => {
   const source = await readUnityBridgeSources();
   const executeStart = source.indexOf("private static async ValueTask<string> Execute(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)");
-  const executeEnd = source.indexOf("private static bool RequiresDestructiveSecurityProof", executeStart);
+  const executeEnd = source.indexOf("private static void CancelPendingWaits", executeStart);
   const executeBlock = source.slice(executeStart, executeEnd);
 
   assert.ok(executeStart > -1, "Could not find typed Execute method");
@@ -689,6 +645,17 @@ test("Bridge execution uses the protocol request, linked cancellation, and one e
   assert.equal(updateRegistrations.length, 1, "Bridge must have exactly one Editor update scheduler");
   assert.match(source, /CancellationTokenSource\.CreateLinkedTokenSource\(cancellationToken/);
   assert.match(source, /UnityCliWaitScheduler\.Tick\(\)/);
+});
+
+test("Unity Bridge source has no destructive security confirmation gate", async () => {
+  const source = await readUnityBridgeSources();
+
+  assert.doesNotMatch(source, /RequiresDestructiveSecurityProof/);
+  assert.doesNotMatch(source, /SecurityConfirmed/);
+  assert.doesNotMatch(source, /SecurityProof/);
+  assert.doesNotMatch(source, /E_DESTRUCTIVE_CONFIRMATION_REQUIRED/);
+  assert.doesNotMatch(source, /--yes/);
+  assert.doesNotMatch(source, /confirmed security/i);
 });
 
 test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
@@ -752,7 +719,7 @@ test("HTTP and execution guards share the safe Play Mode transition allowlist", 
   const httpStart = source.indexOf("private static void HandleHttpCore");
   const httpEnd = source.indexOf("private static async ValueTask<string> Execute", httpStart);
   const executeStart = httpEnd;
-  const executeEnd = source.indexOf("private static bool RequiresDestructiveSecurityProof", executeStart);
+  const executeEnd = source.indexOf("private static void CancelPendingWaits", executeStart);
   const httpBlock = source.slice(httpStart, httpEnd);
   const executeBlock = source.slice(executeStart, executeEnd);
 

@@ -63,10 +63,16 @@ const manifestLockTimeoutMs = 15_000;
 const processStartIdentity = new Date(Date.now() - Math.floor(process.uptime() * 1_000)).toISOString();
 
 let afterProjectionCopyForTest: (() => Promise<void>) | undefined;
+let sourceRootForTest: ((extensionId: ExtensionId) => string) | undefined;
 
 /** 仅测试使用：在 source projection 复制后强制制造交错。 */
 export function setAfterProjectionCopyForTest(hook: (() => Promise<void>) | undefined): void {
   afterProjectionCopyForTest = hook;
+}
+
+/** 仅测试使用：把可变 source 夹具隔离到临时目录。 */
+export function setExtensionSourceRootForTest(resolver: ((extensionId: ExtensionId) => string) | undefined): void {
+  sourceRootForTest = resolver;
 }
 
 /** 返回 extension 源码目录。 */
@@ -166,7 +172,7 @@ export async function installExtensionBundleUnchecked(
   manifest: ExtensionManifest,
   installedStatus: "installed" | "already_installed" = "installed"
 ): Promise<ExtensionInstallResult> {
-  const sourceRoot = extensionSourceRoot(manifest.id);
+  const sourceRoot = sourceRootForTest?.(manifest.id) ?? extensionSourceRoot(manifest.id);
   if (!existsSync(sourceRoot)) {
     throw new ExtensionInstallerError("E_EXTENSION_BUNDLE_MISSING", `Extension source directory not found: ${sourceRoot}`, ["Reinstall or rebuild the unity_cli package."]);
   }

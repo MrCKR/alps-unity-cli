@@ -4,8 +4,8 @@ import { StructuredToolError } from "../errors.js";
 import { toolSource } from "../metadata/index.js";
 
 export interface ToolsGroupRequest {}
-export interface ToolsGroupItem { name: string; summary: string; toolCount: number; source: string; cliCommand: string }
-export interface ToolsGroupResult { command: string; count: number; groups: ToolsGroupItem[]; nextActions: string[] }
+export interface ToolsGroupItem { name: string; summary: string; toolCount: number; source: string }
+export interface ToolsGroupResult { count: number; groups: ToolsGroupItem[] }
 
 const GROUP_SUMMARIES: Record<string, string> = {
   docs: "Offline documentation lookup and search.",
@@ -13,7 +13,7 @@ const GROUP_SUMMARIES: Record<string, string> = {
   package: "Unity package inspection and package management.",
   scene: "Scene hierarchy, load, save, validation, and view operations.",
   probuilder: "ProBuilder shape, mesh, face, edge, and repair operations.",
-  build: "Unity build execution and job status control.",
+  build: "Live Unity build execution with terminal BuildReport and artifact proof.",
   test: "Unity test execution and result collection.",
   editor: "Unity Editor refresh, diagnostics, and session controls.",
   reflect: "Offline C# and Unity type reflection search.",
@@ -49,9 +49,8 @@ export default defineTool<ToolsGroupRequest, ToolsGroupResult>({
       name,
       summary: GROUP_SUMMARIES[name] ?? `${name} capability operations.`,
       toolCount: value.count,
-      source: value.source,
-      cliCommand: `tools group list ${name}`
+      source: value.source
     }));
-    return { command: "tools.group", count: items.length, groups: items, nextActions: ["Run unity_cli tools group list <group> to see tools in a group.", "Run unity_cli tools describe <tool> for full metadata."] };
+    return { count: items.length, groups: items };
   }
 });

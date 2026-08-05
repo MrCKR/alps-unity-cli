@@ -47,7 +47,7 @@ async function makeProjectDir(installedPackages: Record<string, string> = {}, en
 
 test("auto-detect installs extensions whose packages are present", async () => {
   const project = await makeProjectDir({
-    "com.unity.probuilder": "5.2.0",
+    "com.unity.probuilder": "5.2.4",
     "com.unity.visualeffectgraph": "14.0.0"
   });
   try {
@@ -68,7 +68,7 @@ test("auto-detect installs extensions whose packages are present", async () => {
 });
 
 test("auto-detect skips already-installed extension bundles", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     await autoDetectExtensions(project);
     const result = await autoDetectExtensions(project);
@@ -98,7 +98,7 @@ test("auto-detect marks unavailable when Unity packages missing", async () => {
 
 test("auto-detect handles mixed installed/missing packages", async () => {
   const project = await makeProjectDir({
-    "com.unity.probuilder": "5.2.0",
+    "com.unity.probuilder": "5.2.4",
     "com.unity.cinemachine": "3.1.0"
   });
   try {
@@ -140,7 +140,7 @@ test("auto-detect does not guess from file names or directories", async () => {
 });
 
 test("auto-detect dry-run does not write install state", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     const result = await autoDetectExtensions(project, true);
     assert.equal(result.installed.length, 1);
@@ -203,7 +203,7 @@ test("autoDetectSummary handles empty results", () => {
 // ── Integration: init --check with extensions ───────────────────────────────
 
 test("init --check includes extension auto-detect plan", async () => {
-  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.4" });
   try {
     // Use the CLI execute path indirectly — test the auto-detect module
     const result = await autoDetectExtensions(project, true);

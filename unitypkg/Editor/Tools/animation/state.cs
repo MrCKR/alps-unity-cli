@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } public int? Layer { get; set; } }
         public sealed class Result { public GameObjectTargetRef Target { get; set; } public AnimatorInfo Animator { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "animation.state", Summary = "Read the current Animator state for a target GameObject.", Description = "Resolve a target with an Animator and return current state info (layer, state hash, normalized time).", Group = "animation", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read animation state", Input = new Request { Target = "Player" } } } };
+        public ToolDescriptor Describe() => new() { Name = "animation.state", Summary = "Read the current Animator state for a target GameObject.", Description = "Resolve a target with an Animator and return current state info (layer, state hash, normalized time).", Group = "animation",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read animation state", Input = new Request { Target = "Player" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var go = GameObjectToolSupport.ResolveUniqueTarget(r.Target, "Animation state requires --target <go>.");

@@ -26,7 +26,6 @@ namespace UnityCli
             Summary = "Close the currently open Prefab Stage after verifying it has no unsaved changes.",
             Description = "Close the currently open Prefab Stage without saving. If the stage has unsaved changes, the call fails with E_PREFAB_DIRTY_CONFLICT; run prefab.stage-save first, then call this tool again.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "editor-session" },
             Target = "editor",

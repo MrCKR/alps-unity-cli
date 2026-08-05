@@ -21,7 +21,6 @@ namespace UnityCli
             public GameObjectRef Target { get; set; }
             public VfxLineRendererInfo Line { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -30,7 +29,6 @@ namespace UnityCli
             Summary = "Create or initialize a LineRenderer and configure widths, colors, material, positions, and render settings.",
             Description = "Create a new GameObject when target is omitted, ensure a LineRenderer exists, and configure widths, widthCurve, colors, colorGradient, material, positions, looping, world-space mode, alignment, texture mode, and corner/cap vertex counts.",
             Group = "vfx",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-object-create", "component-add", "line-renderer-edit" },
             Target = "editor",
@@ -71,8 +69,7 @@ namespace UnityCli
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
                 Line = VfxToolSupport.BuildLineRendererInfo(observed),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

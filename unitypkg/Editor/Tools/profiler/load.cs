@@ -13,13 +13,13 @@ namespace UnityCli
     public class ProfilerLoadTool : IUnityCliTool<ProfilerLoadTool.Request, ProfilerLoadTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Path { get; set; } }
-        public sealed class Result { public string Command { get; set; } public string Path { get; set; } public long InputSizeBytes { get; set; } public string InputSha256 { get; set; } public long FirstFrameIndex { get; set; } public long LastFrameIndex { get; set; } public bool Loaded { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string Path { get; set; } public long InputSizeBytes { get; set; } public string InputSha256 { get; set; } public long FirstFrameIndex { get; set; } public long LastFrameIndex { get; set; } public bool Loaded { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "profiler.load", Summary = "Load a saved profiler data file (.raw/.data) into the Profiler window.",
             Description = "Stop Profiler recording, clear the current frame buffer, then load one saved profiler data file. Success requires an attributable non-empty frame range after the empty-buffer barrier while the input size and SHA-256 remain unchanged.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "profiler-loaded-data-session", "profiler-recording-stop" }, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler",DestructiveHint = false, SideEffects = new[] { "profiler-loaded-data-session", "profiler-recording-stop" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Load profiler data", Input = new Request { Path = "Artifacts/profiler/baseline.raw" } } }
         };
@@ -39,9 +39,9 @@ namespace UnityCli
             if (driverType == null)
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_LOAD_UNSUPPORTED", "UnityEditorInternal.ProfilerDriver is unavailable.", "Use a Unity Editor version that supports loading profiler captures.");
             var loadMethod = driverType.GetMethod("LoadProfile", new Type[] { typeof(string), typeof(bool) });
-            var clearMethod = driverType.GetMethod("Clear", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            var clearMethod = driverType.GetMethod("ClearAllFrames", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
             if (loadMethod == null || clearMethod == null)
-                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_LOAD_UNSUPPORTED", "ProfilerDriver.LoadProfile or Clear is unavailable.", "Use a Unity Editor version that supports isolated profiler capture loading.");
+                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_LOAD_UNSUPPORTED", "ProfilerDriver.LoadProfile or ClearAllFrames is unavailable.", "Use a supported Unity Editor version that exposes isolated profiler capture loading.");
 
             // 停止采集并建立空 frame buffer barrier，后续出现的 frame 只能归因于本次 LoadProfile。
             ctx.CommitEffect();
@@ -78,7 +78,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_LOAD_PROOF_MISSING", "ProfilerDriver did not expose an attributable loaded frame range for " + resolvedPath + ".", "Verify that the capture contains readable frames and matches this Unity version.");
             if (new FileInfo(resolvedPath).Length != inputSizeBytes || !string.Equals(ProfilerToolSupport.FileSha256(resolvedPath), inputSha256, StringComparison.Ordinal))
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_LOAD_PROOF_MISSING", "Profiler capture input changed while loading: " + resolvedPath, "Keep the capture file unchanged and retry.");
-            return new Result { Command = "profiler.load", Path = resolvedPath, InputSizeBytes = inputSizeBytes, InputSha256 = inputSha256, FirstFrameIndex = observedFirst, LastFrameIndex = observedLast, Loaded = true, PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.load", Path = resolvedPath, SideEffects = "sha256=" + inputSha256 } } };
+            return new Result { Path = resolvedPath, InputSizeBytes = inputSizeBytes, InputSha256 = inputSha256, FirstFrameIndex = observedFirst, LastFrameIndex = observedLast, Loaded = true, PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.load", Path = resolvedPath, SideEffects = "sha256=" + inputSha256 } } };
         }
     }
 }

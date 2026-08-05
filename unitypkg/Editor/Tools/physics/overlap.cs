@@ -38,7 +38,7 @@ namespace UnityCli
             Name = "physics.overlap",
             Summary = "Find colliders overlapping a sphere or box volume in 3D or 2D.",
             Description = "Overlap query: sphere (default) or box. mode=3d (default) or 2d. 2D supports circle (default) and box shapes.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false,
+            Group = "physics",DestructiveHint = false,
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Overlap sphere at origin", Input = new Request { Radius = 5f } } }

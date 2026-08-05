@@ -12,7 +12,7 @@ CLI 只接受本机可证明的 Unity 项目目录。目录大小写、尾分隔
 
 ```powershell
 unity_cli instances list
-unity_cli instances prune --yes
+unity_cli instances prune
 ```
 
 `instances list` 返回 project identity 和归约后的状态：
@@ -65,6 +65,6 @@ alias 绑定完整 `instanceId`、canonical project path 和 canonicalization ve
 - 对一次 transport 尝试绑定 listener generation；
 - 在 compile、import、domain reload 或 listener restart 后重新验证 generation；
 - mutation 重投时保持完全相同的 root request ID 和 request bytes，并只读取 durable canonical terminal；
-- 对 effect 后无法证明的结果返回 `E_REQUEST_OUTCOME_UNKNOWN`，禁止 blind replay。
+- 对超时或终态前断连返回 `E_EXECUTION_TIMEOUT`；调用方观察业务状态后自行决定是否提交新的调用。
 
 普通 Context 的成功结果来自同一 validated generation 的完整读取。`editor.state` 是唯一即时观察例外：它在固定预算内合并 Bridge、registry、process 和 Windows UI 的只读证据，返回 freshness 与 unknown 字段，不等待状态变化。

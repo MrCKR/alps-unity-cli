@@ -12,7 +12,7 @@ namespace UnityCli
         {
             Name = "vfx.particle.clear", Summary = "Clear live ParticleSystem particles.",
             Description = "Clear live particles from the existing ParticleSystem, optionally including child systems.",
-            Group = "vfx", Version = "1.0.0", SideEffects = new[] { "particle-playback-edit" },
+            Group = "vfx",SideEffects = new[] { "particle-playback-edit" },
             Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[]
             {

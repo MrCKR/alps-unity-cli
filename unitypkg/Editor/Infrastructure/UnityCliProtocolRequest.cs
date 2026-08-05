@@ -105,24 +105,6 @@ namespace UnityCli.Protocol
             return true;
         }
 
-        public bool SecurityConfirmed(string toolName, bool destructiveHint, bool supportsDryRun, string bridgeCommand, string liveDescriptorFingerprint = null)
-        {
-            var descriptor = new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                { "name", toolName },
-                { "destructiveHint", destructiveHint },
-                { "supportsDryRun", supportsDryRun },
-                { "bridgeCommand", bridgeCommand }
-            };
-            if (!string.IsNullOrEmpty(liveDescriptorFingerprint)) descriptor.Add("liveDescriptorFingerprint", liveDescriptorFingerprint);
-            var security = Execution == null ? null : Execution.SecurityProof;
-            return security != null
-                && security.Confirmed
-                && string.Equals(security.ToolName, toolName, StringComparison.Ordinal)
-                && string.Equals(security.DescriptorFingerprint, UnityCli.UnityCliSerializer.Sha256Canonical(descriptor), StringComparison.Ordinal)
-                && string.Equals(security.InputSha256, UnityCli.UnityCliSerializer.Sha256Canonical(Input), StringComparison.Ordinal);
-        }
-
         private object GetInputField(string name)
         {
             var dictionary = Input as IDictionary<string, object>;

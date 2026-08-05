@@ -26,7 +26,6 @@ namespace UnityCli
             Summary = "Save the currently open Prefab Stage's edits back to its Assets/*.prefab.",
             Description = "Save the currently open Prefab Stage's edits back to its Assets/*.prefab. Requires a Prefab Stage to be open (run prefab.stage-open first). Optionally pass the expected path to guard against saving the wrong prefab.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

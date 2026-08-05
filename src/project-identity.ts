@@ -187,6 +187,7 @@ function resolveNativeCanonicalProjectPath(inputPath: string): NativeCanonicalPr
   const helperSource = canonicalHelperSourcePath();
   const command = [
     "$ErrorActionPreference = 'Stop'",
+    "$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)",
     "Add-Type -Path $env:UNITY_CLI_CANONICAL_HELPER_SOURCE",
     "$result = [UnityCli.UnityCliCanonicalProjectPath]::Resolve($env:UNITY_CLI_CANONICAL_PATH_INPUT)",
     "$result | ConvertTo-Json -Compress -Depth 4",
@@ -252,6 +253,7 @@ function resolveNativeCanonicalProjectPathAsync(inputPath: string, options: Cano
   const helperSource = canonicalHelperSourcePath();
   const command = [
     "$ErrorActionPreference = 'Stop'",
+    "$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)",
     "Add-Type -Path $env:UNITY_CLI_CANONICAL_HELPER_SOURCE",
     "$result = [UnityCli.UnityCliCanonicalProjectPath]::Resolve($env:UNITY_CLI_CANONICAL_PATH_INPUT)",
     "$result | ConvertTo-Json -Compress -Depth 4",

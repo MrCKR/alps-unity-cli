@@ -19,7 +19,6 @@ export interface ReflectSearchPageInfo {
 }
 
 export interface ReflectSearchResult {
-  command: string;
   mode: string;
   requiresUnity: boolean;
   source: Record<string, AnyJson>;

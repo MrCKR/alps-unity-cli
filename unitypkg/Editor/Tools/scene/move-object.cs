@@ -37,7 +37,6 @@ namespace UnityCli
             Summary = "Move a GameObject from its current scene into another already-loaded scene.",
             Description = "Move a GameObject (resolved by target path or instanceId) into another already-loaded destination scene (--scene path). Useful for multi-scene editing. Requires the destination scene to be loaded (scene.load); returns moved=false if the object is already in the destination.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = false,
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify" },

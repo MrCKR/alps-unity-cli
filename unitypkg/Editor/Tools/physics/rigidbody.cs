@@ -37,7 +37,7 @@ namespace UnityCli
             Name = "physics.rigidbody",
             Summary = "Add, configure, or validate a Rigidbody on a target GameObject.",
             Description = "Add a Rigidbody (if missing) and configure mass/drag/angularDrag/useGravity/isKinematic. validate=true reads existing Rigidbody/Rigidbody2D without mutating.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "scene-modify" },
+            Group = "physics",DestructiveHint = false, SideEffects = new[] { "scene-modify" },
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Validate rigidbody", Input = new Request { Target = "Player", Validate = true } } }

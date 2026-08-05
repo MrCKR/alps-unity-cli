@@ -1,0 +1,144 @@
+{
+  "metadata": {
+    "skill_name": "unity-cli-plan",
+    "skill_path": ".pi/skills/unity-cli-plan",
+    "executor_model": "pi general-purpose default (model id not exposed)",
+    "analyzer_model": "main session",
+    "timestamp": "2026-07-28T11:25:00Z",
+    "evals_run": [1, 2, 3, 4],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "eval_name": "Test overreach",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": { "pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 69.5, "tokens": 62900, "tool_calls": 11, "errors": 0 },
+      "expectations": [
+        { "text": "Does not strengthen the product to satisfy an overreaching test", "passed": true, "evidence": "Classified the full material/UV/unwrap/compiled-mesh requirement as TEST_OVERREACH and prohibited product changes." },
+        { "text": "Updates the existing plan", "passed": true, "evidence": "Explicitly selected the existing active Live direct plan and rejected a parallel plan." },
+        { "text": "Uses a hard-stop classification", "passed": true, "evidence": "Used TEST_OVERREACH and required an owner decision before any proof expansion." },
+        { "text": "Defines outcome-oriented direction states", "passed": true, "evidence": "Returned five business-result outcomes rather than file or command steps." }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "Test overreach",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": { "pass_rate": 0.25, "passed": 1, "failed": 3, "total": 4, "time_seconds": 86.8, "tokens": 93100, "tool_calls": 21, "errors": 0 },
+      "expectations": [
+        { "text": "Does not strengthen the product to satisfy an overreaching test", "passed": false, "evidence": "Recommended a frozen full canonical template and exact material, UV, unwrap and compiled-mesh comparisons." },
+        { "text": "Updates the existing plan", "passed": true, "evidence": "Selected the existing active plan." },
+        { "text": "Uses a hard-stop classification", "passed": false, "evidence": "Called the mismatch a plan omission and authorized product expansion." },
+        { "text": "Defines outcome-oriented direction states", "passed": false, "evidence": "Returned implementation and validation actions instead of direction outcomes." }
+      ],
+      "notes": ["This reproduces the real ProBuilder overreach that motivated the governance Skill."]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "Independent objective",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": { "pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 133.1, "tokens": 117000, "tool_calls": 16, "errors": 0 },
+      "expectations": [
+        { "text": "Uses a separate plan for an independent objective", "passed": true, "evidence": "Selected .plan/official-unity-pipeline-evaluation/ and identified the legacy same-objective file for migration." },
+        { "text": "Uses a stable date-free plan folder", "passed": true, "evidence": "The chosen folder is stable, readable and date-free." },
+        { "text": "Includes the complete package and a direction", "passed": true, "evidence": "Listed plan/context/files/decisions/log/directions plus evidence/index/static/live/gates and four outcomes." },
+        { "text": "Protects the current product worktree", "passed": true, "evidence": "Marked the public-output plan and its product, contract, test, doc and Skill changes as forbidden to touch." }
+      ],
+      "notes": ["The first with-skill run omitted evidence/live and evidence/gates. The validator and Skill required-content list were hardened, then a fresh run passed."]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "Independent objective",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": { "pass_rate": 0.5, "passed": 2, "failed": 2, "total": 4, "time_seconds": 57.7, "tokens": 82700, "tool_calls": 8, "errors": 0 },
+      "expectations": [
+        { "text": "Uses a separate plan for an independent objective", "passed": true, "evidence": "Kept the Pipeline evaluation separate from the active product work." },
+        { "text": "Uses a stable date-free plan folder", "passed": false, "evidence": "Proposed a legacy single Markdown file rather than a plan folder." },
+        { "text": "Includes the complete package and a direction", "passed": false, "evidence": "Did not create the required package files, direction or evidence directories." },
+        { "text": "Protects the current product worktree", "passed": true, "evidence": "Required an isolated worktree and prohibited merging the evaluation into current changes." }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "Compaction recovery",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": { "pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 38.9, "tokens": 56800, "tool_calls": 4, "errors": 0 },
+      "expectations": [
+        { "text": "Uses the canonical package recovery order", "passed": true, "evidence": "Read plan, decisions, context, files, current direction, log, evidence, then fresh state." },
+        { "text": "Fresh-checks process, session, worktree and stamp", "passed": true, "evidence": "Required fresh branch, HEAD, dirty tree, PID ownership, instance, session and source stamp checks." },
+        { "text": "Does not treat historical 882/882 as current", "passed": true, "evidence": "Required the old matrix to match current source, harness, fixture and payload stamp." },
+        { "text": "Does not replay outcome-unknown", "passed": true, "evidence": "Placed the request in MustNotReplay and required independent business readback first." }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "Compaction recovery",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": { "pass_rate": 0.75, "passed": 3, "failed": 1, "total": 4, "time_seconds": 123.3, "tokens": 127400, "tool_calls": 22, "errors": 0 },
+      "expectations": [
+        { "text": "Uses the canonical package recovery order", "passed": false, "evidence": "Suggested a generic plan/git/evidence checkpoint but not the canonical package read order." },
+        { "text": "Fresh-checks process, session, worktree and stamp", "passed": true, "evidence": "Required fresh PID/session, worktree and evidence checks." },
+        { "text": "Does not treat historical 882/882 as current", "passed": true, "evidence": "Kept 882/882 as a historical baseline only." },
+        { "text": "Does not replay outcome-unknown", "passed": true, "evidence": "Explicitly prohibited replay and required journal plus business-state inspection." }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 4,
+      "eval_name": "Legacy plan migration",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": { "pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 107.3, "tokens": 33900, "tool_calls": 14, "errors": 0 },
+      "expectations": [
+        { "text": "Moves to one stable folder and removes the legacy file", "passed": true, "evidence": "Moved the modified source to .plan/live-direct/plan.md and explicitly prohibited a stub or dual format." },
+        { "text": "Preserves source changes and writes one migration baseline", "passed": true, "evidence": "Required byte-preserving movement and exactly one honest migration-baseline event without fabricated history." },
+        { "text": "Preserves paused plan and pending direction state", "passed": true, "evidence": "Set paused, CurrentDirection none and the prior direction to pending or decision-required, with no active direction." },
+        { "text": "Protects user deletion and prohibits product or Unity work", "passed": true, "evidence": "Kept the deleted test excluded and prohibited product, test, contract, docs, Skill and Unity execution." }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 4,
+      "eval_name": "Legacy plan migration",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": { "pass_rate": 0.5, "passed": 2, "failed": 2, "total": 4, "time_seconds": 85.1, "tokens": 78800, "tool_calls": 9, "errors": 0 },
+      "expectations": [
+        { "text": "Moves to one stable folder and removes the legacy file", "passed": true, "evidence": "Proposed a date-free folder, plan.md destination and removal of the old file." },
+        { "text": "Preserves source changes and writes one migration baseline", "passed": false, "evidence": "Used a non-canonical migration-only event and did not bind it to the package event vocabulary." },
+        { "text": "Preserves paused plan and pending direction state", "passed": false, "evidence": "Preserved paused and CurrentDirection none but did not create the required pending direction checklist." },
+        { "text": "Protects user deletion and prohibits product or Unity work", "passed": true, "evidence": "Protected the deleted test and prohibited repository cleanup, product commands and Unity." }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": { "mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0 },
+      "time_seconds": { "mean": 87.2, "stddev": 35.9, "min": 38.9, "max": 133.1 },
+      "tokens": { "mean": 67650, "stddev": 30475, "min": 33900, "max": 117000 }
+    },
+    "without_skill": {
+      "pass_rate": { "mean": 0.5, "stddev": 0.177, "min": 0.25, "max": 0.75 },
+      "time_seconds": { "mean": 88.2, "stddev": 23.3, "min": 57.7, "max": 123.3 },
+      "tokens": { "mean": 95500, "stddev": 19144, "min": 78800, "max": 127400 }
+    },
+    "delta": { "pass_rate": "+0.50", "time_seconds": "-1.0", "tokens": "-27850" }
+  },
+  "notes": [
+    "The skill's strongest differentiator is blocking TEST_OVERREACH before product proof expansion.",
+    "The deterministic validator was expanded after the first eval-2 run exposed an omitted canonical evidence directory.",
+    "Baseline agents inherited repository context, so the comparison is conservative rather than an unassisted blank baseline.",
+    "A fourth eval covers byte-preserving legacy migration, paused/pending state, user-deleted files and the no-Unity boundary."
+  ]
+}

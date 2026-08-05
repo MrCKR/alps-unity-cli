@@ -47,12 +47,10 @@ namespace UnityCli
                 Summary = "List components attached to one GameObject, optionally including readable property previews.",
                 Description = "Lightweight list of components attached to a GameObject: type names, enabled state, and optional readable property preview. Use this before component.get/component.modify to choose component name or index. Does not return every serialized field; use component.get for deep component data.",
                 Category = "scene",
-                Version = "1.0.0",
                 Source = "built-in",
                 Target = "editor",
                 AvailabilityScope = "editorSession",
                 PlayModeSupport = "supported",
-                RefreshBehavior = "on-demand",
                 Examples = new[] { new ContextExample { Description = "List components on the main camera", Input = new Request { Target = "Main Camera", IncludeProperties = true } }, new ContextExample { Description = "List component names only", Input = new Request { Target = "Main Camera", IncludeProperties = false } } }
             };
 

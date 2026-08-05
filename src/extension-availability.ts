@@ -66,7 +66,7 @@ async function checkExtensionPhysicalAvailability(
   if (!extension) return available();
   if (!projectPath) {
     return unavailable(extensionId, undefined, undefined, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN", `${subject} requires a project path to verify extension physical installation.`, [
-      "Pass --project <path> for a Unity project with the extension installed.",
+      "Select the running Unity project with --instance <id|canonical-project-path|alias>.",
       `Run unity_cli extensions doctor --project <path> to inspect ${extensionId}.`
     ]);
   }
@@ -87,9 +87,19 @@ async function checkExtensionPhysicalAvailability(
     return { available: true, extensionId, availabilityResult: availability, physicalState, nextActions: [], errorCode: "", message: "" };
   }
   const code = dependencyInstalled ? "E_EXTENSION_NOT_INSTALLED" : "E_EXTENSION_DEPENDENCY_MISSING";
+  const unsatisfiedPackageIds = missingPackageIds.length > 0
+    ? missingPackageIds
+    : availability.missingPackageIds.length > 0
+      ? availability.missingPackageIds
+      : physicalState.missingPackageIds;
   const reason = dependencyInstalled
     ? `extension files are ${physicalState.status}`
-    : `required Unity package(s) are missing: ${(missingPackageIds.length > 0 ? missingPackageIds : physicalState.missingPackageIds).join(", ")}`;
+    : `required Unity package profile(s) are unavailable: ${unsatisfiedPackageIds.map((packageId) => {
+        const requirement = extension.manifest.unityPackages.find((pkg) => pkg.packageId === packageId);
+        const expected = requirement?.versionRange ? `${packageId}@${requirement.versionRange}` : packageId;
+        const actual = installedPackages.get(packageId);
+        return actual === undefined ? `${expected} (not installed)` : `${expected} (actual ${actual})`;
+      }).join(", ")}`;
   return unavailable(extensionId, availability, physicalState, code, `${subject} is unavailable because ${reason}.`, physicalState.nextActions);
 }
 

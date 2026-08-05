@@ -92,7 +92,13 @@ function physicsArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs
     });
   }
   if (command === "physics.simulation") {
-    return compactArgs({ mode: stringFlag(flags, "mode") ?? stringField(flags, "mode"), steps: numberFlag(flags, "steps") ?? numberField(flags, "steps"), deltaTime: floatFlag(flags, "delta-time") ?? numberField(flags, "deltaTime"), simulate: boolFlag(flags, "simulate") ?? boolField(flags, "simulate") });
+    const structured = structuredInput(flags);
+    return compactArgs({
+      steps: numberFlag(flags, "steps") ?? numberField(flags, "steps"),
+      deltaTime: floatFlag(flags, "delta-time") ?? numberField(flags, "deltaTime"),
+      simulate: boolFlag(flags, "simulate") ?? boolField(flags, "simulate"),
+      completionProbe: structured.completionProbe
+    });
   }
   if (command === "physics.collision-matrix") {
     return compactArgs({ layerA: stringFlag(flags, "layer-a") ?? stringField(flags, "layerA"), layerB: stringFlag(flags, "layer-b") ?? stringField(flags, "layerB"), ignore: boolFlag(flags, "ignore") ?? boolField(flags, "ignore") });
@@ -115,15 +121,12 @@ function physicsArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs
   if (command === "physics.rigidbody") {
     return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), mass: floatFlag(flags, "mass") ?? numberField(flags, "mass"), drag: floatFlag(flags, "drag") ?? numberField(flags, "drag"), angularDrag: floatFlag(flags, "angular-drag") ?? numberField(flags, "angularDrag"), useGravity: boolFlag(flags, "use-gravity") ?? boolField(flags, "useGravity"), isKinematic: boolFlag(flags, "is-kinematic") ?? boolField(flags, "isKinematic"), validate: boolFlag(flags, "validate") ?? boolField(flags, "validate") });
   }
+  const structured = structuredInput(flags);
   return compactArgs({
-    mode: stringFlag(flags, "mode") ?? stringField(flags, "mode"),
     property: stringFlag(flags, "property") ?? stringField(flags, "property"),
     value: stringFlag(flags, "value") ?? stringField(flags, "value"),
-    gravityX: floatFlag(flags, "gravity-x") ?? numberField(flags, "gravityX"),
-    gravityY: floatFlag(flags, "gravity-y") ?? numberField(flags, "gravityY"),
-    gravityZ: floatFlag(flags, "gravity-z") ?? numberField(flags, "gravityZ"),
-    gravity2dX: floatFlag(flags, "gravity2d-x") ?? numberField(flags, "gravity2dX"),
-    gravity2dY: floatFlag(flags, "gravity2d-y") ?? numberField(flags, "gravity2dY"),
+    gravity: structured.gravity,
+    gravity2d: structured.gravity2d,
     defaultContactOffset: floatFlag(flags, "default-contact-offset") ?? numberField(flags, "defaultContactOffset"),
     bounceThreshold: floatFlag(flags, "bounce-threshold") ?? numberField(flags, "bounceThreshold"),
     defaultSolverIterations: numberFlag(flags, "default-solver-iterations") ?? numberField(flags, "defaultSolverIterations"),
@@ -131,7 +134,8 @@ function physicsArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs
     queriesHitTriggers: boolFlag(flags, "queries-hit-triggers") ?? boolField(flags, "queriesHitTriggers"),
     queriesHitBackfaces: boolFlag(flags, "queries-hit-backfaces") ?? boolField(flags, "queriesHitBackfaces"),
     queriesStartInColliders: boolFlag(flags, "queries-start-in-colliders") ?? boolField(flags, "queriesStartInColliders"),
-    autoSimulation: boolFlag(flags, "auto-simulation") ?? boolField(flags, "autoSimulation")
+    autoSimulation: boolFlag(flags, "auto-simulation") ?? boolField(flags, "autoSimulation"),
+    simulationMode2D: stringFlag(flags, "simulation-mode-2d") ?? stringField(flags, "simulationMode2D")
   });
 }
 

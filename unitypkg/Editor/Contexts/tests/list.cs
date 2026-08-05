@@ -33,12 +33,10 @@ namespace UnityCli.Contexts.Tests
             Summary = "Report Unity Test Runner discovery availability and diagnostics.",
             Description = "List all test fixtures and test methods in the project.",
             Category = "tests",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand",
             Examples = new[] { new ContextExample { Description = "List available EditMode tests", Input = new Request { Mode = "EditMode", PageSize = 50 } }, new ContextExample { Description = "List available PlayMode tests", Input = new Request { Mode = "PlayMode", PageSize = 50 } } }
         };
 

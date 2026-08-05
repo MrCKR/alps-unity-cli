@@ -146,6 +146,10 @@ test("physics mutation tools validate before commit and prove fresh observed sta
   assert.match(force, /Enum\.IsDefined\(typeof\(ForceMode\), mode\)/);
   assert.match(force, /Enum\.IsDefined\(typeof\(ForceApplicationType\), forceType\)/);
   assert.ok(force.indexOf("ValidateFinite(force") < force.indexOf("ctx.CommitEffect()"));
+  assert.ok(force.indexOf("if (!requestedNonZero)") < force.indexOf("ctx.CommitEffect()"));
+  assert.match(force, /rigidbody\.Sleep\(\)[\s\S]*if \(!rigidbody\.IsSleeping\(\)\)[\s\S]*rigidbody\.Add(?:Explosion)?Force/);
+  assert.match(force, /if \(observedRigidbody\.IsSleeping\(\)\)/);
+  assert.doesNotMatch(force, /Physics\.Simulate/);
   assert.match(force, /EditorUtility\.InstanceIDToObject\(targetId\) as GameObject/);
 
   const assignMaterial = await readFile(new URL("../unitypkg/Editor/Tools/physics/assign-material.cs", import.meta.url), "utf8");
@@ -164,13 +168,40 @@ test("physics mutation tools validate before commit and prove fresh observed sta
   assert.match(settings, /if \(immutablePlans\.Count > 0\)\s*\{\s*ctx\.CommitEffect\(\)/);
   assert.match(settings, /Unsupported physics setting/);
   assert.match(settings, /bool\.TryParse/);
+  assert.match(settings, /public string SimulationMode2D \{ get; set; \}/);
+  assert.match(settings, /ParseSimulationMode2D\(request\.SimulationMode2D\)/);
+  assert.match(settings, /Physics2D\.simulationMode = value/);
+  assert.match(settings, /Physics2D\.simulationMode == value/);
+  assert.ok(settings.indexOf("AddTypedPlans(request, plans);") < settings.indexOf("ctx.CommitEffect()"));
   assert.match(settings, /foreach \(var plan in immutablePlans\)\s*if \(!plan\.ReadbackMatches\(\)\)/);
+
+  const simulation = await readFile(new URL("../unitypkg/Editor/Tools/physics/simulation.cs", import.meta.url), "utf8");
+  const support = await readFile(new URL("../unitypkg/Editor/Tools/physics/PhysicsToolSupport.cs", import.meta.url), "utf8");
+  assert.match(support, /SimulationMode2D = Physics2D\.simulationMode\.ToString\(\)/);
+  assert.match(support, /Physics\.simulationMode != SimulationMode\.Script/);
+  assert.match(support, /enabled \? SimulationMode\.FixedUpdate : SimulationMode\.Script/);
+  assert.match(settings, /PhysicsToolSupport\.SetAutoSimulation3D\(value\)/);
+  assert.match(simulation, /PhysicsToolSupport\.IsAutoSimulation3D\(\)/);
+  assert.doesNotMatch(settings + simulation + support, /Physics\.autoSimulation = value|Physics\.autoSimulation == value|AutoSimulation = Physics\.autoSimulation|if \(Physics\.autoSimulation/);
+});
+
+test("physics.settings static catalog exposes the manual simulation contract", async () => {
+  const catalog = JSON.parse(await readFile(new URL("../contracts/static-capability-catalog.json", import.meta.url), "utf8"));
+  const descriptor = catalog.tools.find((tool: { name?: string }) => tool.name === "physics.settings");
+  assert.ok(descriptor, "physics.settings must exist in the static catalog");
+  assert.equal(descriptor.inputSchema.properties.simulationMode2D.type, "string");
+  assert.equal(descriptor.outputSchema.$defs["UnityCli.PhysicsSettingsInfo"].properties.simulationMode2D.type, "string");
+  assert.match(descriptor.description, /simulationMode2D accepts FixedUpdate, Update, or Script/);
 });
 
 test("physics bridge spec forwards structured --input fields", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/physics.js", import.meta.url), "utf8");
   assert.match(spec, /stringField\(flags, "target"\)/, "bridge should forward structured target");
-  assert.match(spec, /numberField\(flags, "gravityX"\)/, "bridge should forward structured gravityX");
+  assert.match(spec, /gravity: structured\.gravity/, "bridge should forward the current structured gravity object");
+  assert.match(spec, /gravity2d: structured\.gravity2d/, "bridge should forward the current structured gravity2d object");
+  assert.match(spec, /simulationMode2D: stringFlag\(flags, "simulation-mode-2d"\) \?\? stringField\(flags, "simulationMode2D"\)/);
+  assert.match(spec, /completionProbe: structured\.completionProbe/, "physics.simulation must keep its mandatory proof input");
+  assert.doesNotMatch(spec, /gravityX:/, "removed vector component inputs must not re-enter the bridge payload");
   assert.match(spec, /boolField\(flags, "useGravity"\)/, "bridge should forward structured useGravity");
   assert.match(spec, /stringField\(flags, "shape"\)/, "bridge should forward structured shape");
   assert.match(spec, /stringField\(flags, "materialPath"\)/, "bridge should forward structured materialPath");

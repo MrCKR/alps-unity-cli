@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } }
         public sealed class Result { public GameObjectTargetRef Target { get; set; } public AnimatorInfo Animator { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "animation.stop", Summary = "Stop and rebind an Animator on a target GameObject.", Description = "Call Animator.Rebind() and Update(0) to reset the Animator to its initial state.", Group = "animation", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Stop animation", Input = new Request { Target = "Player" } } } };
+        public ToolDescriptor Describe() => new() { Name = "animation.stop", Summary = "Stop and rebind an Animator on a target GameObject.", Description = "Call Animator.Rebind() and Update(0) to reset the Animator to its initial state.", Group = "animation",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Stop animation", Input = new Request { Target = "Player" } } } };
         public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var go = GameObjectToolSupport.ResolveUniqueTarget(r.Target, "Animation stop requires --target <go>.");

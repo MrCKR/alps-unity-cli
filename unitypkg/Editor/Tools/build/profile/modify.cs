@@ -10,8 +10,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "build.profile.modify", Summary = "Rename a persistent Unity Build Profile asset, with dry-run support.",
-            Description = "Updates the name of an existing Build Profile asset. Requires --yes because it writes the asset. dryRun=true previews without writing. Available in Edit and Play mode when the Unity Build Profile API exists.",
-            Group = "build", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true,
+            Description = "Updates the name of an existing Build Profile asset. dryRun=true previews without writing. Available in Edit and Play mode when the Unity Build Profile API exists.",
+            Group = "build",DestructiveHint = true, SupportsDryRun = true,
             SideEffects = new[] { "asset-write" }, Target = "editor", PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Rename profile", Input = new Request { Path = "Assets/BuildProfiles/Windows.asset", Name = "Windows Release" }, Execution = new ToolExampleExecution { DryRun = true } } }

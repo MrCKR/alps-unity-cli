@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Capture the active SceneView camera to a PNG/JPG file.",
             Description = "Capture the active SceneView camera to a PNG/JPG file. Returns E_SCENE_VIEW_NOT_AVAILABLE when no SceneView is open.",
             Group = "screenshot",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

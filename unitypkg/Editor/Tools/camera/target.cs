@@ -31,7 +31,6 @@ namespace UnityCli
             Summary = "Aim or move one Camera transform using lookAt and/or explicit position/rotation.",
             Description = "Set a Camera transform by looking at a GameObject and/or assigning explicit position/rotation. Session-affecting: marks the Camera dirty and can affect the running Play Mode view without persisting runtime-only state.",
             Group = "camera",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify" },
             Target = "editor",

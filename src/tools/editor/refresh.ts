@@ -1,112 +1,178 @@
-import { startUnityJob } from "../../cli-commands/unity-job.js";
-import { defineTool, type ToolContext } from "../define.js";
-import { StructuredToolError } from "../errors.js";
-import type { AnyJson } from "../../schema/any-json.js";
+import { createHash } from "node:crypto";
+import { executeBridgePayload } from "../../bridge/index.js";
+import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
+import { defineTool } from "../define.js";
+import { waitForEditorTransitionEnd } from "./readiness.js";
+import { blockersFromDetails, StructuredToolError } from "../errors.js";
 
-export interface EditorRefreshRequest {
-  compile?: boolean;
-  project?: string;
-  unity?: string;
-}
-
-export interface EditorRefreshJobResult {
-  action?: string;
-  compile?: boolean;
-}
-
-export interface EditorRefreshError {
-  code: string;
-  message: string;
-  details?: AnyJson;
-}
-
-export interface EditorRefreshCancellation {
-  mode: string;
-  description: string;
-  cancelCommand: string;
-  domainReloadObserved: boolean;
-}
-
+export interface EditorRefreshRequest { compile?: boolean; }
 export interface EditorRefreshResult {
-  jobId: string;
-  kind: string;
-  status: string;
-  requestId: string;
-  projectPath: string;
-  unityPath: string;
-  logPath: string;
-  pid?: number;
-  exitCode?: number;
-  createdAt: string;
-  updatedAt: string;
-  startedAt?: string;
-  finishedAt?: string;
-  command: string[];
-  result?: EditorRefreshJobResult;
-  error?: EditorRefreshError;
-  cancellation: EditorRefreshCancellation;
-  logTail?: string[];
+  changed: boolean;
+  compilationTriggered: boolean;
+  sourceFileCount: number;
+  sourceFingerprint: string;
+  dependencyVersion: string;
+  editorState: { status: "ready"; compile: false; import: false; };
+}
+export interface EditorRefreshDryRunResult {
+  dryRun: true;
+  plannedEffects: Array<{ type: "asset-refresh" } | { type: "script-compile" }>;
 }
 
-type JobFlags = Record<string, string | boolean>;
+type RecordValue = Record<string, unknown>;
+type BridgeData = { data?: unknown };
 
-// 将 defineTool request 映射回现有 batchmode job helper 使用的 CLI flag 名称。
-function buildEditorRefreshFlags(request: EditorRefreshRequest, execution: ToolContext["execution"]): JobFlags {
-  const flags: JobFlags = {};
-  if (request.compile !== undefined) flags.compile = request.compile;
-  if (request.project !== undefined) flags.project = request.project;
-  if (request.unity !== undefined) flags.unity = request.unity;
-  if (execution.wait !== undefined) flags.wait = execution.wait;
-  if (execution.timeoutMs !== undefined) flags["timeout-ms"] = String(execution.timeoutMs);
-  if (execution.waitTimeoutMs !== undefined) flags["wait-timeout-ms"] = String(execution.waitTimeoutMs);
-  return flags;
-}
-
-// editor.refresh 只包装旧 batch refresh job,确保 executeMethod、wait 和错误 envelope 不漂移。
-async function startEditorRefreshJob(request: EditorRefreshRequest, context: ToolContext): Promise<EditorRefreshResult> {
-  if (!context.jobStore || !context.jobRunner || !context.dataDir) {
-    throw new StructuredToolError("E_TOOL_HANDLER_UNSUPPORTED", "Tool \"editor.refresh\" requires a job runner runtime.", [
-      "Run unity_cli tools describe editor.refresh for details."
-    ]);
-  }
-
-  const compile = request.compile === true;
-  const result = await startUnityJob("refresh", buildEditorRefreshFlags(request, context.execution), {
-    dataDir: context.dataDir,
-    store: context.jobStore,
-    runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute
-  }, context.requestId, ["-executeMethod", compile ? "UnityCli.UnityCliBatch.RefreshAndCompile" : "UnityCli.UnityCliBatch.Refresh"], {
-    action: "refresh",
-    compile
-  });
-
-  if (!result.ok) {
-    throw new StructuredToolError(
-      result.error?.code ?? "EDITOR_REFRESH_FAILED",
-      result.error?.message ?? "Unity refresh job failed to start.",
-      result.error?.nextActions ?? ["Run unity_cli tools describe editor.refresh for input requirements."],
-      result.error?.details as Record<string, unknown> | undefined
-    );
-  }
-  return result.data as EditorRefreshResult;
-}
-
-export default defineTool<EditorRefreshRequest, EditorRefreshResult>({
+export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefreshDryRunResult>({
   name: "editor.refresh",
-  summary: "Closed-project batch refresh job; prefer asset.refresh for an already open live Editor.",
-  description: "Trigger AssetDatabase.Refresh in a separate Unity batch job, optionally requesting script compilation and waiting for readiness. Prefer asset.refresh for an already open live Editor; do not use this against a project already open in Unity because open projects can return UNITY_BUSY due to UnityLockfile.",
+  summary: "Refresh the open Unity Editor and return stable import and compile readback.",
+  description: "Refreshes assets in the selected live Editor once, then waits for import and compilation to become stable. compile=true requests script compilation once after Refresh returns; compilationTriggered reports only a compilation cycle actually observed by Unity.",
   group: "editor",
+  target: "editor",
   destructiveHint: false,
+  supportsDryRun: true,
+  timeoutMs: 120_000,
   playModeSupport: "editor-only",
   sideEffects: ["asset-refresh", "script-compile", "domain-reload"],
-  handler: "job",
-  supportStatus: "batch-job",
+  handler: "hybrid",
+  supportStatus: "live-bridge",
   examples: [
-    { description: "Refresh assets in batchmode", argv: ["tools", "run", "editor.refresh", "--project", ".", "--wait"] },
-    { description: "Refresh and request compilation", argv: ["tools", "run", "editor.refresh", "--project", "./Dev/UnityProject", "--wait", "--input", "{\"compile\":true}"] }
+    { description: "Refresh the current open Editor.", argv: ["tools", "run", "editor.refresh"] },
+    { description: "Refresh and request script compilation.", argv: ["tools", "run", "editor.refresh", "--input", "{\"compile\":true}"] },
   ],
   async execute(request, context) {
-    return startEditorRefreshJob(request, context);
-  }
+    if (context.execution.dryRun) {
+      return {
+        dryRun: true,
+        plannedEffects: request.compile
+          ? [{ type: "asset-refresh" as const }, { type: "script-compile" as const }]
+          : [{ type: "asset-refresh" as const }],
+      };
+    }
+
+    const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
+    const state = await waitForEditorTransitionEnd(context, childId(context.requestId, "_refresh_state"), deadline);
+    if (state.status === "blocked") {
+      throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot refresh assets.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
+    }
+    if (state.status === "offline") {
+      throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "editor.refresh requires an open Unity Editor.", ["Open the selected Unity project and retry."]);
+    }
+    if (state.status === "conflict" || !state.session.known || !state.session.editorSessionId) {
+      throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "editor.refresh could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
+    }
+    if (state.status !== "ready") {
+      throw new StructuredToolError("E_UNITY_TRANSITIONING", "editor.refresh requires a stable Editor generation.", ["Wait for editor.state to become ready, then retry."], undefined, true, 250);
+    }
+    if (state.state.playMode.value !== "edit") {
+      throw new StructuredToolError("E_TOOL_PLAYMODE_UNAVAILABLE", "editor.refresh is editor-only and cannot run in Play Mode.", ["Exit Play Mode before running editor.refresh."], { toolName: "editor.refresh", playModeSupport: "editor-only" }, false, 0);
+    }
+
+    const flags: BridgeFlags = { ...(context.flags ?? {}), instance: state.identity.instanceId };
+    const execute = withTransitionBinding({ mode: "execute", mutation: true, absoluteDeadlineMs: deadline });
+    const observe = withTransitionBinding({ mode: "read", mutation: false, absoluteDeadlineMs: deadline });
+    let accepted = false;
+    let root: RecordValue;
+
+    try {
+      root = record((await bridge(context.requestId, "internal.editor.refresh.start", {
+        compile: request.compile === true,
+        expectedEditorSessionId: state.session.editorSessionId,
+      }, flags, context, execute)).data);
+      accepted = root.accepted === true || root.terminal === true;
+    } catch (error) {
+      throw bridgeError(error);
+    }
+
+    // 已被 durable root 接受后，任何轮询/transport 失败都不能改写为普通失败。
+    if (root.terminal !== true) {
+      if (root.terminal !== false || root.accepted !== true) throw invalid();
+      accepted = true;
+      const statusId = childId(context.requestId, "_refresh_status");
+      while (root.terminal !== true) {
+        if (Date.now() >= deadline) throw executionTimeout("E_EXECUTION_TIMEOUT");
+        await delay(100);
+        try {
+          root = record((await bridge(statusId, "internal.editor.refresh.status", { rootRequestId: context.requestId }, flags, context, observe)).data);
+        } catch (error) {
+          throw executionTimeoutFrom(error);
+        }
+      }
+    }
+
+    try {
+      return terminalResult(root, context.requestId);
+    } catch (error) {
+      if (accepted && !(error instanceof StructuredToolError && error.code !== "E_TOOL_COMPLETION_PROOF_INVALID")) throw error;
+      throw error;
+    }
+  },
 });
+
+async function bridge(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: any, invocation: any): Promise<BridgeData> {
+  const result = await executeBridgePayload(requestId, command, input, flags, {
+    dataDir: context.dataDir,
+    bridgeExecute: context.bridgeExecute,
+  }, undefined, invocation);
+  if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live refresh bridge failed." });
+  return { data: result.data };
+}
+
+function terminalResult(root: RecordValue, requestId: string): EditorRefreshResult {
+  const envelope = record(root.rootEnvelope);
+  if (envelope.requestId !== requestId || typeof envelope.ok !== "boolean") throw invalid();
+  if (envelope.ok !== true) {
+    const error = record(envelope.error);
+    throw new StructuredToolError(
+      typeof error.code === "string" ? error.code : "E_EXECUTION_TIMEOUT",
+      typeof error.message === "string" ? error.message : "Refresh failed without a structured terminal.",
+      stringArray(error.nextActions),
+      recordOrUndefined(error.details),
+      typeof error.transient === "boolean" ? error.transient : undefined,
+      typeof error.retryAfterMs === "number" ? error.retryAfterMs : undefined,
+    );
+  }
+  const data = record(envelope.data);
+  const editor = record(data.editorState);
+  if (typeof data.changed !== "boolean" || typeof data.compilationTriggered !== "boolean"
+    || !nonnegativeInteger(data.sourceFileCount) || !sha256(data.sourceFingerprint)
+    || !sha256(data.dependencyVersion) || editor.status !== "ready" || editor.compile !== false || editor.import !== false) throw invalid();
+  return {
+    changed: data.changed,
+    compilationTriggered: data.compilationTriggered,
+    sourceFileCount: data.sourceFileCount as number,
+    sourceFingerprint: data.sourceFingerprint as string,
+    dependencyVersion: data.dependencyVersion as string,
+    editorState: { status: "ready", compile: false, import: false },
+  };
+}
+
+function bridgeError(error: unknown): StructuredToolError {
+  return error instanceof StructuredToolError
+    ? error
+    : new StructuredToolError("BRIDGE_CONNECTION_FAILED", "Live refresh bridge failed.");
+}
+
+function executionTimeoutFrom(error: unknown): StructuredToolError {
+  const cause = bridgeError(error);
+  const blockers = blockersFromDetails(cause.details);
+  return new StructuredToolError("E_EXECUTION_TIMEOUT", "editor.refresh did not return a terminal result before the request deadline.", ["Inspect editor.state before deciding whether to submit a new request."], {
+    causeCode: cause.code,
+    ...(blockers ? { blockers } : {}),
+  }, false, 0);
+}
+
+function executionTimeout(causeCode: string): StructuredToolError {
+  return new StructuredToolError("E_EXECUTION_TIMEOUT", "editor.refresh did not return a terminal result before the request deadline.", ["Inspect editor.state before deciding whether to submit a new request."], { causeCode }, false, 0);
+}
+
+function invalid(): StructuredToolError {
+  return new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "editor.refresh did not return a stable terminal readback.", ["Inspect UnityCliBridge.log before retrying."]);
+}
+
+function record(value: unknown): RecordValue { return value && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {}; }
+function recordOrUndefined(value: unknown): RecordValue | undefined { const result = record(value); return Object.keys(result).length > 0 ? result : undefined; }
+function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
+function sha256(value: unknown): value is string { return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value); }
+function nonnegativeInteger(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
+function childId(root: string, suffix: string): string { return root.length + suffix.length <= 200 ? root + suffix : `${root.slice(0, 160)}_${createHash("sha256").update(root).digest("hex").slice(0, 24)}${suffix}`; }
+function delay(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }

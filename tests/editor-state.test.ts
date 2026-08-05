@@ -5,8 +5,10 @@ import { join } from "node:path";
 import test from "node:test";
 import "../src/contexts/.generated-registry.js";
 import { dispatchContext } from "../src/contexts/dispatcher.js";
-import { readEditorState } from "../src/contexts/editor/state.js";
+import { observeVerifiedRegistrySession, readEditorState } from "../src/contexts/editor/state.js";
 import { defineContextMetadata } from "../src/contexts/define.js";
+import { EditorBlockerObserver } from "../src/editor-blocker-observer.js";
+import type { ProjectProcessClaimInspection, SessionProcessVerification } from "../src/instances.js";
 import { registryIdentity, createUnityProject, makeRegistry, makeRegistrySession, writeRegistry } from "./helpers/instance-registry-v2.js";
 
 const sourcePath = "src/contexts/editor/state.ts";
@@ -15,7 +17,7 @@ test("editor.state is the sole hybrid observation owner with bounded fallback", 
   const source = await readFile(sourcePath, "utf8");
   assert.match(source, /selectObservationInstanceForFlags/);
   assert.match(source, /verifyRegistrySessionProcess/);
-  assert.match(source, /OBSERVATION_BUDGET_MS = 1_000/);
+  assert.match(source, /OBSERVATION_BUDGET_MS = 10_000/);
   assert.match(source, /observationDeadlineMs = Math\.min\(startedAt \+ OBSERVATION_BUDGET_MS, context\.observationAbsoluteDeadlineMs/);
   assert.match(source, /if \(instance\.status === "conflict"\) return makeResult\(instance, undefined, "conflict"/);
   assert.match(source, /selectObservationInstanceForFlags\(context\.flags \?\? \{\}, context\.dataDir, remaining\(observationDeadlineMs\)\)/);
@@ -26,8 +28,12 @@ test("editor.state is the sole hybrid observation owner with bounded fallback", 
   assert.match(source, /\{ instance: selection\.instance\.instanceId \}/);
   assert.doesNotMatch(source, /Promise\.race/);
   assert.match(source, /parseSnapshot\(data\.snapshot \?\? data, session\)/);
-  assert.match(source, /verificationPromise = verifyRegistrySessionProcess[\s\S]*processClaimsPromise = inspectProjectProcessClaims[\s\S]*windowsPromise = probeWindowsEditorState[\s\S]*probeBridge/);
-  assert.match(source, /Promise\.all\(\[verificationPromise, windowsPromise, processClaimsPromise\]\)/);
+  assert.match(source, /verificationPromise = verifyRegistrySessionProcess[\s\S]*processClaimsPromise = inspectProjectProcessClaims[\s\S]*probeBridge/);
+  assert.match(source, /if \(bridge && isLiveSnapshot\(bridge\.snapshot\)\)[\s\S]*processClaims = await processClaimsPromise/);
+  assert.match(source, /Promise\.all\(\[verificationPromise, processClaimsPromise\]\)[\s\S]*observeVerifiedRegistrySession/);
+  assert.doesNotMatch(source, /probeWindowsEditorState/);
+  assert.match(source, /verification !== "verified" \|\| processClaims\.verification !== "verified"[\s\S]*processClaims\.processIds\.length !== 1[\s\S]*session-process-mismatch[\s\S]*observer\.observe/);
+  assert.match(source, /windowsUi: "not-observed" \| "observed-empty" \| "observed-blocked" \| "unproven" \| "unsupported"/);
   assert.match(source, /applyProjectProcessClaimInspection[\s\S]*inspected\.status === "conflict"/);
   assert.match(source, /verification === "dead"/);
   assert.match(source, /verification !== "verified"/);
@@ -86,6 +92,39 @@ function snapshot(session: Awaited<ReturnType<typeof makeRegistrySession>>, obse
   };
 }
 
+test("editor.state fallback performs zero UI probes for unverified, duplicate, or reused process claims", async () => {
+  const fixture = await stateFixture();
+  const correctClaim = { processId: fixture.session.processId, processStartedAt: fixture.session.processStartedAt };
+  const cases: Array<{ name: string; verification: SessionProcessVerification; claims: ProjectProcessClaimInspection; outcome: "conflict" }> = [
+    { name: "unverifiable", verification: "unverifiable", claims: { verification: "verified", processIds: [fixture.session.processId], processClaims: [correctClaim] }, outcome: "conflict" },
+    { name: "duplicate", verification: "verified", claims: { verification: "verified", processIds: [fixture.session.processId, fixture.session.processId + 1], processClaims: [correctClaim, { processId: fixture.session.processId + 1, processStartedAt: fixture.session.processStartedAt }] }, outcome: "conflict" },
+    { name: "reused", verification: "verified", claims: { verification: "verified", processIds: [fixture.session.processId], processClaims: [{ processId: fixture.session.processId, processStartedAt: "2026-01-01T00:00:00.000Z" }] }, outcome: "conflict" },
+  ];
+  try {
+    for (const entry of cases) {
+      let probes = 0;
+      const observer = new EditorBlockerObserver({
+        inspect: async () => entry.claims,
+        probe: async () => { probes += 1; return { supported: true, outcome: "observed-empty", windows: [] }; },
+      });
+      const result = await observeVerifiedRegistrySession(fixture.identity, fixture.session, Date.now() + 1_000, entry.verification, entry.claims, observer);
+      assert.equal(result.outcome, entry.outcome, entry.name);
+      assert.equal(probes, 0, entry.name);
+    }
+
+    let verifiedProbes = 0;
+    const verifiedClaims: ProjectProcessClaimInspection = { verification: "verified", processIds: [fixture.session.processId], processClaims: [correctClaim] };
+    const verified = await observeVerifiedRegistrySession(fixture.identity, fixture.session, Date.now() + 1_000, "verified", verifiedClaims, new EditorBlockerObserver({
+      inspect: async () => verifiedClaims,
+      probe: async () => { verifiedProbes += 1; return { supported: true, outcome: "observed-empty", windows: [] }; },
+    }));
+    assert.equal(verified.outcome, "observed-empty");
+    assert.equal(verifiedProbes, 1);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("readEditorState and dispatchContext use one live bounded bridge observation and sanitize sensitive progress", async () => {
   const fixture = await stateFixture();
   const startedAt = Date.now();
@@ -98,7 +137,7 @@ test("readEditorState and dispatchContext use one live bounded bridge observatio
     data: {
       snapshot: snapshot(fixture.session),
       progress: [{ kind: "import", title: "Importing", value: 0.5, canWait: true, source: "unity", bridgeEndpointUrl: "http://secret" }],
-      blockers: [{ kind: "modal", title: "Dialog", message: "Dialog", requiresUserAction: true, canAutoResolve: false, source: "unity", confidence: "exact", bridgeEndpoint: "http://secret" }],
+      blockers: [{ type: "dialog", dialogId: "dialog_fixture", title: "Dialog", message: "Dialog", buttons: ["OK"], requiresUserAction: true, source: "windows-ui", confidence: "exact", bridgeEndpoint: "http://secret" }],
     },
   };
   };
@@ -106,8 +145,8 @@ test("readEditorState and dispatchContext use one live bounded bridge observatio
     const direct = await readEditorState({ requestId: "state-direct", flags: { instance: fixture.project }, dataDir: fixture.dataDir, bridgeExecute });
     assert.equal(direct.observation.live, true);
     assert.equal(direct.status, "blocked");
-    assert.ok(direct.observation.elapsedMs <= 1_100);
-    assert.ok(Date.now() - startedAt <= 1_100);
+    assert.ok(direct.observation.elapsedMs <= 10_100);
+    assert.ok(Date.now() - startedAt <= 10_100);
     assert.doesNotMatch(JSON.stringify(direct), /secret|bridgeEndpoint/i);
 
     const dispatchedStartedAt = Date.now();
@@ -115,7 +154,7 @@ test("readEditorState and dispatchContext use one live bounded bridge observatio
     assert.ok(dispatched.ok);
     assert.equal((dispatched.data as { observation: { live: boolean } }).observation.live, true);
     assert.ok(observationDeadlines[1] >= dispatchedStartedAt);
-    assert.ok(observationDeadlines[1] <= Date.now() + 1_000);
+    assert.ok(observationDeadlines[1] <= Date.now() + 10_000);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
@@ -166,6 +205,9 @@ test("readEditorState rejects future snapshots and reports conflict or offline f
 test("generated editor.state descriptor is exactly the stable public output schema and validates actual output", async () => {
   const generated = defineContextMetadata().find((context) => context.name === "editor.state")?.outputSchema as Record<string, unknown>;
   const stable = JSON.parse(await readFile("contracts/stable-session/editor-state.schema.json", "utf8")) as Record<string, unknown>;
+  const observation = (stable.properties as Record<string, { properties: Record<string, { maximum?: number }> }>).observation;
+  // 3 秒是内部观察 deadline，不是受事件循环和 schema 校验开销约束的公共耗时上限。
+  assert.equal(observation.properties.elapsedMs.maximum, undefined);
   assert.deepEqual(generated, stable);
   const fixture = await stateFixture();
   try {

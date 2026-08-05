@@ -58,7 +58,7 @@ test("Cinemachine tools have matching command contracts", () => {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name}: contract not found`);
     assert.equal(contract?.group, "cinemachine", `${name}: contract group mismatch`);
-    assert.equal(contract?.handler_type, name === "cinemachine.create" ? "hybrid" : "bridge", `${name}: contract handler mismatch`);
+    assert.equal(contract?.handler_type, "bridge", `${name}: contract handler mismatch`);
     assert.equal(contract?.csharp_handler, "present", `${name}: C# handler should be present`);
     assert.equal(contract?.destructive, false, `${name}: Cinemachine session operations must be non-destructive`);
   }

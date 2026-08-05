@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Set the active scene among currently loaded scenes.",
             Description = "Set the active scene among currently loaded scenes. The target scene must already be loaded (use scene.load first). Affects which scene new GameObjects are created in.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "editor-session" },
             Target = "editor",

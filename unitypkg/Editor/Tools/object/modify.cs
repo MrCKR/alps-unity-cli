@@ -35,14 +35,11 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool DryRun { get; set; }
             public long InstanceId { get; set; }
             public string TypeName { get; set; }
             public List<string> ChangedPaths { get; set; }
             [UnityCliAnyJson] public object UpdatedData { get; set; }
-            public List<string> Logs { get; set; }
-            [UnityCliAnyJson] public object Audit { get; set; }
             public List<PlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -59,8 +56,7 @@ namespace UnityCli
             Summary = "Modify any Unity Object via verified serialized pathPatches; supports dry-run.",
             Description = "Modify an object using non-empty direct replace pathPatches on verifiable SerializedProperties. Resolves the target by instanceId, assetPath/guid, or path/name. Supports dry-run to preview without applying. Marks scene objects dirty.",
             Group = "object",
-            Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "object-modify" },
             Target = "editor",
             PlayModeSupport = "session-affecting",
@@ -69,7 +65,7 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Modify by pathPatches", Input = new Request { Path = "Player", PathPatches = new List<object> { new Dictionary<string, object> { { "path", "name" }, { "value", "PlayerModified" } } } } }
+                new ToolExample { Description = "Modify by pathPatches", Input = new Request { Path = "Player", PathPatches = new List<object> { new Dictionary<string, object> { { "path", "m_Name" }, { "op", "replace" }, { "value", "PlayerModified" } } } } }
             }
         };
 
@@ -93,7 +89,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "object.modify",
                     DryRun = true,
                     InstanceId = target.GetInstanceID(),
                     TypeName = target.GetType().FullName,
@@ -123,13 +118,10 @@ namespace UnityCli
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "object.modify",
                 InstanceId = target.GetInstanceID(),
                 TypeName = target.GetType().FullName,
                 ChangedPaths = result.ChangedPaths,
-                UpdatedData = updatedData,
-                Logs = result.Logs,
-                Audit = UnityCliBridge.ObjectPatch.ResultData(result)
+                UpdatedData = updatedData
             });
         }
     }

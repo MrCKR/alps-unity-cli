@@ -17,7 +17,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public long Frame { get; set; }
             public long Thread { get; set; }
             public long Top { get; set; }
@@ -42,7 +41,7 @@ namespace UnityCli
             Name = "profiler.hierarchy",
             Summary = "Read the per-function CPU call hierarchy (marker tree) for one profiler frame/thread.",
             Description = "Read the CPU call hierarchy for a single profiler frame and thread via ProfilerDriver.GetHierarchyFrameDataView, recursing GetItemChildren to emit a structured marker tree. Defaults are bounded (top=20, depth=5); each node reports childCount and childrenTruncated so AI can see when detail was omitted.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[]
             {
@@ -58,7 +57,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_HIERARCHY_UNAVAILABLE",
                     "UnityEditorInternal.ProfilerDriver is not available; hierarchy requires the Editor Profiler.",
-                    "Run this in the Unity Editor (not batchmode without profiler support).");
+                    "Capture Profiler data in the selected Live Editor, then retry.");
             }
 
             // 省略 frame 时读取最新已采集帧
@@ -125,7 +124,6 @@ namespace UnityCli
             var resolvedFrame = frame < 0 ? (int)hierarchyViewType.GetProperty("frameIndex").GetValue(view, null) : frame;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "profiler.hierarchy",
                 Frame = resolvedFrame,
                 Thread = threadIndex,
                 Top = top,
@@ -184,7 +182,6 @@ namespace UnityCli
         {
             return new ProfilerHierarchyDetails
             {
-                Command = "profiler.hierarchy",
                 Frame = frame,
                 Thread = threadIndex,
                 ProfilerRecording = ProfilerToolSupport.GetProfilerSessionEnabled()

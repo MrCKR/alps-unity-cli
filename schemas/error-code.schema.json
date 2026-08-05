@@ -2,9 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unity-cli.local/schemas/error-code.schema.json",
   "title": "Unity CLI Error Code",
-  "description": "Structured error object used in the response envelope. Defines structured error fields: error.code, error.message, and details.",
+  "description": "Structured error object used in the response envelope. Every failure includes stable retry and recovery fields; blocker observations use a sanitized public DTO.",
+  "x-unityCliTaxonomy": ["E_DIALOG_OBSERVATION_FAILED", "E_DIALOG_NOT_FOUND", "E_DIALOG_STALE", "E_DIALOG_BUTTON_NOT_FOUND", "E_DIALOG_BUTTON_AMBIGUOUS", "E_DIALOG_CLICK_UNPROVEN"],
   "type": "object",
-  "required": ["code", "message"],
+  "required": ["code", "message", "transient", "retryAfterMs", "nextActions"],
   "properties": {
     "code": {
       "type": "string",
@@ -18,17 +19,24 @@
     },
     "details": {
       "type": "object",
-      "description": "Additional structured context about the error (e.g. jobId, timeoutMs, bridgeEndpoint)."
+      "description": "Additional structured business context. Transport endpoints, listener identity and native window handles are never public.",
+      "properties": {
+        "blockers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/blocker" }
+        },
+        "observedBlockers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/blocker" }
+        }
+      },
+      "additionalProperties": true
     },
     "nextActions": {
       "type": "array",
       "items": { "type": "string" },
       "default": [],
       "description": "Suggested recovery actions the caller (Agent or user) can take."
-    },
-    "requestId": {
-      "type": "string",
-      "description": "Request identifier echoed in the error, for audit correlation."
     },
     "retryAfterMs": {
       "type": "integer",
@@ -41,5 +49,22 @@
       "description": "True if the error is transient (compiling, domain reload, import) and the same request may succeed after retry."
     }
   },
-  "additionalProperties": true
+  "$defs": {
+    "blocker": {
+      "type": "object",
+      "required": ["type", "dialogId", "title", "message", "buttons", "requiresUserAction", "source", "confidence"],
+      "properties": {
+        "type": { "const": "dialog" },
+        "dialogId": { "type": "string", "pattern": "^dialog_[a-f0-9]{64}$" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "buttons": { "type": "array", "items": { "type": "string" } },
+        "requiresUserAction": { "const": true },
+        "source": { "const": "windows-ui" },
+        "confidence": { "const": "exact" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
 }

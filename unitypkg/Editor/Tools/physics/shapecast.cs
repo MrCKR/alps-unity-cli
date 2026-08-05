@@ -41,7 +41,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public string Mode { get; set; }
             public string Shape { get; set; }
             public RaycastQuery Query { get; set; }
@@ -54,7 +53,7 @@ namespace UnityCli
             Name = "physics.shapecast",
             Summary = "Cast a sphere, box, or capsule shape and return all hits in 3D or 2D.",
             Description = "Shape cast: sphere (default), box, or capsule. mode=3d (default) or 2d. 2D supports circle (default), box, and capsule.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false,
+            Group = "physics",DestructiveHint = false,
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Sphere cast forward", Input = new Request { Shape = "sphere", DirectionZ = 1f } } }
@@ -92,7 +91,7 @@ namespace UnityCli
                 }
                 var hitList = new List<RaycastHitInfo>();
                 foreach (var h in hits2d) hitList.Add(PhysicsToolSupport.BuildRaycast2DHit(h));
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "physics.shapecast", Mode = "2d", Shape = shape, Query = PhysicsToolSupport.BuildRaycast2DQuery(origin2d, direction2d, distance, layerMask), HitCount = hits2d.Length, Hits = hitList });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "2d", Shape = shape, Query = PhysicsToolSupport.BuildRaycast2DQuery(origin2d, direction2d, distance, layerMask), HitCount = hits2d.Length, Hits = hitList });
             }
             RaycastHit[] hits;
             if (shape == "box")
@@ -123,7 +122,7 @@ namespace UnityCli
             }
             var list = new List<RaycastHitInfo>();
             foreach (var h in hits) list.Add(PhysicsToolSupport.BuildRaycast3DHit(h));
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "physics.shapecast", Mode = "3d", Shape = shape, Query = PhysicsToolSupport.BuildRaycast3DQuery(origin, direction, distance, layerMask), HitCount = hits.Length, Hits = list });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "3d", Shape = shape, Query = PhysicsToolSupport.BuildRaycast3DQuery(origin, direction, distance, layerMask), HitCount = hits.Length, Hits = list });
         }
     }
 }

@@ -3,15 +3,12 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityCli.Protocol;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -30,41 +27,11 @@ namespace UnityCli
 
         private static readonly object CompletionEvidenceLock = new object();
         private static readonly Dictionary<string, CompletionEvidence> CompletionEvidenceByRequest = new Dictionary<string, CompletionEvidence>(StringComparer.Ordinal);
-        private sealed class EffectContinuation
-        {
-            public string Kind;
-            public Dictionary<string, object> Value;
-        }
-
-        private static readonly HashSet<string> ProofRecoveryRequests = new HashSet<string>(StringComparer.Ordinal);
-        private static readonly Dictionary<string, IDictionary<string, object>> ProofRecoveryContinuations = new Dictionary<string, IDictionary<string, object>>(StringComparer.Ordinal);
-        private static readonly HashSet<string> DurableRecoveryToolNames = new HashSet<string>(new[]
-        {
-            "asset.import",
-            "asset.refresh",
-            "build.platform.set",
-            "build.profile.switch",
-            "editor.play",
-            "editor.stop",
-            "package.embed",
-            "camera.screenshot",
-            "editor.menu",
-            "graphics.bake-reflection-probe",
-            "profiler.capture",
-            "profiler.load",
-            "profiler.memory-snapshot.take",
-            "screenshot.game-view",
-            "screenshot.isolated-object",
-            "screenshot.orbit",
-            "screenshot.scene-view",
-            "screenshot.surround",
-            "ui.render-preview"
-        }, StringComparer.Ordinal);
         private static readonly HashSet<string> RegisteredCompletionDriverIds = new HashSet<string>(new[]
         {
             "atomic-typed-result-v1",
             "observed-terminal-readback-v1",
-            "resumable-terminal-readback-v1",
+            "active-operation-terminal-readback-v1",
             "external-terminal-readback-v1"
         }, StringComparer.Ordinal);
 
@@ -77,6 +44,19 @@ namespace UnityCli
             // 私有 compile start/status 必须绕开通用 completion 路径；start 的 accepted 不是公开 terminal。
             if (UnityCliCompileCoordinator.IsCommand(request.Command))
                 return await UnityCliCompileCoordinator.Execute(request, rawRequestBytes, tryAcceptJournal, cancellationToken);
+            // coordinator-owned roots own their journal and must never enter the direct handler path.
+            if (UnityCliLiveBuildCoordinator.IsCommand(request.Command))
+                return await UnityCliLiveBuildCoordinator.Execute(request, rawRequestBytes, tryAcceptJournal, cancellationToken);
+            if (UnityCliLiveRefreshCoordinator.IsCommand(request.Command))
+                return await UnityCliLiveRefreshCoordinator.Execute(request, rawRequestBytes, tryAcceptJournal, cancellationToken);
+            if (UnityCliAssetRefreshCoordinator.IsCommand(request.Command))
+                return await UnityCliAssetRefreshCoordinator.Execute(request, rawRequestBytes, tryAcceptJournal, cancellationToken);
+            if (UnityCliPackageEmbedCoordinator.IsCommand(request.Command))
+                return await UnityCliPackageEmbedCoordinator.Execute(request, rawRequestBytes, tryAcceptJournal, cancellationToken);
+            if (UnityCliPackageResolveCoordinator.IsCommand(request.Command))
+                return await UnityCliPackageResolveCoordinator.Execute(request, rawRequestBytes, tryAcceptJournal, cancellationToken);
+            if (UnityCliTestRunCoordinator.IsCommand(request.Command))
+                return await UnityCliTestRunCoordinator.Execute(request, rawRequestBytes, tryAcceptJournal, cancellationToken);
             var contract = ResolveRequestCompletionContract(request);
             if (contract == null)
             {
@@ -85,17 +65,10 @@ namespace UnityCli
             }
             if (!string.Equals(contract.DeliveryMode, "direct-terminal", StringComparison.Ordinal))
                 return CompletionContractRequiredEnvelope(request);
-            var directAllowed = string.Equals(contract.DirectInvocationPolicy, "allowed", StringComparison.Ordinal);
-            // HTTP coordinator 永不授予 frozen delivery；Unity batchmode 走独立的进程内 ExecuteBatchCommandAsync。
-            if (!directAllowed && !RequestIsSupportedDryRun(request))
-                return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException(
-                    "E_DIRECT_BUSINESS_PROOF_UNAVAILABLE",
-                    "Tool " + contract.ToolName + " cannot prove attributable business completion for live direct delivery.",
-                    "Use only its preserved batch/job delivery when available, or choose a Tool with an allowed direct completion contract."));
             if (!IsRegisteredCompletionDriver(contract.ExecutionClass, contract.CompletionDriverId))
                 return CompletionDriverRequiredEnvelope(request, contract);
 
-            var mutation = RequestRequiresMutationJournal(request, contract);
+            var mutation = RequestRequiresMutation(request, contract);
             if (!mutation)
             {
                 var response = await Execute(request, cancellationToken);
@@ -103,348 +76,92 @@ namespace UnityCli
                 return response;
             }
 
-            // A compile owns the global mutation lane from durable acceptance through root terminal.
-            // Do this before AcceptOrRecover so a rejected ordinary mutation leaves no terminal journal.
-            if (UnityCliCompileCoordinator.IsActive())
+            // 所有 C# 与 TS mutation 共用跨进程 instance lease；拒绝发生在请求接受前。
+            bool newlyAcquiredLease;
+            if (!UnityCliSessionMutationLease.TryAcquire(request.RequestId, UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId), out newlyAcquiredLease))
                 return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(
                     request.RequestId,
-                    "E_UNITY_COMPILING",
-                    "Unity is running a durable editor.compile operation.",
-                    null,
-                    new[] { "Wait for editor.compile to reach its terminal result, then retry this mutation." },
+                    "E_UNITY_BUSY",
+                    "Another mutation owns the selected Unity instance.",
+                    new Dictionary<string, object> { { "owner", "session-mutation" } },
+                    new[] { "Wait for the current mutation to reach its terminal result, then submit this request again." },
                     transient: true,
                     retryAfterMs: 250));
 
-            RequestJournalDecision decision;
             try
             {
-                decision = AcceptOrRecover(request, rawRequestBytes, contract, () =>
-                {
-                    if (tryAcceptJournal == null || !tryAcceptJournal()) throw new OperationCanceledException("HTTP timeout cancelled mutation before journal acceptance.");
-                });
+                // 接受后 HTTP 超时不再取消已入队的业务执行；普通 Tool 不创建请求级文件。
+                if (tryAcceptJournal == null || !tryAcceptJournal())
+                    throw new OperationCanceledException("HTTP timeout cancelled mutation before acceptance.");
             }
-            catch (BridgeCommandException exception)
+            catch (OperationCanceledException)
             {
-                return SerializeBridgeExceptionEnvelope(request.RequestId, exception);
+                if (newlyAcquiredLease) UnityCliSessionMutationLease.Release(request.RequestId);
+                return ExecutionTimeoutEnvelope(request.RequestId, "The request was not accepted before the execution deadline elapsed.");
             }
-            if (decision.ResumeFinalize)
-                return await FinalizeProvenResult(request, decision.TerminalEnvelope, cancellationToken);
-            if (decision.TerminalEnvelope != null) return UnityCliSerializer.Serialize(decision.TerminalEnvelope);
-            if (!decision.Execute)
-                return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException(
-                    "E_REQUEST_JOURNAL_CORRUPT",
-                    "Request journal did not authorize execution or terminal recovery.",
-                    "Inspect the request journal record and retry with a new requestId."));
 
             try
             {
-                if (decision.ResumeProof)
-                {
-                    if (IsGenericExternalReobserveContinuation(decision.Continuation))
-                    {
-                        ReobserveGenericExternalContinuation(decision.Continuation);
-                        return PersistOutcomeUnknown(request.RequestId, true, "The prior external operation has only a non-attributable recovery readback; its mutation will not be replayed.");
-                    }
-                    MarkProofRecoveryRequest(request.RequestId, decision.Continuation);
-                }
-                else MarkAcceptedBeforeEffect(request.RequestId);
                 cancellationToken.ThrowIfCancellationRequested();
                 var response = await Execute(request, cancellationToken);
                 var envelope = ValidateCoordinatedTerminal(response, request.RequestId);
                 object okValue;
                 var ok = envelope.TryGetValue("ok", out okValue) && okValue is bool && (bool)okValue;
-                if (!ok)
-                {
-                    if (RequestJournalEffectStarted(request.RequestId))
-                        return PersistOutcomeUnknown(request.RequestId, true, "The Tool returned an error after its effect barrier; no terminal business proof was registered.");
-                    return UnityCliSerializer.Serialize(PersistTerminal(request.RequestId, envelope, "failed"));
-                }
+                if (!ok) return UnityCliSerializer.Serialize(envelope);
 
                 var evidence = TakeCompletionEvidence(request.RequestId, contract);
                 if (evidence == null)
-                {
-                    if (RequestJournalEffectStarted(request.RequestId))
-                        return PersistOutcomeUnknown(request.RequestId, true, "The Tool returned success without completion-driver evidence after its effect barrier.");
-                    var invalid = CompletionProofInvalidEnvelope(request, contract, "No completion-driver evidence was registered.");
-                    return UnityCliSerializer.Serialize(PersistTerminal(request.RequestId, invalid, "failed"));
-                }
-                if (!RequestJournalEffectStarted(request.RequestId))
-                {
-                    var invalid = CompletionProofInvalidEnvelope(request, contract, "Completion evidence exists but the durable effect_started barrier is missing.");
-                    return UnityCliSerializer.Serialize(PersistTerminal(request.RequestId, invalid, "failed"));
-                }
-
-                MarkEffectProven(request.RequestId, evidence.ProofKind, evidence.ProofBytes, envelope);
-                return await FinalizeProvenResult(request, envelope, cancellationToken);
+                    return UnityCliSerializer.Serialize(CompletionProofInvalidEnvelope(request, contract, "No completion-driver evidence was registered."));
+                return await FinalizeResult(request, envelope, cancellationToken);
             }
             catch (OperationCanceledException)
             {
-                if (!RequestJournalEffectStarted(request.RequestId))
-                    return PersistFailedBeforeEffect(request.RequestId, new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed before any effect began.", "Inspect editor.state before submitting a new request."));
-                return PersistOutcomeUnknown(request.RequestId, true,
-                    "The immutable deadline or Unity session ended before a durable terminal proof was persisted.");
+                return ExecutionTimeoutEnvelope(request.RequestId, "The execution deadline elapsed and the result cannot be confirmed. Check the affected business state.");
             }
             catch (BridgeCommandException exception)
             {
-                if (!RequestJournalEffectStarted(request.RequestId)) return PersistFailedBeforeEffect(request.RequestId, exception);
-                return PersistOutcomeUnknown(request.RequestId, true,
-                    "The mutation crossed effect_started but completion proof failed: " + exception.Code + ".");
+                return SerializeBridgeExceptionEnvelope(request.RequestId, exception);
             }
             catch (Exception exception)
             {
-                if (!RequestJournalEffectStarted(request.RequestId))
-                    return PersistFailedBeforeEffect(request.RequestId, new BridgeCommandException(
-                        "E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log."));
-                return PersistOutcomeUnknown(request.RequestId, true,
-                    "The mutation crossed effect_started but completion became uncertain: " + exception.GetType().Name + ".");
+                return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException(
+                    "E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log."));
             }
             finally
             {
                 RemoveCompletionEvidence(request.RequestId);
-                RemoveProofRecoveryRequest(request.RequestId);
+                UnityCliSessionMutationLease.Release(request.RequestId);
             }
         }
 
-        /// <summary>
-        /// handler 进入前只构造可持久化 continuation 与完成只读前置校验，不写 effect_started。
-        /// 真正 barrier 由 Tool 在首个 mutation 前通过 ctx.CommitEffect() 显式触发。
-        /// </summary>
-        private static EffectContinuation PrepareToolEffect(BridgeRequest request, UnityCliToolCompletionContract contract, object typedInput)
+        /// <summary>普通 Tool 不跨重载恢复；active operation 由专用 coordinator 管理。</summary>
+        private static bool TryFinalizeRecoveredPlayModeRoot(string requestId, string requestDigest)
         {
-            if (IsProofRecoveryRequest(request.RequestId))
-            {
-                var recovered = ProofRecoveryContinuation(request.RequestId);
-                object kind;
-                if (recovered == null || !recovered.TryGetValue("kind", out kind) || string.IsNullOrEmpty(kind as string))
-                    throw new BridgeCommandException("E_REQUEST_JOURNAL_CORRUPT", "Proof recovery continuation has no kind.", "Inspect the request journal before retrying.");
-                return new EffectContinuation { Kind = kind as string, Value = new Dictionary<string, object>(recovered) };
-            }
-            if (!RequestRequiresMutationJournal(request, contract)) return null;
-            return BuildEffectContinuation(contract.ToolName, typedInput);
+            return false;
         }
 
-        /// <summary>显式 commit boundary 紧邻首个业务 effect 写 durable barrier；一次请求只能调用一次。</summary>
-        private static void CommitToolEffect(BridgeRequest request, UnityCliToolCompletionContract contract, EffectContinuation continuation)
+        /// <summary>普通 Tool 的 effect 提交只保留 runner 协调语义，不写请求级持久状态。</summary>
+        private static object PrepareToolEffect(BridgeRequest request, UnityCliToolCompletionContract contract, object typedInput)
         {
-            if (IsProofRecoveryRequest(request.RequestId))
-                throw new BridgeCommandException("E_TOOL_EFFECT_BARRIER_INVALID", "Proof recovery cannot commit the mutation again.", "Reobserve the existing effect without replaying it.");
-            if (!RequestRequiresMutationJournal(request, contract))
-                throw new BridgeCommandException("E_TOOL_EFFECT_BARRIER_INVALID", "The current request is not classified as a mutation.", "Remove ctx.CommitEffect() from read-only and dry-run paths.");
-            MarkEffectStarted(request.RequestId, continuation == null ? null : continuation.Kind, continuation == null ? null : continuation.Value);
-            if (continuation != null)
-            {
-                lock (CompletionEvidenceLock) ProofRecoveryContinuations[request.RequestId] = continuation.Value;
-            }
-        }
-
-        private static bool SupportsProofRecovery(string toolName)
-        {
-            return !string.IsNullOrWhiteSpace(toolName) && DurableRecoveryToolNames.Contains(toolName);
-        }
-
-        /// <summary>在 effect_started 前冻结可重观察所需的最小非敏感 seed；未注册 Tool 不获得恢复资格。</summary>
-        private static EffectContinuation BuildEffectContinuation(string toolName, object typedInput)
-        {
-            if (!SupportsProofRecovery(toolName)) return null;
-            if (string.Equals(toolName, "asset.import", StringComparison.Ordinal))
-            {
-                AssetToolSupport.EnsureEditorNotBusy(toolName);
-                var path = AssetToolSupport.RequireAssetPath(InputString(typedInput, "Path") ?? InputString(typedInput, "Destination"));
-                var source = InputString(typedInput, "Source");
-                var content = InputString(typedInput, "Content");
-                var destinationPath = AssetToolSupport.AssetFullPath(path);
-                var overwrite = InputNullableBool(typedInput, "Overwrite") ?? false;
-                if (File.Exists(destinationPath) && !overwrite)
-                    throw new BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Asset already exists: " + path, "Pass --overwrite or choose another destination.");
-                byte[] bytes;
-                if (!string.IsNullOrEmpty(source))
-                {
-                    var normalizedSource = AssetToolSupport.NormalizeAssetPath(source);
-                    var sourcePath = normalizedSource.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)
-                        ? AssetToolSupport.AssetFullPath(normalizedSource)
-                        : Path.GetFullPath(source);
-                    if (!File.Exists(sourcePath)) throw new BridgeCommandException("E_ASSET_SOURCE_NOT_FOUND", "Asset import source file not found: " + source, "Pass an existing source path.");
-                    if (string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
-                        throw new BridgeCommandException("E_ASSET_SOURCE_EQUALS_DESTINATION", "Asset import source and destination resolve to the same file.", "Choose a different destination path.");
-                    bytes = File.ReadAllBytes(sourcePath);
-                }
-                else
-                {
-                    if (content == null) throw new BridgeCommandException("E_ASSET_IMPORT_INPUT_REQUIRED", "asset.import requires source or content.", "Pass a source file or inline content.");
-                    bytes = Encoding.UTF8.GetBytes(content);
-                }
-                return Continuation("asset-content-sha256-v1", new Dictionary<string, object> { { "path", path }, { "contentSha256", Sha256Hex(bytes) } });
-            }
-            if (string.Equals(toolName, "asset.refresh", StringComparison.Ordinal))
-            {
-                AssetToolSupport.EnsureEditorNotBusy(toolName);
-                var path = InputString(typedInput, "Path") ?? InputString(typedInput, "AssetPath") ?? InputString(typedInput, "Target");
-                if (!string.IsNullOrEmpty(path)) path = AssetToolSupport.RequireAssetPath(path);
-                var continuation = new Dictionary<string, object> { { "path", path ?? string.Empty }, { "beforeListenerGeneration", CurrentListenerGeneration() } };
-                if (!string.IsNullOrEmpty(path))
-                {
-                    var fullPath = AssetToolSupport.AssetFullPath(path);
-                    if (!File.Exists(fullPath)) throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset refresh target does not exist: " + path, "Pass an existing Assets/ path.");
-                    continuation.Add("contentSha256", Sha256Hex(File.ReadAllBytes(fullPath)));
-                }
-                return Continuation("asset-refresh-v1", continuation);
-            }
-            if (string.Equals(toolName, "build.platform.set", StringComparison.Ordinal))
-            {
-                BuildToolSupport.EnsureEditorNotBusy(toolName);
-                var expected = InputString(typedInput, "Target");
-                BuildTarget parsed;
-                if (string.IsNullOrEmpty(expected)) throw new BridgeCommandException("E_BUILD_TARGET_REQUIRED", "build.platform.set requires target.", "Pass a valid BuildTarget enum name.");
-                if (!Enum.TryParse(expected, true, out parsed)) throw new BridgeCommandException("E_BUILD_TARGET_UNKNOWN", "Unknown BuildTarget: " + expected, "Pass a valid BuildTarget enum name.");
-                return Continuation("build-platform-v1", new Dictionary<string, object> { { "expected", expected }, { "before", EditorUserBuildSettings.activeBuildTarget.ToString() } });
-            }
-            if (string.Equals(toolName, "build.profile.switch", StringComparison.Ordinal))
-            {
-                BuildToolSupport.EnsureEditorNotBusy(toolName);
-                var profileType = BuildToolSupport.RequireBuildProfileType(toolName);
-                var path = InputString(typedInput, "Path");
-                BuildToolSupport.LoadProfile(profileType, path, toolName);
-                var active = BuildToolSupport.ActiveBuildProfile(profileType);
-                return Continuation("build-profile-v1", new Dictionary<string, object> { { "expectedPath", path }, { "beforePath", active == null ? string.Empty : AssetDatabase.GetAssetPath(active) } });
-            }
-            if (string.Equals(toolName, "editor.play", StringComparison.Ordinal))
-            {
-                EditorToolSupport.EnsureEditorNotBusy(toolName);
-                return Continuation("playmode-v1", new Dictionary<string, object> { { "expectedPlaying", true }, { "beforePlaying", EditorApplication.isPlaying } });
-            }
-            if (string.Equals(toolName, "editor.stop", StringComparison.Ordinal))
-            {
-                EditorToolSupport.EnsureEditorNotBusy(toolName);
-                return Continuation("playmode-v1", new Dictionary<string, object> { { "expectedPlaying", false }, { "beforePlaying", EditorApplication.isPlaying } });
-            }
-            if (string.Equals(toolName, "package.embed", StringComparison.Ordinal))
-            {
-                var packageId = InputString(typedInput, "Package");
-                if (string.IsNullOrEmpty(packageId)) throw new BridgeCommandException("E_PACKAGE_ID_REQUIRED", "package.embed requires --package <id>.", "Pass a package id like com.unity.x.");
-                if (EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || UnityCliBridge.IsPlayModeChanging())
-                    throw new BridgeCommandException("E_UNITY_BUSY", "Unity Editor is not ready to embed a package.", "Wait for editor.state to become ready.");
-                var embedMethod = typeof(UnityEditor.PackageManager.Client).GetMethod("Embed", BindingFlags.Static | BindingFlags.Public);
-                if (embedMethod == null) throw new BridgeCommandException("E_PACKAGE_EMBED_UNSUPPORTED", "PackageClient.Embed is not available in this Unity version.", "Use a Unity Editor version with PackageClient.Embed.");
-                var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/" + packageId);
-                if (info == null) throw new BridgeCommandException("E_PACKAGE_NOT_FOUND", "Installed package was not found: " + packageId + ".", "Inspect package.list and pass an installed registry package.");
-                if (info.source == UnityEditor.PackageManager.PackageSource.Embedded)
-                    throw new BridgeCommandException("E_PACKAGE_ALREADY_EMBEDDED", "Package is already embedded: " + packageId + ".", "Inspect package.info or choose a registry package.");
-                return Continuation("package-embed-v1", new Dictionary<string, object> { { "packageId", packageId }, { "beforeEmbedded", false } });
-            }
-            if (IsGenericExternalRecoveryTool(toolName))
-            {
-                var path = InputString(typedInput, "Path") ?? InputString(typedInput, "Output") ?? InputString(typedInput, "ContactSheetPath");
-                var target = InputString(typedInput, "Target");
-                var format = InputString(typedInput, "Format");
-                return Continuation("external-reobserve-v1", new Dictionary<string, object>
-                {
-                    { "toolName", toolName },
-                    { "path", path ?? string.Empty },
-                    { "target", target ?? string.Empty },
-                    { "format", format ?? string.Empty }
-                });
-            }
             return null;
         }
 
-        /// <summary>无可恢复 operation identity 的外部 Tool 只保存非敏感观察 seed，reload 后绝不 blind replay。</summary>
-        private static bool IsGenericExternalRecoveryTool(string toolName)
+        private static void CommitToolEffect(BridgeRequest request, UnityCliToolCompletionContract contract, object preparation)
         {
-            return toolName == "camera.screenshot" || toolName == "editor.menu" || toolName == "graphics.bake-reflection-probe"
-                || toolName == "profiler.capture" || toolName == "profiler.load" || toolName == "profiler.memory-snapshot.take"
-                || toolName == "screenshot.game-view" || toolName == "screenshot.isolated-object" || toolName == "screenshot.orbit"
-                || toolName == "screenshot.scene-view" || toolName == "screenshot.surround" || toolName == "ui.render-preview";
+            if (!RequestRequiresMutation(request, contract))
+                throw new BridgeCommandException("E_TOOL_EFFECT_BARRIER_INVALID", "The current request is not classified as a mutation.", "Remove ctx.CommitEffect() from read-only and dry-run paths.");
         }
 
-        private static bool IsGenericExternalReobserveContinuation(object continuation)
-        {
-            var values = continuation as IDictionary<string, object>;
-            object kind;
-            return values != null && values.TryGetValue("kind", out kind) && string.Equals(kind as string, "external-reobserve-v1", StringComparison.Ordinal);
-        }
+        /// <summary>内部命令保留 effect boundary 调用，但不产生请求级持久状态。</summary>
+        private static void BeginDirectEffect(string requestId) { }
 
-        /// <summary>恢复时只重新读取 durable path；即使文件存在也不能把它归因于中断前的 effect。</summary>
-        private static void ReobserveGenericExternalContinuation(object continuation)
-        {
-            var values = continuation as IDictionary<string, object>;
-            object pathValue;
-            if (values == null || !values.TryGetValue("path", out pathValue))
-                throw new BridgeCommandException("E_REQUEST_JOURNAL_CORRUPT", "External recovery continuation has no path field.", "Inspect the request journal before submitting a new request.");
-            var path = pathValue as string;
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-            {
-                // 强制 fresh bytes readback，且不把这一观察提升为 completion proof。
-                Sha256Hex(File.ReadAllBytes(path));
-            }
-        }
-
-        private static EffectContinuation Continuation(string kind, Dictionary<string, object> value)
-        {
-            value["kind"] = kind;
-            return new EffectContinuation { Kind = kind, Value = value };
-        }
-
-        private static object InputProperty(object input, string name)
-        {
-            if (input == null) return null;
-            var property = input.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
-            return property == null ? null : property.GetValue(input, null);
-        }
-
-        private static string InputString(object input, string name) { return InputProperty(input, name) as string; }
-        private static bool? InputNullableBool(object input, string name) { var value = InputProperty(input, name); return value is bool ? (bool?)value : null; }
-
-        private static void MarkProofRecoveryRequest(string requestId, object continuation)
-        {
-            var dictionary = continuation as IDictionary<string, object>;
-            if (dictionary == null) throw new BridgeCommandException("E_REQUEST_JOURNAL_CORRUPT", "Proof recovery requires a validated durable continuation.", "Inspect the request journal record before retrying.");
-            lock (CompletionEvidenceLock)
-            {
-                ProofRecoveryRequests.Add(requestId);
-                ProofRecoveryContinuations[requestId] = dictionary;
-            }
-        }
-
-        private static bool IsProofRecoveryRequest(string requestId)
-        {
-            lock (CompletionEvidenceLock) return ProofRecoveryRequests.Contains(requestId);
-        }
-
-        private static IDictionary<string, object> ProofRecoveryContinuation(string requestId)
-        {
-            lock (CompletionEvidenceLock)
-            {
-                IDictionary<string, object> continuation;
-                return ProofRecoveryContinuations.TryGetValue(requestId, out continuation) ? continuation : null;
-            }
-        }
-
-        private static void RemoveProofRecoveryRequest(string requestId)
-        {
-            lock (CompletionEvidenceLock)
-            {
-                ProofRecoveryRequests.Remove(requestId);
-                ProofRecoveryContinuations.Remove(requestId);
-            }
-        }
-
-        /// <summary>内部窄命令在紧邻真实 effect 前调用；校验失败路径不得调用。</summary>
-        private static void BeginDirectEffect(string requestId)
-        {
-            MarkEffectStarted(requestId);
-        }
-
-        /// <summary>
-        /// typed Tool 已完成 output schema validation 后登记私有 proof。proof 仅持久化摘要，Result 原文不进入 evidence 字段。
-        /// resumable Tool 必须由专用 continuation driver 登记，禁止套用普通 handler-returned 证明。
-        /// </summary>
         private static void RecordToolCompletionEvidence(BridgeRequest request, RegisteredTool definition, object result, object terminalData)
         {
             if (definition == null || definition.CompletionContract == null)
                 throw new BridgeCommandException("E_TOOL_COMPLETION_PROOF_INVALID", "Tool completion contract is unavailable at the runner boundary.", "Fix Tool registration before retrying.");
             var contract = definition.CompletionContract;
             ValidateToolTerminalData(request, definition, result, terminalData);
-            if (!RequestRequiresMutationJournal(request, contract))
+            if (!RequestRequiresMutation(request, contract))
             {
                 if (request.Execution == null || request.Execution.DryRun != true) ValidateDriverReadback(contract, result);
                 return;
@@ -508,7 +225,7 @@ namespace UnityCli
             if (!RegisteredCompletionDriverIds.Contains(completionDriverId ?? string.Empty)) return false;
             if (string.Equals(executionClass, "atomic", StringComparison.Ordinal)) return completionDriverId == "atomic-typed-result-v1";
             if (string.Equals(executionClass, "observed-state", StringComparison.Ordinal)) return completionDriverId == "observed-terminal-readback-v1";
-            if (string.Equals(executionClass, "resumable", StringComparison.Ordinal)) return completionDriverId == "resumable-terminal-readback-v1";
+            if (string.Equals(executionClass, "resumable", StringComparison.Ordinal)) return completionDriverId == "active-operation-terminal-readback-v1";
             if (string.Equals(executionClass, "external", StringComparison.Ordinal)) return completionDriverId == "external-terminal-readback-v1";
             return false;
         }
@@ -516,23 +233,13 @@ namespace UnityCli
         private static void ValidateToolTerminalData(BridgeRequest request, RegisteredTool definition, object result, object terminalData)
         {
             var data = terminalData as IDictionary<string, object>;
-            object commandValue;
-            object toolValue;
-            object executionValue;
             object resultValue;
-            var tool = data != null && data.TryGetValue("tool", out toolValue) ? toolValue as IDictionary<string, object> : null;
-            var execution = data != null && data.TryGetValue("execution", out executionValue) ? executionValue as IDictionary<string, object> : null;
-            object toolName;
-            object exitState;
             if (data == null
-                || !data.TryGetValue("command", out commandValue)
-                || !(string.Equals(commandValue as string, "project-tool.run", StringComparison.Ordinal) || string.Equals(commandValue as string, "runtime-tool.run", StringComparison.Ordinal))
-                || tool == null || !tool.TryGetValue("name", out toolName) || !string.Equals(toolName as string, definition.Name, StringComparison.Ordinal)
-                || execution == null || !execution.TryGetValue("exitState", out exitState) || !string.Equals(exitState as string, "completed", StringComparison.Ordinal)
+                || data.Count != 1
                 || !data.TryGetValue("result", out resultValue)
                 || !string.Equals(UnityCliSerializer.Serialize(resultValue), UnityCliSerializer.Serialize(result), StringComparison.Ordinal))
             {
-                throw new BridgeCommandException("E_TOOL_COMPLETION_PROOF_INVALID", "Tool runner did not produce a typed terminal result bound to the selected Tool.", "Fix the Tool runner completion boundary before retrying.");
+                throw new BridgeCommandException("E_TOOL_COMPLETION_PROOF_INVALID", "Tool runner did not produce its exact typed business terminal.", "Fix the Tool runner completion boundary before retrying.");
             }
         }
 
@@ -604,11 +311,6 @@ namespace UnityCli
             if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
             if (string.Equals(toolName, "code.exec", StringComparison.Ordinal))
                 return UnityCliToolCompletionRegistry.CodeExec;
-            if (string.Equals(toolName, "bridge.package.refresh", StringComparison.Ordinal))
-                return new UnityCliToolCompletionContract(
-                    "bridge.package.refresh", "internal", "direct-terminal", "external", "external-operation-terminal",
-                    "operation-terminal-and-readback", "reattach-or-reobserve", "E_EXECUTION_TIMEOUT",
-                    "external-proof-or-unknown", "allowed", "ordinary", "external-terminal-readback-v1", "required", true);
             return ResolveRegisteredCustomToolCompletionContract(toolName);
         }
 
@@ -632,7 +334,7 @@ namespace UnityCli
                 if (request != null && string.Equals(request.Command, "internal.editor.compile.start", StringComparison.Ordinal))
                     return request.Execution == null || request.Execution.DryRun != true;
                 var contract = ResolveRequestCompletionContract(request);
-                return RequestRequiresMutationJournal(request, contract);
+                return RequestRequiresMutation(request, contract);
             }
             catch
             {
@@ -640,8 +342,8 @@ namespace UnityCli
             }
         }
 
-        /// <summary>descriptor 表示潜在风险；本次 input 没有 setter/action 时按 read 执行且不创建 mutation journal。</summary>
-        private static bool RequestRequiresMutationJournal(BridgeRequest request, UnityCliToolCompletionContract contract)
+        /// <summary>descriptor 表示潜在风险；本次 input 没有 setter/action 时按 read 执行。</summary>
+        private static bool RequestRequiresMutation(BridgeRequest request, UnityCliToolCompletionContract contract)
         {
             if (request == null || contract == null || !contract.Mutation || (request.Execution != null && request.Execution.DryRun == true)) return false;
             var name = contract.ToolName;
@@ -673,18 +375,6 @@ namespace UnityCli
             if (name == "cinemachine.target") return HasAnyInput(input, "follow", "lookAt");
             if (name == "cinemachine.blend") return HasAnyInput(input, "duration", "style");
             return true;
-        }
-
-        /// <summary>仅 live descriptor 明确支持的 dry-run 可以绕过不可证明 Tool 的 direct 拒绝。</summary>
-        private static bool RequestIsSupportedDryRun(BridgeRequest request)
-        {
-            if (request == null || request.Execution == null || request.Execution.DryRun != true) return false;
-            if (!string.Equals(request.Command, "project-tool.run", StringComparison.Ordinal)
-                && !string.Equals(request.Command, "runtime-tool.run", StringComparison.Ordinal)) return false;
-            DiscoverProjectTools();
-            RegisteredTool definition;
-            return ProjectTools.TryGetValue(RequestToolName(request) ?? string.Empty, out definition)
-                && definition.SupportsDryRun;
         }
 
         private static IDictionary<string, object> RequestBusinessInput(BridgeRequest request)
@@ -789,52 +479,34 @@ namespace UnityCli
             return envelope;
         }
 
-        /// <summary>business effect 已证明后统一吸收延迟 compile/import/reload；恢复时只执行本方法。</summary>
-        private static async Task<string> FinalizeProvenResult(BridgeRequest request, object provenEnvelope, CancellationToken cancellationToken)
+        /// <summary>普通 Tool 只在当前异步窗口等待稳定状态，超时后由调用方检查业务状态。</summary>
+        private static async Task<string> FinalizeResult(BridgeRequest request, object terminalEnvelope, CancellationToken cancellationToken)
         {
             int remainingMs;
             if (!request.TryDeadlineRemainingMs(out remainingMs))
-                return PersistProvenFinalizationFailure(request.RequestId, "The immutable request deadline elapsed before the proven effect reached a stable Editor generation.");
-            bool ready;
+                return ExecutionTimeoutEnvelope(request.RequestId, "The execution result cannot be confirmed before the deadline. Check the affected business state.");
             try
             {
-                ready = await CreateWaiter(request.RequestId, "completion.finalize").UntilEditorReady(TimeSpan.FromMilliseconds(remainingMs), cancellationToken);
+                if (!await CreateWaiter(request.RequestId, "completion.finalize").UntilEditorReady(TimeSpan.FromMilliseconds(remainingMs), cancellationToken))
+                    return ExecutionTimeoutEnvelope(request.RequestId, "The execution result cannot be confirmed before the deadline. Check the affected business state.");
             }
             catch (OperationCanceledException)
             {
-                return PersistProvenFinalizationFailure(request.RequestId, "The immutable request deadline elapsed while waiting for a stable Editor generation.");
+                return ExecutionTimeoutEnvelope(request.RequestId, "The execution result cannot be confirmed before the deadline. Check the affected business state.");
             }
-            if (!ready)
-                return PersistProvenFinalizationFailure(request.RequestId, "Unity did not remain ready across the completion stability window before the deadline.");
-            return UnityCliSerializer.Serialize(PersistTerminal(request.RequestId, provenEnvelope, "completed"));
+            return UnityCliSerializer.Serialize(terminalEnvelope);
         }
 
-        private static string PersistProvenFinalizationFailure(string requestId, string reason)
+        private static string ExecutionTimeoutEnvelope(string requestId, string reason)
         {
-            return UnityCliSerializer.Serialize(PersistTerminal(requestId, ProvenFinalizationFailureEnvelope(requestId, reason), "failed"));
-        }
-
-        private static string PersistFailedBeforeEffect(string requestId, BridgeCommandException exception)
-        {
-            var serialized = SerializeBridgeExceptionEnvelope(requestId, exception);
-            var envelope = UnityCliSerializer.Parse(serialized);
-            return UnityCliSerializer.Serialize(PersistTerminal(requestId, envelope, "failed"));
-        }
-
-        private static string PersistOutcomeUnknown(string requestId, bool effectStarted, string reason)
-        {
-            var envelope = ProtocolEnvelopeFactory.Error(
+            return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(
                 requestId,
-                "E_REQUEST_OUTCOME_UNKNOWN",
-                effectStarted
-                    ? "The request may have changed Unity state, but no durable terminal proof is available."
-                    : "The request did not produce a durable terminal result.",
-                new Dictionary<string, object> { { "effectStarted", effectStarted }, { "reason", reason } },
-                new[] { "Do not replay this mutation automatically.", "Inspect the affected business state using the same requestId before deciding on a new request." });
-            try { return UnityCliSerializer.Serialize(PersistTerminal(requestId, envelope, "outcome_unknown")); }
-            catch (Exception exception) { WriteLog("request_journal_outcome_persist_failed requestId=" + requestId + " " + exception.GetType().Name + ": " + exception.Message); }
-            return UnityCliSerializer.Serialize(envelope);
+                "E_EXECUTION_TIMEOUT",
+                reason,
+                null,
+                new[] { "Check the affected business state before submitting another request." }));
         }
+
 
         private static object CompletionProofInvalidEnvelope(BridgeRequest request, UnityCliToolCompletionContract contract, string reason)
         {

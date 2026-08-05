@@ -6,13 +6,15 @@ import {
   inspectProjectProcessClaims,
   selectObservationInstanceForFlags,
   verifyRegistrySessionProcess,
+  type ProjectProcessClaimInspection,
   type RegistryIdentity,
   type RegistrySession,
+  type SessionProcessVerification,
   type InstanceSelection,
   type UnityInstance,
 } from "../../instances.js";
 import { ProjectIdentityError } from "../../project-identity.js";
-import { probeWindowsEditorState } from "../../windows-editor-state.js";
+import { EditorBlockerObserver, sanitizeEditorBlockers, type EditorBlocker, type EditorBlockerObservation } from "../../editor-blocker-observer.js";
 import type { AnyJson } from "../../schema/any-json.js";
 import { defineContext, StructuredContextError, type ContextReadContext } from "../define.js";
 
@@ -30,16 +32,7 @@ export interface EditorStateProgress {
   source: "unity" | "registry";
 }
 
-export interface EditorStateBlocker {
-  kind: string;
-  title: string;
-  message: string;
-  requiresUserAction: boolean;
-  canAutoResolve: false;
-  source: "unity" | "registry" | "windows-ui";
-  confidence: "exact" | "inferred" | "unknown";
-  buttons?: string[];
-}
+export type EditorStateBlocker = EditorBlocker;
 
 export interface EditorStateResult {
   identity: { instanceId: string; canonicalProjectPath: string; displayProjectPath: string };
@@ -48,12 +41,13 @@ export interface EditorStateResult {
   state: { compile: ObservedField; import: ObservedField; build: ObservedField; playMode: ObservedField; prefabStage: ObservedField; activeScene: ObservedField; runtime: ObservedField };
   progress: EditorStateProgress[];
   blockers: EditorStateBlocker[];
-  observation: { live: boolean; sources: Array<"bridge" | "registry" | "windows-ui" | "process">; observedAt: string; elapsedMs: number; freshness: Freshness; lastHeartbeatAt: string | null; dataObservedAt: string | null; dataAgeMs: number | null; unknownFields: string[] };
+  observation: { live: boolean; sources: Array<"bridge" | "registry" | "windows-ui" | "process">; windowsUi: "not-observed" | "observed-empty" | "observed-blocked" | "unproven" | "unsupported"; observedAt: string; elapsedMs: number; freshness: Freshness; lastHeartbeatAt: string | null; dataObservedAt: string | null; dataAgeMs: number | null; unknownFields: string[] };
 }
 
 const STATE_FIELDS = ["compile", "import", "build", "playMode", "prefabStage", "activeScene", "runtime"] as const;
 const FRESH_SNAPSHOT_MS = 10_000;
-const OBSERVATION_BUDGET_MS = 1_000;
+// Windows 冷启动需在同一上限内完成 Bridge、PID/start 和 canonical project 三重证明。
+const OBSERVATION_BUDGET_MS = 10_000;
 const SENSITIVE_KEYS = new Set(["endpoint", "endpointurl", "bridgeendpoint", "bridgeendpointurl", "bridgeurl", "port", "actualport", "preferredport", "listenerid", "listenergeneration", "generation", "commandline"]);
 
 export default defineContext<EditorStateRequest, EditorStateResult>({
@@ -65,8 +59,6 @@ export default defineContext<EditorStateRequest, EditorStateResult>({
   target: "editor",
   availabilityScope: "always",
   playModeSupport: "supported",
-  supportStatus: "hybrid",
-  refreshBehavior: "observe-now",
   examples: [{ description: "Read the current selected Editor state.", argv: ["context", "read", "editor.state", "--input", "{}"], input: {} }],
   async read(_request, context) { return readEditorState(context); },
 });
@@ -89,34 +81,65 @@ export async function readEditorState(context: ContextReadContext): Promise<Edit
   }
   if (instance.status === "conflict") return makeResult(instance, undefined, "conflict", undefined, [], [], false, ["registry"], startedAt);
   const session = instance.activeSession;
-  if (!session) return makeResult(instance, undefined, "offline", undefined, [], [], false, ["registry"], startedAt);
+  if (!session) {
+    // Bridge 注册前仍以同一 canonical resolver 观察唯一 Unity process；不创建或修复 registry。
+    const observed = await new EditorBlockerObserver().observe(identityOf(instance), observationDeadlineMs);
+    if (observed.outcome === "observed-blocked") {
+      return makeResult(instance, undefined, "blocked", undefined, [], sanitizeEditorBlockers(observed.blockers), false, ["registry", "process", "windows-ui"], startedAt, "observed-blocked");
+    }
+    if (observed.outcome === "conflict") return makeResult(instance, undefined, "conflict", undefined, [], [], false, ["registry", "process"], startedAt);
+    return makeResult(instance, undefined, "offline", undefined, [], [], false, ["registry", ...(observed.outcome === "unsupported" ? [] : ["process" as const]), ...(observed.outcome === "unproven" ? ["windows-ui" as const] : [])], startedAt, observed.outcome === "unproven" ? "unproven" : observed.outcome === "unsupported" ? "unsupported" : "not-observed");
+  }
 
   const fallbackBudgetMs = remaining(observationDeadlineMs);
   if (fallbackBudgetMs <= 0) return makeResult(instance, undefined, "conflict", undefined, [], [], false, ["registry"], startedAt);
-  // Bridge 可能卡在主线程；PID claim 与 Windows UI 必须并发消费同一 deadline，不能等 300ms probe 后再启动。
+  // 正常 Bridge 成功路径不得访问 Windows UI；只有未获证实后才进入一次有界 fallback observer。
   const verificationPromise = verifyRegistrySessionProcess(identityOf(instance), session, fallbackBudgetMs);
   const processClaimsPromise = inspectProjectProcessClaims(identityOf(instance), fallbackBudgetMs);
-  const windowsPromise = probeWindowsEditorState(session.processId, { timeoutMs: fallbackBudgetMs });
   const bridge = await probeBridge(context, observationDeadlineMs, session, selection);
   if (bridge && isLiveSnapshot(bridge.snapshot)) {
-    const [windows, processClaims] = await Promise.all([windowsPromise, processClaimsPromise]);
+    const processClaims = await processClaimsPromise;
     const inspected = applyProjectProcessClaimInspection(instance, processClaims);
-    if (inspected.status === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], sanitizeBlockers(inspected.blockers), false, ["registry", "process", ...(windows.windows.length ? ["windows-ui" as const] : [])], startedAt);
+    if (inspected.status === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], sanitizeEditorBlockers(inspected.blockers), false, ["registry", "process"], startedAt);
     const progress = sanitizeProgress(bridge.progress);
-    const blockers = [...sanitizeBlockers(bridge.blockers), ...windowBlockers(windows.windows)];
-    return makeResult(inspected, session, observedStatus(bridge.snapshot, progress, blockers), bridge.snapshot, progress, blockers, true, ["bridge", "registry", ...(windows.windows.length ? ["windows-ui" as const] : [])], startedAt);
+    const blockers = sanitizeEditorBlockers(bridge.blockers);
+    return makeResult(inspected, session, observedStatus(bridge.snapshot, progress, blockers), bridge.snapshot, progress, blockers, true, ["bridge", "registry"], startedAt);
   }
 
-  // 总预算耗尽前没有完成 PID/start/project 证明时，不能泄露缓存 session 或 snapshot。
-  const [verification, windows, processClaims] = await Promise.all([verificationPromise, windowsPromise, processClaimsPromise]);
+  // Windows UI 读取必须晚于唯一 PID、project path 与 start identity 的完整证明。
+  const [verification, processClaims] = await Promise.all([verificationPromise, processClaimsPromise]);
   const inspected = applyProjectProcessClaimInspection(instance, processClaims);
-  if (inspected.status === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], sanitizeBlockers(inspected.blockers), false, ["registry", "process", ...(windows.windows.length ? ["windows-ui" as const] : [])], startedAt);
-  if (verification === "dead") return makeResult(inspected, undefined, "offline", undefined, [], [], false, ["registry", "process", ...(windows.windows.length ? ["windows-ui" as const] : [])], startedAt);
-  if (verification !== "verified") return makeResult(inspected, undefined, "conflict", undefined, [], [], false, ["registry", "process", ...(windows.windows.length ? ["windows-ui" as const] : [])], startedAt);
+  if (inspected.status === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], sanitizeEditorBlockers(inspected.blockers), false, ["registry", "process"], startedAt);
+  const observed = await observeVerifiedRegistrySession(identityOf(instance), session, observationDeadlineMs, verification, processClaims);
+  if (observed.outcome === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], [], false, ["registry", "process"], startedAt);
+  if (observed.outcome === "offline") return makeResult(inspected, undefined, "offline", undefined, [], [], false, ["registry", "process"], startedAt);
   const snapshot = parseSnapshot(session.lastUnitySnapshot, session);
   const progress = sanitizeProgress(session.progress);
-  const blockers = [...sanitizeBlockers(session.blockers), ...windowBlockers(windows.windows)];
-  return makeResult(inspected, session, fallbackStatus(session, progress, blockers), snapshot, progress, blockers, false, ["registry", "process", ...(windows.windows.length ? ["windows-ui" as const] : [])], startedAt);
+  const blockers = [...sanitizeEditorBlockers(session.blockers), ...observed.blockers];
+  const windowsSources: EditorStateResult["observation"]["sources"] = observed.outcome === "unsupported" ? [] : ["windows-ui"];
+  const windowsUi = observed.outcome === "unsupported" ? "unsupported" : observed.outcome;
+  return makeResult(inspected, session, fallbackStatus(session, progress, blockers), snapshot, progress, blockers, false, ["registry", "process", ...windowsSources], startedAt, windowsUi);
+}
+
+/**
+ * registry fallback 只有在 session PID、project claim 与 start identity 全部一致后才允许 UIAutomation。
+ * 任何多 PID、不可验证或 PID 复用迹象都在 observer 调用前 fail closed。
+ */
+export async function observeVerifiedRegistrySession(
+  identity: RegistryIdentity,
+  session: RegistrySession,
+  deadlineMs: number,
+  verification: SessionProcessVerification,
+  processClaims: ProjectProcessClaimInspection,
+  observer: Pick<EditorBlockerObserver, "observe"> = new EditorBlockerObserver({ inspect: async () => processClaims }),
+): Promise<EditorBlockerObservation> {
+  if (verification === "dead") return { outcome: "offline", blockers: [] };
+  if (verification !== "verified" || processClaims.verification !== "verified") return { outcome: "conflict", blockers: [], reason: "process-claims-unverifiable" };
+  if (processClaims.processIds.length === 0) return { outcome: "offline", blockers: [] };
+  if (processClaims.processIds.length !== 1 || processClaims.processIds[0] !== session.processId) return { outcome: "conflict", blockers: [], reason: "multiple-or-mismatched-process-claims" };
+  const claim = processClaims.processClaims?.find((item) => item.processId === session.processId);
+  if (!claim || Date.parse(claim.processStartedAt) !== Date.parse(session.processStartedAt)) return { outcome: "conflict", blockers: [], reason: "session-process-mismatch" };
+  return observer.observe(identity, deadlineMs, session);
 }
 
 /** Bridge observation inherits this read's one absolute deadline; it never restarts a remaining budget. */
@@ -157,7 +180,7 @@ function hasExactKeys(value: Record<string, unknown>, names: readonly string[]):
   return keys.length === names.length && names.every((name) => Object.prototype.hasOwnProperty.call(value, name));
 }
 
-function makeResult(instance: UnityInstance, session: RegistrySession | undefined, status: EditorStateResult["status"], snapshot: Snapshot | undefined, progress: EditorStateProgress[], blockers: EditorStateBlocker[], live: boolean, sources: EditorStateResult["observation"]["sources"], startedAt: number): EditorStateResult {
+function makeResult(instance: UnityInstance, session: RegistrySession | undefined, status: EditorStateResult["status"], snapshot: Snapshot | undefined, progress: EditorStateProgress[], blockers: EditorStateBlocker[], live: boolean, sources: EditorStateResult["observation"]["sources"], startedAt: number, windowsUi: EditorStateResult["observation"]["windowsUi"] = "not-observed"): EditorStateResult {
   const now = Date.now();
   const observedAt = snapshot?.observedAt ?? null;
   const observedAtMs = observedAt ? Date.parse(observedAt) : Number.NaN;
@@ -175,7 +198,7 @@ function makeResult(instance: UnityInstance, session: RegistrySession | undefine
     state,
     progress,
     blockers,
-    observation: { live, sources, observedAt: new Date(now).toISOString(), elapsedMs: now - startedAt, freshness, lastHeartbeatAt: session?.lastHeartbeatAt ?? null, dataObservedAt: observedAt, dataAgeMs: age, unknownFields },
+    observation: { live, sources, windowsUi, observedAt: new Date(now).toISOString(), elapsedMs: now - startedAt, freshness, lastHeartbeatAt: session?.lastHeartbeatAt ?? null, dataObservedAt: observedAt, dataAgeMs: age, unknownFields },
   };
 }
 
@@ -222,8 +245,6 @@ function safeValue(value: unknown, parentKey?: string): AnyJson {
   return safeRecord(value, parentKey) ?? null;
 }
 const PROGRESS_SOURCES = new Set(["unity", "registry"]);
-const BLOCKER_SOURCES = new Set(["unity", "registry", "windows-ui"]);
-const BLOCKER_CONFIDENCE = new Set(["exact", "inferred", "unknown"]);
 function sanitizeProgress(value: unknown): EditorStateProgress[] {
   return Array.isArray(value) ? value.flatMap((item): EditorStateProgress[] => {
     const record = safeRecord(item);
@@ -232,19 +253,4 @@ function sanitizeProgress(value: unknown): EditorStateProgress[] {
       || (record.value !== undefined && record.value !== null && (typeof record.value !== "number" || record.value < 0 || record.value > 1))) return [];
     return [{ kind: record.kind, title: record.title, ...(Object.prototype.hasOwnProperty.call(record, "value") ? { value: record.value as number | null } : {}), canWait: record.canWait, source: record.source as EditorStateProgress["source"] }];
   }) : [];
-}
-function sanitizeBlockers(value: unknown): EditorStateBlocker[] {
-  return Array.isArray(value) ? value.flatMap((item): EditorStateBlocker[] => {
-    const record = safeRecord(item);
-    if (!record || typeof record.kind !== "string" || record.kind.length === 0 || typeof record.title !== "string" || typeof record.message !== "string"
-      || typeof record.requiresUserAction !== "boolean" || record.canAutoResolve !== false
-      || !BLOCKER_SOURCES.has(record.source as string) || !BLOCKER_CONFIDENCE.has(record.confidence as string)
-      || (record.buttons !== undefined && (!Array.isArray(record.buttons) || record.buttons.some((button) => typeof button !== "string")))) return [];
-    return [{ kind: record.kind, title: record.title, message: record.message, requiresUserAction: record.requiresUserAction,
-      canAutoResolve: false, source: record.source as EditorStateBlocker["source"], confidence: record.confidence as EditorStateBlocker["confidence"],
-      ...(record.buttons !== undefined ? { buttons: record.buttons as string[] } : {}) }];
-  }) : [];
-}
-function windowBlockers(windows: Array<{ modal: boolean; kind?: string; title: string; buttons: Array<{ label: string }> }>): EditorStateBlocker[] {
-  return windows.filter((window) => window.modal).map((window) => ({ kind: window.kind ?? "unknown-modal", title: window.title, message: window.title, requiresUserAction: true, canAutoResolve: false, source: "windows-ui", confidence: window.kind === "unknown-modal" ? "unknown" : "exact", buttons: window.buttons.map((button) => button.label) }));
 }

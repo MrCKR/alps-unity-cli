@@ -33,7 +33,7 @@ namespace UnityCli
             Name = "physics.assign-material",
             Summary = "Assign a PhysicMaterial asset to a Collider on a target GameObject, with dry-run support.",
             Description = "Resolve a target GameObject, load a PhysicMaterial asset, and assign it to the matching Collider. Supports collider type filter and index. dryRun=true previews without mutating.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false, SupportsDryRun = true, SideEffects = new[] { "scene-modify" },
+            Group = "physics",DestructiveHint = false, SupportsDryRun = true, SideEffects = new[] { "scene-modify" },
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Assign bouncy material", Input = new Request { Target = "Player", MaterialPath = "Assets/Physics/Bouncy.physicMaterial" } } }

@@ -20,19 +20,6 @@
           "items": { "type": "string" },
           "default": [],
           "description": "Non-fatal warnings encountered during execution."
-        },
-        "logsRef": {
-          "type": "string",
-          "description": "Path or reference to the full execution log, when available."
-        },
-        "jobId": {
-          "type": "string",
-          "description": "Job identifier for async/long-running commands. Present when the command was dispatched as a job."
-        },
-        "durationMs": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Wall-clock execution time in milliseconds."
         }
       },
       "additionalProperties": false
@@ -47,11 +34,6 @@
         "error": {
           "$ref": "./error-code.schema.json",
           "description": "Structured error details. Recovery guidance is nested under error.nextActions and transient retry delay under error.retryAfterMs."
-        },
-        "durationMs": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Wall-clock execution time in milliseconds (including time until error)."
         }
       },
       "additionalProperties": false

@@ -28,7 +28,6 @@ namespace UnityCli
             Summary = "Return name, path and build index of the currently active scene.",
             Description = "Return name, path and build index of the currently active scene. Read-only; use scene.list-opened for all loaded scenes and scene.set-active to change the active scene.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } }
         public sealed class Result { public GameObjectTargetRef Target { get; set; } public AnimatorInfo Animator { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "animator.get-info", Summary = "Read Animator details: layers, parameters, clips, and runtime controller.", Description = "Resolve a target with an Animator and return enabled, speed, layerCount, parameters, layers, and clips.", Group = "animation", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read animator info", Input = new Request { Target = "Player" } } } };
+        public ToolDescriptor Describe() => new() { Name = "animator.get-info", Summary = "Read Animator details: layers, parameters, clips, and runtime controller.", Description = "Resolve a target with an Animator and return enabled, speed, layerCount, parameters, layers, and clips.", Group = "animation",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read animator info", Input = new Request { Target = "Player" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var go = GameObjectToolSupport.ResolveUniqueTarget(r.Target, "Animator info requires --target <go>.");

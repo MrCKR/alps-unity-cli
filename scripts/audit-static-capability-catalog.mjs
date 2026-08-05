@@ -20,18 +20,26 @@ const actualContexts = names(catalog.contexts, "Context");
 compareSets("Tool", expectedTools, actualTools);
 compareSets("Context", expectedContexts, actualContexts);
 
+const forbiddenDescriptorFields = new Set([
+  "artifactKinds", "capabilityType", "cliCommand", "completionContract", "defaultTimeoutMs", "descriptorFingerprint",
+  "fingerprint", "handler", "internalDescriptorFingerprint", "maxTimeoutMs", "refreshBehavior", "supportStatus", "supportsJob", "version",
+]);
+const forbiddenOutputFields = new Set([
+  "actualPort", "audit", "bridgeCommand", "bridgeEndpoint", "bridgeEndpointUrl", "bridgeUrl", "command", "commandLine",
+  "descriptorFingerprint", "endpoint", "endpointUrl", "execution", "handler", "handlerFingerprint", "hwnd",
+  "internalDescriptorFingerprint", "listenerGeneration", "listenerId", "logPath", "logs", "ownerHwnd", "port", "preferredPort",
+  "route", "routing", "sourceListenerGeneration", "windowsCommandLine",
+]);
 for (const tool of catalog.tools ?? []) {
   validateDescriptor(tool, "Tool");
-  if (!tool.outputSchema) failures.push(`Tool ${tool.name} is missing outputSchema`);
+  validatePublicDescriptorFields(tool, "Tool", forbiddenDescriptorFields);
+  failures.push(...findSchemaProperties(tool.outputSchema, `Tool ${tool.name}.outputSchema`, forbiddenOutputFields));
 }
 for (const context of catalog.contexts ?? []) {
   validateDescriptor(context, "Context");
-  if (!context.outputSchema) failures.push(`Context ${context.name} is missing outputSchema`);
-  if (!/^[a-f0-9]{64}$/.test(context.descriptorFingerprint ?? "")) failures.push(`Context ${context.name} is missing descriptorFingerprint`);
+  validatePublicDescriptorFields(context, "Context", forbiddenDescriptorFields);
+  failures.push(...findSchemaProperties(context.outputSchema, `Context ${context.name}.outputSchema`, forbiddenOutputFields));
 }
-
-const forbidden = findForbidden(catalog, "$", new Set(["bridgeEndpoint", "listenerId", "actualPort", "sourceListenerGeneration"]));
-failures.push(...forbidden.map((entry) => `Static catalog exposes private transport field ${entry}`));
 
 const result = {
   ok: failures.length === 0,
@@ -43,13 +51,27 @@ const result = {
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 if (!result.ok) process.exitCode = 1;
 
-/** Descriptor snapshot 必须足以让陌生 AI 离线发现和构造调用。 */
+/** Descriptor snapshot 必须足以让陌生 AI 离线发现并直接构造调用。 */
 function validateDescriptor(descriptor, kind) {
-  for (const field of ["name", "summary", "description", "source", "inputSchema", "examples"]) {
+  for (const field of ["name", "summary", "description", "source", "target", "availabilityScope", "playModeSupport", "inputSchema", "outputSchema", "examples"]) {
     if (descriptor?.[field] === undefined || descriptor?.[field] === "") failures.push(`${kind} ${descriptor?.name ?? "unknown"} is missing ${field}`);
   }
   if (!Array.isArray(descriptor?.examples) || descriptor.examples.length === 0) failures.push(`${kind} ${descriptor?.name ?? "unknown"} has no examples`);
+  else for (const [index, example] of descriptor.examples.entries()) {
+    const keys = Object.keys(example ?? {}).sort();
+    if (keys.join(",") !== "argv,description" || !Array.isArray(example?.argv) || example.argv.some((token) => typeof token !== "string")) {
+      failures.push(`${kind} ${descriptor?.name ?? "unknown"} examples[${index}] is not a public argv-only example`);
+    }
+  }
   if (descriptor?.source !== "built-in" && descriptor?.source !== "extension") failures.push(`${kind} ${descriptor?.name ?? "unknown"} has non-static source`);
+  for (const field of ["permissions", "requiresPackages", "sideEffects"]) {
+    if (Object.hasOwn(descriptor ?? {}, field) && (!Array.isArray(descriptor[field]) || descriptor[field].length === 0)) failures.push(`${kind} ${descriptor?.name ?? "unknown"} must omit empty ${field}`);
+  }
+}
+
+/** descriptor 顶层只允许公开契约字段；内部执行字段无论值为何都禁止冻结。 */
+function validatePublicDescriptorFields(descriptor, kind, forbiddenFields) {
+  for (const field of forbiddenFields) if (Object.hasOwn(descriptor ?? {}, field)) failures.push(`${kind} ${descriptor?.name ?? "unknown"} exposes ${field}`);
 }
 
 function names(entries, kind) {
@@ -69,17 +91,20 @@ function compareSets(kind, expected, actual) {
   for (const name of actual) if (!expectedSet.has(name)) failures.push(`Unexpected static ${kind}: ${name}`);
 }
 
-function findForbidden(value, location, forbiddenFields) {
+/** 只审计 JSON Schema 的 property names，避免把 description 中的业务术语误判为字段泄漏。 */
+function findSchemaProperties(value, location, forbiddenFields) {
   if (!value || typeof value !== "object") return [];
   const findings = [];
   if (Array.isArray(value)) {
-    value.forEach((item, index) => findings.push(...findForbidden(item, `${location}[${index}]`, forbiddenFields)));
+    value.forEach((item, index) => findings.push(...findSchemaProperties(item, `${location}[${index}]`, forbiddenFields)));
     return findings;
   }
   for (const [key, child] of Object.entries(value)) {
     const next = `${location}.${key}`;
-    if (forbiddenFields.has(key)) findings.push(next);
-    findings.push(...findForbidden(child, next, forbiddenFields));
+    if (key === "properties" && child && typeof child === "object" && !Array.isArray(child)) {
+      for (const property of Object.keys(child)) if (forbiddenFields.has(property)) findings.push(`${next}.${property} exposes a private field`);
+    }
+    findings.push(...findSchemaProperties(child, next, forbiddenFields));
   }
   return findings;
 }

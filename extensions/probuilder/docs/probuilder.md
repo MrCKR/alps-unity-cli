@@ -1,165 +1,125 @@
 # ProBuilder 扩展包
 
-ProBuilder 扩展包（`unity-cli-extension-probuilder`）提供 36 个细粒度工具，用于在 Unity 中进行 ProBuilder 网格编辑。
+ProBuilder 扩展包提供 36 个细粒度 Tool，用于在已打开的 Unity Editor 中创建、读取和编辑 ProBuilder 网格。扩展精确支持 `com.unity.probuilder@5.2.4`；Unity patch 版本不参与能力判定。
 
 ## 前置条件
 
-- Unity 项目已安装 `com.unity.probuilder` 包
-- 已运行 `unity_cli extensions install probuilder --project <project>`，或 `init` 已自动复制 ProBuilder extension bundle
-- alps-unity-cli 已连接到运行中的 Unity Editor（Bridge 连接）
+- Unity 项目安装精确版本 `com.unity.probuilder@5.2.4`
+- Unity Editor 已打开目标项目并完成编译
+- 已运行 `unity_cli extensions install probuilder --project <project>`，或由 `init` 在检测到精确依赖后复制 extension bundle
+- `unity_cli extensions doctor --project <project>` 显示 ProBuilder extension 已安装、可用且健康
 
-## 发现与查看工具
-
-### 列出所有 ProBuilder 工具
-
-```bash
-unity_cli tools group list probuilder --project <project>
-```
-
-### 查看某个工具的详细参数
+## 发现与执行
 
 ```bash
-unity_cli tools describe probuilder.mesh-info --project <project>
-unity_cli tools describe probuilder.create-shape --project <project>
-unity_cli tools describe probuilder.extrude-faces --project <project>
+# 列出 ProBuilder Tool
+unity_cli tools group list probuilder --instance <instanceId|projectPath|alias>
+
+# 获取完整输入 schema、边界、错误与示例
+unity_cli tools describe probuilder.create-shape --instance <instanceId|projectPath|alias>
+unity_cli tools describe probuilder.extrude-faces --instance <instanceId|projectPath|alias>
+
+# 证明 Package 与 extension 可用
+unity_cli tools run probuilder.ping --instance <instanceId|projectPath|alias>
+
+# 按 descriptor 创建形状
+unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":"MyCube"}' --instance <instanceId|projectPath|alias>
 ```
 
-### 运行工具
-
-```bash
-# 检测 ProBuilder 包是否可用
-unity_cli tools run probuilder.ping --project <project>
-
-# 创建形状
-unity_cli tools run probuilder.create-shape --project <project> --input '{"shapeType":"Cube","name":"MyCube"}'
-
-# 查看网格信息
-unity_cli tools run probuilder.mesh-info --project <project> --input '{"target":"<target>"}'
-
-# 挤出面
-unity_cli tools run probuilder.extrude-faces --project <project> --input '{"target":"<target>","faceIndices":[1,2,3],"distance":0.5}'
-```
+不要根据本页猜测 face、edge 或 vertex index。先读取当前对象和 Live descriptor，再提交 mutation。
 
 ## 工具分类
 
-| 分类 | 工具 | 数量 |
+| 分类 | Tool | 数量 |
 |------|------|------|
-| 工具检测 | `probuilder.ping` | 1 |
+| 检测 | `probuilder.ping` | 1 |
 | 形状创建 | `probuilder.create-shape`、`probuilder.create-poly-shape` | 2 |
 | 面操作 | `probuilder.extrude-faces`、`probuilder.delete-faces`、`probuilder.detach-faces`、`probuilder.merge-faces`、`probuilder.subdivide`、`probuilder.flip-normals`、`probuilder.select-faces`、`probuilder.set-face-material`、`probuilder.set-face-color`、`probuilder.set-face-uvs` | 10 |
 | 边操作 | `probuilder.extrude-edges`、`probuilder.bevel-edges`、`probuilder.bridge-edges`、`probuilder.connect-elements` | 4 |
 | 网格合并 | `probuilder.combine-meshes`、`probuilder.merge-objects`、`probuilder.duplicate-and-flip`、`probuilder.create-polygon` | 4 |
 | 顶点操作 | `probuilder.merge-vertices`、`probuilder.weld-vertices`、`probuilder.split-vertices`、`probuilder.move-vertices`、`probuilder.insert-vertex`、`probuilder.append-vertices-to-edge` | 6 |
-| 信息查看 | `probuilder.mesh-info`、`probuilder.validate-mesh` | 2 |
+| 读取 | `probuilder.mesh-info`、`probuilder.validate-mesh` | 2 |
 | 转换 | `probuilder.convert-to-probuilder` | 1 |
 | 平滑 | `probuilder.set-smoothing`、`probuilder.auto-smooth` | 2 |
-| 轴心/变换 | `probuilder.center-pivot`、`probuilder.freeze-transform`、`probuilder.set-pivot` | 3 |
+| 轴心与变换 | `probuilder.center-pivot`、`probuilder.freeze-transform`、`probuilder.set-pivot` | 3 |
 | 修复 | `probuilder.repair-mesh` | 1 |
 
-## 扩展包安装
+## 完成语义
 
-### 自动安装（init 检测）
+所有 mutating Tool 都在 `ctx.CommitEffect()` 前完成 typed input、target 和 selection 校验。跨过 effect barrier 后，Tool 通过 Undo API 记录实际 serialized owner，执行一次 Package mutation，刷新所需数据，并从冻结 identity 做 fresh readback。effect 后的 invoke、refresh、identity 或 postcondition 不确定性统一返回 `E_REQUEST_OUTCOME_UNKNOWN`；此时应先检查 request journal 和 fresh state，不能盲目重放 mutation。
 
-当 Unity 项目中已安装 `com.unity.probuilder` 时，`init` 会自动安装 ProBuilder 扩展包：
+以下十五项使用 request-specific terminal proof：
 
-```bash
-unity_cli init --project /path/to/unity/project
-```
+- `probuilder.append-vertices-to-edge`
+- `probuilder.auto-smooth`
+- `probuilder.bevel-edges`
+- `probuilder.bridge-edges`
+- `probuilder.connect-elements`
+- `probuilder.create-shape`
+- `probuilder.duplicate-and-flip`
+- `probuilder.extrude-edges`
+- `probuilder.extrude-faces`
+- `probuilder.flip-normals`
+- `probuilder.insert-vertex`
+- `probuilder.merge-objects`
+- `probuilder.merge-vertices`
+- `probuilder.subdivide`
+- `probuilder.weld-vertices`
 
-输出中的 `extensions.autoInstalled` 会包含 `["probuilder"]`。
+其余十七项 scene mutation 使用各 Tool 的最小 typed business/effect readback，不建立完整 canonical plan：
 
-### 查看扩展状态
+- `probuilder.center-pivot`
+- `probuilder.combine-meshes`
+- `probuilder.convert-to-probuilder`
+- `probuilder.create-poly-shape`
+- `probuilder.create-polygon`
+- `probuilder.delete-faces`
+- `probuilder.detach-faces`
+- `probuilder.freeze-transform`
+- `probuilder.merge-faces`
+- `probuilder.move-vertices`
+- `probuilder.repair-mesh`
+- `probuilder.set-face-color`
+- `probuilder.set-face-material`
+- `probuilder.set-face-uvs`
+- `probuilder.set-pivot`
+- `probuilder.set-smoothing`
+- `probuilder.split-vertices`
 
-```bash
-unity_cli doctor --project /path/to/unity/project
-```
+`probuilder.create-shape` 是十五项中的独立边界。它只冻结 fresh object identity、name、position、center pivot、requested world bounds，以及 ProBuilder 5.2.4 的 ShapeType topology record。record 仅包含 default local bounds、raw vertex count、directed face index streams 和 shared-vertex partitions；material、UV、compiled Mesh channels、unwrap、selection 与 Unity patch 均不是完成 predicate。
 
-> 扩展包也可通过 `extensions install/remove/doctor` 命令管理。
+## 关键边界
 
-### 手动安装
+`probuilder.create-shape` 支持 Cube、Stair、CurvedStair、Prism、Cylinder、Plane、Door、Pipe、Cone、Sprite、Arch、Sphere 和 Torus。Plane 与 Sprite 的 Y 轴尺寸为零，因此不能显式传 `height`。其他 Package 版本会在 scene mutation 前拒绝。
 
-```bash
-unity_cli extensions install probuilder --project /path/to/unity/project
-```
+`probuilder.create-poly-shape` 接受至少三个 finite ordered points、可选 `extrudeHeight` 和 `flipNormals`。fresh readback 验证输入点、共同 extrusion offset 和 Package 使用的 normal orientation。
 
-### 卸载
+`probuilder.combine-meshes` 接受至少两个唯一 ProBuilder target，将几何合并到第一个 target，并通过 Undo 删除其余 source object。总 raw vertex 数必须低于 ProBuilder 5.2.4 的单 mesh 上限。
 
-```bash
-unity_cli extensions remove probuilder --project /path/to/unity/project
-```
+`probuilder.convert-to-probuilder` 接受带 readable vertices 和 triangle indices 的 `MeshFilter`。fresh readback 以有向 triangle 几何多重集验证 import 结果，允许 importer 重排或复制 raw vertices。
 
-### 查看所有扩展
+`probuilder.create-polygon` 接受至少三个唯一有效 raw vertex index；`unordered` 默认为 `true`。fresh readback 验证新增 face 的 distinct raw vertex set。
 
-```bash
-unity_cli extensions list --project /path/to/unity/project
-```
+`probuilder.split-vertices` 将请求 raw index 从 shared partition 拆为 singleton；请求项本来全部是 singleton 时返回无 effect 的成功结果。
 
-## 依赖缺失时的行为
+`probuilder.set-smoothing` 的 `smoothingGroup` 范围为 `0..65535`。
 
-当项目中未安装 `com.unity.probuilder` 包时：
+`probuilder.append-vertices-to-edge`、`probuilder.bevel-edges`、`probuilder.bridge-edges`、`probuilder.connect-elements`、`probuilder.extrude-edges`、`probuilder.extrude-faces`、`probuilder.insert-vertex`、`probuilder.merge-objects`、`probuilder.merge-vertices`、`probuilder.weld-vertices` 等 dedicated proof Tool 的具体拓扑、UV、material 和有限算术边界由各自 Live descriptor 自足声明。
 
-- ProBuilder 工具在 `tools group list probuilder` 中标记为 `available=false`
-- `tools describe probuilder.*` 会显示 `requiresPackages: ["com.unity.probuilder"]`
-- `tools run probuilder.*` 返回 `E_EXTENSION_UNAVAILABLE` 错误，附带 `nextActions` 提示手动安装依赖并复制 extension bundle
-
-### 恢复路径
-
-```bash
-# 方法 1：通过 Unity Package Manager 安装 com.unity.probuilder
-
-# 方法 2：手动添加到 Packages/manifest.json
-# 在 dependencies 中添加 "com.unity.probuilder": "latest"
-
-# Unity 解析包后复制 extension bundle，并重新检测
-unity_cli extensions install probuilder --project /path/to/project
-unity_cli doctor --project /path/to/project
-```
-
-## 诊断
-
-### doctor 检查
-
-```bash
-unity_cli doctor --project /path/to/unity/project
-```
-
-doctor 会输出 `extension.probuilder` 检查项，包括：
-
-- 扩展包是否已注册
-- 扩展包是否已启用（installed）
-- `com.unity.probuilder` 是否存在及版本
-- descriptor 数量（期望 36）
-- bridge command 数量（期望 36）
-- C# handler 代码是否存在
-
-### 扩展包专项诊断
+## 安装与诊断
 
 ```bash
-unity_cli doctor --project /path/to/unity/project
+# 安装精确 Package 后复制 extension bundle
+unity_cli extensions install probuilder --project <project>
+
+# 检查 Package version、安装投影与 Live availability
+unity_cli extensions doctor --project <project>
+
+# 查看 extension 状态
+unity_cli extensions list --project <project>
+
+# 删除 Unity 侧 extension 投影
+unity_cli extensions remove probuilder --project <project>
 ```
 
-### 扩展状态查看
-
-```bash
-unity_cli extensions list --project /path/to/unity/project
-```
-
-返回结果会区分 Unity package 依赖与 ProBuilder extension 的物理安装状态，并列出贡献的工具数量。
-
-## 常见问题
-
-### Q: 运行 ProBuilder 工具时报 `E_PROBUILDER_PACKAGE_NOT_FOUND`
-
-A: 项目中未安装 `com.unity.probuilder` 包。请按上方"恢复路径"安装。
-
-### Q: `tools group list probuilder` 中看不到 ProBuilder 工具
-
-A: 可能未启用扩展包。运行 `unity_cli init --project <path>` 确保 Bridge 包已安装，然后确认 `com.unity.probuilder` 已安装。
-
-### Q: 运行工具时 Unity 报错
-
-A: 确认 Unity Editor 正在运行，且 Bridge 连接正常。运行 `unity_cli doctor` 检查连接状态。
-
-### Q: init 未自动安装 ProBuilder 扩展包
-
-A: `init` 仅在项目已包含 `com.unity.probuilder` 时自动安装。如果包是 init 之后安装的，可重新运行 `unity_cli init --project <path>` 或手动运行 `unity_cli extensions install probuilder --project <path>`。
+依赖缺失或版本不是 `5.2.4` 时，extension 状态为 unavailable，`nextActions` 会要求安装 `com.unity.probuilder@5.2.4` 后重新安装 extension。CLI 不会自动选择其他版本。

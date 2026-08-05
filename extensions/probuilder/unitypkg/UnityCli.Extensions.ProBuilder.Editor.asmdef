@@ -2,7 +2,8 @@
   "name": "UnityCli.Extensions.ProBuilder.Editor",
   "rootNamespace": "UnityCli.ProBuilder",
   "references": [
-    "UnityCli.Editor"
+    "UnityCli.Editor",
+    "Unity.ProBuilder"
   ],
   "includePlatforms": [
     "Editor"
@@ -13,6 +14,12 @@
   "precompiledReferences": [],
   "autoReferenced": true,
   "defineConstraints": [],
-  "versionDefines": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.probuilder",
+      "expression": "[5.2.4,5.2.5)",
+      "define": "UNITY_CLI_PROBUILDER_5_2_4"
+    }
+  ],
   "noEngineReferences": false
 }

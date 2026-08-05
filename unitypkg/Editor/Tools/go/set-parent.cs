@@ -20,7 +20,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public GameObjectRef Target { get; set; }
             public string Parent { get; set; }
@@ -34,7 +33,6 @@ namespace UnityCli
             Summary = "Reparent a GameObject under another GameObject or detach it to the scene root.",
             Description = "Reparent a GameObject under another GameObject or detach it to the scene root. Prefer hierarchy paths or instance ids for target and parent; plain names can be ambiguous after duplicate/create operations. Use --dry-run first for hierarchy work; worldPositionStays defaults to true.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify", "undo-stack", "hierarchy-reparent" },
@@ -68,7 +66,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "go.set-parent",
                     DryRun = true,
                     Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                     Parent = parentName ?? "<root>",
@@ -84,7 +81,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_GO_SET_PARENT_STATE_MISMATCH", "GameObject hierarchy did not match the requested parent after write.", "Inspect the hierarchy and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "go.set-parent",
                 Target = GameObjectToolSupport.BuildGameObjectRef(observed),
                 Parent = parentName ?? "<root>",
                 WorldPositionStays = worldPositionStays,

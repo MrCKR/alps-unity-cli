@@ -43,4 +43,5 @@ test("reflect-service error recovery hints use current tools run form and the cu
   const source = await readFile(new URL("../src/services/reflect-service.js", import.meta.url), "utf8");
   assert.match(source, /tools run reflect\.search/, "error hints should route to tools run reflect.search");
   assert.match(source, /tools run reflect\.type/, "error hints should route to tools run reflect.type");
+  assert.doesNotMatch(source, /\breflect (?:type|member|search)\b/, "error hints must not emit removed reflect top-level commands");
 });

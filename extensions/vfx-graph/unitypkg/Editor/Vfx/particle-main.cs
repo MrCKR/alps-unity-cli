@@ -21,7 +21,6 @@ namespace UnityCli
             public GameObjectRef Target { get; set; }
             public VfxParticleSystemInfo ParticleSystem { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -30,7 +29,6 @@ namespace UnityCli
             Summary = "Update ParticleSystem main module fields such as lifetime, speed, size, looping, and simulation space.",
             Description = "Update the main module of an existing ParticleSystem. Supports duration, start lifetime, start speed, start size, start color, rotation, gravity, maxParticles, loop, playOnAwake, simulationSpace, and scalingMode.",
             Group = "vfx",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "particle-main-edit" },
             Target = "editor",
@@ -71,8 +69,7 @@ namespace UnityCli
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
                 ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(observed),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

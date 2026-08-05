@@ -30,19 +30,16 @@ namespace UnityCli.Contexts.Instances
         {
             Name = "instances.list",
             Summary = "Read the current logical Unity project instance summary from the live Editor process.",
-            Description = "Read the CanonicalPath v1 project identity and Editor readiness visible to the current Unity process. Transport listeners, endpoints, ports, and generations are private session-supervisor state.",
+            Description = "Read the CanonicalPath v1 project identity, canonical project path, Unity version, and ready status visible to the current Editor process.",
             Category = "instances",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "always",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live",
             Examples = new[] { new ContextExample { Description = "Read the current Bridge instance", Input = new Request { } } }
         };
 
-        /// <summary>
-        /// <summary>读取当前 Editor 的逻辑项目 identity；transport generation 不进入 Context 结果。</summary>
+        /// <summary>读取当前 Editor 的逻辑项目 identity 和业务 readiness 摘要。</summary>
         public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var identity = UnityCliCanonicalProjectPath.Resolve(ProjectRoot(ctx));

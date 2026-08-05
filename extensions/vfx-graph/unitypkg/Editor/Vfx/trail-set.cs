@@ -9,13 +9,13 @@ namespace UnityCli
     public sealed class VfxTrailSetTool : IUnityCliTool<VfxTrailSetTool.Request, VfxTrailSetTool.Result>
     {
         public sealed class Request : TrailRendererFields { [UnityCliRequired] public string Target { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public VfxTrailRendererInfo Trail { get; set; } public List<VfxPlannedEffect> PlannedEffects { get; set; } public string LogPath { get; set; } }
+        public sealed class Result { public GameObjectRef Target { get; set; } public VfxTrailRendererInfo Trail { get; set; } public List<VfxPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "vfx.trail.set", Summary = "Configure an existing TrailRenderer.",
             Description = "Apply width, gradient, material, lifetime, emission, alignment, texture, and vertex settings to one existing TrailRenderer.",
-            Group = "vfx", Version = "1.0.0", SideEffects = new[] { "trail-renderer-edit" },
+            Group = "vfx",SideEffects = new[] { "trail-renderer-edit" },
             Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Update the matrix trail", Input = new Request { Target = "Trail", StartWidth = 0.2, EndWidth = 0 } } }
         };
@@ -37,7 +37,7 @@ namespace UnityCli
             VfxToolSupport.VerifyTrailRendererFields(observed, request);
             UnityCliSceneMutation.MarkSceneObjectDirty(observed);
             VfxToolSupport.MarkSceneDirty(observed.gameObject);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject), Trail = VfxToolSupport.BuildTrailRendererInfo(observed), PlannedEffects = effects, LogPath = ctx.LogPath });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject), Trail = VfxToolSupport.BuildTrailRendererInfo(observed), PlannedEffects = effects });
         }
     }
 }

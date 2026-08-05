@@ -9,11 +9,16 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } public string Path { get; set; } }
         public sealed class Result { public ReflectionProbeInfo Probe { get; set; } public bool Baked { get; set; } public string ArtifactPath { get; set; } public long SizeBytes { get; set; } public string Sha256 { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "graphics.bake-reflection-probe", Summary = "Bake a single ReflectionProbe to an .exr cubemap asset.", Description = "Bake a ReflectionProbe to an .exr path.", Group = "graphics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "bake", "asset-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Bake one reflection probe", Input = new Request { Target = "ReflectionProbe", Path = "Assets/Reflections/ReflectionProbe.exr" } } } };
+        public ToolDescriptor Describe() => new() { Name = "graphics.bake-reflection-probe", Summary = "Bake a single ReflectionProbe to an .exr cubemap asset.", Description = "Bake a ReflectionProbe to an .exr path. The parent Assets folder must already exist; a missing parent fails before Unity starts the bake.", Group = "graphics",DestructiveHint = true, SideEffects = new[] { "bake", "asset-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Bake one reflection probe", Input = new Request { Target = "ReflectionProbe", Path = "Assets/Reflections/ReflectionProbe.exr" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var probe = PhysicsToolSupport.ResolveReflectionProbe(r.Target); if (probe == null) throw new UnityCliBridge.BridgeCommandException("E_REFLECTION_PROBE_NOT_FOUND", "ReflectionProbe not found: " + r.Target, "Pass an existing ReflectionProbe target.");
             var probePath = GraphicsToolSupport.NormalizeAssetPathRequired(r.Path ?? ("Assets/" + probe.gameObject.name + "_reflection.exr"), ".exr"); var outputPath = AssetToolSupport.AssetFullPath(probePath);
+            // Unity 的 bake API 会为不存在的父目录弹出原生阻断窗口，必须在 effect barrier 前拒绝。
+            var parentAssetPath = Path.GetDirectoryName(probePath)?.Replace('\\', '/');
+            var parentOutputPath = Path.GetDirectoryName(outputPath);
+            if (string.IsNullOrEmpty(parentAssetPath) || string.IsNullOrEmpty(parentOutputPath) || !Directory.Exists(parentOutputPath))
+                throw new UnityCliBridge.BridgeCommandException("E_GRAPHICS_ASSET_DIRECTORY_NOT_FOUND", "ReflectionProbe output parent folder does not exist: " + parentAssetPath, "Run tools run asset.create with path and type=folder input, then retry with a new output path.");
             var oldExists = File.Exists(outputPath); var oldBytes = oldExists ? File.ReadAllBytes(outputPath) : null; var oldDigest = oldBytes == null ? null : GraphicsToolSupport.FileSha256(oldBytes); var started = System.DateTime.UtcNow;
             ctx.CommitEffect();
             if (!Lightmapping.BakeReflectionProbe(probe, probePath)) throw new UnityCliBridge.BridgeCommandException("E_REFLECTION_PROBE_BAKE_FAILED", "Unity did not complete the ReflectionProbe bake: " + probePath, "Check lighting settings and retry.");

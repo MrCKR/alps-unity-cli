@@ -33,7 +33,7 @@ namespace UnityCli.ProBuilder
         {
             Name = "probuilder.bridge-edges",
             Summary = "Bridge two edges on a ProBuilder mesh to create a connecting face.",
-            Description = "Create a bridge between two edges on a ProBuilder mesh. Each edge is specified as a vertex-pair {a,b}. Optionally allow non-manifold geometry.",
+            Description = "Create exactly one non-degenerate quad between two existing edges. The edges must resolve to four distinct shared endpoints, may not already bound the same face, and must not require the ProBuilder triangle-bridge branch. UV1 must be absent, and every existing triangle must have UV0 inputs whose full 5.2.4 tangent reciprocal, direction, and raw accumulation arithmetic stays finite. By default each edge must be a boundary edge; allowNonManifold permits one or both edges to have two readable incidences, but all other exact-plan restrictions still apply. The created quad receives a deterministic manual UV0 layout before tangent refresh.",
             Group = "probuilder",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
@@ -41,8 +41,6 @@ namespace UnityCli.ProBuilder
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
             MaxTimeoutMs = 30000,
-            SupportsJob = true,
-            ArtifactKinds = new[] { "json" },
             Examples = new[]
             {
                 new ToolExample { Description = "在闭合网格上桥接两条边", Input = new Request { Target = "MyCube", EdgeA = new EdgeRef { A = 0, B = 1 }, EdgeB = new EdgeRef { A = 5, B = 7 }, AllowNonManifold = true } }
@@ -54,7 +52,9 @@ namespace UnityCli.ProBuilder
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(request.Target);
+            var target = request.Target;
+            var allowNonManifold = request.AllowNonManifold;
+            var go = ProBuilderInput.ResolveTarget(target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -65,23 +65,48 @@ namespace UnityCli.ProBuilder
             var edgeA = new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(request.EdgeA.A, "edgeA.a"), b = ProBuilderOperationProof.CheckedInt(request.EdgeA.B, "edgeA.b") };
             var edgeB = new ProBuilderInput.EdgePair { a = ProBuilderOperationProof.CheckedInt(request.EdgeB.A, "edgeB.a"), b = ProBuilderOperationProof.CheckedInt(request.EdgeB.B, "edgeB.b") };
             var edgeArray = ProBuilderOperationProof.ValidateEdges(mesh, null, new[] { edgeA, edgeB });
-            var before = ProBuilderOperationProof.Capture(mesh, edges: edgeArray);
-            if (before == null) throw ProBuilderErrors.OperationFailed("bridge-edges", "Requested edge geometry is not readable.");
+            var source = ProBuilderEdgeCompletionProof.Capture(go, mesh, edgeArray);
+            if (!ProBuilderEdgeCompletionProof.TryPlanBridge(source, allowNonManifold))
+                throw ProBuilderErrors.SchemaInvalid("bridge requires two distinct real edges with four shared endpoints and a complete provable quad plan.");
+            var frozenEdgeA = edgeArray.GetValue(0); var frozenEdgeB = edgeArray.GetValue(1);
             ctx.CommitEffect();
-            Undo.RecordObject(go, "ProBuilder Bridge Edges");
-            var bridged = ProBuilderReflection.BridgeEdges(mesh, edgeA.a, edgeA.b, edgeB.a, edgeB.b, request.AllowNonManifold);
-            if (!bridged)
-                throw ProBuilderErrors.OperationFailed("bridge-edges", "AppendElements.Bridge method not found or failed in ProBuilder assembly.");
+            try
+            {
+            bool invoked, bridged;
+            try
+            {
+                Undo.RecordObject(go, "ProBuilder Bridge Edges");
+                invoked = ProBuilderReflection.TryBridgeFrozenEdges(mesh, frozenEdgeA, frozenEdgeB, allowNonManifold, out bridged);
+            }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch { throw ProBuilderErrors.OutcomeUnknown("bridge-edges", "invoke", "AppendElements.Bridge threw after the effect barrier."); }
+            if (!invoked || !bridged)
+                throw ProBuilderErrors.OutcomeUnknown("bridge-edges", "invoke", "AppendElements.Bridge did not create the planned face.");
+            if (!ProBuilderOperationProof.ApplyDeterministicQuadUvs(mesh, source[0].Before.Faces.Length, 1))
+                throw ProBuilderErrors.OutcomeUnknown("bridge-edges", "invoke", "The created bridge quad could not receive its deterministic manual UV0 layout.");
 
-            ProBuilderReflection.RefreshMesh(mesh);
-            EditorSceneManager.MarkSceneDirty(go.scene);
-            var freshMesh = ProBuilderOperationProof.ResolveFreshMesh(request.Target, go);
-            var after = ProBuilderOperationProof.Capture(freshMesh, edges: edgeArray);
-            if (!ProBuilderOperationProof.HasTopologyExpansion(before, after))
-                throw ProBuilderErrors.OperationFailed("bridge-edges", "Requested edges did not produce readable bridge topology.");
+            try
+            {
+                if (!ProBuilderReflection.RefreshMeshPreservingVertexPayload(mesh)) throw new System.InvalidOperationException();
+                EditorSceneManager.MarkSceneDirty(go.scene);
+            }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch { throw ProBuilderErrors.OutcomeUnknown("bridge-edges", "readback", "ProBuilder mesh refresh failed after effect."); }
+            var freshMesh = ProBuilderEdgeCompletionProof.ResolveFresh(source[0], target);
+            if (freshMesh == null)
+                throw ProBuilderErrors.OutcomeUnknown("bridge-edges", "readback", "Fresh target identity could not be resolved.");
+            try
+            {
+                if (!ProBuilderEdgeCompletionProof.BridgeMatches(source, go, freshMesh, allowNonManifold, out var mismatch))
+                    throw ProBuilderErrors.OutcomeUnknown("bridge-edges", "postcondition", "Requested bridge face was not proven by fresh topology readback: " + mismatch + ".");
+            }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch (System.Exception exception) { throw ProBuilderErrors.OutcomeUnknown("bridge-edges", "postcondition", exception.Message); }
 
-            var newFaceCount = ProBuilderReflection.GetFaceCount(freshMesh);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceCount = newFaceCount });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceCount = 1 });
+            }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
+            catch (System.Exception exception) { throw ProBuilderErrors.OutcomeUnknown("bridge-edges", "postcondition", exception.Message); }
         }
     }
 }

@@ -2,9 +2,9 @@
 
 CLI-first Unity 自动化工具，不是 MCP server。通过 `unity_cli` 二进制命令行直接驱动 Unity Editor，无需额外协议层。
 
-npm 包名：`@alps_ckr/unity_cli`  
+npm 包名：`@alpsckr/unity_cli`
 运行环境：Windows + Node.js 20+  
-当前方向：冻结决策 — 独立 CLI 实现、Windows-only、npm-first 安装、开放能力无默认风险门控。
+当前方向：冻结决策 - 独立 CLI 实现、Windows-only、npm-first 安装；公开 Tool 与 CLI 控制面调用即授权。
 
 ## Project Baseline
 
@@ -31,15 +31,13 @@ CLI 控制面只允许：
 - `extensions`
 - `target`
 - `instances`
-- `jobs`
-- `batch`
 - `doctor`
 
 Unity 项目内容与 Editor 能力域必须继续通过 `tools run <tool>` 或 `context read <context>` 暴露，例如 scene、asset、game-object、prefab、editor、screenshot、package、docs、reflect、build、test、code、profiler、physics、graphics 等。
 
-`target`、`instances`、`jobs`、`batch`、`doctor` 是 CLI 自身的状态、路由、队列、编排和诊断控制面；它们可以作为顶层命令存在，但不得重新引入 Unity 能力域的顶层入口。
+`target`、`instances`、`doctor` 是 CLI 自身的状态、路由和诊断控制面；它们可以作为顶层命令存在，但不得重新引入 Unity 能力域的顶层入口。
 
-内部 bridge command、job runner、worker、registry 可以作为实现细节存在，但不得定义超出上述清单的用户可见顶层命令形态。
+内部 Bridge、协调器和 registry 可以作为实现细节存在，但不得定义超出上述清单的用户可见顶层命令形态。
 
 ### 3. AI-First Tool Interface
 
@@ -52,12 +50,10 @@ unity_cli tools group/search
 unity_cli tools describe <tool>
 unity_cli tools run <tool> --input <json>
 
-unity_cli context list/describe/read
+unity_cli context list/search/describe/read
 
 unity_cli target alias list/set/unset
 unity_cli instances list/prune
-unity_cli jobs status/logs/describe/cancel
-unity_cli batch run/schema
 unity_cli doctor
 
 unity_cli extensions list/install/remove/doctor
@@ -139,7 +135,7 @@ unity_cli tools run reflect.member UnityEngine.Camera.fieldOfView
 
 ### 4. 项目自定义工具
 
-Unity 项目可通过 C# `IUnityCliTool<TReq,TRes>` 注册自定义工具；Request/Result 派生 schema，`Describe()` 只写人工 descriptor 字段：
+Unity 项目可通过异步 C# `IUnityCliTool<TReq,TRes>` 注册自定义 Tool；Request/Result 派生 schema，`Describe()` 声明公开 descriptor 与 direct completion contract：
 
 ```powershell
 # 发现项目自定义工具（需要 Bridge 连接）
@@ -149,7 +145,7 @@ unity_cli tools group list custom --include-custom
 unity_cli tools describe my.custom-tool --include-custom
 
 # 执行自定义工具
-unity_cli tools run my.custom-tool --include-custom --input '{"key":"value"}'
+unity_cli tools run my.custom-tool --input '{"key":"value"}' --instance <id|projectPath|alias>
 ```
 
 > **注意**：可通过 `extensions list` 查看已安装扩展，`extensions install <id>` / `extensions remove <id>` 管理扩展，`extensions doctor` 诊断扩展状态。扩展包也可通过 `init` 命令安装 Bridge 包来启用。
@@ -168,10 +164,10 @@ unity_cli tools run diagnose.preflight
 
 | 规则 | 说明 |
 |------|------|
-| Tool 可有副作用 | `destructiveHint: true` 的工具需要 `--yes` 确认或 `--dry-run` 预览 |
-| Context 只负责观察 | Context 不承载写入、artifact、job 或 destructive 语义 |
+| Tool 可有副作用 | 调用即授权；`destructiveHint`、`sideEffects` 与 `supportsDryRun` 仅描述风险和可选预览 |
+| Context 只负责观察 | Context 不承载写入、artifact 或 destructive 语义 |
 | Extension 不能绕过 descriptor/envelope | 项目工具必须可描述、可审计、可阻断 |
-| fingerprint mismatch 默认 block | 自定义工具的 handler 代码与 descriptor 指纹不匹配时，默认阻止执行 |
+| 内部完整性不匹配默认阻止 | 自定义工具的 handler 代码与 descriptor 不一致时，默认阻止执行 |
 
 ## 安装与构建
 
@@ -214,329 +210,36 @@ npm link
 }
 ```
 
-## Job 模型
+## Live Editor 执行
 
-长时间运行的 Unity batchmode 操作在 `%LOCALAPPDATA%\UnityCli` 下创建持久 job。
+需要 Unity 执行的 Tool 只连接已打开的 Unity Editor，并在同一次 direct 调用中返回最终业务结果。`build.run`、`test.run`、`editor.refresh`、`code.exec` 以及需要 Editor 刷新的 Package Tool 都会等待已证明的终态；它们不创建可查询的后台任务。
 
-Job 状态：`queued` → `running` → `succeeded` / `failed` / `cancelled` / `timeout`
+## 能力发现与执行
 
-```powershell
-unity_cli jobs status <jobId>
-unity_cli jobs logs <jobId> --tail 100
-unity_cli jobs cancel <jobId>
-```
-
-## 命令支持状态
-
-`supportStatus` 是稳定机器字段，AI 应直接读取字段值：
-
-| supportStatus | 含义 |
-|------|------|
-| `live-bridge` | 通过 Unity Bridge 实时执行 |
-| `bridge-job` | 支持 Bridge 实时执行，也支持 batch/job 通道 |
-| `batch-job` | 通过 Unity batchmode/job 执行 |
-| `cli-only` | 本地 CLI 执行，无需 Unity 连接 |
-| `live-bridge-runtime` | 通过 Play Mode runtime Bridge 执行 |
-| `planned` | CLI 命令合约已声明，Bridge 处理程序待实现 |
-
-## 全部命令参考
-
-### 工具发现与执行
+公开能力不维护静态命令清单。Tool 和 Context 的当前 schema、可用性、示例与结果契约以 CLI discovery 为准：
 
 ```powershell
-# 列出工具分组
 unity_cli tools group
-
-# 按组列出工具
-unity_cli tools group list camera
-
-# 包含项目自定义工具
-unity_cli tools group list custom --include-custom
-
-# 搜索工具
+unity_cli tools group list <group>
 unity_cli tools search <keyword>
-unity_cli tools search screenshot --include-custom
-
-# 工具完整描述
 unity_cli tools describe <tool-name>
+unity_cli tools run <tool-name> --input '<json>' [--instance <id|projectPath|alias>]
 
-# 执行工具
-unity_cli tools run <tool-name> --input '<json>'
-unity_cli tools run <tool-name> --input-file params.json
-unity_cli tools run <tool-name> --stdin
+unity_cli context list
+unity_cli context search <keyword>
+unity_cli context describe <context-name>
+unity_cli context read <context-name> --input '<json>' [--instance <id|projectPath|alias>]
 ```
 
-Bridge-backed 工具会在 Unity 主线程执行。CLI 的 session supervisor 在一个不可变 deadline 内透明等待 compile、import、domain reload 和 listener restart，并在恢复后的 validated generation 上继续同一个逻辑请求。直接调用只返回已证明的业务终态或结构化失败；观察当前进度和 blocker 使用 `unity_cli context read editor.state --input '{}'`，该 Context 在固定预算内立即返回，不等待状态变化。
+项目自定义能力只在显式 `--include-custom` discovery 或已选中的 Live Editor 中出现。`examples[].argv` 是可直接执行的参数 token 数组；业务参数全部放入 `--input`、`--input-file` 或 `--stdin`，命令控制项不混入业务 JSON。
 
-### 场景与截图
-
-```powershell
-unity_cli tools run scene.hierarchy --page-size 100
-unity_cli tools run scene.active
-unity_cli tools run scene.list-opened
-unity_cli tools run scene.unload <path> --yes
-unity_cli tools run scene.set-active <path>
-unity_cli tools run scene.data --max-depth 3 --include-components
-unity_cli tools run scene.view-frame --target Player
-unity_cli tools run scene.screenshot <output-path> --width 1920 --height 1080
-
-unity_cli tools run camera.list
-unity_cli tools run camera.info "Main Camera"
-unity_cli tools run camera.screenshot "Main Camera" --output shot.png --width 1920 --height 1080
-
-unity_cli tools run screenshot.capture <output-path>
-unity_cli tools run screenshot.game-view <output-path> --include-diagnostics
-unity_cli tools run screenshot.scene-view <output-path>
-unity_cli tools run screenshot.isolated-object --target Player --output iso.png
-unity_cli tools run screenshot.orbit --target Player --output-dir Assets/Shots --count 8
-```
-
-### 对象、组件与反射
-
-```powershell
-# 通用 Object 深读写（对齐 IvanMurzak）
-unity_cli tools run object.get-data --input '{"instanceId":12345}'
-unity_cli tools run object.get-data --input '{"path":"Main Camera","paths":["localPosition"]}'
-unity_cli tools run object.modify --input '{"instanceId":123,"pathPatches":[{"path":"m_Color","value":{"r":1}}]}'
-unity_cli tools run object.modify --input '{"instanceId":123,"jsonPatch":{"m_Color":{"r":1}}}' --dry-run
-
-# Component 深读写
-unity_cli tools run component.get --input '{"path":"Player","component":"Transform"}'
-unity_cli tools run component.modify --input '{"path":"Player","component":"Transform","pathPatches":[{"path":"localPosition","value":{"x":1}}]}'
-unity_cli tools run component.list-types --input '{"keyword":"Rigidbody"}'
-
-# Live 反射
-unity_cli tools run reflection.method.find --input '{"typeName":"UnityEngine.Transform","methodName":"Translate"}'
-unity_cli tools run reflection.method.call --input '{"typeName":"UnityEngine.Transform","methodName":"Translate","args":[1,0,0],"instanceRef":{"instanceId":123},"security":{"confirmed":true,"destructiveFingerprint":"..."}}'
-unity_cli tools run type.schema --input '{"typeName":"UnityEngine.Rigidbody"}'
-```
-
-> patch 路径使用 `/` 分隔：`fieldName`、`nested/field`、`arrayField/[i]`、`dictField/[key]`，并可带 `#/` 前缀。执行顺序：`jsonPatch` → `pathPatches` → `objectDiff/componentDiff`。
-
-### 资产与预制体
-
-```powershell
-unity_cli tools run asset.search <keyword> --type Prefab
-unity_cli tools run asset.info <path>
-unity_cli tools run asset.create <path> --content '{}' --overwrite
-unity_cli tools run asset.delete <path> --yes
-unity_cli tools run asset.duplicate <path> --to <new-path>
-unity_cli tools run asset.move <path> --to <new-path>
-unity_cli tools run asset.rename <path> --name <new-name>
-unity_cli tools run asset.import <source> --project <project-path>
-
-unity_cli tools run prefab.info <path>
-unity_cli tools run prefab.create <source> --path <prefab-path>
-unity_cli tools run prefab.modify <path> --name <new-name>
-unity_cli tools run prefab.stage-open <path>
-unity_cli tools run prefab.stage-save
-unity_cli tools run prefab.stage-save
-unity_cli tools run prefab.stage-close
-unity_cli tools run prefab.hierarchy <path> --page-size 100
-unity_cli tools run prefab.instantiate <path> --parent Enemies --name Enemy_1
-unity_cli tools run prefab.unpack --target Player --yes
-
-unity_cli tools run asset.search-built-in --keyword Icon --type Texture
-unity_cli tools run asset.get-data <asset-path> --max-depth 3
-unity_cli tools run asset.preview <asset-path>
-```
-
-### 材质、图形、物理
-
-```powershell
-unity_cli tools run material.info <path>
-unity_cli tools run material.create <path> --shader Standard
-unity_cli tools run material.assign --target <go> --material <path> --slot 0
-unity_cli tools run material.set <path> --property _Color --value "#ff00ffff" --type color
-
-unity_cli tools run graphics.quality --quality-level 2
-unity_cli tools run graphics.settings --anti-aliasing 4
-unity_cli tools run graphics.pipeline
-unity_cli tools run graphics.volume "Global Volume"
-unity_cli tools run graphics.screenshot <output-path>
-
-unity_cli tools run physics.settings
-unity_cli tools run physics.raycast --origin-x 0 --origin-y 2 --origin-z -5 --direction-z 1 --distance 100
-unity_cli tools run physics.raycast-all --origin-x 0 --origin-y 2 --origin-z -5 --direction-z 1
-unity_cli tools run physics.linecast --start-x 0 --start-y 0 --start-z 0 --end-x 10 --end-y 0 --end-z 0
-unity_cli tools run physics.shapecast --shape sphere --origin-x 0 --origin-y 5 --origin-z 0 --direction-z -1 --radius 0.5
-unity_cli tools run physics.shapecast --shape capsule --origin-x 0 --origin-y 5 --origin-z 0 --direction-z -1 --height 2 --radius 0.5
-unity_cli tools run physics.validate --target Player
-unity_cli tools run physics.force --target Ball --x 0 --y 500 --z 0 --mode Impulse
-unity_cli tools run physics.force --target Crate --force-type explosion --explosion-force 1000 --explosion-radius 10
-unity_cli tools run physics.simulation --steps 3 --delta-time 0.02 --simulate
-
-unity_cli tools run texture.generate Assets/Tex/Checker.png --pattern checkerboard --pattern-size 8 --color "#000000" --color2 "#ffffff"
-unity_cli tools run texture.generate Assets/Tex/Grad.png --pattern radial --color "#ff0000" --color2 "#0000ff"
-```
-
-### 控制台、包与构建
-
-```powershell
-unity_cli tools run console.get --type error --count 20
-unity_cli tools run console.clear --yes
-
-unity_cli tools run package.embed --package com.unity.inputsystem --yes
-
-unity_cli tools run build.scene.list
-unity_cli tools run build.scene.add --path Assets/Scenes/Main.unity --yes
-unity_cli tools run build.platform.get
-unity_cli tools run build.platform.set --target Android
-unity_cli tools run build.settings.get
-```
-
-### Profiler
-
-```powershell
-unity_cli tools run profiler.status
-unity_cli tools run profiler.start
-unity_cli tools run profiler.modules
-unity_cli tools run profiler.areas
-unity_cli tools run profiler.object-memory --target Player
-unity_cli tools run profiler.rendering-stats
-unity_cli tools run profiler.script-stats
-unity_cli tools run profiler.clear --yes
-unity_cli tools run profiler.load --path Assets/profiler.raw
-```
-
-### 动画、VFX、Shader、纹理
-
-```powershell
-unity_cli tools run animation.clip --input '{"path":"Assets/Walk.anim","maxCurveKeys":8}'
-unity_cli tools run animation.clip.create --input '{"path":"Assets/Walk.anim","length":1,"loopTime":true}' --yes
-unity_cli tools run animation.clip.modify --input '{"path":"Assets/Walk.anim","loopTime":false}' --yes
-unity_cli tools run animation.state <target>
-unity_cli tools run animation.play <target> --state Run
-unity_cli tools run animation.stop <target>
-
-unity_cli tools run vfx.graph.info --input '{"path":"<path>"}'
-unity_cli tools run vfx.graph.create --input '{"path":"<path>"}' --yes
-unity_cli tools run vfx.effect.add --input '{"target":"<target>","graph":"<vfx-path>"}'
-unity_cli tools run vfx.effect.info --input '{"target":"<target>"}'
-
-unity_cli tools run shader.info <path>
-unity_cli tools run shader.read <path>
-unity_cli tools run shader.create <path> --content-file <source>
-unity_cli tools run shader.update <path> --content-file <source>
-
-unity_cli tools run texture.info <path>
-unity_cli tools run texture.create <path> --source <image>
-unity_cli tools run texture.sprite <path> --pixels-per-unit 128
-unity_cli tools run texture.import-settings <path> --readable false --mipmap false
-```
-
-### UI
-
-```powershell
-unity_cli tools run ui.canvas.create <name>
-unity_cli tools run ui.text.create <name> --parent <canvas> --text "Hello"
-unity_cli tools run ui.button.create <name> --parent <canvas> --label "Click"
-unity_cli tools run ui.image.create <name> --parent <canvas> --sprite <sprite-path>
-unity_cli tools run ui.document.create --name <name> --uxml <uxml-path> --uss <uss-path>
-unity_cli tools run ui.document.info <target>
-unity_cli tools run ui.hierarchy <target> --page-size 100
-```
-
-### GameObject 与组件
-
-```powershell
-unity_cli tools run go.find <keyword>
-unity_cli tools run go.inspect <target>
-unity_cli tools run go.create <name>
-unity_cli tools run go.modify <target>
-unity_cli tools run go.delete <target>
-
-unity_cli tools run component.add --target <go> --type <component>
-unity_cli tools run component.remove --target <go> --type <component>
-unity_cli tools run component.set --target <go> --type <component> --property <name> --value <value>
-```
-
-### 编辑器控制
-
-```powershell
-unity_cli context read editor.state --input '{}'
-unity_cli tools run editor.play --timeout-ms 7000
-unity_cli tools run editor.pause
-unity_cli tools run editor.stop --timeout-ms 7000
-unity_cli tools run editor.menu <menu-path>
-unity_cli tools run editor.console --count 50
-unity_cli tools run editor.compile --input '{"refresh":true,"includeWarnings":true}' --timeout-ms 120000
-unity_cli tools run editor.refresh --input '{"compile":true}' --wait
-unity_cli tools run editor.launch-dialog.dismiss --input '{"pid":<unity-pid>,"timeoutMs":5000}'
-```
-
-### 代码执行
-
-```powershell
-unity_cli tools run code.exec --file <script.csx>
-unity_cli tools run code.exec --stdin --channel live
-unity_cli tools run code.exec --code "return UnityEditor.EditorApplication.isPlaying;"
-unity_cli tools run code.exec --channel batchmode --project <path> --unity <unity-exe> --wait
-```
-
-### 包管理
-
-```powershell
-unity_cli tools run package.list --project <path>
-unity_cli tools run package.info <package-name> --project <path>
-unity_cli tools run package.search <keyword>
-unity_cli tools run package.install <package@version> --project <path> --unity <unity-exe> --wait
-unity_cli tools run package.remove <package-name> --project <path> --unity <unity-exe> --wait
-unity_cli tools run package.deploy --input '{"project":"<path>","source":"<local-package-source>"}' --dry-run
-unity_cli tools run package.deploy --input '{"project":"<path>","source":"<local-package-source>"}' --yes
-unity_cli tools run package.restore --input '{"project":"<path>","packageName":"<package-name>"}' --dry-run
-unity_cli tools run package.restore --input '{"project":"<path>","packageName":"<package-name>"}' --yes
-unity_cli tools run package.resolve --project <path> --unity <unity-exe> --wait
-unity_cli tools run package.registry.get --project <path>
-unity_cli tools run package.registry.set --url <url> --project <path> --yes
-unity_cli tools run package.registry.clear --project <path> --yes
-unity_cli tools run package.scoped-registry.list --project <path>
-unity_cli tools run package.scoped-registry.add --name <name> --url <url> --scope <scope> --project <path> --yes
-unity_cli tools run package.scoped-registry.remove --name <name> --project <path> --yes
-```
-
-### 测试与构建
-
-```powershell
-unity_cli tools run test.run --platform EditMode --wait --project <path> --unity <unity-exe>
-unity_cli jobs status <jobId>
-unity_cli jobs logs <jobId> --tail 100
-unity_cli jobs cancel <jobId> --yes
-
-unity_cli tools run build.run --target StandaloneWindows64 --output <output-path> --wait
-unity_cli jobs status <jobId>
-unity_cli jobs logs <jobId> --tail 100
-unity_cli jobs cancel <jobId> --yes
-```
-
-### Batch 自动化
-
-```powershell
-unity_cli batch schema
-unity_cli batch run <batch-file.json>
-unity_cli batch run <file> --preflight --parallel 4 --fail-fast false
-```
-
-Batch step 可用 `input` 字段传结构化 JSON，CLI 会安全转成 `--input <json>`；Windows 路径不需要手写转义在 `args` 字符串里。
-
-```json
-{
-  "steps": [
-    {
-      "id": "capture",
-      "command": ["tools", "run", "profiler.capture"],
-      "job": true,
-      "input": { "path": "Artifacts/profile.json", "format": "json", "overwrite": true }
-    }
-  ]
-}
-```
+Bridge-backed Tool 在 Unity 主线程执行。CLI 的 session supervisor 在一个不可变 deadline 内透明处理 compile、import、domain reload 和 listener restart，并在同一次 direct 调用中返回已证明的业务终态或结构化失败。观察当前进度和 blocker 使用 `unity_cli context read editor.state`；该 Context 立即返回，不等待状态变化。
 
 ### 实例与目标
 
 ```powershell
 unity_cli instances list
-unity_cli instances prune --yes
+unity_cli instances prune
 
 # target 只管理 canonical project identity 的别名
 unity_cli target alias set <projectPath|instanceId> <alias>
@@ -546,55 +249,7 @@ unity_cli target alias list
 
 实例与目标属于 CLI 控制面，只使用顶层 `instances` / `target`；不要通过 `context read` 或 `tools run` 访问这些状态。
 
-### Jobs、诊断与能力
-
-```powershell
-unity_cli jobs status <jobId>
-unity_cli jobs logs <jobId> --tail 100
-unity_cli jobs describe <jobId>
-unity_cli jobs cancel <jobId>
-
-unity_cli doctor
-unity_cli tools run diagnose.preflight
-unity_cli tools run diagnose.capabilities
-```
-
-### Context（只读项目状态）
-
-```powershell
-unity_cli context list
-unity_cli context describe <name>
-unity_cli context read <name> [--input '<json>']
-
-# Resource 对齐 Context 示例
-unity_cli context read scene.gameobject.components --input '{"instanceId":123}'
-unity_cli context read prefab.info --input '{"path":"Assets/Prefabs/Hero.prefab"}'
-unity_cli context read tools.groups
-```
-
-### 扩展包
-
-```powershell
-unity_cli extensions list
-unity_cli extensions install <id>
-unity_cli extensions remove <id>
-unity_cli extensions doctor
-```
-
-扩展源码以 `extensions/<id>/` 目录组织；安装到 Unity 项目后只作为主包子目录存在：`Packages/com.unity_cli/Extensions/<id>/`。不会创建 `Packages/com.unity_cli.<id>` 这类独立 Unity package。
-
-### 离线文档与反射
-
-```powershell
-unity_cli tools run docs.list
-unity_cli tools run docs.topic <topic>
-unity_cli tools run docs.get <api-name>
-unity_cli tools run docs.search <query>
-
-unity_cli tools run reflect.type <type-name>
-unity_cli tools run reflect.member <type.member>
-unity_cli tools run reflect.search <query>
-```
+`doctor`、`instances`、`target alias` 和 `extensions` 属于 CLI 控制面。扩展源码以 `extensions/<id>/` 组织，安装后投影到 `Packages/com.unity_cli/Extensions/<id>/`；Extension 贡献的 Tool/Context 仍通过统一 discovery 入口发现。
 
 ## 初始化（init）
 
@@ -624,154 +279,20 @@ unity_cli init --check --project C:\path\MyProject
 
 ## Unity Editor Bridge
 
-Bridge 包（`com.unity_cli`）在 Unity Editor 中提供 `POST /bridge/execute` HTTP 端点。CLI 通过此端点路由实时命令。
+`init` 以 copy 模式把 `com.unity_cli` 安装到 `Packages/com.unity_cli/`。已打开的 Unity Editor 自动注册 canonical project identity 和 Live listener；CLI 通过 `instances list` 与 `--instance` 选择唯一会话，公开接口不接受 endpoint 或 port。
 
-Bridge 生命周期：
-1. `init` 安装 Bridge 包到 `Packages/com.unity_cli/`（copy 模式）
-2. Unity Editor 打开时自动启动 Bridge HTTP 服务
-3. Bridge 自动向 CLI 注册实例（心跳机制）
-4. CLI 通过 `instances list` 发现运行中的 Bridge 端点
+Bridge command、handler、journal、fingerprint、listener generation 和 completion contract 都是内部实现，不构成第二套用户入口。mutation 在首个真实 effect 前持久化 effect barrier；effect 后只有 fresh business readback 或 artifact proof 能完成。无法证明终态时返回 `E_REQUEST_OUTCOME_UNKNOWN`，禁止自动重放。
 
-### Bridge Command Reference
-
-`camera.list`, `camera.info`, `camera.screenshot`, `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`, `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.duplicate`, `go.move-relative`, `go.look-at`, `go.delete`, `component.add`, `component.remove`, `component.set`
-
-**Camera & Screenshot:**
-- `camera.list`, `camera.info`, `camera.screenshot`, `camera.create`, `camera.target`, `camera.lens`, `camera.multiview`
-- `camera.screenshot` captures render texture and returns artifact metadata
-- `E_CAMERA_NOT_FOUND` for `tools run camera.info` when a target Camera cannot be resolved
-- `E_TARGET_NOT_FOUND` for `tools run camera.screenshot` when the target is empty or cannot be resolved
-
-**Scene:**
-- `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`
-
-**GameObject & Component:**
-- `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.duplicate`, `go.move-relative`, `go.look-at`, `go.delete`, `component.add`, `component.remove`, `component.set`
-
-**Asset:**
-- `asset.search`, `asset.info`, `asset.create`, `asset.import`, `asset.modify`, `asset.delete`, `asset.duplicate`, `asset.move`, `asset.rename`
-
-**Prefab:**
-- `tools run prefab.info --input '{"path":"<path>"}'` returns Prefab metadata including GUID, root name, asset type, `variant` base/source paths and GUIDs, `dependencies.items`, and `nestedPrefabs.items` rather than counts only
-- `tools run prefab.hierarchy --input '{"path":"<path>"}'` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant/dependency summary, `nestedPrefabs.items` and `logPath`
-- `E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_MODIFY_NOOP`, `E_PREFAB_CHILD_EXISTS`, `E_PREFAB_CHILD_NOT_FOUND`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`
-
-**UI:**
-- `tools run ui.canvas.create`, `tools run ui.text.create`, `tools run ui.button.create` and `tools run ui.image.create` create uGUI objects
-- `tools run ui.document.info` supports live UIDocument inspection and offline `.uxml`/`.uss` file reads
-- `E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`
-
-**Material:**
-- `tools run material.info --input '{"path":"<path>"}'` returns shader, keywords, ShaderUtil property metadata, current values, texture references, dependencies and `logPath`
-- `tools run material.assign --input '{"target":"<go>","material":"<path>"}'` assigns to a Renderer shared material slot or a UI Graphic `material` property
-- `E_MATERIAL_PATH_REQUIRED`, `E_MATERIAL_PATH_INVALID`, `E_MATERIAL_NOT_FOUND`, `E_SHADER_NOT_FOUND`, `E_MATERIAL_PROPERTY_NOT_FOUND`, `E_MATERIAL_PROPERTY_TYPE_MISMATCH`, `E_TARGET_AMBIGUOUS`, `E_MATERIAL_SLOT_INVALID`, `E_TEXTURE_NOT_FOUND` and `E_UNITY_BUSY`
-
-**Graphics & Physics:**
-- `tools run graphics.quality` reads and updates `QualitySettings`
-- `tools run physics.raycast` supports 3D and 2D ray queries
-- `physics.raycast` supports 3D and 2D ray queries
-
-**Shader & Texture:**
-- `tools run shader.info`, `tools run shader.read`, `tools run shader.create`, `tools run shader.update`
-- `tools run texture.info`, `tools run texture.create`, `tools run texture.sprite`, `tools run texture.import-settings`
-- `E_SHADER_NOT_FOUND`, `E_TEXTURE_NOT_FOUND`, `E_IMPORT_FAILED`
-
-**Animation & VFX:**
-- `tools run animation.clip --input '{"path":"<path>"}'` reads `Assets/*.anim` AnimationClip settings, events, and bounded curve summaries
-- `tools run animation.clip.create --input '{"path":"<path>","length":1}' --yes` creates or overwrites persistent `Assets/*.anim` assets
-- `tools run animation.clip.modify --input '{"path":"<path>","loopTime":true}' --yes` updates persistent clip-level settings
-- `tools run vfx.graph.info --input '{"path":"<path>"}'` reads an `Assets/*.vfx` Visual Effect Graph asset
-- `tools run vfx.graph.create --input '{"path":"<path>"}' --yes` creates a persistent Visual Effect Graph asset
-- Windows-style `Assets\VFX\Explosion.vfx` paths are normalized to Unity asset paths
-- `E_VFX_PACKAGE_MISSING`, `E_VFX_GRAPH_NOT_FOUND`
-
-**Editor:**
-- `context read editor.state --input '{}'` immediately observes compile/import/build/PlayMode/Prefab Stage, progress, blockers and freshness without waiting or side effects
-- `tools run editor.play`, `tools run editor.pause` and `tools run editor.stop` control Editor PlayMode and return only stable observed terminal state
-- `tools run editor.menu --input '{"path":"<path>"}'` executes a Unity Editor menu item
-- `tools run console.get --input '{"count":<n>}'` returns recent Unity Console entries
-- `E_UNITY_BUSY`, `E_UNITY_TRANSITION_TIMEOUT`, `E_MENU_NOT_FOUND`, `E_MENU_COMPLETION_UNSUPPORTED`
-
-**稳定会话与终态安全：**
-- mutation 在首个真实 effect 前持久化 effect barrier；effect 前超时可返回确定失败
-- effect 后只有 durable business proof 才能成功；proof 缺失时返回 `E_REQUEST_OUTCOME_UNKNOWN`，并禁止 blind replay
-- HTTP acknowledgement、queued/started/running 状态、listener generation 和 journal 元数据不会成为公开成功结果
-
-**Runtime validation disclaimer:**
-- C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG/JPG artifacts, Prefab Stage open/save/close, Prefab dirty conflicts, nested/variant Prefab summaries, Material asset creation, Renderer/UI Graphic assignment, Material property writes, GraphicsSettings/QualitySettings persistence, render pipeline asset resolution, Physics/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation/binding summaries, Animator state/play/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows + Unity Editor validation
-
-**Code:**
-- `code.exec`.
-
-**Context & Extension:**
-- `context.list`, `context.describe`, `context.read` — read-only context observations
-- `extension.status` — extension availability check
-
-**ProBuilder Extension:**
-- Requires `com.unity.probuilder` package
-- 36 tools: `probuilder.ping` through `probuilder.repair-mesh`
-
-**Cinemachine, URP, HDRP Extensions:**
-- Cinemachine: `cinemachine.create`, `cinemachine.target`, `cinemachine.lens`, etc.
-- URP: `urp.feature.list`, `urp.feature.add`, `urp.feature.toggle`, `urp.feature.configure`, `urp.feature.remove`, `urp.volume.list`, `urp.volume.create`, `urp.volume.info`, `urp.volume.add-effect`, `urp.volume.set`, `urp.settings.get`, `urp.settings.set`
-- HDRP: `hdrp.volume.list`, `hdrp.volume.create`, `hdrp.volume.info`, `hdrp.volume.add-effect`, `hdrp.volume.set`, `hdrp.settings.get`, `hdrp.settings.set`
+当前能力、Extension 依赖和 Editor/PlayMode 可用性只通过 `tools` / `context` discovery 获取，不在 README 冻结能力名清单。
 
 ## 项目自定义工具（Custom Tools）
 
-Unity 项目 C# 代码通过 `IUnityCliTool<TReq,TRes>` 注册自定义工具。Tool 类自包含 `Request`、`Result`、`Describe()` 和 `Execute(Request, ctx)`；schema 由框架从 DTO 派生，不在 descriptor 里手写。
+Unity 项目 C# 代码可通过异步 `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 注册自定义能力。schema 由 DTO 派生；Tool 必须声明完整 direct completion contract，并在全部可预见校验后、首个 mutation 前调用一次 `ctx.CommitEffect()`。当前接口与完整示例见 [Custom Tools](skills/unity_cli/references/custom-tools.md) 和 [Custom Contexts](skills/unity_cli/references/custom-contexts.md)。
 
-```csharp
-#if UNITY_EDITOR
-using UnityCli;
-
-public sealed class MyEditorTool : IUnityCliTool<MyEditorTool.Request, MyEditorTool.Result>
-{
-    public sealed class Request
-    {
-        [UnityCliRequired]
-        public string Message { get; set; }
-    }
-
-    public sealed class Result
-    {
-        public string Result { get; set; }
-    }
-
-    public ToolDescriptor Describe() => new ToolDescriptor
-    {
-        Name = "my.editor-tool",
-        Summary = "Run the project-specific editor action and return a structured result.",
-        Description = "Runs a project-specific Editor action with a required message input.",
-        Group = "custom",
-        DestructiveHint = false,
-        Target = "editor",
-        PlayModeSupport = "editor-only"
-    };
-
-    /// <summary>
-    /// 执行项目侧 Editor 动作。输入和输出 schema 由 DTO 派生。
-    /// </summary>
-    public Result Execute(Request request, UnityCliProjectToolContext ctx)
-    {
-        return new Result { Result = "done" };
-    }
-}
-#endif
-```
-
-关键字段：
-- `Name`：工具唯一标识（如 `my.editor-tool`）
-- `Summary`：必填短说明，用于 discovery/list/search
-- `Group`：工具分组（如 `custom` 或项目域名）
-- `Description`：完整工具描述、边界和副作用
-- `DestructiveHint`：是否需要 `--yes`（默认 false）
-- `Target` / `PlayModeSupport`：Editor/Runtime 可用性语义
-
-发现与执行：
 ```powershell
 unity_cli tools group list custom --include-custom
 unity_cli tools describe my.editor-tool --include-custom
-unity_cli tools run my.editor-tool --include-custom --input '{"message":"hello"}'
+unity_cli tools run my.editor-tool --input '{"message":"hello"}' --instance <id|projectPath|alias>
 ```
 
 ### 统一 Tool 与 target
@@ -784,35 +305,24 @@ unity_cli tools run my.editor-tool --include-custom --input '{"message":"hello"}
 
 - **Descriptor**：每个工具必须有完整的 inputSchema/outputSchema
 - **Envelope**：所有输入输出必须通过统一 envelope 格式
-- **Fingerprint**：handler 代码 + descriptor 的 SHA256 指纹，mismatch 时默认阻止执行
+- **内部完整性校验**：handler 与 descriptor 不一致时默认阻止执行
 - **target-scoped availability**：工具可用性依赖目标实例和 Play Mode 状态
 - **禁止项**：不允许任意方法调用、反射 escape hatch、绕过 registry 直接执行
 
 ## ProBuilder 扩展
 
-ProBuilder 工具需要项目先安装 `com.unity.probuilder`，再安装 CLI 扩展目录：
+ProBuilder 工具需要项目先安装精确版本 `com.unity.probuilder@5.2.4`，再安装 CLI 扩展目录；其他版本不执行基于 5.2.4 源码闭合的 mutation proof：
 
 ```powershell
 unity_cli extensions install probuilder --project <project>
-unity_cli tools group list probuilder --project <project>
-unity_cli tools run probuilder.create-shape --project <project> --input '{"shapeType":"Cube","name":"MyCube"}'
-unity_cli tools run probuilder.extrude-faces --project <project> --input '{"target":"<target>","faceIndices":[1,2,3],"distance":0.5}'
-unity_cli tools run probuilder.delete-faces --project <project> --input '{"target":"<target>","faceIndices":[4,5]}' --yes
+unity_cli tools group list probuilder --instance <id|projectPath|alias>
+unity_cli tools describe probuilder.create-shape --instance <id|projectPath|alias>
+unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":"MyCube"}' --instance <id|projectPath|alias>
 ```
 
-## 风险与破坏性工具
+## 风险与副作用
 
-`destructiveHint: true` 的工具执行前需要确认：
-
-```powershell
-# 预览（如工具支持 dry-run）
-unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
-
-# 确认执行
-unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
-```
-
-支持 `--dry-run` 的破坏性工具包括 `asset.delete`、`scene.save`、`scriptable-object.modify`、`texture.modify`、`texture.delete`、`shader.delete`、`object.modify`、`package.embed` 等；`go.delete` 和 `component.remove` 只修改当前场景/会话，不属于破坏性工具。
+公开 Tool 与 CLI 控制面调用本身即授权。`destructiveHint`、`sideEffects` 和 `supportsDryRun` 让调用方了解效果与可选预览，但不会触发额外确认、预定义按钮列表或意图复核。支持 dry-run 的 Tool 可用 `--dry-run` 返回 `plannedEffects` 而不执行实际 mutation；不使用它不会阻止调用。
 
 ## 扩展能力概览
 
@@ -820,9 +330,9 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 |----------|---------|---------|
 | 项目自定义 Tool (`target=editor`) | ✅ 已实现 | `tools group list custom --include-custom` |
 | 项目自定义 Tool (`target=runtime`) | ✅ 已实现 | `tools group list custom --include-custom`（通常需 Play Mode） |
-| 项目自定义 Context | ✅ 已实现 | `context list/describe/read` |
+| 项目自定义 Context | ✅ 已实现 | `context list/search/describe/read` |
 | 扩展包管理 | ✅ 已实现 | `extensions list/install/remove/doctor` |
-| ProBuilder 扩展 | ✅ 已实现 | `tools group/list/describe/run`（需要 `com.unity.probuilder` + `extensions install probuilder`） |
+| ProBuilder 扩展 | ✅ 已实现 | `tools group/list/describe/run`（需要 `com.unity.probuilder@5.2.4` + `extensions install probuilder`） |
 | Cinemachine/VFX/URP/HDRP 扩展 | ✅ 已实现 | `tools group/list/describe/run`（需要对应 Unity package + `extensions install <id>`） |
 
 ## 更多文档
@@ -831,13 +341,13 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 - [Target 与 Instance](docs/target-and-instance.md) — 目标选择与实例管理
 - [工具发现](docs/tool-discovery.md) — group-first 分层发现详解
 - [工具执行](docs/tool-execution.md) — tools run 执行通道详解
-- [安全边界](docs/safety-boundaries.md) — 风险模型与破坏性确认
-- [风险与副作用](docs/risk-and-side-effects.md) — destructive/dry-run 规则
+- [安全边界](docs/safety-boundaries.md) — 调用授权、风险元数据与正确性边界
+- [风险与副作用](docs/risk-and-side-effects.md) — destructive/dry-run 描述与可选预览
 - [错误码](docs/error-codes.md) — 结构化错误与 nextActions
 - [可用性差异](docs/availability-differences.md) — 不同实例的工具有效性
 - [扩展包](docs/extensions.md) — 可选扩展安装、卸载与诊断
-- [自定义 Tool](docs/custom-tools.md) — 项目侧 Tool 注册开发
-- [自定义 Context](docs/custom-contexts.md) — 项目侧只读 Context 注册开发
+- [自定义 Tool](skills/unity_cli/references/custom-tools.md) — 项目侧 Tool 注册开发
+- [自定义 Context](skills/unity_cli/references/custom-contexts.md) — 项目侧只读 Context 注册开发
 - [AI Agent Skill](skills/unity_cli/SKILL.md) — Agent 最小入口卡片
 
 ## 本地开发

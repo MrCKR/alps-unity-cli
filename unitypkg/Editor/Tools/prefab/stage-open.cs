@@ -26,7 +26,6 @@ namespace UnityCli
             Summary = "Open an Assets/*.prefab in the Unity Prefab Stage for isolated editing.",
             Description = "Open an Assets/*.prefab in the Unity Prefab Stage. Editor-only: this drives the editor's Prefab Isolation UI. Refuses if another dirty Prefab Stage is open; run prefab.stage-save or prefab.stage-close first.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "editor-session" },
             Target = "editor",

@@ -31,12 +31,10 @@ namespace UnityCli.Contexts.Scene
             Summary = "Report URP renderer feature availability and configured renderer data names.",
             Description = "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and nextActions.",
             Category = "scene",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "static",
             Examples = new[] { new ContextExample { Description = "Read URP renderer features", Input = new Request { } } },
             RequiresPackages = new[] { "com.unity.render-pipelines.universal" }
         };

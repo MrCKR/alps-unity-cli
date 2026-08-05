@@ -19,7 +19,7 @@ namespace UnityCli
         {
             Name = "profiler.stop", Summary = "Stop profiler data collection.",
             Description = "Stop Unity Profiler data collection and restore the previous Editor profiling state.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler",DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Stop profiler", Input = new Request { } } }
         };

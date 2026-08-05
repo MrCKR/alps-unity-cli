@@ -27,7 +27,6 @@ namespace UnityCli
             Summary = "Inspect one GameObject summary by name/path/id; use component.get for deep component fields.",
             Description = "Inspect one GameObject by name, hierarchy path, or instance id. Returns transform, components and direct children; use object.get-data or component.get for deeper serialized data and keep go.find/scene.hierarchy for discovery.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

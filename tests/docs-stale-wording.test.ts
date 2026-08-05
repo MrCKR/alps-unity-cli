@@ -114,7 +114,7 @@ test("docs contain required current command references", () => {
 });
 
 test("skill does not use stale CLI parameter/field/error names", () => {
-  const skillPath = fileURLToPath(new URL("../../skills/unity_cli/SKILL.md", import.meta.url));
+  const skillPath = fileURLToPath(new URL("../skills/unity_cli/SKILL.md", import.meta.url));
   const skill = readFileSync(skillPath, "utf8");
 
   // --input-json is not a CLI parameter; the CLI uses --input
@@ -188,6 +188,20 @@ test("docs use camelCase for error response fields", () => {
     0,
     `Stale field names found:\n${violations.join("\n")}`
   );
+});
+
+test("public docs do not expose private Bridge HTTP routes", () => {
+  const violations: string[] = [];
+  for (const file of allDocFiles()) {
+    let content: string;
+    try {
+      content = readDocFile(file);
+    } catch {
+      continue;
+    }
+    if (/\bPOST\s+\/bridge\b|\/bridge\/execute\b/i.test(content)) violations.push(file);
+  }
+  assert.deepEqual(violations, []);
 });
 
 test("docs distinguish between current and planned features", () => {

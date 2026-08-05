@@ -10,7 +10,7 @@ namespace UnityCli
         {
             Name = "vfx.control.play", Summary = "Play a VisualEffect component.",
             Description = "Play the VisualEffect and prove a running transition through pause=false plus a changed positive aliveParticleCount. Fails closed when the graph exposes no observable particle transition.",
-            Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
+            Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Play the matrix emitter", Input = new Request { Target = "Effects/Emitter" } } }

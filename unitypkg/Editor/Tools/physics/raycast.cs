@@ -39,7 +39,7 @@ namespace UnityCli
             Name = "physics.raycast",
             Summary = "Cast a 3D or 2D ray and return the first hit, or all hits with all=true.",
             Description = "Cast a ray from origin along direction up to distance. mode=3d (default) or 2d. all=true returns all hits sorted by distance. layerMask defaults to DefaultRaycastLayers.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false,
+            Group = "physics",DestructiveHint = false,
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "3D raycast forward", Input = new Request { OriginY = 1f, DirectionZ = 1f } } }

@@ -114,5 +114,6 @@ test("adjacent core tools expose observed business objects after mutation", asyn
   assert.match(objectModify, /ObjectSerializer\.Serialize\(observedTarget, options\)/);
   assert.match(componentSet, /GameObjectToolSupport\.BuildComponentSummary\(observedComponent\)/);
   assert.match(gameObjectModify, /GameObjectToolSupport\.BuildGameObjectDetail\(observed\)/);
+  assert.match(gameObjectModify, /GameObject = details\[0\], ModifiedCount = 1/);
   assert.match(gameObjectModify, /ModifiedCount = details\.Count/);
 });

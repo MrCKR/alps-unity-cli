@@ -26,7 +26,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public TextureInfo Texture { get; set; }
             public TextureImportSettings ImportSettings { get; set; }
@@ -49,7 +48,6 @@ namespace UnityCli
             Summary = "Fill a pixel region of a PNG/JPG texture with a color and reimport; destructive, supports --dry-run.",
             Description = "Fill a rectangular pixel region of an existing PNG/JPG texture with a solid color, then force-reimport it. Only PNG/JPG assets are supported. Pass x/y/width/height for the region (defaults fill from 0,0 to the texture size). Destructive: overwrites the texture file.",
             Group = "texture",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "asset-write", "asset-import" },
@@ -98,7 +96,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "texture.modify",
                     DryRun = true,
                     Region = new TextureRegion { X = x, Y = y, Width = width, Height = height },
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.modify", Path = path } }
@@ -125,7 +122,6 @@ namespace UnityCli
                 VerifyPixels(path, x, y, width, height, color);
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "texture.modify",
                     Texture = TextureToolSupport.BuildTextureInfo(path, TextureToolSupport.LoadTextureAsset(path)),
                     ImportSettings = TextureToolSupport.BuildTextureImportSettings(TextureToolSupport.RequireTextureImporter(path)),
                     ChangedPixels = (long)(width * height),

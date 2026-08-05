@@ -60,12 +60,12 @@ namespace UnityCli
                     case SerializedPropertyType.Boolean: converted = Convert.ToBoolean(value, CultureInfo.InvariantCulture); if (!validateOnly) prop.boolValue = (bool)converted; return true;
                     case SerializedPropertyType.Float: converted = Convert.ToSingle(value, CultureInfo.InvariantCulture); if (!validateOnly) prop.floatValue = (float)converted; return true;
                     case SerializedPropertyType.String: if (!validateOnly) prop.stringValue = value == null ? null : Convert.ToString(value, CultureInfo.InvariantCulture); return true;
-                    case SerializedPropertyType.Color: converted = ObjectPatch.ConvertValue(value, typeof(Color)); if (!validateOnly) prop.colorValue = (Color)converted; return true;
-                    case SerializedPropertyType.ObjectReference: converted = ObjectPatch.ConvertValue(value, typeof(UnityEngine.Object)); if (!validateOnly) prop.objectReferenceValue = converted as UnityEngine.Object; return value == null || converted != null;
-                    case SerializedPropertyType.Vector2: converted = ObjectPatch.ConvertValue(value, typeof(Vector2)); if (!validateOnly) prop.vector2Value = (Vector2)converted; return true;
-                    case SerializedPropertyType.Vector3: converted = ObjectPatch.ConvertValue(value, typeof(Vector3)); if (!validateOnly) prop.vector3Value = (Vector3)converted; return true;
-                    case SerializedPropertyType.Vector4: converted = ObjectPatch.ConvertValue(value, typeof(Vector4)); if (!validateOnly) prop.vector4Value = (Vector4)converted; return true;
-                    case SerializedPropertyType.Quaternion: converted = ObjectPatch.ConvertValue(value, typeof(Quaternion)); if (!validateOnly) prop.quaternionValue = (Quaternion)converted; return true;
+                    case SerializedPropertyType.Color: converted = UnityCliValueConverter.ConvertValue(value, typeof(Color)); if (!validateOnly) prop.colorValue = (Color)converted; return true;
+                    case SerializedPropertyType.ObjectReference: converted = UnityCliValueConverter.ConvertValue(value, typeof(UnityEngine.Object)); if (!validateOnly) prop.objectReferenceValue = converted as UnityEngine.Object; return value == null || converted != null;
+                    case SerializedPropertyType.Vector2: converted = UnityCliValueConverter.ConvertValue(value, typeof(Vector2)); if (!validateOnly) prop.vector2Value = (Vector2)converted; return true;
+                    case SerializedPropertyType.Vector3: converted = UnityCliValueConverter.ConvertValue(value, typeof(Vector3)); if (!validateOnly) prop.vector3Value = (Vector3)converted; return true;
+                    case SerializedPropertyType.Vector4: converted = UnityCliValueConverter.ConvertValue(value, typeof(Vector4)); if (!validateOnly) prop.vector4Value = (Vector4)converted; return true;
+                    case SerializedPropertyType.Quaternion: converted = UnityCliValueConverter.ConvertValue(value, typeof(Quaternion)); if (!validateOnly) prop.quaternionValue = (Quaternion)converted; return true;
                     case SerializedPropertyType.Enum:
                         var enumText = Convert.ToString(value, CultureInfo.InvariantCulture);
                         int enumIndex;

@@ -24,7 +24,7 @@ export type ExtensionAvailability =
 export interface UnityPackageRequirement {
   /** Unity package identifier, e.g. "com.unity.probuilder". */
   packageId: string;
-  /** Minimum version constraint (semver range or exact version). Optional — absence means any version. */
+  /** 精确 SemVer 约束；省略表示接受任意已安装版本。 */
   versionRange?: string;
   /** Human-readable name for the package, e.g. "ProBuilder". */
   displayName: string;

@@ -20,7 +20,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public long Count { get; set; }
             public List<ShaderListItem> Shaders { get; set; }
         }
@@ -40,7 +39,6 @@ namespace UnityCli
             Summary = "List all Shader assets in the project, optionally filtered by keyword, paged.",
             Description = "List all Shader assets in the project via AssetDatabase. Optional keyword filters by asset name/path. Results are paged via pageSize (default 100, max 500). Use shader.info or shader.get-data for details on a specific shader.",
             Group = "shader",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",
@@ -75,7 +73,6 @@ namespace UnityCli
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "shader.list",
                 Count = results.Count,
                 Shaders = results
             });

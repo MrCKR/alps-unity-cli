@@ -1,86 +1,70 @@
-import { resolve } from "node:path";
-import { resolvePackageChanges } from "../../cli-commands/package.js";
-import { installPackage, parsePackageSpec, validatePackageName } from "../../package-manager.js";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { installPackage, parsePackageSpec, readUnityManifestDependencies, validatePackageName } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
-import type { AnyJson } from "../../schema/any-json.js";
+import { StructuredToolError } from "../errors.js";
+import { runPackageFileMutationWorker } from "./file-mutation-worker.js";
+import { runLivePackageResolve, type LiveResolveResult, type PackageFileMutationBundle } from "./live-resolve.js";
+import { projectRelativePath } from "./public-result.js";
 
-export interface PackageInstallRequest {
-  name: string;
-  version?: string;
-  project?: string;
-  unity?: string;
-}
+export interface PackageInstallRequest { name: string; version?: string; }
+export interface PackageInstallResult { action: "install"; package: string; manifestPath: string; manifestHash: string; dependency: { name: string; version: string; present: true }; files: { proven: true; manifestPath: string; manifestHash: string }; resolve: LiveResolveResult; }
+interface InstallPlan { name: string; version: string; manifestPath: string; }
 
-export interface PackageInstallObject { [key: string]: AnyJson; }
-
-export interface PackageInstallResult {
-  action?: string;
-  package?: string;
-  projectPath?: string;
-  manifestPath?: string;
-  installedVersion?: string;
-  dependencyInstalled?: boolean;
-  status?: string;
-  resolve?: string;
-  liveRefresh?: PackageInstallObject;
-  nextActions?: string[];
-  bridge?: PackageInstallObject;
-  jobId?: string;
-  kind?: string;
-  requestId?: string;
-  unityPath?: string;
-  logPath?: string;
-  pid?: number;
-  exitCode?: number;
-  createdAt?: string;
-  updatedAt?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  command?: string[];
-  result?: PackageInstallObject;
-  error?: PackageInstallObject;
-  cancellation?: PackageInstallObject;
-  logTail?: string[];
-}
-
-/** 写入 manifest dependency，并按运行环境执行 resolve。 */
+/** manifest 写入、Resolve 与 PackageInfo readback 共用公开 requestId root。 */
 async function runPackageInstall(request: PackageInstallRequest, context: ToolContext): Promise<PackageInstallResult> {
-  const projectPath = resolve(request.project ?? context.projectPath);
   const spec = parsePackageSpec(validatePackageName(request.name), request.version);
-  const prepared = await installPackage(projectPath, spec, { dryRun: true });
-  if (context.execution.dryRun) return { action: "install", package: spec.name, projectPath, ...prepared };
-  await context.commitEffect?.();
-  const installed = await installPackage(projectPath, spec);
-  const resolveRequestId = context.localJournalActive ? `${context.requestId}_package_install_resolve` : context.requestId;
-  return resolvePackageChanges("install", {
-    projectPath,
-    unity: request.unity,
-    wait: context.execution.wait,
-    waitTimeoutMs: context.execution.waitTimeoutMs,
-    timeoutMs: context.execution.timeoutMs,
-    absoluteDeadlineMs: context.absoluteDeadlineMs,
-    job: context.execution.job
-  }, {
-    dataDir: context.dataDir ?? context.projectPath,
-    runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute
-  }, resolveRequestId, { action: "install", package: spec.name, ...installed }) as Promise<PackageInstallResult>;
+  if (context.execution.dryRun) {
+    await installPackage(context.projectPath, spec, { dryRun: true });
+    throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "package.install dry-run does not have a live PackageInfo terminal.");
+  }
+  return runLivePackageResolve<PackageInstallResult>(context, "install", { name: spec.name, version: spec.version }, {
+    async prepare(signal) {
+      signal.throwIfAborted();
+      const prepared = await installPackage(context.projectPath, spec, { dryRun: true });
+      signal.throwIfAborted();
+      return { name: spec.name, version: prepared.installedVersion, manifestPath: prepared.manifestPath } satisfies InstallPlan as unknown as Record<string, unknown>;
+    },
+    async apply(plan, signal, stopAtMs) {
+      const expected = installPlan(plan);
+      await runPackageFileMutationWorker("install", context.projectPath, plan, stopAtMs, signal);
+      return installBundle(context.projectPath, expected, expected.manifestPath);
+    },
+    async recover(plan, signal) {
+      signal.throwIfAborted();
+      const expected = installPlan(plan);
+      const bundle = await installBundle(context.projectPath, expected, expected.manifestPath);
+      signal.throwIfAborted();
+      return bundle;
+    },
+  });
 }
+
+async function installBundle(projectPath: string, plan: InstallPlan, manifestPath: string): Promise<PackageFileMutationBundle> {
+  const dependencies = await readUnityManifestDependencies(projectPath);
+  if (dependencies[plan.name] !== plan.version) throw new Error(`Manifest dependency ${plan.name} does not match the committed install plan.`);
+  const manifestHash = await hash(manifestPath);
+  const files = { proven: true as const, manifestPath, manifestHash };
+  const publicManifestPath = projectRelativePath(projectPath, manifestPath, "manifestPath");
+  const publicFiles = { ...files, manifestPath: publicManifestPath };
+  return {
+    expectedManifestSha256: manifestHash,
+    predicates: [{ name: plan.name, requestedVersion: plan.version, present: true }],
+    filesProof: files,
+    publicResultSeed: { action: "install", package: plan.name, manifestPath: publicManifestPath, manifestHash, dependency: { name: plan.name, version: plan.version, present: true }, files: publicFiles },
+  };
+}
+
+function installPlan(value: Record<string, unknown>): InstallPlan {
+  if (typeof value.name !== "string" || typeof value.version !== "string" || typeof value.manifestPath !== "string") throw new Error("Durable package.install file plan is corrupt.");
+  return { name: value.name, version: value.version, manifestPath: value.manifestPath };
+}
+async function hash(path: string): Promise<string> { return createHash("sha256").update(await readFile(path)).digest("hex"); }
 
 export default defineTool<PackageInstallRequest, PackageInstallResult>({
-  name: "package.install",
-  summary: "Install or update a package in the project manifest and optionally resolve.",
-  description: "Install or update a package in the project manifest and optionally resolve. Destructive: manifest change + possible Unity resolve/domain reload. Requires an explicit version and explicit confirmation; refuses numeric downgrades to avoid accidental package rollback. If no live Editor Bridge is reachable, pass unity/job options to run Unity PackageManager resolve, or accept a skipped resolve success and let Unity import on next open.",
-  group: "package",
-  destructiveHint: true,
-  sideEffects: ["manifest-change", "session-affecting"],
-  playModeSupport: "session-affecting",
-  handler: "hybrid",
-  supportStatus: "bridge-job",
-  examples: [
-    { description: "Install a package", argv: ["tools", "run", "package.install", "--input", "{\"name\":\"com.unity.textmeshpro\",\"version\":\"3.0.7\"}"] }
-  ],
-  async execute(request, context) {
-    return runPackageInstall(request, context);
-  }
+  name: "package.install", summary: "Install a package and prove it through the open Unity Editor.",
+  description: "Writes a prevalidated manifest dependency once, then requires a terminal live PackageInfo resolve proof.",
+  group: "package", destructiveHint: true, sideEffects: ["manifest-change", "session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
+  examples: [{ description: "Install a package.", argv: ["tools", "run", "package.install", "--input", "{\"name\":\"com.unity.textmeshpro\",\"version\":\"3.0.7\"}"] }],
+  async execute(request, context) { return runPackageInstall(request, context); }
 });

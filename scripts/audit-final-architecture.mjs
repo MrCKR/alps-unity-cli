@@ -6,6 +6,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const strict = args.includes("--strict");
 const outputPath = optionValue("--output");
+const readOnlyProcessObservationBatchModeFilterAllowlist = new Set([
+  "src/unity-project-processes.ts"
+]);
 
 /** 读取 UTF-8 文本，并统一路径分隔符便于跨平台审计。 */
 function readText(path) {
@@ -124,12 +127,13 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
     ["legacyRuntimeContext", /\blegacyRuntimeFromContext\b/g],
     ["legacyWireRequest", /\{\s*requestId\s*:[^{}\n]+,\s*command\s*:[^{}\n]+,\s*args\s*[,}]|bridgeExecute\??:\s*\([^\n]*\bargs\s*:/g],
     ["legacyCompatibilityFallback", /\blegacy(?:Method|Fallback|Adapter|Path|Implementation)\b|兼容[^\r\n]{0,80}(?:旧|legacy)[^\r\n]{0,80}(?:API|接口|路径|实现)?/gi],
-    ["probuilderSemanticDegradation", /\bfallback\b|回退|近似|\blegacy(?:Method|Fallback|Adapter|Path|Implementation)\b|Mesh\.CombineMeshes|CreatePrimitive|InsertVertexOnEdge\([^\r\n]*null|hasColors|sharedMaterials\s*=/gi],
+    ["probuilderSemanticDegradation", /\bfallback\b|回退|近似|\blegacy(?:Method|Fallback|Adapter|Path|Implementation)\b|Mesh\.CombineMeshes|CreatePrimitive|InsertVertexOnEdge\([^\r\n]*null|hasColors|sharedMaterials\s*=(?!=)/gi],
     ["contextEmptySchemaFallback", /(?:inputSchema|outputSchema)\s*:\s*[^\n?]+\?\?\s*\{\s*type:\s*["']object["'],\s*properties:\s*\{\s*\}\s*\}/g],
     ["bypassDefineTool", /\bbypassDefineTool\b/g],
     ["duplicateToolJsonParser", /\bUnityCliToolJson\b/g],
     ["manualJsonParsers", /\bJsonRawProperty\s*\(|\bFindJson(?:String|Value)End\s*\(|\bJsonObjectPropertyNames\s*\(|\b(?:private|internal|public)\s+static\s+(?:bool|object|string|Dictionary[^\n]+|List[^\n]+)\s+Parse(?:Json)?(?:Value|Object|Array|String|Number|Literal|Bool)\s*\(/g],
     ["removedIdentifier", /\b[A-Za-z0-9_]*_Removed\b/g],
+    ["removedJobHeadlessArchitecture", /\b(?:JobRunner|JobStore|UnityCliBatch|jobId|logsRef|supportsJob|job-deferred|directInvocationPolicy|frozenDeliveryPolicy|UNITY_EXE|discoverUnity)\b|-nographics\b|-runTests\b|-executeMethod\b|-quit\b/g],
     ["duplicateCliResultInterface", /(?:export\s+)?interface\s+CliResult\b/g],
     ["cliErrorIndexSignature", /interface\s+CliError\s*\{[\s\S]*?\[key:\s*string\]:\s*unknown;/g],
     ["curInstancesEnvelopeField", /\bcurInstances\b/g],
@@ -140,6 +144,8 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
   for (const [id, pattern] of patternChecks) {
     const auditedRoots = id === "manualJsonParsers"
       ? searchRoots.filter((entry) => entry.path !== "unitypkg/Editor/Infrastructure/UnityCliSerializer.cs")
+      : id === "removedJobHeadlessArchitecture"
+        ? searchRoots.filter((entry) => /^(?:src|unitypkg|extensions|docs|skills)\//.test(entry.path))
       : id === "legacyCompatibilityFallback"
         ? searchRoots.filter((entry) => entry.path.endsWith(".cs"))
         : id === "probuilderSemanticDegradation"
@@ -150,6 +156,33 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
       .filter((entry) => entry.count > 0);
     checks.push({ id, expected: 0, actual: matches.reduce((sum, entry) => sum + entry.count, 0), files: matches });
   }
+
+  const batchModeResiduals = searchRoots
+    .filter((entry) => /^(?:src|unitypkg|extensions|docs|skills)\//.test(entry.path))
+    .filter((entry) => !readOnlyProcessObservationBatchModeFilterAllowlist.has(entry.path))
+    .map((entry) => ({ path: entry.path, count: countMatches(entry.text, /-batchmode\b/g) }))
+    .filter((entry) => entry.count > 0);
+  checks.push({
+    id: "unityBatchModeProductPath",
+    expected: 0,
+    actual: batchModeResiduals.reduce((sum, entry) => sum + entry.count, 0),
+    files: batchModeResiduals
+  });
+
+  const removedHeadlessRuntime = searchRoots
+    .filter((entry) => /^(?:src|unitypkg|extensions)\//.test(entry.path))
+    .map((entry) => ({
+      path: entry.path,
+      count: countMatches(entry.text, /\b(?:JobRunner|JobStore|UnityCliBatch|discoverUnity|UNITY_EXE|__run-job)\b|-nographics\b|-executeMethod\b/g)
+        + (readOnlyProcessObservationBatchModeFilterAllowlist.has(entry.path) ? 0 : countMatches(entry.text, /-batchmode\b/g))
+    }))
+    .filter((entry) => entry.count > 0);
+  checks.push({
+    id: "removedHeadlessRuntime",
+    expected: 0,
+    actual: removedHeadlessRuntime.reduce((sum, entry) => sum + entry.count, 0),
+    files: removedHeadlessRuntime
+  });
 
   const contractResidualSpecs = [
     {

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -36,7 +37,6 @@ namespace UnityCli
             Summary = "Remove one or more non-Transform Components from a GameObject.",
             Description = "Remove one or more non-Transform Components from a GameObject in the current scene/session. Use component for one type and componentIndex when multiple components of the same type exist; use components as a string array to remove multiple different component types in one call.",
             Group = "component",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "component-remove", "scene-modify" },
             Target = "editor",
@@ -46,7 +46,7 @@ namespace UnityCli
             Examples = new[]
             {
                 new ToolExample { Description = "Remove first BoxCollider", Input = new Request { Target = "Player", Component = "BoxCollider", ComponentIndex = 0 } },
-                new ToolExample { Description = "Remove multiple component types", Input = new Request { Target = "Player", Components = new List<string> { "BoxCollider", "Rigidbody" } } }
+                new ToolExample { Description = "Remove multiple component types", Input = new Request { Target = "ComponentTarget", Components = new List<string> { "BoxCollider", "Rigidbody" } } }
             }
         };
 
@@ -70,6 +70,11 @@ namespace UnityCli
                     EnsureNotTransform(component, name);
                     targets.Add(component);
                 }
+                var targetIds = new HashSet<int>();
+                foreach (var component in targets)
+                    if (!targetIds.Add(component.GetInstanceID()))
+                        throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_DUPLICATE", "components resolves the same Component more than once.", "Pass each component type once.");
+                EnsureDependenciesRemain(gameObject, targets);
                 var removed = new List<ComponentSummary>();
                 ctx.CommitEffect();
                 foreach (var component in targets)
@@ -79,9 +84,8 @@ namespace UnityCli
                 }
                 UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
                 var observedTarget = EditorUtility.InstanceIDToObject(gameObject.GetInstanceID()) as GameObject;
-                foreach (var removedComponent in targets)
-                    if (observedTarget == null || observedTarget.GetComponent(removedComponent.GetType()) != null)
-                        throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_STATE_MISMATCH", "Removed component remained on the target after independent readback.", "Inspect the target GameObject and retry after the Editor is idle.");
+                if (observedTarget == null || targetIds.Any(id => EditorUtility.InstanceIDToObject(id) != null))
+                    throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_STATE_MISMATCH", "Removed component remained on the target after independent readback.", "Inspect the target GameObject and retry after the Editor is idle.");
                 var effects = new List<GameObjectPlannedEffect>();
                 foreach (var name in request.Components)
                 {
@@ -98,13 +102,14 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli tools run component.get or context read scene.gameobject.components to list components.");
             }
             EnsureNotTransform(singleComponent, componentName);
+            EnsureDependenciesRemain(gameObject, new[] { singleComponent });
             var singleRemoved = GameObjectToolSupport.BuildComponentSummary(singleComponent);
             var removedId = singleComponent.GetInstanceID();
             ctx.CommitEffect();
             UnityCliSceneMutation.DestroyObject(singleComponent);
             UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
             var observedSingleTarget = EditorUtility.InstanceIDToObject(gameObject.GetInstanceID()) as GameObject;
-            if (EditorUtility.InstanceIDToObject(removedId) != null || observedSingleTarget == null || observedSingleTarget.GetComponent(componentName) != null)
+            if (EditorUtility.InstanceIDToObject(removedId) != null || observedSingleTarget == null)
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_STATE_MISMATCH", "Removed component remained on the target after independent readback.", "Inspect the target GameObject and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
@@ -113,6 +118,26 @@ namespace UnityCli
                 ComponentIndex = request.ComponentIndex.HasValue ? request.ComponentIndex.Value.ToString(CultureInfo.InvariantCulture) : null,
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.remove", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = componentName } }
             });
+        }
+
+        /// <summary>在 effect 前验证剩余组件仍满足 RequireComponent，避免 Unity 静默拒绝删除。</summary>
+        private static void EnsureDependenciesRemain(GameObject gameObject, IEnumerable<Component> removals)
+        {
+            var removedIds = new HashSet<int>(removals.Select(component => component.GetInstanceID()));
+            var remaining = gameObject.GetComponents<Component>().Where(component => component != null && !removedIds.Contains(component.GetInstanceID())).ToArray();
+            foreach (var owner in remaining)
+            {
+                foreach (RequireComponent requirement in owner.GetType().GetCustomAttributes(typeof(RequireComponent), true))
+                {
+                    foreach (var fieldName in new[] { "m_Type0", "m_Type1", "m_Type2" })
+                    {
+                        var field = typeof(RequireComponent).GetField(fieldName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                        var requiredType = field == null ? null : field.GetValue(requirement) as System.Type;
+                        if (requiredType != null && !remaining.Any(component => requiredType.IsAssignableFrom(component.GetType())))
+                            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_DEPENDENCY", owner.GetType().Name + " requires " + requiredType.Name + ", so the requested removal is invalid.", "Remove the dependent component in the same request, or keep its required component.");
+                    }
+                }
+            }
         }
 
         private static void EnsureNotTransform(Component component, string name)

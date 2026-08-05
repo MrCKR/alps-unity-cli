@@ -42,7 +42,6 @@ namespace UnityCli
             Summary = "List discoverable ScriptableObject types in the current Editor domain with pagination.",
             Description = "List ScriptableObject types available in the current Editor domain. Supports namePattern, assemblyPattern, includeAbstract, pageSize and cursor pagination. Use the returned type names with scriptable-object.create.",
             Group = "scriptable-object",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

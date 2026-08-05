@@ -31,9 +31,9 @@ test("cross-domain new tools keep contract entries with present C# handlers", ()
   const newTools = [
     "scene.unload", "scene.set-active", "scene.list-opened", "scene.data", "scene.view-frame",
     "go.set-parent", "prefab.instantiate", "prefab.unpack",
-    "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.preview", "asset.refresh",
+    "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.preview",
     "shader.list", "shader.get-data", "texture.generate",
-    "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set", "package.embed",
+    "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set",
     "build.scene.list", "build.scene.add", "build.scene.remove", "build.scene.enable", "build.scene.disable",
     "build.platform.get", "build.platform.set", "build.profile.list", "build.profile.create", "build.profile.switch", "build.profile.modify", "build.settings.get", "build.settings.set",
     "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
@@ -57,7 +57,8 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   assert.match(assetSource, /AssetDatabase\.FindAssets\(resolvedFilter, searchInFolders\.Length == 0 \? null : searchInFolders\)/);
   assert.match(assetSource, /class AssetGetDataTool : IUnityCliTool/);
   assert.match(assetSource, /class AssetGetComponentsTool : IUnityCliTool[\s\S]*PageInfo = new AssetPageInfo/);
-  assert.match(assetSource, /class AssetRefreshTool : IUnityCliTool[\s\S]*AssetDatabase\.(Refresh|ImportAsset)/);
+  // asset.refresh 已迁移为协调器路线（internal.asset.refresh.start/.status），不再是 asset/search 域的 IUnityCliTool。
+  assert.doesNotMatch(assetSource, /class AssetRefreshTool/);
   assert.match(assetSource, /class AssetPreviewTool : IUnityCliTool[\s\S]*AssetPreview\.GetAssetPreview/);
   const assetExists = assetSupportSource.slice(assetSupportSource.indexOf("public static bool AssetExists"), assetSupportSource.indexOf("public static void CreateAssetDirectory"));
   assert.match(assetExists, /File\.Exists\(fullPath\)/);
@@ -88,6 +89,20 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   assert.doesNotMatch(menuSource, /unity_cli editor menu/);
 });
 
+test("scene.view-frame synchronizes the hidden SceneView camera before frustum proof", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/scene/view-frame.cs", import.meta.url), "utf8");
+  const commitIndex = source.indexOf("ctx.CommitEffect()");
+  const frameIndex = source.indexOf("sceneView.Frame(bounds, true)");
+  const synchronizeIndex = source.indexOf("SynchronizeSceneCamera(sceneView)");
+  const stableIndex = source.indexOf("ctx.Wait.UntilStable");
+
+  assert.ok(commitIndex >= 0 && commitIndex < frameIndex);
+  assert.ok(frameIndex < synchronizeIndex && synchronizeIndex < stableIndex);
+  assert.match(source, /camera\.transform\.position = sceneView\.pivot \+ rotation \* new Vector3\(0f, 0f, -distance\)/);
+  assert.match(source, /camera\.fieldOfView = verticalHalfFov \* 2f \* Mathf\.Rad2Deg/);
+  assert.match(source, /camera\.ResetWorldToCameraMatrix\(\)[\s\S]*camera\.ResetProjectionMatrix\(\)/);
+});
+
 test("asset preview and delete expose only terminal observed state", async () => {
   const previewSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/preview.cs", import.meta.url), "utf8");
   const deleteSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/delete.cs", import.meta.url), "utf8");
@@ -95,7 +110,8 @@ test("asset preview and delete expose only terminal observed state", async () =>
   assert.match(previewSource, /AssetPreview\.GetAssetPreview\(asset\)[\s\S]*ctx\.Wait\.Until\([\s\S]*!AssetPreview\.IsLoadingAssetPreview\(instanceId\)[\s\S]*AssetPreview\.GetAssetPreview\(asset\)/);
   assert.match(previewSource, /IsTransient = false/);
   assert.match(previewSource, /E_ASSET_PREVIEW_TIMEOUT/);
-  assert.match(deleteSource, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*AssetPathToGUID\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.match(deleteSource, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*!AssetDatabase\.IsValidFolder\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.doesNotMatch(deleteSource, /AssetPathToGUID\(path\)/);
   assert.match(deleteSource, /E_ASSET_DELETE_PROOF_MISSING/);
 });
 
@@ -103,8 +119,8 @@ test("build/animation/package sources keep current typed-result flows", async ()
   const buildSource = await readCsSources(new URL("../unitypkg/Editor/Tools/build/", import.meta.url));
   const animationSource = await readCsSources(new URL("../unitypkg/Editor/Tools/animation/", import.meta.url));
   const controllerSource = await readCsSources(new URL("../unitypkg/Editor/Tools/controller/", import.meta.url));
-  const packageBridgeSpec = await readFile(new URL("../src/bridge/domains/package.js", import.meta.url), "utf8");
-  const packageSource = await readFile(new URL("../unitypkg/Editor/Tools/package/embed.cs", import.meta.url), "utf8");
+  const packageTool = await readFile(new URL("../src/tools/package/embed.js", import.meta.url), "utf8");
+  const packageSource = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliPackageEmbedCoordinator.cs", import.meta.url), "utf8");
 
   assert.match(buildSource, /class BuildSceneListTool : IUnityCliTool/);
   assert.match(buildSource, /Name = "build\.scene\.add"/);
@@ -126,11 +142,11 @@ test("build/animation/package sources keep current typed-result flows", async ()
   assert.doesNotMatch(controllerSource, /controller get-info <path>/);
   assert.doesNotMatch(controllerSource, /animation\.clip action=create/);
 
-  assert.match(packageBridgeSpec, /packageEmbedArgs[\s\S]*stringField\(flags, "packageId"\)/);
-  assert.match(packageBridgeSpec, /dryRun: boolFlag\(flags, "dry-run"\) \?\? boolField\(flags, "dryRun"\)/);
-  assert.match(packageSource, /class PackageEmbedTool : IUnityCliTool/);
+  assert.match(packageTool, /internal\.package\.embed\.start/);
+  assert.match(packageTool, /internal\.package\.embed\.status/);
+  assert.match(packageSource, /UnityCliPackageEmbedCoordinator/);
   assert.match(packageSource, /PackageClient\.Embed is not available/);
-  assert.match(packageSource, /PlannedEffects = new List<EditorPlannedEffect> \{ new EditorPlannedEffect \{ Type = "package\.embed"/);
+  assert.match(packageSource, /new List<EditorPlannedEffect> \{ new EditorPlannedEffect \{ Type = "package\.embed"/);
 });
 
 test("one-capability source, contract, and bridge spec sets are bidirectionally aligned", async () => {
@@ -159,11 +175,11 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
     ["prefab", "unpack", "project-tool.run"],
     ["asset", "get-data", "project-tool.run"],
     ["asset", "get-components", "project-tool.run"],
-    ["asset", "refresh", "project-tool.run"],
+
     ["shader", "list", "project-tool.run"],
     ["texture", "generate", "project-tool.run"],
     ["console", "get", "project-tool.run", "console.get"],
-    ["package", "embed", "project-tool.run", "package.embed"],
+
     ["editor", "selection-set", "project-tool.run", "editor.selection.set"],
     ["build", "scene-list", "project-tool.run", "build.scene.list"],
     ["build", "profile-list", "project-tool.run", "build.profile.list"],

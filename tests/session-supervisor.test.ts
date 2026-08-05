@@ -7,10 +7,22 @@ import {
   computeRequestDigestV1,
   freezeRequest,
 } from "../src/bridge/session-supervisor.js";
+import { EditorBlockerObserver } from "../src/editor-blocker-observer.js";
 import type { InstanceSelection, UnityInstance, UnityInstanceStatus } from "../src/instances.js";
 
 const INSTANCE_ID = `unity-${"a".repeat(64)}`;
 const SESSION_ID = `session-${"b".repeat(64)}`;
+const OBSERVED_BLOCKER = {
+  type: "dialog" as const, dialogId: "dialog_test", title: "Third Party Dialog", message: "Third Party Dialog",
+  buttons: ["OK"], requiresUserAction: true as const, source: "windows-ui" as const, confidence: "exact" as const,
+};
+
+function observer(outcome: "observed-empty" | "observed-blocked" | "unproven" | "conflict" | "unsupported" | "offline", calls?: { value: number }): EditorBlockerObserver {
+  return { observe: async () => {
+    if (calls) calls.value += 1;
+    return { outcome, blockers: outcome === "observed-blocked" ? [OBSERVED_BLOCKER] : [], ...(outcome === "conflict" ? { reason: "multiple-process-claims" } : {}) };
+  } } as unknown as EditorBlockerObserver;
+}
 
 function selection(status: UnityInstanceStatus, generation = 1): InstanceSelection {
   const session = {
@@ -120,6 +132,46 @@ test("supervisor consumes one absolute deadline and redelivers identical read by
   assert.ok(now < 6_000);
 });
 
+test("caller absolute deadline is not truncated by the implicit execution default", async () => {
+  const callerDeadlineMs = 130_000;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => 10_000,
+    sleep: async () => undefined,
+    select: async () => selection("ready", 1),
+    post: async (_binding, request, remainingMs) => {
+      assert.equal(remainingMs, 120_000);
+      assert.equal(request.absoluteDeadlineMs, callerDeadlineMs);
+      assert.equal(request.payload.execution.absoluteDeadlineUtc, "1970-01-01T00:02:10.000Z");
+      return { response: { ok: true, requestId: request.payload.requestId, data: {} }, attestation: attestation(1) };
+    },
+  });
+
+  const response = await supervisor.execute({
+    requestId: "req_caller_deadline",
+    command: "project-tool.run",
+    input: {},
+    mutation: true,
+    absoluteDeadlineMs: callerDeadlineMs,
+  });
+  assert.equal(response.ok, true);
+});
+
+test("supervisor retains its execution default when no caller deadline exists", async () => {
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => 10_000,
+    sleep: async () => undefined,
+    select: async () => selection("ready", 1),
+    post: async (_binding, request, remainingMs) => {
+      assert.equal(remainingMs, 60_000);
+      assert.equal(request.absoluteDeadlineMs, 70_000);
+      return { response: { ok: true, requestId: request.payload.requestId, data: {} }, attestation: attestation(1) };
+    },
+  });
+
+  const response = await supervisor.read({ requestId: "req_default_deadline", command: "context.read", input: {} });
+  assert.equal(response.ok, true);
+});
+
 test("query transport recovery rebinds generation without rebuilding request", async () => {
   let now = 10_000;
   let generation = 1;
@@ -169,7 +221,7 @@ test("journal-backed mutation redelivery reuses exact bytes and recovers termina
   assert.deepEqual(bodies, [bodies[0], bodies[0]]);
 });
 
-test("mutation without recoverable terminal becomes outcome unknown at the one deadline", async () => {
+test("mutation without recoverable terminal becomes execution timeout at the one deadline", async () => {
   let now = 25_000;
   let posts = 0;
   const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
@@ -184,13 +236,13 @@ test("mutation without recoverable terminal becomes outcome unknown at the one d
 
   await assert.rejects(
     supervisor.execute({ requestId: "req_mutation_timeout", command: "project-tool.run", input: {}, timeoutMs: 250, mutation: true }),
-    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_REQUEST_OUTCOME_UNKNOWN",
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
   assert.ok(posts >= 2);
   assert.equal(now, 25_250);
 });
 
-test("post-dispatch rebind failure becomes outcome unknown", async () => {
+test("post-dispatch rebind failure becomes execution timeout", async () => {
   let now = 28_000;
   let selections = 0;
   const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
@@ -202,7 +254,7 @@ test("post-dispatch rebind failure becomes outcome unknown", async () => {
 
   await assert.rejects(
     supervisor.execute({ requestId: "req_post_bind_failure", command: "project-tool.run", input: {}, timeoutMs: 500, mutation: true }),
-    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_REQUEST_OUTCOME_UNKNOWN",
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
 });
 
@@ -246,6 +298,89 @@ test("blocked session fails before POST and does not expose endpoint details", a
   assert.equal(posts, 0);
 });
 
+test("successful direct response performs zero Windows blocker observations", async () => {
+  const calls = { value: 0 };
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => 35_000,
+    select: async () => selection("ready", 1),
+    observer: observer("observed-empty", calls),
+    post: async (_binding, request) => ({ response: { ok: true, requestId: request.payload.requestId, data: { done: true } }, attestation: attestation(1) }),
+  });
+  const result = await supervisor.read({ requestId: "req_zero_observer", command: "context.read", input: {}, timeoutMs: 500 });
+  assert.equal(result.ok, true);
+  assert.equal(calls.value, 0);
+});
+
+test("read transport failure returns observed blocker in the same error", async () => {
+  let now = 36_000;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => now,
+    sleep: async (ms) => { now += ms; },
+    select: async () => selection("ready", 1),
+    observer: observer("observed-blocked"),
+    post: async () => { throw new Error("modal blocked main thread"); },
+  });
+  await assert.rejects(
+    supervisor.read({ requestId: "req_read_blocker", command: "context.read", input: {}, timeoutMs: 500 }),
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_UNITY_BLOCKED"
+      && Array.isArray(error.details?.blockers) && error.details.blockers.length === 1,
+  );
+});
+
+test("post-dispatch mutation keeps execution timeout and attaches observed blockers", async () => {
+  let now = 37_000;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => now,
+    sleep: async (ms) => { now += ms; },
+    select: async () => selection("ready", 1),
+    observer: observer("observed-blocked"),
+    post: async () => { throw new Error("response lost behind modal"); },
+  });
+  await assert.rejects(
+    supervisor.execute({ requestId: "req_mutation_blocker", command: "project-tool.run", input: {}, timeoutMs: 500, mutation: true }),
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT"
+      && Array.isArray(error.details?.blockers) && error.details.blockers.length === 1,
+  );
+});
+
+test("Bridge execution timeout terminal is returned without an additional observation", async () => {
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => 38_000,
+    select: async () => selection("ready", 1),
+    observer: observer("observed-blocked"),
+    post: async (_binding, request) => ({
+      response: { ok: false, requestId: request.payload.requestId, error: { code: "E_EXECUTION_TIMEOUT", message: "unknown", nextActions: [], transient: false, retryAfterMs: 0, details: { phase: "effect_started" } } },
+      attestation: attestation(1),
+    }),
+  });
+  const result = await supervisor.execute({ requestId: "req_bridge_unknown", command: "project-tool.run", input: {}, timeoutMs: 500, mutation: true });
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
+    assert.equal((result.error.details as { phase?: string }).phase, "effect_started");
+    assert.equal(((result.error.details as { blockers?: unknown[] }).blockers ?? []).length, 0);
+  }
+});
+
+test("pre-registry selector failure reports unique process modal before dispatch", async () => {
+  let posts = 0;
+  const offline = selection("offline", 1);
+  offline.instance.sessions = [];
+  offline.instance.activeSession = undefined;
+  const supervisor = new SessionSupervisor({ instance: "C:\\repo\\project" }, { dataDir: "test" }, {
+    now: () => 39_000,
+    select: async () => { throw new Error("registry not written"); },
+    selectObservation: async () => offline,
+    observer: observer("observed-blocked"),
+    post: async () => { posts += 1; throw new Error("must not post"); },
+  });
+  await assert.rejects(
+    supervisor.execute({ requestId: "req_pre_registry_blocker", command: "project-tool.run", input: {}, timeoutMs: 500, mutation: true }),
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_UNITY_BLOCKED",
+  );
+  assert.equal(posts, 0);
+});
+
 test("observeNow binds and posts once during a transitioning session without waiting or rebinding", async () => {
   let sleeps = 0;
   let posts = 0;
@@ -254,12 +389,12 @@ test("observeNow binds and posts once during a transitioning session without wai
     sleep: async () => { sleeps += 1; },
     select: async () => selection("transitioning", 1),
     selectObservation: async (_flags, _dataDir, remainingMs) => {
-      assert.equal(remainingMs, 1_000);
+      assert.equal(remainingMs, 10_000);
       return selection("transitioning", 1);
     },
     post: async (_binding, request, remainingMs) => {
       posts += 1;
-      assert.equal(remainingMs, 300);
+      assert.equal(remainingMs, 3_500);
       return { response: { ok: true, requestId: request.payload.requestId, data: { schemaVersion: 1 } }, attestation: attestation(1) };
     },
   });
@@ -323,7 +458,7 @@ test("observeNow preserves an already-consumed supplied budget and does not POST
   assert.ok(Date.now() - startedAt < 150);
 });
 
-test("injected observeNow freezes the selected real instance and caps a suspended probe at 300ms", async () => {
+test("injected observeNow freezes the selected real instance and caps a suspended probe at 3500ms", async () => {
   const startedAt = Date.now();
   let selected = 0;
   const supervisor = new SessionSupervisor({}, {
@@ -339,7 +474,7 @@ test("injected observeNow freezes the selected real instance and caps a suspende
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_CONTEXT_READ_TIMEOUT",
   );
   assert.equal(selected, 1);
-  assert.ok(Date.now() - startedAt < 500);
+  assert.ok(Date.now() - startedAt < 4_000);
 });
 
 test("observeNow does not POST for offline or conflict observations", async () => {
@@ -381,4 +516,49 @@ test("Bridge request v2 carries identity, immutable execution controls and remai
   assert.equal(frozen.requestDigest, computeRequestDigestV1(INSTANCE_ID, Buffer.from(frozen.body, "utf8")));
   assert.ok(Object.isFrozen(frozen.payload));
   assert.ok(Object.isFrozen(frozen.payload.execution));
+});
+
+test("durable transition status uses the health-independent selector", async () => {
+  let normalSelections = 0;
+  let transitionSelections = 0;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    select: async () => { normalSelections += 1; return selection("ready", 1); },
+    selectTransition: async () => { transitionSelections += 1; return selection("transitioning", 2); },
+    post: async (_binding, request) => ({
+      response: { ok: true, requestId: request.payload.requestId, data: { terminal: true } },
+      attestation: attestation(2),
+    }),
+  });
+  const response = await supervisor.read({
+    requestId: "req_transition_status",
+    command: "internal.editor.compile.status",
+    input: { rootRequestId: "req_root" },
+    absoluteDeadlineMs: Date.now() + 5_000,
+    allowTransitionBinding: true,
+  });
+  assert.equal(response.ok, true);
+  assert.equal(normalSelections, 0);
+  assert.equal(transitionSelections, 1);
+});
+
+test("durable roots and root-bound controls retain one immutable deadline and permit only the private allowlist", async () => {
+  let now = 10_000;
+  const commands = ["internal.editor.refresh.start", "internal.editor.refresh.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.prove", "internal.package.files.fail"];
+  for (const command of commands) {
+    const bodies: string[] = [];
+    const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+      now: () => now,
+      sleep: async () => { now += 1; },
+      select: async () => selection("ready", 1),
+      post: async (_binding, request) => {
+        bodies.push(request.body);
+        return { response: { ok: true, requestId: request.payload.requestId, data: {} }, attestation: attestation(1) };
+      },
+    });
+    const response = await supervisor.execute({ requestId: `req_${command}`, command, input: {}, mutation: !command.endsWith("status"), absoluteDeadlineMs: 20_000, timeoutMs: 50_000, allowTransitionBinding: true });
+    assert.equal(response.ok, true);
+    assert.match(bodies[0]!, /"absoluteDeadlineUtc":"1970-01-01T00:00:20.000Z"/);
+  }
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, { now: () => now, sleep: async () => undefined, select: async () => selection("ready", 1) });
+  await assert.rejects(() => supervisor.execute({ requestId: "req_forbidden_transition", command: "project-tool.run", input: {}, allowTransitionBinding: true }), (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_INTERNAL_INVOCATION_INVALID");
 });

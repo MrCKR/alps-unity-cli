@@ -1,82 +1,27 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-
 namespace UnityCli.ProBuilder
 {
-    /// <summary>
-    /// probuilder.create-polygon — 从选定顶点创建多边形面。
-    /// </summary>
     public class CreatePolygonTool : IUnityCliTool<CreatePolygonTool.Request, CreatePolygonTool.Result>
     {
-        public sealed class Request
-        {
-            [UnityCliRequired] public string Target { get; set; }
-            [UnityCliRequired] public List<long> VertexIndices { get; set; }
-            public bool? Unordered { get; set; }                    // 可选,默认 true
-        }
-
-        public sealed class Result
-        {
-            public long NewFaceIndex { get; set; }
-        }
-
-        public ToolDescriptor Describe() => new()
-        {
-            Name = "probuilder.create-polygon",
-            Summary = "Create a new polygon face from selected vertices on a ProBuilder mesh.",
-            Description = "Create a new polygon face from selected vertices on a ProBuilder mesh. Requires at least 3 vertex indices. When unordered is true (default), ProBuilder attempts to order the vertices into a valid polygon.",
-            Group = "probuilder",
-            DestructiveHint = false,
-            SideEffects = new[] { "scene-modify", "undo-stack" },
-            Target = "editor",
-            PlayModeSupport = "editor-only",
-            DefaultTimeoutMs = 10000,
-            MaxTimeoutMs = 30000,
-            SupportsJob = true,
-            ArtifactKinds = new[] { "json" },
-            Examples = new[]
-            {
-                new ToolExample { Description = "从 3 个顶点创建三角面", Input = new Request { Target = "MyCube", VertexIndices = new List<long> { 0, 1, 2 } } }
-            }
-        };
-
+        public sealed class Request { [UnityCliRequired] public string Target { get; set; } [UnityCliRequired] public List<long> VertexIndices { get; set; } public bool? Unordered { get; set; } }
+        public sealed class Result { public long NewFaceIndex { get; set; } }
+        public ToolDescriptor Describe() => new() { Name = "probuilder.create-polygon", Summary = "Create a polygon face from selected vertices.", Description = "Create a polygon from at least three valid vertex indices. unordered defaults to true.", Group = "probuilder", DestructiveHint = false, SideEffects = new[] { "scene-modify", "undo-stack" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 10000, MaxTimeoutMs = 30000, Examples = new[] { new ToolExample { Description = "创建多边形", Input = new Request { Target = "MyCube", VertexIndices = new List<long> { 0, 1, 2 } } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            if (!ProBuilderReflection.IsAvailable)
-                throw ProBuilderErrors.PackageNotAvailable();
-
-            var go = ProBuilderInput.ResolveTarget(request.Target);
-            if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
-
-            var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) throw ProBuilderErrors.OperationFailed("create-polygon", "No ProBuilderMesh on target.");
-
-            int[] vertexIndices = request.VertexIndices?.Select(i => ProBuilderOperationProof.CheckedInt(i, "vertexIndices")).ToArray();
-            if (vertexIndices == null || vertexIndices.Length < 3)
-                throw ProBuilderErrors.SchemaInvalid("At least 3 vertexIndices required for create-polygon.");
-
-            var unordered = request.Unordered ?? true;
-            var beforeFaceCount = ProBuilderReflection.GetFaceCount(mesh);
-            if (beforeFaceCount < 1 || vertexIndices.Any(index => index < 0 || index >= ProBuilderReflection.GetVertexCount(mesh)))
-                throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
-            ctx.CommitEffect();
-            Undo.RecordObject(go, "ProBuilder Create Polygon");
-            var created = ProBuilderReflection.CreatePolygon(mesh, vertexIndices, unordered);
-            if (!created)
-                throw ProBuilderErrors.OperationFailed("create-polygon", "AppendElements.CreatePolygon method not found or failed in ProBuilder assembly.");
-
-            ProBuilderReflection.RefreshMesh(mesh);
-            EditorSceneManager.MarkSceneDirty(go.scene);
-            var freshGo = ProBuilderInput.ResolveTarget(request.Target);
-            var freshMesh = ProBuilderReflection.GetProBuilderMesh(freshGo);
-            if (!ProBuilderRequestProof.PolygonWasCreatedFromRequestedVertices(freshMesh, vertexIndices, beforeFaceCount + 1))
-                throw ProBuilderErrors.OperationFailed("create-polygon", "Created face did not contain exactly the requested vertex set.");
-
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceIndex = beforeFaceCount });
+            if (!ProBuilderReflection.IsAvailable) throw ProBuilderErrors.PackageNotAvailable(); var go = ProBuilderInput.ResolveTarget(request.Target); if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target); var mesh = ProBuilderReflection.GetProBuilderMesh(go); if (mesh == null) throw ProBuilderErrors.OperationFailed("create-polygon", "No ProBuilderMesh on target.");
+            var indices = request.VertexIndices?.Select(value => ProBuilderOperationProof.CheckedInt(value, "vertexIndices")).ToArray(); var vertexCount = ProBuilderReflection.GetVertexCount(mesh); var beforeCount = ProBuilderReflection.GetFaceCount(mesh);
+            if (indices == null || indices.Length < 3 || indices.Distinct().Count() != indices.Length || vertexCount < 0 || beforeCount < 0 || indices.Any(value => value < 0 || value >= vertexCount)) throw ProBuilderErrors.SchemaInvalid("vertexIndices must contain at least 3 unique valid vertices.");
+            var unordered = request.Unordered ?? true; var id = go.GetInstanceID(); ctx.CommitEffect();
+            try { ProBuilderAtomicReadback.RegisterMeshUndo(go, mesh, "ProBuilder Create Polygon"); if (!ProBuilderReflection.CreatePolygon(mesh, indices, unordered)) throw ProBuilderErrors.OutcomeUnknown("create-polygon", "invoke", "AppendElements.CreatePolygon failed."); }
+            catch (UnityCliBridge.BridgeCommandException) { throw; } catch (Exception ex) { throw ProBuilderErrors.OutcomeUnknown("create-polygon", "invoke", ex.Message); }
+            try { if (!ProBuilderReflection.RefreshMeshPreservingVertexPayload(mesh)) throw ProBuilderErrors.OutcomeUnknown("create-polygon", "readback", "ProBuilder refresh failed."); EditorSceneManager.MarkSceneDirty(go.scene); var fresh = EditorUtility.InstanceIDToObject(id) as GameObject; var freshMesh = ProBuilderReflection.GetProBuilderMesh(fresh); if (!ProBuilderAtomicReadback.PolygonWasCreatedFromRequestedVertices(freshMesh, indices, beforeCount + 1)) throw ProBuilderErrors.OutcomeUnknown("create-polygon", "postcondition", "Created polygon could not be confirmed."); return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceIndex = beforeCount }); }
+            catch (UnityCliBridge.BridgeCommandException) { throw; } catch (Exception ex) { throw ProBuilderErrors.OutcomeUnknown("create-polygon", "readback", ex.Message); }
         }
     }
 }

@@ -37,7 +37,6 @@ namespace UnityCli
             Summary = "Create a Unity Camera GameObject in the active scene with optional parent, transform, projection, clear flags, depth, and MainCamera tag.",
             Description = "Create a Unity Camera GameObject in the active scene with optional parent, transform, projection, clear flags, depth, and MainCamera tag. Parent and enum inputs are validated before mutation to avoid partial objects.",
             Group = "camera",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "component-add" },
             Target = "editor",

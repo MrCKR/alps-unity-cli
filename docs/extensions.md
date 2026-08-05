@@ -4,7 +4,7 @@
 
 ## 当前状态：已实现
 
-扩展包系统已完成，包括 Bridge 包安装、项目工具发现、fingerprint 校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前运行时准源是 `src/tools/metadata/groups/*`、`src/bridge/domains/*`、核心 `unitypkg/Editor/Commands/*` 与目录扩展包 `extensions/<id>/`。
+扩展包系统已完成，包括 Bridge 包安装、项目工具发现、内部完整性校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前准源是 TS-local `defineTool` registry、`src/bridge/domains/*`、Core typed Tool/Context registry 与目录扩展包 `extensions/<id>/`。
 
 ## 当前扩展能力
 
@@ -38,12 +38,12 @@ unity_cli tools describe my.custom-tool
 unity_cli tools run my.custom-tool --input '{}'
 ```
 
-详见 [自定义工具](custom-tools.md)。
+项目自定义 Tool 通过同一公开 descriptor 和 Live Editor direct-final 调用使用。
 
 ### 诊断
 
 ```powershell
-# 检查 CLI 控制面、Bridge 连接和项目工具 fingerprint
+# 检查 CLI 控制面、Bridge 连接和项目工具完整性
 unity_cli doctor
 
 # 诊断预检（Unity Bridge 工具）
@@ -66,7 +66,7 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 `init` 会根据 Unity 项目已安装的 Package 自动匹配并安装对应的 Unity 侧扩展目录；不会自动安装 Unity Package：
 
 ```
-项目检测到 com.unity.probuilder → 复制 ProBuilder bundle → `tools run probuilder.*` 可用
+项目检测到 com.unity.probuilder@5.2.4 → 复制 ProBuilder bundle → `tools run probuilder.*` 可用
 项目检测到 com.unity.visualeffectgraph → 复制 VFX Graph bundle → `tools run vfx.*` 可用
 项目检测到 com.unity.cinemachine → 复制 Cinemachine bundle → `tools run cinemachine.*` 可用
 项目检测到 com.unity.render-pipelines.universal → 复制 URP bundle → `tools run urp.*` 可用
@@ -89,19 +89,18 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 
 ### 缺依赖行为
 
-当扩展依赖的 Unity Package 未安装时：
+当扩展依赖的 Unity Package 未安装或不满足 manifest 的精确版本时：
 
-- 扩展工具通过 `tools group/list/describe/run` 暴露；缺依赖时 `tools describe` 返回 `extensionAvailability: "unavailable"`、`missingPackageIds` 和错误恢复用的 `nextActions`
-- 执行时返回错误，`nextActions` 指向手动安装 Unity Package 与随后运行 `extensions install <id>`
+- 扩展工具通过 `tools group/list/describe/run` 暴露；缺依赖时 `tools describe` 返回 `available: false`、`unavailableReason` 和 `requiresPackages`
+- 执行时返回错误，`error.nextActions` 指向手动安装 Unity Package 与随后运行 `extensions install <id>`
 - 不自动安装 Unity Package，不产生静默失败
 
 ```json
 {
   "name": "probuilder.create-shape",
-  "extensionAvailability": "unavailable",
   "requiresPackages": ["com.unity.probuilder"],
-  "missingPackageIds": ["com.unity.probuilder"],
-  "nextActions": ["Install com.unity.probuilder manually via Unity Package Manager or Packages/manifest.json.", "Then run unity_cli extensions install probuilder --project <path>."]
+  "available": false,
+  "unavailableReason": "E_EXTENSION_DEPENDENCY_MISSING: required Unity package profile com.unity.probuilder@5.2.4 is unavailable for the selected project."
 }
 ```
 
@@ -109,7 +108,7 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 
 | 扩展 | 状态 | 说明 |
 |------|------|------|
-| ProBuilder | ✅ 已实现 | 36 个扩展工具（create-shape/extrude-faces/delete-faces 等），需要 `com.unity.probuilder` |
+| ProBuilder | ✅ 已实现 | 36 个扩展工具（create-shape/extrude-faces/delete-faces 等），只接受 `com.unity.probuilder@5.2.4` |
 | Cinemachine | ✅ 已实现 | Cinemachine camera/target/lens/shot 等工具，需要 `com.unity.cinemachine` |
 | VFX Graph | ✅ 已实现 | VFX Graph、ParticleSystem、LineRenderer、TrailRenderer 相关工具；VFX Graph 子集需要 `com.unity.visualeffectgraph` |
 | URP | ✅ 已实现 | URP renderer feature、volume、settings 等工具，需要 `com.unity.render-pipelines.universal` |
@@ -121,12 +120,12 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 |------|------|
 | 扩展不能绕过 descriptor/envelope | 必须通过统一注册和执行流程 |
 | 扩展不能提供任意反射 | 不允许 escape hatch |
-| Fingerprint 校验 | handler 代码变更时默认阻止 |
+| 内部完整性校验 | handler 代码变更时默认阻止 |
 | 缺依赖不可用 | unavailable + nextActions，不静默失败 |
 
 ## 取证与依赖
 
-- 扩展基础设施：`extensions list/install/remove/doctor`、`init --auto-detect`、缺依赖 `extensionAvailability:unavailable` + `nextActions`。
-- ProBuilder：源码位于 `extensions/probuilder/`，安装后位于 `Packages/com.unity_cli/Extensions/probuilder/`，通过 project-tool bridge 路由提供扩展工具。
+- 扩展基础设施：`extensions list/install/remove/doctor`、`init --auto-detect`、缺依赖 descriptor 的 `available:false` / `unavailableReason` 与执行错误的 `nextActions`。
+- ProBuilder：源码位于 `extensions/probuilder/`，安装后位于 `Packages/com.unity_cli/Extensions/probuilder/`，通过 project-tool bridge 路由提供扩展工具；所有 operation replay 固定于 `com.unity.probuilder@5.2.4`，版本不匹配时在 effect 前拒绝。
 - Cinemachine/VFX/URP/HDRP：源码位于对应 `extensions/<id>/` 目录，安装后位于 `Packages/com.unity_cli/Extensions/<id>/`，通过 metadata、bridge domain 和 C# command handler 提供 live Bridge 工具。
 - 验证入口：`npm test`、`npm run contracts:validate`、extension availability tests。

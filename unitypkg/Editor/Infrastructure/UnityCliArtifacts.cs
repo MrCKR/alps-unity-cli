@@ -97,19 +97,13 @@ namespace UnityCli
             return format;
         }
 
-        private static string ResolveArtifactDir(string rawPath, string requestId)
+        /// <summary>解析调用方显式指定的 artifact 根目录；普通调用不会创建默认目录。</summary>
+        private static string ResolveArtifactDir(string rawPath)
         {
-            if (!string.IsNullOrEmpty(rawPath))
-            {
-                var normalized = rawPath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
-                return Path.GetFullPath(Path.IsPathRooted(normalized) ? normalized : Path.Combine(ProjectRoot(), normalized));
-            }
-            var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (string.IsNullOrEmpty(root))
-            {
-                root = Path.Combine(ProjectRoot(), "Library", "UnityCli");
-            }
-            return Path.Combine(root, "UnityCli", "artifacts", requestId ?? Guid.NewGuid().ToString("N"));
+            if (string.IsNullOrWhiteSpace(rawPath))
+                throw new BridgeCommandException("E_ARTIFACT_DIR_REQUIRED", "artifactDir must be a non-empty explicit path.", "Pass --artifact-dir only for a Tool that writes business artifacts.");
+            var normalized = rawPath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+            return Path.GetFullPath(Path.IsPathRooted(normalized) ? normalized : Path.Combine(ProjectRoot(), normalized));
         }
     }
 }

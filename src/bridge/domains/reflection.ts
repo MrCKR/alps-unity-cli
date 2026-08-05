@@ -30,8 +30,9 @@ function reflectionCallArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]
     typeName: stringFlag(flags, "type-name") ?? structured.typeName,
     methodName: stringFlag(flags, "method-name") ?? structured.methodName,
     args: structured.args,
+    parameterTypes: structured.parameterTypes,
     instanceRef: structured.instanceRef,
-    security: structured.security
+    completionProbe: structured.completionProbe
   });
 }
 

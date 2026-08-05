@@ -15,8 +15,7 @@ export const assetBridgeSpecs: BridgeCommandSpec[] = [
   { group: "asset", command: "search-built-in", bridgeCommand: "project-tool.run", toolName: "asset.search-built-in", buildArgs: assetSearchBuiltInArgs },
   { group: "asset", command: "get-data", bridgeCommand: "project-tool.run", toolName: "asset.get-data", buildArgs: assetGetDataArgs },
   { group: "asset", command: "get-components", bridgeCommand: "project-tool.run", toolName: "asset.get-components", buildArgs: assetGetComponentsArgs },
-  { group: "asset", command: "preview", bridgeCommand: "project-tool.run", toolName: "asset.preview", buildArgs: assetPreviewArgs },
-  { group: "asset", command: "refresh", bridgeCommand: "project-tool.run", toolName: "asset.refresh", buildArgs: assetRefreshArgs, supportsJob: true, supportsDryRun: true }
+  { group: "asset", command: "preview", bridgeCommand: "project-tool.run", toolName: "asset.preview", buildArgs: assetPreviewArgs }
 ];
 
 /** 读取 tools run --input 中无法映射为简单 flag 的结构化字段。 */
@@ -87,13 +86,4 @@ function assetGetComponentsArgs({ flags, positionalTarget }: Parameters<BridgeCo
 
 function assetPreviewArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({ assetPath: positionalTarget ?? stringFlag(flags, "asset-path") ?? stringFlag(flags, "path") });
-}
-
-function assetRefreshArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  const structured = structuredInput(flags);
-  return compactArgs({
-    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "asset-path") ?? structured.path ?? structured.assetPath,
-    forceUpdate: boolFlag(flags, "force-update") ?? structured.forceUpdate,
-    importRecursive: boolFlag(flags, "import-recursive") ?? structured.importRecursive
-  });
 }

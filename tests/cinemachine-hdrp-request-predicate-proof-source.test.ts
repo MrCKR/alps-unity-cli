@@ -172,6 +172,9 @@ test("HDRP settings and volume mutations use independently acquired pipeline, pr
   assert.doesNotMatch(support, /public static SetVolumeResult Set\(string target/);
   assert.match(support, /GetProfileForPlanning\(volumeComponent\)/);
   assert.match(support, /m_InternalProfile/);
+  // sharedProfile 是 Core RP 14 的 public 字段：规划读回必须字段优先，否则 PlayMode 重载后永远命中不了。
+  assert.match(support, /GetField\("sharedProfile", BindingFlags\.Instance \| BindingFlags\.Public \| BindingFlags\.NonPublic\)/);
+  assert.match(support, /var sharedProperty = s_volumeType\.GetProperty\("sharedProfile"/);
   assert.match(set, /var mutationProfile = HdrpToolSupport\.GetVolumeProfile/);
   assert.match(set, /mutationProfile\.components\.FirstOrDefault/);
   assert.match(set, /plan\.SharedProfileId/);

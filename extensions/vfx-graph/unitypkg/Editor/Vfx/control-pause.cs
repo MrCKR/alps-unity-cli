@@ -10,7 +10,7 @@ namespace UnityCli
         {
             Name = "vfx.control.pause", Summary = "Toggle VisualEffect pause state.",
             Description = "Toggle the public pause property on the existing VisualEffect component.",
-            Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
+            Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[] { new ToolExample { Description = "Toggle emitter pause", Input = new Request { Target = "Effects/Emitter" } } }

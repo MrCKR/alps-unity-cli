@@ -14,17 +14,12 @@ function body(text: string): string {
 
 test("supported dry-runs bypass direct proof refusal while graphics reads remain journal-free", async () => {
   const coordinator = await source("Infrastructure/UnityCliOperationCoordinator.cs");
-  assert.match(coordinator, /!directAllowed && !RequestIsSupportedDryRun\(request\)/);
-  assert.doesNotMatch(coordinator, /preservedBatch|preservedFrozenInvocation/);
-  assert.match(coordinator, /ProjectTools\.TryGetValue\(RequestToolName\(request\) \?\? string\.Empty, out definition\)[\s\S]*definition\.SupportsDryRun/);
-  assert.match(coordinator, /name == "graphics\.reflection-probe"\) return HasAnyMeaningfulInput\(input, "mode", "resolution", "bounces", "hdr", "boxSize", "boxOffset"\) \|\| CreateProbeNeedsMutation\(input, true\)/);
-  assert.match(coordinator, /name == "graphics\.light-probe-group"\) return HasAnyMeaningfulInput\(input, "positions"\) \|\| CreateProbeNeedsMutation\(input, false\)/);
-  assert.match(coordinator, /CreateProbeNeedsMutation[\s\S]*targetObject\.GetComponent<ReflectionProbe>\(\) == null[\s\S]*targetObject\.GetComponent<LightProbeGroup>\(\) == null/);
-  assert.match(coordinator, /name == "graphics\.skybox-set-properties"\) return HasAllMeaningfulInput\(input, "property", "value"\)/);
-  assert.match(coordinator, /name == "physics\.rigidbody"\) return !InputBoolean\(input, "validate"\) && \(HasAnyMeaningfulInput[\s\S]*RigidbodyNeedsMutation\(input\)\)/);
-  assert.match(coordinator, /HasMeaningfulInput[\s\S]*value is string[\s\S]*!string\.IsNullOrEmpty/);
-  assert.match(coordinator, /HasUiVisualElementMutation[\s\S]*"text"[\s\S]*text != null[\s\S]*"addClass", "display", "height", "removeClass", "width"/);
-  assert.match(coordinator, /RigidbodyNeedsMutation[\s\S]*ResolveUniqueTarget\(target, "physics\.rigidbody requires --target\."\)[\s\S]*GetComponent<Rigidbody>\(\) == null/);
+  assert.match(coordinator, /contract\.DeliveryMode, "direct-terminal"/);
+  assert.match(coordinator, /RequestRequiresMutation[\s\S]*request\.Execution\.DryRun == true\)\) return false/);
+  assert.match(coordinator, /name == "graphics\.reflection-probe"/);
+  assert.match(coordinator, /name == "graphics\.light-probe-group"/);
+  assert.match(coordinator, /name == "physics\.rigidbody"/);
+  assert.doesNotMatch(coordinator, /RequestJournal|E_REQUEST_OUTCOME_UNKNOWN/);
 });
 
 test("core request predicates cross one barrier before their first mutation", async () => {

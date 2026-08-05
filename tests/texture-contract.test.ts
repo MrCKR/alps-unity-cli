@@ -17,8 +17,8 @@ test("texture group tools are contract-discovered with correct live descriptor h
     makeLiveTool({ name: "texture.generate", summary: "Generate a texture.", description: "Generate a texture.", group: "texture", destructiveHint: true, supportsDryRun: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "texture.modify", summary: "Modify texture pixels.", description: "Modify texture pixels.", group: "texture", destructiveHint: true, supportsDryRun: true, sideEffects: ["asset-write"], inputSchema: { type: "object", properties: { fillColor: { type: "string" }, x: { type: "integer" } } } }),
     makeLiveTool({ name: "texture.delete", summary: "Delete a texture asset.", description: "Delete a texture asset.", group: "texture", destructiveHint: true, supportsDryRun: true, sideEffects: ["asset-delete"] }),
-    makeLiveTool({ name: "texture.import-settings", summary: "Update texture importer settings.", description: "Update texture importer settings.", group: "texture", playModeSupport: "session-affecting", sideEffects: ["asset-import"], inputSchema: { type: "object", properties: { textureType: { type: "string", enum: ["Default", "Sprite"] }, wrapMode: { type: "string", enum: ["Repeat", "Clamp"] }, filterMode: { type: "string", enum: ["Point", "Bilinear"] }, compression: { type: "string", enum: ["None", "Compressed"] } } }, outputSchema: { type: "object", properties: { changed: { type: "boolean" } } } }),
-    makeLiveTool({ name: "texture.sprite", summary: "Configure sprite slices.", description: "Configure sprite slices.", group: "texture", inputSchema: { type: "object", properties: { slices: { type: "array" } } } })
+    makeLiveTool({ name: "texture.import-settings", summary: "Update texture importer settings.", description: "Update texture importer settings.", group: "texture", destructiveHint: true, playModeSupport: "editor-only", sideEffects: ["asset-import"], inputSchema: { type: "object", properties: { textureType: { type: "string", enum: ["Default", "Sprite"] }, wrapMode: { type: "string", enum: ["Repeat", "Clamp"] }, filterMode: { type: "string", enum: ["Point", "Bilinear"] }, compression: { type: "string", enum: ["None", "Compressed"] } } }, outputSchema: { type: "object", properties: { changed: { type: "boolean" } } } }),
+    makeLiveTool({ name: "texture.sprite", summary: "Configure sprite slices.", description: "Configure sprite slices.", group: "texture", destructiveHint: true, playModeSupport: "editor-only", sideEffects: ["asset-import"], inputSchema: { type: "object", properties: { slices: { type: "array" } } } })
   );
 
   const info = tools.get("texture.info")!;
@@ -46,7 +46,8 @@ test("texture group tools are contract-discovered with correct live descriptor h
   assert.ok(del.sideEffects?.includes("asset-delete"));
 
   const importSettings = tools.get("texture.import-settings")!;
-  assert.equal(importSettings.playModeSupport, "session-affecting");
+  assert.equal(importSettings.destructiveHint, true);
+  assert.equal(importSettings.playModeSupport, "editor-only");
   assert.ok(importSettings.sideEffects?.includes("asset-import"));
   const imp = importSettings.inputSchema.properties as Record<string, { enum?: string[] }>;
   assert.ok(imp.textureType?.enum?.includes("Sprite"));
@@ -58,7 +59,10 @@ test("texture group tools are contract-discovered with correct live descriptor h
   assert.ok(out.texture);
   assert.ok(out.importSettings);
 
-  const spriteProps = tools.get("texture.sprite")!.inputSchema.properties as Record<string, unknown>;
+  const sprite = tools.get("texture.sprite")!;
+  assert.equal(sprite.destructiveHint, true);
+  assert.equal(sprite.playModeSupport, "editor-only");
+  const spriteProps = sprite.inputSchema.properties as Record<string, unknown>;
   assert.ok(spriteProps.slices);
   const modifyProps = tools.get("texture.modify")!.inputSchema.properties as Record<string, unknown>;
   assert.ok(modifyProps.fillColor);
@@ -116,7 +120,8 @@ test("texture delete and generate return only observed disk and AssetDatabase st
   const deleteSource = await readFile(new URL("../unitypkg/Editor/Tools/texture/delete.cs", import.meta.url), "utf8");
   const generateSource = await readFile(new URL("../unitypkg/Editor/Tools/texture/generate.cs", import.meta.url), "utf8");
 
-  assert.match(deleteSource, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*AssetPathToGUID\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.match(deleteSource, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*!AssetDatabase\.IsValidFolder\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.doesNotMatch(deleteSource, /AssetPathToGUID\(path\)/);
   assert.match(deleteSource, /E_TEXTURE_DELETE_PROOF_MISSING/);
   assert.match(generateSource, /bytes == null \|\| bytes\.Length == 0/);
   assert.match(generateSource, /File\.Exists\(fullPath\) \|\| new FileInfo\(fullPath\)\.Length <= 0/);

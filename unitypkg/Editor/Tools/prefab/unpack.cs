@@ -19,7 +19,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public GameObjectRef Target { get; set; }
             public List<PrefabPlannedEffect> PlannedEffects { get; set; }
@@ -31,7 +30,6 @@ namespace UnityCli
             Summary = "Unpack a prefab instance in the scene into a plain GameObject; supports --dry-run.",
             Description = "Unpack a prefab instance in the scene into a plain GameObject via PrefabUtility.UnpackPrefabInstance (OutermostRoot). The target must be a prefab instance. Supports --dry-run to preview the planned unpack.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = false,
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify" },
@@ -61,7 +59,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "prefab.unpack",
                     DryRun = true,
                     Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
@@ -77,7 +74,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_UNPACK_STATE_MISMATCH", "Prefab instance remained linked after unpack.", "Inspect the scene object and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "prefab.unpack",
                 Target = GameObjectToolSupport.BuildGameObjectRef(observed),
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(observed) } }
             });

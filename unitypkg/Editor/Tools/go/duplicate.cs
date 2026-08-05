@@ -31,7 +31,6 @@ namespace UnityCli
             Summary = "Duplicate a GameObject in the active scene, optionally assigning a new name or parent.",
             Description = "Duplicate a GameObject in the active scene, optionally assigning a new name or parent. Prefer hierarchy paths or instance ids for target and parent; returns the duplicate path/id so follow-up calls can avoid ambiguous names.",
             Group = "go",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",

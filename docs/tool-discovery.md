@@ -33,13 +33,13 @@ unity_cli tools group
 ```json
 {
   "ok": true,
+  "requestId": "req-xxx",
   "data": {
-    "command": "tools.group",
     "count": 34,
     "groups": [
-      { "name": "scene", "summary": "...", "toolCount": 12, "source": "built-in", "cliCommand": "tools group list scene" },
-      { "name": "object", "summary": "...", "toolCount": 2, "source": "built-in", "cliCommand": "tools group list object" },
-      { "name": "reflection", "summary": "...", "toolCount": 2, "source": "built-in", "cliCommand": "tools group list reflection" }
+      { "name": "scene", "summary": "...", "toolCount": 12, "source": "built-in" },
+      { "name": "object", "summary": "...", "toolCount": 2, "source": "built-in" },
+      { "name": "reflection", "summary": "...", "toolCount": 2, "source": "built-in" }
     ]
   }
 }
@@ -104,17 +104,12 @@ unity_cli tools describe camera.screenshot
 | `outputSchema` | 输出格式 JSON Schema；TS Tool 来自 `defineTool`，C# Tool 来自 Result DTO 派生 |
 | `destructiveHint` | 是否有破坏性 |
 | `supportsDryRun` | 是否支持 `--dry-run` |
-| `riskLevel` | 根据权限和副作用推导的风险等级 |
-| `longRunning` | 是否长时间运行，仅长任务出现 |
-| `cancellation` | 长任务取消语义：`cooperative` / `job`，无特殊取消语义时省略 |
-| `supportStatus` | 支持状态 |
 | `target` | 目标类型 |
 | `availabilityScope` | 可用性范围 |
 | `playModeSupport` | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
 | `requiresPackages` | 依赖的 Unity 包 |
 | `examples` | 使用示例 |
 | `permissions` | 所需权限，仅需要特殊权限时出现 |
-| `cliCommand` | 可直接执行的 CLI 命令 |
 
 ### 自定义工具描述
 
@@ -129,15 +124,11 @@ unity_cli tools describe my.custom-tool --include-custom
 
 ### 安全判断
 
-- `destructiveHint: true` → 执行前必须确认风险、使用 `--dry-run` 或 `--yes`
+- `destructiveHint: true` → 描述可能不可逆效果，不构成执行门；如支持，调用方可选用 `--dry-run` 预览
 
-### 执行通道判断
+### 执行方式
 
-- `supportStatus: "live-bridge"` → 实时 Bridge 执行
-- `supportStatus: "live-bridge-runtime"` → 需要 Play Mode 的 Runtime 工具
-- `supportStatus: "bridge-job"` → 支持 Bridge + job 双通道
-- `supportStatus: "batch-job"` → batchmode/job 执行
-- `supportStatus: "cli-only"` → 本地 CLI 执行
+所有需要 Unity 的 Tool 都通过已打开的 Unity Editor 直接执行，并在该调用中返回最终业务结果。`target` 与 `playModeSupport` 说明工具可在哪个 Editor 状态执行。
 
 ### 可用性判断
 
@@ -149,8 +140,8 @@ unity_cli tools describe my.custom-tool --include-custom
 - `playModeSupport: "runtime-only"` → Play Mode 可执行，但结果只影响当前运行会话
 - `playModeSupport: "session-affecting"` → 可能触发 import、compile、domain reload 或 Play Mode 状态变化
 - `playModeSupport: "editor-only"` → Play Mode 下不可执行，返回 `E_TOOL_PLAYMODE_UNAVAILABLE`
-- `extensionAvailability` / `missingPackageIds` → 扩展依赖在当前项目中的可用性（仅扩展工具缺依赖时出现）
-- `requiresPackages` → 需要安装的 Unity 包
+- `available: false` / `unavailableReason` → 能力在当前项目中不可执行及其明确原因
+- `requiresPackages` → 需要安装的 Unity Package
 
 ## AI Agent 发现工作流
 
@@ -161,7 +152,7 @@ unity_cli tools describe my.custom-tool --include-custom
 
 ### 错误处理
 
-- `E_TOOL_NOT_FOUND_FOR_TARGET` → 工具在当前目标不可用，检查 `requiresPackages`、`extensionAvailability` 和目标实例状态
+- `E_TOOL_NOT_FOUND_FOR_TARGET` → 工具在当前目标不可用，检查 `available`、`unavailableReason`、`requiresPackages` 和目标实例状态
 - `E_RUNTIME_NOT_READY` → Runtime 工具需要 Play Mode 活跃，检查 `target: "runtime"`
 - `E_INSTANCE_CONFLICT` -> 同一 canonical project 存在多个 Unity Editor process/session claim，关闭重复 Editor 后再执行
 - `E_INSTANCE_NOT_RUNNING` -> 选定项目没有可验证的运行中 Editor；静态内置/Extension catalog 仍可离线发现

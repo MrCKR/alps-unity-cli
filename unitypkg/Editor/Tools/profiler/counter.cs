@@ -19,7 +19,7 @@ namespace UnityCli
         {
             Name = "profiler.counter", Summary = "Read current profiler counter values, optionally narrowed by category and counter name.",
             Description = "Read current profiler counter values and available counter metadata, optionally narrowed by category and counter name. Read-only.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read memory counters", Input = new Request { Category = "memory" } } }
         };

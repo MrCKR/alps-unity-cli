@@ -1,8 +1,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { executeBridgeCommand, executeBridgePayload } from "../dist/bridge/index.js";
-import { defaultDataDir } from "../dist/platform.js";
-import { createRequestId } from "../dist/output.js";
+import { executeBridgeCommand, executeBridgePayload } from "../dist/src/bridge/index.js";
+import { parseLiveDescriptor } from "../dist/src/contexts/catalog.js";
+import { publicContextDescriptor } from "../dist/src/contexts/dispatcher.js";
+import { createRequestId } from "../dist/src/output.js";
+import { defaultDataDir } from "../dist/src/platform.js";
+import { projectDescriptorToToolMetadata } from "../dist/src/project-tool-discovery.js";
+import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "../dist/src/tools/.generated-completion-registry.js";
+import { publicToolDescriptor } from "../dist/src/tools/catalog.js";
 import { collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
 import { extractConditionalToolDescriptor } from "./lib/conditional-csharp-descriptor.mjs";
 
@@ -34,18 +39,27 @@ const contextsResult = await executeBridgePayload(
 );
 if (!contextsResult.ok) throw new Error(`${contextsResult.error.code}: ${contextsResult.error.message}`);
 
+const completionContracts = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((contract) => [contract.toolName, contract]));
 const tools = arrayField(toolsResult.data, "tools")
   .filter((item) => item.source === "built-in" || item.source === "extension")
+  .map(withGeneratedCompletionContract)
+  .map(toPublicToolDescriptor)
   .map(stripDynamicToolFields);
 const expectedTools = collectPublicToolInventory(process.cwd())
   .filter((tool) => tool.descriptorOwner === "built-in" || tool.descriptorOwner.startsWith("extension:"));
 const capturedNames = new Set(tools.map((tool) => tool.name));
 for (const inventoryEntry of expectedTools) {
-  if (!capturedNames.has(inventoryEntry.name)) tools.push(extractConditionalToolDescriptor(process.cwd(), inventoryEntry));
+  if (!capturedNames.has(inventoryEntry.name)) {
+    const completionContract = completionContracts.get(inventoryEntry.name);
+    if (!completionContract) throw new Error(`Missing generated completion contract for ${inventoryEntry.name}.`);
+    const descriptor = { ...extractConditionalToolDescriptor(process.cwd(), inventoryEntry), completionContract, available: true };
+    tools.push(stripDynamicToolFields(toPublicToolDescriptor(descriptor)));
+  }
 }
 tools.sort(byName);
 const contexts = arrayField(contextsResult.data, "contexts")
   .filter((item) => item.source === "built-in" || item.source === "extension")
+  .map(toPublicContextDescriptor)
   .map(stripDynamicContextFields)
   .sort(byName);
 assertUnique(tools, "Tool");
@@ -53,7 +67,7 @@ assertUnique(contexts, "Context");
 
 const catalog = {
   version: 1,
-  semantics: "Offline built-in and Extension metadata captured from one validated Unity listener generation; project-defined capabilities are never packaged here.",
+  semantics: "Offline built-in and Extension metadata captured from one successfully compiled Live Editor package; project-defined capabilities are never packaged here.",
   tools,
   contexts,
 };
@@ -85,16 +99,54 @@ function arrayField(data, field) {
   });
 }
 
+/** Live raw descriptor 与 tools describe 一样先绑定 generated completion contract；缺失表示 catalog 不完整。 */
+function withGeneratedCompletionContract(descriptor) {
+  const completionContract = completionContracts.get(descriptor.name);
+  if (!completionContract) throw new Error(`Missing generated completion contract for ${descriptor.name}.`);
+  return { ...descriptor, completionContract };
+}
+
+/** Bridge authoring descriptor 必须先经过与 tools describe 相同的公开投影。 */
+function toPublicToolDescriptor(descriptor) {
+  const metadata = projectDescriptorToToolMetadata(descriptor);
+  if (!metadata) throw new Error(`Malformed Live Tool descriptor: ${String(descriptor.name ?? "unknown")}`);
+  return publicToolDescriptor(metadata);
+}
+
+/** Bridge authoring descriptor 必须先经过与 context describe 相同的公开投影。 */
+function toPublicContextDescriptor(descriptor) {
+  const parsed = parseLiveDescriptor(descriptor);
+  if (typeof parsed === "string") throw new Error(`Malformed Live Context descriptor ${String(descriptor.name ?? "unknown")}: ${parsed}`);
+  return publicContextDescriptor(parsed);
+}
+
 /** session 可用性由调用时重新计算，不能冻结进 package snapshot。 */
 function stripDynamicToolFields(tool) {
-  const { available, availabilityReason, ...stable } = tool;
-  return stable;
+  const stable = pickFields(tool, [
+    "name", "summary", "description", "group", "inputSchema", "outputSchema",
+    "destructiveHint", "sideEffects", "playModeSupport", "supportsDryRun", "permissions",
+    "examples", "source", "target", "availabilityScope", "requiresPackages", "extensionId"
+  ]);
+  return omitEmptyOptionalArrays(stable, new Set(["permissions", "requiresPackages", "sideEffects"]));
 }
 
 /** Context snapshot 同样只保留稳定 descriptor 契约。 */
 function stripDynamicContextFields(context) {
-  const { available, availabilityReason, ...stable } = context;
-  return stable;
+  const stable = pickFields(context, [
+    "name", "summary", "description", "category", "inputSchema", "outputSchema",
+    "examples", "source", "target", "availabilityScope", "playModeSupport", "requiresPackages", "extensionId"
+  ]);
+  return omitEmptyOptionalArrays(stable, new Set(["requiresPackages"]));
+}
+
+/** snapshot 使用公开 schema allowlist，未知内部字段默认不落盘。 */
+function pickFields(descriptor, allowedFields) {
+  return Object.fromEntries(allowedFields.filter((key) => Object.hasOwn(descriptor, key)).map((key) => [key, descriptor[key]]));
+}
+
+/** 公开 descriptor 不写可选空数组，减少离线 discovery 体积。 */
+function omitEmptyOptionalArrays(descriptor, optionalFields) {
+  return Object.fromEntries(Object.entries(descriptor).filter(([key, value]) => !(optionalFields.has(key) && Array.isArray(value) && value.length === 0)));
 }
 
 function assertUnique(items, kind) {

@@ -21,7 +21,6 @@ namespace UnityCli.Cinemachine
             public CinemachinePackageStatus Cinemachine { get; set; }
             public CinemachineObjectInfo Object { get; set; }
             public List<CinemachinePlannedEffect> PlannedEffects { get; set; }
-            public string LogPath { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -30,7 +29,6 @@ namespace UnityCli.Cinemachine
             Summary = "Set the Follow and/or LookAt targets on a Cinemachine virtual camera.",
             Description = "Set the Follow and/or LookAt targets on a Cinemachine virtual camera. target must resolve to a GameObject that already owns a Cinemachine camera component.",
             Group = "cinemachine",
-            Version = "1.0.0",
             DestructiveHint = false,
             RequiresPackages = new[] { "com.unity.cinemachine" },
             SideEffects = new[] { "scene-modify" },
@@ -78,8 +76,7 @@ namespace UnityCli.Cinemachine
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(observedObject),
-                PlannedEffects = effects,
-                LogPath = ctx.LogPath
+                PlannedEffects = effects
             });
         }
     }

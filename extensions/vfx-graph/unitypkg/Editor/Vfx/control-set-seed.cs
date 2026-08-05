@@ -10,7 +10,7 @@ namespace UnityCli
         {
             Name = "vfx.control.set-seed", Summary = "Set VisualEffect random seed.",
             Description = "Set startSeed and optionally resetSeedOnPlay on the existing VisualEffect component, then return verified public-property readbacks.",
-            Group = "vfx", Version = "1.0.0", RequiresPackages = new[] { "com.unity.visualeffectgraph" },
+            Group = "vfx",RequiresPackages = new[] { "com.unity.visualeffectgraph" },
             SideEffects = new[] { "component-state-edit" }, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 60000,
             Examples = new[]

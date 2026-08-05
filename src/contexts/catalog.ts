@@ -9,7 +9,7 @@ import { scoreSearch } from "../util.js";
 import { validateSchema } from "../schema/validator.js";
 import "./.generated-registry.js";
 import { defineContextMetadata } from "./define.js";
-import type { ContextDescriptor, ContextFingerprint, ContextListEntry, ContextSource } from "./types.js";
+import type { ContextDescriptor, ContextListEntry, ContextSource } from "./types.js";
 
 export interface ContextCatalogRuntime extends Partial<BridgeRuntime> {
   dataDir?: string;
@@ -69,7 +69,7 @@ export async function resolveCatalogContext(
   runtime: ContextCatalogRuntime,
   requestId: string
 ): Promise<{ ok: true; context?: ContextDescriptor; live: boolean } | (CliResult & { ok: false })> {
-  // editor.state 由 TS 聚合 identity/session/Windows UI；不得被旧 live descriptor 覆盖。
+  // editor.state 由 TS 聚合 identity/session/Windows UI，live catalog 不得覆盖其唯一 owner。
   if (name === "editor.state") return { ok: true, context: builtinContextDescriptors().find((context) => context.name === name), live: false };
   if (runtime.projectContexts !== undefined || runtime.bridgeExecute !== undefined) {
     const supplied = await loadContextCatalog(flags, runtime, requestId, { requireLive: true });
@@ -118,8 +118,9 @@ export function searchContexts(keyword: string, contexts = builtinContextDescrip
 }
 
 export function toContextListEntry(context: ContextDescriptor): ContextListEntry {
-  const { name, summary, description, category, source, target, availabilityScope, playModeSupport, supportStatus, cliCommand, available, requiresPackages, extensionId } = context;
-  return { name, summary, description, category, source, target, availabilityScope, playModeSupport, supportStatus, cliCommand, available, requiresPackages, extensionId };
+  const { name, summary, description, category, source, target, availabilityScope, playModeSupport, unavailableReason, requiresPackages, extensionId } = context;
+  const available = context.available ?? true;
+  return { name, summary, description, category, source, target, availabilityScope, playModeSupport, available, ...(!available && unavailableReason ? { unavailableReason } : {}), ...(requiresPackages?.length ? { requiresPackages } : {}), ...(extensionId ? { extensionId } : {}) };
 }
 
 function parseLiveDescriptors(values: unknown[], requestId: string): { ok: true; contexts: ContextDescriptor[] } | (CliResult & { ok: false }) {
@@ -153,7 +154,6 @@ export function parseLiveDescriptor(value: unknown): ContextDescriptor | string 
   if (raw.source === "extension" && !ownership) return "declares source=extension without a manifest owner.";
   if (raw.source !== "extension" && ownership) return `is claimed by extension ${ownership.id} but declares source=${String(raw.source)}.`;
   const requiresPackages = stringArray(raw.requiresPackages) ?? ownership?.requiresPackages;
-  const fp = fingerprint(raw.fingerprint);
   return {
     name: String(raw.name),
     summary: typeof raw.summary === "string" && raw.summary.length > 0 ? raw.summary : String(raw.description),
@@ -166,19 +166,15 @@ export function parseLiveDescriptor(value: unknown): ContextDescriptor | string 
     inputSchema: raw.inputSchema,
     outputSchema: raw.outputSchema,
     examples,
-    cliCommand: `context read ${String(raw.name)}`,
-    ...(typeof raw.descriptorFingerprint === "string" ? { descriptorFingerprint: raw.descriptorFingerprint } : {}),
-    ...(typeof raw.supportStatus === "string" ? { supportStatus: raw.supportStatus } : {}),
-    ...(requiresPackages ? { requiresPackages } : {}),
+    ...(typeof raw.internalDescriptorFingerprint === "string" ? { descriptorFingerprint: raw.internalDescriptorFingerprint } : {}),
+    ...(requiresPackages?.length ? { requiresPackages } : {}),
     ...(ownership ? { extensionId: ownership.id } : {}),
-    ...(typeof raw.refreshBehavior === "string" ? { refreshBehavior: raw.refreshBehavior } : {}),
     ...(typeof raw.available === "boolean" ? { available: raw.available } : {}),
-    ...(typeof raw.version === "string" ? { version: raw.version } : {}),
-    ...(fp ? { fingerprint: fp } : {})
+    ...(typeof raw.unavailableReason === "string" ? { unavailableReason: raw.unavailableReason } : {})
   };
 }
 
-/** 将 Bridge typed Context 示例归一为 CLI 可直接照抄的 argv。 */
+/** 同时归一 Bridge authoring input 与 static catalog 的 argv-only 公开示例。 */
 function contextExamplesProp(record: Record<string, unknown>, name: string, inputSchema: Record<string, unknown>): ContextDescriptor["examples"] | undefined {
   const value = record.examples;
   if (!Array.isArray(value) || value.length === 0) return undefined;
@@ -186,10 +182,22 @@ function contextExamplesProp(record: Record<string, unknown>, name: string, inpu
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const example = item as Record<string, unknown>;
     if (typeof example.description !== "string" || example.description.length === 0) return [];
-    if (!isExampleInput(example.input)) return [];
-    const input = example.input;
-    if (validateSchema(inputSchema, input).length > 0) return [];
-    return [{ description: example.description, input, argv: ["context", "read", name, "--input", JSON.stringify(input)] }];
+
+    if (Array.isArray(example.argv) && example.argv.every((token) => typeof token === "string")) {
+      const argv = example.argv as string[];
+      if (argv[0] !== "context" || argv[1] !== "read" || argv[2] !== name) return [];
+      const inputIndex = argv.indexOf("--input");
+      try {
+        const input = inputIndex >= 0 ? JSON.parse(argv[inputIndex + 1] ?? "") : {};
+        if (!isExampleInput(input) || validateSchema(inputSchema, input).length > 0) return [];
+      } catch {
+        return [];
+      }
+      return [{ description: example.description, argv: [...argv] }];
+    }
+
+    if (!isExampleInput(example.input) || validateSchema(inputSchema, example.input).length > 0) return [];
+    return [{ description: example.description, argv: ["context", "read", name, "--input", JSON.stringify(example.input)] }];
   });
   return examples.length === value.length ? examples : undefined;
 }
@@ -225,4 +233,3 @@ function isTarget(value: unknown): value is ContextDescriptor["target"] { return
 function isAvailabilityScope(value: unknown): value is ContextDescriptor["availabilityScope"] { return value === "editorSession" || value === "playModeSession" || value === "always"; }
 function isPlayModeSupport(value: unknown): value is ContextDescriptor["playModeSupport"] { return value === "supported" || value === "runtime-only" || value === "session-affecting" || value === "editor-only" || value === "unknown"; }
 function stringArray(value: unknown): string[] | undefined { return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : undefined; }
-function fingerprint(value: unknown): ContextFingerprint | undefined { return value && typeof value === "object" && !Array.isArray(value) ? value as ContextFingerprint : undefined; }

@@ -19,7 +19,7 @@ namespace UnityCli
         {
             Name = "profiler.memory", Summary = "Query Unity memory usage from the live Editor.",
             Description = "Query Unity memory usage from the live Editor, including values exposed by UnityEngine.Profiling.Profiler.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Query memory", Input = new Request { } } }
         };

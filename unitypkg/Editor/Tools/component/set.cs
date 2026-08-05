@@ -38,7 +38,6 @@ namespace UnityCli
             Summary = "Set one simple public field/property, or multiple simple fields/properties via properties, on a Component attached to a GameObject.",
             Description = "Set one simple public field/property, or multiple simple fields/properties via properties, on a Component attached to a GameObject. For nested values, object references, arrays, or SerializedObject-style patches, use component.modify after component.get/type.schema.",
             Group = "component",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "component-modify", "scene-modify" },
             Target = "editor",

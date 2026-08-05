@@ -318,7 +318,7 @@ namespace UnityCli
             {
                 var created = CreateVfxGraphAssetWithUnityUtility(path, assetType);
                 if (created == null)
-                    throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_FACTORY_UNAVAILABLE", "VisualEffectAssetEditorUtility did not create a readable VisualEffectAsset.", "Update the Visual Effect Graph package to a version exposing VisualEffectAssetEditorUtility.CreateNewAsset(string).");
+                    throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_FACTORY_UNAVAILABLE", "VisualEffectAssetEditorUtility did not create a readable VisualEffectAsset.", "Use a Visual Effect Graph package exposing UnityEditor.VisualEffectAssetEditorUtility.CreateNewAsset(string).");
                 return created;
             }
             catch (UnityCliBridge.BridgeCommandException)
@@ -518,7 +518,7 @@ namespace UnityCli
         public static void VerifyParticleShapeFields(ParticleSystem particleSystem, bool? enabled, string shapeType, double? radius, double? angle, double? arc, double? length, double? boxX, double? boxY, double? boxZ, bool? randomDirection)
         {
             var shape = particleSystem.shape;
-            if ((enabled.HasValue && shape.enabled != enabled.Value) || (!string.IsNullOrWhiteSpace(shapeType) && !string.Equals(shape.shapeType.ToString(), shapeType, StringComparison.OrdinalIgnoreCase)) || (radius.HasValue && !Mathf.Approximately(shape.radius, (float)radius.Value)) || (angle.HasValue && !Mathf.Approximately(shape.angle, (float)angle.Value)) || (arc.HasValue && !Mathf.Approximately(shape.arc, (float)arc.Value)) || (length.HasValue && !Mathf.Approximately(shape.length, (float)length.Value)) || (boxX.HasValue && !Mathf.Approximately(shape.scale.x, (float)boxX.Value)) || (boxY.HasValue && !Mathf.Approximately(shape.scale.y, (float)boxY.Value)) || (boxZ.HasValue && !Mathf.Approximately(shape.scale.z, (float)boxZ.Value)) || (randomDirection.HasValue && shape.randomDirection != randomDirection.Value))
+            if ((enabled.HasValue && shape.enabled != enabled.Value) || (!string.IsNullOrWhiteSpace(shapeType) && !string.Equals(shape.shapeType.ToString(), shapeType, StringComparison.OrdinalIgnoreCase)) || (radius.HasValue && !Mathf.Approximately(shape.radius, (float)radius.Value)) || (angle.HasValue && !Mathf.Approximately(shape.angle, (float)angle.Value)) || (arc.HasValue && !Mathf.Approximately(shape.arc, (float)arc.Value)) || (length.HasValue && !Mathf.Approximately(shape.length, (float)length.Value)) || (boxX.HasValue && !Mathf.Approximately(shape.scale.x, (float)boxX.Value)) || (boxY.HasValue && !Mathf.Approximately(shape.scale.y, (float)boxY.Value)) || (boxZ.HasValue && !Mathf.Approximately(shape.scale.z, (float)boxZ.Value)) || (randomDirection.HasValue && !Mathf.Approximately(shape.randomDirectionAmount, randomDirection.Value ? 1f : 0f)))
                 throw new UnityCliBridge.BridgeCommandException("E_PARTICLE_VERIFY_FAILED", "ParticleSystem shape module did not retain every requested field.", "Check the ParticleSystem shape module and retry.");
         }
 
@@ -742,7 +742,7 @@ namespace UnityCli
                     Arc = shape.arc,
                     Length = shape.length,
                     Box = new Vector3Data(shape.scale),
-                    RandomDirection = shape.randomDirection
+                    RandomDirection = shape.randomDirectionAmount > 0f
                 },
                 Modules = new VfxParticleModulesInfo
                 {
@@ -924,7 +924,6 @@ namespace UnityCli
         {
             var created = RequireVfxGraphFactory().Invoke(null, new object[] { path }) as UnityEngine.Object;
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            AssetDatabase.Refresh();
             return created == null || !assetType.IsInstanceOfType(created)
                 ? AssetDatabase.LoadAssetAtPath(path, assetType)
                 : created;
@@ -937,10 +936,10 @@ namespace UnityCli
 
         private static MethodInfo RequireVfxGraphFactory()
         {
-            var utilityType = GameObjectToolSupport.FindType("UnityEditor.VFX.VisualEffectAssetEditorUtility");
+            var utilityType = GameObjectToolSupport.FindType("UnityEditor.VisualEffectAssetEditorUtility");
             var createMethod = utilityType == null ? null : utilityType.GetMethod("CreateNewAsset", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(string) }, null);
             if (createMethod == null)
-                throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_FACTORY_UNAVAILABLE", "VisualEffectAssetEditorUtility.CreateNewAsset(string) is unavailable.", "Update the Visual Effect Graph package to a version exposing UnityEditor.VFX.VisualEffectAssetEditorUtility.");
+                throw new UnityCliBridge.BridgeCommandException("E_VFX_GRAPH_FACTORY_UNAVAILABLE", "VisualEffectAssetEditorUtility.CreateNewAsset(string) is unavailable.", "Use a Visual Effect Graph package exposing UnityEditor.VisualEffectAssetEditorUtility.CreateNewAsset(string).");
             return createMethod;
         }
 

@@ -27,7 +27,6 @@ namespace UnityCli
             Summary = "Return shader, properties, texture references and dependencies for an Assets/*.mat; use namePattern for token-safe reads.",
             Description = "Return shader, render queue, keywords, properties, texture references and dependencies for an Assets/*.mat. Pass namePattern (comma-separated property names) for a token-safe lightweight read that skips full property expansion.",
             Group = "material",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

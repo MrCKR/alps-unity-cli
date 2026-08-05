@@ -26,12 +26,10 @@ namespace UnityCli.Contexts.Project
             Name = "project.info",
             Description = "Project metadata: name, path, Unity version, and overall project structure.",
             Category = "project",
-            Version = "1.0.0",
             Source = "built-in",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "static",
             Examples = new[] { new ContextExample { Description = "Read project metadata", Input = new Request { } } }
         };
 

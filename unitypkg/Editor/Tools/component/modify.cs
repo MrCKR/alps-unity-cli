@@ -30,14 +30,11 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public long ComponentInstanceId { get; set; }
             public string TypeName { get; set; }
             public List<string> ChangedPaths { get; set; }
             [UnityCliAnyJson] public object UpdatedData { get; set; }
-            public List<string> Logs { get; set; }
-            [UnityCliAnyJson] public object Audit { get; set; }
             public List<GameObjectPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -45,10 +42,9 @@ namespace UnityCli
         {
             Name = "component.modify",
             Summary = "Modify one Component with verified serialized pathPatches; use component.get/type.schema first.",
-            Description = "Apply direct replace pathPatches to verifiable SerializedProperties of one Component. Returns updated data, changed paths, logs and audit. Use component.get first. In Play Mode, scene component changes affect only the current runtime session unless later persisted by Unity workflow; in Edit Mode they mark scene/component state dirty.",
+            Description = "Apply direct replace pathPatches to verifiable SerializedProperties of one Component. Returns fresh updated data and changed paths. Use component.get first. In Play Mode, scene component changes affect only the current runtime session unless later persisted by Unity workflow; in Edit Mode they mark scene/component state dirty.",
             Group = "component",
-            Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "component-modify" },
             Target = "editor",
@@ -57,7 +53,7 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Patch localPosition", Input = new Request { Path = "Player", Component = "Transform", PathPatches = new List<object> { new Dictionary<string, object> { { "path", "localPosition/x" }, { "value", 1L } } } } }
+                new ToolExample { Description = "Patch localPosition", Input = new Request { Path = "Player", Component = "Transform", PathPatches = new List<object> { new Dictionary<string, object> { { "path", "m_LocalPosition.x" }, { "op", "replace" }, { "value", 1L } } } } }
             }
         };
 
@@ -72,7 +68,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "component.modify",
                     DryRun = true,
                     ComponentInstanceId = component.GetInstanceID(),
                     TypeName = component.GetType().FullName,
@@ -100,13 +95,10 @@ namespace UnityCli
             var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedComponent, new UnityCliBridge.ObjectSerializer.Options { MaxDepth = maxDepth, IncludeFields = true, IncludeProperties = true, DeepSerialization = false });
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "component.modify",
                 ComponentInstanceId = component.GetInstanceID(),
                 TypeName = component.GetType().FullName,
                 ChangedPaths = new List<string>(result.ChangedPaths),
-                Logs = new List<string>(result.Logs),
-                UpdatedData = updatedData,
-                Audit = UnityCliBridge.ObjectPatch.ResultData(result)
+                UpdatedData = updatedData
             });
         }
     }

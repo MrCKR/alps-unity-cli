@@ -1,22 +1,21 @@
 # Risk and Side Effects
 
-> **How the unified tool descriptor expresses risk, confirmation, and preview**
+> **How the unified tool descriptor expresses risk, effects, and optional preview**
 
 ## The Risk Model
 
-Every tool carries risk hints in its descriptor. These are the only way to assess risk — there is no separate risk registry, no independent safety gate, and no external confirmation prompt outside the unified `tools describe` metadata.
+Every tool carries risk hints in its descriptor. Public Tool and CLI control-plane invocation is authorization: there is no separate risk gate, confirmation prompt, predefined button list, or intent review.
 
 | Descriptor Field | Meaning | How AI Should Handle |
 |-----------------|---------|---------------------|
-| `destructiveHint: true` | Tool may irreversibly modify or delete data | Must confirm with `--yes`; consider `--dry-run` first |
-| `supportsDryRun: true` | Tool accepts `--dry-run` for safe preview | Always preview with `--dry-run` before `--yes` |
-| `longRunning: true` | Tool may take seconds or minutes | Check `cancellation`; consider `--timeout-ms` |
+| `destructiveHint: true` | Tool may irreversibly modify or delete data | Assess the effect; the hint does not block execution |
+| `supportsDryRun: true` | Tool accepts `--dry-run` for a safe preview | Use preview when useful; it is optional |
 | `permissions` | Permission tokens required (e.g. `["executes_code"]`) | Ensure the context allows the required permissions |
-| `cancellation` | Structured cancellation mode for long-running tools | Use job cancellation when value is `job`; treat `cooperative` as tool-specific wait/cancel behavior |
+| `target` / `availabilityScope` | Editor target and availability boundary | Execute against the selected open Unity Editor |
 
 ## Destructive Commands
 
-The CLI enforces a confirmation gate for all tools with `destructiveHint: true`. Current built-in metadata declares destructive commands across all domains. Key destructive commands include:
+`destructiveHint: true` documents a potentially irreversible effect. It does not add an authorization requirement or alter normal execution. Key destructive commands include:
 
 | Command | Title | Supports `--dry-run`? |
 |---------|-------|----------------------|
@@ -41,33 +40,12 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | `tools run package.deploy` | Package Deploy | ✅ |
 | `tools run package.restore` | Package Restore | ✅ |
 | `tools run package.bridge-remove` | Package Bridge Remove | ✅ |
-| `batch run` | Batch Run | ✅ (preflight) |
-| `jobs cancel` | Cancel Job | ❌ |
 
-The `reflection.method.call` tool is classified `riskLevel: critical`. It performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). It requires `--yes` for execution, supports `--dry-run`, and returns a structured audit including parameters, result serialization, and any exception. When a method name has overloads, pass the selected signature's `parameterType` values as `parameterTypes`.
+The `reflection.method.call` tool performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). Its risk metadata describes that effect; invoking the public Tool authorizes execution. When a method name has overloads, pass the selected signature's `parameterType` values as `parameterTypes`.
 
-### Confirmation Flow
+### Optional Preview
 
-1. **Call with `--dry-run`** (if `supportsDryRun: true`) — preview effects without execution.
-2. **Call with `--yes`** — execute the command with explicit confirmation.
-3. **Without `--yes` or `--dry-run`** — the CLI returns `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` with `nextActions` suggesting how to proceed.
-
-In a TTY environment, the CLI also offers an interactive confirmation prompt. In non-TTY or CI environments, only `--yes` or `--dry-run` bypass the gate.
-
-### Destructive Security Proof
-
-When a destructive command is confirmed, the response carries a `destructiveSecurityProof`:
-
-```json
-{
-  "destructive": true,
-  "confirmed": true,
-  "confirmedBy": "--yes",
-  "destructiveFingerprint": "destructive-safety-v1"
-}
-```
-
-This proof is propagated through the request chain for audit.
+When `supportsDryRun: true`, pass `--dry-run` to obtain planned effects without executing the mutation. The caller may invoke the Tool directly instead; neither dry-run nor a separate confirmation is required.
 
 ## Planned Effects Preview
 
@@ -85,38 +63,28 @@ Mutating tools (both destructive and non-destructive) often return a `plannedEff
 
 For tools with `supportsDryRun`, `--dry-run` returns the same `plannedEffects` without executing the actual mutation.
 
-## Project Tool Fingerprint
+## Project Tool Integrity
 
-Project tools registered by `IUnityCliTool<TReq,TRes>` C# implementations carry a `fingerprint` field (SHA-256 of handler code + descriptor). This fingerprint is checked at execution time:
-
-| `--fingerprint-mode` | Behavior on mismatch |
-|---------------------|---------------------|
-| `block` (default) | Returns `E_TOOL_FINGERPRINT_MISMATCH`; execution blocked |
-| `warn` | Logs warning; execution proceeds |
-| (environment `UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE=warn`) | Same as `--fingerprint-mode warn` |
-
-**Use `warn` only for intentional, audited code changes.** The default `block` mode protects against tampering or accidental descriptor drift.
-
-The `doctor` command reports fingerprint status for all project tools. Use it to verify fingerprint consistency before and after code changes.
+Project tools are checked internally before execution. A descriptor mismatch returns a structured error with the next action needed to restore a verified project tool; implementation proof is not included in normal descriptor or success output.
 
 ## How to Assess Risk as an AI Agent
 
-1. **Always `tools describe` first.** Read `destructiveHint`, `supportsDryRun`, `target`, `availabilityScope`, and `supportStatus`.
-2. **For destructive tools**: Use `--dry-run` if supported; otherwise, explain the planned effects to the user before calling with `--yes`.
+1. **Always `tools describe` first.** Read `destructiveHint`, `supportsDryRun`, `target`, `availabilityScope`, permissions, and schemas.
+2. **For destructive tools**: Assess the declared effects and invoke directly when authorized by the public call; use `--dry-run` only when a preview is useful.
 3. **For runtime tools**: Verify Play Mode state before calling `target: "runtime"` tools.
-4. **For long-running tools**: Set appropriate `--timeout-ms`; check `cancellation` before starting.
-5. **For project tools**: Check fingerprint status with `doctor`; use `--fingerprint-mode block` (default) to ensure integrity.
+4. **For direct-final tools**: Set an appropriate `--timeout-ms` when the operation may take time, then use the returned business data as the terminal result.
+5. **For project tools**: Follow any structured mismatch error and use `doctor` for diagnostics.
 
 ## Known Limitations
 
 | Limitation | Risk Level | Mitigation |
 |-----------|-----------|------------|
-| Dry-run is not available for every destructive tool | Medium | All destructive commands require `--yes`; dry-run is supplemental |
-| Built-in tools do not use project-tool fingerprints | Low | Built-in commands are protected by contract validation and security policy checks |
+| Dry-run is not available for every destructive tool | Medium | Invoke directly with declared effects; use preview only where supported |
+| Project tool registration can change during domain reload | Low | Re-discover the selected target and follow structured availability errors |
 
 ## Cross-Reference
 
-- Error codes including `E_DESTRUCTIVE_CONFIRMATION_REQUIRED`, `E_RUNTIME_NOT_READY`, and `E_TOOL_FINGERPRINT_MISMATCH`: [error-codes](./error-codes.md)
+- Runtime and execution errors: [error-codes](./error-codes.md)
 - Tool descriptor field coverage: [tool-discovery](./tool-discovery.md) §Descriptor field coverage
 - Tool metadata schema: [../schemas/tool-metadata.schema.json](../schemas/tool-metadata.schema.json)
 - Security policy source: `src/security-policy.ts` and `src/security.ts`

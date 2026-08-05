@@ -19,7 +19,7 @@ namespace UnityCli
         {
             Name = "profiler.pause", Summary = "Pause or resume Profiler data collection by toggling Unity Profiler.enabled.",
             Description = "Pause or resume Profiler data collection. Pass paused=true to pause, false to resume; omit to toggle the current state.",
-            Group = "profiler", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "session-affecting",
+            Group = "profiler",DestructiveHint = false, SideEffects = new[] { "profiler-session-state" }, Target = "editor", PlayModeSupport = "session-affecting",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Pause profiler", Input = new Request { Paused = true } } }
         };

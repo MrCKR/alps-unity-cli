@@ -39,7 +39,6 @@ namespace UnityCli
             Summary = "Search the Unity AssetDatabase by native filter, type, and folder scope with paging.",
             Description = "Search the Unity AssetDatabase using a native filter, optional type suffix, and one or more Assets/ or Packages/ folder scopes. Results are lightweight summaries, paged via cursor/pageSize.",
             Group = "asset",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

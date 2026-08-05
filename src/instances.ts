@@ -8,7 +8,7 @@ import { failure, success } from "./output.js";
 import { stripBom } from "./util.js";
 import { getBoolean } from "./args.js";
 import { stringFlag } from "./bridge/args.js";
-import { findUnityProjectProcesses } from "./launch-dialog-dismiss.js";
+import { findUnityProjectProcesses } from "./unity-project-processes.js";
 import {
   CANONICALIZATION_VERSION,
   ProjectIdentityError,
@@ -104,6 +104,7 @@ export interface UnityInstance {
 export interface ProjectProcessClaimInspection {
   verification: "verified" | "unverifiable" | "unsupported";
   processIds: number[];
+  processClaims?: Array<{ processId: number; processStartedAt: string }>;
 }
 
 export interface InstanceSelection {
@@ -164,7 +165,8 @@ export class InstanceRegistryError extends Error {
 }
 
 const healthCache = new Map<string, { checkedAt: number; identity: HealthIdentity }>();
-const PROJECT_PROCESS_CLAIM_TIMEOUT_MS = 1_500;
+const PROJECT_PROCESS_CLAIM_TIMEOUT_MS = 10_000;
+const PROCESS_OBSERVATION_TIMEOUT_MS = 3_000;
 
 /** 清空仅成功 health identity 的短缓存；失败探测从不缓存。 */
 export function clearInstanceHealthCache(): void {
@@ -180,13 +182,12 @@ export async function handleInstancesCommand(
 ): Promise<CliResult> {
   if (command === "list" || !command) {
     const instances = await readInstancesWithProjectProcessClaims(dataDir);
-    return success(requestId, { registryPath: instancesDir(dataDir), instances: instances.map(instanceListSummary) });
+    return success(requestId, { instances: instances.map(instanceListSummary) });
   }
 
   if (command === "prune") {
     const instances = await readInstancesWithProjectProcessClaims(dataDir);
     return success(requestId, {
-      registryPath: instancesDir(dataDir),
       removed: 0,
       remaining: instances.length,
       writer: "unity-bridge",
@@ -197,7 +198,7 @@ export async function handleInstancesCommand(
 
   return failure(requestId, "UNKNOWN_INSTANCES_COMMAND", "Expected instances list or instances prune.", [
     "Run unity_cli instances list to inspect project identities and Editor sessions.",
-    "Run unity_cli instances prune --yes to request writer-owned cleanup.",
+    "Run unity_cli instances prune to request writer-owned cleanup.",
   ]);
 }
 
@@ -230,7 +231,6 @@ async function handleTargetAliasCommand(
   if (!command || command === "list") {
     const instances = await readInstances(dataDir);
     return success(requestId, {
-      command: "target.alias.list",
       aliases: store.aliases.map((binding) => ({
         ...binding,
         status: instances.find((instance) => instance.instanceId === binding.instanceId)?.status ?? "offline",
@@ -264,7 +264,6 @@ async function handleTargetAliasCommand(
       aliases.push(aliasBinding(alias, identity));
       await writeAliasStore(dataDir, { version: 2, revision: store.revision + 1, aliases: aliases.sort((left, right) => left.alias.localeCompare(right.alias)) });
       return success(requestId, {
-        command: "target.alias.set",
         alias,
         identity: aliasBinding(alias, identity),
         replacedInstanceId: existing && existing.instanceId !== identity.instanceId ? existing.instanceId : null,
@@ -281,7 +280,7 @@ async function handleTargetAliasCommand(
       return failure(requestId, "E_INSTANCE_NOT_FOUND", `Target alias not found: ${alias ?? ""}.`, ["Run unity_cli target alias list."]);
     }
     await writeAliasStore(dataDir, { version: 2, revision: store.revision + 1, aliases: store.aliases.filter((binding) => binding.alias !== alias) });
-    return success(requestId, { command: "target.alias.unset", alias, instanceId: existing.instanceId });
+    return success(requestId, { alias, instanceId: existing.instanceId });
   }
 
   return failure(requestId, "UNKNOWN_TARGET_ALIAS_COMMAND", "Expected target alias list, target alias set <projectPath|instanceId> <alias>, or target alias unset <alias>.");
@@ -313,7 +312,7 @@ export async function selectInstanceForFlags(
   const instance = (await readInstances(dataDir)).find((candidate) => candidate.instanceId === selection.identity.instanceId);
   if (!instance) throw missingSelectedInstance(selection.identity, selection.explicit);
   assertRegistryIdentity(instance, selection.identity);
-  const inspected = applyProjectProcessClaimInspection(instance, await inspectProjectProcessClaims(selection.identity, PROJECT_PROCESS_CLAIM_TIMEOUT_MS));
+  const inspected = applyProjectProcessClaimInspection(instance, await inspectProjectProcessClaimsWithConvergence(selection.identity));
   if (inspected.status === "offline") {
     throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "The selected Unity project has no active Editor session.", [
       "Open this exact Unity project in Unity Editor.",
@@ -332,6 +331,14 @@ export async function selectInstanceForFlags(
 }
 
 /** 即时观察选择器保留 offline/conflict/blocked 状态，绝不把状态归约为 selector 异常。 */
+/** 单次 WMI/进程枚举不可验证时只重做一次纯读证明；真实 duplicate claim 不等待。 */
+async function inspectProjectProcessClaimsWithConvergence(identity: ProjectIdentity): Promise<ProjectProcessClaimInspection> {
+  const first = await inspectProjectProcessClaims(identity, PROJECT_PROCESS_CLAIM_TIMEOUT_MS);
+  if (first.verification !== "unverifiable") return first;
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+  return inspectProjectProcessClaims(identity, PROJECT_PROCESS_CLAIM_TIMEOUT_MS);
+}
+
 export async function selectObservationInstanceForFlags(
   flags: Record<string, string | boolean>,
   dataDir: string,
@@ -341,10 +348,67 @@ export async function selectObservationInstanceForFlags(
   const observationDeadlineMs = remainingMs === undefined ? undefined : Date.now() + Math.max(0, remainingMs);
   const selection = await resolveInstanceSelectionIdentity(flags, dataDir, cwd, observationDeadlineMs);
   const record = await readRegistryRecord(dataDir, selection.identity.instanceId, observationDeadlineMs);
-  if (!record) throw missingSelectedInstance(selection.identity, selection.explicit);
-  const instance = reduceObservationRegistryRecord(record);
+  // observation 不要求 Bridge 已注册；canonical identity 仍可归因到启动中的 Unity process。
+  if (!record) return { instance: offlineObservationInstance(selection.identity), matchedBy: selection.matchedBy };
+  const processBudgetMs = Math.max(0, observationDeadlineMs === undefined ? PROCESS_OBSERVATION_TIMEOUT_MS : observationDeadlineMs - Date.now());
+  const observations = await probeProcessObservations(record.sessions.map((session) => session.processId), processBudgetMs);
+  const instance = reduceObservationRegistryRecord(record, observations);
   assertRegistryIdentity(instance, selection.identity);
   return { instance, matchedBy: selection.matchedBy };
+}
+
+/**
+ * durable root 在 domain reload 中读取 journal 时不能依赖瞬时 /health ready。
+ * 该 selector 仍要求唯一 PID、process start、Unity.exe 与 canonical -projectPath 全部独立成立。
+ */
+export async function selectTransitionInstanceForFlags(
+  flags: Record<string, string | boolean>,
+  dataDir: string,
+  remainingMs: number,
+  cwd = process.cwd(),
+): Promise<InstanceSelection> {
+  const deadlineMs = Date.now() + Math.max(0, remainingMs);
+  const selection = await selectObservationInstanceForFlags(flags, dataDir, Math.max(0, deadlineMs - Date.now()), cwd);
+  const instance = selection.instance;
+  const session = instance.activeSession;
+  if (!session || instance.status === "offline") {
+    throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "The selected Unity project has no active Editor session.", ["Open this exact Unity project in Unity Editor."], { instance: instanceListSummary(instance) });
+  }
+  if (instance.status === "conflict") {
+    throw new InstanceRegistryError("E_INSTANCE_CONFLICT", "The selected Unity Editor process identity is conflicting.", ["Close every duplicate Editor process except the intended session."], { instance: instanceListSummary(instance) });
+  }
+
+  const identity: RegistryIdentity = {
+    instanceId: instance.instanceId,
+    canonicalProjectPath: instance.canonicalProjectPath,
+    displayProjectPath: instance.displayProjectPath,
+  };
+  const processBudgetMs = Math.max(0, deadlineMs - Date.now());
+  const [verification, claims] = await Promise.all([
+    verifyRegistrySessionProcess(identity, session, processBudgetMs),
+    inspectProjectProcessClaims(identity, processBudgetMs),
+  ]);
+  const exactClaim = claims.verification === "verified"
+    && claims.processIds.length === 1
+    && claims.processIds[0] === session.processId;
+  if (verification === "dead") {
+    throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "The selected Unity Editor process exited during transition recovery.", ["Reopen this exact Unity project before submitting a new request."], { instance: instanceListSummary(instance) });
+  }
+  if (verification !== "verified" || !exactClaim) {
+    throw new InstanceRegistryError("E_INSTANCE_CONFLICT", "The selected Unity Editor process identity cannot be proven during transition recovery.", ["Wait for the selected Editor process identity to become uniquely verifiable."], { instance: instanceListSummary(instance), processClaimIds: claims.processIds });
+  }
+  return { instance: { ...instance, processClaimIds: claims.processIds }, matchedBy: selection.matchedBy };
+}
+
+/** registry 尚未写入时的只读 canonical identity 投影；绝不由 TS 创建 registry。 */
+function offlineObservationInstance(identity: ProjectIdentity): UnityInstance {
+  return {
+    instanceId: identity.instanceId, canonicalizationVersion: 1,
+    canonicalProjectPath: identity.canonicalProjectPath, displayProjectPath: identity.displayProjectPath,
+    projectPath: identity.displayProjectPath, projectName: projectNameFromPath(identity.displayProjectPath),
+    status: "offline", revision: 0, updatedAt: new Date(0).toISOString(), sessions: [], progress: [], blockers: [],
+    claimVerification: "none",
+  };
 }
 
 /** 两个 selector 共享 identity/flag 契约；仅 reducer 的可信度不同。 */
@@ -400,13 +464,17 @@ function missingSelectedInstance(identity: ProjectIdentity, explicit: string | u
 }
 
 /** 即时观察只归约原始 registry：不得发 health 请求或扫描旧 PID。 */
-export function reduceObservationRegistryRecord(record: InstanceRegistryV2): UnityInstance {
+export function reduceObservationRegistryRecord(record: InstanceRegistryV2, observations?: Map<number, ProcessObservation>): UnityInstance {
   validateRegistryRecord(record);
-  const sessions = record.sessions;
+  // 传入 OS observation 时只剔除已证明 dead/start-mismatch 的 claim；无法证明的 claim 继续形成 conflict。
+  const sessions = observations
+    ? record.sessions.filter((session) => claimIsAlive(session, observations.get(session.processId)))
+    : record.sessions;
+  const processUnverifiable = observations !== undefined && sessions.some((session) => observations.get(session.processId)?.state === "unverifiable");
   const activeSession = sessions.length === 1 ? sessions[0] : undefined;
   const status: UnityInstanceStatus = sessions.length === 0
     ? "offline"
-    : sessions.length > 1
+    : sessions.length > 1 || processUnverifiable
       ? "conflict"
       : activeSession!.claimVerification === "unverifiable"
         ? "conflict"
@@ -436,7 +504,7 @@ export function reduceObservationRegistryRecord(record: InstanceRegistryV2): Uni
     unityVersion: activeSession?.unityVersion,
     buildStamp: activeSession?.buildStamp,
     toolCatalogFingerprint: activeSession?.toolCatalogFingerprint,
-    claimVerification: sessions.length === 0 ? "none" : sessions.length > 1 ? "unverifiable" : activeSession!.claimVerification,
+    claimVerification: sessions.length === 0 ? "none" : sessions.length > 1 || processUnverifiable ? "unverifiable" : activeSession!.claimVerification,
   };
 }
 
@@ -532,7 +600,9 @@ export async function inspectProjectProcessClaims(identity: RegistryIdentity | P
   if (process.platform !== "win32") return { verification: "unsupported", processIds: [] };
   try {
     const processes = await findUnityProjectProcesses(identity.instanceId, identity.canonicalProjectPath, timeoutMs);
-    return { verification: "verified", processIds: [...new Set(processes.map((item) => item.processId))].sort((left, right) => left - right) };
+    const processClaims = processes.map((item) => ({ processId: item.processId, processStartedAt: item.processStartedAt }))
+      .sort((left, right) => left.processId - right.processId);
+    return { verification: "verified", processIds: [...new Set(processClaims.map((item) => item.processId))], processClaims };
   } catch {
     return { verification: "unverifiable", processIds: [] };
   }
@@ -654,7 +724,11 @@ export function instanceListSummary(instance: UnityInstance): Record<string, unk
       state: session.state,
       claimVerification: session.claimVerification,
     })),
-    lastUnitySnapshot: instance.lastUnitySnapshot ?? null,
+    lastUnitySnapshot: instance.lastUnitySnapshot ? {
+      schemaVersion: instance.lastUnitySnapshot.schemaVersion,
+      observedAt: instance.lastUnitySnapshot.observedAt,
+      fields: instance.lastUnitySnapshot.fields,
+    } : null,
     progress: instance.progress,
     blockers: instance.blockers,
     unityVersion: instance.unityVersion ?? null,
@@ -789,7 +863,7 @@ function validPort(value: number): boolean {
 }
 
 /** 批量读取 PID start time；access denied 保留 unverifiable claim 并 fail closed。 */
-export async function probeProcessObservations(processIds: number[]): Promise<Map<number, ProcessObservation>> {
+export async function probeProcessObservations(processIds: number[], timeoutMs = PROCESS_OBSERVATION_TIMEOUT_MS): Promise<Map<number, ProcessObservation>> {
   const ids = [...new Set(processIds.filter((value) => Number.isInteger(value) && value > 0))];
   if (ids.length === 0) return new Map();
   const command = [
@@ -803,7 +877,7 @@ export async function probeProcessObservations(processIds: number[]): Promise<Ma
     "}",
     "@($items) | ConvertTo-Json -Compress -Depth 3",
   ].join("\n");
-  const execution = runPowerShell(command, { UNITY_CLI_PROCESS_IDS: JSON.stringify(ids) }, 1_000);
+  const execution = runPowerShell(command, { UNITY_CLI_PROCESS_IDS: JSON.stringify(ids) }, Math.max(1, timeoutMs));
   if (execution.status !== 0 || execution.error) {
     return new Map(ids.map((processId) => [processId, { processId, state: "unverifiable" as const }]));
   }

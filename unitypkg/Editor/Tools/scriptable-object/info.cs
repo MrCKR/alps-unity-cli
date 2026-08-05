@@ -24,7 +24,6 @@ namespace UnityCli
             Summary = "Read ScriptableObject asset properties (path, guid, name, type, public fields).",
             Description = "Read a ScriptableObject asset's properties at an Assets/*.asset path. Returns path, guid, name, type, and public field/property values. Read-only.",
             Group = "scriptable-object",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

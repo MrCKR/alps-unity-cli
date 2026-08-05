@@ -35,7 +35,6 @@ namespace UnityCli
             Summary = "Update Camera lens/projection settings: FOV, orthographic mode/size, near/far clip planes, clear flags, and depth.",
             Description = "Update Camera lens/projection settings: FOV, orthographic mode/size, near/far clip planes, clear flags, and depth. Invalid clearFlags returns E_CAMERA_CLEAR_FLAGS_INVALID instead of silently doing nothing.",
             Group = "camera",
-            Version = "1.0.0",
             DestructiveHint = false,
             SideEffects = new[] { "scene-modify" },
             Target = "editor",

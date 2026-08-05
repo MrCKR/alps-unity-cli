@@ -7,7 +7,7 @@ namespace UnityCli
     public static partial class UnityCliBridge
     {
         /// <summary>scene.gameobject 内置 Context：只读单个 GameObject 摘要。</summary>
-        public sealed class SceneGameObjectContext : IUnityCliContext<SceneGameObjectContext.Request, SceneGameObjectContext.Result>
+        public sealed class SceneGameObjectContext : IUnityCliContext<SceneGameObjectContext.Request, SceneGameObjectContext.Result>, IUnityCliProofObserver<SceneGameObjectContext.Request>
         {
             public sealed class Request { public string Target { get; set; } public int Id { get; set; } public string Path { get; set; } public bool IncludeComponents { get; set; } = true; }
             public sealed class Result { public GameObjectInfo GameObject { get; set; } }
@@ -26,9 +26,16 @@ namespace UnityCli
             {
                 Name = "scene.gameobject", Summary = "Read one GameObject summary by id, hierarchy path, or name without modifying the scene.",
                 Description = "Read one GameObject's lightweight scene summary by id, hierarchy path, or name. Use this before go.inspect, component.get, object.get-data, or mutation tools to confirm the stable path/id. Does not modify the scene; set includeComponents=false when only the reusable GameObject reference is needed.",
-                Category = "scene", Version = "1.0.0", Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported", RefreshBehavior = "on-demand",
+                Category = "scene",Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported",
                 Examples = new[] { new ContextExample { Description = "Read the main camera object", Input = new Request { Target = "Main Camera", IncludeComponents = true } }, new ContextExample { Description = "Read only the reusable object reference", Input = new Request { Target = "Main Camera", IncludeComponents = false } } }
             };
+
+            /// <summary>解析 completionProbe 的唯一场景对象 identity，不执行 Context read。</summary>
+            public UnityCliProofResourceClaim ResolveProofResource(Request request)
+            {
+                request = request ?? new Request();
+                return SceneProofResource(ResolveSceneContextGameObject(request.Target, request.Id == 0 ? (int?)null : request.Id, request.Path));
+            }
 
             /// <summary>解析并读取场景对象；不修改场景或 Selection。</summary>
             public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)

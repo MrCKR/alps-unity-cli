@@ -87,7 +87,15 @@ namespace UnityCli
             if (type == typeof(object))
                 return Failure(path, "explicit [UnityCliAnyJson]", ActualType(value), "Arbitrary JSON requires [UnityCliAnyJson].");
 
-            if (type == typeof(string)) return value is string ? null : Failure(path, "string", ActualType(value));
+            if (type == typeof(string))
+            {
+                var text = value as string;
+                if (text == null) return Failure(path, "string", ActualType(value));
+                var stringEnum = member == null ? null : member.GetCustomAttributes(typeof(UnityCliStringEnumAttribute), true).Cast<UnityCliStringEnumAttribute>().SingleOrDefault();
+                return stringEnum == null || stringEnum.Values.Contains(text, StringComparer.Ordinal)
+                    ? null
+                    : Failure(path, "enum(" + string.Join("|", stringEnum.Values) + ")", ActualValue(value));
+            }
             if (type == typeof(char))
             {
                 var character = value as string;
@@ -145,7 +153,7 @@ namespace UnityCli
                 object child;
                 if (!objectValue.TryGetValue(pair.Key, out child))
                 {
-                    if (pair.Value.IsDefined(typeof(UnityCliRequiredAttribute), true))
+                    if (pair.Value.IsDefined(typeof(UnityCliRequiredAttribute), true) || pair.Value.IsDefined(typeof(UnityCliPresenceRequiredAttribute), true))
                         return Failure(path + "." + pair.Key, "required property", "missing");
                     continue;
                 }

@@ -37,7 +37,6 @@ namespace UnityCli
             Summary = "List currently loaded (opened) scenes with name, path, build index, loaded/dirty state and active flag.",
             Description = "List currently loaded (opened) scenes with name, path, build index, loaded/dirty state and active flag. Read-only.",
             Group = "scene",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

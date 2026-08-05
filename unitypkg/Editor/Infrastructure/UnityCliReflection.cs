@@ -232,34 +232,49 @@ namespace UnityCli
                     }).ToList();
             }
 
-            /// <summary>调用方法：返回结果、异常和可序列化的审计值树。</summary>
-            public static Dictionary<string, object> CallMethod(string typeName, string methodName, object argsValue, List<string> parameterTypes, Dictionary<string, object> instanceRef, BindingFlags bindings)
+            internal sealed class PreparedMethodCall
+            {
+                internal Type Type;
+                internal MethodInfo Method;
+                internal ParameterInfo[] Parameters;
+                internal object[] Arguments;
+                internal object Instance;
+            }
+
+            /// <summary>effect 前完整解析 type、overload、参数与 instance；不会调用目标方法。</summary>
+            public static PreparedMethodCall PrepareCall(string typeName, string methodName, object argsValue, List<string> parameterTypes, Dictionary<string, object> instanceRef, BindingFlags bindings)
             {
                 var type = TypeSchemaGenerator.ResolveType(typeName);
                 if (type == null) throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Type not found: " + typeName, "Pass a full type name.");
                 var method = ResolveCallMethod(type, methodName, argsValue, parameterTypes, bindings);
                 RequireSynchronousResult(method);
-                var paramList = method.GetParameters();
-                var args = ResolveCallArguments(argsValue, paramList);
+                var parameters = method.GetParameters();
+                var arguments = ResolveCallArguments(argsValue, parameters);
                 object instance = null;
                 if (!method.IsStatic)
                 {
                     instance = ResolveCallInstance(instanceRef, type);
                     if (instance == null) throw new BridgeCommandException("E_METHOD_INSTANCE_REQUIRED", "Instance method " + methodName + " requires an instance reference.", "Pass instanceRef with instanceId/assetPath/path.");
                 }
-                var audit = new Dictionary<string, object>
+                return new PreparedMethodCall { Type = type, Method = method, Parameters = parameters, Arguments = arguments, Instance = instance };
+            }
+
+            /// <summary>跨 effect barrier 后只执行一次已准备的方法并返回审计值树。</summary>
+            public static Dictionary<string, object> InvokePrepared(PreparedMethodCall call)
+            {
+                if (call == null) throw new ArgumentNullException("call");
+                var data = new Dictionary<string, object>
                 {
-                    { "command", "reflection.method.call" }, { "typeName", type.FullName }, { "methodName", method.Name },
-                    { "isStatic", method.IsStatic }, { "returnType", method.ReturnType.FullName }
+                    { "typeName", call.Type.FullName }, { "methodName", call.Method.Name },
+                    { "isStatic", call.Method.IsStatic }, { "returnType", call.Method.ReturnType.FullName }
                 };
                 try
                 {
-                    var result = method.Invoke(instance, args);
+                    var result = call.Method.Invoke(call.Instance, call.Arguments);
                     if (result is System.Threading.Tasks.Task || result is IEnumerator || result is AsyncOperation || result is CustomYieldInstruction)
-                        throw new BridgeCommandException("E_METHOD_COMPLETION_UNPROVABLE", "The method returned an asynchronous/yield operation that has no registered terminal proof.", "Use a dedicated Tool with an explicit completion predicate.");
-                    audit["ok"] = true;
-                    audit["result"] = BuildCallResult(result);
-                    audit["parameters"] = paramList.Select((parameter, index) => (object)new Dictionary<string, object> { { "name", parameter.Name }, { "value", BuildCallResult(args[index]) } }).ToList();
+                        throw new BridgeCommandException("E_METHOD_COMPLETION_UNPROVABLE", "The method returned an asynchronous/yield operation that has no immediate completion proof.", "Use a dedicated Tool with an explicit asynchronous completion predicate.");
+                    data["result"] = BuildCallResult(result);
+                    data["parameters"] = call.Parameters.Select((parameter, index) => (object)new Dictionary<string, object> { { "name", parameter.Name }, { "value", BuildCallResult(call.Arguments[index]) } }).ToList();
                 }
                 catch (TargetInvocationException tie)
                 {
@@ -267,7 +282,7 @@ namespace UnityCli
                     throw new BridgeCommandException(
                         "E_METHOD_INVOCATION_FAILED",
                         inner.GetType().Name + ": " + inner.Message,
-                        new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", method.Name }, { "errorType", inner.GetType().FullName } },
+                        new Dictionary<string, object> { { "typeName", call.Type.FullName }, { "methodName", call.Method.Name }, { "errorType", inner.GetType().FullName } },
                         new[] { "Inspect the method contract and arguments before submitting a new request." });
                 }
                 catch (BridgeCommandException) { throw; }
@@ -276,20 +291,18 @@ namespace UnityCli
                     throw new BridgeCommandException(
                         "E_METHOD_INVOCATION_FAILED",
                         exception.GetType().Name + ": " + exception.Message,
-                        new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", method.Name }, { "errorType", exception.GetType().FullName } },
+                        new Dictionary<string, object> { { "typeName", call.Type.FullName }, { "methodName", call.Method.Name }, { "errorType", exception.GetType().FullName } },
                         new[] { "Inspect the method contract and arguments before submitting a new request." });
                 }
-                audit["logPath"] = LogPath();
-                return audit;
+                return data;
             }
 
-            /// <summary>通用 reflection Tool 只允许同步、非 void 返回；其余必须由专用 completion driver 承担。</summary>
+            /// <summary>completionProbe 只允许同步方法；void 由独立 Context after proof 覆盖。</summary>
             private static void RequireSynchronousResult(MethodInfo method)
             {
                 var returnType = method.ReturnType;
                 var fullName = returnType.FullName ?? string.Empty;
-                if (returnType == typeof(void)
-                    || typeof(System.Threading.Tasks.Task).IsAssignableFrom(returnType)
+                if (typeof(System.Threading.Tasks.Task).IsAssignableFrom(returnType)
                     || fullName == "System.Threading.Tasks.ValueTask"
                     || fullName.StartsWith("System.Threading.Tasks.ValueTask`", StringComparison.Ordinal)
                     || typeof(IEnumerator).IsAssignableFrom(returnType)
@@ -297,7 +310,7 @@ namespace UnityCli
                     || typeof(CustomYieldInstruction).IsAssignableFrom(returnType))
                     throw new BridgeCommandException(
                         "E_METHOD_COMPLETION_UNPROVABLE",
-                        "reflection.method.call cannot prove completion for void, awaitable, yield, or AsyncOperation returns: " + returnType.FullName + ".",
+                        "reflection.method.call cannot prove immediate completion for awaitable, yield, or AsyncOperation returns: " + returnType.FullName + ".",
                         "Use a dedicated Tool with an explicit business predicate and proof source.");
             }
 
@@ -365,7 +378,7 @@ namespace UnityCli
                     else if (i < parsed.Count) value = parsed[i];
                     else if (parameter.HasDefaultValue) value = parameter.DefaultValue;
                     else value = parameter.ParameterType.IsValueType ? Activator.CreateInstance(parameter.ParameterType) : null;
-                    result[i] = ObjectPatch.ConvertValue(value, parameter.ParameterType);
+                    result[i] = UnityCliValueConverter.ConvertValue(value, parameter.ParameterType);
                 }
                 return result;
             }
@@ -426,21 +439,6 @@ namespace UnityCli
             public string Name { get; set; }
             public string ParameterType { get; set; }
             public bool HasDefaultValue { get; set; }
-        }
-
-        /// <summary>审计工具：为高风险操作记录结构化 audit。</summary>
-        internal static class AuditTrail
-        {
-            public static Dictionary<string, object> Entry(string command, string action, string target, bool confirmed, string fingerprint)
-            {
-                var entry = new Dictionary<string, object>
-                {
-                    { "command", command }, { "action", action }, { "target", target }, { "confirmed", confirmed },
-                    { "timestamp", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) }, { "logPath", LogPath() }
-                };
-                if (!string.IsNullOrEmpty(fingerprint)) entry["fingerprint"] = fingerprint;
-                return entry;
-            }
         }
 
         private static object MemberValue(Type type, object instance, string name)

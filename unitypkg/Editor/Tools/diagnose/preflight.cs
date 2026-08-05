@@ -16,7 +16,7 @@ namespace UnityCli
         /// <summary>
         /// diagnose.preflight — 聚合 Unity Editor 健康诊断。
         ///
-        /// 作为 UnityCliBridge 的嵌套类实现，聚合 Editor 状态、capability 列表、项目工具/上下文
+        /// 作为 UnityCliBridge 的嵌套类实现，聚合 Editor 状态、公开 capability 计数、项目 Tool/Context
         /// fingerprint 与编译诊断。所有动态字段直接构造为 Dictionary/List 值树。
         /// </summary>
         public sealed class DiagnosePreflightTool : IUnityCliTool<DiagnosePreflightTool.Request, DiagnosePreflightTool.Result>
@@ -28,7 +28,6 @@ namespace UnityCli
 
             public sealed class Result
             {
-                public string Command { get; set; }
                 public string TargetCommand { get; set; }
                 public ProjectInfo Project { get; set; }
                 [UnityCliAnyJson] public object Editor { get; set; }
@@ -36,7 +35,6 @@ namespace UnityCli
                 public CustomFingerprintInfo CustomTools { get; set; }
                 public CustomFingerprintInfo CustomContexts { get; set; }
                 [UnityCliAnyJson] public List<object> Checks { get; set; }
-                public string LogPath { get; set; }
             }
 
             public sealed class ProjectInfo
@@ -48,9 +46,9 @@ namespace UnityCli
 
             public sealed class BridgeInfo
             {
-                public long Port { get; set; }
-                public string LogPath { get; set; }
-                [UnityCliAnyJson] public object Capabilities { get; set; }
+                public bool Ready { get; set; }
+                public long ToolCount { get; set; }
+                public long ContextCount { get; set; }
             }
 
             public sealed class CustomFingerprintInfo
@@ -71,9 +69,9 @@ namespace UnityCli
             public ToolDescriptor Describe() => new()
             {
                 Name = "diagnose.preflight",
-                Summary = "Run a live Unity Editor health check for project path, editor busy state, bridge capabilities, custom tool/context fingerprints, and recoverable checks.",
-                Description = "Run a live Unity Editor health check for project path, editor busy state, bridge capabilities, custom tool/context fingerprints, and recoverable checks. Use this before live bridge work when Unity may be compiling, importing, or using stale custom tool/context metadata.",
-                Group = "diagnose", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
+                Summary = "Run a live Unity Editor health check for project state, capability counts, custom fingerprints, and compile diagnostics.",
+                Description = "Reads current project and Editor busy state, public capability counts, custom Tool/Context fingerprint health, and recent compile diagnostics without exposing Bridge routes, ports, or logs.",
+                Group = "diagnose",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
                 DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
                 Examples = new[]
                 {
@@ -97,7 +95,6 @@ namespace UnityCli
 
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "diagnose.preflight",
                     TargetCommand = request.Command,
                     Project = new ProjectInfo
                     {
@@ -114,14 +111,13 @@ namespace UnityCli
                     },
                     Bridge = new BridgeInfo
                     {
-                        Port = (long)port,
-                        LogPath = LogPath(),
-                        Capabilities = BuildCapabilities()
+                        Ready = true,
+                        ToolCount = ProjectTools.Count,
+                        ContextCount = ProjectContexts.Count
                     },
                     CustomTools = new CustomFingerprintInfo { Fingerprint = ProjectToolFingerprintSummary() },
                     CustomContexts = new CustomFingerprintInfo { Fingerprint = ProjectContextFingerprintSummary() },
-                    Checks = checks,
-                    LogPath = LogPath()
+                    Checks = checks
                 });
             }
 
@@ -129,45 +125,6 @@ namespace UnityCli
             private static Dictionary<string, object> MakeCheck(string name, bool ok)
             {
                 return new Dictionary<string, object> { { "name", name }, { "ok", ok } };
-            }
-
-            // 构造 bridge capability 列表，保持与 HTTP capability discovery 相同的域和命令集合。
-            private static List<object> BuildCapabilities()
-            {
-                var capabilities = new List<object>();
-                AddCapability(capabilities, "camera", CameraCommands);
-                AddCapability(capabilities, "scene", SceneCommands);
-                AddCapability(capabilities, "go", GameObjectCommands);
-                AddCapability(capabilities, "asset", AssetCommands);
-                AddCapability(capabilities, "diagnose", DiagnoseCommands);
-                AddCapability(capabilities, "screenshot", ScreenshotCommands);
-                AddCapability(capabilities, "prefab", PrefabCommands);
-                AddCapability(capabilities, "ui", UiCommands);
-                AddCapability(capabilities, "material", MaterialCommands);
-                AddCapability(capabilities, "graphics", GraphicsCommands);
-                AddCapability(capabilities, "physics", PhysicsCommands);
-                AddCapability(capabilities, "scriptable-object", ScriptableObjectCommands);
-                AddCapability(capabilities, "profiler", ProfilerCommands);
-                AddCapability(capabilities, "animation", AnimationCommands);
-                AddCapability(capabilities, "shader", ShaderCommands);
-                AddCapability(capabilities, "texture", TextureCommands);
-                AddCapability(capabilities, "editor", EditorCommands);
-                AddCapability(capabilities, "code", CodeCommands);
-                AddCapability(capabilities, "project-tool", ProjectToolCommands);
-                AddCapability(capabilities, "runtime-tool", RuntimeToolCommands);
-                AddCapability(capabilities, "context", ContextCommands);
-                AddCapability(capabilities, "extension", ExtensionCommands);
-                return capabilities;
-            }
-
-            private static void AddCapability(List<object> capabilities, string domain, string[] commands)
-            {
-                capabilities.Add(new Dictionary<string, object>
-                {
-                    { "domain", domain },
-                    { "route", "POST /bridge/execute" },
-                    { "commands", commands }
-                });
             }
 
             // 编译状态检查:isCompiling + 近期编译错误(通过反射 LogEntries)。

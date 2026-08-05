@@ -17,7 +17,7 @@ export interface PackageRegistryClearResult {
 export default defineTool<PackageRegistryClearRequest, PackageRegistryClearResult>({
   name: "package.registry.clear",
   summary: "Clear the primary registry URL from the project manifest.",
-  description: "Remove the primary registry URL from Packages/manifest.json. Requires --yes and supports --dry-run.",
+  description: "Remove the primary registry URL from Packages/manifest.json. Supports --dry-run.",
   group: "package",
   destructiveHint: true,
   supportsDryRun: true,
@@ -26,7 +26,7 @@ export default defineTool<PackageRegistryClearRequest, PackageRegistryClearResul
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Clear the primary registry", argv: ["tools", "run", "package.registry.clear", "--input", "{}", "--yes"] }
+    { description: "Clear the primary registry", argv: ["tools", "run", "package.registry.clear", "--input", "{}"] }
   ],
   async execute(request, context) {
     const projectPath = resolve(request.project ?? context.projectPath);

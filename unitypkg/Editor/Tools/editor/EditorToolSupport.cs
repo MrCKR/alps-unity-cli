@@ -94,11 +94,17 @@ namespace UnityCli
             return null;
         }
 
+        // Unity 2022 LogEntry.mode 位布局：kError=1, kAssert=2, kLog=4, kFatal=16, kAssetImportError=64,
+        // kAssetImportWarning=128, kScriptingError=256, kScriptingWarning=512, kScriptingException=2048, kScriptingAssertion=4096。
+        // 错误/警告/断言来自多个位（脚本与资源导入各有独立位），只查低 3 位会把全部条目误归为 log。
         private static string ConsoleLevel(int mode)
         {
-            if ((mode & 1) != 0) return "error";
-            if ((mode & 2) != 0) return "assert";
-            if ((mode & 4) != 0) return "warning";
+            const int errorBits = (1 << 0) | (1 << 4) | (1 << 6) | (1 << 8) | (1 << 11) | (1 << 16);
+            const int warningBits = (1 << 7) | (1 << 9) | (1 << 17);
+            const int assertBits = (1 << 1) | (1 << 12);
+            if ((mode & errorBits) != 0) return "error";
+            if ((mode & assertBits) != 0) return "assert";
+            if ((mode & warningBits) != 0) return "warning";
             return "log";
         }
     }

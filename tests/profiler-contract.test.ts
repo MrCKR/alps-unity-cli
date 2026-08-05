@@ -3,7 +3,6 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { destructiveCommands } from "../src/security-policy.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 import { contractToolNames, discoverLiveTools, listCsFiles, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
@@ -121,6 +120,7 @@ test("profiler.start records Editor frames and profiler.stop restores profileEdi
   assert.match(source, /PreviousProfilerEditorRecording = ProfilerToolSupport\.GetProfilerEditorRecording\(\)/);
   assert.match(source, /SetProfilerEditorRecording\(true\)[\s\S]*SetProfilerSessionEnabled\(true\)/);
   assert.match(source, /SetProfilerEditorRecording\(ProfilerToolSupport\.PreviousProfilerEditorRecording\.Value\)/);
+  assert.doesNotMatch(supportSource, /HandlerFingerprint|handlerFingerprint/, "Profiler business DTO must not expose internal fingerprints");
 });
 
 test("bridge specs resolve for profiler tools", () => {
@@ -145,9 +145,17 @@ test("profiler commands are exposed by typed C# tools", async () => {
   }
 });
 
-test("profiler.clear is not in the destructive security policy", () => {
-  const commands = new Set(destructiveCommands().map((entry) => entry.command));
-  assert.equal(commands.has("profiler.clear"), false);
+test("profiler.clear has no destructive metadata", () => {
+  const command = bridgeCommandRegistry.lookup("profiler", "clear");
+  assert.equal(command?.destructiveHint, undefined);
+});
+
+test("profiler.clear uses the Unity 2022.3 frame-clear API with exact readback", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/clear.cs", import.meta.url), "utf8");
+  assert.match(source, /GetMethod\("ClearAllFrames"/);
+  assert.doesNotMatch(source, /GetMethod\("Clear"/);
+  assert.match(source, /firstFrameIndex >= 0 \|\| lastFrameIndex >= 0/);
+  assert.match(source, /E_PROFILER_CLEAR_STATE_MISMATCH/);
 });
 
 test("profiler.object-memory and script-stats implement IUnityCliTool", async () => {
@@ -211,6 +219,8 @@ test("profiler.load and capture require real terminal artifacts before reporting
   assert.match(loadSource, /E_PROFILER_CAPTURE_NOT_FOUND/);
   assert.match(loadSource, /E_PROFILER_LOAD_UNSUPPORTED/);
   assert.match(loadSource, /E_PROFILER_LOAD_FAILED/);
+  assert.match(loadSource, /GetMethod\("ClearAllFrames"/);
+  assert.doesNotMatch(loadSource, /GetMethod\("Clear"/);
   assert.doesNotMatch(loadSource, /loadMethod\?\.Invoke/);
   assert.match(loadSource, /Loaded = true/);
   assert.match(captureSource, /File\.Delete\(outputPath\)/);
@@ -244,7 +254,12 @@ test("profiler memory-snapshot and frame-debugger tools implement IUnityCliTool"
   const frameSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerFrameDebuggerSupport.cs", import.meta.url), "utf8");
   assert.match(supportSource, /Type\.GetType\(fullName, false\)/);
   assert.match(supportSource, /fullName\.IndexOf\(','\)/);
-  assert.match(frameSupportSource, /UnityEditorInternal\.FrameDebuggerUtility, UnityEditor/);
+  assert.match(frameSupportSource, /UnityEditorInternal\.FrameDebuggerInternal\.FrameDebuggerUtility, UnityEditor/);
+  assert.match(frameSupportSource, /UnityEngine\.FrameDebugger, UnityEngine\.CoreModule/);
+  assert.match(frameSupportSource, /GetProperty\("enabled", BindingFlags\.Public \| BindingFlags\.Static\)/);
+  assert.doesNotMatch(frameSupportSource, /GetMethod\("IsLocalEnabled"/);
+  assert.match(frameSupportSource, /new object\[\] \{ value, 0 \}/);
+  assert.doesNotMatch(frameSupportSource, /eventsCount|isEnabled|GetMethod\("GetEnabled"/);
 });
 
 test("profiler.capture and memory-snapshot.take use async IUnityCliTool", async () => {
@@ -254,6 +269,10 @@ test("profiler.capture and memory-snapshot.take use async IUnityCliTool", async 
   assert.match(captureSource, /await ctx\.Wait\.NextFrame\(1, ct\)/);
   assert.match(captureSource, /DestructiveHint = true/);
   assert.match(captureSource, /SideEffects = new\[\] \{ "persistent-artifact-write" \}/);
+  assert.match(captureSource, /Multi-frame raw artifacts can be large, so start with frames=1 and increase deliberately\./);
+  assert.match(captureSource, /Description = "Capture one raw profiler snapshot with tag"/);
+  assert.match(captureSource, /Frames = 1/);
+  assert.doesNotMatch(captureSource, /Frames = 30/);
   const snapshotSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot/take.cs", import.meta.url), "utf8");
   assert.match(snapshotSource, /class ProfilerMemorySnapshotTakeTool : IUnityCliTool</);
   assert.match(snapshotSource, /public async ValueTask<Result> ExecuteAsync\(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default\)/);

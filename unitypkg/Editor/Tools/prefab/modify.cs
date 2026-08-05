@@ -31,7 +31,6 @@ namespace UnityCli
             Summary = "Modify a prefab's root name or add/remove a child by editing prefab contents in-place.",
             Description = "Modify a prefab's contents. Supports renaming the root, adding a child (overwrite=true to replace an existing child of the same name), and removing a child by name. At least one mutation is required. Changes are saved through PrefabUtility.SaveAsPrefabAsset.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",

@@ -12,7 +12,7 @@ namespace UnityCli
     {
         public sealed class Request { public string ControllerPath { get; set; } }
         public sealed class Result { public ControllerInfo Controller { get; set; } public List<AnimatorParameterInfo> Parameters { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "controller.get-info", Summary = "Read AnimatorController layers, states, and parameters.", Description = "Read-only: returns controller path, guid, layer count, parameter count, and parameter definitions.", Group = "controller", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read controller info", Input = new Request { ControllerPath = "Assets/Animations/Player.controller" } } } };
+        public ToolDescriptor Describe() => new() { Name = "controller.get-info", Summary = "Read AnimatorController layers, states, and parameters.", Description = "Read-only: returns controller path, guid, layer count, parameter count, and parameter definitions.", Group = "controller",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read controller info", Input = new Request { ControllerPath = "Assets/Animations/Player.controller" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);

@@ -15,10 +15,10 @@ export const buildBridgeSpecs: BridgeCommandSpec[] = [
   { group: "build", command: "scene-enable", bridgeCommand: "project-tool.run", toolName: "build.scene.enable", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
   { group: "build", command: "scene-disable", bridgeCommand: "project-tool.run", toolName: "build.scene.disable", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
   { group: "build", command: "platform-get", bridgeCommand: "project-tool.run", toolName: "build.platform.get", buildArgs: emptyArgs },
-  { group: "build", command: "platform-set", bridgeCommand: "project-tool.run", toolName: "build.platform.set", buildArgs: targetArgs, supportsDryRun: true },
+  { group: "build", command: "platform-set", bridgeCommand: "project-tool.run", toolName: "build.platform.set", buildArgs: targetArgs, destructiveHint: true, supportsDryRun: true },
   { group: "build", command: "profile-list", bridgeCommand: "project-tool.run", toolName: "build.profile.list", buildArgs: emptyArgs },
   { group: "build", command: "profile-create", bridgeCommand: "project-tool.run", toolName: "build.profile.create", buildArgs: profileArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "profile-switch", bridgeCommand: "project-tool.run", toolName: "build.profile.switch", buildArgs: pathArgs, supportsDryRun: true },
+  { group: "build", command: "profile-switch", bridgeCommand: "project-tool.run", toolName: "build.profile.switch", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
   { group: "build", command: "profile-modify", bridgeCommand: "project-tool.run", toolName: "build.profile.modify", buildArgs: profileArgs, destructiveHint: true, supportsDryRun: true },
   { group: "build", command: "settings-get", bridgeCommand: "project-tool.run", toolName: "build.settings.get", buildArgs: emptyArgs },
   { group: "build", command: "settings-set", bridgeCommand: "project-tool.run", toolName: "build.settings.set", buildArgs: settingsArgs, destructiveHint: true, supportsDryRun: true }

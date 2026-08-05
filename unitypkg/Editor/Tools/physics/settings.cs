@@ -20,6 +20,7 @@ namespace UnityCli
             public bool? QueriesHitBackfaces { get; set; }
             public bool? QueriesStartInColliders { get; set; }
             public bool? AutoSimulation { get; set; }
+            public string SimulationMode2D { get; set; }
             public string Property { get; set; }
             public string Value { get; set; }
         }
@@ -33,9 +34,9 @@ namespace UnityCli
 
         public ToolDescriptor Describe() => new()
         {
-            Name = "physics.settings", Summary = "Read and update Physics and Physics2D global settings (gravity, contact offset, solver iterations, queries, auto simulation).",
-            Description = "Read and update Physics and Physics2D global settings. Pass individual fields to update; omit all to read current values. Supports a generic property/value pair for gravityY, defaultContactOffset, queriesHitTriggers.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
+            Name = "physics.settings", Summary = "Read and update Physics and Physics2D global settings, including manual simulation mode.",
+            Description = "Read and update Physics and Physics2D global settings. Pass individual fields to update; omit all to read current values. simulationMode2D accepts FixedUpdate, Update, or Script so physics.simulation prerequisites can be configured through the public Tool. Supports a generic property/value pair for gravityY, defaultContactOffset, queriesHitTriggers.",
+            Group = "physics",DestructiveHint = true, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read physics settings", Input = new Request { } } }
         };
 
@@ -70,7 +71,12 @@ namespace UnityCli
             if (request.QueriesHitTriggers.HasValue) { var value = request.QueriesHitTriggers.Value; plans.Add(new SettingPlan("queriesHitTriggers", value.ToString().ToLowerInvariant(), () => Physics.queriesHitTriggers = value, () => Physics.queriesHitTriggers == value)); }
             if (request.QueriesHitBackfaces.HasValue) { var value = request.QueriesHitBackfaces.Value; plans.Add(new SettingPlan("queriesHitBackfaces", value.ToString().ToLowerInvariant(), () => Physics.queriesHitBackfaces = value, () => Physics.queriesHitBackfaces == value)); }
             if (request.QueriesStartInColliders.HasValue) { var value = request.QueriesStartInColliders.Value; plans.Add(new SettingPlan("queriesStartInColliders", value.ToString().ToLowerInvariant(), () => Physics2D.queriesStartInColliders = value, () => Physics2D.queriesStartInColliders == value)); }
-            if (request.AutoSimulation.HasValue) { var value = request.AutoSimulation.Value; plans.Add(new SettingPlan("autoSimulation", value.ToString().ToLowerInvariant(), () => Physics.autoSimulation = value, () => Physics.autoSimulation == value)); }
+            if (request.AutoSimulation.HasValue) { var value = request.AutoSimulation.Value; plans.Add(new SettingPlan("autoSimulation", value.ToString().ToLowerInvariant(), () => PhysicsToolSupport.SetAutoSimulation3D(value), () => PhysicsToolSupport.IsAutoSimulation3D() == value)); }
+            if (!string.IsNullOrEmpty(request.SimulationMode2D))
+            {
+                var value = ParseSimulationMode2D(request.SimulationMode2D);
+                plans.Add(new SettingPlan("simulationMode2D", value.ToString(), () => Physics2D.simulationMode = value, () => Physics2D.simulationMode == value));
+            }
         }
 
         // property/value 只接受当前公开的设置，并在写入前转换为对应的强类型值。
@@ -85,6 +91,16 @@ namespace UnityCli
         }
 
         private static float ParseFiniteFloat(string text, string name) { float value; if (!float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value)) throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_SETTING_VALUE_INVALID", name + " must be a float.", "Pass a finite numeric value."); ValidateFinite(value, name); return value; }
+
+        // 只接受 Unity 2022.3 公开的 SimulationMode2D 成员，避免未定义数值进入全局设置。
+        private static SimulationMode2D ParseSimulationMode2D(string text)
+        {
+            SimulationMode2D value;
+            if (!Enum.TryParse(text, true, out value) || !Enum.IsDefined(typeof(SimulationMode2D), value))
+                throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_SETTING_VALUE_INVALID", "simulationMode2D must be FixedUpdate, Update, or Script.", "Pass one named SimulationMode2D value.");
+            return value;
+        }
+
         private static void ValidateFinite(float value, string name) { if (float.IsNaN(value) || float.IsInfinity(value)) throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_SETTING_VALUE_INVALID", name + " must be finite.", "Pass a finite numeric value."); }
         private static void ValidateFinite(Vector3 value, string name) { ValidateFinite(value.x, name + ".x"); ValidateFinite(value.y, name + ".y"); ValidateFinite(value.z, name + ".z"); }
         private static void ValidateFinite(Vector2 value, string name) { ValidateFinite(value.x, name + ".x"); ValidateFinite(value.y, name + ".y"); }

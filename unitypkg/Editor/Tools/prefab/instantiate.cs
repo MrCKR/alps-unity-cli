@@ -25,7 +25,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public GameObjectRef Instance { get; set; }
             public string SourcePath { get; set; }
@@ -38,7 +37,6 @@ namespace UnityCli
             Summary = "Instantiate an Assets/*.prefab into the active scene with optional parent, position and name; supports --dry-run.",
             Description = "Instantiate an Assets/*.prefab into the active scene. Optionally parent under a scene GameObject (name/path/instance id), set world position, and rename the instance. Supports --dry-run to preview the planned instantiation.",
             Group = "prefab",
-            Version = "1.0.0",
             DestructiveHint = false,
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify" },
@@ -75,16 +73,15 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Command = "prefab.instantiate",
                     DryRun = true,
                     SourcePath = path,
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.instantiate", Path = path } }
                 });
             }
             ctx.CommitEffect();
-            var instance = EditorApplication.isPlaying
-                ? UnityEngine.Object.Instantiate(prefab)
-                : (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent != null ? parent.gameObject.scene : SceneManager.GetActiveScene());
+            // PlayMode 也必须经 PrefabUtility.InstantiatePrefab：Object.Instantiate 不建立 prefab 连接，
+            // 终态 readback 的 GetCorrespondingObjectFromSource 断言必然失败，把合法调用判成 outcome-unknown。
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent != null ? parent.gameObject.scene : SceneManager.GetActiveScene());
             if (parent != null) instance.transform.SetParent(parent, false);
             instance.transform.position = new Vector3(posX, posY, posZ);
             if (!string.IsNullOrEmpty(request.Name)) instance.name = request.Name;
@@ -99,7 +96,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_INSTANTIATE_STATE_MISMATCH", "Prefab instance readback did not match the request.", "Inspect the active scene and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Command = "prefab.instantiate",
                 Instance = GameObjectToolSupport.BuildGameObjectRef(observedInstance),
                 SourcePath = path,
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.instantiate", Path = path } }

@@ -12,8 +12,6 @@ export interface ContextDefinition<TReq = unknown, TRes = unknown> {
   target?: ContextTarget;
   availabilityScope?: ContextAvailabilityScope;
   playModeSupport?: ContextPlayModeSupport;
-  supportStatus?: string;
-  refreshBehavior?: string;
   requiresPackages?: string[];
   examples: ContextExample[];
   /** 只读读取入口。不得修改 Unity、项目文件或会话状态。 */
@@ -82,13 +80,10 @@ export function defineContextMetadata(): ContextDescriptor[] {
       target: d.target ?? "editor",
       availabilityScope: d.availabilityScope ?? "editorSession",
       playModeSupport: d.playModeSupport ?? "supported",
-      supportStatus: d.supportStatus,
       requiresPackages: d.requiresPackages,
-      refreshBehavior: d.refreshBehavior,
       inputSchema: entry.inputSchema,
       outputSchema: entry.outputSchema,
-      examples: d.examples,
-      cliCommand: `context read ${d.name}`
+      examples: d.examples
     });
   }
   return result;

@@ -20,8 +20,7 @@ function descriptor(source: ContextDescriptor["source"]): ContextDescriptor {
     playModeSupport: "supported",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     outputSchema: { type: "object", properties: { value: { type: "string" } }, additionalProperties: false },
-    examples: [{ description: `Read ${source} sample.`, input: {}, argv: ["context", "read", source === "extension" ? "probuilder.scene" : `${source}.sample`, "--input", "{}"] }],
-    cliCommand: `context read ${source === "extension" ? "probuilder.scene" : `${source}.sample`}`
+    examples: [{ description: `Read ${source} sample.`, input: {}, argv: ["context", "read", source === "extension" ? "probuilder.scene" : `${source}.sample`, "--input", "{}"] }]
   };
 }
 

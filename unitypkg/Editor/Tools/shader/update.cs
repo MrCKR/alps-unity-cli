@@ -30,7 +30,6 @@ namespace UnityCli
             Summary = "Overwrite an existing shader's source content and force-recompile it.",
             Description = "Overwrite an existing Assets/*.shader (or .shadergraph) source with new content and force-reimport it. The shader must already exist. Updating triggers shader recompilation; check shader.get-data diagnostics afterward.",
             Group = "shader",
-            Version = "1.0.0",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write", "shader-recompile" },
             Target = "editor",

@@ -1,83 +1,95 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import test from "node:test";
-import { tmpdir } from "node:os";
-import {
-  addScopedRegistry,
-  clearRegistry,
-  installPackage,
-  removePackage,
-  removeScopedRegistry,
-  setRegistry
-} from "../src/package-manager.js";
-import { validateLocalCompletionProof } from "../src/tools/dispatcher.js";
 import { generatedToolCompletionContract } from "../src/tools/.generated-completion-registry.js";
+import { validateLocalCompletionProof } from "../src/tools/dispatcher.js";
+import { StructuredToolError } from "../src/tools/errors.js";
 
-async function makeProject(): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "unity-cli-package-proof-"));
-  await mkdir(join(projectPath, "Packages"));
-  await writeFile(join(projectPath, "Packages", "manifest.json"), JSON.stringify({
-    dependencies: { "com.example.base": "1.0.0" },
-    registry: "https://old.registry.test",
-    scopedRegistries: [{ name: "Old", url: "https://old.registry.test", scopes: ["com.old"] }]
-  }, null, 2));
-  return projectPath;
+const hash = "a".repeat(64);
+const resolve = {
+  status: "resolved",
+  manifestHash: hash,
+  lockHash: "b".repeat(64),
+  packageSnapshotHash: "c".repeat(64),
+  packageCount: 1,
+  packages: [{ name: "com.acme.sample", version: "1.2.3", source: "registry" }],
+};
+
+/** 使用生成 completion contract 验证 TS-local Package terminal。 */
+function validate(name: string, result: unknown): void {
+  const completion = generatedToolCompletionContract(name);
+  assert.ok(completion, name);
+  validateLocalCompletionProof(name, completion, result);
 }
 
-async function manifest(projectPath: string): Promise<Record<string, unknown>> {
-  return JSON.parse(await readFile(join(projectPath, "Packages", "manifest.json"), "utf8")) as Record<string, unknown>;
+function invalid(name: string, result: unknown): Promise<void> {
+  return assert.rejects(
+    async () => validate(name, result),
+    (error: unknown) => error instanceof StructuredToolError && error.code === "E_TOOL_COMPLETION_PROOF_INVALID",
+  );
 }
 
-function completion(toolName: string) {
-  const contract = generatedToolCompletionContract(toolName);
-  assert.ok(contract, `missing completion contract for ${toolName}`);
-  return contract;
-}
-
-test("package manifest mutations return verified disk readback", async () => {
-  const projectPath = await makeProject();
-
-  const set = await setRegistry(projectPath, "https://new.registry.test");
-  assert.equal(set.registry, (await manifest(projectPath)).registry);
-  validateLocalCompletionProof("package.registry.set", completion("package.registry.set"), { ...set, projectPath }, false);
-
-  const clear = await clearRegistry(projectPath);
-  assert.equal(clear.registryCleared, true);
-  assert.equal(Object.hasOwn(await manifest(projectPath), "registry"), false);
-  validateLocalCompletionProof("package.registry.clear", completion("package.registry.clear"), { ...clear, projectPath }, false);
-
-  const added = await addScopedRegistry(projectPath, { name: "Acme", url: "https://registry.acme.test", scopes: ["com.acme", "com.acme"] });
-  const persistedRegistries = (await manifest(projectPath)).scopedRegistries as Array<{ name: string; url: string; scopes: string[] }>;
-  assert.deepEqual(added.registry, persistedRegistries.find((entry) => entry.name === "Acme"));
-  validateLocalCompletionProof("package.scoped-registry.add", completion("package.scoped-registry.add"), { ...added, projectPath }, false);
-
-  const removedRegistry = await removeScopedRegistry(projectPath, "Acme", { force: true });
-  assert.equal(removedRegistry.registryRemoved, true);
-  assert.equal(((await manifest(projectPath)).scopedRegistries as Array<{ name: string }>).some((entry) => entry.name === "Acme"), false);
-  validateLocalCompletionProof("package.scoped-registry.remove", completion("package.scoped-registry.remove"), { action: "remove", ...removedRegistry, projectPath }, false);
-
-  const installed = await installPackage(projectPath, { name: "com.acme.tool", version: "2.0.0" });
-  assert.equal(installed.installedVersion, ((await manifest(projectPath)).dependencies as Record<string, string>)["com.acme.tool"]);
-  validateLocalCompletionProof("package.install", completion("package.install"), { action: "install", package: "com.acme.tool", ...installed, projectPath }, false);
-
-  const removedPackage = await removePackage(projectPath, "com.acme.tool", { force: true });
-  assert.equal(removedPackage.dependencyRemoved, true);
-  assert.equal(Object.hasOwn((await manifest(projectPath)).dependencies as Record<string, string>, "com.acme.tool"), false);
-  validateLocalCompletionProof("package.remove", completion("package.remove"), { action: "remove", package: "com.acme.tool", ...removedPackage, projectPath }, false);
+test("package.install requires independent manifest, dependency, files, and PackageInfo proof", async () => {
+  const terminal = {
+    action: "install",
+    manifestPath: "Packages/manifest.json",
+    manifestHash: hash,
+    files: { proven: true, manifestHash: hash },
+    dependency: { present: true, name: "com.acme.sample", version: "1.2.3" },
+    resolve,
+  };
+  validate("package.install", terminal);
+  await invalid("package.install", { ...terminal, files: { proven: false, manifestHash: hash } });
+  await invalid("package.install", { ...terminal, dependency: { present: false, name: "com.acme.sample", version: "1.2.3" } });
+  await invalid("package.install", { ...terminal, resolve: { status: "requested" } });
 });
 
-test("package completion proof rejects missing readback and nested failed terminals", () => {
-  assert.throws(() => validateLocalCompletionProof("package.install", completion("package.install"), {
-    action: "install", manifestPath: "D:/project/Packages/manifest.json", installedVersion: "2.0.0"
-  }, false), /manifest installation readback/);
+test("package.remove requires absent dependency readback and terminal PackageInfo proof", async () => {
+  const terminal = {
+    action: "remove",
+    manifestPath: "Packages/manifest.json",
+    manifestHash: hash,
+    files: { proven: true, manifestHash: hash },
+    dependency: { present: false, name: "com.acme.sample" },
+    resolve,
+  };
+  validate("package.remove", terminal);
+  await invalid("package.remove", { ...terminal, dependency: { present: true, name: "com.acme.sample" } });
+  await invalid("package.remove", { ...terminal, resolve: { ...resolve, status: "failed" } });
+});
 
-  assert.throws(() => validateLocalCompletionProof("package.remove", completion("package.remove"), {
-    action: "remove", manifestPath: "D:/project/Packages/manifest.json", dependencyRemoved: true,
-    liveRefresh: { status: "timeout" }
-  }, false), /returned failed terminal status timeout/);
+test("package.deploy and restore require filesystem proof plus terminal resolve", async () => {
+  validate("package.deploy", {
+    status: "deployed",
+    targetPath: "Packages/com.unity_cli",
+    sourceHash: hash,
+    copiedFileCount: 2,
+    files: { proven: true, sourceHash: hash },
+    resolve,
+  });
+  validate("package.restore", {
+    status: "restored",
+    targetPath: "Packages/com.unity_cli",
+    copiedFileCount: 0,
+    files: { proven: true, restoredFromBackup: false, removedDeployedPackage: true },
+    resolve,
+  });
+  await invalid("package.deploy", {
+    status: "deployed",
+    targetPath: "Packages/com.unity_cli",
+    sourceHash: hash,
+    copiedFileCount: 2,
+    files: { proven: true, sourceHash: hash },
+    resolve: { status: "accepted" },
+  });
+});
 
-  assert.throws(() => validateLocalCompletionProof("package.registry.clear", completion("package.registry.clear"), {
-    manifestPath: "D:/project/Packages/manifest.json", registryCleared: false
-  }, false), /cleared manifest registry readback/);
+test("package.resolve accepts only a fresh terminal PackageInfo snapshot", async () => {
+  validate("package.resolve", resolve);
+  await invalid("package.resolve", { ...resolve, packageSnapshotHash: undefined });
+  await invalid("package.resolve", { ...resolve, packages: [{ name: "com.acme.sample", version: "1.2.3" }] });
+});
+
+test("intermediate and nested failed states never become a successful Package terminal", async () => {
+  await invalid("package.resolve", { ...resolve, accepted: true });
+  await invalid("package.resolve", { ...resolve, child: { status: "failed" } });
 });

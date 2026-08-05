@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { allRegisteredToolMetadata, findToolByName, type ResolvedToolMetadata } from "../src/tools/metadata/index.js";
 import { builtinContextDescriptors } from "../src/contexts/registry.js";
@@ -56,19 +57,19 @@ function assertNoInternalSourceText(subject: string, text: string): void {
   assert.doesNotMatch(text, INTERNAL_SOURCE_PATTERN, `${subject} must not expose internal reference-project wording`);
 }
 
-test("TS-local descriptor registry owns exactly the 36 offline/hybrid tools", () => {
+test("TS-local descriptor registry owns exactly the current offline/hybrid tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    "build.cancel", "build.run", "build.status", "code.exec", "diagnose.capabilities",
+    "asset.refresh", "build.run", "code.exec", "diagnose.capabilities",
     "docs.get", "docs.list", "docs.search", "docs.topic", "editor.compile",
-    "editor.launch-dialog.dismiss", "editor.refresh", "package.bridge-remove", "package.deploy",
-    "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get",
+    "editor.dialog.click", "editor.refresh", "package.bridge-remove", "package.deploy",
+    "package.embed", "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get",
     "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add",
     "package.scoped-registry.list", "package.scoped-registry.remove", "package.search", "package.status",
     "reflect.member", "reflect.search", "reflect.type", "test.run", "tools.describe", "tools.group",
     "tools.group-list", "tools.search"
   ]);
-  assert.equal(findToolByName("asset.refresh"), undefined, "bridge-discovered tools must not retain TS-local descriptors");
+  assert.equal(findToolByName("asset.refresh")?.handler, "hybrid");
 });
 
 test("offline describe descriptors do not expose internal reference-project wording", () => {
@@ -122,4 +123,10 @@ test("large-output TS-local descriptors disclose output controls", () => {
     assert.ok(tool, `${name} should exist`);
     assert.match(descriptorText(tool), LARGE_OUTPUT_PATTERN, `${name} must disclose pagination, preview, planned effects, or artifact controls`);
   }
+});
+
+test("diagnose.preflight exposes health counts without Bridge routes or logs", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/diagnose/preflight.cs", import.meta.url), "utf8");
+  assert.match(source, /public bool Ready \{ get; set; \}[\s\S]*public long ToolCount[\s\S]*public long ContextCount/);
+  assert.doesNotMatch(source, /public long Port|public string LogPath|BuildCapabilities\(|POST \/bridge\/execute/);
 });

@@ -40,7 +40,6 @@ namespace UnityCli
             Summary = "Read shader source text in bounded pages with offset/maxBytes and nextOffset continuation.",
             Description = "Read shader source text from an Assets/*.shader file in bounded pages. Use offset to continue from a previous nextOffset and maxBytes to cap the returned chunk. ShaderGraph (.shadergraph) assets are JSON, not HLSL source.",
             Group = "shader",
-            Version = "1.0.0",
             DestructiveHint = false,
             Target = "editor",
             PlayModeSupport = "supported",

@@ -57,6 +57,5 @@ test("graphics and prefab validate before committing and profile proof does not 
   assertBefore(prefabExecute, "ctx.CommitEffect();", "Object.DestroyImmediate", "prefab destroy");
   assertBefore(prefabExecute, "ctx.CommitEffect();", "new GameObject", "prefab child creation");
   assertBefore(prefabExecute, "ctx.CommitEffect();", "PrefabUtility.SaveAsPrefabAsset", "prefab save");
-  assert.match(profile, /if \(!ctx\.ProofOnly\)\s*\{\s*ctx\.CommitEffect\(\);\s*BuildToolSupport\.SetActiveBuildProfile/s);
-  assert.doesNotMatch(profile, /ctx\.CommitEffect\(\);\s*if \(!ctx\.ProofOnly\)/s);
+  assertBefore(profile, "ctx.CommitEffect();", "BuildToolSupport.SetActiveBuildProfile", "profile switch commit before effect");
 });

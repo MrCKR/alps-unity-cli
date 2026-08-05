@@ -11,8 +11,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "build.profile.create", Summary = "Create a persistent Unity Build Profile asset, with dry-run support.",
-            Description = "Creates a Build Profile asset at path and optionally assigns its name. Requires --yes because it writes an asset file. dryRun=true previews without writing. Available in Edit and Play mode when the Unity Build Profile API exists.",
-            Group = "build", Version = "1.0.0", DestructiveHint = true, SupportsDryRun = true,
+            Description = "Creates a Build Profile asset at path and optionally assigns its name. dryRun=true previews without writing. Available in Edit and Play mode when the Unity Build Profile API exists.",
+            Group = "build",DestructiveHint = true, SupportsDryRun = true,
             SideEffects = new[] { "asset-write" }, Target = "editor", PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Create Windows profile", Input = new Request { Path = "Assets/BuildProfiles/Windows.asset", Name = "Windows" }, Execution = new ToolExampleExecution { DryRun = true } } }

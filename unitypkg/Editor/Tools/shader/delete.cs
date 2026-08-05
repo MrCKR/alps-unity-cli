@@ -20,7 +20,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Command { get; set; }
             public bool? DryRun { get; set; }
             public ShaderInfo Shader { get; set; }
             public List<ShaderPlannedEffect> PlannedEffects { get; set; }
@@ -32,7 +31,6 @@ namespace UnityCli
             Summary = "Delete an Assets/*.shader or *.shadergraph asset; destructive, supports --dry-run preview.",
             Description = "Delete an Assets/*.shader or *.shadergraph asset through AssetDatabase. Destructive: removes a persisted shader and may break materials referencing it. Supports --dry-run to preview the planned deletion without removing anything.",
             Group = "shader",
-            Version = "1.0.0",
             DestructiveHint = true,
             SupportsDryRun = true,
             SideEffects = new[] { "asset-delete" },
@@ -54,7 +52,6 @@ namespace UnityCli
             {
                 return new Result
                 {
-                    Command = "shader.delete",
                     DryRun = true,
                     Shader = ShaderToolSupport.BuildShaderInfo(path, AssetDatabase.LoadAssetAtPath<Shader>(path), false),
                     PlannedEffects = new List<ShaderPlannedEffect> { new ShaderPlannedEffect { Type = "shader.delete", Path = path } }
@@ -70,13 +67,13 @@ namespace UnityCli
             var deleted = await ctx.Wait.Until(
                 () => !File.Exists(fullPath)
                     && !Directory.Exists(fullPath)
-                    && string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path))
+                    && !AssetDatabase.IsValidFolder(path)
                     && AssetDatabase.LoadMainAssetAtPath(path) == null,
                 TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)),
                 ct);
             var observedExists = File.Exists(fullPath)
                 || Directory.Exists(fullPath)
-                || !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path))
+                || AssetDatabase.IsValidFolder(path)
                 || AssetDatabase.LoadMainAssetAtPath(path) != null;
             if (!deleted || observedExists)
             {
@@ -84,7 +81,6 @@ namespace UnityCli
             }
             return new Result
             {
-                Command = "shader.delete",
                 Shader = new ShaderInfo { Path = path, Exists = observedExists },
                 PlannedEffects = new List<ShaderPlannedEffect> { new ShaderPlannedEffect { Type = "shader.delete", Path = path } }
             };

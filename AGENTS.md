@@ -16,7 +16,7 @@
 2. **只吸收 Unity 侧独特价值**：AI 能直接读写 `.cs` 等工程文件，不需要 CLI 包装；只有 Editor 内存、资产、场景、物理、渲染等 AI 无法直接完成的操作才进入 CLI。
 3. **不包装现有命令行能力**：install-unity、create-project、open/close Editor 等由 AI 直接使用系统命令完成。
 4. **上下文消耗是硬指标**：大输出必须支持分页、筛选、深度或 pattern 控制；默认返回摘要，按需展开；`describe` 必须自足；减少不必要轮询。
-5. **安全策略最小化**：只拦真实持久化文件操作和任意代码执行。场景内存与会话状态操作不得因为日常编辑而滥用 `--yes`。
+5. **调用即授权**：公开 Tool 和 CLI 控制面调用本身即授权。`destructiveHint`、`sideEffects` 与 `supportsDryRun` 只描述行为，不能作为额外确认、预定义按钮列表或意图复核的执行门。
 
 ### 架构边界
 
@@ -30,7 +30,9 @@ Unity Bridge (C#)
 Unity Editor
 ```
 
-内部 Bridge command、job worker 和 registry 可以存在，但不得改变公开 CLI 形态。公开 descriptor 不得泄露内部路由字段。
+内部 Bridge command、coordinator 和 registry 可以存在，但不得改变公开 CLI 形态。公开 descriptor 不得泄露内部路由字段。
+
+超时/断连由调用方负责判断重试，系统不做重放拦截；审计为 session 级 append 日志。
 
 ### 明确不做
 
@@ -55,8 +57,6 @@ CLI 控制面：
 - `extensions`
 - `target`
 - `instances`
-- `jobs`
-- `batch`
 - `doctor`
 
 硬规则：
@@ -75,9 +75,28 @@ Tool 用于动作，Context 用于观察。
 - 所有用户可见输出必须是稳定、机器可读的 JSON envelope；错误必须提供稳定 code 和可执行的 `nextActions`。
 - 详细的 descriptor、Editor/PlayMode、安全、schema 和输出规则以 `unity-cli-capability` Skill 为唯一领域规范。
 
+## 临时文件与机制状态
+
+三条铁律，产品与验证共同遵守：
+
+1. **机制状态重启作废**：CLI 机制使用的临时状态（互斥锁、进行中标记等）只对 Unity 实例的本次启动有效，重启后一律作废，不得影响新启动；实现上此类状态必须携带本次启动标识，不得以进程存活猜测替代。业务效果（资源、场景、包状态）不属于机制状态，持久保留。
+2. **临时文件增长有界**：CLI 产生的临时文件，数量与大小不得随使用次数和时间无限增长；必须是常数上限（如一类协调器一个固定文件、用完即删）或滚动/保留窗口（如日志滚动、artifacts 保留最新 100 个）。禁止一请求一文件的积累型记录。
+3. **临时文件位置**：所有临时文件必须位于所属根的临时区——用户级为 `%LOCALAPPDATA%\UnityCli\.temp\`（artifacts、logs、requests 等）；项目内以 `Library\UnityCli\` 为临时根（Bridge 日志、transactions、active operation、指纹、扩展锁等），不得在项目根新建临时目录。实例注册表（`instances.json`、`config.json`、`instances\`）不是临时文件，留在用户级根。
+
 ## 强制 Skill 路由
 
 项目 Skill 是硬规范，不是可选参考。命中任务后必须在实施前使用 `read` 完整读取对应 `SKILL.md`；系统提示中的 name/description 元数据不能替代正文。一个任务命中多个领域时必须全部加载。
+
+### `unity-cli-plan`
+
+路径：`.pi/skills/unity-cli-plan/SKILL.md`
+
+创建、更新、迁移、恢复或继续任何 `.plan` 计划，以及任务预计跨多个文件、多个步骤或一个上下文窗口时必须读取。验证失败准备转为产品修改、计划范围或公开语义可能变化时也必须读取。
+
+- 计划必须是 `.plan/<stable-short-name>/` 文件夹执行包，不得新建活动单文件计划。
+- 创建或激活执行任务时必须同步创建一个上下文窗口大小的 direction checklist；具体 Todo 必须映射到其中一个 outcome。
+- 未登记文件、未授权公开契约、能力范围、版本支持、proof 语义或验证范围变化必须硬阻断，由项目所有者决定。
+- execution log 只追加工程事件；动态上下文必须 fresh 核验，旧摘要、PID、session、stamp 或历史 PASS 不能替代当前事实。
 
 ### `unity-cli-capability`
 
@@ -89,7 +108,7 @@ Tool 用于动作，Context 用于观察。
 - descriptor、group、summary、description、schema、examples、availability。
 - 公开 README、docs、Skill、tests 或 contract 中的能力契约与命令语义。
 - Editor/PlayMode、session-affecting、runtime-only 行为。
-- destructive、`--yes`、`--dry-run`、security-policy。
+- destructive、`--dry-run`、security-policy。
 - JSON envelope、错误码、`nextActions`。
 - 项目自定义 `IUnityCliTool` / `IUnityCliContext`。
 

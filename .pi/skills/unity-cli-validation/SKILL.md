@@ -8,6 +8,18 @@ compatibility: 适用于 alps-unity-cli；Unity 真实验证使用 ./Dev，子�
 
 本 Skill 规定主 Agent 在设计前必须明确的验证计划和最终完成门槛。它不能传给 `unity-cli-gate`，也不能作为子代理的背景信息；门禁子代理只能从公开 CLI 自发现。
 
+## 计划方向门禁
+
+计划任务必须同时遵守 `unity-cli-plan`。自动化、Live 或 gate 失败准备转为代码修改前，先在当前 direction 与 execution log 中完成分类：
+
+- `PRODUCT_DEFECT`：产品违反已批准 spec，可以修产品。
+- `HARNESS_DEFECT`：测试、fixture 或断言错误，只修验证 owner。
+- `ENVIRONMENT_BLOCKED`：记录解锁条件，不修改产品。
+- `SPEC_GAP`：source of truth 没有定义，等待项目所有者决定。
+- `TEST_OVERREACH`：测试强于 spec，禁止反向强化产品。
+
+失败无法映射到当前 direction outcome，或修复会改变公开契约、能力范围、版本支持、proof 语义、文件 owner 或验证范围时必须硬阻断。等价类可以压缩共享验证，但计划已经明确要求逐项覆盖的内容，未经项目所有者修改计划不得自行缩窄。
+
 ## 契约与自动化测试
 
 新增或修改能力时必须检查：
@@ -17,13 +29,14 @@ compatibility: 适用于 alps-unity-cli；Unity 真实验证使用 ./Dev，子�
 - C# handler 注册与 TypeScript metadata 一致。
 - JSON Schema 与实际输入输出一致。
 - README、docs、Skill 使用当前 CLI 形态并与实现一致。
+- 超时或终态前断连使用 `E_EXECUTION_TIMEOUT`，由调用方判断是否提交新的调用；不得恢复请求级日志或防重放契约。跨 reload 的同次调用续接与 session 级 append 审计应保持可验证。
 - 测试覆盖成功路径、错误路径、Editor/PlayMode 差异和 extension availability。
 - discovery、describe 或 offline visibility 语义变化时，tests、docs、skills 和 descriptor governance 必须整体切换到新语义。
 
 自动化测试不能替代真实 Unity 调用：
 
 - 新增或修改 Tool / Context / Extension 时，必须建立真实调用矩阵；单元测试、契约测试和源码断言只能补充。
-- 矩阵必须覆盖每类公开用法：默认调用、主要可选参数、筛选/分页/精读/续读、边界值、错误路径、权限、`--yes`、`--dry-run`、Editor/PlayMode 差异。
+- 矩阵必须覆盖每类公开用法：默认调用、主要可选参数、筛选/分页/精读/续读、边界值、错误路径、权限、可选 `--dry-run`、Editor/PlayMode 差异。
 - 组合较多时可以按等价类压缩，但不能跳过公开行为类别，且必须说明等价依据。
 - 正向用例必须验证关键业务字段，不得只检查 `ok: true`。
 - 反向用例必须验证稳定的 `error.code`、`message`、`transient`、`retryAfterMs`、`nextActions`。
@@ -34,7 +47,7 @@ compatibility: 适用于 alps-unity-cli；Unity 真实验证使用 ./Dev，子�
 
 `./Dev` 是真实 Unity 验证的专用沙盒：
 
-- 可以安装 Bridge 和 Extension、运行 Unity、创建/修改/删除测试资源。
+- 可以安装 Bridge 和 Extension、运行 Unity、创建/修改/删除测试资源；Dev dirty scene 是沙盒状态，不应当作用户业务资产要求人工决策。
 - 可以验证破坏性操作、PlayMode、package 依赖和 artifact 输出。
 - 临时实验结果不得作为产品代码提交，除非任务明确要求。
 - 需要验证 Unity 行为时优先使用 `./Dev`，不得只依赖单元测试或静态推断。
@@ -90,6 +103,7 @@ Dev 调用矩阵：
 - capability gate 使用单领域真实任务，观察能否发现正确能力。
 - task gate 使用跨能力真实目标，观察能否自主组合。
 - perturbation gate 把并发、reload、Prefab Stage 或 UI cache 写成任务环境或约束，不拆成测试脚本步骤。
+- blocker gate 在已由主 Agent 建立 modal 环境中给出自然任务。陌生 AI 从原错误的 blocker 自主读取 `editor.dialogs`，并可用 `editor.dialog.click` 点击任意当前可见 modal 的 enabled button；第一次错误规则仍适用，但不得因 modal 陌生而禁止点击。主 Agent 仍负责真实状态和证据。
 - 完整行为类别覆盖由主 Agent 的矩阵承担，不要求一个弱模型重复全仓验证。
 
 主 Agent 只能提供：
@@ -139,7 +153,7 @@ FAIL 后由主 Agent 结合原始 transcript 和诊断回答分类：
 - 被测子代理不得承担证据格式化职责。主 Agent 从原始 prompt、tool calls、stdout/stderr、最终回答和 Unity 前后状态独立生成 evidence。
 - 证据必须记录实际模型、agent ID、原始提示词、发现链、读取的 descriptor、首次选择依据、第一次实际调用、关键业务验证、清理结果和禁止信息检查。
 - 失败时额外记录诊断问题与原样回答；诊断回答只能用于归因。
-- capability、task、perturbation 三类门禁分别保存 fresh 会话证据；旧会话、自评摘要或恢复后成功不得替代。
+- capability、task、perturbation、blocker 四类门禁分别保存 fresh 会话证据；旧会话、自评摘要或恢复后成功不得替代。
 
 ## 完成条件
 
@@ -150,5 +164,6 @@ FAIL 后由主 Agent 结合原始 transcript 和诊断回答分类：
 - 契约校验通过。
 - `./Dev` 真实验证通过，除非能力确实不依赖 Unity 实例。
 - 干净子代理门禁通过。
+- 涉及临时文件或机制状态的改动，必须实测验证 AGENTS.md《临时文件与机制状态》三条铁律：重启后机制状态不影响新启动；临时文件数量与大小有界（现场盘点）；位置在所属根的临时区（用户级 `.temp\`、项目内 `Library\UnityCli\`）。
 
 任一必测项未执行、证据不足、存在 unresolved error 或环境 blocker 时，功能保持未完成。
