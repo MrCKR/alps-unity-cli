@@ -1,11 +1,43 @@
+# Node build and package outputs
 node_modules/
 dist/
+/coverage/
+/.nyc_output/
+/TestResults/
+/Builds/
+*.tsbuildinfo
+/*.tgz
+
+# Workspace-local caches and temporary output
 .alps-unity/
 .tmp/
 .multica-evidence/
-*.log
-Dev/
 .codegraph/
-.plan/evidence/
-.plan/**/evidence/
 temp/
+*.log
+
+# Unity validation sandbox and root matrix artifacts
+Dev/
+/slice-*-failed-*
+/Packages/my-package/*.meta
+
+# Raw plan evidence stays local. Only artifacts explicitly curated into a
+# published directory after fresh validation are eligible for version control.
+.plan/evidence/
+.plan/**/evidence/*
+!.plan/**/evidence/published/
+!.plan/**/evidence/published/**
+
+# Local IDE and operating-system state
+/.vs/
+/.idea/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
