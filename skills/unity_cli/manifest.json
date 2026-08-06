@@ -1,8 +1,8 @@
 {
   "name": "unity_cli",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "owner": "alps-unity-cli maintainers",
-  "updated_at": "2026-08-05",
+  "updated_at": "2026-08-06",
   "status": "active",
   "maturity_tier": "governed",
   "lifecycle_stage": "governed",

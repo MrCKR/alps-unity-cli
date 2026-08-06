@@ -1,8 +1,8 @@
 # unity_cli Output Quality Scorecard
 
-Release: 0.1.9
+Release: 0.1.10
 Status: governed baseline
-Captured: 2026-08-05
+Captured: 2026-08-06
 
 ## Output Contract
 
