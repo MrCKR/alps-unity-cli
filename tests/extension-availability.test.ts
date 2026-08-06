@@ -245,7 +245,7 @@ test("doctor and capabilities keep extension summaries available from manifests"
   assert.ok(extCheck);
   assert.equal(extCheck!.status, "fail");
 
-  const capabilities = await handleCapabilitiesCommand({ project: projectPath }, {}, requestId);
+  const capabilities = await handleCapabilitiesCommand({ project: projectPath }, { projectTools: [], projectContexts: [] }, requestId);
   assert.ok(capabilities.ok);
   const ext = (capabilities.data as Record<string, unknown>).extensions as Record<string, unknown>;
   assert.equal(ext.total, 5);

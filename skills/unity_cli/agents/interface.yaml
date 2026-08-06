@@ -1,0 +1,30 @@
+interface:
+  display_name: "unity_cli"
+  short_description: "Discover and operate an opened Unity Editor through the public unity_cli catalog"
+  default_prompt: "Use $unity_cli for every Unity task so the available CLI is known. Use direct file tools for pure source/text work, and use the connected Editor catalog whenever live Unity state, effects, or verification are needed."
+compatibility:
+  canonical_format: "agent-skills"
+  adapter_targets:
+    - "openai"
+    - "claude"
+    - "generic"
+  activation:
+    mode: "automatic"
+    paths: []
+  execution:
+    context: "inline"
+    shell: "powershell"
+  trust:
+    source_tier: "local"
+    remote_inline_execution: "forbid"
+    remote_metadata_policy: "allow-metadata-only"
+  permissions:
+    network: "deny"
+    file_write:
+      - "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback*.jsonl"
+    subprocess:
+      - "powershell.exe for the opt-in feedback recorder"
+  degradation:
+    openai: "runtime-bundle-with-deferred-references"
+    claude: "runtime-bundle-with-deferred-references"
+    generic: "agent-skills-compatible-runtime-bundle"

@@ -182,8 +182,8 @@ namespace UnityCli
         private static RegisteredTool CreateRegisteredTool<TReq, TRes>(object instance, ToolDescriptor descriptor, Assembly assembly, Type implementationType)
         {
             var tool = (IUnityCliTool<TReq, TRes>)instance;
-            var source = registryOwnership.Resolve(implementationType);
-            var completion = ResolveToolCompletionContract(descriptor, source);
+            var ownership = registryOwnership.Resolve(implementationType);
+            var completion = ResolveToolCompletionContract(descriptor, ownership);
             return new RegisteredTool
             {
                 Name = descriptor.Name,
@@ -191,7 +191,8 @@ namespace UnityCli
                 Description = descriptor.Description,
                 Group = string.IsNullOrEmpty(descriptor.Group) ? "custom" : descriptor.Group,
                 Descriptor = descriptor,
-                Source = source,
+                Source = ownership,
+                Ownership = ownership,
                 InputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
                 OutputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
                 DestructiveHint = descriptor.DestructiveHint,
@@ -220,14 +221,14 @@ namespace UnityCli
         }
 
         /// <summary>built-in/Extension 只信任生成 registry；自定义 Tool 必须提供完整机器契约。</summary>
-        private static UnityCliToolCompletionContract ResolveToolCompletionContract(ToolDescriptor descriptor, string source)
+        private static UnityCliToolCompletionContract ResolveToolCompletionContract(ToolDescriptor descriptor, string ownership)
         {
             UnityCliToolCompletionContract generated;
             if (UnityCliToolCompletionRegistry.TryGet(descriptor.Name, out generated))
             {
                 var generatedExtension = generated.DescriptorOwner.StartsWith("extension:", StringComparison.Ordinal);
-                if ((generatedExtension && !string.Equals(source, "extension", StringComparison.Ordinal))
-                    || (!generatedExtension && !string.Equals(generated.DescriptorOwner, source, StringComparison.Ordinal)))
+                if ((generatedExtension && !string.Equals(ownership, "extension", StringComparison.Ordinal))
+                    || (!generatedExtension && !string.Equals(generated.DescriptorOwner, ownership, StringComparison.Ordinal)))
                     throw new InvalidOperationException("Completion contract owner mismatch for " + descriptor.Name + ".");
                 var descriptorMutation = descriptor.DestructiveHint
                     || descriptor.SupportsDryRun
@@ -303,7 +304,7 @@ namespace UnityCli
             var name = args.Name;
             if (string.IsNullOrEmpty(name) || !ProjectTools.ContainsKey(name))
             {
-                throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli tools group --include-custom --instance <id|projectPath|alias> or tools search <keyword> to inspect registered tools.");
+                throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 
             var definition = ProjectTools[name];
@@ -479,12 +480,46 @@ namespace UnityCli
                 { "defaultTimeoutMs", definition.DefaultTimeoutMs },
                 { "completionContract", CompletionContractData(definition.CompletionContract) },
                 { "internalDescriptorFingerprint", definition.Fingerprint },
-                { "available", true }
+                { "available", ToolAvailableNow(definition) }
             };
+            if (!(bool)data["available"])
+                data["unavailableReason"] = ToolUnavailableReason(definition);
             if (definition.SideEffects != null && definition.SideEffects.Length > 0) data["sideEffects"] = definition.SideEffects;
             if (definition.Permissions != null && definition.Permissions.Length > 0) data["permissions"] = definition.Permissions;
             if (definition.RequiresPackages != null && definition.RequiresPackages.Length > 0) data["requiresPackages"] = definition.RequiresPackages;
             return data;
+        }
+
+        /// <summary>目录始终显示 Tool；available 只描述当前 mode/API 状态，不参与过滤。</summary>
+        private static bool ToolAvailableNow(RegisteredTool definition)
+        {
+            if (BuildProfileApiRequired(definition) && BuildToolSupport.BuildProfileType() == null)
+                return false;
+            if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
+                return EditorApplication.isPlaying && !IsPlayModeChanging();
+            if (definition.PlayModeSupport == "editor-only")
+                return !EditorApplication.isPlayingOrWillChangePlaymode && !IsPlayModeChanging();
+            return !IsPlayModeChanging();
+        }
+
+        /// <summary>按执行门禁优先级返回与 available=false 对应的稳定原因。</summary>
+        private static string ToolUnavailableReason(RegisteredTool definition)
+        {
+            if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
+                return "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool.";
+            if (definition.PlayModeSupport == "editor-only" && EditorApplication.isPlayingOrWillChangePlaymode)
+                return "E_TOOL_PLAYMODE_UNAVAILABLE: Exit Play Mode before executing this editor-only Tool.";
+            if (BuildProfileApiRequired(definition) && BuildToolSupport.BuildProfileType() == null)
+                return "E_BUILD_PROFILE_API_UNAVAILABLE: This Unity Editor version does not expose the Build Profile API.";
+            return "E_UNITY_TRANSITIONING: Wait until the Editor mode transition finishes.";
+        }
+
+        /// <summary>这些 Tool 在所有版本注册；版本差异仅通过 availability 与执行错误表达。</summary>
+        private static bool BuildProfileApiRequired(RegisteredTool definition)
+        {
+            return definition.Name == "build.profile.create"
+                || definition.Name == "build.profile.modify"
+                || definition.Name == "build.profile.switch";
         }
 
         private static object CompleteProjectToolSuccess(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, object result)
@@ -519,11 +554,11 @@ namespace UnityCli
             definition.Fingerprint = Sha256Hex(ProjectToolFingerprintAlgorithm + "\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
 
             ProjectToolPinnedFingerprint pin;
-            if (string.Equals(definition.Source, "project", StringComparison.Ordinal) && !string.IsNullOrEmpty(definition.PinnedFingerprint))
+            if (string.Equals(definition.Ownership, "project", StringComparison.Ordinal) && !string.IsNullOrEmpty(definition.PinnedFingerprint))
             {
                 pin = ParseProjectToolPinnedFingerprint("descriptor", definition.PinnedFingerprint);
             }
-            else if (string.Equals(definition.Source, "project", StringComparison.Ordinal))
+            else if (string.Equals(definition.Ownership, "project", StringComparison.Ordinal))
             {
                 var baseline = LoadProjectToolExpectedFingerprint(definition.Name);
                 if (string.IsNullOrEmpty(baseline))

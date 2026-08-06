@@ -45,6 +45,20 @@ test("cross-domain new tools keep contract entries with present C# handlers", ()
   }
 });
 
+test("Build Profile Tools stay registered on every supported Unity version", async () => {
+  for (const name of ["create", "modify", "switch"]) {
+    const source = await readFile(new URL(`../unitypkg/Editor/Tools/build/profile/${name}.cs`, import.meta.url), "utf8");
+    assert.match(source, /^#if UNITY_EDITOR\b/);
+    assert.doesNotMatch(source, /UNITY_6000_0_OR_NEWER/);
+    assert.match(source, /RequireBuildProfileType/);
+  }
+  const registry = await readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8");
+  assert.match(registry, /BuildProfileApiRequired[\s\S]*BuildToolSupport\.BuildProfileType\(\) == null/);
+  assert.match(registry, /E_BUILD_PROFILE_API_UNAVAILABLE/);
+  assert.match(registry, /E_TOOL_PLAYMODE_UNAVAILABLE: Exit Play Mode before executing this editor-only Tool/);
+  assert.doesNotMatch(registry, /E_UNITY_PLAY_MODE: Exit Play Mode before executing this editor-only Tool/);
+});
+
 test("asset/search scene/hierarchy go/find and editor/console sources keep current implementation", async () => {
   const assetSource = await readCsSources(new URL("../unitypkg/Editor/Tools/asset/", import.meta.url));
   const assetSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/AssetToolSupport.cs", import.meta.url), "utf8");

@@ -51,7 +51,7 @@ const result = {
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 if (!result.ok) process.exitCode = 1;
 
-/** Descriptor snapshot 必须足以让陌生 AI 离线发现并直接构造调用。 */
+/** Descriptor snapshot 必须足以完成内部契约冻结审计，不进入公开 discovery。 */
 function validateDescriptor(descriptor, kind) {
   for (const field of ["name", "summary", "description", "source", "target", "availabilityScope", "playModeSupport", "inputSchema", "outputSchema", "examples"]) {
     if (descriptor?.[field] === undefined || descriptor?.[field] === "") failures.push(`${kind} ${descriptor?.name ?? "unknown"} is missing ${field}`);

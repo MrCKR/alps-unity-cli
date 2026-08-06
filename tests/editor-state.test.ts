@@ -129,8 +129,11 @@ test("readEditorState and dispatchContext use one live bounded bridge observatio
   const fixture = await stateFixture();
   const startedAt = Date.now();
   const observationDeadlines: number[] = [];
-  const bridgeExecute = async (payload: { requestId: string; execution: { absoluteDeadlineUtc: string } }) => {
+  const bridgeExecute = async (payload: { requestId: string; command: string; execution: { absoluteDeadlineUtc: string } }) => {
     observationDeadlines.push(Date.parse(payload.execution.absoluteDeadlineUtc));
+    if (payload.command === "context.list") {
+      return { ok: true as const, requestId: payload.requestId, data: { contexts: [] } };
+    }
     return {
       ok: true as const,
       requestId: payload.requestId,
@@ -153,8 +156,8 @@ test("readEditorState and dispatchContext use one live bounded bridge observatio
     const dispatched = await dispatchContext("read", "editor.state", { instance: fixture.project }, { dataDir: fixture.dataDir, bridgeExecute }, "state-dispatch");
     assert.ok(dispatched.ok);
     assert.equal((dispatched.data as { observation: { live: boolean } }).observation.live, true);
-    assert.ok(observationDeadlines[1] >= dispatchedStartedAt);
-    assert.ok(observationDeadlines[1] <= Date.now() + 10_000);
+    assert.ok(observationDeadlines[2] >= dispatchedStartedAt);
+    assert.ok(observationDeadlines[2] <= Date.now() + 10_000);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }

@@ -11,7 +11,6 @@ export {
   parseLiveDescriptor,
   resolveCatalogContext,
   searchContexts,
-  shouldLoadLiveContextCatalog,
   toContextListEntry
 } from "./catalog.js";
 export type { ContextCatalogRuntime, ContextCatalogResult } from "./catalog.js";

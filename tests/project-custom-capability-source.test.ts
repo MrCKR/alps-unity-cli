@@ -9,6 +9,15 @@ const contextRegistryPath = "unitypkg/Editor/ProjectContexts/ProjectContextRegis
 const runtimeExecutorPath = "unitypkg/Editor/Infrastructure/UnityCliRuntimeExecutor.cs";
 const contextBridgeDomainPath = "src/bridge/domains/context.ts";
 const runtimeBridgeDomainPath = "src/bridge/domains/runtime-tool.ts";
+const toolDispatcherPath = "src/tools/dispatcher.ts";
+
+test("typed Tool input cannot become selector or execution flags", async () => {
+  const dispatcher = await readFile(toolDispatcherPath, "utf8");
+  assert.match(dispatcher, /const dispatchFlags = withStructuredInput\(flags, parsed\.input\)/);
+  assert.match(dispatcher, /TOOL_CONTROL_FLAGS[\s\S]*"instance"[\s\S]*"runtime"[\s\S]*"timeout-ms"/);
+  assert.doesNotMatch(dispatcher, /function mergeInputFlags/);
+  assert.doesNotMatch(dispatcher, /Object\.entries\(input\)[\s\S]*merged\[flag\]/);
+});
 
 test("project custom Tool uses async typed execution and a complete direct completion contract", async () => {
   const [toolInterface, registry] = await Promise.all([
@@ -35,7 +44,8 @@ test("project custom Tool uses async typed execution and a complete direct compl
   assert.match(registry, /ParseProjectToolPinnedFingerprint\("project-baseline", baseline\)/);
   assert.match(registry, /CompletionFingerprintMaterial\(definition\.CompletionContract\)/);
   assert.match(registry, /UnityCliSerializer\.Serialize\(definition\.Examples/);
-  assert.match(registry, /string\.Equals\(definition\.Source, "project", StringComparison\.Ordinal\)/);
+  assert.match(registry, /string\.Equals\(definition\.Ownership, "project", StringComparison\.Ordinal\)/);
+  assert.doesNotMatch(registry, /string\.Equals\(definition\.Source, "project", StringComparison\.Ordinal\)/);
 });
 
 test("project custom Context uses cancellation-aware ValueTask reads and public examples", async () => {
@@ -54,7 +64,10 @@ test("project custom Context uses cancellation-aware ValueTask reads and public 
   assert.match(registry, /ParseProjectContextPinnedFingerprint\("descriptor", definition\.PinnedFingerprint\)/);
   assert.match(registry, /ParseProjectContextPinnedFingerprint\("project-baseline", baseline\)/);
   assert.match(registry, /UnityCliSerializer\.Serialize\(definition\.Examples/);
-  assert.match(registry, /string\.Equals\(definition\.Source, "project", StringComparison\.Ordinal\)/);
+  assert.match(registry, /string\.Equals\(definition\.Ownership, "project", StringComparison\.Ordinal\)/);
+  assert.doesNotMatch(registry, /string\.Equals\(definition\.Source, "project", StringComparison\.Ordinal\)/);
+  assert.doesNotMatch(registry, /if \(definition\.Source == "project"\)/);
+  assert.doesNotMatch(registry, /OrderBy\(context => context\.Source/);
   assert.doesNotMatch(registry, /RefreshBehavior|refreshBehavior/);
 });
 

@@ -1,5 +1,5 @@
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../../extension-availability.js";
-import { catalogFlags, loadToolCatalog, resolveLiveToolRegistrations } from "../catalog.js";
+import { loadToolCatalog } from "../catalog.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
 import { toolAvailabilityScope, toolSource } from "../metadata/index.js";
@@ -11,7 +11,7 @@ export interface ToolsGroupListResult { group: string; count: number; tools: Too
 export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
   name: "tools.group-list",
   summary: "List direct tools in a specific group with routing summaries and current availability.",
-  description: "List tools in a group from the shared TS-local and live Bridge catalog.",
+  description: "List every Tool in one group from the connected Unity instance catalog.",
   group: "tools",
   handler: "offline",
   supportStatus: "cli-only",
@@ -21,13 +21,12 @@ export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
   examples: [{ description: "List tools in the camera group", argv: ["tools", "run", "tools.group-list", "--input", "{\"group\":\"camera\"}"] }],
   async execute(request, context) {
     if (!request.group) throw new StructuredToolError("TOOLS_GROUP_LIST_NAME_REQUIRED", "Pass a group name: unity_cli tools group list <group>.", ["Run unity_cli tools group to see all tool groups."]);
-    const flags = catalogFlags(request as unknown as Record<string, unknown>, context.flags);
+    const flags = context.flags ?? {};
     const catalog = await loadToolCatalog(flags, context, context.requestId);
     if (catalog.ok === false) throw StructuredToolError.from(catalog.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
     const availabilityFlags = await extensionAvailabilityFlags(flags, context);
-    const staticMatches = catalog.tools.filter((tool) => tool.group === request.group);
-    if (staticMatches.length === 0) throw new StructuredToolError("E_TOOL_GROUP_NOT_FOUND", `Tool group not found: ${request.group}.`, ["Run unity_cli tools group to see all tool groups."]);
-    const matches = await resolveLiveToolRegistrations(staticMatches, flags, context, context.requestId);
+    const matches = catalog.tools.filter((tool) => tool.group === request.group);
+    if (matches.length === 0) throw new StructuredToolError("E_TOOL_GROUP_NOT_FOUND", `Tool group not found: ${request.group}.`, ["Run unity_cli tools group to see all tool groups."]);
     const tools = await Promise.all(matches.map(async (tool) => {
       const availability = await checkToolExtensionAvailability(tool, availabilityFlags);
       return {

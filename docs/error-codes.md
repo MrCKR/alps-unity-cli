@@ -24,7 +24,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 `error` 只允许上述协议字段；`details` 仅承载业务诊断，不公开内部日志、审计、endpoint、port、listener/process identity、native window handle 或 Windows command line。blocker 使用固定公开 DTO。
 
-普通 Tool 或 Context 在业务 effect 前确认阻断时返回 `E_UNITY_BLOCKED`，同一响应的 `details.blockers` 包含已清洗 blocker。调用在超时或断连后统一返回 `E_EXECUTION_TIMEOUT`；调用方应先观察业务状态，再自行决定是否提交新的调用。系统不提供请求级重放拦截。
+普通 Tool 或 Context 在业务 effect 前确认阻断时返回 `E_UNITY_BLOCKED`，同一响应的 `details.blockers` 包含已清洗 blocker。session recovery 可在同一次调用内续接完全相同的请求；调用返回后 CLI 不会自行启动新调用，也不提供请求级重放门。超时或断连后统一返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；是否观察状态、重试、重复调用或继续 mutation 由调用方决定。
 
 ## 错误分类
 
@@ -53,8 +53,11 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_TOOL_NOT_FOUND_FOR_TARGET` | 工具在目标不可用 | `tools describe` 检查可用性 |
-| `E_SCHEMA_INVALID` | 输入不符合 schema | 查看 `tools describe` 的 inputSchema |
+| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search` |
+| `E_CONTEXT_NOT_FOUND` | 名称不属于当前实例完整 Context 目录 | 重新运行 `context list` / `context search` |
+| `E_TOOL_REGISTRY_UNHEALTHY` | 当前实例 Tool catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
+| `E_CONTEXT_REGISTRY_UNHEALTHY` | 当前实例 Context catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
+| `E_SCHEMA_INVALID` | 输入不符合 schema | 查看对应 `tools describe` / `context describe` 的 inputSchema |
 
 ### 可选预览错误
 
@@ -100,7 +103,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_UNITY_BLOCKED` | effect 前已证明 Unity/UI blocker；原错误的 `details.blockers` 含结构化弹窗摘要 |
 | `E_UNITY_TRANSITION_TIMEOUT` | 可恢复 lifecycle transition 未在 absolute deadline 内稳定 |
 | `E_CONTEXT_READ_TIMEOUT` | Context 未在同一 validated generation 上完成读取 |
-| `E_EXECUTION_TIMEOUT` | Tool 未在调用 deadline 内返回终态，或连接在终态前断开；调用方负责观察状态并判断是否重试，系统不做请求级重放拦截 |
+| `E_EXECUTION_TIMEOUT` | Tool 未在调用 deadline 内返回终态，或连接在终态前断开；调用返回后 CLI 不自行启动新调用，是否观察、重试、重复调用或继续 mutation 由调用方决定 |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
@@ -112,9 +115,9 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 ## AI Agent 错误处理流程
 
 1. 读取 `error.code` 确定错误类别
-2. 检查 `transient` 和 `retryAfterMs`；只有错误明确允许时才提交新的逻辑请求
-3. `E_EXECUTION_TIMEOUT` 后先独立观察业务状态，再由调用方决定是否提交新的调用
-4. 遵循 `nextActions`；可恢复 compile/import/reload/listener transition 已由 supervisor 内部处理
+2. 将 `transient`、`retryAfterMs` 和 `nextActions` 作为恢复建议，不把它们当成权限门
+3. `E_EXECUTION_TIMEOUT` 只说明没有可信终态；是否观察状态、重试或继续 mutation 由调用方决定
+4. 可恢复 compile/import/reload/listener transition 已由 supervisor 内部处理
 
 ### nextActions 规则
 

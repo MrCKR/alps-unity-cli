@@ -239,7 +239,13 @@ async function handleTargetAliasCommand(
   }
 
   if (command === "set") {
-    const selector = positional[0] ?? stringFlag(flags, "instance") ?? stringFlag(flags, "project");
+    let explicitInstance: string | undefined;
+    try {
+      explicitInstance = explicitInstanceSelector(flags);
+    } catch (error) {
+      return instanceSelectionFailure(requestId, error) ?? failure(requestId, "E_INSTANCE_REQUIRED", error instanceof Error ? error.message : String(error));
+    }
+    const selector = positional[0] ?? explicitInstance ?? stringFlag(flags, "project");
     const alias = positional[1] ?? stringFlag(flags, "alias");
     if (!selector || !alias) {
       return failure(requestId, "E_INSTANCE_NOT_FOUND", "target alias set requires <projectPath|instanceId> <alias>.", [
@@ -286,6 +292,18 @@ async function handleTargetAliasCommand(
   return failure(requestId, "UNKNOWN_TARGET_ALIAS_COMMAND", "Expected target alias list, target alias set <projectPath|instanceId> <alias>, or target alias unset <alias>.");
 }
 
+/** 显式 instance flag 一旦出现就必须携带非空 selector，禁止降级到 CWD。 */
+function explicitInstanceSelector(flags: Record<string, string | boolean>): string | undefined {
+  if (!Object.prototype.hasOwnProperty.call(flags, "instance")) return undefined;
+  const value = flags.instance;
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new InstanceRegistryError("E_INSTANCE_REQUIRED", "--instance requires a non-empty full instance id, project path, or alias.", [
+      "Pass --instance <full-id|projectPath|alias>, or remove the flag to select from the current Unity project CWD."
+    ]);
+  }
+  return value;
+}
+
 /** 离线 project constraint/discovery 使用 canonical identity，不依赖 active target 或单实例 fallback。 */
 export async function currentInstanceProjectPath(
   flags: Record<string, string | boolean>,
@@ -293,8 +311,8 @@ export async function currentInstanceProjectPath(
   cwd = process.cwd(),
 ): Promise<string | undefined> {
   try {
-    const explicit = stringFlag(flags, "instance");
-    if (!explicit) return resolveProjectIdentityFromCwd(cwd).displayProjectPath;
+    const explicit = explicitInstanceSelector(flags);
+    if (explicit === undefined) return resolveProjectIdentityFromCwd(cwd).displayProjectPath;
     const identity = await resolveSelectorIdentity(explicit, dataDir);
     return identity.displayProjectPath;
   } catch {
@@ -427,13 +445,13 @@ async function resolveInstanceSelectionIdentity(
   const remainingSelectorBudget = () => observationDeadlineMs === undefined
     ? undefined
     : Math.max(0, observationDeadlineMs - Date.now());
-  const explicit = stringFlag(flags, "instance");
-  const identity = explicit
+  const explicit = explicitInstanceSelector(flags);
+  const identity = explicit !== undefined
     ? await resolveSelectorIdentity(explicit, dataDir, remainingSelectorBudget(), observationDeadlineMs)
     : observationDeadlineMs === undefined
       ? resolveProjectIdentityFromCwd(cwd)
       : await resolveProjectIdentityFromCwdAsync(cwd, { timeoutMs: remainingSelectorBudget() ?? 0 });
-  const matchedBy: InstanceSelection["matchedBy"] = explicit
+  const matchedBy: InstanceSelection["matchedBy"] = explicit !== undefined
     ? (await readAliasStore(dataDir)).aliases.some((binding) => binding.alias === explicit)
       ? "alias"
       : INSTANCE_ID_PATTERN.test(explicit)
@@ -546,7 +564,8 @@ export async function verifyRegistrySessionProcess(identity: RegistryIdentity, s
 
 /** 将显式 --instance 解析为已验证的 registry v2 canonical identity，供本地 journal 绑定请求。 */
 export async function resolveInstanceJournalIdentity(flags: Record<string, string | boolean>, dataDir: string): Promise<InstanceJournalIdentity | undefined> {
-  if (!stringFlag(flags, "instance")) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(flags, "instance")) return undefined;
+  explicitInstanceSelector(flags);
   const selected = await selectInstanceForFlags(flags, dataDir);
   return {
     instanceId: selected.instance.instanceId,

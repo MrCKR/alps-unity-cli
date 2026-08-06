@@ -12,7 +12,7 @@ let cached: StaticCapabilityCatalogFile | undefined;
 
 /**
  * 读取 package 自带的 built-in/Extension descriptor snapshot。
- * 该文件不包含 project-defined 能力，因此 offline、reload 与 blocked 状态均可安全读取。
+ * 该文件不包含 project-defined 能力，仅供生成、contract 与离线审计；不得作为公开 discovery fallback。
  */
 export function staticCapabilityCatalog(): StaticCapabilityCatalogFile {
   if (cached) return cached;
@@ -28,7 +28,7 @@ export function clearStaticCapabilityCatalogCache(): void {
   cached = undefined;
 }
 
-/** snapshot 结构异常必须在 discovery 边界 fail closed，禁止退回 live transport 补造 metadata。 */
+/** snapshot 结构异常必须在内部生成/审计边界 fail closed。 */
 function validateCatalog(catalog: StaticCapabilityCatalogFile): void {
   if (catalog.version !== 1 || !Array.isArray(catalog.tools) || !Array.isArray(catalog.contexts)) {
     throw new Error("Static capability catalog must be version 1 with tools and contexts arrays.");

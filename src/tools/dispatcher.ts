@@ -9,14 +9,13 @@ import {
   type BridgeCommandSpec,
   type BridgeDescriptorBinding
 } from "../bridge/index.js";
-import type { BuiltinDocsRuntime } from "../builtin-docs.js";
 import { failure, success } from "../output.js";
 import { PackageManagerError } from "../package-manager.js";
-import { InstanceRegistryError, resolveInstanceJournalIdentity, selectObservationInstanceForFlags } from "../instances.js";
+import { instanceSelectionFailure, selectInstanceForFlags, selectObservationInstanceForFlags } from "../instances.js";
 import { EditorBlockerObserver, sanitizeEditorBlockers } from "../editor-blocker-observer.js";
 import { defaultDataDir } from "../platform.js";
 import type { ContextCatalogRuntime } from "../contexts/catalog.js";
-import { discoverProjectTools, discoverRuntimeTools, type ProjectToolRuntime } from "../project-tool-discovery.js";
+import type { ProjectToolRuntime } from "../project-tool-discovery.js";
 import type { ContextDescriptor } from "../project-context-discovery.js";
 import { validateSchema } from "../schema/validator.js";
 import type { CliResult } from "../types.js";
@@ -27,8 +26,9 @@ import { findDefineTool, type ToolContext } from "./define.js";
 import { StructuredToolError } from "./errors.js";
 import { EXTENSION_GROUPS, findToolByName, toolIsMutation, type ToolMetadata } from "./metadata/index.js";
 
-export type ToolsRuntime = ProjectToolRuntime & ContextCatalogRuntime & Partial<BridgeRuntime> & Partial<BuiltinDocsRuntime> & {
+export type ToolsRuntime = ProjectToolRuntime & ContextCatalogRuntime & Partial<BridgeRuntime> & {
   dataDir?: string;
+  fetch?: (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
 };
 
 type ParsedInput = { ok: true; input: Record<string, unknown> } | { ok: false; error: CliResult };
@@ -52,24 +52,31 @@ export async function dispatchTool(
 
   const parsed = await parseTypedInput(flags, requestId);
   if (!parsed.ok) return parsed.error;
-  const mergedFlags = mergeInputFlags(parsed.input, flags);
-  const localTool = findToolByName(name);
-  if (localTool) {
-    const input = requestFromInput(localTool, { ...parsed.input, ...seed }, mergedFlags, positionalTarget);
-    return dispatchResolvedTool(localTool, input, mergedFlags, runtime, requestId, dispatchStartedAtMs);
+  const dispatchFlags = withStructuredInput(flags, parsed.input);
+  const localMetadata = findToolByName(name);
+  const localProperties = localMetadata?.inputSchema.properties as Record<string, unknown> | undefined;
+  // TS-local schema 的 project 仅约束已选实例；不得把其他业务字段写入 selector/execution flags。
+  const catalogFlags = localMetadata && localProperties && "project" in localProperties
+    && typeof parsed.input.project === "string" && dispatchFlags.project === undefined
+    ? { ...dispatchFlags, project: parsed.input.project }
+    : dispatchFlags;
+  const coreSpec = bridgeCommandRegistry.specs().find((spec) => (spec.toolName === name || spec.bridgeCommand === name) && !EXTENSION_GROUPS.has(spec.group) && spec.internal !== true);
+  // 无 catalog fixture 的注入式 bridgeExecute 仅用于隔离测试；其余路径必须 catalog-first。
+  if (runtime.bridgeExecute && runtime.projectTools === undefined && localMetadata) {
+    const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
+    return dispatchResolvedTool(localMetadata, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+  }
+  if (coreSpec && runtime.bridgeExecute && runtime.projectTools === undefined) {
+    return executeCoreBridgeSpec(name, coreSpec, parsed.input, dispatchFlags, runtime, requestId, positionalTarget);
   }
 
-  const coreSpec = bridgeCommandRegistry.specs().find((spec) => (spec.toolName === name || spec.bridgeCommand === name) && !EXTENSION_GROUPS.has(spec.group) && spec.internal !== true);
-  // 注入式 bridgeExecute 用静态 spec 做隔离测试；真实 CLI 必须先经过 live descriptor/schema。
-  if (coreSpec && runtime.bridgeExecute) return executeCoreBridgeSpec(name, coreSpec, parsed.input, mergedFlags, runtime, requestId, positionalTarget);
-
-  const resolved = await resolveCatalogTool(name, mergedFlags, runtime, requestId);
-  if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, mergedFlags, runtime);
+  const resolved = await resolveCatalogTool(name, catalogFlags, runtime, requestId);
+  if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime);
   const tool = resolved.tool;
   if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <keyword> to find related tools."]);
 
-  const input = requestFromInput(tool, { ...parsed.input, ...seed }, mergedFlags, positionalTarget);
-  return dispatchResolvedTool(tool, input, mergedFlags, runtime, requestId, dispatchStartedAtMs);
+  const input = requestFromInput(tool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
+  return dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
 }
 
 async function dispatchResolvedTool(
@@ -81,20 +88,7 @@ async function dispatchResolvedTool(
   dispatchStartedAtMs: number,
 ): Promise<CliResult> {
   const definition = findDefineTool(tool.name);
-  let executionTool = tool;
-  if (!definition) {
-    const runtimeTarget = tool.target === "runtime" || (tool.target === "both" && getBoolean(flags, "runtime"));
-    const discovered = runtimeTarget
-      ? await discoverRuntimeTools(flags, runtime, requestId, { requireBridge: true })
-      : await discoverProjectTools(flags, runtime, requestId, { requireBridge: true });
-    if (discovered.ok === false) return enrichTargetFailureWithDialogBlocker(discovered, flags, runtime);
-    const current = discovered.tools.find((candidate) => candidate.name === tool.name);
-    if (!current) return failure(requestId, "E_TOOL_UNAVAILABLE", `Tool ${tool.name} is not registered in the selected Unity generation.`, [
-      "Run unity_cli tools describe against the installed CLI package to inspect its static requirements.",
-      "Use a Unity version and installed Extension set that registers this Tool."
-    ], { toolName: tool.name, selectedTarget: runtimeTarget ? "runtime" : "editor" });
-    executionTool = current;
-  }
+  const executionTool = tool;
   const completion = generatedToolCompletionContract(executionTool.name) ?? executionTool.completionContract;
   if (!completion) return failure(requestId, "E_TOOL_COMPLETION_CONTRACT_REQUIRED", `Tool ${executionTool.name} has no explicit completion contract.`, [
     "Declare execution class, completion predicate, proof source, reload policy, timeout error, and outcome-unknown policy before registering this Tool."
@@ -147,14 +141,19 @@ async function executeDefinition(
   let projectPath = typeof input.project === "string" ? input.project : process.cwd();
   const execution = executionFromFlags(flags);
   const absoluteDeadlineMs = dispatchStartedAtMs + Math.max(1, execution.timeoutMs ?? tool.timeoutMs ?? 30_000);
-  // 本地 mutation 仍需绑定 --instance 的项目，避免调用方输入跨项目写入；不创建请求记录。
+  // package 本地 Tool 也是当前实例的一等能力；生产调用必须先绑定实例，测试注入仍复用显式 fake catalog。
   try {
-    if (completion.mutation && !execution.dryRun) {
-      const selected = await resolveInstanceJournalIdentity(flags, runtime.dataDir ?? defaultDataDir());
-      if (selected) projectPath = selected.canonicalProjectPath;
+    if (!runtime.bridgeExecute && runtime.projectTools === undefined && runtime.projectContexts === undefined) {
+      // project 是所选实例的一致性约束，不是 selector；其余 typed input 永不进入控制 flags。
+      const selectionFlags = typeof input.project === "string" && flags.project === undefined
+        ? { ...flags, project: input.project }
+        : flags;
+      const selected = await selectInstanceForFlags(selectionFlags, runtime.dataDir ?? defaultDataDir());
+      projectPath = selected.instance.canonicalProjectPath;
     }
   } catch (error) {
-    if (error instanceof InstanceRegistryError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    const selectionFailure = instanceSelectionFailure(requestId, error);
+    if (selectionFailure) return selectionFailure;
     throw error;
   }
   const run = async (): Promise<CliResult> => {
@@ -561,6 +560,12 @@ async function readStdin(): Promise<string> {
   return data;
 }
 
+const TOOL_CONTROL_FLAGS = new Set([
+  "input", "input-file", "stdin", "raw", "format",
+  "instance", "project", "runtime", "timeout-ms", "artifact-dir", "dry-run"
+]);
+
+/** typed input 与 execution/selector 控制项保持严格隔离。 */
 function requestFromInput(tool: ToolMetadata, input: Record<string, unknown>, flags: Record<string, string | boolean>, positionalTarget?: string): Record<string, unknown> {
   const request = { ...input };
   const required = Array.isArray(tool.inputSchema.required) ? tool.inputSchema.required.map(String) : [];
@@ -570,7 +575,7 @@ function requestFromInput(tool: ToolMetadata, input: Record<string, unknown>, fl
     : {};
   if (positionalTarget !== undefined && "positionalTarget" in properties) request.positionalTarget ??= positionalTarget;
   for (const [key, value] of Object.entries(flags)) {
-    if (key.startsWith("__") || ["input", "input-file", "stdin", "raw"].includes(key)) continue;
+    if (key.startsWith("__") || TOOL_CONTROL_FLAGS.has(key)) continue;
     const property = key.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
     if (property in properties && request[property] === undefined) request[property] = coerceFlagValue(value, properties[property]);
   }
@@ -583,17 +588,6 @@ function coerceFlagValue(value: string | boolean, schema: unknown): unknown {
   if (type === "number" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
   if (type === "boolean" && (value === "true" || value === "false")) return value === "true";
   return value;
-}
-
-function mergeInputFlags(input: Record<string, unknown>, flags: Record<string, string | boolean>): Record<string, string | boolean> {
-  const merged = { ...flags };
-  for (const [key, value] of Object.entries(input)) {
-    const flag = key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-    if (merged[flag] !== undefined) continue;
-    if (typeof value === "string" || typeof value === "boolean") merged[flag] = value;
-    else if (typeof value === "number") merged[flag] = String(value);
-  }
-  return withStructuredInput(merged, input);
 }
 
 /** execution timeout 是命令控制面；非法值必须在任何 selector、journal 或 effect 前失败。 */

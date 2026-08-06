@@ -1,0 +1,27 @@
+{
+  "scenario": "descriptor ambiguity resolved through extra discovery",
+  "feedbackMode": "on",
+  "frictionOccurred": true,
+  "category": "workaround",
+  "summary": "Descriptor target wording required an extra discovery step.",
+  "workaround": "Used context search and descriptor readback to select the capability.",
+  "capability": "sample.tool",
+  "errorCode": "E_SCHEMA_INVALID",
+  "phase": "describe",
+  "expected": {
+    "writeLocalJsonl": true,
+    "appendFeedbackSummary": true,
+    "normalTaskResultStillRequired": true
+  },
+  "forbiddenInputs": [
+    "raw prompt",
+    "complete CLI input",
+    "complete CLI output",
+    "source code",
+    "logs",
+    "paths",
+    "URLs",
+    "endpoints",
+    "secrets"
+  ]
+}

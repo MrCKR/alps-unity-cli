@@ -1,4 +1,3 @@
-import type { BuiltinDocsRuntime } from "../builtin-docs.js";
 import type { DocsGetRequest, DocsGetResult } from "../tools/docs/get.js";
 import type { DocsSearchRequest, DocsSearchResult } from "../tools/docs/search.js";
 import { StructuredToolError } from "../tools/errors.js";
@@ -20,10 +19,11 @@ import {
 
 export interface DocsServiceRuntime {
   dataDir: string;
-  fetch?: BuiltinDocsRuntime["fetch"];
+  fetch?: DocsFetcher;
 }
 
-type Fetcher = NonNullable<BuiltinDocsRuntime["fetch"]>;
+type DocsFetcher = (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
+type Fetcher = DocsFetcher;
 
 /** 读取单个 Unity API 文档；输入为 typed request，输出为业务结果，副作用仅为 cache/网络读取。 */
 export async function getDocs(request: DocsGetRequest, runtime: DocsServiceRuntime): Promise<DocsGetResult> {

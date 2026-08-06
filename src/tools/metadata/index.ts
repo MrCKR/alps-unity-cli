@@ -3,8 +3,8 @@
  *
  * 设计原则:
  * - TS local Tool 的 metadata 真源是 defineTool registry。
- * - C# built-in / Extension descriptor 来自已验证的 static catalog，可离线发现。
- * - Project-defined descriptor 只从选定的 Live Editor 读取。
+ * - C# built-in、Extension 与 Project-defined descriptor 都从选定实例的 live registry 读取。
+ * - static catalog 只供生成、契约和离线审计，不进入公开 discovery。
  * - 每项能力只有一个 descriptor owner，不维护 TS 手写重复 metadata。
  */
 
@@ -48,7 +48,7 @@ export function inferPlayModeSupport(tool: ToolMetadata): PlayModeSupport {
   return "supported";
 }
 
-/** TS 本地工具(metadata 真源 = defineTool registry)。无 bridge 时仅这些工具可见。 */
+/** TS 本地工具(metadata 真源 = defineTool registry)；公开 discovery 仍要求绑定实例。 */
 function localTsTools(): ToolMetadata[] {
   return defineToolMetadata();
 }
@@ -88,17 +88,17 @@ export function allRegisteredToolGroups(): string[] {
   return [...groups].sort();
 }
 
-/** Find a single tool by its dotted name (TS-local only, offline). C# tools require live discovery. */
+/** Find a single TS-local Tool by dotted name；仅供生成、契约与内部测试。 */
 export function findToolByName(name: string): ResolvedToolMetadata | undefined {
   return allRegisteredToolMetadata().find((t) => t.name === name);
 }
 
-/** Filter tools by group (TS-local only, offline). C# tools require live discovery. */
+/** Filter TS-local Tools by group；仅供生成、契约与内部测试。 */
 export function filterToolsByGroup(group: string): ResolvedToolMetadata[] {
   return allRegisteredToolMetadata().filter((t) => t.group === group);
 }
 
-/** Search tools by keyword across name, summary, description, group (TS-local only, offline). */
+/** Search TS-local Tools；仅供生成、契约与内部测试。 */
 export function searchTools(keyword: string): ResolvedToolMetadata[] {
   const lower = keyword.toLowerCase();
   return allRegisteredToolMetadata().filter((t) =>

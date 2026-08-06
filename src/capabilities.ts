@@ -1,62 +1,35 @@
 import { getString } from "./args.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-import { builtinContextDescriptors, loadContextCatalog, shouldLoadLiveContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
+import { loadContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
 import type { ContextDescriptor } from "./contexts/types.js";
 import { readInstalledExtensions } from "./cli-commands/extensions.js";
 import { extensionAvailabilityFlags } from "./extension-availability.js";
 import { ExtensionRegistry, extensionAvailabilitySummary } from "./extensions/index.js";
 import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
-import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import type { ProjectToolRuntime } from "./project-tool-discovery.js";
 import { success } from "./output.js";
-import { staticBridgeToolMetadata } from "./tools/catalog.js";
-import { builtinToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
+import { loadToolCatalog } from "./tools/catalog.js";
+import { toolSource, type ToolMetadata } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
 
-/** 公开 capability summary 只返回计数和分组，不复制完整 descriptor 或内部健康载荷。 */
+/** 公开 capability summary 只汇总当前实例完整目录，不按实现来源拆成不同发现入口。 */
 export async function handleCapabilitiesCommand(
   flags: Record<string, string | boolean>,
   runtime: BridgeRuntime & ProjectToolRuntime & ContextCatalogRuntime,
   requestId: string
 ): Promise<CliResult> {
-  let liveTools: ToolMetadata[] = [];
-  let projectToolSummary: Record<string, unknown> | undefined;
-  if (shouldDiscoverProjectTools(flags, runtime)) {
-    const discovery = await discoverProjectTools(flags, runtime, requestId);
-    if (discovery.ok) {
-      liveTools = discovery.tools;
-      projectToolSummary = { available: true, count: liveTools.length };
-    } else {
-      projectToolSummary = { available: false, code: discovery.error?.code, message: discovery.error?.message };
-    }
-  }
+  const toolCatalog = await loadToolCatalog(flags, runtime, `${requestId}_tools`);
+  if (toolCatalog.ok === false) return toolCatalog;
+  const contextCatalog = await loadContextCatalog(flags, runtime, `${requestId}_contexts`);
+  if (contextCatalog.ok === false) return contextCatalog;
 
-  let customContexts: ContextDescriptor[] = [];
-  let customContextSummary: Record<string, unknown> | undefined;
-  if (await shouldLoadLiveContextCatalog(flags, runtime)) {
-    const catalog = await loadContextCatalog(flags, runtime, requestId, { requireLive: false });
-    if (catalog.ok) {
-      customContexts = catalog.contexts.filter((context) => context.source === "project");
-      customContextSummary = {
-        available: true,
-        count: customContexts.length,
-        categories: [...new Set(customContexts.map((context) => context.category))].sort(),
-      };
-    } else {
-      customContextSummary = { available: false, code: catalog.error?.code, message: catalog.error?.message };
-    }
-  }
-
-  const tools = uniqueTools([...builtinToolMetadata(), ...staticBridgeToolMetadata(), ...liveTools]);
-  const contexts = uniqueContexts([...builtinContextDescriptors(), ...customContexts]);
-  const catalogSummary = buildCatalogSummary(tools, contexts, liveTools.filter((tool) => tool.source === "project").length);
+  const catalogSummary = buildCatalogSummary(toolCatalog.tools, contextCatalog.contexts);
   const extensionSummary = await buildExtensionSummary(flags, runtime);
-  const runtimeSummary = await readRuntimeSummary(flags, runtime, requestId);
+  const runtimeSummary = await readRuntimeSummary(flags, runtime, `${requestId}_runtime`);
 
   return success(requestId, {
     catalog: catalogSummary,
-    ...(projectToolSummary ? { projectTools: projectToolSummary } : {}),
-    ...(customContextSummary ? { customContexts: customContextSummary } : {}),
     ...(runtimeSummary ? { runtime: runtimeSummary } : {}),
     extensions: extensionSummary,
   });
@@ -95,7 +68,6 @@ async function readRuntimeSummary(
   runtime: BridgeRuntime,
   requestId: string
 ): Promise<Record<string, unknown> | undefined> {
-  if (!runtime.bridgeExecute && !getString(flags, "instance")) return undefined;
   try {
     const result = await executeBridgePayload(requestId, "diagnose.preflight", {}, flags, runtime, undefined, { mode: "read", mutation: false });
     if (!result.ok || !result.data || typeof result.data !== "object" || Array.isArray(result.data)) return undefined;
@@ -109,12 +81,21 @@ async function readRuntimeSummary(
   }
 }
 
-/** catalog summary 使用闭集计数；具体名称、schema 与 availability 由 discovery 查询。 */
-function buildCatalogSummary(tools: ToolMetadata[], contexts: ContextDescriptor[], projectToolCount: number): Record<string, unknown> {
+/** catalog summary 使用统一计数；source 只作为说明维度，不改变公开路由。 */
+function buildCatalogSummary(tools: ToolMetadata[], contexts: ContextDescriptor[]): Record<string, unknown> {
   const groups: Record<string, number> = {};
-  for (const tool of tools) groups[tool.group] = (groups[tool.group] ?? 0) + 1;
+  const toolSources: Record<string, number> = {};
+  for (const tool of tools) {
+    groups[tool.group] = (groups[tool.group] ?? 0) + 1;
+    const source = toolSource(tool);
+    toolSources[source] = (toolSources[source] ?? 0) + 1;
+  }
   const categories: Record<string, number> = {};
-  for (const context of contexts) categories[context.category] = (categories[context.category] ?? 0) + 1;
+  const contextSources: Record<string, number> = {};
+  for (const context of contexts) {
+    categories[context.category] = (categories[context.category] ?? 0) + 1;
+    contextSources[context.source] = (contextSources[context.source] ?? 0) + 1;
+  }
   return {
     toolCount: tools.length,
     contextCount: contexts.length,
@@ -123,18 +104,8 @@ function buildCatalogSummary(tools: ToolMetadata[], contexts: ContextDescriptor[
     groups: Object.fromEntries(Object.entries(groups).sort(([left], [right]) => left.localeCompare(right))),
     contextCategories: Object.fromEntries(Object.entries(categories).sort(([left], [right]) => left.localeCompare(right))),
     sources: {
-      tsLocalTools: builtinToolMetadata().length,
-      bridgeTools: staticBridgeToolMetadata().length,
-      projectTools: projectToolCount,
-      projectContexts: contexts.filter((context) => context.source === "project").length,
+      tools: Object.fromEntries(Object.entries(toolSources).sort(([left], [right]) => left.localeCompare(right))),
+      contexts: Object.fromEntries(Object.entries(contextSources).sort(([left], [right]) => left.localeCompare(right))),
     },
   };
-}
-
-function uniqueTools(tools: ToolMetadata[]): ToolMetadata[] {
-  return [...new Map(tools.map((tool) => [tool.name, tool])).values()];
-}
-
-function uniqueContexts(contexts: ContextDescriptor[]): ContextDescriptor[] {
-  return [...new Map(contexts.map((context) => [context.name, context])).values()];
 }

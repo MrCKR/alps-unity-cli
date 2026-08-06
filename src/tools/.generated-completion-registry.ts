@@ -1208,35 +1208,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": false
   },
   {
-    "toolName": "docs.list",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
     "toolName": "docs.search",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "docs.topic",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
     "executionClass": "atomic",

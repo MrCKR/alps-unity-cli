@@ -20,7 +20,7 @@ export const PLAYMODE_RESOLVE_BLOCKED_TOOLS = new Set([
   "package.deploy", "package.embed", "package.install", "package.remove", "package.resolve", "package.restore",
   "package.scoped-registry.add", "package.scoped-registry.remove"
 ]);
-const LOCAL_CONTEXT_NAMES = Object.freeze(["editor.state", "tools.custom", "tools.groups"]);
+const LOCAL_CONTEXT_NAMES = Object.freeze(["editor.dialogs", "editor.state"]);
 const REQUIRED_PROJECT_TOOL_NAMES = Object.freeze(["validation.echo", "validation.wait"]);
 const REQUIRED_PROJECT_CONTEXT_NAMES = Object.freeze(["validation.ui-cache", "validation.wait-status"]);
 const REMOVED_PUBLIC_TOOL_NAMES = Object.freeze(["build.status", "build.cancel"]);
@@ -392,7 +392,7 @@ export function extensionAvailabilityIssues(listData, doctorData) {
   return issues;
 }
 
-/** 当前 product inventory 来自 completion contract 和静态 Context catalog，禁止运行时缩窄能力集合。 */
+/** 验证基线来自内部 completion contract 与 Context snapshot；公开 inventory 必须由 live instance 完整返回。 */
 export async function loadRuntimeInventoryBaseline() {
   const completion = JSON.parse(await readFile(new URL("../contracts/tool-completion-contract.json", import.meta.url), "utf8"));
   const catalog = JSON.parse(await readFile(new URL("../contracts/static-capability-catalog.json", import.meta.url), "utf8"));
@@ -434,27 +434,21 @@ export function runtimeInventoryIssues(discovered, baseline) {
 function inventoryHash(names) { return createHash("sha256").update([...names].sort().join("\n")).digest("hex"); }
 
 async function discover(m) {
-  const groups = await m.call("tools.groups", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } }));
+  const groups = await m.call("tools.group", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } }));
   for (const item of groups.envelope?.data?.groups ?? []) {
     const group = nameOf(item); if (!group) continue;
-    const listed = await m.call(`tools.group.${group}`, ["tools", "group", "list", group, "--include-custom"], (e) => assertSuccess(e, { required: ["tools"] }));
+    const listed = await m.call(`tools.group.${group}`, ["tools", "group", "list", group], (e) => assertSuccess(e, { required: ["tools"] }));
     for (const tool of listed.envelope?.data?.tools ?? []) {
       const name = nameOf(tool); if (!name) continue;
       if (!m.discovered.tools.includes(name)) m.discovered.tools.push(name);
       m.discoveredSources.toolSources.set(name, tool?.source);
     }
   }
-  const contexts = await m.call("contexts.list", ["context", "list", "--include-custom"], (e) => assertSuccess(e, { required: ["contexts"] }));
+  const contexts = await m.call("contexts.list", ["context", "list"], (e) => assertSuccess(e, { required: ["contexts"] }));
   for (const item of contexts.envelope?.data?.contexts ?? []) {
     const name = nameOf(item); if (!name) continue;
     if (!m.discovered.contexts.includes(name)) m.discovered.contexts.push(name);
     m.discoveredSources.contextSources.set(name, item?.source);
-  }
-  const customTools = await m.call("tools.custom", ["context", "read", "tools.custom", "--input", "{}"], (e) => assertSuccess(e, { required: ["tools"], properties: { tools: { type: "array" } } }));
-  for (const tool of customTools.envelope?.data?.tools ?? []) {
-    const name = nameOf(tool); if (!name) continue;
-    if (!m.discovered.tools.includes(name)) m.discovered.tools.push(name);
-    m.discoveredSources.toolSources.set(name, tool?.source);
   }
   const ext = await m.call("extensions.list", ["extensions", "list"], (e) => assertSuccess(e, {}));
   const doc = await m.call("extensions.doctor", ["extensions", "doctor"], (e) => assertSuccess(e, {}));

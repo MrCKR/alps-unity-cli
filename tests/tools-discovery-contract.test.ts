@@ -8,7 +8,7 @@ test("tools group exposes only the four discovery meta tools", () => {
   assert.deepEqual(tools, ["tools.describe", "tools.group", "tools.group-list", "tools.search"]);
 });
 
-test("tools discovery tools are offline/non-destructive/supported in any play mode", () => {
+test("tools discovery tools are TS-owned, non-destructive, and supported in any play mode", () => {
   for (const name of ["tools.group", "tools.group-list", "tools.search", "tools.describe"]) {
     const tool = findToolByName(name)!;
     assert.equal(tool.destructiveHint, false, `${name} non-destructive`);

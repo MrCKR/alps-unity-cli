@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { handleContextCommand } from "../src/contexts/commands.js";
 import { handleToolsCommand } from "../src/tools/commands.js";
+import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import { staticCapabilityCatalog } from "../src/static-capability-catalog.js";
 
 const OFFLINE_INSTANCE = `unity-${"f".repeat(64)}`;
@@ -85,41 +86,30 @@ test("session-mutating read-shaped Tools declare explicit side effects", () => {
   }
 });
 
-test("static Tool discovery stays available with an offline explicit instance and performs no live call", async () => {
+test("public Tool discovery rejects an offline explicit instance without static fallback", async () => {
   const runtime = { dataDir: "Z:/definitely-missing-unity-cli-data" };
   const flags = { instance: OFFLINE_INSTANCE };
-  const group = await handleToolsCommand("group", [], flags, runtime, "req_static_group");
-  assert.equal(group.ok, true);
-  assert.ok((group.data as { groups: Array<{ name: string }> }).groups.some((entry) => entry.name === "scene"));
-
-  const search = await handleToolsCommand("search", ["hierarchy"], flags, runtime, "req_static_search");
-  assert.equal(search.ok, true);
-  assert.ok((search.data as { tools: Array<{ name: string }> }).tools.some((tool) => tool.name === "scene.hierarchy"));
-
-  const describe = await handleToolsCommand("describe", ["scene.hierarchy"], flags, runtime, "req_static_describe");
-  assert.equal(describe.ok, true);
-  assert.equal((describe.data as { source: string }).source, "built-in");
+  for (const [command, args] of [["group", []], ["search", ["hierarchy"]], ["describe", ["scene.hierarchy"]]] as const) {
+    const result = await handleToolsCommand(command, [...args], flags, runtime, `req_offline_${command}`);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_INSTANCE_NOT_FOUND");
+  }
 });
 
-test("all detailed discovery paths mark conditional Tools unavailable when the selected generation omits them", async () => {
-  const runtime = { projectTools: [] };
-  const described = await handleToolsCommand("describe", ["build.profile.create"], {}, runtime, "req_conditional_describe");
+test("all detailed discovery paths expose the complete connected instance catalog", async () => {
+  const runtime = { projectTools: staticBridgeToolMetadata(), runtimeTools: [] };
+  const described = await handleToolsCommand("describe", ["build.profile.create"], {}, runtime, "req_complete_describe");
   assert.equal(described.ok, true);
-  const descriptor = described.data as { available: boolean; unavailableReason?: string };
-  assert.equal(descriptor.available, false);
-  assert.match(String(descriptor.unavailableReason), /^E_TOOL_UNAVAILABLE:/);
 
-  const grouped = await handleToolsCommand("group", ["list", "build"], {}, runtime, "req_conditional_group");
+  const grouped = await handleToolsCommand("group", ["list", "build"], {}, runtime, "req_complete_group");
   assert.equal(grouped.ok, true);
-  const groupProfiles = (grouped.data as { tools: Array<{ name: string; available: boolean; unavailableReason?: string }> }).tools.filter((tool) => tool.name.startsWith("build.profile."));
+  const groupProfiles = (grouped.data as { tools: Array<{ name: string }> }).tools.filter((tool) => tool.name.startsWith("build.profile."));
   assert.equal(groupProfiles.length, 4);
-  assert.ok(groupProfiles.every((tool) => tool.available === false && /^E_TOOL_UNAVAILABLE:/.test(String(tool.unavailableReason))));
 
-  const searched = await handleToolsCommand("search", ["build.profile"], {}, runtime, "req_conditional_search");
+  const searched = await handleToolsCommand("search", ["build.profile"], {}, runtime, "req_complete_search");
   assert.equal(searched.ok, true);
-  const searchProfiles = (searched.data as { tools: Array<{ name: string; available: boolean; unavailableReason?: string }> }).tools;
+  const searchProfiles = (searched.data as { tools: Array<{ name: string }> }).tools;
   assert.equal(searchProfiles.length, 4);
-  assert.ok(searchProfiles.every((tool) => tool.available === false && /^E_TOOL_UNAVAILABLE:/.test(String(tool.unavailableReason))));
 });
 
 function schemaPropertyNames(value: unknown, result = new Set<string>()): Set<string> {
@@ -137,18 +127,12 @@ function schemaPropertyNames(value: unknown, result = new Set<string>()): Set<st
   return result;
 }
 
-test("static Context discovery stays available with an offline explicit instance", async () => {
+test("public Context discovery rejects an offline explicit instance without static fallback", async () => {
   const runtime = { dataDir: "Z:/definitely-missing-unity-cli-data" };
   const flags = { instance: OFFLINE_INSTANCE };
-  const listed = await handleContextCommand("list", [], flags, runtime, "req_static_context_list");
-  assert.equal(listed.ok, true);
-  assert.equal((listed.data as { count: number }).count, 26);
-
-  const searched = await handleContextCommand("search", ["editor.state"], flags, runtime, "req_static_context_search");
-  assert.equal(searched.ok, true);
-  assert.ok((searched.data as { contexts: Array<{ name: string }> }).contexts.some((context) => context.name === "editor.state"));
-
-  const described = await handleContextCommand("describe", ["editor.state"], flags, runtime, "req_static_context_describe");
-  assert.equal(described.ok, true);
-  assert.equal((described.data as { source: string }).source, "built-in");
+  for (const [command, args] of [["list", []], ["search", ["editor.state"]], ["describe", ["editor.state"]]] as const) {
+    const result = await handleContextCommand(command, [...args], flags, runtime, `req_offline_context_${command}`);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_INSTANCE_NOT_FOUND");
+  }
 });

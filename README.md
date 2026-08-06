@@ -113,42 +113,35 @@ unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":
 
 ### 3. 获取只读项目信息
 
-当前版本通过 `docs` 和 `reflect` 命令访问离线文档和反射缓存：
+当前版本通过 `docs.get/search` 查询 Unity API 文档，通过 `reflect.*` 查询类型缓存；这些 Tool 仍从已连接实例的统一 catalog 发现和调用：
 
 ```powershell
-# 列出内置文档主题
-unity_cli tools run docs.list
-
-# 查看特定主题
-unity_cli tools run docs.topic tool-discovery
-
-# 离线 Unity API 文档
+# Unity API 文档
 unity_cli tools run docs.get UnityEngine.Camera
 unity_cli tools run docs.search "Render Pipeline"
 
-# 离线类型反射
+# 类型反射
 unity_cli tools run reflect.type UnityEngine.Camera
 unity_cli tools run reflect.member UnityEngine.Camera.fieldOfView
 ```
 
-> **注意**：可通过 `context list` / `context describe <name>` / `context read <name>` 命令获取只读项目状态，也可通过 `docs`/`reflect` 命令获取离线文档与类型信息。
+> **注意**：项目与 Editor 状态通过 `context list` / `context describe <name>` / `context read <name>` 读取。
 
-### 4. 项目自定义工具
+### 4. 项目注册能力
 
-Unity 项目可通过异步 C# `IUnityCliTool<TReq,TRes>` 注册自定义 Tool；Request/Result 派生 schema，`Describe()` 声明公开 descriptor 与 direct completion contract：
+Unity 项目可通过异步 C# `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 注册能力；完成编译后自动进入该实例的完整目录，与 package 内置和 Extension 能力使用同一路径：
 
 ```powershell
-# 发现项目自定义工具（需要 Bridge 连接）
-unity_cli tools group list custom --include-custom
+# 从当前实例目录发现真实 group/category
+unity_cli tools group --instance <id|projectPath|alias>
+unity_cli context list --instance <id|projectPath|alias>
 
-# 查看自定义工具描述
-unity_cli tools describe my.custom-tool --include-custom
-
-# 执行自定义工具
+# 描述并执行项目 Tool
+unity_cli tools describe my.custom-tool --instance <id|projectPath|alias>
 unity_cli tools run my.custom-tool --input '{"key":"value"}' --instance <id|projectPath|alias>
 ```
 
-> **注意**：可通过 `extensions list` 查看已安装扩展，`extensions install <id>` / `extensions remove <id>` 管理扩展，`extensions doctor` 诊断扩展状态。扩展包也可通过 `init` 命令安装 Bridge 包来启用。
+> **注意**：不要假设项目能力位于 `custom` 分组。可通过 `extensions list` 查看已安装扩展，`extensions install <id>` / `extensions remove <id>` 管理扩展，`extensions doctor` 诊断扩展状态。
 
 ### 5. 诊断与健康检查
 
@@ -231,7 +224,7 @@ unity_cli context describe <context-name>
 unity_cli context read <context-name> --input '<json>' [--instance <id|projectPath|alias>]
 ```
 
-项目自定义能力只在显式 `--include-custom` discovery 或已选中的 Live Editor 中出现。`examples[].argv` 是可直接执行的参数 token 数组；业务参数全部放入 `--input`、`--input-file` 或 `--stdin`，命令控制项不混入业务 JSON。
+Tool/Context discovery 必须绑定已连接实例；未连接时返回稳定 instance error，不返回静态或空目录。连接后完整显示 package 内置、Extension、项目注册、Editor 与 Runtime 能力，不按 `source` 或当前模式过滤。`source` 只作描述/审计。`examples[].argv` 是可执行参数 token 数组；业务参数全部放入 `--input`、`--input-file` 或 `--stdin`，命令控制项不混入业务 JSON。
 
 Bridge-backed Tool 在 Unity 主线程执行。CLI 的 session supervisor 在一个不可变 deadline 内透明处理 compile、import、domain reload 和 listener restart，并在同一次 direct 调用中返回已证明的业务终态或结构化失败。观察当前进度和 blocker 使用 `unity_cli context read editor.state`；该 Context 立即返回，不等待状态变化。
 
@@ -253,7 +246,7 @@ unity_cli target alias list
 
 ## 初始化（init）
 
-`init` 安装捆绑的 `com.unity_cli` Bridge 包到目标 Unity 项目；如果项目根目录已经存在 `.pi`、`.claude` 或 `.agents`，会自动安装对应 AI Agent Skill。也可以用 `--agent` 显式指定目标。
+`init` 安装捆绑的 `com.unity_cli` Bridge 包到目标 Unity 项目；如果项目根目录已经存在 `.pi`、`.claude` 或 `.agents`，会自动安装对应 AI Agent Skill。也可以用 `--agent` 显式指定目标。Skill 以 `SKILL.md`、`references/**`、`scripts/**` 完整 runtime bundle 安装，`--check` 校验全部 managed 文件；更新会保留已安装 `SKILL.md` 中合法的 `FeedbackMode: off|on`。
 
 | 标志 | 含义 |
 |------|------|
@@ -277,11 +270,13 @@ unity_cli init --project C:\path\MyProject --skill-only --agent pi
 unity_cli init --check --project C:\path\MyProject
 ```
 
+`FeedbackMode` 默认 `off`。改为 `on` 后，使用该 Skill 的 Agent 只在实际遇到失败、歧义、缺失、误导或成功绕过的坑点时，调用 bundle 内 recorder 写入 `%LOCALAPPDATA%\UnityCli\feedback\` 的有界 JSONL；正常调用不记录，也不联网。
+
 ## Unity Editor Bridge
 
 `init` 以 copy 模式把 `com.unity_cli` 安装到 `Packages/com.unity_cli/`。已打开的 Unity Editor 自动注册 canonical project identity 和 Live listener；CLI 通过 `instances list` 与 `--instance` 选择唯一会话，公开接口不接受 endpoint 或 port。
 
-Bridge command、handler、journal、fingerprint、listener generation 和 completion contract 都是内部实现，不构成第二套用户入口。mutation 在首个真实 effect 前持久化 effect barrier；effect 后只有 fresh business readback 或 artifact proof 能完成。无法证明终态时返回 `E_REQUEST_OUTCOME_UNKNOWN`，禁止自动重放。
+Bridge command、handler、journal、fingerprint、listener generation 和 completion contract 都是内部实现，不构成第二套用户入口。mutation 在首个真实 effect 前持久化 effect barrier；effect 后只有 fresh business readback 或 artifact proof 能完成。同一次调用可在 compile、reload 或 listener restart 后续接完全相同的请求以取得 terminal；调用返回后 CLI 不会自行启动新的用户调用。无法证明终态时返回 `E_EXECUTION_TIMEOUT`，是否观察状态、重试、重复调用或继续 mutation 由调用方决定。
 
 当前能力、Extension 依赖和 Editor/PlayMode 可用性只通过 `tools` / `context` discovery 获取，不在 README 冻结能力名清单。
 
@@ -290,8 +285,9 @@ Bridge command、handler、journal、fingerprint、listener generation 和 compl
 Unity 项目 C# 代码可通过异步 `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 注册自定义能力。schema 由 DTO 派生；Tool 必须声明完整 direct completion contract，并在全部可预见校验后、首个 mutation 前调用一次 `ctx.CommitEffect()`。当前接口与完整示例见 [Custom Tools](skills/unity_cli/references/custom-tools.md) 和 [Custom Contexts](skills/unity_cli/references/custom-contexts.md)。
 
 ```powershell
-unity_cli tools group list custom --include-custom
-unity_cli tools describe my.editor-tool --include-custom
+unity_cli tools group --instance <id|projectPath|alias>
+unity_cli tools group list <real-group> --instance <id|projectPath|alias>
+unity_cli tools describe my.editor-tool --instance <id|projectPath|alias>
 unity_cli tools run my.editor-tool --input '{"message":"hello"}' --instance <id|projectPath|alias>
 ```
 
@@ -328,8 +324,8 @@ unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":
 
 | 扩展类型 | 当前状态 | 发现方式 |
 |----------|---------|---------|
-| 项目自定义 Tool (`target=editor`) | ✅ 已实现 | `tools group list custom --include-custom` |
-| 项目自定义 Tool (`target=runtime`) | ✅ 已实现 | `tools group list custom --include-custom`（通常需 Play Mode） |
+| 项目自定义 Tool (`target=editor`) | ✅ 已实现 | 当前实例 `tools group/list/describe/run` |
+| 项目自定义 Tool (`target=runtime`) | ✅ 已实现 | 当前实例 `tools group/list/describe/run`；EditMode 仍显示，执行通常需 PlayMode |
 | 项目自定义 Context | ✅ 已实现 | `context list/search/describe/read` |
 | 扩展包管理 | ✅ 已实现 | `extensions list/install/remove/doctor` |
 | ProBuilder 扩展 | ✅ 已实现 | `tools group/list/describe/run`（需要 `com.unity.probuilder@5.2.4` + `extensions install probuilder`） |

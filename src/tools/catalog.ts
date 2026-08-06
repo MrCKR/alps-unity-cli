@@ -1,5 +1,3 @@
-import { getBoolean } from "../args.js";
-import { hasInstanceForFlags } from "../instances.js";
 import {
   discoverProjectTools,
   discoverRuntimeTools,
@@ -7,6 +5,7 @@ import {
   type ProjectToolRuntime
 } from "../project-tool-discovery.js";
 import { staticCapabilityCatalog } from "../static-capability-catalog.js";
+import { failure } from "../output.js";
 import type { CliResult } from "../types.js";
 import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "./.generated-completion-registry.js";
 import {
@@ -19,11 +18,7 @@ import {
 export type ToolCatalogRuntime = ProjectToolRuntime & { dataDir?: string };
 export type ToolCatalogResult = { ok: true; tools: ToolMetadata[] } | (CliResult & { ok: false });
 
-const STATIC_BRIDGE_TOOL_NAMES = new Set(GENERATED_TOOL_COMPLETION_CONTRACTS
-  .filter((contract) => contract.descriptorOwner === "built-in" || contract.descriptorOwner.startsWith("extension:"))
-  .map((contract) => contract.toolName));
-
-/** package snapshot 中的 C# built-in/Extension descriptor；ownership 不匹配或结构异常时 fail closed。 */
+/** package snapshot 中的 C# built-in/Extension descriptor，仅供生成、契约和离线审计使用。 */
 export function staticBridgeToolMetadata(): ToolMetadata[] {
   const bridgeContracts = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS
     .filter((contract) => contract.descriptorOwner === "built-in" || contract.descriptorOwner.startsWith("extension:"))
@@ -36,116 +31,92 @@ export function staticBridgeToolMetadata(): ToolMetadata[] {
   });
 }
 
-/** 静态 discovery 永不因 ready instance 自动进入 supervisor；只有显式 custom/runtime 请求才读取 live catalog。 */
-export async function shouldLoadLiveCatalog(flags: Record<string, string | boolean>, runtime: ToolCatalogRuntime): Promise<boolean> {
-  return getBoolean(flags, "include-custom")
-    || getBoolean(flags, "runtime")
-    || runtime.projectTools !== undefined
-    || runtime.bridgeExecute !== undefined;
-}
-
-/** 合并 TS-local 与 Bridge 返回的 built-in、extension、project、runtime descriptor。 */
+/**
+ * 读取当前实例的唯一完整 Tool catalog。
+ * project-tool.list 返回全部注册能力；runtime-tool.list 只补充同一注册在当前 PlayMode 下的 availability。
+ */
 export async function loadToolCatalog(
   flags: Record<string, string | boolean>,
   runtime: ToolCatalogRuntime,
   requestId: string,
-  options: { requireLive?: boolean } = {}
 ): Promise<ToolCatalogResult> {
-  const tools = [...builtinToolMetadata(), ...staticBridgeToolMetadata()];
-  const loadLive = options.requireLive === true || await shouldLoadLiveCatalog(flags, runtime);
-  if (!loadLive) return { ok: true, tools };
-
-  const editor = await discoverProjectTools(flags, runtime, requestId, { requireBridge: options.requireLive });
+  const editor = await discoverProjectTools(flags, runtime, `${requestId}_editor_catalog`, { requireBridge: true });
   if (editor.ok === false) return editor;
-  tools.push(...editor.tools);
 
-  if (getBoolean(flags, "runtime")) {
-    const runtimeTools = await discoverRuntimeTools(flags, runtime, requestId, { requireBridge: options.requireLive });
-    if (runtimeTools.ok === false) return runtimeTools;
-    tools.push(...runtimeTools.tools);
-  }
-  return { ok: true, tools: uniqueByName(tools) };
+  const runtimeCatalog = await discoverRuntimeTools(flags, runtime, `${requestId}_runtime_catalog`, { requireBridge: true });
+  if (runtimeCatalog.ok === false) return runtimeCatalog;
+
+  return mergeLiveToolCatalog(requestId, builtinToolMetadata(), editor.tools, runtimeCatalog.tools);
 }
 
-/**
- * 显式选中 Live Editor 时，用该 generation 的真实 registry 覆盖静态条件 Tool 可用性。
- * 静态 descriptor 仍负责跨版本发现；当前版本未注册时必须在执行前暴露 available=false。
- */
-export async function resolveLiveToolRegistration(
-  tool: ToolMetadata,
-  flags: Record<string, string | boolean>,
-  runtime: ToolCatalogRuntime,
-  requestId: string,
-): Promise<ToolMetadata> {
-  return (await resolveLiveToolRegistrations([tool], flags, runtime, requestId))[0];
-}
-
-/** 为 group/search 批量投影当前 generation；每类 registry 最多读取一次。 */
-export async function resolveLiveToolRegistrations(
-  tools: ToolMetadata[],
-  flags: Record<string, string | boolean>,
-  runtime: ToolCatalogRuntime,
-  requestId: string,
-): Promise<ToolMetadata[]> {
-  const conditional = tools.filter((tool) => STATIC_BRIDGE_TOOL_NAMES.has(tool.name));
-  if (conditional.length === 0 || !await hasLiveCatalogTarget(flags, runtime)) return tools;
-
-  const isRuntimeTarget = (tool: ToolMetadata) => tool.target === "runtime" || (tool.target === "both" && getBoolean(flags, "runtime"));
-  const editorTools = conditional.filter((tool) => !isRuntimeTarget(tool));
-  const runtimeTools = conditional.filter(isRuntimeTarget);
-  const editor = editorTools.length > 0 ? await discoverProjectTools(flags, runtime, `${requestId}_editor`, { requireBridge: true }) : undefined;
-  const runtimeCatalog = runtimeTools.length > 0 ? await discoverRuntimeTools(flags, runtime, `${requestId}_runtime`, { requireBridge: true }) : undefined;
-
-  return tools.map((tool) => {
-    if (!STATIC_BRIDGE_TOOL_NAMES.has(tool.name)) return tool;
-    const discovered = isRuntimeTarget(tool) ? runtimeCatalog : editor;
-    if (!discovered || discovered.ok === false) {
-      const error = discovered?.ok === false ? discovered.error : undefined;
-      const code = error?.code ?? "E_TOOL_UNAVAILABLE";
-      const message = error?.message ?? `Tool ${tool.name} availability could not be verified in the selected Unity generation.`;
-      return { ...tool, available: false, unavailableReason: `${code}: ${message}` };
-    }
-    return discovered.tools.find((candidate) => candidate.name === tool.name) ?? {
-      ...tool,
-      available: false,
-      unavailableReason: `E_TOOL_UNAVAILABLE: Tool ${tool.name} is not registered in the selected Unity generation.`,
-    };
-  });
-}
-
-async function hasLiveCatalogTarget(flags: Record<string, string | boolean>, runtime: ToolCatalogRuntime): Promise<boolean> {
-  return runtime.projectTools !== undefined
-    || runtime.bridgeExecute !== undefined
-    || (typeof runtime.dataDir === "string" && await hasInstanceForFlags(flags, runtime.dataDir));
-}
-
-/** 按名称解析 catalog descriptor，并在需要时加载 live catalog。 */
+/** 按名称从同一实例完整目录解析 Tool；本地 Tool 也不能绕过实例连接。 */
 export async function resolveCatalogTool(
   name: string,
   flags: Record<string, string | boolean>,
   runtime: ToolCatalogRuntime,
   requestId: string
 ): Promise<{ ok: true; tool?: ToolMetadata } | (CliResult & { ok: false })> {
-  // editor.state is a Context-only observation capability.
-  if (name === "editor.state") return { ok: true, tool: undefined };
-  if (runtime.projectTools) {
-    const supplied = await discoverProjectTools(flags, runtime, requestId, { requireBridge: true });
-    if (supplied.ok === false) return supplied;
-    const tool = supplied.tools.find((candidate) => candidate.name === name);
-    if (tool) return { ok: true, tool };
+  const catalog = await loadToolCatalog(flags, runtime, requestId);
+  return catalog.ok ? { ok: true, tool: catalog.tools.find((tool) => tool.name === name) } : catalog;
+}
+
+/**
+ * package 本地 Tool 与 live Tool 必须名称唯一；runtime 列表只能覆盖同一 live registration 的动态 availability。
+ * 未经证明的同名覆盖会让来源影响路由，因此必须 fail closed。
+ */
+function mergeLiveToolCatalog(
+  requestId: string,
+  localTools: ToolMetadata[],
+  editorTools: ToolMetadata[],
+  runtimeTools: ToolMetadata[],
+): ToolCatalogResult {
+  const tools = new Map<string, ToolMetadata>();
+  const liveNames = new Set<string>();
+
+  for (const tool of localTools) tools.set(tool.name, tool);
+  for (const tool of editorTools) {
+    if (tools.has(tool.name)) return toolCatalogConflict(requestId, tool.name, "package-local and live registrations use the same name");
+    tools.set(tool.name, tool);
+    liveNames.add(tool.name);
   }
-  const local = [...builtinToolMetadata(), ...staticBridgeToolMetadata()].find((tool) => tool.name === name);
-  if (local) return { ok: true, tool: local };
-  const shouldLoad = await shouldLoadLiveCatalog(flags, runtime)
-    || (typeof runtime.dataDir === "string" && await hasInstanceForFlags(flags, runtime.dataDir));
-  if (!shouldLoad) return { ok: true, tool: undefined };
-  const runtimeCatalog = await discoverRuntimeTools(flags, runtime, requestId, { requireBridge: true });
-  if (runtimeCatalog.ok === false) return runtimeCatalog;
-  const runtimeTool = runtimeCatalog.tools.find((tool) => tool.name === name);
-  if (runtimeTool) return { ok: true, tool: runtimeTool };
-  const editorCatalog = await discoverProjectTools(flags, runtime, requestId, { requireBridge: true });
-  if (editorCatalog.ok === false) return editorCatalog;
-  return { ok: true, tool: editorCatalog.tools.find((tool) => tool.name === name) };
+
+  for (const runtimeTool of runtimeTools) {
+    const current = tools.get(runtimeTool.name);
+    if (!current) {
+      tools.set(runtimeTool.name, runtimeTool);
+      liveNames.add(runtimeTool.name);
+      continue;
+    }
+    if (!liveNames.has(runtimeTool.name) || !sameLiveRegistration(current, runtimeTool)) {
+      return toolCatalogConflict(requestId, runtimeTool.name, "runtime registration does not match the instance Tool registry");
+    }
+    if (current.target === "runtime") {
+      tools.set(runtimeTool.name, {
+        ...current,
+        available: runtimeTool.available,
+        ...(runtimeTool.unavailableReason ? { unavailableReason: runtimeTool.unavailableReason } : {}),
+      });
+    }
+  }
+
+  return { ok: true, tools: [...tools.values()].sort((left, right) => left.name.localeCompare(right.name)) };
+}
+
+/** runtime availability 必须来自同一份 live descriptor，不能借同名切换 owner。 */
+function sameLiveRegistration(left: ToolMetadata, right: ToolMetadata): boolean {
+  if (left.group !== right.group || left.target !== right.target) return false;
+  if (left.liveDescriptorFingerprint || right.liveDescriptorFingerprint) {
+    return left.liveDescriptorFingerprint === right.liveDescriptorFingerprint;
+  }
+  return JSON.stringify(left.inputSchema) === JSON.stringify(right.inputSchema)
+    && JSON.stringify(left.outputSchema) === JSON.stringify(right.outputSchema);
+}
+
+/** 返回稳定的 catalog ownership 冲突，不允许静默覆盖。 */
+function toolCatalogConflict(requestId: string, name: string, reason: string): CliResult & { ok: false } {
+  return failure(requestId, "E_TOOL_SCHEMA_CONFLICT", `Tool catalog conflict for ${name}: ${reason}.`, [
+    "Fix the duplicate Tool registration in the selected Unity project, then retry discovery."
+  ], { toolName: name, reason }) as CliResult & { ok: false };
 }
 
 export function uniqueByName(tools: ToolMetadata[]): ToolMetadata[] {
@@ -178,20 +149,4 @@ export function publicToolDescriptor(tool: ToolMetadata): Record<string, unknown
     ...(!available && tool.unavailableReason ? { unavailableReason: tool.unavailableReason } : {}),
     ...(tool.requiresPackages?.length ? { requiresPackages: tool.requiresPackages } : {})
   };
-}
-
-/** 将 Tool 请求中的目标字段转换为 discovery 与实例选择共用 flags。 */
-export function catalogFlags(request: Record<string, unknown>, base: Record<string, string | boolean> = {}): Record<string, string | boolean> {
-  const flags = { ...base };
-  const mappings: Record<string, string> = {
-    includeCustom: "include-custom",
-    instance: "instance",
-    runtime: "runtime",
-    project: "project"
-  };
-  for (const [property, flag] of Object.entries(mappings)) {
-    const value = request[property];
-    if (typeof value === "string" || typeof value === "boolean") flags[flag] = value;
-  }
-  return flags;
 }

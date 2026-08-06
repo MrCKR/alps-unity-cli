@@ -53,7 +53,7 @@ namespace MyProject.UnityCLI
                 ProofSource = "typed-result-and-effect-readback",
                 ReloadPolicy = "same-session-proof-recovery",
                 TimeoutError = "E_EXECUTION_TIMEOUT",
-                OutcomeUnknownPolicy = "fail-closed-no-replay",
+                OutcomeUnknownPolicy = "caller-decides-after-timeout",
                 CompletionDriverId = "atomic-typed-result-v1"
             },
             Examples = new[]
@@ -84,7 +84,7 @@ namespace MyProject.UnityCLI
 - `Request` / `Result` 嵌套在 Tool 类内，public 属性派生 `inputSchema` / `outputSchema`。
 - `[UnityCliRequired]` 标记必填输入字段；不要手写 schema 字符串。
 - `Describe()` 只写 `Name`、`Summary`、`Description`、`Group`、风险、target、Play Mode、completion 和 examples 等人工字段。
-- 自定义 Tool 必须声明完整 `Completion`；driver 必须使用框架已注册的 execution class/driver 对。
+- 自定义 Tool 必须声明完整 `Completion`；driver 必须使用框架已注册的 execution class/driver 对。`OutcomeUnknownPolicy` 描述 timeout 后没有可信终态且后续由调用方决定，不构成调用限制。
 - `ExecuteAsync(Request, ctx, ct)` 返回 `ValueTask<Result>`；失败交给框架转结构化错误 envelope，不要返回伪造的 `{ ok:false }`。
 - mutation Tool 在全部输入、目标、权限和包前置校验后、紧邻首个真实 effect 前必须恰好调用一次 `ctx.CommitEffect()`。漏调而返回成功会被协调器拒绝为 `E_TOOL_COMPLETION_PROOF_INVALID`；重复调用稳定返回 `E_TOOL_EFFECT_BARRIER_DUPLICATE`。只读 Tool、dry-run 与 proof-only recovery 不得调用。
 - `DestructiveHint = true` 准确描述可能不可逆效果，但公开 Tool 调用本身即授权；不得引入 CLI 确认、预定义按钮列表或意图门。能预览的写操作设置 `SupportsDryRun = true`。
@@ -92,20 +92,20 @@ namespace MyProject.UnityCLI
 
 ## 执行入口
 
-AI 使用公开 CLI 自发现和执行：
+AI 使用当前实例的统一公开目录自发现和执行：
 
 ```powershell
-unity_cli context read tools.custom
-unity_cli tools group list <group> --include-custom
-unity_cli tools describe <custom-tool> --include-custom
+unity_cli tools group --instance <id|projectPath|alias>
+unity_cli tools group list <group> --instance <id|projectPath|alias>
+unity_cli tools describe <custom-tool> --instance <id|projectPath|alias>
 unity_cli tools run <custom-tool> --input '<json>' --instance <id|projectPath|alias>
 ```
 
-`<group>` 必须来自 `tools.custom` 或 `tools group list <group> --include-custom` 的真实输出；不要假设所有项目工具都在 `custom` 组。
+`<group>` 必须来自当前实例 `tools group` 的真实输出；不要假设项目 Tool 位于 `custom` 组。`source` 只作描述/审计，不改变发现或执行路径。
 
 ## 最小验证
 
 1. Unity 编译无错误。
-2. `tools group list <group> --include-custom` 能发现 Tool。
-3. `tools describe <tool> --include-custom` 的 schema、风险、target、Play Mode 语义足以让陌生 AI 一次调用成功。
+2. `tools group` 与 `tools group list <group>` 能从同一实例完整目录发现 Tool。
+3. `tools describe <tool>` 的 schema、风险、target、Play Mode 语义足以让陌生 AI 一次调用成功。
 4. `tools run <tool> --input '<json>' --instance <id|projectPath|alias>` 覆盖默认正向、代表性可选参数和错误路径。

@@ -1,85 +1,84 @@
 # 可用性差异（Availability Differences）
 
-> 为什么不同 Unity 实例可能返回不同的工具可用性
-
 ## 核心原则
 
-工具可用性是 **per-instance** 的，不是全局的。`tools group list` 和 `tools describe` 反映已解析目标实例的能力。不同实例可能显示不同的工具集。
+能力目录和可用性都是 per-instance。`tools` / `context` discovery 读取一个已连接 Unity 实例的完整 catalog；不同项目、Package、Extension、项目注册和 Editor 状态会产生不同 descriptor 集合与 `available` 状态。
 
-## 可用性差异原因
+完整显示不等于无条件执行。目录不按 source 或 Edit/Play 状态过滤，执行仍按 schema、Package、PlayMode、安全、deadline 和 completion contract fail closed。
 
-### 1. 已安装 Package
+## 实例状态
 
-依赖特定 Unity Package 的工具只在目标项目安装了对应包时可用：
+| 状态 | Discovery 与执行 |
+|------|------------------|
+| `ready` | 返回当前实例完整 Tool/Context catalog；可执行状态由 descriptor 表达 |
+| `transitioning` | supervisor 在同一 deadline 内尝试绑定恢复后的 generation；无法稳定时返回结构化 transition/timeout error |
+| `blocked` | discovery 或执行返回 blocker error；`editor.state` / `editor.dialogs` 提供只读观察 |
+| `offline` | 不返回 capability catalog；返回 `E_INSTANCE_NOT_RUNNING` |
+| `conflict` | 不猜测 session；返回 `E_INSTANCE_CONFLICT` |
 
-| 工具 | Package 依赖 | 不可用时行为 |
-|------|-------------|-------------|
-| ProBuilder 扩展工具（create-shape/extrude-faces/delete-faces 等） | 精确 `com.unity.probuilder@5.2.4` | 缺包或版本不匹配时在 effect 前返回 dependency error |
-| `vfx.graph/vfx.effect` | `com.unity.visualeffectgraph` | 返回 `E_VFX_PACKAGE_MISSING` |
+没有 selector 且 CWD 不在 Unity 项目中时返回 `E_INSTANCE_REQUIRED`。静态 snapshot 不作为公开 fallback。
 
-Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
+## Package 与 Extension
+
+依赖特定 Unity Package 的能力仍出现在实例目录中。descriptor 使用以下字段表达当前可执行性：
 
 ```json
 {
-  "name": "vfx.graph",
-  "requiresPackages": ["com.unity.visualeffectgraph"]
+  "name": "probuilder.create-shape",
+  "source": "extension",
+  "requiresPackages": ["com.unity.probuilder"],
+  "available": false,
+  "unavailableReason": "E_EXTENSION_DEPENDENCY_MISSING: ..."
 }
 ```
 
-执行前可通过 `tools describe` 检查 `available`、`unavailableReason` 和 `requiresPackages`；执行失败时跟随错误里的 `nextActions`。
+`source` 只用于说明和审计，不影响 visibility、describe、execution 或公开路由。安装 Package/Extension 后重新运行原 discovery 命令。
 
-### 2. 项目工具注册
+## 项目注册能力
 
-项目工具（`IUnityCliTool<TReq,TRes>` C# 实现）通过 Bridge 运行时发现。不同项目注册不同工具。`tools group list custom --include-custom` 对实例 A 可能显示 `sample.echo`，对实例 B 可能显示 `acme.custom-builder`。
+项目通过 `IUnityCliTool<TReq,TRes>` 和 `IUnityCliContext<TReq,TRes>` 注册的能力，与 package 内置和 Extension 能力使用相同入口：
 
-项目工具发现需要可验证的 live Bridge generation。无 live Bridge 时，CLI 仍提供 packaged built-in/Extension static catalog；项目自定义能力只能来自带 identity/freshness 的已验证 snapshot，否则返回结构化 unavailable。
+```powershell
+unity_cli tools group
+unity_cli tools group list <group>
+unity_cli tools describe <tool>
+unity_cli context list
+unity_cli context describe <context>
+```
 
-### 3. Bridge 可达性
+不同实例可以注册不同名称和分组；不需要额外来源参数，也不存在来源专用 Context。
 
-| Instance 状态 | 发现与执行 |
-|---------------|------------|
-| `ready` | static catalog + 当前 validated generation 的 live/project custom descriptors；可执行 Bridge Tool |
-| `transitioning` | static catalog 立即可用；直接调用由 supervisor 在 absolute deadline 内等待恢复 |
-| `blocked` | static catalog 立即可用；`editor.state` 返回 blocker，普通调用返回结构化 blocked error |
-| `offline` | static catalog 与 TS-local 能力可用；live project custom discovery 不伪造结果 |
-| `conflict` | static catalog 可用；Bridge 调用返回 `E_INSTANCE_CONFLICT` |
+## EditMode 与 PlayMode
 
-不需要 Unity 连接的能力不受 Bridge 状态影响：
-- `tools run package.list` / `package.info` / `package.search` / `package.bridge-remove`
-- `tools run docs.get` / `docs.search` / `reflect.type` / `reflect.member` / `reflect.search`
-- `init --check`, `doctor`, `instances list` / `instances prune`
-- `target alias list` / `target alias set` / `target alias unset`
+Editor 与 Runtime 能力在两种模式中都保持可发现。`available`、`unavailableReason`、`target`、`availabilityScope` 和 `playModeSupport` 表达当前状态：
 
-`package.install`、`package.remove`、`package.resolve`、`package.deploy` 和 `package.restore` 连接已打开的 Unity Editor，并在同一次直接调用中证明文件终态、`Client.Resolve()` 后的显式 `Client.List(false, true)` completion fence、manifest/lock 与 fresh PackageInfo readback。超时或终态前断连统一返回 `E_EXECUTION_TIMEOUT`；调用方负责观察业务状态并判断是否提交新的调用。
+| 当前模式 | `target: editor` | `target: runtime` |
+|---------|------------------|-------------------|
+| EditMode | 通常可执行 | 显示但通常 `available:false`；执行返回 `E_RUNTIME_NOT_READY` |
+| PlayMode | 依据 `playModeSupport` 执行或拒绝 | 可执行；结果通常限于当前 PlayMode session |
 
-### 4. 编辑器状态（PlayMode）与 Runtime 工具可用性
+进入 PlayMode 的标准步骤：
 
-`target: "runtime"` 和 `availabilityScope: "playModeSession"` 的工具仅在 Play Mode 下可用：
+1. `unity_cli tools run editor.play --input '{}'`
+2. `unity_cli context read editor.state --input '{}'`
+3. 重新 `tools describe <runtime-tool>` 或直接按 `nextActions` 调用
 
-| 编辑器状态 | `target: "editor"` 工具 | `target: "runtime"` 工具 |
-|-----------|------------------------|-------------------------|
-| 编辑模式 | 可执行 | 执行返回 `E_RUNTIME_NOT_READY`（transient） |
-| 播放模式 | 可执行 | 可执行 |
+Editor-only Tool 在 PlayMode 中同样保持可见，但执行继续返回准确错误。
 
-使 runtime 工具可用的步骤：
-1. `tools run editor.play` 进入 Play Mode
-2. `context read editor.state --input '{}'` 确认 `state.playMode` 的已知值为 `play`
-3. 重试 runtime 工具
+## Domain Reload
 
-### 5. Domain Reload
-
-Unity domain reload 期间，registry 将 project identity 归约为 `transitioning`，listener generation 可以变化。session supervisor 在同一直接调用和 absolute deadline 内重新绑定已验证 generation；可恢复 reload 不作为直接调用的最终错误暴露。deadline 耗尽或终态前断连时返回 `E_EXECUTION_TIMEOUT`。
+Domain reload 期间，registry 将实例归约为 `transitioning`，listener generation 可以变化。session supervisor 在同一 direct call 与 absolute deadline 内重新验证 generation；终态前断连或 deadline 耗尽返回 `E_EXECUTION_TIMEOUT`。该错误只表示本次调用没有可信终态；调用方可观察状态、重试、重复调用或继续 mutation，并自行决定后续动作。`nextActions` 仅为建议。
 
 ## AI Agent 处理方式
 
-1. **先解析项目身份。** 执行任何工具前先 `instances list`，然后在 discovery、describe 和执行命令上显式传 `--instance`；也可以从目标 Unity 项目 CWD 调用
-2. **执行前先 describe。** descriptor 显示 `target`、`availabilityScope`、`playModeSupport`、schema 和副作用。
-3. **按结构化终态处理。** Package-not-found、instance conflict、blocker、`E_EXECUTION_TIMEOUT` 和 `E_RUNTIME_NOT_READY` 都包含 `nextActions`。
-4. **能力变化后重新发现。** 安装包或 domain reload 后，重新 `tools group list custom --include-custom`。
-5. **需要即时状态时读取 Context。** 使用 `context read editor.state --input '{}'`；`target: "runtime"` 的 Tool 需先进入 Play Mode。
+1. 显式传 `--instance <id|projectPath|alias>`，或从目标 Unity 项目 CWD 调用。
+2. 先 discovery，再 describe；不要从 source 或工具名推断参数。
+3. 对 `available:false` 读取 `unavailableReason`、`requiresPackages` 和 `nextActions`。
+4. Package、Extension、项目代码、domain reload 或 PlayMode 变化后重新 discovery。
+5. 即时状态使用 `context read editor.state --input '{}'`。
 
 ## 交叉引用
 
-- 目标选择：[target-and-instance](./target-and-instance.md)
-- 工具发现：[tool-discovery](./tool-discovery.md)
-- 错误码：[error-codes](./error-codes.md)
+- [Target 与 Instance](./target-and-instance.md)
+- [工具发现](./tool-discovery.md)
+- [错误码](./error-codes.md)

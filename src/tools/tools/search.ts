@@ -1,5 +1,5 @@
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../../extension-availability.js";
-import { catalogFlags, loadToolCatalog, resolveLiveToolRegistrations } from "../catalog.js";
+import { loadToolCatalog } from "../catalog.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
 import { toolAvailabilityScope, toolSource } from "../metadata/index.js";
@@ -11,7 +11,7 @@ export interface ToolsSearchResult { keyword: string; count: number; tools: Tool
 export default defineTool<ToolsSearchRequest, ToolsSearchResult>({
   name: "tools.search",
   summary: "Search tools by keyword across name, summary, description, and group.",
-  description: "Search the shared TS-local and live Bridge catalog.",
+  description: "Search the complete Tool catalog owned by the connected Unity instance.",
   group: "tools",
   handler: "offline",
   supportStatus: "cli-only",
@@ -21,13 +21,12 @@ export default defineTool<ToolsSearchRequest, ToolsSearchResult>({
   examples: [{ description: "Search for hierarchy tools", argv: ["tools", "run", "tools.search", "--input", "{\"keyword\":\"hierarchy\"}"] }],
   async execute(request, context) {
     if (!request.keyword) throw new StructuredToolError("TOOLS_SEARCH_KEYWORD_REQUIRED", "Pass a keyword: unity_cli tools search <keyword>.", ["Run unity_cli tools group to see tool groups."]);
-    const flags = catalogFlags(request as unknown as Record<string, unknown>, context.flags);
+    const flags = context.flags ?? {};
     const catalog = await loadToolCatalog(flags, context, context.requestId);
     if (catalog.ok === false) throw StructuredToolError.from(catalog.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
     const availabilityFlags = await extensionAvailabilityFlags(flags, context);
     const keyword = request.keyword.toLowerCase();
-    const staticMatches = catalog.tools.filter((tool) => [tool.name, tool.summary, tool.description, tool.group].some((value) => value.toLowerCase().includes(keyword)));
-    const matches = await resolveLiveToolRegistrations(staticMatches, flags, context, context.requestId);
+    const matches = catalog.tools.filter((tool) => [tool.name, tool.summary, tool.description, tool.group].some((value) => value.toLowerCase().includes(keyword)));
     const tools = await Promise.all(matches.map(async (tool) => {
       const availability = await checkToolExtensionAvailability(tool, availabilityFlags);
       return {

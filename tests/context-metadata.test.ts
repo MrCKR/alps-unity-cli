@@ -21,15 +21,15 @@ test("TS context metadata has one authoritative plural source", async () => {
   assert.equal(await exists("src/contexts/dispatcher.ts"), true, "plural Context dispatcher must exist");
 });
 
-test("offline context catalog merges TS-owned and packaged C# descriptors", () => {
+test("audit-only Context snapshot merges CLI aggregates and packaged descriptors", () => {
   const contexts = builtinContextDescriptors();
-  assert.equal(contexts.length, 26);
+  assert.equal(contexts.length, 24);
   assert.ok(contexts.some((context) => context.name === "editor.state" && context.source === "built-in"));
   assert.ok(contexts.some((context) => context.name === "probuilder.scene" && context.source === "extension"));
-  assert.deepEqual(defineContextMetadata().map((context) => context.name).sort(), ["editor.dialogs", "editor.state", "tools.custom", "tools.groups"]);
+  assert.deepEqual(defineContextMetadata().map((context) => context.name).sort(), ["editor.dialogs", "editor.state"]);
 });
 
-test("offline context descriptors keep public descriptor hygiene", () => {
+test("audit-only Context descriptors keep public descriptor hygiene", () => {
   const forbidden = ["title", "kind", "resourceUri", "destructiveHint", "bridgeCommand", "cliCommand", "supportStatus", "refreshBehavior", "version", "fingerprint"];
   for (const ctx of builtinContextDescriptors()) {
     assert.ok(ctx.name, "name required");
@@ -51,23 +51,16 @@ test("offline context descriptors keep public descriptor hygiene", () => {
   }
 });
 
-test("tools.groups remains offline and tools.custom remains live bridge backed", () => {
-  const toolsGroups = findBuiltinContextByName("tools.groups");
-  assert.ok(toolsGroups, "tools.groups must exist");
-  assert.equal(toolsGroups.availabilityScope, "always");
-  assert.ok((toolsGroups.outputSchema.properties as Record<string, unknown>).groups, "tools.groups must expose groups array");
-
-  const toolsCustom = findBuiltinContextByName("tools.custom");
-  assert.ok(toolsCustom, "tools.custom must exist");
-  assert.equal(toolsCustom.availabilityScope, "editorSession");
-  assert.ok((toolsCustom.outputSchema.properties as Record<string, unknown>).tools, "tools.custom must expose tools array");
+test("duplicate Tool discovery Contexts are absent", () => {
+  assert.equal(findBuiltinContextByName("tools.groups"), undefined);
+  assert.equal(findBuiltinContextByName("tools.custom"), undefined);
 });
 
-test("offline context categories, filtering, and search include packaged C# metadata", () => {
-  assert.deepEqual(builtinContextCategories(), ["editor", "instances", "prefab", "probuilder", "project", "scene", "tests", "tools"]);
-  assert.deepEqual(filterContextsByCategory("tools").map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
+test("audit-only Context categories, filtering, and search include packaged C# metadata", () => {
+  assert.deepEqual(builtinContextCategories(), ["editor", "instances", "prefab", "probuilder", "project", "scene", "tests"]);
+  assert.deepEqual(filterContextsByCategory("tools"), []);
   assert.ok(filterContextsByCategory("scene").some((context) => context.name === "scene.cameras"));
   assert.equal(findBuiltinContextByName("scene.cameras")?.source, "built-in");
-  assert.ok(searchContexts("custom").some((context) => context.name === "tools.custom"));
+  assert.equal(searchContexts("custom").some((context) => context.name === "tools.custom"), false);
   assert.ok(searchContexts("camera").some((context) => context.name === "scene.cameras"));
 });

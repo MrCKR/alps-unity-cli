@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "default_policy": {
+    "decision": "deny",
+    "reason": "The runtime Skill and feedback recorder do not require network access."
+  },
+  "scripts": {
+    "scripts/record-feedback.ps1": {
+      "decision": "deny",
+      "allowed_hosts": [],
+      "observed_network_apis": [],
+      "evidence": [
+        "tests/unity-cli-skill-feedback.test.ts static network API scan",
+        "DIR-002 runtime-contract-scan.json"
+      ]
+    }
+  }
+}

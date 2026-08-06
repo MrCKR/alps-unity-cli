@@ -49,31 +49,29 @@ function runtime(bridgeExecute?: BridgeRuntime["bridgeExecute"]): BridgeRuntime 
 }
 
 test("context read accepts only strict JSON object input", async () => {
+  const bridgeExecute: BridgeRuntime["bridgeExecute"] = async (payload) => ({ ok: true, requestId: payload.requestId, data: { contexts: [] } });
   for (const input of ["{", "{} trailing", "[]", "true", "null"]) {
-    const result = await handleContextCommand("read", ["tools.groups"], { input }, runtime(), requestId);
+    const result = await handleContextCommand("read", ["editor.state"], { input }, runtime(bridgeExecute), requestId);
     assert.ok(!result.ok);
     assert.equal(result.error?.code, input === "[]" || input === "true" || input === "null" ? "E_SCHEMA_INVALID" : "E_CONTEXT_INPUT_JSON_INVALID");
   }
 });
 
-test("offline context catalog merges generated TS registry and packaged C# snapshot", async () => {
-  assert.equal(builtinContextDescriptors().length, 26);
+test("static Context snapshots remain audit-only and public discovery requires a live instance", async () => {
+  assert.equal(builtinContextDescriptors().length, 24);
   assert.ok(builtinContextCategories().includes("editor"));
-  assert.deepEqual(filterContextsByCategory("tools").map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
+  assert.deepEqual(filterContextsByCategory("tools"), []);
   assert.equal(findBuiltinContextByName("project.info")?.source, "built-in");
-  assert.ok(searchContexts("custom").some((context) => context.name === "tools.custom"));
+  assert.equal(searchContexts("custom").some((context) => context.name === "tools.custom"), false);
 
   const result = await handleContextCommand("list", [], {}, runtime(), requestId);
-  assert.ok(result.ok);
-  const data = result.data as { count: number; contexts: ContextDescriptor[] };
-  assert.equal(data.count, 26);
-  assert.ok(data.contexts.some((context) => context.name === "editor.state"));
-  assert.deepEqual(new Set(data.contexts.map((context) => context.source)), new Set(["built-in", "extension"]));
+  assert.ok(!result.ok);
+  assert.equal(result.error?.code, "E_INSTANCE_REQUIRED");
 });
 
 test("live list and search merge built-in, extension, and project descriptors", async () => {
   const contexts = [
-    descriptor("editor.state"),
+    descriptor("scene.opened"),
     descriptor("probuilder.scene", { source: "extension", category: "probuilder", requiresPackages: ["com.unity.probuilder"] }),
     descriptor("sample.summary", { source: "project", category: "sample" })
   ];
@@ -82,7 +80,7 @@ test("live list and search merge built-in, extension, and project descriptors", 
   const listed = await handleContextCommand("list", [], {}, runtime(bridgeExecute), requestId);
   assert.ok(listed.ok);
   const listData = listed.data as { count: number; contexts: ContextDescriptor[] };
-  assert.equal(listData.count, 27);
+  assert.equal(listData.count, 5);
   assert.deepEqual(new Set(listData.contexts.map((context) => context.source)), new Set(["built-in", "extension", "project"]));
 
   const searched = await handleContextCommand("search", ["sample"], {}, runtime(bridgeExecute), requestId);
@@ -110,6 +108,30 @@ test("describe returns the exact live descriptor from the shared catalog", async
   assert.equal(data.cliCommand, undefined);
   assert.deepEqual(data.inputSchema, live.inputSchema);
   assert.deepEqual(data.outputSchema, live.outputSchema);
+});
+
+test("runtime Context remains discoverable in EditMode and read returns E_RUNTIME_NOT_READY", async () => {
+  const live = descriptor("runtime.player-state", {
+    target: "runtime",
+    availabilityScope: "playModeSession",
+    playModeSupport: "runtime-only",
+    available: false,
+    unavailableReason: "E_RUNTIME_NOT_READY: Enter Play Mode before reading this Context."
+  });
+  const bridgeExecute: BridgeRuntime["bridgeExecute"] = async (payload) => ({ ok: true, requestId: payload.requestId, data: { contexts: [live] } });
+
+  const listed = await handleContextCommand("list", [], {}, runtime(bridgeExecute), requestId);
+  assert.ok(listed.ok);
+  assert.ok((listed.data as { contexts: ContextDescriptor[] }).contexts.some((context) => context.name === live.name));
+
+  const described = await handleContextCommand("describe", [live.name], {}, runtime(bridgeExecute), requestId);
+  assert.ok(described.ok);
+  assert.equal((described.data as ContextDescriptor).available, false);
+
+  const read = await handleContextCommand("read", [live.name], {}, runtime(bridgeExecute), requestId);
+  assert.ok(!read.ok);
+  assert.equal(read.error?.code, "E_RUNTIME_NOT_READY");
+  assert.equal(read.error?.transient, true);
 });
 
 test("duplicate and malformed live descriptors fail closed", async () => {
@@ -162,45 +184,21 @@ test("context read validates refs, tuples, dictionaries, and unknown fields befo
 });
 
 test("context input arrays and scalars are rejected instead of becoming empty objects", async () => {
-  const live = descriptor("editor.state");
-  const bridgeExecute: BridgeRuntime["bridgeExecute"] = async (payload) => ({ ok: true, requestId: payload.requestId, data: { contexts: [live] } });
+  const bridgeExecute: BridgeRuntime["bridgeExecute"] = async (payload) => ({ ok: true, requestId: payload.requestId, data: { contexts: [] } });
   for (const input of ["[]", "42", "null"]) {
-    const result = await handleContextCommand("read", [live.name], { input }, runtime(bridgeExecute), requestId);
+    const result = await handleContextCommand("read", ["editor.state"], { input }, runtime(bridgeExecute), requestId);
     assert.ok(!result.ok);
     assert.equal(result.error?.code, "E_SCHEMA_INVALID");
   }
 });
 
-test("tools.groups stays offline and tools.custom reports the live project tool registry only", async () => {
-  const groups = await handleContextCommand("read", ["tools.groups"], {}, runtime(), requestId);
-  assert.ok(groups.ok);
-  assert.ok(Array.isArray((groups.data as { groups: unknown[] }).groups));
-
-  const custom = await handleContextCommand("read", ["tools.custom"], {}, {
-    projectTools: [{
-      name: "sample.echo",
-      summary: "Echo a value.",
-      description: "Echo a value from the project registry.",
-      group: "sample",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false },
-      outputSchema: { type: "object", properties: { value: { type: "string" } }, additionalProperties: false },
-      destructiveHint: false,
-      supportsDryRun: false,
-      sideEffects: [],
-      playModeSupport: "supported",
-      target: "editor",
-      source: "project",
-      available: true,
-      examples: [{ description: "Echo a value.", argv: ["tools", "run", "sample.echo", "--input", "{}"] }]
-    }]
-  } as never, requestId);
-  assert.ok(custom.ok);
-  const customData = custom.data as { count: number; tools: Array<{ name: string; handler?: string; completionContract?: unknown }>; mode?: string };
-  assert.equal(customData.count, 1);
-  assert.equal(customData.tools[0].name, "sample.echo");
-  assert.equal(customData.tools[0].handler, undefined);
-  assert.equal(customData.tools[0].completionContract, undefined);
-  assert.equal(customData.mode, undefined);
+test("removed tools.groups and tools.custom Contexts do not resolve through the live catalog", async () => {
+  const bridgeExecute: BridgeRuntime["bridgeExecute"] = async (payload) => ({ ok: true, requestId: payload.requestId, data: { contexts: [] } });
+  for (const name of ["tools.groups", "tools.custom"]) {
+    const result = await handleContextCommand("read", [name], {}, runtime(bridgeExecute), requestId);
+    assert.ok(!result.ok);
+    assert.equal(result.error?.code, "E_CONTEXT_NOT_FOUND");
+  }
 });
 
 test("extension physical-state uncertainty is consistent for list, describe, and read", async () => {

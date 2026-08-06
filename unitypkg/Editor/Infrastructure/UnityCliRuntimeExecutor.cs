@@ -173,6 +173,8 @@ namespace UnityCli
                 if (definition.Target != "runtime" && definition.Target != "both") continue;
                 var descriptor = ProjectToolDescriptorData(definition);
                 descriptor["available"] = playModeReady;
+                if (!playModeReady)
+                    descriptor["unavailableReason"] = "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool.";
                 tools.Add(descriptor);
             }
             return new System.Collections.Generic.Dictionary<string, object>
@@ -221,7 +223,7 @@ namespace UnityCli
             if (!ProjectTools.ContainsKey(name))
             {
                 throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name,
-                    "Run unity_cli tools group --include-custom --instance <id|projectPath|alias> or tools search <keyword> to inspect registered tools.");
+                    "Run unity_cli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 
             var definition = ProjectTools[name];

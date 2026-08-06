@@ -4,7 +4,7 @@
 
 ## 当前状态：已实现
 
-扩展包系统已完成，包括 Bridge 包安装、项目工具发现、内部完整性校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前准源是 TS-local `defineTool` registry、`src/bridge/domains/*`、Core typed Tool/Context registry 与目录扩展包 `extensions/<id>/`。
+扩展包系统已完成，包括 Bridge 包安装、项目工具发现、内部完整性校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前准源是 package-local `defineTool` registry、连接实例中的 typed Tool/Context registry 与目录扩展包 `extensions/<id>/`；公开 discovery 只返回选定实例合并后的完整目录。
 
 ## 当前扩展能力
 
@@ -26,19 +26,21 @@ unity_cli init --check --project C:\path\MyProject
 安装内容：
 - `Packages/com.unity_cli/` — Bridge 包（copy 模式）
 - `Packages/unity_cli.install.json` — 安装元数据（项目 hash、版本、支持范围）
-- `.pi/skills/unity_cli/SKILL.md`、`.claude/skills/unity_cli/SKILL.md` 或 `.agents/skills/unity_cli/SKILL.md` — 仅当对应 Agent 目录已存在，或显式传入 `--agent` 时安装
+- `.pi/skills/unity_cli/`、`.claude/skills/unity_cli/` 或 `.agents/skills/unity_cli/` — 仅当对应 Agent 目录已存在，或显式传入 `--agent` 时安装完整 runtime bundle（`SKILL.md`、`references/**`、`scripts/**`）
 
-### 项目自定义工具发现
+### 项目能力发现
 
-Bridge 包安装后，项目可以通过 `IUnityCliTool<TReq,TRes>` 注册自定义工具，通过 `--include-custom` 标志发现：
+Bridge 包安装并连接 Unity Editor 后，项目可以通过 `IUnityCliTool<TReq,TRes>` 和 `IUnityCliContext<TReq,TRes>` 注册能力。它们自动进入该实例的完整目录，与 package 内置和 Extension 能力使用相同入口：
 
 ```powershell
-unity_cli tools group list custom --include-custom
+unity_cli tools group
+unity_cli tools group list <group>
 unity_cli tools describe my.custom-tool
 unity_cli tools run my.custom-tool --input '{}'
+unity_cli context list
 ```
 
-项目自定义 Tool 通过同一公开 descriptor 和 Live Editor direct-final 调用使用。
+分组名称来自实际 discovery 输出，不假设项目能力位于 `custom` 分组。
 
 ### 诊断
 

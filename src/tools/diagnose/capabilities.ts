@@ -12,26 +12,24 @@ export interface DiagnoseCapabilitiesObject { [key: string]: AnyJson; }
 
 export interface DiagnoseCapabilitiesResult {
   catalog: DiagnoseCapabilitiesObject;
-  projectTools?: DiagnoseCapabilitiesObject;
-  customContexts?: DiagnoseCapabilitiesObject;
   runtime?: DiagnoseCapabilitiesObject;
   extensions: DiagnoseCapabilitiesObject;
 }
 
 export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResult>({
   name: "diagnose.capabilities",
-  summary: "Summarize built-in CLI capabilities, tool/context catalog counts, extension availability, and optional selected Unity session capabilities.",
-  description: "Summarize offline CLI capabilities and, when --instance selects a live project, include validated Unity session capabilities through the session supervisor.",
+  summary: "Summarize the selected Unity instance's complete Tool, Context, Extension, and runtime capabilities.",
+  description: "Summarize the complete unified capability catalog of the selected live Unity instance. Package, Extension, and project-defined capabilities use the same catalog.",
   group: "diagnose",
   destructiveHint: false,
   playModeSupport: "supported",
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Read offline CLI capabilities", argv: ["tools", "run", "diagnose.capabilities", "--input", "{}"] },
-    { description: "Include selected live capabilities", argv: ["tools", "run", "diagnose.capabilities", "--instance", "<projectPath>"] }
+    { description: "Summarize the instance selected from CWD", argv: ["tools", "run", "diagnose.capabilities", "--input", "{}"] },
+    { description: "Summarize an explicitly selected instance", argv: ["tools", "run", "diagnose.capabilities", "--instance", "<projectPath>"] }
   ],
-  /** 复用既有 capabilities 状态机,保持 offline/live/custom discovery 语义一致。 */
+  /** 复用统一 live catalog，来源只作为汇总维度。 */
   async execute(request, ctx) {
     const flags = { ...ctx.flags };
     const runtime: BridgeRuntime & ProjectToolRuntime & ContextCatalogRuntime = {

@@ -1,0 +1,44 @@
+{
+  "captured_at": "2026-08-05",
+  "release": "0.1.9",
+  "status": "baseline",
+  "trigger_eval": {
+    "case_count": 29,
+    "precision": 1.0,
+    "recall": 1.0,
+    "false_positives": 0,
+    "false_negatives": 0,
+    "evidence": "DIR-003 trigger-eval.json"
+  },
+  "output_eval": {
+    "case_count": 5,
+    "file_backed_case_count": 2,
+    "baseline_pass_rate": 0.0,
+    "with_skill_pass_rate": 100.0,
+    "regression_count": 0,
+    "evidence": "DIR-003 output-eval.json"
+  },
+  "repository_tests": {
+    "passed": 876,
+    "failed": 0,
+    "evidence": "DIR-003 full-tests.log"
+  },
+  "targeted_skill_tests": {
+    "passed": 61,
+    "failed": 0,
+    "evidence": "DIR-003 targeted-regression.log"
+  },
+  "dev_live": {
+    "agents": ["pi", "claude", ".agents"],
+    "install_update_check": "pass",
+    "compile_errors": 0,
+    "compile_warnings": 0
+  },
+  "clean_agent_gate": "pass",
+  "missing evidence": [
+    "production trigger telemetry",
+    "longitudinal feedback quality",
+    "human blind-review adjudication",
+    "native permission enforcement"
+  ]
+}

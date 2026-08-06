@@ -150,13 +150,13 @@ function help(): Record<string, unknown> {
   return {
     usage: "unity_cli <command> [options]",
     commands: [
-      "tools group [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
-      "tools group list <group> [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
+      "tools group [--instance <id|projectPath|alias>] [--format json|text]",
+      "tools group list <group> [--instance <id|projectPath|alias>] [--format json|text]",
       "tools describe <tool> [--instance <id|projectPath|alias>]",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--artifact-dir <path>] [--runtime] [--instance <id|projectPath|alias>]",
       "tools search <keyword> [--instance <id|projectPath|alias>] [--format json|text]",
-      "context list [--category <cat>] [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
-      "context search <keyword> [--category <cat>] [--include-custom] [--instance <id|projectPath|alias>] [--format json|text]",
+      "context list [--category <cat>] [--instance <id|projectPath|alias>] [--format json|text]",
+      "context search <keyword> [--category <cat>] [--instance <id|projectPath|alias>] [--format json|text]",
       "context describe <name> [--instance <id|projectPath|alias>]",
       "context read <name> [--input <json>] [--input-file <path>] [--instance <id|projectPath|alias>]",
       "extensions list [--project <path>] [--format json|text]",

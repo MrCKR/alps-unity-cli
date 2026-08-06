@@ -99,16 +99,18 @@ namespace MyProject.UnityCLI
 ## 读取入口
 
 ```powershell
-unity_cli context list --include-custom
-unity_cli context describe <custom-context> --include-custom
-unity_cli context read <custom-context> --include-custom --input '{}'
+unity_cli context list --instance <id|projectPath|alias>
+unity_cli context describe <custom-context> --instance <id|projectPath|alias>
+unity_cli context read <custom-context> --input '{}' --instance <id|projectPath|alias>
 ```
 
 按分类浏览：
 
 ```powershell
-unity_cli context list --category <category> --include-custom
+unity_cli context list --category <category> --instance <id|projectPath|alias>
 ```
+
+项目 Context 自动进入连接实例的完整目录，与 package 内置和 Extension Context 使用同一路径；`source` 不影响显示或读取。
 
 ## 只读硬边界
 
@@ -121,6 +123,6 @@ unity_cli context list --category <category> --include-custom
 ## 最小验证
 
 1. Unity 编译无错误。
-2. `context list --include-custom` 能发现 Context。
-3. `context describe <context> --include-custom` 的只读边界、schema、target 和 Play Mode 语义足够明确。
-4. `context read <context> --include-custom --input '{}'` 覆盖默认读取、代表性可选参数和错误路径。
+2. `context list` 能从连接实例的完整目录发现 Context。
+3. `context describe <context>` 的只读边界、schema、target 和 Play Mode 语义足够明确。
+4. `context read <context> --input '{}'` 覆盖默认读取、代表性可选参数和错误路径。

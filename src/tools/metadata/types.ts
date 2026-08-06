@@ -52,6 +52,8 @@ export interface ToolMetadata {
   supportStatus?: ToolSupportStatus;
   /** Execution target: "editor" (default), "runtime", or "both". */
   target?: string;
+  /** Descriptor 声明的可用范围；live registry 值优先于 target 派生默认值。 */
+  availabilityScope?: string;
   /** Whether the tool is currently available based on session state (runtime tools: only in Play Mode). */
   available?: boolean;
   /** 当前不可用的可执行原因；仅在 available=false 时公开。 */

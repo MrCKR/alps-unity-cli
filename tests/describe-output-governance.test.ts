@@ -61,7 +61,7 @@ test("TS-local descriptor registry owns exactly the current offline/hybrid tools
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
     "asset.refresh", "build.run", "code.exec", "diagnose.capabilities",
-    "docs.get", "docs.list", "docs.search", "docs.topic", "editor.compile",
+    "docs.get", "docs.search", "editor.compile",
     "editor.dialog.click", "editor.refresh", "package.bridge-remove", "package.deploy",
     "package.embed", "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get",
     "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add",

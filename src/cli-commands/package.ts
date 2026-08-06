@@ -28,7 +28,17 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
   const pkgOnly = getBoolean(flags, "pkg-only");
   const skillOnly = getBoolean(flags, "skill-only");
   const isCheck = getBoolean(flags, "check");
-  const effectiveAgentFlag = agentFlag ?? (!pkgOnly ? (await detectAgentKinds(projectPath)).join(",") || undefined : undefined);
+  let checkIdentity: ReturnType<typeof resolveProjectIdentity> | undefined;
+  if (isCheck) {
+    try {
+      checkIdentity = resolveProjectIdentity(projectPath);
+    } catch (error) {
+      if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);
+      throw error;
+    }
+  }
+  const agentDetectionPath = checkIdentity?.canonicalProjectPath ?? projectPath;
+  const effectiveAgentFlag = agentFlag ?? (!pkgOnly ? (await detectAgentKinds(agentDetectionPath)).join(",") || undefined : undefined);
 
   if (skillOnly && !effectiveAgentFlag) return failure(requestId, "INVALID_INIT_FLAGS", "--skill-only requires --agent or an existing .pi/.claude/.agents directory in the project.", ["Create the target Agent directory first, or pass --agent <pi|claude|.agents> explicitly."]);
   if (pkgOnly && skillOnly) return failure(requestId, "INVALID_INIT_FLAGS", "--pkg-only and --skill-only are mutually exclusive.", ["Use exactly one init scope flag."]);
@@ -41,32 +51,46 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
     throw error;
   }
 
-  // check 是严格纯读路径：不创建 journal、lock、目录或任何安装投影。
+  // check 不写项目文件；canonical identity 保证 alias 与 install 共用同一 named mutex。
   if (isCheck) {
-    const result: Record<string, unknown> = { action: "init_check", projectPath };
-    if (!skillOnly) {
-      try {
-        result.package = { status: "installed", bridge: await checkPackageBridge(projectPath), nextActions: ["Unity package com.unity_cli is installed via copy mode in Packages/com.unity_cli/."] };
-      } catch (error) {
-        if (!(error instanceof PackageManagerError)) throw error;
-        result.package = { status: "not_installed", code: error.code, message: error.message };
+    try {
+      const canonicalProjectPath = checkIdentity!.canonicalProjectPath;
+      const checkDeadlineMs = Date.now() + Math.max(1, Number(getString(flags, "timeout-ms")) || 60_000);
+      const result: Record<string, unknown> = { action: "init_check", projectPath: canonicalProjectPath };
+      if (!skillOnly) {
+        try {
+          result.package = { status: "installed", bridge: await checkPackageBridge(canonicalProjectPath), nextActions: ["Unity package com.unity_cli is installed via copy mode in Packages/com.unity_cli/."] };
+        } catch (error) {
+          if (!(error instanceof PackageManagerError)) throw error;
+          result.package = { status: "not_installed", code: error.code, message: error.message };
+        }
       }
+      if (agents.length > 0) {
+        try {
+          result.skills = await agentSkillInstaller.checkForAgents(agents, await findSkillSourcePath(), canonicalProjectPath, checkDeadlineMs);
+        } catch (error) {
+          if (error instanceof SkillInstallerError) return failure(requestId, error.code, error.message, error.nextActions);
+          throw error;
+        }
+      }
+      if (!skillOnly) {
+        const { checkExtensionBundles } = await import("../extensions/installer.js");
+        const physicalState = await checkExtensionBundles(canonicalProjectPath);
+        result.extensionPhysicalState = physicalState;
+        result.extensionSummary = {
+          total: physicalState.length,
+          dependencyInstalled: physicalState.filter((item) => item.dependencyInstalled).length,
+          installed: physicalState.filter((item) => item.installed).length,
+          unhealthy: physicalState.filter((item) => !item.installed || !item.dependencyInstalled).length
+        };
+        const { autoDetectExtensions } = await import("./extension-auto-detect.js");
+        result.extensions = await autoDetectExtensions(canonicalProjectPath, true);
+      }
+      return success(requestId, result);
+    } catch (error) {
+      if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);
+      throw error;
     }
-    if (agents.length > 0) result.skills = await agentSkillInstaller.checkForAgents(agents, await findSkillSourcePath(), projectPath);
-    if (!skillOnly) {
-      const { checkExtensionBundles } = await import("../extensions/installer.js");
-      const physicalState = await checkExtensionBundles(projectPath);
-      result.extensionPhysicalState = physicalState;
-      result.extensionSummary = {
-        total: physicalState.length,
-        dependencyInstalled: physicalState.filter((item) => item.dependencyInstalled).length,
-        installed: physicalState.filter((item) => item.installed).length,
-        unhealthy: physicalState.filter((item) => !item.installed || !item.dependencyInstalled).length
-      };
-      const { autoDetectExtensions } = await import("./extension-auto-detect.js");
-      result.extensions = await autoDetectExtensions(projectPath, true);
-    }
-    return success(requestId, result);
   }
 
   try {
@@ -88,8 +112,8 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
       }
       if (skillSource) {
         if (Date.now() >= absoluteDeadlineMs) throw new PackageManagerError("E_EXECUTION_TIMEOUT", "The immutable init deadline elapsed before skill installation.");
-        const skills = await agentSkillInstaller.installForAgents(agents, skillSource, projectPath);
-        result.skills = await agentSkillInstaller.checkForAgents(agents, skillSource, projectPath);
+        const skills = await agentSkillInstaller.installForAgents(agents, skillSource, identity.canonicalProjectPath, absoluteDeadlineMs);
+        result.skills = await agentSkillInstaller.checkForAgents(agents, skillSource, identity.canonicalProjectPath, absoluteDeadlineMs);
         result.skillChanges = skills.filter((item) => item.status === "updated").map((item) => ({ agent: item.agent, action: "overwritten", previousHash: item.previousHash, newHash: item.newHash }));
       }
       if (extensionPlan) {
@@ -105,6 +129,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
     }
   } catch (error) {
     if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);
+    if (error instanceof SkillInstallerError) return failure(requestId, error.code, error.message, error.nextActions);
     if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
     if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details,
       error.transient === undefined ? undefined : { transient: error.transient, retryAfterMs: error.retryAfterMs });

@@ -6,11 +6,11 @@
  * Transport endpoint and listener identity remain internal to instance selection.
  */
 
-import { builtinContextDescriptors, loadContextCatalog, shouldLoadLiveContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
+import { builtinContextDescriptors, loadContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
 import type { ContextDescriptor } from "./contexts/types.js";
 import { getString } from "./args.js";
 import { access, stat } from "node:fs/promises";
-import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import { discoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { instanceSelectionFailure, obsoleteLocalStatePaths, readInstances, selectInstanceForFlags, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { EDITOR_STATE_OBSERVATION_BUDGET_MS } from "./bridge/session-supervisor.js";
@@ -332,43 +332,44 @@ async function checkDataDirectory(dataDir: string): Promise<DoctorCheck> {
 }
 
 async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string, bridgeReachable: boolean): Promise<DoctorCheck> {
-  const builtinCount = builtinToolMetadata().length;
-  const includeCustom = runtime.projectTools !== undefined || (bridgeReachable && shouldDiscoverProjectTools(flags, runtime));
-  const discovery = includeCustom ? await discoverProjectTools(flags, runtime, `${requestId}_project_tools`) : { ok: true as const, tools: [], mode: "skipped" as const };
+  if (!bridgeReachable && runtime.projectTools === undefined) {
+    return {
+      name: "unified_tool_discovery",
+      status: "warn",
+      message: "Tool discovery is unavailable because no Unity instance is connected.",
+      details: { mode: "unavailable", toolCount: 0 }
+    };
+  }
+  const discovery = await discoverProjectTools(flags, runtime, `${requestId}_project_tools`, { requireBridge: true });
   if (!discovery.ok) {
     return {
       name: "unified_tool_discovery",
-      status: "pass",
-      message: `Static tool metadata remains available (${builtinCount}); live project-defined discovery is currently unavailable.`,
-      details: {
-        builtinCount,
-        projectToolCount: 0,
-        projectDiscoveryMode: "unavailable",
-        projectTools: { status: "error", code: discovery.error?.code, message: discovery.error?.message },
-      }
+      status: "warn",
+      message: `Tool discovery failed: ${discovery.error?.code ?? "unknown"} — ${discovery.error?.message ?? "no message"}`,
+      details: { mode: "error", toolCount: 0, errorCode: discovery.error?.code, errorMessage: discovery.error?.message }
     };
   }
 
+  const localCount = builtinToolMetadata().length;
   return {
     name: "unified_tool_discovery",
     status: "pass",
-    message: `Unified discovery is available: ${builtinCount} built-in tool(s), ${discovery.tools.length} custom tool(s).`,
-    details: { builtinCount, projectToolCount: discovery.tools.length, projectDiscoveryMode: discovery.mode }
+    message: `The connected instance exposes ${localCount + discovery.tools.length} Tool descriptor(s).`,
+    details: { mode: discovery.mode, localCount, liveCount: discovery.tools.length, toolCount: localCount + discovery.tools.length }
   };
 }
 
 async function checkProjectContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string, bridgeReachable: boolean): Promise<DoctorCheck> {
-  const includeCustom = runtime.projectContexts !== undefined || (bridgeReachable && await shouldLoadLiveContextCatalog(flags, runtime));
-  if (!includeCustom) {
+  if (!bridgeReachable && runtime.projectContexts === undefined) {
     return {
       name: "project_context_discovery",
-      status: "pass",
-      message: "Context discovery skipped (no bridge or include-custom flag). Built-in contexts are always available offline.",
-      details: { mode: "skipped", projectCustomCount: 0, builtInCount: 0 }
+      status: "warn",
+      message: "Context discovery is unavailable because no Unity instance is connected.",
+      details: { mode: "unavailable", contextCount: 0 }
     };
   }
 
-  const discovery = await loadContextCatalog(flags, runtime, `${requestId}_context`, { requireLive: false });
+  const discovery = await loadContextCatalog(flags, runtime, `${requestId}_context`);
   if (!discovery.ok) {
     return {
       name: "project_context_discovery",
@@ -570,7 +571,7 @@ async function checkExtensionAvailability(flags: Record<string, string | boolean
 async function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, bridgeReachable: boolean): Promise<DoctorCheck> {
   const contexts = builtinContextDescriptors();
   const localCount = contexts.length;
-  const liveDiscoveryEnabled = runtime.projectContexts !== undefined || (bridgeReachable && await shouldLoadLiveContextCatalog(flags, runtime));
+  const liveDiscoveryEnabled = runtime.projectContexts !== undefined || bridgeReachable;
   if (localCount === 0) {
     return {
       name: "context_discovery",
@@ -592,7 +593,7 @@ async function checkContextDiscovery(flags: Record<string, string | boolean>, ru
     return {
       name: "context_discovery",
       status: "warn",
-      message: `Local context discovery available: ${localCount} TS-owned context(s), but ${warnings.join("; ")}.`,
+      message: `TS Context registry contains ${localCount} descriptor(s), but ${warnings.join("; ")}.`,
       details: { localCount, liveDiscoveryEnabled, warnings }
     };
   }
@@ -600,7 +601,7 @@ async function checkContextDiscovery(flags: Record<string, string | boolean>, ru
   return {
     name: "context_discovery",
     status: "pass",
-    message: `Local context discovery is available: ${localCount} TS-owned context(s)${liveDiscoveryEnabled ? ", live Bridge context discovery enabled" : ""}.`,
+    message: `TS Context registry is healthy: ${localCount} descriptor(s)${liveDiscoveryEnabled ? "; live instance discovery is connected" : "; no live instance is connected"}.`,
     details: { localCount, liveDiscoveryEnabled }
   };
 }
@@ -642,12 +643,11 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Apply the reported rePinValue only after accepting the exact Tool change.");
           break;
         case "project_context_fingerprint":
-          suggestions.push("Run unity_cli context list --include-custom to inspect custom context descriptors and fingerprints.");
+          suggestions.push("Run unity_cli context list to inspect the connected instance Context descriptors and fingerprints.");
           suggestions.push("Apply the reported rePinValue only after accepting the exact Context change.");
           break;
         case "context_discovery":
-          suggestions.push("Run unity_cli context list to see available contexts.");
-          suggestions.push("Run unity_cli context list --include-custom to discover project custom contexts.");
+          suggestions.push("Connect the target Unity instance, then run unity_cli context list to see its complete Context catalog.");
           suggestions.push("Run unity_cli context describe <name> or context read <name> to inspect a specific context.");
           break;
         case "data_directory":
@@ -661,7 +661,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           break;
         case "unified_tool_discovery":
           suggestions.push("Run unity_cli tools group to see tool groups.");
-          suggestions.push("Run unity_cli tools group list <group> with a reachable Unity Bridge to inspect project custom descriptors.");
+          suggestions.push("Run unity_cli tools group list <group> with a connected Unity instance to inspect its complete Tool descriptors.");
           break;
         case "extension_registry":
           suggestions.push("Run unity_cli extensions list to see available extensions.");

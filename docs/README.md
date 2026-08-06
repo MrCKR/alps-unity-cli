@@ -26,6 +26,8 @@
 | [扩展包](extensions.md) | bundled optional extensions 的安装、卸载、诊断和依赖边界 |
 | [自定义 Tool](../skills/unity_cli/references/custom-tools.md) | 项目侧 `IUnityCliTool<TReq,TRes>` 注册、发现与执行 |
 | [自定义 Context](../skills/unity_cli/references/custom-contexts.md) | 项目侧 `IUnityCliContext<TReq,TRes>` 只读状态注册 |
+| [Skill 操作协议](../skills/unity_cli/references/operation-protocol.md) | 实例选择、descriptor、envelope、分页、artifact、弹窗与 outcome unknown |
+| [Skill 问题反馈](../skills/unity_cli/references/feedback.md) | `FeedbackMode`、受限字段、本地滚动 JSONL 与回复摘要 |
 
 ## AI Agent 阅读顺序
 

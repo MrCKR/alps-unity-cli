@@ -14,6 +14,7 @@ import {
   type AsyncNativeCanonicalProjectPathResolver,
   type NativeCanonicalProjectPathResolver,
 } from "../src/project-identity.js";
+import { currentInstanceProjectPath, handleTargetCommand, InstanceRegistryError, resolveInstanceJournalIdentity, selectInstanceForFlags } from "../src/instances.js";
 
 /** 创建最小 Unity project root fixture。 */
 async function createUnityProject(root: string): Promise<void> {
@@ -25,6 +26,31 @@ async function createUnityProject(root: string): Promise<void> {
   await writeFile(path.join(root, "Packages", "manifest.json"), "{}\n", "utf8");
   await writeFile(path.join(root, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 2022.3.62f1\n", "utf8");
 }
+
+test("显式空 instance selector 不得降级到 Unity CWD", async () => {
+  const base = await mkdtemp(path.join(tmpdir(), "unity-cli-empty-selector-"));
+  const project = path.join(base, "Project");
+  await createUnityProject(project);
+  try {
+    for (const value of [true, ""] as const) {
+      await assert.rejects(
+        selectInstanceForFlags({ instance: value }, path.join(base, "missing-data"), project),
+        (error: unknown) => error instanceof InstanceRegistryError && error.code === "E_INSTANCE_REQUIRED"
+      );
+      assert.equal(await currentInstanceProjectPath({ instance: value }, path.join(base, "missing-data"), project), undefined);
+      await assert.rejects(
+        resolveInstanceJournalIdentity({ instance: value }, path.join(base, "missing-data")),
+        (error: unknown) => error instanceof InstanceRegistryError && error.code === "E_INSTANCE_REQUIRED"
+      );
+      const alias = await handleTargetCommand("alias", ["set", project, "empty-selector"], { instance: value }, path.join(base, "data"), "req_empty_selector");
+      assert.equal(alias.ok, false);
+      if (!alias.ok) assert.equal(alias.error.code, "E_INSTANCE_REQUIRED");
+    }
+  } finally {
+    await rm(base, { recursive: true, force: true });
+    clearProjectIdentityCache();
+  }
+});
 
 test("CanonicalPath v1 对 root、深层目录、尾分隔符与大小写返回同一 identity", async () => {
   const base = await mkdtemp(path.join(tmpdir(), "unity-cli-identity-"));

@@ -16,6 +16,7 @@ namespace UnityCli
         public string OutputSchema { get; set; }
 
         public string Source { get; set; }
+        internal string Ownership { get; set; }
         public string Target { get; set; }
         public string AvailabilityScope { get; set; }
         public string PlayModeSupport { get; set; }

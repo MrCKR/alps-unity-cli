@@ -8,7 +8,7 @@ import { execute } from "../src/cli.js";
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 async function runtime(overrides: Record<string, unknown> = {}) {
-  return { dataDir: await mkdtemp(join(tmpdir(), "unity-cli-docs-reflect-data-")), ...overrides } as never;
+  return { dataDir: await mkdtemp(join(tmpdir(), "unity-cli-docs-reflect-data-")), projectTools: [], runtimeTools: [], ...overrides } as never;
 }
 
 async function docsCache(): Promise<string> {

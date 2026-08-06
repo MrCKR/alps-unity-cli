@@ -1,158 +1,127 @@
 # 工具发现（Tool Discovery）
 
-alps-unity-cli 使用 group-first 分层发现模型：先看分组概览，再按组深入，最后查看单个工具完整描述。
+`unity_cli` 的 Tool/Context 目录属于一个已连接 Unity 实例。没有连接实例时，discovery 返回稳定 instance error，不返回静态或空目录。
+
+## 实例绑定
+
+每次调用可选传入 `--instance <full-instance-id|project-path|alias>`；显式 selector 优先于 CWD。未传时，CLI 只从当前 Unity 项目 CWD 解析目标，不保存 active target，也不猜测唯一存活实例。
+
+```powershell
+unity_cli instances list
+unity_cli tools group --instance <id|projectPath|alias>
+unity_cli context list --instance <id|projectPath|alias>
+```
+
+本文示例省略 `--instance` 时，默认命令运行在目标 Unity 项目 CWD。
 
 ## 推荐发现流程
 
-```
-tools group                     → 查看所有工具分组
-       ↓
-tools group list <group>       → 查看某个分组的工具摘要
-       ↓
-tools describe <tool>          → 查看工具完整描述（执行前必做）
-       ↓
-tools run <tool>               → 执行工具
+```text
+tools group
+    -> tools group list <group>
+    -> tools describe <tool>
+    -> tools run <tool> --input '<json>'
 ```
 
-辅助发现：
+不确定分组时使用：
 
+```powershell
+unity_cli tools search <keyword>
 ```
-tools search <keyword>          → 按关键词搜索工具
-```
 
-## tools group
+### `tools group`
 
-列出所有工具分组名称。
+列出当前实例完整 Tool 目录中的分组与计数：
 
 ```powershell
 unity_cli tools group
+unity_cli tools group --instance my-project
 ```
 
-输出：
+### `tools group list`
 
-```json
-{
-  "ok": true,
-  "requestId": "req-xxx",
-  "data": {
-    "count": 34,
-    "groups": [
-      { "name": "scene", "summary": "...", "toolCount": 12, "source": "built-in" },
-      { "name": "object", "summary": "...", "toolCount": 2, "source": "built-in" },
-      { "name": "reflection", "summary": "...", "toolCount": 2, "source": "built-in" }
-    ]
-  }
-}
-```
-
-核心分组包含：scene、camera、go、component、object、reflection、type、asset、prefab、material、graphics、physics、profiler、shader、texture、animation、ui、script、editor、console、package、build、screenshot、code、diagnose。可选 extension 分组（probuilder/cinemachine/vfx/urp/hdrp）仅在目标项目安装对应 Unity 包时出现。
-
-### 包含项目自定义工具分组
-
-当 Bridge 可达时，`tools group` 会自动发现项目自定义工具的分组：
+列出一个真实分组中的全部 Tool 摘要：
 
 ```powershell
-unity_cli tools group --include-custom --instance <instanceId|projectPath|alias>
-```
-
-## tools group list
-
-列出指定分组的工具摘要信息。
-
-```powershell
-# 按分组查看工具（必填分组名）
 unity_cli tools group list camera
-
-# 包含项目自定义工具
-unity_cli tools group list custom --include-custom
-
-# 文本格式
-unity_cli tools group list camera --format text
+unity_cli tools group list probuilder --instance my-project
 ```
 
-`tools group list` 是按分组查看工具的标准入口；需要全量视图时先用 `tools group` 获取分组，再逐组展开。
+分组名称必须来自当前实例的 `tools group` 输出，不要假设项目能力都位于 `custom` 分组。
 
-## tools search
+### `tools search`
 
-按关键词搜索工具名称、摘要、描述和分组。
+按名称、summary、description 和 group 搜索当前实例完整目录：
 
 ```powershell
 unity_cli tools search screenshot
-unity_cli tools search camera --include-custom
+unity_cli tools search project-summary --instance my-project
 ```
 
-搜索是辅助手段，不应替代 group-first 发现流程。当你知道关键词但不确定分组时使用。
+### `tools describe`
 
-## tools describe
-
-查看单个工具的完整描述。**执行任何工具前必须先 describe。**
+执行前读取单个 Tool 的完整 descriptor：
 
 ```powershell
 unity_cli tools describe camera.screenshot
 ```
 
-输出包含完整的工具 descriptor：
+常用字段：
 
 | 字段 | 说明 |
 |------|------|
-| `name` | 工具唯一标识 |
-| `summary` | 简短摘要 |
-| `description` | 详细说明 |
-| `group` | 所属分组 |
-| `source` | 来源：`built-in` / `extension` / `project` |
-| `inputSchema` | 输入参数 JSON Schema；TS Tool 来自 `defineTool`，C# Tool 来自 Request DTO 派生 |
-| `outputSchema` | 输出格式 JSON Schema；TS Tool 来自 `defineTool`，C# Tool 来自 Result DTO 派生 |
-| `destructiveHint` | 是否有破坏性 |
-| `supportsDryRun` | 是否支持 `--dry-run` |
-| `target` | 目标类型 |
-| `availabilityScope` | 可用性范围 |
-| `playModeSupport` | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
-| `requiresPackages` | 依赖的 Unity 包 |
-| `examples` | 使用示例 |
-| `permissions` | 所需权限，仅需要特殊权限时出现 |
+| `name` / `group` | 唯一名称与分组 |
+| `summary` / `description` | 路由摘要与完整职责 |
+| `inputSchema` / `outputSchema` | 输入输出 JSON Schema |
+| `destructiveHint` / `sideEffects` | 效果说明，不构成执行门 |
+| `supportsDryRun` | 是否支持可选 `--dry-run` |
+| `target` / `availabilityScope` | Editor、Runtime 或两者，以及状态范围 |
+| `playModeSupport` | `supported`、`runtime-only`、`session-affecting`、`editor-only` 或 `unknown` |
+| `available` / `unavailableReason` | 当前实例状态下是否可执行及原因 |
+| `requiresPackages` | Unity Package 依赖 |
+| `examples` | 可执行 argv 示例 |
+| `source` | 说明/审计来源；不影响显示、describe、执行或公开路由 |
 
-### 自定义工具描述
+## 完整目录语义
 
-当工具名不在内置列表中时，先通过 `--include-custom` 让 CLI 查询目标 Unity Bridge 中的项目自定义工具：
+一个已连接实例的 catalog 同时包含：
+
+- package 内置能力；
+- 已安装 Extension 能力；
+- 项目通过 `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 注册的能力；
+- Editor 与 Runtime 能力；
+- package-local CLI Tool 和 CLI 聚合 Context。
+
+所有能力使用同一 `tools group/list/search/describe/run` 或 `context list/search/describe/read` 路径。目录不按 source、EditMode/PlayMode 或当前可执行性过滤。当前不可执行的能力仍显示，由 descriptor 和执行错误说明原因。
+
+静态 capability snapshot 只供 package 生成、contract 和审计，不进入公开 discovery。
+
+## Context 发现
 
 ```powershell
-unity_cli tools group list <real-group> --include-custom
-unity_cli tools describe my.custom-tool --include-custom
+unity_cli context list
+unity_cli context search <keyword>
+unity_cli context describe <context>
+unity_cli context read <context> --input '<json>'
 ```
 
-## Descriptor 字段用途
+Context 同样读取当前实例完整目录。Tool 目录只通过 `tools` discovery 读取，不通过 Context 提供重复入口。
 
-### 安全判断
+## AI Agent 工作流
 
-- `destructiveHint: true` → 描述可能不可逆效果，不构成执行门；如支持，调用方可选用 `--dry-run` 预览
+1. 用 `instances list` 确认 canonical project identity，或切换到目标 Unity 项目 CWD。
+2. 用 `tools group` / `context list` 读取当前实例目录。
+3. 用 `group list`、`search` 缩小范围。
+4. 用 `describe` 获取 schema、状态约束、副作用和示例。
+5. 用 `tools run` 或 `context read` 调用同一名称。
+6. 安装 Package、安装 Extension、domain reload 或切换 PlayMode 后重新 discovery。
 
-### 执行方式
+## 错误处理
 
-所有需要 Unity 的 Tool 都通过已打开的 Unity Editor 直接执行，并在该调用中返回最终业务结果。`target` 与 `playModeSupport` 说明工具可在哪个 Editor 状态执行。
-
-### 可用性判断
-
-- `target: "editor"` → 编辑器主线程可用
-- `target: "runtime"` → Play Mode 下可用
-- `target: "both"` → 编辑器和运行时都可用
-- `availabilityScope` → 详细可用性范围
-- `playModeSupport: "supported"` → Play Mode 下语义基本不变
-- `playModeSupport: "runtime-only"` → Play Mode 可执行，但结果只影响当前运行会话
-- `playModeSupport: "session-affecting"` → 可能触发 import、compile、domain reload 或 Play Mode 状态变化
-- `playModeSupport: "editor-only"` → Play Mode 下不可执行，返回 `E_TOOL_PLAYMODE_UNAVAILABLE`
-- `available: false` / `unavailableReason` → 能力在当前项目中不可执行及其明确原因
-- `requiresPackages` → 需要安装的 Unity Package
-
-## AI Agent 发现工作流
-
-1. `tools group` — 了解能力分类
-2. `tools group list <relevant-group>` — 查看相关分组工具
-3. `tools describe <tool>` — 获取完整 descriptor，确认 inputSchema、安全提示和可用性
-4. `tools run <tool> --input '...'` — 执行
-
-### 错误处理
-
-- `E_TOOL_NOT_FOUND_FOR_TARGET` → 工具在当前目标不可用，检查 `available`、`unavailableReason`、`requiresPackages` 和目标实例状态
-- `E_RUNTIME_NOT_READY` → Runtime 工具需要 Play Mode 活跃，检查 `target: "runtime"`
-- `E_INSTANCE_CONFLICT` -> 同一 canonical project 存在多个 Unity Editor process/session claim，关闭重复 Editor 后再执行
-- `E_INSTANCE_NOT_RUNNING` -> 选定项目没有可验证的运行中 Editor；静态内置/Extension catalog 仍可离线发现
+- `E_INSTANCE_REQUIRED`：未传 selector，CWD 也不在 Unity 项目中。
+- `E_INSTANCE_NOT_FOUND`：显式 selector 无法解析。
+- `E_INSTANCE_NOT_RUNNING`：目标 identity 已确定，但 Unity Editor 未连接。
+- `E_INSTANCE_CONFLICT`：同一项目存在多个或不可唯一证明的 Editor claim。
+- `E_TOOL_REGISTRY_UNHEALTHY` / `E_CONTEXT_REGISTRY_UNHEALTHY`：实例 catalog 有 malformed、重复或 ownership 冲突；修复 registry 后重新发现。
+- `E_TOOL_NOT_FOUND_FOR_TARGET` / `E_CONTEXT_NOT_FOUND`：名称不属于当前实例目录；重新 discovery。
+- `E_RUNTIME_NOT_READY`：Runtime Tool 已显示，但执行需要稳定 PlayMode。

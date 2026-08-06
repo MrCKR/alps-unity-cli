@@ -1,7 +1,5 @@
-import { getBoolean } from "../args.js";
 import { executeBridgePayload, type BridgeRuntime } from "../bridge/index.js";
 import { ExtensionRegistry } from "../extensions/index.js";
-import { hasInstanceForFlags } from "../instances.js";
 import { staticCapabilityCatalog } from "../static-capability-catalog.js";
 import { failure } from "../output.js";
 import type { CliResult } from "../types.js";
@@ -16,30 +14,20 @@ export interface ContextCatalogRuntime extends Partial<BridgeRuntime> {
   projectContexts?: unknown[];
 }
 
-export type ContextCatalogResult = { ok: true; contexts: ContextDescriptor[]; live: boolean; liveContexts: ContextDescriptor[] } | (CliResult & { ok: false });
+export type ContextCatalogResult = { ok: true; contexts: ContextDescriptor[]; live: true; liveContexts: ContextDescriptor[] } | (CliResult & { ok: false });
 
-/** 无 live 目标时只暴露生成 registry 中的 TS-local Context。 */
-export async function shouldLoadLiveContextCatalog(flags: Record<string, string | boolean>, runtime: ContextCatalogRuntime): Promise<boolean> {
-  return getBoolean(flags, "include-custom")
-    || runtime.projectContexts !== undefined
-    || runtime.bridgeExecute !== undefined;
-}
-
-/** 加载唯一 catalog view；任何 malformed descriptor 或 duplicate 都使 registry fail closed。 */
+/** 加载当前实例的唯一完整 Context catalog；任何 live 失败、malformed descriptor 或同名 owner 都 fail closed。 */
 export async function loadContextCatalog(
   flags: Record<string, string | boolean>,
   runtime: ContextCatalogRuntime,
   requestId: string,
-  options: { requireLive?: boolean } = {}
 ): Promise<ContextCatalogResult> {
   let local: ContextDescriptor[];
   try {
-    local = builtinContextDescriptors();
+    local = defineContextMetadata();
   } catch (error) {
     return unhealthy(requestId, error instanceof Error ? error.message : String(error));
   }
-  const loadLive = options.requireLive === true || await shouldLoadLiveContextCatalog(flags, runtime);
-  if (!loadLive) return { ok: true, contexts: local, live: false, liveContexts: [] };
 
   let live: ContextDescriptor[];
   if (runtime.projectContexts) {
@@ -56,33 +44,19 @@ export async function loadContextCatalog(
     live = parsed.contexts;
   }
 
-  const liveNames = new Set(live.map((context) => context.name));
-  const merged = [...local.filter((context) => !liveNames.has(context.name)), ...live];
-  const duplicate = duplicateNames(merged);
-  if (duplicate.length > 0) return unhealthy(requestId, `Duplicate context registration: ${duplicate.join(", ")}.`, { duplicates: duplicate });
-  return { ok: true, contexts: merged, live: true, liveContexts: live };
+  const duplicate = duplicateNames([...local, ...live]);
+  if (duplicate.length > 0) return unhealthy(requestId, `Duplicate Context ownership in the selected instance: ${duplicate.join(", ")}.`, { duplicates: duplicate });
+  return { ok: true, contexts: [...local, ...live].sort((left, right) => left.name.localeCompare(right.name)), live: true, liveContexts: live };
 }
 
+/** Context 名称只能从当前实例完整目录解析，本地聚合 Context 也不能绕过实例连接。 */
 export async function resolveCatalogContext(
   name: string,
   flags: Record<string, string | boolean>,
   runtime: ContextCatalogRuntime,
   requestId: string
-): Promise<{ ok: true; context?: ContextDescriptor; live: boolean } | (CliResult & { ok: false })> {
-  // editor.state 由 TS 聚合 identity/session/Windows UI，live catalog 不得覆盖其唯一 owner。
-  if (name === "editor.state") return { ok: true, context: builtinContextDescriptors().find((context) => context.name === name), live: false };
-  if (runtime.projectContexts !== undefined || runtime.bridgeExecute !== undefined) {
-    const supplied = await loadContextCatalog(flags, runtime, requestId, { requireLive: true });
-    if (supplied.ok === false) return supplied;
-    const context = supplied.contexts.find((candidate) => candidate.name === name);
-    if (context) return { ok: true, context, live: true };
-  }
-  const local = builtinContextDescriptors().find((context) => context.name === name);
-  if (local) return { ok: true, context: local, live: false };
-  const shouldLoad = await shouldLoadLiveContextCatalog(flags, runtime)
-    || (typeof runtime.dataDir === "string" && await hasInstanceForFlags(flags, runtime.dataDir));
-  if (!shouldLoad) return { ok: true, context: undefined, live: false };
-  const catalog = await loadContextCatalog(flags, runtime, requestId, { requireLive: true });
+): Promise<{ ok: true; context?: ContextDescriptor; live: true } | (CliResult & { ok: false })> {
+  const catalog = await loadContextCatalog(flags, runtime, requestId);
   return catalog.ok ? { ok: true, context: catalog.contexts.find((context) => context.name === name), live: true } : catalog;
 }
 
@@ -151,8 +125,6 @@ export function parseLiveDescriptor(value: unknown): ContextDescriptor | string 
   if (!examples) return "is missing valid examples.";
 
   const ownership = extensionOwnership(String(raw.name));
-  if (raw.source === "extension" && !ownership) return "declares source=extension without a manifest owner.";
-  if (raw.source !== "extension" && ownership) return `is claimed by extension ${ownership.id} but declares source=${String(raw.source)}.`;
   const requiresPackages = stringArray(raw.requiresPackages) ?? ownership?.requiresPackages;
   return {
     name: String(raw.name),

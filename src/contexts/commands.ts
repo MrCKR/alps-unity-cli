@@ -32,11 +32,11 @@ function rejectUnknownContextFlags(
 ): CliResult | undefined {
   const common = ["instance", "raw"];
   const allowed = !command || command === "list"
-    ? [...common, "category", "include-custom", "format"]
+    ? [...common, "category", "format"]
     : command === "search"
-      ? [...common, "category", "include-custom", "format"]
+      ? [...common, "category", "format"]
       : command === "describe"
-        ? [...common, "include-custom"]
+        ? common
         : command === "read"
           ? [...common, "input", "input-file", "stdin", "timeout-ms"]
           : common;

@@ -4,7 +4,6 @@
  */
 
 import type { BridgeRuntime } from "../bridge/index.js";
-import type { BuiltinDocsRuntime } from "../builtin-docs.js";
 import type { ToolMetadata, PlayModeSupport, ToolHandler } from "./metadata/types.js";
 
 // ─── 工具定义输入(defineTool 接收的形态)────────────────────────────────
@@ -55,14 +54,14 @@ export interface ToolContext {
   logPath?: string;
   /** tools run 合并后的原始 flags,供 action 型工具执行内部确认与 dry-run 判定。 */
   flags?: Record<string, string | boolean>;
-  /** 运行时已发现的项目自定义工具,供 docs/diagnose 等离线工具生成动态能力视图。 */
+  /** 测试或宿主注入的实例 Tool descriptor。 */
   projectTools?: ToolMetadata[];
   /** 运行时已发现的项目自定义 Context,供 diagnose.capabilities 保持统一 discovery 语义。 */
   projectContexts?: unknown[];
   /** 可选 live Bridge 执行器，仅供 defineTool 的隔离测试 transport。 */
   bridgeExecute?: BridgeRuntime["bridgeExecute"];
   /** 测试或宿主注入的文档抓取器,用于 docs online fallback,避免工具内部直接绑定全局网络。 */
-  fetch?: BuiltinDocsRuntime["fetch"];
+  fetch?: (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
 }
 
 // ─── registry(收集 defineTool 注册的工具)──────────────────────────────

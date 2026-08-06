@@ -1,0 +1,8 @@
+{
+  "Category": "workaround",
+  "Summary": "Descriptor target wording required an extra discovery step.",
+  "Workaround": "Used context search and descriptor readback to select the capability.",
+  "Capability": "sample.tool",
+  "ErrorCode": "E_SCHEMA_INVALID",
+  "Phase": "describe"
+}

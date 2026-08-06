@@ -1,6 +1,6 @@
-import { getBoolean, getString } from "./args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
 import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolHandler, type ToolMetadata, type ToolSupportStatus } from "./tools/metadata/index.js";
+import { failure } from "./output.js";
 import type { CliResult } from "./types.js";
 import type { AnyJson } from "./schema/any-json.js";
 import { validateSchema } from "./schema/validator.js";
@@ -9,28 +9,17 @@ export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
   projectTools?: ToolMetadata[];
 }
 
-export type ProjectToolDiscovery = { ok: true; tools: ResolvedToolMetadata[]; mode: "runtime" | "bridge" | "skipped" } | (CliResult & { ok: false });
+export type ProjectToolDiscovery = { ok: true; tools: ResolvedToolMetadata[]; mode: "runtime" | "bridge" } | (CliResult & { ok: false });
 
-export function shouldDiscoverProjectTools(flags: Record<string, string | boolean>, runtime: ProjectToolRuntime): boolean {
-  return getBoolean(flags, "include-custom") ||
-    getBoolean(flags, "runtime") ||
-    runtime.projectTools !== undefined ||
-    runtime.bridgeExecute !== undefined ||
-    typeof getString(flags, "instance") === "string";
-}
-
+/** 当前实例是 Tool descriptor 的唯一公开真源；调用 discovery 必须实际读取该实例。 */
 export async function discoverProjectTools(
   flags: Record<string, string | boolean>,
   runtime: ProjectToolRuntime,
   requestId: string,
-  options: { requireBridge?: boolean } = {}
+  _options: { requireBridge?: boolean } = {}
 ): Promise<ProjectToolDiscovery> {
   if (runtime.projectTools) {
     return { ok: true, tools: runtime.projectTools.map(ensureProjectToolDefaults), mode: "runtime" };
-  }
-
-  if (!options.requireBridge && !shouldDiscoverProjectTools(flags, runtime)) {
-    return { ok: true, tools: [], mode: "skipped" };
   }
 
   const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false });
@@ -39,10 +28,7 @@ export async function discoverProjectTools(
   }
 
   const rawTools = (result.data as { tools?: unknown } | undefined)?.tools;
-  if (!Array.isArray(rawTools)) {
-    return { ok: true, tools: [], mode: "bridge" };
-  }
-  return { ok: true, tools: rawTools.map(projectDescriptorToToolMetadata).filter(isResolvedToolMetadata), mode: "bridge" };
+  return parseBridgeToolCatalog(rawTools, requestId, "project-tool.list");
 }
 
 export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMetadata | undefined {
@@ -85,7 +71,9 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     examples,
     handler: toolHandlerProp(descriptor, "handler"),
     target,
+    availabilityScope,
     available: booleanProp(descriptor, "available") ?? undefined,
+    unavailableReason: stringProp(descriptor, "unavailableReason"),
     source: toolSourceProp(descriptor, "source"),
     liveDescriptorFingerprint: stringProp(descriptor, "internalDescriptorFingerprint"),
     completionContract
@@ -105,10 +93,6 @@ function ensureProjectToolDefaults(tool: ToolMetadata): ResolvedToolMetadata {
     target,
     playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool)
   }, source);
-}
-
-function isResolvedToolMetadata(value: ResolvedToolMetadata | undefined): value is ResolvedToolMetadata {
-  return value !== undefined;
 }
 
 function stringProp(record: Record<string, unknown>, key: string): string | undefined {
@@ -213,16 +197,12 @@ export function groupFromName(name: string): string {
   return group || "custom";
 }
 
-/**
- * Discover runtime tools via runtime-tool.list bridge command.
- * This path is exempt from the Play Mode busy guard, so it works
- * correctly in Play Mode where project-tool.list would be blocked.
- */
+/** runtime-tool.list 只补充当前 PlayMode availability；不会形成第二份公开目录。 */
 export async function discoverRuntimeTools(
   flags: Record<string, string | boolean>,
   runtime: ProjectToolRuntime,
   requestId: string,
-  options: { requireBridge?: boolean } = {}
+  _options: { requireBridge?: boolean } = {}
 ): Promise<ProjectToolDiscovery> {
   if (runtime.projectTools) {
     const runtimeTools = runtime.projectTools
@@ -231,18 +211,30 @@ export async function discoverRuntimeTools(
     return { ok: true, tools: runtimeTools, mode: "runtime" };
   }
 
-  if (!options.requireBridge && !shouldDiscoverProjectTools(flags, runtime)) {
-    return { ok: true, tools: [], mode: "skipped" };
-  }
-
   const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }
 
   const rawTools = (result.data as { tools?: unknown } | undefined)?.tools;
-  if (!Array.isArray(rawTools)) {
-    return { ok: true, tools: [], mode: "bridge" };
+  return parseBridgeToolCatalog(rawTools, requestId, "runtime-tool.list");
+}
+
+/** Bridge catalog 必须整体可解析且名称唯一，禁止静默返回部分能力。 */
+function parseBridgeToolCatalog(rawTools: unknown, requestId: string, command: string): ProjectToolDiscovery {
+  if (!Array.isArray(rawTools)) return unhealthyToolCatalog(requestId, `${command} response must contain a tools array.`);
+  const tools: ResolvedToolMetadata[] = [];
+  for (let index = 0; index < rawTools.length; index += 1) {
+    const parsed = projectDescriptorToToolMetadata(rawTools[index]);
+    if (!parsed) return unhealthyToolCatalog(requestId, `${command} tools[${index}] is not a complete Tool descriptor.`, { index });
+    tools.push(parsed);
   }
-  return { ok: true, tools: rawTools.map(projectDescriptorToToolMetadata).filter(isResolvedToolMetadata), mode: "bridge" };
+  const duplicates = [...new Set(tools.map((tool) => tool.name).filter((name, index, names) => names.indexOf(name) !== index))].sort();
+  if (duplicates.length > 0) return unhealthyToolCatalog(requestId, `${command} contains duplicate Tool registrations: ${duplicates.join(", ")}.`, { duplicates });
+  return { ok: true, tools, mode: "bridge" };
+}
+
+/** 返回稳定 registry 健康错误，要求修复实例 owner 后重新发现。 */
+function unhealthyToolCatalog(requestId: string, message: string, details?: Record<string, unknown>): CliResult & { ok: false } {
+  return failure(requestId, "E_TOOL_REGISTRY_UNHEALTHY", message, ["Fix the Tool descriptor registry in the selected Unity instance, then retry discovery."], details) as CliResult & { ok: false };
 }

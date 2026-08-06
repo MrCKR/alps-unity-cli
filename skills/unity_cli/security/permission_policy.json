@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "reviewed_at": "2026-08-05",
+  "capabilities": {
+    "file_write": {
+      "decision": "approved",
+      "reviewer": "project owner",
+      "reason": "The owner explicitly selected bounded local rolling JSONL as the feedback persistence mechanism.",
+      "scope": "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.jsonl plus feedback.1.jsonl through feedback.3.jsonl; LOCALAPPDATA must resolve to a fixed local drive and contain no existing reparse path component",
+      "expires_at": "2027-08-05",
+      "evidence": [
+        "Owner decision D008",
+        "tests/unity-cli-skill-feedback.test.ts"
+      ],
+      "target_enforcement": {
+        "openai": "FeedbackMode and runtime recorder contract",
+        "claude": "FeedbackMode and runtime recorder contract",
+        "generic": "FeedbackMode and runtime recorder contract",
+        "vscode": "FeedbackMode and runtime recorder contract"
+      }
+    },
+    "subprocess": {
+      "decision": "approved",
+      "reviewer": "project owner",
+      "reason": "The installed Skill invokes only the bundled PowerShell feedback recorder when feedback is enabled and friction occurred.",
+      "scope": "powershell.exe executing scripts/record-feedback.ps1",
+      "expires_at": "2027-08-05",
+      "evidence": [
+        "Owner decision D008",
+        "skills/unity_cli/references/feedback.md"
+      ],
+      "target_enforcement": {
+        "openai": "Bundled runtime script path",
+        "claude": "Bundled runtime script path",
+        "generic": "Bundled runtime script path",
+        "vscode": "Bundled runtime script path"
+      }
+    }
+  }
+}

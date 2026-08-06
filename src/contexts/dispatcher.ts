@@ -64,12 +64,6 @@ export async function dispatchContext(
     return success(requestId, publicContextDescriptor(descriptor));
   }
 
-  if (!isEditorState && descriptor.available === false && descriptor.source !== "extension") {
-    return failure(requestId, "E_CONTEXT_UNAVAILABLE", `Context is not available for the selected target: ${descriptor.name}.`, [
-      `Run unity_cli context describe ${descriptor.name} to inspect target, availabilityScope, and playModeSupport.`,
-      "Select a compatible Unity target or Editor/Play Mode state and retry."
-    ], { target: descriptor.target, availabilityScope: descriptor.availabilityScope, playModeSupport: descriptor.playModeSupport });
-  }
   if (!isEditorState) {
     const availability = await checkContextExtensionAvailability(descriptor.name, availabilityFlags);
     if (!availability.available) {
@@ -78,6 +72,7 @@ export async function dispatchContext(
         missingPackageIds: availability.availabilityResult?.missingPackageIds ?? descriptor.requiresPackages ?? []
       });
     }
+    if (descriptor.available === false) return unavailableContext(requestId, descriptor);
   }
   const parsed = await parseContextInput(flags, requestId);
   if (!parsed.ok) return parsed.error;
@@ -111,6 +106,21 @@ export async function dispatchContext(
 /** physical gate 优先使用显式 project，否则从当前 target/active instance 推断项目。 */
 async function contextAvailabilityFlags(flags: Record<string, string | boolean>, runtime: ContextRuntime): Promise<Record<string, string | boolean>> {
   return extensionAvailabilityFlags(flags, runtime);
+}
+
+/** descriptor 保持可见；读取时把当前状态投影为准确错误，不按 source 分流。 */
+function unavailableContext(requestId: string, descriptor: ContextDescriptor): CliResult {
+  const details = { target: descriptor.target, availabilityScope: descriptor.availabilityScope, playModeSupport: descriptor.playModeSupport };
+  if (descriptor.target === "runtime" || descriptor.playModeSupport === "runtime-only") {
+    return failure(requestId, "E_RUNTIME_NOT_READY", descriptor.unavailableReason ?? `Context ${descriptor.name} requires an active Play Mode session.`, [
+      "Run unity_cli tools run editor.play --input '{}' to enter Play Mode.",
+      `Run unity_cli context describe ${descriptor.name} after Play Mode becomes stable.`
+    ], details);
+  }
+  return failure(requestId, "E_CONTEXT_UNAVAILABLE", descriptor.unavailableReason ?? `Context is not available for the selected target: ${descriptor.name}.`, [
+    `Run unity_cli context describe ${descriptor.name} to inspect target, availabilityScope, and playModeSupport.`,
+    "Select a compatible Unity Editor state and retry."
+  ], details);
 }
 
 async function decorateAvailability(context: ContextDescriptor, flags: Record<string, string | boolean>): Promise<ContextDescriptor> {

@@ -35,6 +35,7 @@ namespace UnityCli
         public string Description { get; set; }
         public string Group { get; set; }
         public string Source { get; set; }
+        internal string Ownership { get; set; }
         public string InputSchema { get; set; }
         public string OutputSchema { get; set; }
         public bool DestructiveHint { get; set; }

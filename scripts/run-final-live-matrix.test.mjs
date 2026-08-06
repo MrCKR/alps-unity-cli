@@ -531,8 +531,10 @@ test("extension doctor validation consumes the current checks envelope", () => {
 
 test("runtime inventory is exact for product capabilities and requires Dev fixtures", async () => {
   const baseline = await loadRuntimeInventoryBaseline();
-  assert.equal(baseline.tools.length, 361);
-  assert.equal(baseline.contexts.length, 25);
+  assert.equal(baseline.tools.length, 359);
+  assert.equal(baseline.contexts.length, 24);
+  assert.equal(baseline.tools.includes("docs.list") || baseline.tools.includes("docs.topic"), false);
+  assert.equal(baseline.contexts.includes("tools.custom") || baseline.contexts.includes("tools.groups"), false);
   const projectTools = ["validation.echo", "validation.wait"];
   const projectContexts = ["validation.ui-cache", "validation.wait-status"];
   const discovered = {

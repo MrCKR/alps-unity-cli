@@ -12,7 +12,7 @@ test("generated Context registry is idempotent and contains only TS-local capabi
   await execFileAsync(process.execPath, ["scripts/gen-ts-registries.mjs"]);
   const after = await readFile(path, "utf8");
   assert.equal(after, before);
-  assert.match(after, /\.\/tools\/custom\.js/);
-  assert.match(after, /\.\/tools\/groups\.js/);
-  assert.doesNotMatch(after, /project\.info|probuilder\.scene/);
+  assert.match(after, /\.\/editor\/dialogs\.js/);
+  assert.match(after, /\.\/editor\/state\.js/);
+  assert.doesNotMatch(after, /tools\/custom|tools\/groups|project\.info|probuilder\.scene/);
 });

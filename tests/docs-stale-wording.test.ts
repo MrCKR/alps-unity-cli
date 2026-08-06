@@ -58,7 +58,6 @@ const REQUIRED_COMMANDS = [
   "tools describe",         // actual command for full descriptor
   "tools run",              // actual command to execute
   "tools search",           // actual command for keyword search
-  "--include-custom",       // flag to discover project tools
   "context list",           // actual command to list contexts
   "context describe",       // actual command for context descriptor
   "context read",           // actual command to read context

@@ -795,27 +795,9 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "docs.list",
-      "group": "docs",
-      "command": "list",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "docs.search",
       "group": "docs",
       "command": "search",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "docs.topic",
-      "group": "docs",
-      "command": "topic",
       "handler_type": "offline",
       "csharp_handler": "none",
       "destructive": false,

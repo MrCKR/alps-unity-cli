@@ -1,6 +1,6 @@
 # 工具执行（Tool Execution）
 
-`tools run` 是统一执行入口，所有工具（内置和项目自定义）都通过此命令执行。
+`tools run` 是统一执行入口，package 内置、Extension、项目注册、Editor、Runtime 和 package-local CLI Tool 都通过此命令执行。
 
 ## 基本用法
 
@@ -17,7 +17,7 @@ echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
 
 ## 执行路由
 
-`tools run` 根据公开 descriptor 的 `target` 自动路由。离线 Tool 由本地 CLI 返回业务数据；Unity Tool 只连接用户已打开并由 `--instance` 唯一选中的 Editor，在同一次 direct 调用中返回已证明的终态业务结果。内部 listener 和 transport 由 CLI 管理，不是用户可调用接口。
+`tools run` 先绑定一个已连接 Unity 实例并从其完整 catalog 解析名称，再根据公开 descriptor 的 `target` 和内部 owner 执行。package-local CLI Tool 可在 CLI 进程内产生业务结果，但同样不能绕过实例绑定和统一 discovery。Unity Tool 只连接用户已打开并由 `--instance` 或 CWD 唯一选中的 Editor，在同一次 direct 调用中返回已证明的终态业务结果。内部 listener 和 transport 由 CLI 管理，不是用户可调用接口。
 
 ### Target 路由
 
@@ -48,7 +48,7 @@ unity_cli tools run camera.screenshot --input '{}'
 
 Bridge-backed Tool 由 Unity Editor 主线程执行。session supervisor 在调用的单一 absolute deadline 内透明吸收 compile、import、domain reload 和 listener restart，并在恢复后的 validated generation 上继续同一逻辑请求。调用方不需要轮询 listener 或手动重试 transport。
 
-直接 Tool 只返回已证明的 terminal business success 或 terminal structured failure。超时或终态前断连统一返回 `E_EXECUTION_TIMEOUT`，调用方负责先观察业务状态并判断是否提交新的调用；系统不做请求级重放拦截。要即时观察进度、freshness 和 blocker，使用 `context read editor.state --input '{}'`；它不会等待 ready 或触发 Unity 副作用。
+直接 Tool 只返回已证明的 terminal business success 或 terminal structured failure。同一次调用可在 session recovery 中续接完全相同的请求；调用返回后 CLI 不会自行启动新调用，也不提供请求级重放门。超时或终态前断连统一返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；调用方可自行决定是否观察业务状态、提交新调用、重复调用或继续 mutation。要即时观察进度、freshness 和 blocker，可使用 `context read editor.state --input '{}'`；它不会等待 ready 或触发 Unity 副作用。
 
 ### `editor.compile`
 
@@ -60,9 +60,9 @@ unity_cli tools run editor.compile --input '{"refresh":true,"includeWarnings":tr
 
 accepted、queued、phase、run ID 和 listener 字段仅属于内部 coordinator，不会成为公开成功。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh 或 compile。
 
-## 项目 Tool 完整性
+## 实例 Tool 完整性
 
-项目自定义 Tool 在执行前经过内部完整性校验。正常 descriptor 与成功 envelope 只提供调用所需信息；校验不匹配时，结构化错误会提供恢复步骤。
+实例 registry 中的 Tool 在 discovery 时整体校验 descriptor 完整性和名称 ownership；malformed、重复或冲突目录返回 `E_TOOL_REGISTRY_UNHEALTHY`，不会静默形成部分 catalog。项目注册 Tool 在执行前继续经过内部完整性校验。正常 descriptor 与成功 envelope 只提供调用所需信息；校验不匹配时，结构化错误会提供恢复步骤。
 
 ## 风险元数据与可选预览
 
@@ -124,7 +124,7 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 | `E_INSTANCE_CONFLICT` | 同一 canonical project 存在多个 Unity Editor process/session claim | 关闭重复 Editor，只保留目标 session |
 | `E_INSTANCE_NOT_RUNNING` | 选定项目没有可验证的运行中 Editor | 检查 `instances list` 并打开该项目 |
 | `E_UNITY_BLOCKED` | effect 前已确认 Unity/UI blocker | 读取同一响应的 `details.blockers` 并处理对应窗口 |
-| `E_EXECUTION_TIMEOUT` | 调用在终态前超时或断连 | 先读取业务状态，再由调用方决定是否提交新的调用 |
+| `E_EXECUTION_TIMEOUT` | 调用在终态前超时或断连 | 没有可信终态；是否观察、重试、重复调用或继续 mutation 由调用方决定 |
 | `E_UNITY_TRANSITION_TIMEOUT` | lifecycle transition 未在 absolute deadline 内稳定 | 检查 `editor.state` 的 progress/blockers |
 
 弹窗 blocker 在原错误的 `details.blockers` 中结构化返回。其 DTO 包含 `type`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 和 `confidence`。使用只读 `context read editor.dialogs` 获取当前 dialogId、`observedAt`、modal 状态和按钮；无弹窗时返回空数组，Windows 读取失败返回 `E_DIALOG_OBSERVATION_FAILED`。再以 `tools run editor.dialog.click` 精确传入 dialogId 与规范化 button label。该 Tool 会重新验证选中 Unity 的 PID/processStartedAt、dialogId 和唯一 enabled button，并证明原 dialog 已消失或不再 modal；不匹配分别返回 stale、not-found 或 ambiguous 错误，无法证明点击结果返回 `E_DIALOG_CLICK_UNPROVEN`。任意当前可见 modal 的任意 enabled button 都可点击，不设预定义按钮列表、确认或人工处理门。

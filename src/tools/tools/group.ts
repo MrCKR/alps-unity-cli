@@ -1,10 +1,9 @@
-import { catalogFlags, loadToolCatalog } from "../catalog.js";
+import { loadToolCatalog } from "../catalog.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
-import { toolSource } from "../metadata/index.js";
 
 export interface ToolsGroupRequest {}
-export interface ToolsGroupItem { name: string; summary: string; toolCount: number; source: string }
+export interface ToolsGroupItem { name: string; summary: string; toolCount: number }
 export interface ToolsGroupResult { count: number; groups: ToolsGroupItem[] }
 
 const GROUP_SUMMARIES: Record<string, string> = {
@@ -29,7 +28,7 @@ function discoveryError(result: { error?: { code: string; message: string; nextA
 export default defineTool<ToolsGroupRequest, ToolsGroupResult>({
   name: "tools.group",
   summary: "List the available tool groups with counts.",
-  description: "List tool groups from the shared TS-local and live Bridge catalog.",
+  description: "List every Tool group owned by the connected Unity instance, including package-local CLI capabilities.",
   group: "tools",
   handler: "offline",
   supportStatus: "cli-only",
@@ -38,18 +37,14 @@ export default defineTool<ToolsGroupRequest, ToolsGroupResult>({
   playModeSupport: "supported",
   examples: [{ description: "List all tool groups", argv: ["tools", "run", "tools.group", "--input", "{}"] }],
   async execute(request, context) {
-    const catalog = await loadToolCatalog(catalogFlags(request as unknown as Record<string, unknown>, context.flags), context, context.requestId);
+    const catalog = await loadToolCatalog(context.flags ?? {}, context, context.requestId);
     if (catalog.ok === false) discoveryError(catalog);
-    const groups = new Map<string, { count: number; source: string }>();
-    for (const tool of catalog.tools) {
-      const current = groups.get(tool.group);
-      groups.set(tool.group, { count: (current?.count ?? 0) + 1, source: current?.source ?? toolSource(tool) });
-    }
-    const items = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => ({
+    const groups = new Map<string, number>();
+    for (const tool of catalog.tools) groups.set(tool.group, (groups.get(tool.group) ?? 0) + 1);
+    const items = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([name, toolCount]) => ({
       name,
       summary: GROUP_SUMMARIES[name] ?? `${name} capability operations.`,
-      toolCount: value.count,
-      source: value.source
+      toolCount
     }));
     return { count: items.length, groups: items };
   }

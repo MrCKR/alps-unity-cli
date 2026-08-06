@@ -87,7 +87,6 @@ const MEDIUM_RISK_TOOL_NAMES = new Set([
 
 /** 生成文档归类；少数跨 group 文档归属由集中 override 维护。 */
 export function toolDocsTopic(tool: { name: string; group: string; source?: ToolSource; target?: string }): string {
-  if (tool.source === "project") return tool.target === "runtime" ? "runtime-tool" : "project-tool";
   if (tool.name.startsWith("animator.") || tool.name.startsWith("controller.")) return "animation";
   return DOCS_TOPIC_OVERRIDES.get(tool.name) ?? tool.group;
 }

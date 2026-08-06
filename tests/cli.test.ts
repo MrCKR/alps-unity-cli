@@ -33,8 +33,10 @@ test("unknown commands and options return a closed public error envelope", async
   assert.equal(option.error?.code, "E_UNKNOWN_OPTION");
 
   for (const argv of [
-    ["tools", "run", "docs.list", "--fingerprint-mode", "warn"],
-    ["tools", "run", "docs.list", "--yes"],
+    ["tools", "run", "docs.get", "--fingerprint-mode", "warn"],
+    ["tools", "run", "docs.get", "--yes"],
+    ["tools", "group", "--include-custom"],
+    ["context", "list", "--include-custom"],
     ["context", "describe", "editor.state", "--fingerprint-mode", "block"],
   ]) {
     const fingerprintMode = await execute(argv, runtime);

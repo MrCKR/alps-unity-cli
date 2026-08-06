@@ -1,0 +1,113 @@
+{
+  "name": "unity_cli",
+  "version": "0.1.9",
+  "owner": "alps-unity-cli maintainers",
+  "updated_at": "2026-08-05",
+  "status": "active",
+  "maturity_tier": "governed",
+  "lifecycle_stage": "governed",
+  "context_budget_tier": "production",
+  "review_cadence": "per-release",
+  "category": "unity-editor-automation",
+  "complexity_tier": "complex",
+  "target_platforms": [
+    "openai",
+    "claude",
+    "generic"
+  ],
+  "factory_components": [
+    "agents",
+    "references",
+    "scripts",
+    "evals",
+    "examples",
+    "security",
+    "reports"
+  ],
+  "runtime_projection": {
+    "include": [
+      "SKILL.md",
+      "references/**",
+      "scripts/**"
+    ],
+    "exclude": [
+      "agents/**",
+      "evals/**",
+      "examples/**",
+      "security/**",
+      "reports/**",
+      "manifest.json"
+    ],
+    "local_override": "SKILL.md:FeedbackMode",
+    "local_override_values": [
+      "off",
+      "on"
+    ]
+  },
+  "input_files": {
+    "required": [
+      "SKILL.md"
+    ],
+    "deferred": [
+      "references/operation-protocol.md",
+      "references/feedback.md",
+      "references/custom-tools.md",
+      "references/custom-contexts.md"
+    ],
+    "file-backed fixture": [
+      "evals/output/fixtures/feedback-scenario.json",
+      "examples/feedback-event.input.json",
+      "examples/feedback-record.output.json"
+    ],
+    "runtime_observation": "Current unity_cli JSON envelopes and connected-instance descriptors"
+  },
+  "output_contract": {
+    "normal_task_response": "No additional fixed format is imposed.",
+    "feedback_summary_condition": "FeedbackMode is on, a real friction event occurred, and the recorder returned ok:true.",
+    "feedback_summary_fields": [
+      "category",
+      "summary",
+      "workaround",
+      "recordId",
+      "localPath"
+    ],
+    "recorder_stdout_fields": [
+      "ok",
+      "recordId",
+      "path",
+      "rotated"
+    ],
+    "no_friction_behavior": "No feedback record and no feedback summary."
+  },
+  "rollback_boundary": {
+    "skill_install": "The installer retains one fixed previous projection until the new runtime bundle passes filesystem readback.",
+    "feedback_mode": "Bundle updates preserve the installed legal FeedbackMode value.",
+    "feedback_records": "Append-only user-local records are not automatically rolled back; retention is bounded by one main file and three archives.",
+    "caller_authority": "Timeout and retry decisions remain with the caller; governance metadata does not add an execution gate."
+  },
+  "permissions": {
+    "network": "deny",
+    "runtime_read": [
+      "Installed Skill runtime files",
+      "Public unity_cli JSON output"
+    ],
+    "subprocess": [
+      "powershell.exe for scripts/record-feedback.ps1 when FeedbackMode is on and friction occurred"
+    ],
+    "file_write": [
+      "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.jsonl",
+      "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.1.jsonl",
+      "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.2.jsonl",
+      "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.3.jsonl"
+    ]
+  },
+  "evidence_status": {
+    "automated_tests": "available",
+    "local_install_roundtrip": "available",
+    "clean_agent_review": "available",
+    "native_permission_enforcement": "missing evidence",
+    "longitudinal_feedback_quality": "missing evidence",
+    "human_release_approval": "missing evidence",
+    "production_telemetry": "missing evidence"
+  }
+}

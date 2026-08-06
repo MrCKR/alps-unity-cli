@@ -17,7 +17,6 @@ const publicDocs = [
   "skills/unity_cli/SKILL.md",
   "skills/unity_cli/references/custom-tools.md",
   "skills/unity_cli/references/custom-contexts.md",
-  "src/builtin-docs.ts",
 ];
 
 test("stable session public docs contain only current identity and terminal semantics", async () => {

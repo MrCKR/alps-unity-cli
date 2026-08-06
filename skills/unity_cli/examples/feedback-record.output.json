@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "recordId": "fb_fixture0000000000000000000000000000",
+  "createdAtUtc": "2026-08-05T00:00:00.0000000Z",
+  "category": "workaround",
+  "phase": "describe",
+  "capability": "sample.tool",
+  "errorCode": "E_SCHEMA_INVALID",
+  "summary": "Descriptor target wording required an extra discovery step.",
+  "workaround": "Used context search and descriptor readback to select the capability.",
+  "resolved": true
+}

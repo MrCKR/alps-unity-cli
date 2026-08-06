@@ -1,0 +1,39 @@
+{
+  "recommended_threshold": 0.5,
+  "negative_patterns": [],
+  "should_trigger": [
+    {"text": "Open the Unity scene and move the Main Camera to frame the player.", "family": "live_editor_action"},
+    {"text": "Check why this GameObject is missing its Rigidbody in the opened Editor.", "family": "live_editor_observation"},
+    {"text": "Run the Unity EditMode tests and report the result.", "family": "test"},
+    {"text": "Build the Unity project for Windows and inspect the artifact.", "family": "build"},
+    {"text": "Take a screenshot of the current Unity GameView.", "family": "screenshot"},
+    {"text": "Install the ProBuilder extension in this Unity project.", "family": "extension"},
+    {"text": "Create a prefab from the selected GameObject.", "family": "prefab"},
+    {"text": "Read the current Unity Console errors.", "family": "console"},
+    {"text": "Explain how MonoBehaviour Awake and Start differ.", "family": "unity_explanation"},
+    {"text": "Review this Unity C# component and fix the null reference.", "family": "unity_source"},
+    {"text": "Only edit this Unity manifest JSON; no Editor state is needed.", "family": "unity_text"},
+    {"text": "Find the Cinemachine virtual camera and inspect its lens settings.", "family": "package_capability"},
+    {"text": "这个 Unity 场景里的灯光为什么没有生效？", "family": "cn_live_observation"},
+    {"text": "帮我修改 Unity 的 PlayerController.cs，不需要打开 Editor。", "family": "cn_unity_source"},
+    {"text": "检查 Prefab、Asset 导入和当前 PlayMode 状态。", "family": "cn_editor_state"},
+    {"text": "用 Unity Editor 运行一次构建并验证输出。", "family": "cn_build"}
+  ],
+  "should_not_trigger": [
+    {"text": "Fix the React state update in this web dashboard.", "family": "web"},
+    {"text": "Explain dependency injection in a plain .NET console app.", "family": "dotnet"},
+    {"text": "Open this Blender file and adjust the mesh normals.", "family": "other_engine"},
+    {"text": "Create an Unreal Engine Blueprint for a door.", "family": "other_engine"},
+    {"text": "Debug this Godot GDScript signal.", "family": "other_engine"},
+    {"text": "Summarize this Jira ticket.", "family": "project_management"},
+    {"text": "Update the Kubernetes deployment manifest.", "family": "infrastructure"},
+    {"text": "Write a SQL query for monthly revenue.", "family": "data"},
+    {"text": "修复这个 Vue 页面里的表单校验。", "family": "cn_web"},
+    {"text": "解释普通 C# 控制台程序的 async await。", "family": "cn_dotnet"}
+  ],
+  "near_neighbor": [
+    {"text": "Compare several 3D game engines without choosing one.", "family": "game_engine_general"},
+    {"text": "Review a generic C# math library used by several applications.", "family": "generic_csharp"},
+    {"text": "Design gameplay rules on paper without using any engine.", "family": "game_design"}
+  ]
+}

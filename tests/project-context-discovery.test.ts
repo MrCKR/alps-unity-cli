@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import type { BridgeRequest } from "../src/bridge/index.js";
 import {
   discoverProjectContexts,
-  rawDescriptorToContextDescriptor,
-  shouldDiscoverContexts
+  rawDescriptorToContextDescriptor
 } from "../src/project-context-discovery.js";
 import type { ContextDescriptor } from "../src/contexts/types.js";
 
@@ -32,25 +32,28 @@ test("raw descriptor mapping preserves built-in, extension, and project source",
   }
 });
 
-test("raw descriptor mapping rejects unknown source and missing schemas", () => {
+test("raw descriptor mapping validates source shape without using source for ownership routing", () => {
   assert.equal(rawDescriptorToContextDescriptor({ ...descriptor("built-in"), source: "unknown" }), undefined);
   assert.equal(rawDescriptorToContextDescriptor({ ...descriptor("built-in"), inputSchema: undefined }), undefined);
   assert.equal(rawDescriptorToContextDescriptor({ ...descriptor("built-in"), outputSchema: undefined }), undefined);
+
+  const informationalSource = rawDescriptorToContextDescriptor({ ...descriptor("extension"), source: "built-in" });
+  assert.ok(informationalSource);
+  assert.equal(informationalSource.source, "built-in");
+  assert.equal(informationalSource.extensionId, "probuilder");
 });
 
-test("context discovery ignores removed endpoint and business target selectors", () => {
-  assert.equal(shouldDiscoverContexts({}, {}), false);
-  assert.equal(shouldDiscoverContexts({ "include-custom": true }, {}), true);
-  assert.equal(shouldDiscoverContexts({ "bridge-endpoint": "http://127.0.0.1:1234" }, {}), false);
-  assert.equal(shouldDiscoverContexts({ target: "Main Camera" }, {}), false);
-  assert.equal(shouldDiscoverContexts({ instance: "C:/Project" }, {}), true);
-  assert.equal(shouldDiscoverContexts({}, { projectContexts: [] }), true);
+test("live Context availability reasons match read routing errors", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8");
+  assert.match(source, /E_RUNTIME_NOT_READY: Enter Play Mode before reading this Context/);
+  assert.match(source, /E_CONTEXT_UNAVAILABLE: Exit Play Mode before reading this editor-only Context/);
+  assert.doesNotMatch(source, /E_UNITY_PLAY_MODE: Exit Play Mode before reading this editor-only Context/);
 });
 
 test("project context discovery delegates to the strict plural catalog", async () => {
   const requests: BridgeRequest[] = [];
   const contexts = [descriptor("built-in"), descriptor("extension"), descriptor("project")];
-  const result = await discoverProjectContexts({ "include-custom": true }, {
+  const result = await discoverProjectContexts({}, {
     bridgeExecute: async (payload) => {
       requests.push(payload);
       return { ok: true, requestId: payload.requestId, data: { contexts } };
@@ -66,7 +69,7 @@ test("project context discovery delegates to the strict plural catalog", async (
 });
 
 test("project context discovery returns structured registry errors", async () => {
-  const result = await discoverProjectContexts({ "include-custom": true }, {
+  const result = await discoverProjectContexts({}, {
     bridgeExecute: async (payload) => ({
       ok: true,
       requestId: payload.requestId,

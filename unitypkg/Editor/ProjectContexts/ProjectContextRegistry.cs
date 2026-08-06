@@ -87,7 +87,7 @@ namespace UnityCli
             definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "IUnityCliContext" : definition.DescriptorSource;
             ComputeProjectContextFingerprint(definition);
 
-            if (definition.Source == "project" && !string.IsNullOrEmpty(definition.Method))
+            if (definition.Ownership == "project" && !string.IsNullOrEmpty(definition.Method))
             {
                 var violation = ProjectContextSourceGuardCheck(ProjectContextHandlerSource(definition), definition.Name);
                 if (violation != null) throw new ArgumentException("Custom context " + definition.Name + " contains forbidden write-semantic token: " + violation, violation);
@@ -149,24 +149,25 @@ namespace UnityCli
         {
             var context = (IUnityCliContext<TReq, TRes>)instance;
             var proofObserver = instance as IUnityCliProofObserver<TReq>;
-            var source = registryOwnership.Resolve(implementationType);
-            if (proofObserver != null && !string.Equals(source, "built-in", StringComparison.Ordinal))
+            var ownership = registryOwnership.Resolve(implementationType);
+            if (proofObserver != null && !string.Equals(ownership, "built-in", StringComparison.Ordinal))
                 throw new InvalidOperationException("Only built-in Contexts may register completion proof observers.");
             RegisterContext(new RegisteredContext
             {
                 Name = descriptor.Name,
                 Summary = string.IsNullOrEmpty(descriptor.Summary) ? descriptor.Description : descriptor.Summary,
                 Description = descriptor.Description,
-                Category = string.IsNullOrEmpty(descriptor.Category) ? (source == "built-in" ? "built-in" : "custom") : descriptor.Category,
+                Category = string.IsNullOrEmpty(descriptor.Category) ? (ownership == "built-in" ? "built-in" : "custom") : descriptor.Category,
                 InputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
                 OutputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
-                Source = source,
+                Source = ownership,
+                Ownership = ownership,
                 Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
                 AvailabilityScope = descriptor.AvailabilityScope,
                 PlayModeSupport = descriptor.PlayModeSupport,
                 Examples = descriptor.Examples ?? Array.Empty<ContextExample>(),
                 RequiresPackages = descriptor.RequiresPackages ?? Array.Empty<string>(),
-                RegisteredBy = source == "extension" ? "extension-manifest" : "unity-editor-package",
+                RegisteredBy = ownership == "extension" ? "extension-manifest" : "unity-editor-package",
                 DescriptorSource = "IUnityCliContext",
                 Assembly = assembly.GetName().Name,
                 Method = implementationType.FullName + ".ReadAsync",
@@ -269,11 +270,11 @@ namespace UnityCli
         {
             ComputeProjectContextFingerprint(definition);
             ProjectContextPinnedFingerprint pin;
-            if (string.Equals(definition.Source, "project", StringComparison.Ordinal) && !string.IsNullOrEmpty(definition.PinnedFingerprint))
+            if (string.Equals(definition.Ownership, "project", StringComparison.Ordinal) && !string.IsNullOrEmpty(definition.PinnedFingerprint))
             {
                 pin = ParseProjectContextPinnedFingerprint("descriptor", definition.PinnedFingerprint);
             }
-            else if (string.Equals(definition.Source, "project", StringComparison.Ordinal))
+            else if (string.Equals(definition.Ownership, "project", StringComparison.Ordinal))
             {
                 var baseline = LoadProjectContextExpectedFingerprint(definition.Name);
                 if (string.IsNullOrEmpty(baseline))
@@ -453,8 +454,7 @@ namespace UnityCli
         {
             DiscoverContexts();
             var items = Contexts.Values
-                .OrderBy(context => context.Source, StringComparer.Ordinal)
-                .ThenBy(context => context.Name, StringComparer.Ordinal)
+                .OrderBy(context => context.Name, StringComparer.Ordinal)
                 .Select(ContextDescriptorData)
                 .ToList();
             return new Dictionary<string, object>
@@ -491,7 +491,7 @@ namespace UnityCli
             RegisteredContext definition;
             if (!Contexts.TryGetValue(args.Name, out definition))
                 throw new BridgeCommandException("E_CONTEXT_NOT_FOUND", "Context not found: " + args.Name, "Run context.list to see available contexts.");
-            if (definition.Source == "project") RefreshProjectContextFingerprint(definition);
+            if (definition.Ownership == "project") RefreshProjectContextFingerprint(definition);
             return ContextDescriptorData(definition);
         }
 
@@ -512,7 +512,7 @@ namespace UnityCli
             if (!Contexts.TryGetValue(args.Name, out definition))
                 throw new BridgeCommandException("E_CONTEXT_NOT_FOUND", "Context not found: " + args.Name, "Run context.list to see available contexts.");
 
-            if (definition.Source == "project")
+            if (definition.Ownership == "project")
             {
                 var fingerprint = RefreshProjectContextFingerprint(definition);
                 if (fingerprint.Blocked)
@@ -587,10 +587,32 @@ namespace UnityCli
                 { "playModeSupport", definition.PlayModeSupport },
                 { "examples", definition.Examples },
                 { "internalDescriptorFingerprint", definition.Fingerprint },
-                { "available", true }
+                { "available", ContextAvailableNow(definition) }
             };
+            if (!(bool)data["available"])
+                data["unavailableReason"] = ContextUnavailableReason(definition);
             if (definition.RequiresPackages != null && definition.RequiresPackages.Length > 0) data["requiresPackages"] = definition.RequiresPackages;
             return data;
+        }
+
+        /// <summary>目录始终显示 Context；available 只描述当前 Edit/Play 状态，不参与过滤。</summary>
+        private static bool ContextAvailableNow(RegisteredContext definition)
+        {
+            if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
+                return EditorApplication.isPlaying && !IsPlayModeChanging();
+            if (definition.PlayModeSupport == "editor-only")
+                return !EditorApplication.isPlayingOrWillChangePlaymode && !IsPlayModeChanging();
+            return !IsPlayModeChanging();
+        }
+
+        /// <summary>按读取门禁优先级返回与 available=false 对应的稳定原因。</summary>
+        private static string ContextUnavailableReason(RegisteredContext definition)
+        {
+            if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
+                return "E_RUNTIME_NOT_READY: Enter Play Mode before reading this Context.";
+            if (definition.PlayModeSupport == "editor-only" && EditorApplication.isPlayingOrWillChangePlaymode)
+                return "E_CONTEXT_UNAVAILABLE: Exit Play Mode before reading this editor-only Context.";
+            return "E_UNITY_TRANSITIONING: Wait until the Editor mode transition finishes.";
         }
 
         private static Dictionary<string, object> ContextFingerprintDetails(RegisteredContext definition)
@@ -612,7 +634,7 @@ namespace UnityCli
         {
             var items = new List<object>();
             var blocked = 0;
-            foreach (var pair in Contexts.Where(pair => pair.Value.Source == "project"))
+            foreach (var pair in Contexts.Where(pair => pair.Value.Ownership == "project"))
             {
                 var definition = pair.Value;
                 RefreshProjectContextFingerprint(definition);
@@ -629,7 +651,7 @@ namespace UnityCli
             return new Dictionary<string, object>
             {
                 { "algorithm", ContextFingerprintAlgorithm },
-                { "contextCount", (long)Contexts.Values.Count(context => context.Source == "project") },
+                { "contextCount", (long)Contexts.Values.Count(context => context.Ownership == "project") },
                 { "blockedCount", (long)blocked },
                 { "contexts", items }
             };

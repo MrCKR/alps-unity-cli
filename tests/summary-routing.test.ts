@@ -5,10 +5,11 @@ import { allRegisteredToolMetadata } from "../src/tools/metadata/index.js";
 import { builtinContextDescriptors } from "../src/contexts/registry.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
 import { probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
+import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import "../src/extensions/index.js";
 
 const requestId = "test_summary_routing_001";
-const emptyRuntime: ToolsRuntime = {};
+const connectedRuntime: ToolsRuntime = { projectTools: staticBridgeToolMetadata() };
 const GENERIC_PATTERNS = [/\bvarious\b/i, /\butilities\b/i, /\bhelpers\b/i, /\bmanage things\b/i, /^run\s+[\w.-]+\.?$/i, /^manage\s+\w+\.?$/i, /\.\.\./];
 
 function wordCount(text: string): number {
@@ -23,8 +24,8 @@ function assertRouteSummary(name: string, summary: string): void {
   }
 }
 
-test("offline tools group summaries cover TS-local and packaged static groups", async () => {
-  const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
+test("connected tools group summaries cover package-local and instance groups", async () => {
+  const result = await handleToolsCommand("group", [], {}, connectedRuntime, requestId);
   assert.ok(result.ok);
 
   const data = result.data as { groups: Array<{ name: string; summary: string }> };
@@ -49,7 +50,7 @@ test("live-discovered C# and extension groups still get route summaries through 
   const result = await handleToolsCommand("group", [], {}, runtime, requestId);
   assert.ok(result.ok);
 
-  const data = result.data as { groups: Array<{ name: string; summary: string; source: string }> };
+  const data = result.data as { groups: Array<{ name: string; summary: string }> };
   const scene = data.groups.find((group) => group.name === "scene");
   const probuilder = data.groups.find((group) => group.name === "probuilder");
 
@@ -57,13 +58,11 @@ test("live-discovered C# and extension groups still get route summaries through 
   assert.ok(probuilder);
   assertRouteSummary("group scene", scene!.summary);
   assertRouteSummary("group probuilder", probuilder!.summary);
-  assert.equal(scene!.source, "built-in");
-  assert.equal(probuilder!.source, "extension");
   assert.match(scene!.summary, /hierarchy|save|load|view/i);
   assert.match(probuilder!.summary, /shape|mesh|face|repair/i);
 });
 
-test("offline tool summaries stay concise and route-specific", () => {
+test("package-local Tool summaries stay concise and route-specific", () => {
   const tools = allRegisteredToolMetadata();
   assert.ok(tools.length > 0);
 
@@ -89,8 +88,9 @@ test("local context discovery descriptions are route-specific", () => {
       assert.doesNotMatch(context.description, pattern, `${context.name} context description is not route-specific`);
     }
   }
-  assert.ok(contexts.some((context) => context.name === "tools.groups" && /local CLI registry/i.test(context.description)));
-  assert.ok(contexts.some((context) => context.name === "tools.custom" && /custom Unity project tools/i.test(context.description)));
+  assert.ok(contexts.some((context) => context.name === "editor.state" && /selected Unity project identity/i.test(context.description)));
+  assert.ok(contexts.some((context) => context.name === "editor.dialogs" && /Windows modal dialogs/i.test(context.description)));
+  assert.equal(contexts.some((context) => context.name === "tools.groups" || context.name === "tools.custom"), false);
 });
 
 test("extension manifest descriptions remain route-specific even though tool descriptors are live-only", () => {
