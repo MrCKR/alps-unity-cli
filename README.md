@@ -68,7 +68,7 @@ unity_cli init
 
 ```powershell
 # 安装
-npm install -g @alps_ckr/unity_cli
+npm install -g @alpsckr/unity_cli
 
 # 初始化项目（安装 Bridge 包；若项目已有 .pi/.claude/.agents，则自动安装 Skill）
 unity_cli init --project C:\path\MyProject
@@ -190,7 +190,7 @@ unity_cli tools run diagnose.preflight
 
 ```powershell
 # 全局安装
-npm install -g @alps_ckr/unity_cli
+npm install -g @alpsckr/unity_cli
 
 # 本地开发
 npm install

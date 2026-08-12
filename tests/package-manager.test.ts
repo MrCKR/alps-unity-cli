@@ -36,7 +36,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", a
   const result = await ensurePackageBridge(project);
 
   assert.equal(result.dependencyName, "com.unity_cli");
-  assert.equal(result.packageVersion, "0.1.0");
+  assert.equal(result.packageVersion, "0.2.1");
   assert.equal(result.installMode, "copy");
   assert.equal(result.projectHash.length, 64);
   assert.equal(result.sourceHash.length, 64);
@@ -46,7 +46,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", a
   const bridgePath = result.bridgePath;
   const packageJson = JSON.parse(await readFile(join(bridgePath, "package.json"), "utf8")) as { name: string; version: string };
   assert.equal(packageJson.name, "com.unity_cli");
-  assert.equal(packageJson.version, "0.1.0");
+  assert.equal(packageJson.version, "0.2.1");
 
   // Editor files should be copied
   const bridgeSource = await readFile(join(bridgePath, "Editor", "UnityCliBridge.cs"), "utf8");
@@ -69,6 +69,36 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", a
   // No file: dependency in manifest
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.unity_cli"], undefined);
+});
+
+test("ensurePackageBridge refreshes orphaned legacy metadata when the package directory is absent", async () => {
+  const project = await makeUnityProject();
+  const metadataPath = join(project, "Packages", "unity_cli.install.json");
+  await writeFile(metadataPath, `${JSON.stringify({
+    packageName: "com.unity_cli",
+    packageVersion: "0.1.0",
+    sourceHash: "0".repeat(64),
+    projectHash: "legacy",
+    installMode: "copy",
+    installTime: "2026-07-02T07:50:45.979Z",
+    cliCompatibilityRange: ">=0.1.0 <0.2.0"
+  }, null, 2)}\n`, "utf8");
+
+  const installed = await ensurePackageBridge(project);
+  const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
+  assert.equal(installed.packageVersion, "0.2.1");
+  assert.equal(metadata.packageVersion, "0.2.1");
+  assert.equal(metadata.cliCompatibilityRange, ">=0.2.0 <0.3.0");
+  assert.match(String(metadata.managedFilesSha256), /^[a-f0-9]{64}$/);
+});
+
+test("ensurePackageBridge rejects invalid metadata when the package directory exists", async () => {
+  const project = await makeUnityProject();
+  const packagePath = join(project, "Packages", "com.unity_cli");
+  await mkdir(packagePath, { recursive: true });
+  await writeFile(join(packagePath, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.1.0" }), "utf8");
+  await writeFile(join(project, "Packages", "unity_cli.install.json"), "{}\n", "utf8");
+  await assert.rejects(() => ensurePackageBridge(project), { code: "INIT_CHECK_FAILED" });
 });
 
 test("ensurePackageBridge rejects a source-hash-stale init plan before target writes", async () => {
@@ -105,7 +135,7 @@ test("ensurePackageBridge removes a proven stale publish sibling before idempote
   const first = await ensurePackageBridge(project);
   const stale = `${first.bridgePath}.previous-00000000-0000-4000-8000-000000000001`;
   await mkdir(stale, { recursive: true });
-  await writeFile(join(stale, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.1.0" }), "utf8");
+  await writeFile(join(stale, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.2.1" }), "utf8");
 
   const second = await ensurePackageBridge(project);
   assert.equal(second.installTime, first.installTime);
@@ -125,12 +155,12 @@ test("ensurePackageBridge overwrites when version or hash changes", async () => 
 
   // Second install should detect the mismatch and re-copy
   const second = await ensurePackageBridge(project);
-  assert.equal(second.packageVersion, "0.1.0");
+  assert.equal(second.packageVersion, "0.2.1");
   assert.notEqual(second.installTime, first.installTime);
 
   // Verify the metadata was corrected
   const updatedMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as { packageVersion: string };
-  assert.equal(updatedMetadata.packageVersion, "0.1.0");
+  assert.equal(updatedMetadata.packageVersion, "0.2.1");
 });
 
 test("ensurePackageBridge retries transient Windows rename failures before publishing", async () => {
@@ -314,7 +344,7 @@ test("ensurePackageBridge republishes tampered identity and compatibility metada
     await ensurePackageBridge(project);
     const observed = JSON.parse(await readFile(installed.installMetadataPath, "utf8")) as Record<string, unknown>;
     assert.equal(observed.packageName, "com.unity_cli");
-    assert.equal(observed.cliCompatibilityRange, ">=0.1.0 <0.2.0");
+    assert.equal(observed.cliCompatibilityRange, ">=0.2.0 <0.3.0");
   }
 });
 
@@ -325,7 +355,7 @@ test("checkPackageBridge succeeds for valid copy-mode install", async () => {
   const checked = await checkPackageBridge(project);
 
   assert.equal(checked.dependencyName, "com.unity_cli");
-  assert.equal(checked.packageVersion, "0.1.0");
+  assert.equal(checked.packageVersion, "0.2.1");
   assert.equal(checked.installMode, "copy");
   assert.equal(checked.projectHash.length, 64);
   assert.equal(checked.sourceHash.length, 64);
@@ -345,7 +375,7 @@ test("checkPackageBridge fails when install metadata is missing", async () => {
   // Copy the package without going through ensurePackageBridge
   const packages = join(project, "Packages", "com.unity_cli");
   await mkdir(join(packages, "Editor"), { recursive: true });
-  await writeFile(join(packages, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.1.0" }), "utf8");
+  await writeFile(join(packages, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.2.1" }), "utf8");
 
   await assert.rejects(
     () => checkPackageBridge(project),

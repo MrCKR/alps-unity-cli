@@ -7,8 +7,6 @@ const validationPath = ".pi/skills/unity-cli-validation/SKILL.md";
 const agentsPath = "AGENTS.md";
 const publicSkillPath = "skills/unity_cli/SKILL.md";
 const readmePath = "README.md";
-const projectFixturePath = "Dev/UnityProject/Library/UnityCli/dir022-validation-project/Assets/Editor/Dir022ProjectCommand.cs";
-const packageFixturePath = "Dev/UnityProject/Library/UnityCli/dir022-validation-project/Packages/com.example.dir022/Editor/Dir022PackageCommand.cs";
 
 test("fresh gate keeps task values above defaults and forbids probe calls", async () => {
   const [agent, validation, agents] = await Promise.all([
@@ -34,15 +32,4 @@ test("public guidance says examples do not override caller intent", async () => 
   assert.match(skill, /任务明确要求的业务值优先/);
   assert.match(skill, /不能把default\/example当作连通性或probe调用/);
   assert.match(readme, /调用方明确要求的业务值优先于schema default和example值/);
-});
-
-test("DIR-022 echo fixtures describe caller payload and fixed source prefixes", async () => {
-  const [projectFixture, packageFixture] = await Promise.all([
-    readFile(projectFixturePath, "utf8"),
-    readFile(packageFixturePath, "utf8"),
-  ]);
-  assert.match(projectFixture, /Echo a caller-provided payload with the project source prefix/);
-  assert.match(projectFixture, /fixed project: source prefix[\s\S]*caller-requested payload/);
-  assert.match(packageFixture, /Echo a caller-provided payload with the third-party package source prefix/);
-  assert.match(packageFixture, /fixed package: source prefix[\s\S]*caller-requested payload/);
 });

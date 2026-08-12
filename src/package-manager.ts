@@ -204,7 +204,7 @@ export interface UnityCliPackageRemoval {
 }
 
 const bridgePackageName = "com.unity_cli";
-const cliCompatibilityRange = ">=0.1.0 <0.2.0";
+const cliCompatibilityRange = ">=0.2.0 <0.3.0";
 const installMetadataFileName = "unity_cli.install.json";
 const fileManifestFileName = "unity_cli.files.json";
 const deploymentMetadataFileName = "unity_cli.package-deployments.json";
@@ -626,7 +626,9 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
   // Check existing installation: skip if same version & hash
   const expectedManagedFiles = await listManagedSourceFiles(sourcePath);
   const expectedManagedFilesSha256 = managedFilesSha256(expectedManagedFiles);
-  const existing = await readOptionalInstallMetadata(installMetadataPath);
+  const targetExists = await directoryExists(targetPath);
+  // 包目录不存在时 metadata 只是孤立残留；普通 init 可用当前完整投影替换它。
+  const existing = targetExists ? await readOptionalInstallMetadata(installMetadataPath) : undefined;
   if (existing) await readVerifiedManagedFileList(fileManifestPath, existing.managedFilesSha256);
   if (existing && existing.packageName === bridgePackageName && existing.installMode === "copy"
     && existing.packageVersion === packageManifest.version && existing.sourceHash === sourceHash && existing.projectHash === projectHash
@@ -655,7 +657,6 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
   const publishNonce = randomUUID();
   const stagingPath = `${targetPath}.staging-${publishNonce}`;
   const backupPath = `${targetPath}.previous-${publishNonce}`;
-  const targetExists = await directoryExists(targetPath);
   // publish 阶段（复制+rename）必须尊重调用方 immutable deadline；Defender/索引器短暂占用时只在该窗口内重试。
   let installTime: string | undefined;
   let observedMetadata: UnityCliInstallMetadata | undefined;
@@ -663,7 +664,7 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
   let metadataWriteAttempted = false;
   try {
     const freshTargetExists = await directoryExists(targetPath);
-    const freshExisting = await readOptionalInstallMetadata(installMetadataPath);
+    const freshExisting = freshTargetExists ? await readOptionalInstallMetadata(installMetadataPath) : undefined;
     if (freshTargetExists !== targetExists)
       throw new PackageManagerError("INIT_PLAN_STALE", "Bridge package target changed before staging; no package was published.");
     if ((!existing && freshExisting) || (existing && (!freshExisting || !sameInstallMetadata(existing, freshExisting))))

@@ -1,6 +1,6 @@
 {
   "name": "com.unity_cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "displayName": "Unity CLI",
   "description": "Editor package used by Unity CLI commands.",
   "unity": "2022.3",
