@@ -9,14 +9,22 @@ import { projectRelativePath, publicPackageEffects } from "./public-result.js";
 
 export interface PackageDeployRequest { source: string; packageName?: string; }
 export interface PackageDeployPlannedEffect { type?: string; package?: string; from?: string; to?: string; targetPath?: string; packageVersion?: string | null; fileCount?: number; reason?: string; }
-export interface PackageDeployFilesProof { proven: true; targetPath: string; sourceHash: string; targetHash: string; copiedFileCount: number; metadataPath: string; metadataHash: string; backupPath?: string; backupHash?: string; }
+export interface PackageDeployFilesProof { proven: true; targetPath: string; sourceHash: string; targetHash: string; copiedFileCount: number; metadataPath: string; metadataHash: string; backupPath?: string; backupHash?: string; backupPackageVersion?: string; }
 export interface PackageDeployResult {
   action: string; status: string; manifestPath: string; packageName: string; packageVersion: string;
   sourcePath: string; sourceHash: string; targetPath: string; backupPath?: string; backupPackageVersion?: string;
   backupCreated: boolean; repeatedDeployment: boolean; copiedFileCount: number; dryRun: boolean;
   plannedEffects: PackageDeployPlannedEffect[]; metadataPath: string; files?: PackageDeployFilesProof; resolve?: LiveResolveResult;
 }
-interface DeployPlan extends PackageDeployFileResult { requestedSource: string; requestedPackageName: string | null; previousTargetHash?: string; previousBackupHash?: string; }
+interface DeployPlan extends PackageDeployFileResult {
+  requestedSource: string;
+  requestedPackageName: string | null;
+  previousTargetExists: boolean;
+  previousTargetHash?: string;
+  previousRecordIdentity: string;
+  previousBackupExists: boolean;
+  previousBackupHash?: string;
+}
 
 /** deploy 的 backup/copy、Resolve 与 PackageInfo readback 共用一个 durable root。 */
 async function runPackageDeploy(request: PackageDeployRequest, context: ToolContext): Promise<PackageDeployResult> {
@@ -33,7 +41,16 @@ async function runPackageDeploy(request: PackageDeployRequest, context: ToolCont
       const prepared = await deployPackageSource(projectPath, request.source, { packageName: request.packageName, dryRun: true });
       const observed = await inspectPackageDeploymentFiles(projectPath, prepared.packageName, prepared.targetPath, prepared.backupPath);
       signal.throwIfAborted();
-      return { ...prepared, requestedSource: request.source, requestedPackageName: request.packageName ?? null, previousTargetHash: observed.targetHash, previousBackupHash: observed.backupHash } as unknown as Record<string, unknown>;
+      return {
+        ...prepared,
+        requestedSource: request.source,
+        requestedPackageName: request.packageName ?? null,
+        previousTargetExists: observed.targetExists,
+        previousTargetHash: observed.targetHash,
+        previousRecordIdentity: observed.recordIdentity,
+        previousBackupExists: observed.backupExists,
+        previousBackupHash: observed.backupHash,
+      } as unknown as Record<string, unknown>;
     },
     async apply(plan, signal, stopAtMs) {
       const projectPath = resolve(context.projectPath);
@@ -63,7 +80,11 @@ async function deployBundle(projectPath: string, plan: DeployPlan, deployed: Pac
   const observed = await inspectPackageDeploymentFiles(projectPath, plan.packageName, plan.targetPath, plan.backupPath);
   const currentSourceHash = await hashPackageTree(plan.sourcePath);
   if (!observed.targetExists || observed.targetHash !== plan.sourceHash || observed.targetFileCount !== plan.copiedFileCount || currentSourceHash !== plan.sourceHash) throw new Error("Deployed package target does not match the committed source tree.");
-  if (!observed.record || observed.record.sourceHash !== plan.sourceHash || observed.record.targetPath !== plan.targetPath) throw new Error("Package deployment metadata does not match the committed plan.");
+  if (!observed.record || observed.record.packageName !== plan.packageName || observed.record.packageVersion !== plan.packageVersion
+    || observed.record.sourcePath !== plan.sourcePath || observed.record.sourceHash !== plan.sourceHash || observed.record.targetPath !== plan.targetPath
+    || (observed.record.backupPath ?? null) !== (plan.backupPath ?? null)
+    || (observed.record.backupPackageVersion ?? null) !== (plan.backupPackageVersion ?? null))
+    throw new Error("Package deployment metadata does not match the committed plan.");
   const expectedBackupHash = plan.backupCreated ? plan.previousTargetHash : plan.previousBackupHash;
   if (expectedBackupHash && observed.backupHash !== expectedBackupHash) throw new Error("Package deployment backup does not match its committed pre-state.");
   const manifestHash = await hash(plan.manifestPath);
@@ -71,6 +92,7 @@ async function deployBundle(projectPath: string, plan: DeployPlan, deployed: Pac
     proven: true, targetPath: plan.targetPath, sourceHash: plan.sourceHash, targetHash: observed.targetHash,
     copiedFileCount: observed.targetFileCount, metadataPath: observed.metadataPath, metadataHash: observed.metadataHash,
     ...(plan.backupPath ? { backupPath: plan.backupPath } : {}), ...(observed.backupHash ? { backupHash: observed.backupHash } : {}),
+    ...(plan.backupPackageVersion ? { backupPackageVersion: plan.backupPackageVersion } : {}),
   };
   return {
     expectedManifestSha256: manifestHash,
@@ -120,7 +142,9 @@ function deployPlan(value: Record<string, unknown>): DeployPlan {
   for (const key of ["projectPath", "manifestPath", "packageName", "packageVersion", "sourcePath", "sourceHash", "targetPath", "metadataPath", "requestedSource"])
     if (typeof value[key] !== "string") throw new Error(`Durable package.deploy file plan is missing ${key}.`);
   if (value.requestedPackageName !== null && typeof value.requestedPackageName !== "string") throw new Error("Durable package.deploy file plan has an invalid requestedPackageName.");
-  if (typeof value.backupCreated !== "boolean" || typeof value.repeatedDeployment !== "boolean" || typeof value.copiedFileCount !== "number" || !Array.isArray(value.plannedEffects)) throw new Error("Durable package.deploy file plan is corrupt.");
+  if (typeof value.backupCreated !== "boolean" || typeof value.repeatedDeployment !== "boolean" || typeof value.copiedFileCount !== "number"
+    || typeof value.previousTargetExists !== "boolean" || typeof value.previousRecordIdentity !== "string"
+    || typeof value.previousBackupExists !== "boolean" || !Array.isArray(value.plannedEffects)) throw new Error("Durable package.deploy file plan is corrupt.");
   return value as unknown as DeployPlan;
 }
 async function hash(path: string): Promise<string> { return createHash("sha256").update(await readFile(path)).digest("hex"); }

@@ -230,10 +230,10 @@ namespace UnityCli
         private static void WriteRegistryTextAtomically(string path, string content)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            var temporaryPath = path + "." + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            var temporaryPath = path + ".tmp";
             try
             {
-                using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                using (var stream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
                 {
                     writer.Write(content);
@@ -252,6 +252,9 @@ namespace UnityCli
         /// <summary>写入或更新当前 editor session claim；同 identity 的其他存活 claim 必须保留以形成 conflict。</summary>
         private static bool RegisterInstance(string requestedState)
         {
+            // AutoStart=false不即时停当前domain，但compile/reload边界开始后不得再把旧listener发布成transitioning。
+            if (!UnityCliProjectSettings.Current.BridgeAutoStart
+                && (domainReloading || EditorApplication.isCompiling || EditorApplication.isUpdating)) return true;
             try
             {
                 WithRegistryMutex(() =>
@@ -371,6 +374,8 @@ namespace UnityCli
             var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             var session = new Dictionary<string, object>
             {
+                { "target", "editor" },
+                { "sessionId", EditorSessionId() },
                 { "editorSessionId", EditorSessionId() },
                 { "processId", (long)Process.GetCurrentProcess().Id },
                 { "processStartedAt", ProcessStartedAt() },
@@ -425,7 +430,9 @@ namespace UnityCli
 
         private static bool IsCurrentSession(Dictionary<string, object> session)
         {
-            return session != null && string.Equals(ReadString(session, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal);
+            return session != null
+                && string.Equals(ReadString(session, "target"), "editor", StringComparison.Ordinal)
+                && string.Equals(ReadString(session, "sessionId"), EditorSessionId(), StringComparison.Ordinal);
         }
 
         private static bool IsProcessClaimAliveOrUnverifiable(Dictionary<string, object> session)

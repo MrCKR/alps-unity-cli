@@ -6,12 +6,12 @@ import { toolAvailabilityScope, toolSource } from "../metadata/index.js";
 
 export interface ToolsGroupListRequest { group: string }
 export interface ToolsGroupListItem { name: string; summary: string; group: string; source: string; destructiveHint: boolean; playModeSupport: string; target: string; availabilityScope: string; available: boolean; unavailableReason?: string; requiresPackages?: string[]; extensionId?: string }
-export interface ToolsGroupListResult { group: string; count: number; tools: ToolsGroupListItem[] }
+export interface ToolsGroupListResult { group: string; count: number; nameSemantics: { exact: true; groupPrefix: false }; tools: ToolsGroupListItem[] }
 
 export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
   name: "tools.group-list",
   summary: "List direct tools in a specific group with routing summaries and current availability.",
-  description: "List every Tool in one group from the connected Unity instance catalog.",
+  description: "List every Tool in one group from the connected Unity instance catalog. Each tools[].name is the exact invocation name; group is only a filter and must never be prepended.",
   group: "tools",
   handler: "offline",
   supportStatus: "cli-only",
@@ -22,7 +22,7 @@ export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
   async execute(request, context) {
     if (!request.group) throw new StructuredToolError("TOOLS_GROUP_LIST_NAME_REQUIRED", "Pass a group name: unity_cli tools group list <group>.", ["Run unity_cli tools group to see all tool groups."]);
     const flags = context.flags ?? {};
-    const catalog = await loadToolCatalog(flags, context, context.requestId);
+    const catalog = await loadToolCatalog(flags, context, `${context.requestId}_group_list_execution`);
     if (catalog.ok === false) throw StructuredToolError.from(catalog.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
     const availabilityFlags = await extensionAvailabilityFlags(flags, context);
     const matches = catalog.tools.filter((tool) => tool.group === request.group);
@@ -44,6 +44,6 @@ export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
         ...(availability.extensionId ? { extensionId: availability.extensionId } : {})
       };
     }));
-    return { group: request.group, count: tools.length, tools };
+    return { group: request.group, count: tools.length, nameSemantics: { exact: true, groupPrefix: false }, tools };
   }
 });

@@ -20,7 +20,7 @@ namespace UnityCli
                 CapabilityData("material", MaterialCommands), CapabilityData("graphics", GraphicsCommands), CapabilityData("physics", PhysicsCommands), CapabilityData("scriptable-object", ScriptableObjectCommands),
                 CapabilityData("profiler", ProfilerCommands), CapabilityData("animation", AnimationCommands), CapabilityData("shader", ShaderCommands), CapabilityData("texture", TextureCommands),
                 CapabilityData("editor", EditorCommands), CapabilityData("code", CodeCommands), CapabilityData("project-tool", ProjectToolCommands), CapabilityData("runtime-tool", RuntimeToolCommands),
-                CapabilityData("context", ContextCommands), CapabilityData("extension", ExtensionCommands)
+                CapabilityData("extension", ExtensionCommands)
             };
         }
 
@@ -93,7 +93,8 @@ namespace UnityCli
                 context.Response.ContentType = "application/json; charset=utf-8";
                 // transport attestation 由 supervisor 消费，禁止写入公开 business envelope。
                 context.Response.Headers["x-unity-cli-instance-id"] = InstanceId();
-                context.Response.Headers["x-unity-cli-editor-session-id"] = EditorSessionId();
+                context.Response.Headers["x-unity-cli-session-id"] = EditorSessionId();
+                context.Response.Headers["x-unity-cli-target"] = "editor";
                 context.Response.Headers["x-unity-cli-listener-id"] = ListenerId;
                 context.Response.Headers["x-unity-cli-listener-generation"] = CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture);
                 context.Response.ContentLength64 = bytes.Length;

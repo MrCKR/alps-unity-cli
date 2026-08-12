@@ -2,7 +2,7 @@
  * Extension metadata type for the Unity CLI.
  *
  * An Extension is an optional capability pack that provides additional
- * tools, contexts, or both. Extensions depend on optional Unity packages
+ * Tools. Extensions depend on optional Unity packages
  * (e.g. com.unity.probuilder) and are not part of the core CLI package.
  *
  * Defines the typed descriptor surface for extension metadata.
@@ -29,8 +29,6 @@ export interface ExtensionMetadata {
   status: ExtensionStatus;
   /** Tools provided by this extension (dotted names, e.g. ['probuilder.shape']). */
   providesTools?: string[];
-  /** Contexts provided by this extension (dotted names, e.g. ['probuilder.mesh-info']). */
-  providesContexts?: string[];
   /** Unity packages required for this extension to work. */
   requiresUnityPackages?: string[];
   /** How the extension is installed: 'auto' (detected during init) or 'manual' (explicit install command). */

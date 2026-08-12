@@ -1,6 +1,9 @@
+import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import path from "node:path";
 import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding, type BridgeResponse } from "../../bridge/types.js";
+import { defaultDataDir } from "../../platform.js";
 import type { ToolContext } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
 import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
@@ -53,6 +56,7 @@ interface RootState {
   fileExecutorOwnedByCaller: boolean;
   operation?: string;
   rootInputSha256?: string;
+  rootRequestDigest?: string;
   filePlan?: Record<string, unknown>;
   terminalEnvelope?: Record<string, unknown>;
 }
@@ -75,48 +79,54 @@ export async function runLivePackageResolve<T>(context: ToolContext, operation: 
   const binding = existingBinding ?? await bindLivePackageProject(context, operation);
   const executorCapability = randomBytes(32).toString("hex");
   const rootInput = JSON.parse(JSON.stringify(input)) as Record<string, unknown>;
+  const rootInputSha256 = hashRecord(rootInput);
   let root = await startRoot(context, binding, operation, rootInput, executorCapability);
   if (root.terminal) return terminalResult<T>(context.requestId, root);
+  const rootRequestDigest = root.rootRequestDigest;
+  if (!rootRequestDigest) throw invalidPackageRootDigest();
 
   if (operation === "resolve") {
     await context.commitEffect?.();
   } else if (root.phase === "awaiting_files") {
     if (!files) throw new StructuredToolError("E_INTERNAL", "Package file driver is missing.", ["Report this internal package Tool error."]);
-    root = await claimFiles(context, binding, operation, executorCapability);
+    root = await claimFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest);
     if (root.terminal) return terminalResult<T>(context.requestId, root);
-    if (!root.fileExecutorOwnedByCaller) return waitForTerminal<T>(context, binding, executorCapability);
+    if (!root.fileExecutorOwnedByCaller) return waitForTerminal<T>(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
     let plan: Record<string, unknown>;
     try { plan = await runFileDriverStep(context, (signal) => files.prepare(signal)); }
     catch (error) {
-      root = await failFiles(context, binding, operation, executorCapability, error);
-      return root.terminal ? terminalResult<T>(context.requestId, root) : waitForTerminal<T>(context, binding, executorCapability);
+      root = await failFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, error);
+      return root.terminal ? terminalResult<T>(context.requestId, root) : waitForTerminal<T>(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
     }
     await context.commitEffect?.();
-    root = await commitFiles(context, binding, operation, executorCapability, plan);
+    root = await commitFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, plan);
     if (root.terminal) return terminalResult<T>(context.requestId, root);
-    if (!root.fileExecutorOwnedByCaller) return waitForTerminal<T>(context, binding, executorCapability);
+    if (!root.fileExecutorOwnedByCaller) return waitForTerminal<T>(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
     try {
-      const bundle = await runFileDriverStep(context, (signal, stopAtMs) => files.apply(plan, signal, stopAtMs));
-      root = await proveFiles(context, binding, operation, executorCapability, bundle);
+      const bundle = await runFileDriverStep(context, (signal, stopAtMs) => withExactPackageLease(
+        context, binding, context.requestId, rootRequestDigest, executorCapability, stopAtMs, signal,
+        (guardedSignal) => files.apply(plan, guardedSignal, stopAtMs),
+      ));
+      root = await proveFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, bundle);
     } catch (error) {
-      root = await failFiles(context, binding, operation, executorCapability, error);
+      root = await failFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, error);
     }
   } else if (root.phase === "files_committing" && !root.fileExecutorAlive) {
     if (!files || !root.filePlan) throw new StructuredToolError("E_EXECUTION_TIMEOUT", "Package file work did not return a terminal result before the request deadline.", ["Inspect package files before deciding whether to submit a new request."]);
     const recoveryPlan = root.filePlan;
     await context.commitEffect?.();
-    root = await commitFiles(context, binding, operation, executorCapability, recoveryPlan);
+    root = await commitFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, recoveryPlan);
     if (root.terminal) return terminalResult<T>(context.requestId, root);
-    if (!root.fileExecutorOwnedByCaller) return waitForTerminal<T>(context, binding, executorCapability);
+    if (!root.fileExecutorOwnedByCaller) return waitForTerminal<T>(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
     try {
       const bundle = await runFileDriverStep(context, (signal) => files.recover(recoveryPlan, signal));
-      root = await proveFiles(context, binding, operation, executorCapability, bundle);
+      root = await proveFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, bundle);
     } catch (error) {
-      root = await failFiles(context, binding, operation, executorCapability, error);
+      root = await failFiles(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, error);
     }
   }
   if (root.terminal) return terminalResult<T>(context.requestId, root);
-  return waitForTerminal<T>(context, binding, executorCapability);
+  return waitForTerminal<T>(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
 }
 
 /** start 只接受公开 root；transport loss 后通过同一 root status 判定，不创建 child journal。 */
@@ -133,7 +143,7 @@ async function startRoot(context: ToolContext, binding: LivePackageBinding, oper
     const code = error instanceof StructuredToolError ? error.code : undefined;
     if (!code || !new Set(["E_EXECUTION_TIMEOUT", "E_UNITY_TRANSITION_TIMEOUT", "BRIDGE_CONNECTION_FAILED", "E_BRIDGE_RESPONSE_INVALID", "E_BRIDGE_RESPONSE_MISMATCH"]).has(code)) throw error;
     try {
-      const root = await status(context, binding, executorCapability);
+      const root = await status(context, binding, executorCapability, hashRecord(input));
       if (root.operation === operation && root.rootInputSha256 === hashRecord(input)) return root;
     } catch {
       // status 只有证明 exact root 已接受时才能恢复 start response loss。
@@ -143,25 +153,25 @@ async function startRoot(context: ToolContext, binding: LivePackageBinding, oper
 }
 
 /** 在任何文件规划或 mutation 前取得 durable executor ownership。 */
-async function claimFiles(context: ToolContext, binding: LivePackageBinding, operation: string, executorCapability: string): Promise<RootState> {
+async function claimFiles(context: ToolContext, binding: LivePackageBinding, operation: string, executorCapability: string, rootInputSha256: string, rootRequestDigest: string): Promise<RootState> {
   return control(
-    context, binding, operation, executorCapability, "internal.package.files.claim", "files-claim",
+    context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, "internal.package.files.claim", "files-claim",
     { rootRequestId: context.requestId, executorPid: process.pid, executorCapability },
     (root) => root.phase === "awaiting_files" && root.fileExecutorOwnedByCaller,
   );
 }
 
-async function commitFiles(context: ToolContext, binding: LivePackageBinding, operation: string, executorCapability: string, filePlan: Record<string, unknown>): Promise<RootState> {
+async function commitFiles(context: ToolContext, binding: LivePackageBinding, operation: string, executorCapability: string, rootInputSha256: string, rootRequestDigest: string, filePlan: Record<string, unknown>): Promise<RootState> {
   return control(
-    context, binding, operation, executorCapability, "internal.package.files.commit", "files-commit",
+    context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, "internal.package.files.commit", "files-commit",
     { rootRequestId: context.requestId, filePlan, executorPid: process.pid, executorCapability },
     (root) => root.phase === "files_committing" && root.fileExecutorOwnedByCaller && sameRecord(root.filePlan, filePlan),
   );
 }
 
-async function proveFiles(context: ToolContext, binding: LivePackageBinding, operation: string, executorCapability: string, bundle: PackageFileMutationBundle): Promise<RootState> {
+async function proveFiles(context: ToolContext, binding: LivePackageBinding, operation: string, executorCapability: string, rootInputSha256: string, rootRequestDigest: string, bundle: PackageFileMutationBundle): Promise<RootState> {
   assertSha256(bundle.expectedManifestSha256, "expectedManifestSha256");
-  return control(context, binding, operation, executorCapability, "internal.package.files.prove", "files-prove", {
+  return control(context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, "internal.package.files.prove", "files-prove", {
     rootRequestId: context.requestId,
     executorPid: process.pid,
     executorCapability,
@@ -172,10 +182,10 @@ async function proveFiles(context: ToolContext, binding: LivePackageBinding, ope
   }, (root) => root.phase !== "awaiting_files" && root.phase !== "files_committing");
 }
 
-async function failFiles(context: ToolContext, binding: LivePackageBinding, operation: string, executorCapability: string, error: unknown): Promise<RootState> {
+async function failFiles(context: ToolContext, binding: LivePackageBinding, operation: string, executorCapability: string, rootInputSha256: string, rootRequestDigest: string, error: unknown): Promise<RootState> {
   const failure = failureData(error);
   return control(
-    context, binding, operation, executorCapability, "internal.package.files.fail", "files-fail",
+    context, binding, operation, executorCapability, rootInputSha256, rootRequestDigest, "internal.package.files.fail", "files-fail",
     { rootRequestId: context.requestId, executorPid: process.pid, executorCapability, ...failure },
     (root) => root.terminal,
   );
@@ -186,6 +196,8 @@ async function control(
   binding: LivePackageBinding,
   operation: string,
   executorCapability: string,
+  rootInputSha256: string,
+  rootRequestDigest: string,
   command: string,
   suffix: string,
   args: Record<string, unknown>,
@@ -197,7 +209,7 @@ async function control(
     return rootState(response, request.requestId);
   } catch (error) {
     try {
-      const root = await status(context, binding, executorCapability);
+      const root = await status(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
       if (root.terminal || recoveredTransitionHolds(root)) return root;
     } catch {
       // status 只有证明 exact root 已进入预期状态时才能恢复 control response loss。
@@ -207,19 +219,19 @@ async function control(
   }
 }
 
-async function status(context: ToolContext, binding: LivePackageBinding, executorCapability: string): Promise<RootState> {
+async function status(context: ToolContext, binding: LivePackageBinding, executorCapability: string, rootInputSha256: string, rootRequestDigest?: string): Promise<RootState> {
   const request: PrivateRequest = {
     requestId: childRequestId(context.requestId, "status"), command: "internal.package.resolve.status",
-    args: { rootRequestId: context.requestId, executorPid: process.pid, executorCapability },
+    args: { rootRequestId: context.requestId, rootInputSha256, ...(rootRequestDigest ? { rootRequestDigest } : {}), executorPid: process.pid, executorCapability },
   };
   return rootState(await execute(context, binding, request, false), request.requestId);
 }
 
-async function waitForTerminal<T>(context: ToolContext, binding: LivePackageBinding, executorCapability: string): Promise<T> {
+async function waitForTerminal<T>(context: ToolContext, binding: LivePackageBinding, executorCapability: string, rootInputSha256: string, rootRequestDigest: string): Promise<T> {
   const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
   while (Date.now() < deadline) {
     try {
-      const root = await status(context, binding, executorCapability);
+      const root = await status(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
       if (root.terminal) return terminalResult<T>(context.requestId, root);
     } catch (error) {
       const structured = error instanceof StructuredToolError ? error : undefined;
@@ -239,7 +251,7 @@ async function waitForTerminal<T>(context: ToolContext, binding: LivePackageBind
     await delay(50);
   }
   try {
-    const root = await status(context, binding, executorCapability);
+    const root = await status(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
     if (root.terminal) return terminalResult<T>(context.requestId, root);
   } catch {
     // Deadline 后只保留统一 timeout，不泄露 control request 的 transport 细节。
@@ -294,6 +306,7 @@ function rootState(response: BridgeResponse, requestId: string): RootState {
   };
   if (typeof data.operation === "string") state.operation = data.operation;
   if (typeof data.rootInputSha256 === "string") state.rootInputSha256 = data.rootInputSha256;
+  if (typeof data.rootRequestDigest === "string" && /^[a-f0-9]{64}$/.test(data.rootRequestDigest)) state.rootRequestDigest = data.rootRequestDigest;
   const plan = record(data.filePlan);
   if (plan) state.filePlan = plan;
   if (nested) state.terminalEnvelope = nested;
@@ -405,6 +418,168 @@ function failureData(error: unknown): { code: string; message: string; nextActio
     message: typeof candidate?.message === "string" && candidate.message ? candidate.message : "Package file mutation did not reach fresh proof.",
     nextActions: Array.isArray(candidate?.nextActions) ? candidate.nextActions.filter((value): value is string => typeof value === "string") : [],
   };
+}
+
+const PACKAGE_LEASE_GUARD_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+$path = $env:UNITY_CLI_LEASE_PATH
+$revokePath = $env:UNITY_CLI_REVOKE_PATH
+$rootPath = $env:UNITY_CLI_PACKAGE_ROOT_PATH
+$epochPath = $env:UNITY_CLI_RELOAD_EPOCH_PATH
+$requestId = $env:UNITY_CLI_ROOT_REQUEST_ID
+$requestDigest = $env:UNITY_CLI_ROOT_REQUEST_DIGEST
+$editorSessionId = $env:UNITY_CLI_EDITOR_SESSION_ID
+$executorPid = [long]$env:UNITY_CLI_EXECUTOR_PID
+$executorCapabilitySha256 = $env:UNITY_CLI_EXECUTOR_CAPABILITY_SHA256
+function Read-Epoch {
+  $epoch = [System.IO.File]::ReadAllText($epochPath) | ConvertFrom-Json
+  if ($epoch.editorSessionId -ne $editorSessionId -or [string]::IsNullOrWhiteSpace($epoch.epoch)) { throw 'reload-epoch-invalid' }
+  return $epoch.epoch
+}
+function Test-Revoked([string]$baselineEpoch) {
+  try {
+    if ((Read-Epoch) -ne $baselineEpoch) { return $true }
+    $root = [System.IO.File]::ReadAllText($rootPath) | ConvertFrom-Json
+    if ($root.requestId -ne $requestId -or $root.requestDigest -ne $requestDigest -or $root.editorSessionId -ne $editorSessionId -or $root.phase -ne 'effect_started') { return $true }
+    if ($null -eq $root.packageOperation -or $root.packageOperation.phase -ne 'files_committing' -or [long]$root.packageOperation.fileExecutorPid -ne $executorPid -or $root.packageOperation.fileExecutorCapabilitySha256 -ne $executorCapabilitySha256) { return $true }
+    if ([System.IO.File]::Exists($revokePath)) {
+      $revoke = [System.IO.File]::ReadAllText($revokePath) | ConvertFrom-Json
+      if ($revoke.requestId -eq $requestId -and $revoke.requestDigest -eq $requestDigest -and $revoke.editorSessionId -eq $editorSessionId) { return $true }
+    }
+    return $false
+  }
+  catch { return $true }
+}
+$deadline = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$env:UNITY_CLI_EFFECT_STOP_AT_MS).UtcDateTime
+while ([DateTime]::UtcNow -lt $deadline) {
+  try {
+    $stream = [System.IO.FileStream]::new($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::None)
+    try {
+      $bytes = [byte[]]::new($stream.Length)
+      $read = $stream.Read($bytes, 0, $bytes.Length)
+      if ($read -ne $bytes.Length) { throw 'lease-read-incomplete' }
+      $owner = [System.Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json
+      if ($owner.requestId -ne $requestId -or $owner.requestDigest -ne $requestDigest) { exit 3 }
+      try { $baselineEpoch = Read-Epoch } catch { exit 4 }
+      if (Test-Revoked $baselineEpoch) { exit 4 }
+      [Console]::Out.WriteLine('READY')
+      [Console]::Out.Flush()
+      $release = [Console]::In.ReadLineAsync()
+      while (-not $release.IsCompleted) {
+        if (Test-Revoked $baselineEpoch) { exit 4 }
+        Start-Sleep -Milliseconds 5
+      }
+      exit 0
+    }
+    finally { $stream.Dispose() }
+  }
+  catch {
+    Start-Sleep -Milliseconds 5
+  }
+}
+exit 2
+`;
+
+/** Worker文件effect期间独占并核对exact Unity lease，阻止reload/cleanup跨过Node effect。 */
+async function withExactPackageLease<T>(
+  context: ToolContext,
+  binding: LivePackageBinding,
+  requestId: string,
+  requestDigest: string,
+  executorCapability: string,
+  stopAtMs: number,
+  signal: AbortSignal,
+  run: (guardedSignal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  if (!/^[a-f0-9]{64}$/.test(requestDigest)) throw invalidPackageRootDigest();
+  if (!context.projectPath) throw packageLeaseGuardError("Package file effect has no canonical project binding.");
+  const leasePath = path.join(context.dataDir ?? defaultDataDir(), ".temp", "requests", binding.instanceId, ".instance-resource.lock");
+  const unityCliStateRoot = path.join(context.projectPath, "Library", "UnityCli");
+  const revokePath = path.join(unityCliStateRoot, "active-package-file-revoke.json");
+  const packageRootPath = path.join(unityCliStateRoot, "active-package-resolve.json");
+  const reloadEpochPath = path.join(unityCliStateRoot, "active-package-reload-epoch.json");
+  const child = spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", PACKAGE_LEASE_GUARD_SCRIPT], {
+    env: {
+      ...process.env,
+      UNITY_CLI_LEASE_PATH: leasePath,
+      UNITY_CLI_REVOKE_PATH: revokePath,
+      UNITY_CLI_PACKAGE_ROOT_PATH: packageRootPath,
+      UNITY_CLI_RELOAD_EPOCH_PATH: reloadEpochPath,
+      UNITY_CLI_ROOT_REQUEST_ID: requestId,
+      UNITY_CLI_ROOT_REQUEST_DIGEST: requestDigest,
+      UNITY_CLI_EDITOR_SESSION_ID: binding.expectedEditorSessionId,
+      UNITY_CLI_EXECUTOR_PID: String(process.pid),
+      UNITY_CLI_EXECUTOR_CAPABILITY_SHA256: createHash("sha256").update(executorCapability).digest("hex"),
+      UNITY_CLI_EFFECT_STOP_AT_MS: String(stopAtMs),
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk: Buffer) => { if (stderr.length < 4096) stderr += chunk.toString("utf8"); });
+  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, childSignal) => resolve({ code, signal: childSignal }));
+  });
+  const ready = new Promise<void>((resolve, reject) => {
+    let output = "";
+    const timer = setTimeout(() => reject(packageLeaseGuardError("The exact Package lease guard did not become ready.")), Math.max(1, stopAtMs - Date.now()));
+    const onAbort = () => reject(signal.reason ?? packageLeaseGuardError("Package file effect was cancelled before lease authorization."));
+    signal.addEventListener("abort", onAbort, { once: true });
+    child.stdout.on("data", (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+      if (!output.includes("READY")) return;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    });
+    exit.then(({ code }) => {
+      if (output.includes("READY")) return;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(packageLeaseGuardError(`The exact Package lease guard exited before authorization (${code ?? "signal"}).`));
+    }, reject);
+  });
+
+  let releasing = false;
+  let authorized = false;
+  const guardAbort = new AbortController();
+  const abortGuard = () => guardAbort.abort(signal.reason);
+  signal.addEventListener("abort", abortGuard, { once: true });
+  exit.then(({ code }) => {
+    if (!releasing) guardAbort.abort(packageLeaseGuardError(`The exact Package lease guard exited during file effect (${code ?? "signal"}).`));
+  }).catch((error) => { if (!releasing) guardAbort.abort(error); });
+  try {
+    await ready;
+    authorized = true;
+    signal.throwIfAborted();
+    const result = await run(guardAbort.signal);
+    guardAbort.signal.throwIfAborted();
+    return result;
+  } finally {
+    releasing = true;
+    signal.removeEventListener("abort", abortGuard);
+    if (!authorized) child.kill();
+    else try { child.stdin.write("RELEASE\n"); child.stdin.end(); } catch { child.kill(); }
+    const settled = await exit.catch(() => ({ code: null, signal: null }));
+    if (settled.code !== 0 && !signal.aborted)
+      throw packageLeaseGuardError(`The exact Package lease guard did not release cleanly (${settled.code ?? "signal"}): ${stderr.slice(0, 256)}`);
+  }
+}
+
+function invalidPackageRootDigest(): StructuredToolError {
+  return packageLeaseGuardError("Package root did not expose its exact request digest.");
+}
+
+function packageLeaseGuardError(message: string): StructuredToolError {
+  return new StructuredToolError(
+    "E_EXECUTION_TIMEOUT",
+    message,
+    ["Inspect Package files and the selected Editor session before submitting another mutation."],
+    undefined,
+    false,
+    0,
+  );
 }
 
 /** 为 file control 回写保留 deadline 预算；生产 apply 会把同一 stopAtMs 交给独立 Worker。 */

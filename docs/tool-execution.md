@@ -1,6 +1,6 @@
 # 工具执行（Tool Execution）
 
-`tools run` 是统一执行入口，package 内置、Extension、项目注册、Editor、Runtime 和 package-local CLI Tool 都通过此命令执行。
+`tools run`是统一Tool dispatcher的结构化JSON入口。package内置、Extension、项目注册、Editor、Runtime和package-local Tool也可通过[`command`](command-execution.md)按同一live schema调用；二者不建立第二套catalog或执行路径。
 
 ## 基本用法
 
@@ -42,13 +42,13 @@ unity_cli tools run camera.screenshot --input '{}'
 
 ## Descriptor 示例
 
-`tools describe <name>` 的每个示例把业务 `input` 与命令层 `execution` 分开。`input` 必须只包含 `inputSchema` 定义的 Request 字段；dry-run 与 timeout 会在示例 `argv` 中显示为 `--dry-run` 和 `--timeout-ms <n>`，不能放入 JSON input。`examples[].argv` 是参数 token 数组，不是可直接粘贴的 shell 字符串；PowerShell 内联 JSON 必须用单引号包裹，复杂输入应改用 `--input-file`。`context describe <name>` 同样提供 `context read <name> --input <json>` 示例。
+`tools describe <name>` 的每个示例把业务 `input` 与命令层 `execution` 分开。`input` 必须只包含 `inputSchema` 定义的 Request 字段；dry-run 与 timeout 会在示例 `argv` 中显示为 `--dry-run` 和 `--timeout-ms <n>`，不能放入 JSON input。`examples[].argv` 是参数 token 数组，不是可直接粘贴的 shell 字符串；PowerShell 内联 JSON 必须用单引号包裹，复杂输入应改用 `--input-file`。`tools describe <name>` 同样提供 `tools run <name> --input <json>` 示例。
 
 ## Bridge 执行约束
 
 Bridge-backed Tool 由 Unity Editor 主线程执行。session supervisor 在调用的单一 absolute deadline 内透明吸收 compile、import、domain reload 和 listener restart，并在恢复后的 validated generation 上继续同一逻辑请求。调用方不需要轮询 listener 或手动重试 transport。
 
-直接 Tool 只返回已证明的 terminal business success 或 terminal structured failure。同一次调用可在 session recovery 中续接完全相同的请求；调用返回后 CLI 不会自行启动新调用，也不提供请求级重放门。超时或终态前断连统一返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；调用方可自行决定是否观察业务状态、提交新调用、重复调用或继续 mutation。要即时观察进度、freshness 和 blocker，可使用 `context read editor.state --input '{}'`；它不会等待 ready 或触发 Unity 副作用。
+直接 Tool 只返回已证明的 terminal business success 或 terminal structured failure。同一次调用可在 session recovery 中续接完全相同的请求；调用返回后 CLI 不会自行启动新调用，也不提供请求级重放门。超时或终态前断连统一返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；调用方可自行决定是否观察业务状态、提交新调用、重复调用或继续 mutation。要即时观察进度、freshness 和 blocker，可使用 `tools run editor.state --input '{}'`；它不会等待 ready 或触发 Unity 副作用。
 
 ### `editor.compile`
 
@@ -110,7 +110,7 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 |----------|---------|
 | 只读工具 | 检查输出数据是否符合预期 |
 | 修改工具 | 重新调用只读工具确认变更 |
-| Live Editor Tool | 读取能力自己的终态业务数据，必要时用只读 Context 验证 |
+| Live Editor Tool | 读取能力自己的终态业务数据，必要时用读取型Tool验证 |
 | 诊断工具 | 检查 doctor 或 preflight |
 
 ## 错误处理
@@ -127,7 +127,7 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 | `E_EXECUTION_TIMEOUT` | 调用在终态前超时或断连 | 没有可信终态；是否观察、重试、重复调用或继续 mutation 由调用方决定 |
 | `E_UNITY_TRANSITION_TIMEOUT` | lifecycle transition 未在 absolute deadline 内稳定 | 检查 `editor.state` 的 progress/blockers |
 
-弹窗 blocker 在原错误的 `details.blockers` 中结构化返回。其 DTO 包含 `type`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 和 `confidence`。使用只读 `context read editor.dialogs` 获取当前 dialogId、`observedAt`、modal 状态和按钮；无弹窗时返回空数组，Windows 读取失败返回 `E_DIALOG_OBSERVATION_FAILED`。再以 `tools run editor.dialog.click` 精确传入 dialogId 与规范化 button label。该 Tool 会重新验证选中 Unity 的 PID/processStartedAt、dialogId 和唯一 enabled button，并证明原 dialog 已消失或不再 modal；不匹配分别返回 stale、not-found 或 ambiguous 错误，无法证明点击结果返回 `E_DIALOG_CLICK_UNPROVEN`。任意当前可见 modal 的任意 enabled button 都可点击，不设预定义按钮列表、确认或人工处理门。
+弹窗 blocker 在原错误的 `details.blockers` 中结构化返回。其 DTO 包含 `type`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 和 `confidence`。使用只读 `tools run editor.dialogs` 获取当前 dialogId、`observedAt`、modal 状态和按钮；无弹窗时返回空数组，Windows 读取失败返回 `E_DIALOG_OBSERVATION_FAILED`。再以 `tools run editor.dialog.click` 精确传入 dialogId 与规范化 button label。该 Tool 会重新验证选中 Unity 的 PID/processStartedAt、dialogId 和唯一 enabled button，并证明原 dialog 已消失或不再 modal；不匹配分别返回 stale、not-found 或 ambiguous 错误，无法证明点击结果返回 `E_DIALOG_CLICK_UNPROVEN`。任意当前可见 modal 的任意 enabled button 都可点击，不设预定义按钮列表、确认或人工处理门。
 
 ## Object 与 Component 修改
 

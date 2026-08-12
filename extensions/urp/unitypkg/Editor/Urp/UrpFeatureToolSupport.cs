@@ -8,7 +8,15 @@ using UnityEngine;
 
 namespace UnityCli
 {
-    public sealed class UrpFeatureResult
+    public sealed class UrpFeatureListResult : UrpFeatureResult
+    {
+        public bool Available { get; set; }
+        public string Renderer { get; set; }
+        public string Diagnostics { get; set; }
+        public string[] NextActions { get; set; }
+    }
+
+    public class UrpFeatureResult
     {
         public long Count { get; set; }
         public long? RendererIndex { get; set; }
@@ -26,12 +34,32 @@ namespace UnityCli
     /// <summary>URP Renderer Feature 单动作 Tool 的共享资产定位与写入实现。</summary>
     internal static class UrpFeatureToolSupport
     {
-        internal static UrpFeatureResult List(string logPath)
+        /// <summary>读取 active URP renderer feature，并把旧读取入口的可用性诊断并入 canonical Tool。</summary>
+        internal static UrpFeatureListResult List(string logPath)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("urp.feature.list");
-            UrpToolSupport.EnsureUrpAvailable();
-            var features = UrpToolSupport.ListRendererFeatures();
-            return new UrpFeatureResult { Count = features.Count, Features = features};
+            try
+            {
+                var pipeline = UrpToolSupport.GetActivePipelineAsset();
+                var features = UrpToolSupport.ListRendererFeatures();
+                return new UrpFeatureListResult
+                {
+                    Available = true,
+                    Renderer = pipeline.name,
+                    Count = features.Count,
+                    Features = features
+                };
+            }
+            catch (UnityCliBridge.BridgeCommandException exception) when (exception.Code == "E_URP_PACKAGE_NOT_FOUND" || exception.Code == "E_URP_PIPELINE_NOT_ACTIVE")
+            {
+                return new UrpFeatureListResult
+                {
+                    Available = false,
+                    Features = new List<UrpFeatureInfo>(),
+                    Diagnostics = exception.Message,
+                    NextActions = new List<string>(exception.NextActions).ToArray()
+                };
+            }
         }
 
         // 提交前冻结新增所需的资产、类型和可写序列化字段，避免子资产已创建后才暴露版本不兼容。

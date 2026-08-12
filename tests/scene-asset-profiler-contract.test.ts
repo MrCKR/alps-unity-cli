@@ -167,10 +167,12 @@ test("one-capability source, contract, and bridge spec sets are bidirectionally 
   for (const domain of ONE_CAPABILITY_DOMAINS) {
     const sourceNames = await oneCapabilityToolNames(domain);
     const contractNames = contractToolNames(domain)
+      .filter((name) => name.split(".")[0] === domain)
       .filter((name) => findCommandContract(name)?.csharp_handler === "present");
     const specNames = [...new Set(bridgeCommandRegistry.specs()
       .filter((spec) => spec.group === domain && spec.toolName)
       .map((spec) => spec.toolName!))]
+      .filter((name) => name.split(".")[0] === domain)
       .sort();
     assert.deepEqual(contractNames, sourceNames, `${domain} contract must enumerate current one-capability files`);
     assert.deepEqual(specNames, sourceNames, `${domain} bridge spec must enumerate current one-capability files`);

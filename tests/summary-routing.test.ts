@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools/commands.js";
 import { allRegisteredToolMetadata } from "../src/tools/metadata/index.js";
-import { builtinContextDescriptors } from "../src/contexts/registry.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
 import { probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
 import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
@@ -78,19 +77,17 @@ test("package-local Tool summaries stay concise and route-specific", () => {
   assert.match(tools.find((tool) => tool.name === "tools.describe")!.summary, /schema|examples/i);
 });
 
-test("local context discovery descriptions are route-specific", () => {
-  const contexts = builtinContextDescriptors();
-  assert.ok(contexts.length > 0);
-  for (const context of contexts) {
-    assert.ok(context.description.trim(), `${context.name} description must not be empty`);
-    assert.ok(wordCount(context.description) <= 70, `${context.name} context discovery description is too long`);
-    for (const pattern of GENERIC_PATTERNS) {
-      assert.doesNotMatch(context.description, pattern, `${context.name} context description is not route-specific`);
-    }
+test("local read Tool descriptions are route-specific", () => {
+  const tools = allRegisteredToolMetadata();
+  for (const name of ["editor.state", "editor.dialogs"]) {
+    const tool = tools.find((entry) => entry.name === name);
+    assert.ok(tool);
+    assert.ok(tool.description.trim(), `${name} description must not be empty`);
+    assert.ok(wordCount(tool.description) <= 70, `${name} description is too long`);
+    for (const pattern of GENERIC_PATTERNS) assert.doesNotMatch(tool.description, pattern);
   }
-  assert.ok(contexts.some((context) => context.name === "editor.state" && /selected Unity project identity/i.test(context.description)));
-  assert.ok(contexts.some((context) => context.name === "editor.dialogs" && /Windows modal dialogs/i.test(context.description)));
-  assert.equal(contexts.some((context) => context.name === "tools.groups" || context.name === "tools.custom"), false);
+  assert.match(tools.find((entry) => entry.name === "editor.state")!.description, /selected Unity project identity/i);
+  assert.match(tools.find((entry) => entry.name === "editor.dialogs")!.description, /Windows modal dialogs/i);
 });
 
 test("extension manifest descriptions remain route-specific even though tool descriptors are live-only", () => {

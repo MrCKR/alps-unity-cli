@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding } from "../../bridge/types.js";
-import type { EditorStateResult } from "../../contexts/editor/state.js";
+import type { EditorStateResult } from "./state.js";
 import { defineTool, type ToolContext } from "../define.js";
 import { waitForEditorTransitionEnd } from "./readiness.js";
 import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
@@ -124,6 +124,8 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
       return terminalResult(directTerminal);
     }
     if (startData.terminal !== false || startData.accepted !== true) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile start returned neither acceptance nor a root terminal.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+    const rootRequestDigest = typeof startData.rootRequestDigest === "string" && /^[a-f0-9]{64}$/.test(startData.rootRequestDigest) ? startData.rootRequestDigest : undefined;
+    if (!rootRequestDigest) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile start omitted its exact root digest.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
 
     const statusId = compileChildRequestId(context.requestId, "_compile_status");
     for (;;) {
@@ -131,7 +133,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
       await delay(Math.min(100, Math.max(1, absoluteDeadlineMs - Date.now())));
       let status: { data?: unknown };
       try {
-        status = await bridge(statusId, "internal.editor.compile.status", { rootRequestId: context.requestId }, boundContext, statusInvocation);
+        status = await bridge(statusId, "internal.editor.compile.status", { rootRequestId: context.requestId, rootRequestDigest }, boundContext, statusInvocation);
       } catch (error) {
         const cause = error instanceof StructuredToolError ? error : undefined;
         throw compileTimeout(cause?.code, cause?.details);

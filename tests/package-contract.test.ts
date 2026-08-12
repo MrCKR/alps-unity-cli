@@ -126,9 +126,9 @@ test("package.embed is TS-local and destructive with a private reload coordinato
   assert.match(coordinator, /PackageSource\.Embedded/);
   assert.match(coordinator, /waiting_completed/);
   assert.match(coordinator, /waiting_stable/);
-  const embedPersistIndex = coordinator.indexOf('Update(x => x["phase"] = "embed_started")');
+  const embedFenceIndex = coordinator.indexOf('CrossEffectFence(root, "package-embed", "embed_started")');
   const embedEffectIndex = coordinator.indexOf("method.Invoke");
-  assert.ok(embedPersistIndex >= 0 && embedPersistIndex < embedEffectIndex, "package.embed must persist the started phase before Embed can reload the domain.");
+  assert.ok(embedFenceIndex >= 0 && embedFenceIndex < embedEffectIndex, "package.embed must durably cross its exact effect fence before Embed can reload the domain.");
   assert.match(coordinator, /EmbeddedPath = actual/);
 });
 
@@ -226,7 +226,7 @@ test("package live tools use one public root and an explicit PackageManager List
   assert.match(coordinator, /"observedPackageSnapshotHash", "registeredMismatchHash", "registeredMismatchStableFrames", "listRefreshAttempts"/);
   assert.match(coordinator, /UnityCliActiveOperation\.Load\(ActiveScope\)/);
   assert.match(coordinator, /UnityCliActiveOperation\.Save\(ActiveScope/);
-  assert.match(coordinator, /UnityCliActiveOperation\.Clear\(ActiveScope\)/);
+  assert.match(coordinator, /UnityCliActiveOperation\.BeginExactTerminalCleanup\(ActiveScope/);
   assert.doesNotMatch(coordinator, /RequestJournal|E_REQUEST_OUTCOME_UNKNOWN|E_REQUEST_JOURNAL/);
   assert.match(relist, /StartList\(RequiredRoot\(root\.RequestId\), false\)/);
   assert.doesNotMatch(relist, /Client\.Resolve|DispatchResolve|runPackageFileMutationWorker/);
@@ -239,6 +239,16 @@ test("package live tools use one public root and an explicit PackageManager List
   const playGuard = dispatch.indexOf("EditorApplication.isPlayingOrWillChangePlaymode");
   assert.ok(playGuard >= 0 && playGuard < resolveCall, "PlayMode guard must precede the only Client.Resolve() call.");
   assert.doesNotMatch(coordinator, /_package_resolve|resolveCallReturned|stable_ready|leaseRequestId/);
+});
+
+test("package file guard uses Windows PowerShell and C# hashes depth-first per directory", async () => {
+  const [liveResolve, packageState] = await Promise.all([
+    readFile("src/tools/package/live-resolve.ts", "utf8"),
+    readFile("unitypkg/Editor/Infrastructure/UnityCliPackageResolveState.cs", "utf8"),
+  ]);
+  assert.match(liveResolve, /spawn\("powershell\.exe"[\s\S]*"-ExecutionPolicy", "Bypass"/);
+  assert.doesNotMatch(liveResolve, /spawn\("pwsh"/);
+  assert.match(packageState, /HashDirectoryEntries\(sha, root, root\)[\s\S]*GetFileSystemEntries\(directory\)\.OrderBy\(Path\.GetFileName, StringComparer\.Ordinal\)[\s\S]*if \(isDirectory\) HashDirectoryEntries/);
 });
 
 test("package.embed uses the private start/status coordinator", async () => {

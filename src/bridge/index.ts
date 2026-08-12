@@ -104,7 +104,7 @@ export async function executeBridgePayload(
     }
     return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), [
       "Run unity_cli instances list and inspect the selected Unity session.",
-      "Run unity_cli context read editor.state for transition or blocker details."
+      "Run unity_cli tools run editor.state for transition or blocker details."
     ], undefined, { transient: true, retryAfterMs: 100 });
   }
 }
@@ -135,7 +135,7 @@ class PublicTerminalProjectionError extends Error {}
 
 /** 将 durable Bridge terminal 投影成唯一公开业务 DTO，并拒绝任何不符合内部 terminal 契约的成功响应。 */
 function projectPublicData(command: string, data: unknown): unknown {
-  if (command !== "project-tool.run" && command !== "runtime-tool.run" && command !== "context.read") return data;
+  if (command !== "project-tool.run" && command !== "runtime-tool.run") return data;
   if (!data || typeof data !== "object" || Array.isArray(data) || !Object.prototype.hasOwnProperty.call(data, "result")) {
     throw new PublicTerminalProjectionError("Bridge returned a malformed successful terminal.");
   }

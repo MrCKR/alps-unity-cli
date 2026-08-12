@@ -1,6 +1,6 @@
 # Target 与 Instance
 
-> 发现路径：`instances list` -> 显式传 `--instance` 或从 Unity 项目 CWD 解析 -> discovery / describe / run / read
+> 发现路径：`instances list` -> 显式传`--instance`、`command --project-path`或从Unity项目CWD解析 -> discovery / describe / run
 
 ## 稳定项目身份
 
@@ -31,7 +31,7 @@ unity_cli instances prune
 
 ## 选择规则
 
-Tool/Context discovery、describe、run 与 read 使用同一严格选择规则：
+Tool discovery、describe、`tools run`与`command`使用同一严格选择规则：
 
 1. 显式 `--instance <full-instance-id|canonical-project-path|alias>`。
 2. 未传 selector 时，从 CWD 向上寻找最近的 Unity project root，并解析其 canonical identity。
@@ -42,7 +42,7 @@ Tool/Context discovery、describe、run 与 read 使用同一严格选择规则�
 ```powershell
 unity_cli tools describe editor.compile --instance <project-path>
 unity_cli tools run editor.compile --instance my-project --timeout-ms 120000
-unity_cli context read editor.state --instance unity-<64-hex> --input '{}'
+unity_cli tools run editor.state --instance unity-<64-hex> --input '{}'
 ```
 
 ## Alias
@@ -55,11 +55,11 @@ unity_cli target alias list
 unity_cli target alias unset <alias>
 ```
 
-alias 绑定完整 `instanceId`、canonical project path 和 canonicalization version。Editor offline 时 alias 仍可解析 identity，但 Tool/Context discovery 要求运行中的 Editor 并返回 `E_INSTANCE_NOT_RUNNING`。`--instance` 或 CWD 始终决定本次调用的目标。
+alias 绑定完整 `instanceId`、canonical project path 和 canonicalization version。Editor offline 时 alias 仍可解析 identity，但 Tool discovery 要求运行中的 Editor 并返回 `E_INSTANCE_NOT_RUNNING`。`--instance` 或 CWD 始终决定本次调用的目标。
 
 ## Session Supervisor
 
-普通 `tools run` 和 `context read` 不直接绑定某个 endpoint。session supervisor 在同一个 absolute deadline 内：
+普通 `tools run` 不直接绑定某个 endpoint。session supervisor 在同一个 absolute deadline 内：
 
 - 选择唯一 project identity 和已验证 session；
 - 对一次 transport 尝试绑定 listener generation；
@@ -67,4 +67,4 @@ alias 绑定完整 `instanceId`、canonical project path 和 canonicalization ve
 - 同一次 mutation 调用在 session recovery 中续接时保持完全相同的 root request ID 和 request bytes，并只读取 durable canonical terminal；
 - 对超时或终态前断连返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；是否观察状态、重试、重复调用或继续 mutation 由调用方决定。
 
-普通 Context 的成功结果来自同一 validated generation 的完整读取。`editor.state` 是唯一即时观察例外：它在固定预算内合并 Bridge、registry、process 和 Windows UI 的只读证据，返回 freshness 与 unknown 字段，不等待状态变化。
+普通读取型Tool的成功结果来自同一validated generation的完整读取。`editor.state`是唯一即时观察例外：它在固定预算内合并Bridge、registry、process和Windows UI的只读证据，返回freshness与unknown字段，不等待状态变化。

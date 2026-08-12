@@ -17,13 +17,14 @@
     "target",
     "availabilityScope",
     "playModeSupport",
+    "contractProfile",
+    "source",
     "available"
   ],
   "properties": {
     "name": {
       "type": "string",
-      "minLength": 1,
-      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$"
+      "minLength": 1
     },
     "summary": { "type": "string", "minLength": 1 },
     "description": { "type": "string", "minLength": 1 },
@@ -66,6 +67,10 @@
       "type": "string",
       "enum": ["built-in", "project", "extension"]
     },
+    "contractProfile": {
+      "type": "string",
+      "enum": ["native", "official-attribute"]
+    },
     "target": {
       "type": "string",
       "enum": ["editor", "runtime", "both"]
@@ -82,5 +87,25 @@
       "items": { "type": "string", "minLength": 1 }
     },
     "extensionId": { "type": "string", "minLength": 1 }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "contractProfile": { "const": "official-attribute" } },
+        "required": ["contractProfile"]
+      },
+      "then": {
+        "properties": {
+          "name": { "pattern": "^UnityPipeline_[^\\s]+$" },
+          "group": { "const": "UnityPipeline" }
+        }
+      },
+      "else": {
+        "properties": {
+          "name": { "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$" },
+          "group": { "not": { "const": "UnityPipeline" } }
+        }
+      }
+    }
+  ]
 }

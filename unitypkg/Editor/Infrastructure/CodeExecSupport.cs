@@ -27,6 +27,11 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
+        private const int MaxCodeOutputBytes = 256 * 1024;
+        private const int MaxCodeTerminalBytes = 1536 * 1024;
+        private const int MaxRoslynOutputBytes = 512 * 1024;
+        private const int MaxRoslynDiagnostics = 100;
+
         // 注册运行时代码执行命令。
         private static void RegisterCodeExecCommand(BridgeCommandRegistry registry)
         {
@@ -43,19 +48,10 @@ namespace UnityCli
         /// </summary>
         private static string CodeExec(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
+            if (request.Execution != null && request.Execution.DryRun == true)
+                throw new BridgeCommandException("E_DRY_RUN_UNSUPPORTED", "Raw Bridge code.exec dry-run cannot execute or compile caller source.", "Use the public tools run code.exec --dry-run path, which returns the CLI-side source preview without Bridge dispatch.");
             var source = request.StringArg("sourceText");
-            var sourcePath = request.StringArg("sourcePath");
-            if (string.IsNullOrEmpty(source) && !string.IsNullOrEmpty(sourcePath))
-            {
-                try
-                {
-                    source = File.ReadAllText(sourcePath, Encoding.UTF8);
-                }
-                catch (Exception exception)
-                {
-                    return SerializeErrorEnvelope("E_CODE_SOURCE_INVALID", "Code source is not readable: " + exception.Message, "Check that --file points to a UTF-8 C# source file.");
-                }
-            }
+            // raw Bridge不读取调用方路径；公开CLI已按入口deadline有界读取并内联唯一源码。
             if (string.IsNullOrWhiteSpace(source))
             {
                 return SerializeErrorEnvelope("E_CODE_SOURCE_INVALID", "Code source is empty.", "Pass --file, --stdin or --code with non-empty C# source.");
@@ -63,25 +59,28 @@ namespace UnityCli
 
             var result = ExecuteCodeSource(request, source, cancellationToken);
             WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
-            if (!result.Ok)
-            {
-                return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                    request.RequestId, result.ErrorCode, result.ErrorMessage, result.Details, result.NextActions));
-            }
-            RecordDirectCompletionEvidence(request.RequestId, "code.exec", ResolveRequestCompletionContract(request), result.Data);
-            return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, result.Data));
+            object envelope = result.Ok
+                ? (object)UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, result.Data)
+                : UnityCli.Protocol.ProtocolEnvelopeFactory.Error(request.RequestId, result.ErrorCode, BoundedText(result.ErrorMessage, 4096), result.Details, result.NextActions);
+            var serialized = UnityCliSerializer.Serialize(envelope);
+            if (Encoding.UTF8.GetByteCount(serialized) > MaxCodeTerminalBytes)
+                return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Runtime Code completed, but its bounded terminal could not be represented safely.", null, new[] { "Inspect the affected business state before submitting another mutation." }));
+            if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "code.exec", ResolveRequestCompletionContract(request), result.Data);
+            return serialized;
         }
 
         // 编译源码并执行约定的 Run 方法，收集编译诊断、输出和运行时异常。
         private static CodeExecutionResult ExecuteCodeSource(UnityCli.Protocol.BridgeRequest request, string source, CancellationToken cancellationToken)
         {
             var argsJson = request.StringArg("argsJson");
-            var references = DefaultCodeReferences(request.StringArg("refs")).ToList();
-            var referenceError = ValidateCodeReferences(references);
-            if (!string.IsNullOrEmpty(referenceError))
+            List<string> references;
+            try
             {
-                var details = new Dictionary<string, object> { { "referenceError", referenceError } };
-                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, details, "Check Unity/Editor/project assembly references and --refs.");
+                references = DefaultCodeReferences(request.StringArg("refs"), request, cancellationToken).ToList();
+            }
+            catch (OperationCanceledException)
+            {
+                return CodeExecutionResult.Fail("E_EXECUTION_TIMEOUT", "Runtime Code reference discovery exceeded the immutable deadline.", new Dictionary<string, object>(), "Submit a new request after the Editor is responsive.");
             }
             var editorDataPath = EditorDataPath();
             if (string.IsNullOrEmpty(editorDataPath))
@@ -90,16 +89,18 @@ namespace UnityCli
                 return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", message, new Dictionary<string, object> { { "referenceError", message } }, "Check the Unity Editor installation path.");
             }
 
-            var sourceFilePath = Path.Combine(Path.GetTempPath(), "unity-cli-roslyn-" + Guid.NewGuid().ToString("N") + ".cs");
-            var responseFilePath = Path.ChangeExtension(sourceFilePath, ".rsp");
-            var assemblyFilePath = Path.ChangeExtension(sourceFilePath, ".dll");
-            var pdbFilePath = Path.ChangeExtension(sourceFilePath, ".pdb");
+            var temporaryRoot = Path.Combine(ProjectRoot(), "Library", "UnityCli", "code-exec-temp");
+            Directory.CreateDirectory(temporaryRoot);
+            var sourceFilePath = Path.Combine(temporaryRoot, "source.cs");
+            var responseFilePath = Path.Combine(temporaryRoot, "references.rsp");
+            var assemblyFilePath = Path.Combine(temporaryRoot, "assembly.dll");
+            var pdbFilePath = Path.Combine(temporaryRoot, "assembly.pdb");
             byte[] assemblyBytes;
             try
             {
                 File.WriteAllText(sourceFilePath, WrapCodeSource(source), new UTF8Encoding(true));
                 WriteReferenceResponseFile(responseFilePath, references);
-                var compilation = CompileWithRoslyn(editorDataPath, sourceFilePath, responseFilePath, assemblyFilePath, request.StringArg("defines"));
+                var compilation = CompileWithRoslyn(editorDataPath, sourceFilePath, responseFilePath, assemblyFilePath, request.StringArg("defines"), request, cancellationToken);
                 if (compilation.TimedOut)
                     return CodeExecutionResult.Fail("E_EXECUTION_TIMEOUT", "Runtime Code compilation timed out.", new Dictionary<string, object>(), "Inspect the Editor state before submitting a new request.");
                 var diagnostics = RoslynDiagnostics(compilation.Output);
@@ -107,7 +108,10 @@ namespace UnityCli
                 {
                     var errors = diagnostics.Where(item => string.Equals((string)item["severity"], "error", StringComparison.Ordinal)).ToList();
                     var details = new Dictionary<string, object> { { "diagnostics", CompactRoslynDiagnostics(errors) } };
-                    return CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", RoslynCompileFailureMessage(errors), details, "Fix compiler diagnostics and rerun code exec.");
+                    var referenceFailure = RoslynReferenceFailure(compilation.Output);
+                    return !string.IsNullOrEmpty(referenceFailure)
+                        ? CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceFailure, details, "Check Unity/Editor/project assembly references and --refs.")
+                        : CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", RoslynCompileFailureMessage(errors), details, "Fix compiler diagnostics and rerun code exec.");
                 }
                 assemblyBytes = File.ReadAllBytes(assemblyFilePath);
             }
@@ -137,15 +141,27 @@ namespace UnityCli
                 if (probeFailure != null) throw SchemaValidationException(probeFailure);
                 completionProbe = UnityCliSerializer.Deserialize<UnityCliCompletionProbe>(probeJson);
             }
+            BridgeCommandException effectBarrierException = null;
+            BridgeCommandException completionProbeException = null;
             var executionContext = new UnityCliProjectToolContext
             {
                 RequestId = request.RequestId,
                 ProjectPath = ProjectRoot(),
+                DryRun = request.Execution != null && request.Execution.DryRun == true,
                 CancellationToken = cancellationToken,
-                CommitEffectAction = () => BeginDirectEffect(request.RequestId)
+                CommitEffectAction = () =>
+                {
+                    try { BeginCodeEffect(request, cancellationToken); }
+                    catch (BridgeCommandException exception)
+                    {
+                        // 只标记框架barrier自身异常；caller源码构造的同类型异常仍属于runtime failure。
+                        effectBarrierException = exception;
+                        throw;
+                    }
+                }
             };
-            var stdout = new StringWriter(CultureInfo.InvariantCulture);
-            var stderr = new StringWriter(CultureInfo.InvariantCulture);
+            var stdout = new BoundedStringWriter(MaxCodeOutputBytes);
+            var stderr = new BoundedStringWriter(MaxCodeOutputBytes);
             var previousOut = Console.Out;
             var previousError = Console.Error;
             object returnValue = null;
@@ -153,7 +169,11 @@ namespace UnityCli
             {
                 Console.SetOut(stdout);
                 Console.SetError(stderr);
-                try { returnValue = method.Invoke(null, new object[] { argsJson ?? "{}" }); }
+                try
+                {
+                    // 返回对象的ToString也属于caller effect，必须发生在fresh completion readback之前。
+                    returnValue = NormalizeReturnValue(method.Invoke(null, new object[] { argsJson ?? "{}" }));
+                }
                 catch (TargetInvocationException exception) { throw exception.InnerException ?? exception; }
                 finally
                 {
@@ -162,13 +182,42 @@ namespace UnityCli
                 }
             };
             UnityCliCompletionProbeReadback completion = null;
-            if (completionProbe == null)
+            try
             {
-                executionContext.CommitEffect();
-                invoke();
+                if (completionProbe == null)
+                {
+                    executionContext.CommitEffect();
+                    invoke();
+                }
+                else
+                {
+                    try { completion = ExecuteCompletionProbe(executionContext, completionProbe, invoke); }
+                    catch (BridgeCommandException exception)
+                    {
+                        // caller异常会先由probe包装；这里只记录probe边界实际发布的框架异常实例。
+                        completionProbeException = exception;
+                        throw;
+                    }
+                }
             }
-            else completion = ExecuteCompletionProbe(executionContext, completionProbe, invoke);
-            return CodeExecutionResult.Success(CodeSuccessData(stdout.ToString(), stderr.ToString(), returnValue, completion));
+            catch (OperationCanceledException) { throw; }
+            catch (Exception exception)
+            {
+                if (ReferenceEquals(exception, effectBarrierException)
+                    || ReferenceEquals(exception, completionProbeException)) throw;
+                return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", BoundedText(exception.Message, 4096), ExceptionDetails(exception, stdout.ToString(), stderr.ToString()), "Inspect the bounded runtime exception and affected business state.");
+            }
+            try { return CodeExecutionResult.Success(CodeSuccessData(stdout.ToString(), stderr.ToString(), stdout.Truncated, stderr.Truncated, returnValue, completion)); }
+            catch (Exception exception) { return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", BoundedText(exception.Message, 4096), ExceptionDetails(exception, stdout.ToString(), stderr.ToString()), "Inspect the bounded return-value conversion failure and affected business state."); }
+        }
+
+        /// <summary>caller effect紧前同时重验immutable deadline、cancel token与exact direct lease。</summary>
+        private static void BeginCodeEffect(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
+        {
+            int remainingMs;
+            if (cancellationToken.IsCancellationRequested || request == null || !request.TryDeadlineRemainingMs(out remainingMs))
+                throw new OperationCanceledException("Runtime Code deadline elapsed before its effect barrier.", cancellationToken);
+            BeginDirectEffect(request.RequestId);
         }
 
         // 将源码包装为运行时约定的 Script.Run 入口。
@@ -185,24 +234,23 @@ namespace UnityCli
         /// 在编译前汇总 Roslyn 所需引用；排除 facade 与 UnityEngine 主程序集，避免类型转发和重复定义。
         /// 输入为调用方附加引用，输出只包含实际磁盘程序集；不修改 Editor 或项目状态。
         /// </summary>
-        private static IEnumerable<string> DefaultCodeReferences(string refsCsv)
+        private static IEnumerable<string> DefaultCodeReferences(string refsCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             var references = new List<string>();
             var editorDataPath = EditorDataPath();
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
+                EnsureCodePreEffectDeadline(request, cancellationToken);
                 if (assembly.IsDynamic) continue;
                 var location = assembly.Location;
-                if (string.IsNullOrEmpty(location) || !File.Exists(location)) continue;
+                if (string.IsNullOrEmpty(location)) continue;
                 AddReference(references, location);
             }
-            var scriptAssemblies = Path.Combine(ProjectRoot(), "Library", "ScriptAssemblies");
-            if (Directory.Exists(scriptAssemblies))
+            foreach (var reference in SplitCsv(refsCsv))
             {
-                foreach (var assemblyPath in Directory.GetFiles(scriptAssemblies, "*.dll"))
-                    AddReference(references, assemblyPath);
+                EnsureCodePreEffectDeadline(request, cancellationToken);
+                AddReference(references, reference);
             }
-            foreach (var reference in SplitCsv(refsCsv)) AddReference(references, reference);
 
             var excludedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -223,7 +271,8 @@ namespace UnityCli
                 return true;
             }).ToList();
             if (!string.IsNullOrEmpty(editorDataPath))
-                AddReferenceIfExists(references, Path.Combine(editorDataPath, "NetStandard", "ref", "2.1.0", "netstandard.dll"));
+                AddReference(references, Path.Combine(editorDataPath, "NetStandard", "ref", "2.1.0", "netstandard.dll"));
+            EnsureCodePreEffectDeadline(request, cancellationToken);
             return references;
         }
 
@@ -234,28 +283,12 @@ namespace UnityCli
             if (!references.Contains(reference)) references.Add(reference);
         }
 
-        // 仅在文件存在时添加编译引用。
-        private static void AddReferenceIfExists(List<string> references, string reference)
+        // 引用枚举只做内存处理；真实文件解析由可按deadline终止的Roslyn子进程负责。
+        private static void EnsureCodePreEffectDeadline(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
-            if (!string.IsNullOrEmpty(reference) && File.Exists(reference)) AddReference(references, reference);
-        }
-
-        // 验证所有编译引用均存在且可读。
-        private static string ValidateCodeReferences(IEnumerable<string> references)
-        {
-            foreach (var reference in references)
-            {
-                try
-                {
-                    if (!File.Exists(reference)) return "Runtime Code reference was not found: " + reference;
-                    using (File.Open(reference, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) { }
-                }
-                catch (Exception exception)
-                {
-                    return "Runtime Code reference is not readable: " + reference + " (" + exception.Message + ")";
-                }
-            }
-            return null;
+            int remainingMs;
+            if (cancellationToken.IsCancellationRequested || request == null || !request.TryDeadlineRemainingMs(out remainingMs))
+                throw new OperationCanceledException("Runtime Code immutable deadline elapsed before compilation.", cancellationToken);
         }
 
         // 拆分并清理逗号分隔参数。
@@ -273,12 +306,10 @@ namespace UnityCli
         /// <summary>
         /// 使用 Unity 内置 Roslyn 编译临时源码；进程最多运行 60 秒，输出仅用于诊断，成功程序集由调用方读取到内存。
         /// </summary>
-        private static RoslynCompilation CompileWithRoslyn(string editorDataPath, string sourceFilePath, string responseFilePath, string assemblyFilePath, string definesCsv)
+        private static RoslynCompilation CompileWithRoslyn(string editorDataPath, string sourceFilePath, string responseFilePath, string assemblyFilePath, string definesCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             var monoPath = Path.Combine(editorDataPath, "MonoBleedingEdge", "bin", "mono.exe");
             var cscPath = Path.Combine(editorDataPath, "MonoBleedingEdge", "lib", "mono", "4.5", "csc.exe");
-            if (!File.Exists(monoPath) || !File.Exists(cscPath))
-                throw new FileNotFoundException("Unity-bundled Roslyn compiler was not found.");
             var arguments = QuoteProcessArgument(cscPath) + " /nologo /noconfig /nostdlib /utf8output /target:library /langversion:latest /out:" + QuoteProcessArgument(assemblyFilePath) + " @" + QuoteProcessArgument(responseFilePath);
             foreach (var define in SplitCsv(definesCsv)) arguments += " /define:" + define;
             arguments += " " + QuoteProcessArgument(sourceFilePath);
@@ -296,16 +327,38 @@ namespace UnityCli
             using (var process = Process.Start(startInfo))
             {
                 if (process == null) throw new InvalidOperationException("Unity-bundled Roslyn compiler did not start.");
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                if (!process.WaitForExit(60000))
+                var outputBudget = new Utf8ByteBudget(MaxRoslynOutputBytes);
+                var stdoutTask = ReadBoundedToEndAsync(process.StandardOutput, outputBudget);
+                var stderrTask = ReadBoundedToEndAsync(process.StandardError, outputBudget);
+                var compileLimit = DateTimeOffset.UtcNow.AddSeconds(60);
+                while (true)
                 {
-                    try { process.Kill(); } catch { }
+                    int remainingMs;
+                    var compileRemainingMs = (int)Math.Ceiling((compileLimit - DateTimeOffset.UtcNow).TotalMilliseconds);
+                    if (cancellationToken.IsCancellationRequested || request == null || !request.TryDeadlineRemainingMs(out remainingMs) || compileRemainingMs <= 0)
+                    {
+                        TerminateCompiler(process, stdoutTask, stderrTask);
+                        return new RoslynCompilation { TimedOut = true, Output = string.Empty };
+                    }
+                    if (process.WaitForExit(Math.Max(1, Math.Min(100, Math.Min(remainingMs, compileRemainingMs))))) break;
+                }
+                int outputRemainingMs;
+                if (cancellationToken.IsCancellationRequested || !request.TryDeadlineRemainingMs(out outputRemainingMs)
+                    || !Task.WaitAll(new Task[] { stdoutTask, stderrTask }, Math.Max(1, Math.Min(5000, outputRemainingMs))))
+                {
+                    TerminateCompiler(process, stdoutTask, stderrTask);
                     return new RoslynCompilation { TimedOut = true, Output = string.Empty };
                 }
-                Task.WaitAll(stdoutTask, stderrTask);
                 return new RoslynCompilation { ExitCode = process.ExitCode, Output = stdoutTask.Result + Environment.NewLine + stderrTask.Result };
             }
+        }
+
+        // deadline到达后立即终止compiler，并以短固定窗口完成进程与pipe回收。
+        private static void TerminateCompiler(Process process, params Task[] outputTasks)
+        {
+            try { if (process != null && !process.HasExited) process.Kill(); } catch { }
+            try { if (process != null) process.WaitForExit(1000); } catch { }
+            try { Task.WaitAll(outputTasks, 1000); } catch { }
         }
 
         // 写入 Roslyn 引用 response file，避免 Windows 命令行长度限制。
@@ -313,6 +366,13 @@ namespace UnityCli
         {
             using (var writer = new StreamWriter(responseFilePath, false, new UTF8Encoding(false)))
                 foreach (var reference in references) writer.WriteLine("/r:\"" + reference + "\"");
+        }
+
+        // 将Roslyn的缺失/不可读引用错误保持为引用解析错误，而不是普通代码编译错误。
+        private static string RoslynReferenceFailure(string output)
+        {
+            var match = Regex.Match(output ?? string.Empty, "(?:error\\s+)?CS0006:\\s*Metadata file ['\"]([^'\"]+)['\"] could not be found", RegexOptions.IgnoreCase);
+            return match.Success ? "Runtime Code reference was not found or readable: " + BoundedText(match.Groups[1].Value, 2048) : null;
         }
 
         // 解析 Roslyn 标准诊断行，无法解析的输出不作为协议诊断公开。
@@ -324,10 +384,11 @@ namespace UnityCli
             {
                 var match = pattern.Match(line);
                 if (!match.Success) continue;
+                if (diagnostics.Count >= MaxRoslynDiagnostics) continue;
                 diagnostics.Add(new Dictionary<string, object>
                 {
-                    { "severity", match.Groups[4].Value.ToLowerInvariant() }, { "id", match.Groups[5].Value },
-                    { "message", match.Groups[6].Value }, { "file", match.Groups[1].Value },
+                    { "severity", match.Groups[4].Value.ToLowerInvariant() }, { "id", BoundedText(match.Groups[5].Value, 64) },
+                    { "message", BoundedText(match.Groups[6].Value, 4096) }, { "file", BoundedText(match.Groups[1].Value, 2048) },
                     { "line", long.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) },
                     { "column", long.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) }, { "span", null }
                 });
@@ -356,13 +417,77 @@ namespace UnityCli
             var applicationPath = EditorApplication.applicationPath;
             var editorDirectory = string.IsNullOrEmpty(applicationPath) ? null : Path.GetDirectoryName(applicationPath);
             var dataPath = string.IsNullOrEmpty(editorDirectory) ? null : Path.Combine(editorDirectory, "Data");
-            return !string.IsNullOrEmpty(dataPath) && Directory.Exists(dataPath) ? dataPath : null;
+            return string.IsNullOrEmpty(dataPath) ? null : dataPath;
         }
 
         // 为 ProcessStartInfo.Arguments 转义单个路径参数。
         private static string QuoteProcessArgument(string value)
         {
             return "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
+        }
+
+        // 将公开文本字段裁剪到固定UTF-8字节预算，并避免截断surrogate pair。
+        private static string BoundedText(string value, int maxBytes)
+        {
+            if (string.IsNullOrEmpty(value) || Encoding.UTF8.GetByteCount(value) <= maxBytes) return value ?? string.Empty;
+            var low = 0;
+            var high = Math.Min(value.Length, maxBytes);
+            while (low < high)
+            {
+                var middle = low + (high - low + 1) / 2;
+                if (Encoding.UTF8.GetByteCount(value.Substring(0, middle)) <= maxBytes) low = middle;
+                else high = middle - 1;
+            }
+            if (low > 0 && char.IsHighSurrogate(value[low - 1])) low--;
+            return value.Substring(0, low);
+        }
+
+        // 两个Roslyn pipe共享一个UTF-8预算；超限后继续排空但不继续保留。
+        private static async Task<string> ReadBoundedToEndAsync(TextReader reader, Utf8ByteBudget budget)
+        {
+            var result = new StringBuilder(4096);
+            var buffer = new char[4096];
+            int read;
+            while ((read = await reader.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+            {
+                var accepted = budget.Take(new string(buffer, 0, read));
+                if (accepted.Length > 0) result.Append(accepted);
+            }
+            return result.ToString();
+        }
+
+        private sealed class Utf8ByteBudget
+        {
+            private int remaining;
+            private readonly object gate = new object();
+            internal Utf8ByteBudget(int bytes) { remaining = bytes; }
+            internal string Take(string value)
+            {
+                lock (gate)
+                {
+                    if (remaining <= 0 || string.IsNullOrEmpty(value)) return string.Empty;
+                    var accepted = BoundedText(value, remaining);
+                    remaining -= Encoding.UTF8.GetByteCount(accepted);
+                    return accepted;
+                }
+            }
+        }
+
+        private sealed class BoundedStringWriter : StringWriter
+        {
+            private readonly int maxBytes;
+            private int writtenBytes;
+            internal bool Truncated { get; private set; }
+            internal BoundedStringWriter(int maxBytes) : base(CultureInfo.InvariantCulture) { this.maxBytes = maxBytes; }
+            public override void Write(char value) { Write(value.ToString()); }
+            public override void Write(string value)
+            {
+                if (string.IsNullOrEmpty(value)) return;
+                var accepted = BoundedText(value, maxBytes - writtenBytes);
+                if (accepted.Length > 0) { base.Write(accepted); writtenBytes += Encoding.UTF8.GetByteCount(accepted); }
+                if (accepted.Length != value.Length) Truncated = true;
+            }
+            public override void Write(char[] buffer, int index, int count) { Write(new string(buffer, index, count)); }
         }
 
         // 尽力删除临时文件，不因 Windows 延迟释放句柄影响命令结果。
@@ -379,15 +504,15 @@ namespace UnityCli
         }
 
         /// <summary>成功仅返回编译结果、运行返回值与 request-specific fresh readback。</summary>
-        private static Dictionary<string, object> CodeSuccessData(string stdout, string stderr, object returnValue, UnityCliCompletionProbeReadback completion)
+        private static Dictionary<string, object> CodeSuccessData(string stdout, string stderr, bool stdoutTruncated, bool stderrTruncated, object returnValue, UnityCliCompletionProbeReadback completion)
         {
             return new Dictionary<string, object>
             {
                 { "compile", new Dictionary<string, object> { { "diagnostics", Array.Empty<object>() } } },
                 { "runtime", new Dictionary<string, object>
                     {
-                        { "returnValue", NormalizeReturnValue(returnValue) },
-                        { "stdout", stdout }, { "stderr", stderr }
+                        { "returnValue", returnValue },
+                        { "stdout", stdout }, { "stderr", stderr }, { "stdoutTruncated", stdoutTruncated }, { "stderrTruncated", stderrTruncated }
                     }
                 },
                 { "completion", completion }
@@ -399,8 +524,8 @@ namespace UnityCli
         {
             return new Dictionary<string, object>
             {
-                { "diagnostics", Array.Empty<object>() }, { "exceptionType", exception.GetType().FullName },
-                { "message", exception.Message }, { "stackTrace", exception.StackTrace },
+                { "diagnostics", Array.Empty<object>() }, { "exceptionType", BoundedText(exception.GetType().FullName, 512) },
+                { "message", BoundedText(exception.Message, 4096) }, { "stackTrace", BoundedText(exception.StackTrace, 16384) },
                 { "stdout", stdout }, { "stderr", stderr }
             };
         }
@@ -408,9 +533,23 @@ namespace UnityCli
         // 将执行返回值规范化为序列化器支持的协议值。
         private static object NormalizeReturnValue(object value)
         {
-            if (value == null || value is bool || value is float || value is double || value is int || value is long) return value;
+            if (value == null || value is bool || value is int || value is long) return value;
+            if (value is float)
+            {
+                var number = (float)value;
+                if (float.IsNaN(number) || float.IsInfinity(number))
+                    throw new InvalidOperationException("Runtime Code returned a non-finite floating-point value.");
+                return number;
+            }
+            if (value is double)
+            {
+                var number = (double)value;
+                if (double.IsNaN(number) || double.IsInfinity(number))
+                    throw new InvalidOperationException("Runtime Code returned a non-finite floating-point value.");
+                return number;
+            }
             if (value is decimal) return Convert.ToDouble(value, CultureInfo.InvariantCulture);
-            return Convert.ToString(value, CultureInfo.InvariantCulture);
+            return BoundedText(Convert.ToString(value, CultureInfo.InvariantCulture), MaxCodeOutputBytes);
         }
 
         private sealed class CodeExecutionResult

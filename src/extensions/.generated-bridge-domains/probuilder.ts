@@ -5,7 +5,7 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag, ta
 import type { BridgeCommandSpec, BridgeFlags } from "../../bridge/types.js";
 
 /**
- * ProBuilder extension bridge specs — 36 single-action tools.
+ * ProBuilder extension bridge specs — 37 single-action tools.
  *
  * Each CLI command is routed through the project-tool.run bridge command
  * to reach ProBuilder IUnityCliTool handlers in the Unity package. The
@@ -19,6 +19,7 @@ import type { BridgeCommandSpec, BridgeFlags } from "../../bridge/types.js";
 export const probuilderBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   // ─── Utility ───────────────────────────────────────────
   { group: "probuilder", command: "ping", bridgeCommand: "project-tool.run", toolName: "probuilder.ping", buildArgs: probuilderPingArgs },
+  { group: "probuilder", command: "scene", bridgeCommand: "project-tool.run", toolName: "probuilder.scene", buildArgs: probuilderSceneArgs },
 
   // ─── Shape Creation ────────────────────────────────────
   { group: "probuilder", command: "create-shape", bridgeCommand: "project-tool.run", toolName: "probuilder.create-shape", buildArgs: probuilderCreateShapeArgs },
@@ -84,6 +85,13 @@ function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
 
 function probuilderPingArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({});
+}
+
+function probuilderSceneArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    namePattern: stringFlag(flags, "name-pattern") ?? stringField(flags, "namePattern"),
+    pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize")
+  });
 }
 
 function probuilderCreateShapeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

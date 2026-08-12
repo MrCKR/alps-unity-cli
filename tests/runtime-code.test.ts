@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import type { BridgeRequest } from "../src/bridge/index.js";
 import { execute } from "../src/cli.js";
@@ -6,7 +10,7 @@ import { execute } from "../src/cli.js";
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 const probe = {
-  context: "scene.gameobject",
+  readTool: "scene.gameobject",
   input: { target: "ProbeTarget", includeComponents: false },
   assertions: [{
     path: "/gameObject/transform/position/x",
@@ -25,7 +29,7 @@ const offline = { dataDir: "Z:/missing-unity-cli-data" };
 
 test("code.exec rejects malformed completionProbe before Bridge dispatch", async () => {
   for (const input of [
-    request({ completionProbe: { ...probe, context: "scene.unknown" } }),
+    request({ completionProbe: { ...probe, readTool: "scene.unknown" } }),
     request({ completionProbe: { ...probe, assertions: [{ ...probe.assertions[0], operator: "unknown" }] } }),
   ]) {
     let calls = 0;
@@ -54,6 +58,80 @@ test("code.exec dry-run hashes source and never calls Bridge", async () => {
   assert.equal(data.plannedEffects.length, 1);
 });
 
+test("code.exec rejects oversized typed input file before JSON materialization", async () => {
+  const root = await mkdtemp(join(tmpdir(), "code-exec-input-"));
+  const inputPath = join(root, "input.json");
+  await writeFile(inputPath, `{"code":"${"x".repeat(1024 * 1024)}"}`, "utf8");
+  let calls = 0;
+  const result = await execute(["tools", "run", "code.exec", "--input-file", inputPath], {
+    ...offline,
+    bridgeExecute: async () => { calls += 1; throw new Error("must not dispatch"); },
+  } as never);
+  assert.ok(!result.ok);
+  assert.equal(result.error?.code, "E_CODE_INPUT_TOO_LARGE");
+  assert.equal(calls, 0);
+});
+
+test("code.exec typed stdin stops waiting at the immutable deadline", async () => {
+  const child = spawn(process.execPath, ["dist/cli.js", "tools", "run", "code.exec", "--stdin", "--timeout-ms", "100"], {
+    cwd: process.cwd(),
+    env: { ...process.env, UNITY_CLI_ALLOW_NON_WINDOWS: "1" },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stdin.write('{"code":"return null;"');
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  const exitCode = await new Promise<number | null>((resolvePromise, rejectPromise) => {
+    const timer = setTimeout(() => { child.kill(); rejectPromise(new Error("code.exec stdin did not honor timeout")); }, 2_000);
+    child.once("error", rejectPromise);
+    child.once("exit", (code) => { clearTimeout(timer); resolvePromise(code); });
+  });
+  child.stdin.destroy();
+  assert.equal(exitCode, 1);
+  const result = JSON.parse(stdout) as { ok: boolean; error?: { code?: string } };
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_EXECUTION_TIMEOUT");
+});
+
+test("code.exec rejects oversized source locally without Bridge dispatch", async () => {
+  let calls = 0;
+  const result = await execute(["tools", "run", "code.exec", "--input", JSON.stringify({ code: "x".repeat(768 * 1024 + 1) })], {
+    ...offline,
+    bridgeExecute: async () => { calls += 1; throw new Error("must not dispatch"); },
+  } as never);
+  assert.ok(!result.ok);
+  assert.equal(result.error?.code, "E_CODE_INPUT_TOO_LARGE");
+  assert.equal(calls, 0);
+});
+
+test("code.exec caps extra reference count before Bridge dispatch", async () => {
+  let calls = 0;
+  const result = await execute(["tools", "run", "code.exec", "--input", JSON.stringify({ code: "return null;", refs: Array.from({ length: 65 }, () => ".") })], {
+    ...offline,
+    bridgeExecute: async () => { calls += 1; throw new Error("must not dispatch"); },
+  } as never);
+  assert.ok(!result.ok);
+  assert.equal(result.error?.code, "E_REFERENCE_RESOLUTION_FAILED");
+  assert.equal(calls, 0);
+});
+
+test("code.exec Bridge request retains the dispatcher absolute deadline", async () => {
+  const startedAt = Date.now();
+  let captured: BridgeRequest | undefined;
+  const result = await execute(["tools", "run", "code.exec", "--timeout-ms", "5000", "--input", JSON.stringify({ code: "return null;" })], {
+    ...offline,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      captured = payload;
+      return { ok: true as const, requestId: payload.requestId, data: { compile: { diagnostics: [] }, runtime: { returnValue: null, stdout: "", stderr: "", stdoutTruncated: false, stderrTruncated: false }, completion: null } };
+    },
+  } as never);
+  assert.ok(result.ok, JSON.stringify(result));
+  assert.ok(captured);
+  const deadline = Date.parse(captured!.execution.absoluteDeadlineUtc);
+  assert.ok(deadline >= startedAt + 4_000 && deadline <= startedAt + 5_250, `${startedAt} ${deadline}`);
+});
+
 test("code.exec direct success without completionProbe returns runtime data", async () => {
   const requests: BridgeRequest[] = [];
   const result = await execute(["tools", "run", "code.exec", "--input", JSON.stringify({ code: "return 1;" })], {
@@ -65,7 +143,7 @@ test("code.exec direct success without completionProbe returns runtime data", as
         requestId: payload.requestId,
         data: {
           compile: { diagnostics: [] },
-          runtime: { returnValue: 1, stdout: "", stderr: "" },
+          runtime: { returnValue: 1, stdout: "", stderr: "", stdoutTruncated: false, stderrTruncated: false },
           completion: null,
         },
       };
@@ -89,7 +167,7 @@ test("code.exec direct success carries exact probe and returns fresh assertion r
         requestId: payload.requestId,
         data: {
           compile: { diagnostics: [] },
-          runtime: { returnValue: null, stdout: "", stderr: "" },
+          runtime: { returnValue: null, stdout: "", stderr: "", stdoutTruncated: false, stderrTruncated: false },
           completion: { assertions: [{ path: "/gameObject/transform/position/x", value: 1 }] },
         },
       };
@@ -115,7 +193,7 @@ test("code.exec preserves execution timeout and scrubs internal error details", 
       error: {
         code: "E_EXECUTION_TIMEOUT",
         message: "Effect began without a proven terminal.",
-        nextActions: ["Inspect the target through a Context before submitting another request."],
+        nextActions: ["Run the declared read Tool before submitting another request."],
         transient: false,
         retryAfterMs: 0,
         details: {

@@ -54,7 +54,6 @@ namespace UnityCli
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
         private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };
-        private static readonly string[] ContextCommands = { "context.list", "context.describe", "context.read" };
         private static readonly string[] ExtensionCommands = { "extension.status" };
         private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
@@ -62,6 +61,7 @@ namespace UnityCli
         private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
         private static HttpListener listener;
         private static bool started;
+        private static bool startupScheduled;
         private static bool projectToolsDiscovered;
         private static volatile bool domainReloading;
         private static int port;
@@ -89,18 +89,98 @@ namespace UnityCli
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
             UnityCliCompileCoordinator.Initialize();
+            UnityCliLiveBuildCoordinator.Initialize();
             UnityCliLiveRefreshCoordinator.Initialize();
             UnityCliAssetRefreshCoordinator.Initialize();
             UnityCliPackageEmbedCoordinator.Initialize();
             UnityCliPackageResolveCoordinator.Initialize();
             UnityCliTestRunCoordinator.Initialize();
+            UnityCliNavMeshBakeCoordinator.Initialize();
+            UnityCliOcclusionBakeCoordinator.Initialize();
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
             EditorApplication.quitting += UnregisterAndStop;
             EditorApplication.playModeStateChanged += OnBridgePlayModeStateChanged;
             domainReloading = false;
+            ScheduleBridgeStartup();
+        }
+
+        /// <summary>
+        /// 先显式触发Pipeline owner静态构造，再跨两轮delay排空其初始化callback；
+        /// 同一domain只允许一个待执行bootstrap，最终handoff不依赖package构造顺序。
+        /// </summary>
+        private static void ScheduleBridgeStartup()
+        {
+            if (startupScheduled) return;
+            startupScheduled = true;
+            EditorApplication.delayCall += PrimeBridgeStartup;
+        }
+
+        private static void PrimeBridgeStartup()
+        {
+            EditorApplication.delayCall -= PrimeBridgeStartup;
+            if (domainReloading || AssetDatabase.IsAssetImportWorkerProcess())
+            {
+                startupScheduled = false;
+                return;
+            }
+            string primeState;
+            string primeError;
+            if (!UnityCliPipelineHandoff.PrimePipelineStartup(out primeState, out primeError))
+            {
+                startupScheduled = false;
+                DeleteInstanceRegistration();
+                StopListener();
+                WriteRuntimeLoadDiagnostics("pipeline_prime_failed");
+                WriteLog("bridge_start_blocked pipelinePrime=" + primeState + " error=" + primeError);
+                return;
+            }
+            EditorApplication.delayCall += QueueCompleteBridgeStartup;
+        }
+
+        private static void QueueCompleteBridgeStartup()
+        {
+            EditorApplication.delayCall -= QueueCompleteBridgeStartup;
+            if (domainReloading || AssetDatabase.IsAssetImportWorkerProcess())
+            {
+                startupScheduled = false;
+                return;
+            }
+            EditorApplication.delayCall += CompleteBridgeStartup;
+        }
+
+        /// <summary>
+        /// Pipeline初始化callback排空后执行最终停服proof与一次性标记，再按项目AutoStart发布listener与实例。
+        /// </summary>
+        private static void CompleteBridgeStartup()
+        {
+            EditorApplication.delayCall -= CompleteBridgeStartup;
+            startupScheduled = false;
+            if (domainReloading || AssetDatabase.IsAssetImportWorkerProcess()) return;
+
+            string handoffState;
+            string handoffError;
+            if (!UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError))
+            {
+                DeleteInstanceRegistration();
+                StopListener();
+                WriteRuntimeLoadDiagnostics("pipeline_handoff_failed");
+                WriteLog("bridge_start_blocked pipelineHandoff=" + handoffState + " error=" + handoffError);
+                return;
+            }
+
             StopStaleBridgeListeners();
+            if (!UnityCliProjectSettings.Current.BridgeAutoStart)
+            {
+                DeleteInstanceRegistration();
+                StopListener();
+                WriteRuntimeLoadDiagnostics("listener_autostart_disabled");
+                WriteLog("bridge_autostart_disabled pipelineHandoff=" + handoffState);
+                return;
+            }
+
+            WriteLog("bridge_bootstrap pipelineHandoff=" + handoffState + " autoStart=true");
             StartListener();
         }
 
@@ -132,16 +212,27 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
+            ReleaseActiveDirectMutationLease();
             UnityCliCompilationEventBroker.BeforeReload();
             UnityCliCompileCoordinator.BeforeReload();
+            UnityCliLiveBuildCoordinator.BeforeReload();
             UnityCliLiveRefreshCoordinator.BeforeReload();
             UnityCliAssetRefreshCoordinator.BeforeReload();
             UnityCliPackageEmbedCoordinator.BeforeReload();
             UnityCliPackageResolveCoordinator.BeforeReload();
             UnityCliTestRunCoordinator.BeforeReload();
+            UnityCliNavMeshBakeCoordinator.BeforeReload();
+            UnityCliOcclusionBakeCoordinator.BeforeReload();
             BridgeLifetime.Cancel();
             CancelQueuedWork();
             CancelPendingWaits("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
+            if (!UnityCliProjectSettings.Current.BridgeAutoStart)
+            {
+                DeleteInstanceRegistration();
+                StopListener();
+                WriteLog("bridge_before_assembly_reload autostart_disabled");
+                return;
+            }
             RegisterInstance("transitioning");
             StopListener();
         }
@@ -152,14 +243,16 @@ namespace UnityCli
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
             UnityCliCompileCoordinator.Initialize();
+            UnityCliLiveBuildCoordinator.Initialize();
             UnityCliLiveRefreshCoordinator.Initialize();
             UnityCliAssetRefreshCoordinator.Initialize();
             UnityCliPackageEmbedCoordinator.Initialize();
             UnityCliPackageResolveCoordinator.Initialize();
             UnityCliTestRunCoordinator.Initialize();
-            WriteLog("bridge_after_assembly_reload restarting listener");
-            StopStaleBridgeListeners();
-            StartListener();
+            UnityCliNavMeshBakeCoordinator.Initialize();
+            UnityCliOcclusionBakeCoordinator.Initialize();
+            WriteLog("bridge_after_assembly_reload scheduling bootstrap");
+            ScheduleBridgeStartup();
 
             // After domain reload, static fields are reset. Re-initialize the Runtime Executor
             // and restore session state if we are already in Play Mode.
@@ -168,13 +261,21 @@ namespace UnityCli
 
         private static void UnregisterAndStop()
         {
+            ReleaseActiveDirectMutationLease();
+            EditorApplication.delayCall -= PrimeBridgeStartup;
+            EditorApplication.delayCall -= QueueCompleteBridgeStartup;
+            EditorApplication.delayCall -= CompleteBridgeStartup;
+            startupScheduled = false;
             UnityCliCompilationEventBroker.Shutdown();
             UnityCliCompileCoordinator.Shutdown();
+            UnityCliLiveBuildCoordinator.Shutdown();
             UnityCliLiveRefreshCoordinator.Shutdown();
             UnityCliAssetRefreshCoordinator.Shutdown();
             UnityCliPackageEmbedCoordinator.Shutdown();
             UnityCliPackageResolveCoordinator.Shutdown();
             UnityCliTestRunCoordinator.Shutdown();
+            UnityCliNavMeshBakeCoordinator.Shutdown();
+            UnityCliOcclusionBakeCoordinator.Shutdown();
             BridgeLifetime.Cancel();
             CancelQueuedWork();
             CancelPendingWaits("E_UNITY_QUITTING", "Unity Editor is quitting.", "Restart Unity and retry the request.", 5000);
@@ -273,7 +374,7 @@ namespace UnityCli
                 throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", null, new[] { "Wait for domain reload to complete and retry." }, true, 10000);
             }
 
-            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
+            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
             if (EditorApplication.isCompiling && !allowedDuringCompileOrImport)
             {
                 throw new BridgeCommandException("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", null, new[] { "Wait for Unity to finish compiling and retry." }, true, 5000);
@@ -287,7 +388,7 @@ namespace UnityCli
             if (IsPlayModeChanging())
             {
                 // 只在 PlayMode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续操作 Unity。
-                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command)
+                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command)
                     || IsEditorStateSnapshotCommand(request.Command)
                     || request.Command == "editor.console"
                     || request.Command == "editor.pause"
@@ -296,9 +397,6 @@ namespace UnityCli
                     || request.Command == "runtime-tool.run"
                     || request.Command == "project-tool.list"
                     || request.Command == "diagnose.preflight"
-                    || request.Command == "context.list"
-                    || request.Command == "context.describe"
-                    || request.Command == "context.read"
                     || request.Command == "extension.status";
 
                 if (!allowedDuringPlayModeTransition)

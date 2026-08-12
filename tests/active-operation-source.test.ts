@@ -14,7 +14,15 @@ test("active operation exposes one durable state file per scope", async () => {
   assert.match(source, /FileOptions\.WriteThrough/);
   assert.match(source, /stream\.Flush\(true\)/);
   assert.doesNotMatch(source, /Directory\.GetFiles/);
-  assert.doesNotMatch(source, /Ttl|Limit|Capacity|requestDigest|outcome_unknown|E_REQUEST_ID_REUSED/);
+  assert.doesNotMatch(source, /Ttl/);
+  assert.match(source, /StoreTerminalFirst\(string scope, string requestId, string requestDigest/);
+  assert.match(source, /Entries\.Count > 100/);
+  assert.match(source, /MaxTerminalEntryBytes = 2 \* 1024 \* 1024/);
+  assert.match(source, /Encoding\.UTF8\.GetByteCount\(serialized\) > MaxTerminalCacheBytes/);
+  assert.match(source, /RetiredIdentities\.Add\(TerminalIdentityHash[\s\S]*RemoveAt\(0\)/);
+  assert.match(source, /EnsureTerminalAdmission[\s\S]*TerminalAdmissionIdentityReserve >= MaxRetiredTerminalIdentities/);
+  assert.doesNotMatch(source, /retiredBloom|MightContainRetiredTerminal/);
+  assert.match(source, /E_REQUEST_ID_REUSED/);
 });
 
 test("ordinary requests retain no compatibility journal", async () => {

@@ -29,7 +29,7 @@ test("atomic mutations return only independently observed completion state", asy
   assert.match(moveObject, /observedScenePath != destScene\.path \|\| observedSceneHandle != destScene\.handle/);
   assert.match(moveObject, /E_SCENE_MOVE_STATE_MISMATCH/);
 
-  assert.match(activeTool, /var observedTool = Tools\.current/);
+  assert.match(activeTool, /var observedTool = UnityEditor\.Tools\.current/);
   assert.match(activeTool, /observedTool != editorTool/);
   assert.match(activeTool, /E_EDITOR_ACTIVE_TOOL_STATE_MISMATCH/);
 

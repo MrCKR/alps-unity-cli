@@ -17,9 +17,18 @@ function sourceFiles(root) {
   return files;
 }
 
+function assertNoLegacyContextAuthoring() {
+  const sourceRoot = join(ROOT, "src");
+  if (existsSync(join(sourceRoot, "contexts"))) throw new Error("src/contexts: legacy Context authoring directory is forbidden; define Tools under src/tools instead");
+  for (const file of sourceFiles(sourceRoot)) {
+    const text = readFileSync(file, "utf8");
+    if (/\bdefineContext\s*(?:<|\()/.test(text)) throw new Error(`${relative(ROOT, file)}: legacy defineContext authoring is forbidden; define a Tool instead`);
+  }
+}
+
 function generate(kind, directory, output) {
   if (!existsSync(directory)) throw new Error(`Registry source directory not found: ${directory}`);
-  const call = kind === "Tool" ? "defineTool" : "defineContext";
+  const call = "defineTool";
   const capabilities = [];
   for (const file of sourceFiles(directory)) {
     const text = readFileSync(file, "utf8");
@@ -54,5 +63,5 @@ function generate(kind, directory, output) {
   process.stdout.write(`generated ${relative(ROOT, output)} (${capabilities.length} ${kind.toLowerCase()}s)\n`);
 }
 
+assertNoLegacyContextAuthoring();
 generate("Tool", join(ROOT, "src", "tools"), join(ROOT, "src", "tools", ".generated-registry.ts"));
-generate("Context", join(ROOT, "src", "contexts"), join(ROOT, "src", "contexts", ".generated-registry.ts"));

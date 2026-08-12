@@ -29,6 +29,7 @@ const LISTENER_ID_PATTERN = /^listener-[0-9a-f]{32}$/;
 const ALIAS_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 
 export type UnityInstanceStatus = "ready" | "transitioning" | "blocked" | "offline" | "conflict";
+export type InstanceTarget = "editor" | "runtime";
 
 export interface RegistryIdentity {
   instanceId: string;
@@ -52,7 +53,10 @@ export interface RegistryListener {
 }
 
 export interface RegistrySession {
-  editorSessionId: string;
+  target: InstanceTarget;
+  sessionId: string;
+  editorSessionId?: string;
+  runtimeSessionId?: string;
   processId: number;
   processStartedAt: string;
   lastHeartbeatAt: string;
@@ -65,6 +69,8 @@ export interface RegistrySession {
   unityVersion?: string;
   buildStamp?: string;
   toolCatalogFingerprint?: string;
+  executablePath?: string;
+  buildId?: string;
 }
 
 export interface InstanceRegistryV2 {
@@ -84,11 +90,15 @@ export interface UnityInstance {
   projectPath: string;
   projectName: string;
   status: UnityInstanceStatus;
+  target?: InstanceTarget;
   revision: number;
   updatedAt: string;
   sessions: RegistrySession[];
   activeSession?: RegistrySession;
+  allSessions: RegistrySession[];
+  sessionId?: string;
   editorSessionId?: string;
+  runtimeSessionId?: string;
   processId?: number;
   lastHeartbeatAt?: string;
   lastUnitySnapshot?: Record<string, unknown>;
@@ -143,13 +153,15 @@ export type SessionProcessVerification = "verified" | "dead" | "unverifiable";
 
 interface HealthIdentity {
   version: 2;
+  target: InstanceTarget;
   instanceId: string;
   canonicalProjectPath: string;
   canonicalizationVersion: 1;
-  editorSessionId: string;
+  sessionId: string;
   listenerId: string;
   actualPort: number;
   buildStamp: string;
+  buildId?: string;
 }
 
 export class InstanceRegistryError extends Error {
@@ -325,26 +337,20 @@ export async function selectInstanceForFlags(
   flags: Record<string, string | boolean>,
   dataDir: string,
   cwd = process.cwd(),
+  target: InstanceTarget = "editor",
 ): Promise<InstanceSelection> {
   const selection = await resolveInstanceSelectionIdentity(flags, dataDir, cwd);
-  const instance = (await readInstances(dataDir)).find((candidate) => candidate.instanceId === selection.identity.instanceId);
-  if (!instance) throw missingSelectedInstance(selection.identity, selection.explicit);
+  const record = await readRegistryRecord(dataDir, selection.identity.instanceId);
+  if (!record) throw missingSelectedInstance(selection.identity, selection.explicit, target);
+  const observations = await probeProcessObservations(record.sessions.map((session) => session.processId));
+  const instance = await reduceRegistryRecord(record, observations, Date.now(), target);
   assertRegistryIdentity(instance, selection.identity);
-  const inspected = applyProjectProcessClaimInspection(instance, await inspectProjectProcessClaimsWithConvergence(selection.identity));
-  if (inspected.status === "offline") {
-    throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "The selected Unity project has no active Editor session.", [
-      "Open this exact Unity project in Unity Editor.",
-    ], { instance: instanceListSummary(inspected) });
-  }
-  if (inspected.status === "conflict") {
-    const message = (inspected.processClaimIds?.length ?? 0) > 1
-      ? "Multiple Unity Editor processes claim the same canonical project identity."
-      : "The selected Unity Editor process identity cannot be proven uniquely.";
-    throw new InstanceRegistryError("E_INSTANCE_CONFLICT", message, [
-      "Close every duplicate Unity Editor process except the intended session.",
-      "Run unity_cli instances list to inspect all claimants.",
-    ], { instance: instanceListSummary(inspected) });
-  }
+  // Editor 额外证明 -projectPath claim；Player 的项目归因由 build sidecar、进程路径与 health attestation 联合证明。
+  const inspected = target === "editor"
+    ? applyProjectProcessClaimInspection(instance, await inspectProjectProcessClaimsWithConvergence(selection.identity))
+    : instance;
+  if (inspected.status === "offline") throw targetNotRunning(inspected, target);
+  if (inspected.status === "conflict") throw targetConflict(inspected, target);
   return { instance: inspected, matchedBy: selection.matchedBy };
 }
 
@@ -362,15 +368,16 @@ export async function selectObservationInstanceForFlags(
   dataDir: string,
   remainingMs?: number,
   cwd = process.cwd(),
+  target: InstanceTarget = "editor",
 ): Promise<InstanceSelection> {
   const observationDeadlineMs = remainingMs === undefined ? undefined : Date.now() + Math.max(0, remainingMs);
   const selection = await resolveInstanceSelectionIdentity(flags, dataDir, cwd, observationDeadlineMs);
   const record = await readRegistryRecord(dataDir, selection.identity.instanceId, observationDeadlineMs);
   // observation 不要求 Bridge 已注册；canonical identity 仍可归因到启动中的 Unity process。
-  if (!record) return { instance: offlineObservationInstance(selection.identity), matchedBy: selection.matchedBy };
+  if (!record) return { instance: offlineObservationInstance(selection.identity, target), matchedBy: selection.matchedBy };
   const processBudgetMs = Math.max(0, observationDeadlineMs === undefined ? PROCESS_OBSERVATION_TIMEOUT_MS : observationDeadlineMs - Date.now());
   const observations = await probeProcessObservations(record.sessions.map((session) => session.processId), processBudgetMs);
-  const instance = reduceObservationRegistryRecord(record, observations);
+  const instance = reduceObservationRegistryRecord(record, observations, target);
   assertRegistryIdentity(instance, selection.identity);
   return { instance, matchedBy: selection.matchedBy };
 }
@@ -384,17 +391,14 @@ export async function selectTransitionInstanceForFlags(
   dataDir: string,
   remainingMs: number,
   cwd = process.cwd(),
+  target: InstanceTarget = "editor",
 ): Promise<InstanceSelection> {
   const deadlineMs = Date.now() + Math.max(0, remainingMs);
-  const selection = await selectObservationInstanceForFlags(flags, dataDir, Math.max(0, deadlineMs - Date.now()), cwd);
+  const selection = await selectObservationInstanceForFlags(flags, dataDir, Math.max(0, deadlineMs - Date.now()), cwd, target);
   const instance = selection.instance;
   const session = instance.activeSession;
-  if (!session || instance.status === "offline") {
-    throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "The selected Unity project has no active Editor session.", ["Open this exact Unity project in Unity Editor."], { instance: instanceListSummary(instance) });
-  }
-  if (instance.status === "conflict") {
-    throw new InstanceRegistryError("E_INSTANCE_CONFLICT", "The selected Unity Editor process identity is conflicting.", ["Close every duplicate Editor process except the intended session."], { instance: instanceListSummary(instance) });
-  }
+  if (!session || instance.status === "offline") throw targetNotRunning(instance, target);
+  if (instance.status === "conflict") throw targetConflict(instance, target);
 
   const identity: RegistryIdentity = {
     instanceId: instance.instanceId,
@@ -404,27 +408,25 @@ export async function selectTransitionInstanceForFlags(
   const processBudgetMs = Math.max(0, deadlineMs - Date.now());
   const [verification, claims] = await Promise.all([
     verifyRegistrySessionProcess(identity, session, processBudgetMs),
-    inspectProjectProcessClaims(identity, processBudgetMs),
+    target === "editor" ? inspectProjectProcessClaims(identity, processBudgetMs) : Promise.resolve(undefined),
   ]);
-  const exactClaim = claims.verification === "verified"
+  const exactClaim = target === "runtime" || (claims?.verification === "verified"
     && claims.processIds.length === 1
-    && claims.processIds[0] === session.processId;
-  if (verification === "dead") {
-    throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "The selected Unity Editor process exited during transition recovery.", ["Reopen this exact Unity project before submitting a new request."], { instance: instanceListSummary(instance) });
-  }
+    && claims.processIds[0] === session.processId);
+  if (verification === "dead") throw targetNotRunning(instance, target);
   if (verification !== "verified" || !exactClaim) {
-    throw new InstanceRegistryError("E_INSTANCE_CONFLICT", "The selected Unity Editor process identity cannot be proven during transition recovery.", ["Wait for the selected Editor process identity to become uniquely verifiable."], { instance: instanceListSummary(instance), processClaimIds: claims.processIds });
+    throw new InstanceRegistryError("E_INSTANCE_CONFLICT", `The selected ${target} process identity cannot be proven during transition recovery.`, ["Wait for the selected process identity to become uniquely verifiable."], { instance: instanceListSummary(instance), processClaimIds: claims?.processIds ?? [] });
   }
-  return { instance: { ...instance, processClaimIds: claims.processIds }, matchedBy: selection.matchedBy };
+  return { instance: { ...instance, ...(claims ? { processClaimIds: claims.processIds } : {}) }, matchedBy: selection.matchedBy };
 }
 
 /** registry 尚未写入时的只读 canonical identity 投影；绝不由 TS 创建 registry。 */
-function offlineObservationInstance(identity: ProjectIdentity): UnityInstance {
+function offlineObservationInstance(identity: ProjectIdentity, target: InstanceTarget): UnityInstance {
   return {
     instanceId: identity.instanceId, canonicalizationVersion: 1,
     canonicalProjectPath: identity.canonicalProjectPath, displayProjectPath: identity.displayProjectPath,
     projectPath: identity.displayProjectPath, projectName: projectNameFromPath(identity.displayProjectPath),
-    status: "offline", revision: 0, updatedAt: new Date(0).toISOString(), sessions: [], progress: [], blockers: [],
+    status: "offline", target, revision: 0, updatedAt: new Date(0).toISOString(), sessions: [], allSessions: [], progress: [], blockers: [],
     claimVerification: "none",
   };
 }
@@ -474,20 +476,37 @@ async function resolveInstanceSelectionIdentity(
   return { identity, matchedBy, explicit };
 }
 
-function missingSelectedInstance(identity: ProjectIdentity, explicit: string | undefined): InstanceRegistryError {
-  return new InstanceRegistryError(explicit && INSTANCE_ID_PATTERN.test(explicit) ? "E_INSTANCE_NOT_FOUND" : "E_INSTANCE_NOT_RUNNING", "No Unity Editor registry record exists for the selected project identity.", [
-    "Open this exact Unity project in Unity Editor.",
+function missingSelectedInstance(identity: ProjectIdentity, explicit: string | undefined, target: InstanceTarget): InstanceRegistryError {
+  const code = explicit && INSTANCE_ID_PATTERN.test(explicit) ? "E_INSTANCE_NOT_FOUND" : target === "runtime" ? "E_RUNTIME_NOT_RUNNING" : "E_INSTANCE_NOT_RUNNING";
+  return new InstanceRegistryError(code, `No ${target} registry record exists for the selected project identity.`, [
+    target === "runtime" ? "Launch a development Player built from this exact Unity project." : "Open this exact Unity project in Unity Editor.",
     "Run unity_cli instances list to inspect known project identities.",
-  ], { instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath });
+  ], { instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath, target });
+}
+
+/** 为 target 离线返回稳定且可执行的选择错误。 */
+function targetNotRunning(instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
+  return new InstanceRegistryError(target === "runtime" ? "E_RUNTIME_NOT_RUNNING" : "E_INSTANCE_NOT_RUNNING", `The selected Unity project has no active ${target} session.`, [
+    target === "runtime" ? "Launch a development Player built from this exact Unity project." : "Open this exact Unity project in Unity Editor.",
+  ], { instance: instanceListSummary(instance), target });
+}
+
+/** 同一 target 的多个或不可验证 claim 必须 fail closed；另一 target 的正常 session 不参与冲突。 */
+function targetConflict(instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
+  return new InstanceRegistryError("E_INSTANCE_CONFLICT", `The selected ${target} process identity cannot be proven uniquely.`, [
+    `Close every duplicate ${target} process except the intended session.`,
+    "Run unity_cli instances list to inspect all claimants.",
+  ], { instance: instanceListSummary(instance), target });
 }
 
 /** 即时观察只归约原始 registry：不得发 health 请求或扫描旧 PID。 */
-export function reduceObservationRegistryRecord(record: InstanceRegistryV2, observations?: Map<number, ProcessObservation>): UnityInstance {
+export function reduceObservationRegistryRecord(record: InstanceRegistryV2, observations?: Map<number, ProcessObservation>, target: InstanceTarget = "editor"): UnityInstance {
   validateRegistryRecord(record);
   // 传入 OS observation 时只剔除已证明 dead/start-mismatch 的 claim；无法证明的 claim 继续形成 conflict。
-  const sessions = observations
+  const allSessions = observations
     ? record.sessions.filter((session) => claimIsAlive(session, observations.get(session.processId)))
     : record.sessions;
+  const sessions = allSessions.filter((session) => session.target === target);
   const processUnverifiable = observations !== undefined && sessions.some((session) => observations.get(session.processId)?.state === "unverifiable");
   const activeSession = sessions.length === 1 ? sessions[0] : undefined;
   const status: UnityInstanceStatus = sessions.length === 0
@@ -509,11 +528,15 @@ export function reduceObservationRegistryRecord(record: InstanceRegistryV2, obse
     projectPath: record.identity.displayProjectPath,
     projectName: projectNameFromPath(record.identity.displayProjectPath),
     status,
+    target,
     revision: record.revision,
     updatedAt: record.updatedAt,
     sessions,
     activeSession,
+    allSessions,
+    sessionId: activeSession?.sessionId,
     editorSessionId: activeSession?.editorSessionId,
+    runtimeSessionId: activeSession?.runtimeSessionId,
     processId: activeSession?.processId,
     lastHeartbeatAt: activeSession?.lastHeartbeatAt,
     lastUnitySnapshot: activeSession?.lastUnitySnapshot,
@@ -550,7 +573,12 @@ export async function verifyRegistrySessionProcess(identity: RegistryIdentity, s
     const raw = JSON.parse(execution.stdout.trim()) as Record<string, unknown>;
     if (raw.state === "dead") return "dead";
     if (raw.state !== "alive" || typeof raw.processStartedAt !== "string" || typeof raw.executablePath !== "string" || !Array.isArray(raw.argv)) return "unverifiable";
-    if (Date.parse(raw.processStartedAt) !== Date.parse(session.processStartedAt) || basename(raw.executablePath).toLowerCase() !== "unity.exe") return "unverifiable";
+    if (Date.parse(raw.processStartedAt) !== Date.parse(session.processStartedAt)) return "unverifiable";
+    if (session.target === "runtime") {
+      if (!session.executablePath) return "unverifiable";
+      return resolve(raw.executablePath).toLowerCase() === resolve(session.executablePath).toLowerCase() ? "verified" : "unverifiable";
+    }
+    if (basename(raw.executablePath).toLowerCase() !== "unity.exe") return "unverifiable";
     const argv = raw.argv.every((value) => typeof value === "string") ? raw.argv as string[] : undefined;
     const index = argv?.findIndex((value) => value.toLowerCase() === "-projectpath") ?? -1;
     if (index < 0 || !argv?.[index + 1]) return "unverifiable";
@@ -606,11 +634,11 @@ export function aliasesV2Path(dataDir = defaultDataDir()): string {
   return resolve(dataDir, "aliases-v2.json");
 }
 
-/** 只读全部 v2 identity records；TS 不提供 registry writer。 */
-export async function readInstances(dataDir = defaultDataDir(), now = Date.now()): Promise<UnityInstance[]> {
+/** 只读全部 v2 identity records；TS 不提供 registry writer。all 视图只用于控制面展示，业务执行必须显式选择 target。 */
+export async function readInstances(dataDir = defaultDataDir(), now = Date.now(), target: InstanceTarget | "all" = "all"): Promise<UnityInstance[]> {
   const records = await readRegistryRecords(dataDir);
   const processObservations = await probeProcessObservations(records.flatMap((record) => record.sessions.map((session) => session.processId)));
-  const reduced = await Promise.all(records.map((record) => reduceRegistryRecord(record, processObservations, now)));
+  const reduced = await Promise.all(records.map((record) => reduceRegistryRecord(record, processObservations, now, target)));
   return reduced.sort((left, right) => left.canonicalProjectPath.localeCompare(right.canonicalProjectPath));
 }
 
@@ -630,11 +658,11 @@ export async function inspectProjectProcessClaims(identity: RegistryIdentity | P
 /** 将 OS 进程 claim 与 registry session 交叉验证；冲突时清除任何可执行 session 选择。 */
 export function applyProjectProcessClaimInspection(instance: UnityInstance, inspection: ProjectProcessClaimInspection): UnityInstance {
   if (inspection.verification === "unsupported") return instance;
-  const registeredProcessId = instance.activeSession?.processId;
-  // registry session 已独立证明 selected PID/start/path/health；补充扫描只能增加已观察到的冲突，超时不得伪造第二个 claim。
+  const registeredEditorProcessIds = instance.allSessions.filter((session) => session.target === "editor").map((session) => session.processId);
+  // registry session 已独立证明 selected PID/start/path/health；补充扫描只能增加 Editor target 的已观察冲突。
   if (inspection.verification !== "verified") return instance;
   const conflicts = inspection.processIds.length > 1
-    || (inspection.processIds.length === 1 && registeredProcessId !== undefined && inspection.processIds[0] !== registeredProcessId);
+    || (inspection.processIds.length === 1 && registeredEditorProcessIds.length === 1 && inspection.processIds[0] !== registeredEditorProcessIds[0]);
   if (!conflicts) return { ...instance, processClaimIds: inspection.processIds };
   const blocker = {
     kind: "duplicate-project-process",
@@ -649,7 +677,9 @@ export function applyProjectProcessClaimInspection(instance: UnityInstance, insp
     ...instance,
     status: "conflict",
     activeSession: undefined,
+    sessionId: undefined,
     editorSessionId: undefined,
+    runtimeSessionId: undefined,
     processId: undefined,
     progress: [],
     blockers: [...instance.blockers, blocker],
@@ -673,30 +703,30 @@ export async function reduceRegistryRecord(
   record: InstanceRegistryV2,
   observations: Map<number, ProcessObservation>,
   now = Date.now(),
+  target: InstanceTarget | "all" = "editor",
 ): Promise<UnityInstance> {
   validateRegistryRecord(record);
-  const claims = record.sessions.filter((session) => claimIsAlive(session, observations.get(session.processId)));
-  const unverifiable = claims.some((session) => {
-    const observation = observations.get(session.processId);
-    return session.claimVerification === "unverifiable" || observation?.state === "unverifiable";
-  });
-
-  let status: UnityInstanceStatus = "offline";
-  let activeSession: RegistrySession | undefined;
-  if (claims.length > 1 || unverifiable) {
-    status = "conflict";
-  } else if (claims.length === 1) {
-    activeSession = claims[0];
-    if (activeSession.blockers.length > 0 || activeSession.state === "blocked") {
-      status = "blocked";
-    } else {
-      const heartbeatFresh = isFreshTimestamp(activeSession.lastHeartbeatAt, now, HEARTBEAT_FRESH_MS);
-      const health = await probeHealthIdentity(record.identity, activeSession);
-      status = activeSession.state === "ready" && heartbeatFresh && health ? "ready" : "transitioning";
-    }
-  }
-
-  const selected = activeSession ?? (claims.length === 1 ? claims[0] : undefined);
+  const allClaims = record.sessions.filter((session) => claimIsAlive(session, observations.get(session.processId)));
+  const targets: InstanceTarget[] = target === "all" ? ["editor", "runtime"] : [target];
+  const evaluations = await Promise.all(targets.map(async (candidateTarget) => {
+    const claims = allClaims.filter((session) => session.target === candidateTarget);
+    const unverifiable = claims.some((session) => {
+      const observation = observations.get(session.processId);
+      return session.claimVerification === "unverifiable" || observation?.state === "unverifiable";
+    });
+    if (claims.length > 1 || unverifiable) return { target: candidateTarget, status: "conflict" as UnityInstanceStatus, claims };
+    const active = claims[0];
+    if (!active) return { target: candidateTarget, status: "offline" as UnityInstanceStatus, claims };
+    if (active.blockers.length > 0 || active.state === "blocked") return { target: candidateTarget, status: "blocked" as UnityInstanceStatus, claims };
+    const heartbeatFresh = isFreshTimestamp(active.lastHeartbeatAt, now, HEARTBEAT_FRESH_MS);
+    const health = await probeHealthIdentity(record.identity, active);
+    return { target: candidateTarget, status: active.state === "ready" && heartbeatFresh && health ? "ready" as UnityInstanceStatus : "transitioning" as UnityInstanceStatus, claims };
+  }));
+  const priority: UnityInstanceStatus[] = ["conflict", "blocked", "ready", "transitioning", "offline"];
+  const status = priority.find((candidate) => evaluations.some((evaluation) => evaluation.status === candidate)) ?? "offline";
+  const claims = target === "all" ? allClaims : evaluations[0].claims;
+  const selected = target !== "all" && claims.length === 1 ? claims[0] : allClaims.length === 1 ? allClaims[0] : undefined;
+  const unverifiable = claims.some((session) => session.claimVerification === "unverifiable" || observations.get(session.processId)?.state === "unverifiable");
   return {
     instanceId: record.identity.instanceId,
     canonicalizationVersion: 1,
@@ -705,11 +735,15 @@ export async function reduceRegistryRecord(
     projectPath: record.identity.displayProjectPath,
     projectName: projectNameFromPath(record.identity.displayProjectPath),
     status,
+    ...(target === "all" ? {} : { target }),
     revision: record.revision,
     updatedAt: record.updatedAt,
     sessions: claims,
     activeSession: selected,
+    allSessions: allClaims,
+    sessionId: selected?.sessionId,
     editorSessionId: selected?.editorSessionId,
+    runtimeSessionId: selected?.runtimeSessionId,
     processId: selected?.processId,
     lastHeartbeatAt: selected?.lastHeartbeatAt,
     lastUnitySnapshot: selected?.lastUnitySnapshot,
@@ -718,7 +752,7 @@ export async function reduceRegistryRecord(
     unityVersion: selected?.unityVersion,
     buildStamp: selected?.buildStamp,
     toolCatalogFingerprint: selected?.toolCatalogFingerprint,
-    claimVerification: claims.length === 0 ? "none" : unverifiable ? "unverifiable" : "verified",
+    claimVerification: claims.length === 0 ? "none" : status === "conflict" || unverifiable ? "unverifiable" : "verified",
   };
 }
 
@@ -735,8 +769,11 @@ export function instanceListSummary(instance: UnityInstance): Record<string, unk
     updatedAt: instance.updatedAt,
     claimVerification: instance.claimVerification,
     ...(instance.processClaimIds ? { processClaimIds: instance.processClaimIds } : {}),
-    sessions: instance.sessions.map((session) => ({
-      editorSessionId: session.editorSessionId,
+    sessions: instance.allSessions.map((session) => ({
+      target: session.target,
+      sessionId: session.sessionId,
+      ...(session.editorSessionId ? { editorSessionId: session.editorSessionId } : {}),
+      ...(session.runtimeSessionId ? { runtimeSessionId: session.runtimeSessionId } : {}),
       processId: session.processId,
       processStartedAt: session.processStartedAt,
       lastHeartbeatAt: session.lastHeartbeatAt,
@@ -830,7 +867,16 @@ function validateRegistryRecord(record: InstanceRegistryV2): void {
     const endpoint = listener?.endpoint;
     const snapshot = session?.lastUnitySnapshot as Record<string, unknown> | undefined;
     const expectedUrl = endpoint ? `http://127.0.0.1:${endpoint.actualPort}` : "";
-    if (!session || !SESSION_ID_PATTERN.test(session.editorSessionId) || sessionIds.has(session.editorSessionId)
+    const targetIdentityValid = session?.target === "editor"
+      ? session.editorSessionId === session.sessionId && session.runtimeSessionId === undefined
+        && validEditorRegistrySnapshot(snapshot, session.sessionId, listener?.generation)
+      : session?.target === "runtime"
+        ? session.runtimeSessionId === session.sessionId && session.editorSessionId === undefined
+          && typeof session.executablePath === "string" && isAbsolute(session.executablePath)
+          && typeof session.buildId === "string" && /^[0-9a-f]{32}$/i.test(session.buildId)
+          && validRuntimeRegistrySnapshot(snapshot, session.sessionId, listener?.generation)
+        : false;
+    if (!session || !SESSION_ID_PATTERN.test(session.sessionId) || sessionIds.has(session.sessionId)
       || !Number.isInteger(session.processId) || session.processId < 1
       || !validTimestamp(session.processStartedAt) || !validTimestamp(session.lastHeartbeatAt)
       || (session.claimVerification !== "verified" && session.claimVerification !== "unverifiable")
@@ -840,18 +886,18 @@ function validateRegistryRecord(record: InstanceRegistryV2): void {
       || !endpoint || endpoint.host !== "127.0.0.1"
       || !validPort(endpoint.preferredPort) || !validPort(endpoint.actualPort)
       || typeof endpoint.fallback !== "boolean" || endpoint.url !== expectedUrl
-      || !validRegistrySnapshot(snapshot, session.editorSessionId, listener.generation)
+      || !targetIdentityValid
       || !Array.isArray(session.progress) || !Array.isArray(session.blockers)
       || typeof session.buildStamp !== "string" || session.buildStamp.length === 0) {
-      throw new InstanceRegistryError("E_INSTANCE_IDENTITY_MISMATCH", "Instance registry contains an invalid Editor session claim.", [], { instanceId: identity.instanceId });
+      throw new InstanceRegistryError("E_INSTANCE_IDENTITY_MISMATCH", "Instance registry contains an invalid target session claim.", [], { instanceId: identity.instanceId });
     }
-    sessionIds.add(session.editorSessionId);
+    sessionIds.add(session.sessionId);
     listenerIds.add(listener.listenerId);
   }
 }
 
 /** registry snapshot 是完整 v1 单包；reader 不允许从两次 heartbeat 拼接字段。 */
-function validRegistrySnapshot(snapshot: Record<string, unknown> | undefined, editorSessionId: string, listenerGeneration: number): boolean {
+function validEditorRegistrySnapshot(snapshot: Record<string, unknown> | undefined, editorSessionId: string, listenerGeneration: number | undefined): boolean {
   if (!snapshot || snapshot.schemaVersion !== 1 || snapshot.sourceEditorSessionId !== editorSessionId
     || snapshot.sourceListenerGeneration !== listenerGeneration || !validTimestamp(String(snapshot.observedAt ?? ""))
     || !hasExactKeys(snapshot, ["schemaVersion", "observedAt", "sourceEditorSessionId", "sourceListenerGeneration", "fields"])) return false;
@@ -860,6 +906,24 @@ function validRegistrySnapshot(snapshot: Record<string, unknown> | undefined, ed
   if (!fields || typeof fields !== "object" || Array.isArray(fields) || Object.keys(fields).length !== names.length) return false;
   return names.every((name) => {
     const field = (fields as Record<string, unknown>)[name];
+    if (!field || typeof field !== "object" || Array.isArray(field)) return false;
+    const raw = field as Record<string, unknown>;
+    return typeof raw.known === "boolean"
+      && Object.keys(raw).every((key) => key === "known" || key === "value")
+      && (raw.known ? Object.prototype.hasOwnProperty.call(raw, "value") : !Object.prototype.hasOwnProperty.call(raw, "value"));
+  });
+}
+
+/** Runtime snapshot 与 session/listener 同包归因；字段采用 bounded known/value 结构供后续状态能力扩展。 */
+function validRuntimeRegistrySnapshot(snapshot: Record<string, unknown> | undefined, runtimeSessionId: string, listenerGeneration: number | undefined): boolean {
+  if (!snapshot || snapshot.schemaVersion !== 1 || snapshot.sourceRuntimeSessionId !== runtimeSessionId
+    || snapshot.sourceListenerGeneration !== listenerGeneration || !validTimestamp(String(snapshot.observedAt ?? ""))
+    || !hasExactKeys(snapshot, ["schemaVersion", "observedAt", "sourceRuntimeSessionId", "sourceListenerGeneration", "fields"])) return false;
+  const fields = snapshot.fields;
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) return false;
+  const entries = Object.entries(fields as Record<string, unknown>);
+  if (entries.length < 1 || entries.length > 16) return false;
+  return entries.every(([, field]) => {
     if (!field || typeof field !== "object" || Array.isArray(field)) return false;
     const raw = field as Record<string, unknown>;
     return typeof raw.known === "boolean"
@@ -930,7 +994,7 @@ function claimIsAlive(session: RegistrySession, observation: ProcessObservation 
 /** strict health 必须同时匹配 project/session/listener/port/build identity。 */
 async function probeHealthIdentity(identity: RegistryIdentity, session: RegistrySession): Promise<HealthIdentity | undefined> {
   const listener = session.listener;
-  const cacheKey = [identity.instanceId, session.editorSessionId, listener.listenerId, listener.endpoint.actualPort, session.buildStamp ?? ""].join("\0");
+  const cacheKey = [identity.instanceId, session.target, session.sessionId, listener.listenerId, listener.endpoint.actualPort, session.buildStamp ?? "", session.buildId ?? ""].join("\0");
   const cached = healthCache.get(cacheKey);
   if (cached && Date.now() - cached.checkedAt <= HEALTH_CACHE_TTL_MS) return cached.identity;
 
@@ -940,8 +1004,11 @@ async function probeHealthIdentity(identity: RegistryIdentity, session: Registry
     const response = await fetch(new URL("/health", listener.endpoint.url), {
       signal: controller.signal,
       headers: {
+        "x-unity-cli-expected-target": session.target,
         "x-unity-cli-expected-instance-id": identity.instanceId,
-        "x-unity-cli-expected-editor-session-id": session.editorSessionId,
+        "x-unity-cli-expected-session-id": session.sessionId,
+        "x-unity-cli-expected-listener-id": listener.listenerId,
+        "x-unity-cli-expected-listener-generation": String(listener.generation),
       },
     });
     if (!response.ok) return undefined;
@@ -950,22 +1017,26 @@ async function probeHealthIdentity(identity: RegistryIdentity, session: Registry
     const data = envelope.data as Record<string, unknown>;
     const health: HealthIdentity = {
       version: Number(data.version) as 2,
+      target: String(data.target ?? "") as InstanceTarget,
       instanceId: String(data.instanceId ?? ""),
       canonicalProjectPath: String(data.canonicalProjectPath ?? ""),
       canonicalizationVersion: Number(data.canonicalizationVersion) as 1,
-      editorSessionId: String(data.editorSessionId ?? ""),
+      sessionId: String(data.sessionId ?? ""),
       listenerId: String(data.listenerId ?? ""),
       actualPort: Number(data.actualPort),
       buildStamp: String(data.buildStamp ?? ""),
+      ...(typeof data.buildId === "string" ? { buildId: data.buildId } : {}),
     };
     if (health.version !== 2
+      || health.target !== session.target
       || health.instanceId !== identity.instanceId
       || health.canonicalProjectPath !== identity.canonicalProjectPath
       || health.canonicalizationVersion !== 1
-      || health.editorSessionId !== session.editorSessionId
+      || health.sessionId !== session.sessionId
       || health.listenerId !== listener.listenerId
       || health.actualPort !== listener.endpoint.actualPort
-      || health.buildStamp !== session.buildStamp) return undefined;
+      || health.buildStamp !== session.buildStamp
+      || (session.target === "runtime" && health.buildId !== session.buildId)) return undefined;
     healthCache.set(cacheKey, { checkedAt: Date.now(), identity: health });
     return health;
   } catch {

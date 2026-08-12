@@ -40,6 +40,24 @@ namespace UnityCli
                     if (args == null || string.IsNullOrEmpty(args.Package)) throw new BridgeCommandException("E_PACKAGE_ID_REQUIRED", "package.embed requires --package <id>.", "Pass a package id like com.unity.x.");
                     if (EditorApplication.isPlaying || IsPlayModeChanging()) throw new BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "package.embed is editor-only and requires stable Edit Mode.");
                 }
+                protected override void ValidateLoadedRoot(Dictionary<string, object> root)
+                {
+                    ValidateRootContract(root, new[] { "package", "reloadObserved", "rootContractDigest" }, "queued", "embed_started", "waiting_completed", "waiting_stable");
+                    var packageId = Text(root, "package");
+                    if (string.IsNullOrWhiteSpace(packageId) || packageId.Length > 200 || packageId.IndexOf('/') >= 0 || packageId.IndexOf('\\') >= 0)
+                        throw new InvalidDataException("Package embed active root fields are invalid.");
+                    if (!string.Equals(Text(root, "rootContractDigest"), PackageEmbedRootContractDigest(root), StringComparison.Ordinal))
+                        throw new InvalidDataException("Package embed immutable root contract changed.");
+                    var fenced = HasExactEffectFence("package-embed", root, "package-embed");
+                    if ((Text(root, "phase") == "queued") == fenced)
+                        throw new InvalidDataException("Package embed effect fence is inconsistent with phase.");
+                }
+
+                private static string PackageEmbedRootContractDigest(Dictionary<string, object> root)
+                {
+                    return UnityCliSerializer.Sha256Canonical(new Dictionary<string, object> { { "package", root["package"] } });
+                }
+
                 protected override object Planned(object value)
                 {
                     var args = (Args)value;
@@ -48,7 +66,9 @@ namespace UnityCli
                 protected override Dictionary<string, object> CreateRoot(BridgeRequest request, string digest, object value)
                 {
                     var args = (Args)value;
-                    return new Dictionary<string, object> { { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc }, { "phase", "queued" }, { "package", args.Package } };
+                    var root = new Dictionary<string, object> { { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc }, { "phase", "queued" }, { "package", args.Package } };
+                    root["rootContractDigest"] = PackageEmbedRootContractDigest(root);
+                    return root;
                 }
                 protected override void OnTick(Dictionary<string, object> root)
                 {
@@ -58,8 +78,8 @@ namespace UnityCli
                         if (BusyEditor()) return;
                         var method = typeof(UnityEditor.PackageManager.Client).GetMethod("Embed", BindingFlags.Static | BindingFlags.Public);
                         if (method == null) { Fail(root, "E_PACKAGE_EMBED_UNSUPPORTED", "PackageClient.Embed is not available in this Unity version."); return; }
-                        // Embed 可能在返回前触发 domain reload；先记录已发起，重载后只重新观察业务结果。
-                        Update(x => x["phase"] = "embed_started");
+                        // Embed 可能在返回前触发 domain reload；fence与post phase确认后才调用effect。
+                        root = CrossEffectFence(root, "package-embed", "embed_started");
                         try
                         {
                             ActiveRequests[Text(root, "requestId")] = method.Invoke(null, new object[] { Text(root, "package") });

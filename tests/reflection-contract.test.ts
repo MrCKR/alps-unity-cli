@@ -9,7 +9,7 @@ import { contractToolNames, discoverLiveTools, readEditorCsSources } from "./hel
 /** Reflection 域契约测试：descriptor 改走 live discovery。 */
 
 test("reflection group tools exist with correct live descriptor hints", async () => {
-  assert.deepEqual(contractToolNames("reflection"), ["reflection.method.call", "reflection.method.find"]);
+  assert.deepEqual(contractToolNames("reflection"), ["reflection.method.call", "reflection.method.find", "type.schema"]);
 
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "reflection.method.find", summary: "Find reflected methods.", description: "Find reflected methods.", group: "reflection" }),

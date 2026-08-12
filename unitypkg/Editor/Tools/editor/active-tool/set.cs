@@ -22,8 +22,8 @@ namespace UnityCli
             Tool editorTool;
             switch (r.Tool.ToLowerInvariant()) { case "view": case "pan": editorTool = Tool.View; break; case "move": case "translate": editorTool = Tool.Move; break; case "rotate": case "rotation": editorTool = Tool.Rotate; break; case "scale": editorTool = Tool.Scale; break; case "rect": editorTool = Tool.Rect; break; case "transform": editorTool = Tool.Transform; break; default: throw new UnityCliBridge.BridgeCommandException("E_TOOL_UNKNOWN", "Unknown editor tool: " + r.Tool, "Pass View, Move, Rotate, Scale, Rect, or Transform."); }
             ctx.CommitEffect();
-            Tools.current = editorTool;
-            var observedTool = Tools.current;
+            UnityEditor.Tools.current = editorTool;
+            var observedTool = UnityEditor.Tools.current;
             if (observedTool != editorTool)
                 throw new UnityCliBridge.BridgeCommandException("E_EDITOR_ACTIVE_TOOL_STATE_MISMATCH", "Unity did not apply the requested active Editor tool.", "Inspect the active Editor tool and retry.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Tool = observedTool.ToString(), EditorTool = observedTool.ToString() });

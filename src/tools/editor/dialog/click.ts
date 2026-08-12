@@ -28,7 +28,7 @@ export default defineTool<EditorDialogClickRequest, EditorDialogClickResult>({
     catch (error) { if (error instanceof InstanceRegistryError) throw new StructuredToolError(error.code, error.message, error.nextActions, error.details); throw error; }
     if (instance.status === "conflict") throw new StructuredToolError("E_INSTANCE_CONFLICT", "Multiple Unity Editor sessions claim the selected project identity.", ["Close duplicate Unity Editor processes before clicking a dialog."]);
     const observed = await observeEditorDialogs({ instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath }, Math.max(0, deadlineMs - Date.now()));
-    const recovery = ["Run context read editor.dialogs, then run tools run editor.dialog.click with a current dialogId and exact enabled button label."];
+    const recovery = ["Run tools run editor.dialogs, then run tools run editor.dialog.click with a current dialogId and exact enabled button label."];
     if (observed.outcome === "unproven" || observed.outcome === "unsupported") throw new StructuredToolError("E_DIALOG_OBSERVATION_FAILED", "Windows dialog observation could not be proven for the selected Unity project.", recovery);
     if (observed.outcome === "conflict") throw new StructuredToolError("E_INSTANCE_CONFLICT", "Multiple Unity Editor processes claim the selected project identity.", recovery);
     if (observed.outcome === "offline") throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "The selected Unity project has no attributable Unity process.", recovery);

@@ -73,9 +73,9 @@ test("VFX actions use stable observable state and profiler artifacts retain exte
   assert.match(load, /Wait\.UntilStable/);
   assert.match(assetRefresh, /asset\.refresh requires one asset path/);
   assert.match(assetRefresh, /waiting_stable/);
-  const assetRefreshPersistIndex = assetRefresh.indexOf('Update(x => x["phase"] = "waiting_stable")');
+  const assetRefreshFenceIndex = assetRefresh.indexOf('CrossEffectFence(root, "asset-import", "waiting_stable")');
   const assetRefreshEffectIndex = assetRefresh.indexOf("AssetDatabase.ImportAsset");
-  assert.ok(assetRefreshPersistIndex >= 0 && assetRefreshPersistIndex < assetRefreshEffectIndex, "asset.refresh must persist the post-dispatch phase before ImportAsset can reload the domain.");
+  assert.ok(assetRefreshFenceIndex >= 0 && assetRefreshFenceIndex < assetRefreshEffectIndex, "asset.refresh must durably cross its exact effect fence before ImportAsset can reload the domain.");
   assert.match(assetRefresh, /AssetDatabase\.AssetPathToGUID/);
   assert.doesNotMatch(assetRefresh, /AssetDatabase\.Refresh\(/);
   assert.match(menu, /if \(!saveScene\)/);

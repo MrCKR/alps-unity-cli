@@ -1,19 +1,19 @@
 ---
 name: unity-cli-wait
-description: unity_cli 异步 Tool/Context、跨帧等待、callback 生命周期与中央 scheduler 硬规范。涉及 ValueTask、Promise、ctx.Wait、EditorApplication.update、timeout/cancel 或 PlayMode 跨帧行为时必须先完整读取；修改公开能力时同时加载 unity-cli-capability。
+description: unity_cli 异步 Tool、跨帧等待、callback 生命周期与中央 scheduler 硬规范。涉及 ValueTask、Promise、ctx.Wait、EditorApplication.update、timeout/cancel 或 PlayMode 跨帧行为时必须先完整读取；修改公开能力时同时加载 unity-cli-capability。
 compatibility: 适用于 alps-unity-cli 的 TypeScript CLI 与 Unity C# Bridge。
 ---
 
 # Unity CLI Wait
 
-本项目的 Tool / Context 执行接口默认具备异步能力。调用方只负责发出命令并取得最终结果，不应感知内部同步或异步差异。
+本项目的Tool执行接口默认具备异步能力。调用方只负责发出命令并取得最终结果，不应感知内部同步或异步差异。
 
-涉及公开 Tool / Context 时，先完整读取 `../unity-cli-capability/SKILL.md`。
+涉及公开Tool时，先完整读取`../unity-cli-capability/SKILL.md`。
 
 ## 接口层
 
-- C# Tool / Context 使用语言原生异步接口，推荐 `ValueTask<T>`。
-- TypeScript local Tool / Context 使用 `Promise<T>`。
+- C# Tool使用语言原生异步接口，推荐`ValueTask<T>`。
+- TypeScript local Tool使用`Promise<T>`。
 - 不得把 deferred 作为特殊工具形态暴露给调用方或工具作者。
 
 ## 框架层 Wait

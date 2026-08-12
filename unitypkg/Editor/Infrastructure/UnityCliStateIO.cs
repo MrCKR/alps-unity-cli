@@ -21,10 +21,10 @@ namespace UnityCli
         private static void DurableWriteText(string path, string content)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            var temporary = path + ".tmp";
             try
             {
-                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false))) { writer.Write(content); writer.Flush(); stream.Flush(true); }
                 if (!MoveFileExW(temporary, path, StateIOMoveFileReplaceExisting | StateIOMoveFileWriteThrough))
                     throw new IOException("MoveFileExW failed: " + Marshal.GetLastWin32Error().ToString(CultureInfo.InvariantCulture));

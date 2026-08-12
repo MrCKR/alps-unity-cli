@@ -1,6 +1,5 @@
 import { handleCapabilitiesCommand } from "../../capabilities.js";
 import type { ProjectToolRuntime } from "../../project-tool-discovery.js";
-import type { ContextCatalogRuntime } from "../../contexts/catalog.js";
 import type { BridgeRuntime } from "../../bridge/index.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
@@ -18,7 +17,7 @@ export interface DiagnoseCapabilitiesResult {
 
 export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResult>({
   name: "diagnose.capabilities",
-  summary: "Summarize the selected Unity instance's complete Tool, Context, Extension, and runtime capabilities.",
+  summary: "Summarize the selected Unity instance's complete Tool, Extension, and runtime capabilities.",
   description: "Summarize the complete unified capability catalog of the selected live Unity instance. Package, Extension, and project-defined capabilities use the same catalog.",
   group: "diagnose",
   destructiveHint: false,
@@ -32,11 +31,10 @@ export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResul
   /** 复用统一 live catalog，来源只作为汇总维度。 */
   async execute(request, ctx) {
     const flags = { ...ctx.flags };
-    const runtime: BridgeRuntime & ProjectToolRuntime & ContextCatalogRuntime = {
+    const runtime: BridgeRuntime & ProjectToolRuntime = {
       dataDir: ctx.dataDir,
       bridgeExecute: ctx.bridgeExecute,
-      projectTools: ctx.projectTools,
-      projectContexts: ctx.projectContexts
+      projectTools: ctx.projectTools
     };
     const result = await handleCapabilitiesCommand(flags, runtime, ctx.requestId);
     if (!result.ok) {

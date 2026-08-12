@@ -18,7 +18,8 @@ const GROUP_SUMMARIES: Record<string, string> = {
   reflect: "Offline C# and Unity type reflection search.",
   code: "C# code execution with explicit safety controls.",
   diagnose: "CLI, target, and Bridge capability diagnostics.",
-  asset: "Unity asset discovery, import, editing, and refresh operations."
+  asset: "Unity asset discovery, import, editing, and refresh operations.",
+  runtime: "Development Player state, console, capture, timing, and input operations."
 };
 
 function discoveryError(result: { error?: { code: string; message: string; nextActions?: string[]; details?: unknown; transient?: boolean; retryAfterMs?: number } }): never {
@@ -37,7 +38,7 @@ export default defineTool<ToolsGroupRequest, ToolsGroupResult>({
   playModeSupport: "supported",
   examples: [{ description: "List all tool groups", argv: ["tools", "run", "tools.group", "--input", "{}"] }],
   async execute(request, context) {
-    const catalog = await loadToolCatalog(context.flags ?? {}, context, context.requestId);
+    const catalog = await loadToolCatalog(context.flags ?? {}, context, `${context.requestId}_group_execution`);
     if (catalog.ok === false) discoveryError(catalog);
     const groups = new Map<string, number>();
     for (const tool of catalog.tools) groups.set(tool.group, (groups.get(tool.group) ?? 0) + 1);

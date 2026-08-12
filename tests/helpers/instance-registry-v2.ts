@@ -58,23 +58,33 @@ export async function makeRegistrySession(
   const now = new Date().toISOString();
   const url = new URL(endpoint);
   const actualPort = Number(url.port);
+  const target = overrides.target ?? "editor";
+  const sessionId = overrides.sessionId ?? overrides.editorSessionId ?? overrides.runtimeSessionId ?? `session-${"1".repeat(64)}`;
   return {
-    editorSessionId: overrides.editorSessionId ?? `session-${"1".repeat(64)}`,
+    target,
+    sessionId,
+    ...(target === "editor" ? { editorSessionId: sessionId } : { runtimeSessionId: sessionId }),
     processId: overrides.processId ?? process.pid,
     processStartedAt: overrides.processStartedAt ?? await currentProcessStartedAt(),
     lastHeartbeatAt: overrides.lastHeartbeatAt ?? now,
     claimVerification: overrides.claimVerification ?? "verified",
     state: overrides.state ?? "ready",
-    lastUnitySnapshot: overrides.lastUnitySnapshot ?? {
+    lastUnitySnapshot: overrides.lastUnitySnapshot ?? (target === "editor" ? {
       schemaVersion: 1,
       observedAt: now,
-      sourceEditorSessionId: overrides.editorSessionId ?? `session-${"1".repeat(64)}`,
+      sourceEditorSessionId: sessionId,
       sourceListenerGeneration: overrides.listener?.generation ?? 1,
       fields: {
         compile: { known: false }, import: { known: false }, build: { known: false },
         playMode: { known: false }, prefabStage: { known: false }, activeScene: { known: false }, runtime: { known: false },
       },
-    },
+    } : {
+      schemaVersion: 1,
+      observedAt: now,
+      sourceRuntimeSessionId: sessionId,
+      sourceListenerGeneration: overrides.listener?.generation ?? 1,
+      fields: { developmentBuild: { known: true, value: true } },
+    }),
     listener: overrides.listener ?? {
       listenerId: `listener-${"2".repeat(32)}`,
       generation: 1,
@@ -92,6 +102,10 @@ export async function makeRegistrySession(
     unityVersion: overrides.unityVersion ?? "2022.3.62f1",
     buildStamp: overrides.buildStamp ?? "test-build",
     toolCatalogFingerprint: overrides.toolCatalogFingerprint ?? "test-tools",
+    ...(target === "runtime" ? {
+      executablePath: overrides.executablePath ?? process.execPath,
+      buildId: overrides.buildId ?? "a".repeat(32),
+    } : {}),
   };
 }
 

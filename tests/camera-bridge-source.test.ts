@@ -40,12 +40,13 @@ test("AssetImportWorker never starts or registers a Bridge listener", async () =
   // Worker 会加载 Editor assembly，但不是用户可寻址的 Unity Editor instance。
   const source = await readFile(new URL("UnityCliBridge.cs", editorUrl), "utf8");
   const start = source.indexOf("static UnityCliBridge()");
-  const end = source.indexOf("private static void StartListener", start);
+  const end = source.indexOf("private static void ScheduleBridgeStartup", start);
   const constructor = source.slice(start, end);
   assert.ok(start > -1 && end > start);
   assert.match(constructor, /AssetDatabase\.IsAssetImportWorkerProcess\(\)/);
   assert.ok(constructor.indexOf("IsAssetImportWorkerProcess") < constructor.indexOf("EditorApplication.update += ProcessQueuedWork"));
-  assert.ok(constructor.indexOf("IsAssetImportWorkerProcess") < constructor.indexOf("StartListener()"));
+  assert.ok(constructor.indexOf("IsAssetImportWorkerProcess") < constructor.indexOf("ScheduleBridgeStartup()"));
+  assert.doesNotMatch(constructor, /StartListener\(\)/);
 });
 
 test("one-capability-per-file camera tools route through project-tool.run with matching descriptors and contracts", async () => {
@@ -728,7 +729,7 @@ test("HTTP and execution guards share the safe Play Mode transition allowlist", 
   assert.match(executeBlock, /IsEditorStateSnapshotCommand\(request\.Command\)/);
   assert.doesNotMatch(httpBlock, /request\.Command == "editor\.state"/);
   assert.doesNotMatch(executeBlock, /request\.Command == "editor\.state"/);
-  for (const command of ["runtime-tool.list", "runtime-tool.run", "context.read"]) {
+  for (const command of ["runtime-tool.list", "runtime-tool.run"]) {
     const pattern = new RegExp(`request\\.Command == "${command.replaceAll(".", "\\.")}"`);
     assert.match(httpBlock, pattern, `${command} must be allowed before queueing`);
     assert.match(executeBlock, pattern, `${command} must be allowed during execution`);

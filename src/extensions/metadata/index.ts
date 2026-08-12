@@ -20,7 +20,6 @@ const BUILTIN_EXTENSIONS: ExtensionMetadata[] = BUILTIN_EXTENSION_MANIFESTS.map(
   version: manifest.version,
   status: "available",
   providesTools: (manifest.contributions.tools ?? []).map((tool) => tool.name),
-  providesContexts: (manifest.contributions.contexts ?? []).map((context) => context.key),
   requiresUnityPackages: manifest.unityPackages.map((pkg) => pkg.packageId),
   installMode: "auto",
   installCommand: `extensions install ${manifest.id}`,

@@ -123,11 +123,11 @@ test("command contract marks representative routing correctly", () => {
 test("typed generic C# registry registrations are extracted from executable code", () => {
   const source = `
     registry.Register<UnityCli.Protocol.BridgeRequest>(
-      "context.read", "context", false, 30000, ContextRead);
-    RegisterCommand(registry, "context.list", "context", false, ContextList);
+      "project-tool.run", "project-tool", false, 30000, ProjectToolRun);
+    RegisterCommand(registry, "runtime-tool.list", "runtime-tool", false, RuntimeToolList);
   `;
 
-  assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source), ["context.list", "context.read"]);
+  assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source), ["project-tool.run", "runtime-tool.list"]);
 });
 
 test("missing typed generic C# registry registration is reported by extraction", () => {
@@ -139,7 +139,7 @@ test("missing typed generic C# registry registration is reported by extraction",
 test("C# registry extraction ignores similar comments and strings", () => {
   const source = `
     // registry.Register<UnityCli.Protocol.BridgeRequest>("runtime-tool.run", "runtime-tool", false, 60000, RuntimeToolRun);
-    var example = "RegisterCommand(registry, \\\"context.read\\\")";
+    var example = "RegisterCommand(registry, \\\"project-tool.run\\\")";
     /* RegisterCommand(registry, "project-tool.run", "project-tool", false, ProjectToolRun); */
   `;
 
@@ -147,8 +147,8 @@ test("C# registry extraction ignores similar comments and strings", () => {
 });
 
 test("registered C# command inventory agrees with command contracts", async () => {
-  // editor.state 是 TS-owned Context；Unity 只注册不可发现的私有快照命令。
-  assert.deepEqual([...PRIVATE_BRIDGE_COMMANDS].sort(), ["internal.asset.refresh.start", "internal.asset.refresh.status", "internal.build.run.start", "internal.editor.compile.start", "internal.editor.compile.status", "internal.editor.refresh.start", "internal.editor.refresh.status", "internal.editor.state.snapshot", "internal.package.embed.start", "internal.package.embed.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.fail", "internal.package.files.prove", "internal.package.resolve.start", "internal.package.resolve.status", "internal.test.run.start", "internal.test.run.status"]);
+  // editor.state 是 TS-owned Tool；Unity 只注册不可发现的私有快照命令。
+  assert.deepEqual([...PRIVATE_BRIDGE_COMMANDS].sort(), ["internal.asset.refresh.start", "internal.asset.refresh.status", "internal.build.run.start", "internal.editor.compile.start", "internal.editor.compile.status", "internal.editor.refresh.start", "internal.editor.refresh.status", "internal.editor.state.snapshot", "internal.navmesh.bake.cancel", "internal.navmesh.bake.plan", "internal.navmesh.bake.snapshot", "internal.navmesh.bake.start", "internal.navmesh.bake.status", "internal.package.embed.start", "internal.package.embed.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.fail", "internal.package.files.prove", "internal.package.resolve.start", "internal.package.resolve.status", "internal.test.run.start", "internal.test.run.status"]);
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
   const csharpCommands = await registeredCsharpCommands(editorUrl);
   const extensionCsharpCommands = await registeredExtensionCsharpCommands();

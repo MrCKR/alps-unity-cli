@@ -1,6 +1,6 @@
 # 工具发现（Tool Discovery）
 
-`unity_cli` 的 Tool/Context 目录属于一个已连接 Unity 实例。没有连接实例时，discovery 返回稳定 instance error，不返回静态或空目录。
+`unity_cli` 的 Tool 目录属于一个已连接 Unity 实例。没有连接实例时，discovery 返回稳定 instance error，不返回静态或空目录。
 
 ## 实例绑定
 
@@ -9,12 +9,11 @@
 ```powershell
 unity_cli instances list
 unity_cli tools group --instance <id|projectPath|alias>
-unity_cli context list --instance <id|projectPath|alias>
 ```
 
 本文示例省略 `--instance` 时，默认命令运行在目标 Unity 项目 CWD。
 
-## 推荐发现流程
+## 推荐流程
 
 ```text
 tools group
@@ -23,11 +22,7 @@ tools group
     -> tools run <tool> --input '<json>'
 ```
 
-不确定分组时使用：
-
-```powershell
-unity_cli tools search <keyword>
-```
+不确定分组时使用 `unity_cli tools search <keyword>`。
 
 ### `tools group`
 
@@ -47,7 +42,7 @@ unity_cli tools group list camera
 unity_cli tools group list probuilder --instance my-project
 ```
 
-分组名称必须来自当前实例的 `tools group` 输出，不要假设项目能力都位于 `custom` 分组。
+分组名称必须来自当前实例的`tools group`输出，不要假设项目能力都位于`custom`分组。`tools group list`返回`nameSemantics.exact=true`与`groupPrefix=false`：每个`tools[].name`已经是完整精确调用名，group只用于筛选，绝不能拼到name前。
 
 ### `tools search`
 
@@ -84,36 +79,17 @@ unity_cli tools describe camera.screenshot
 
 ## 完整目录语义
 
-一个已连接实例的 catalog 同时包含：
+一个已连接实例的 catalog 同时包含 package 内置能力、已安装 Extension 能力、项目 `IUnityCliTool<TReq,TRes>` 能力，以及 Editor、Runtime 和 package-local Tool。动作与读取能力都使用同一 `tools group/list/search/describe/run` 路径；读取型 Tool 通过无副作用 descriptor 明确其边界。
 
-- package 内置能力；
-- 已安装 Extension 能力；
-- 项目通过 `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 注册的能力；
-- Editor 与 Runtime 能力；
-- package-local CLI Tool 和 CLI 聚合 Context。
-
-所有能力使用同一 `tools group/list/search/describe/run` 或 `context list/search/describe/read` 路径。目录不按 source、EditMode/PlayMode 或当前可执行性过滤。当前不可执行的能力仍显示，由 descriptor 和执行错误说明原因。
-
-静态 capability snapshot 只供 package 生成、contract 和审计，不进入公开 discovery。
-
-## Context 发现
-
-```powershell
-unity_cli context list
-unity_cli context search <keyword>
-unity_cli context describe <context>
-unity_cli context read <context> --input '<json>'
-```
-
-Context 同样读取当前实例完整目录。Tool 目录只通过 `tools` discovery 读取，不通过 Context 提供重复入口。
+目录不按 source、EditMode/PlayMode 或当前可执行性过滤。当前不可执行的能力仍显示，由 descriptor 和执行错误说明原因。静态 capability snapshot 只供 package 生成、contract 和审计，不进入公开 discovery。
 
 ## AI Agent 工作流
 
 1. 用 `instances list` 确认 canonical project identity，或切换到目标 Unity 项目 CWD。
-2. 用 `tools group` / `context list` 读取当前实例目录。
-3. 用 `group list`、`search` 缩小范围。
-4. 用 `describe` 获取 schema、状态约束、副作用和示例。
-5. 用 `tools run` 或 `context read` 调用同一名称。
+2. 用 `tools group` 读取当前实例目录。
+3. 用 `tools group list`、`tools search` 缩小范围。
+4. 用 `tools describe` 获取 schema、状态约束、副作用和示例。
+5. 用 `tools run` 调用同一名称。
 6. 安装 Package、安装 Extension、domain reload 或切换 PlayMode 后重新 discovery。
 
 ## 错误处理
@@ -122,6 +98,6 @@ Context 同样读取当前实例完整目录。Tool 目录只通过 `tools` disc
 - `E_INSTANCE_NOT_FOUND`：显式 selector 无法解析。
 - `E_INSTANCE_NOT_RUNNING`：目标 identity 已确定，但 Unity Editor 未连接。
 - `E_INSTANCE_CONFLICT`：同一项目存在多个或不可唯一证明的 Editor claim。
-- `E_TOOL_REGISTRY_UNHEALTHY` / `E_CONTEXT_REGISTRY_UNHEALTHY`：实例 catalog 有 malformed、重复或 ownership 冲突；修复 registry 后重新发现。
-- `E_TOOL_NOT_FOUND_FOR_TARGET` / `E_CONTEXT_NOT_FOUND`：名称不属于当前实例目录；重新 discovery。
+- `E_TOOL_REGISTRY_UNHEALTHY`：实例 catalog 有 malformed、重复或 ownership 冲突；修复 registry 后重新发现。
+- `E_TOOL_NOT_FOUND_FOR_TARGET`：名称不属于当前实例目录；重新 discovery。
 - `E_RUNTIME_NOT_READY`：Runtime Tool 已显示，但执行需要稳定 PlayMode。

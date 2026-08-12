@@ -10,7 +10,7 @@ export function stripBom(text: string): string {
 
 /**
  * 关键词搜索打分：完全匹配 > 前缀匹配 > 包含匹配 > 无。
- * 用于 tools/context 等发现类命令的排序。
+ * 用于Tool discovery等稳定公开列表的排序。
  */
 export function scoreSearch(text: string, query: string): number {
   if (text === query) return 8;

@@ -6,8 +6,6 @@
  * Transport endpoint and listener identity remain internal to instance selection.
  */
 
-import { builtinContextDescriptors, loadContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
-import type { ContextDescriptor } from "./contexts/types.js";
 import { getString } from "./args.js";
 import { access, stat } from "node:fs/promises";
 import { discoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
@@ -22,7 +20,7 @@ import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
-export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime, ContextCatalogRuntime {
+export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime {
   dataDir: string;
 }
 
@@ -95,16 +93,7 @@ export async function handleDoctorCommand(
   // Extension package availability comes from physical project state.
   checks.push(await checkExtensionAvailability(flags, runtime));
 
-  // Built-in and project Context discovery diagnostics.
-  checks.push(await checkContextDiscovery(flags, runtime, bridgeReachable));
   checks.push(checkExtensionRegistry());
-  checks.push(await checkProjectContextDiscovery(flags, runtime, requestId, bridgeReachable));
-
-  // Custom context fingerprint diagnostics.
-  const contextFingerprintCheck = checkContextFingerprintStatus(checks);
-  if (contextFingerprintCheck) {
-    checks.push(contextFingerprintCheck);
-  }
 
   const allPassed = checks.every((c) => c.status === "pass");
   const hasWarnings = checks.some((c) => c.status === "warn");
@@ -359,92 +348,6 @@ async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, ru
   };
 }
 
-async function checkProjectContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string, bridgeReachable: boolean): Promise<DoctorCheck> {
-  if (!bridgeReachable && runtime.projectContexts === undefined) {
-    return {
-      name: "project_context_discovery",
-      status: "warn",
-      message: "Context discovery is unavailable because no Unity instance is connected.",
-      details: { mode: "unavailable", contextCount: 0 }
-    };
-  }
-
-  const discovery = await loadContextCatalog(flags, runtime, `${requestId}_context`);
-  if (!discovery.ok) {
-    return {
-      name: "project_context_discovery",
-      status: "warn",
-      message: `Context discovery failed: ${discovery.error?.code ?? "unknown"} — ${discovery.error?.message ?? "no message"}`,
-      details: { mode: "error", projectCustomCount: 0, builtInCount: 0, errorCode: discovery.error?.code, errorMessage: discovery.error?.message }
-    };
-  }
-
-  // Count categories from project custom contexts
-  const liveContexts = discovery.contexts.filter((context) => !builtinContextDescriptors().some((local) => local.name === context.name));
-  const projectContexts = liveContexts.filter((context) => context.source === "project");
-  const categories = [...new Set(projectContexts.map((context) => context.category))];
-  const conflictCount = countContextConflicts(discovery.contexts);
-  const unavailableCount = liveContexts.filter((context) => context.available === false).length;
-  const builtInCount = liveContexts.filter((context) => context.source === "built-in").length;
-
-  const status: DoctorCheck["status"] = conflictCount > 0 || unavailableCount > 0 ? "warn" : "pass";
-  return {
-    name: "project_context_discovery",
-    status,
-    message: status === "pass"
-      ? `Context discovery available: ${builtInCount} built-in, ${projectContexts.length} project custom (mode: bridge).`
-      : `Context discovery available: ${builtInCount} built-in, ${projectContexts.length} project custom, but ${unavailableCount} unavailable, ${conflictCount} conflict(s) (mode: bridge).`,
-    details: { mode: discovery.live ? "bridge" : "skipped", builtInCount, projectCustomCount: projectContexts.length, categories, unavailableCount, conflictCount }
-  };
-}
-
-function countContextConflicts(contexts: ContextDescriptor[]): number {
-  // Count project contexts that were rejected due to name collision with built-in
-  // (This is a structural check — in discoverProjectContexts, duplicates are already filtered,
-  // so we count how many project contexts have names matching built-in names in the raw set)
-  const names: Map<string, number> = new Map();
-  for (const c of contexts) {
-    names.set(c.name, (names.get(c.name) ?? 0) + 1);
-  }
-  let conflicts = 0;
-  for (const [name, count] of names) {
-    if (count > 1) conflicts++;
-  }
-  return conflicts;
-}
-
-function checkContextFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
-  // Check bridge response for custom context fingerprint data
-  const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
-  const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
-  if (!bridgeResponse || typeof bridgeResponse !== "object") {
-    return undefined;
-  }
-
-  const customContexts = (bridgeResponse as { customContexts?: unknown }).customContexts;
-  if (!customContexts || typeof customContexts !== "object") {
-    return undefined;
-  }
-
-  const fingerprint = (customContexts as { fingerprint?: unknown }).fingerprint;
-  if (!fingerprint || typeof fingerprint !== "object") {
-    return undefined;
-  }
-
-  const blockedCount = numberProp(fingerprint, "blockedCount") ?? 0;
-  const contextCount = numberProp(fingerprint, "contextCount") ?? 0;
-
-  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : "pass";
-  return {
-    name: "project_context_fingerprint",
-    status,
-    message: status === "pass"
-      ? `Custom context fingerprints match for ${contextCount} context(s).`
-      : `Custom context fingerprints are blocked for ${blockedCount} of ${contextCount} context(s).`,
-    details: { fingerprint }
-  };
-}
-
 async function checkConfigIntegrity(readyInstances: UnityInstance[]): Promise<DoctorCheck> {
   const issues: string[] = [];
 
@@ -568,44 +471,6 @@ async function checkExtensionAvailability(flags: Record<string, string | boolean
   };
 }
 
-async function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, bridgeReachable: boolean): Promise<DoctorCheck> {
-  const contexts = builtinContextDescriptors();
-  const localCount = contexts.length;
-  const liveDiscoveryEnabled = runtime.projectContexts !== undefined || bridgeReachable;
-  if (localCount === 0) {
-    return {
-      name: "context_discovery",
-      status: "warn",
-      message: "No local TS-owned context descriptors registered.",
-      details: { localCount, liveDiscoveryEnabled }
-    };
-  }
-
-  // Verify all local TS-owned contexts have the public descriptor fields required for discovery.
-  const missingDescription = contexts.filter((c) => !c.description);
-  const missingOutputSchema = contexts.filter((c) => !c.outputSchema);
-
-  const warnings: string[] = [];
-  if (missingDescription.length > 0) warnings.push(`${missingDescription.length} context(s) missing description`);
-  if (missingOutputSchema.length > 0) warnings.push(`${missingOutputSchema.length} context(s) missing outputSchema`);
-
-  if (warnings.length > 0) {
-    return {
-      name: "context_discovery",
-      status: "warn",
-      message: `TS Context registry contains ${localCount} descriptor(s), but ${warnings.join("; ")}.`,
-      details: { localCount, liveDiscoveryEnabled, warnings }
-    };
-  }
-
-  return {
-    name: "context_discovery",
-    status: "pass",
-    message: `TS Context registry is healthy: ${localCount} descriptor(s)${liveDiscoveryEnabled ? "; live instance discovery is connected" : "; no live instance is connected"}.`,
-    details: { localCount, liveDiscoveryEnabled }
-  };
-}
-
 function checkExtensionRegistry(): DoctorCheck {
   const extensions = builtinExtensionMetadata();
   const installed = extensions.filter((e) => e.status === "installed").length;
@@ -641,14 +506,6 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "project_tool_fingerprint":
           suggestions.push("Inspect unity_cli doctor fingerprint details, then review project tool descriptor/handler code changes.");
           suggestions.push("Apply the reported rePinValue only after accepting the exact Tool change.");
-          break;
-        case "project_context_fingerprint":
-          suggestions.push("Run unity_cli context list to inspect the connected instance Context descriptors and fingerprints.");
-          suggestions.push("Apply the reported rePinValue only after accepting the exact Context change.");
-          break;
-        case "context_discovery":
-          suggestions.push("Connect the target Unity instance, then run unity_cli context list to see its complete Context catalog.");
-          suggestions.push("Run unity_cli context describe <name> or context read <name> to inspect a specific context.");
           break;
         case "data_directory":
           suggestions.push("Run any unity_cli command to auto-create the data directory.");

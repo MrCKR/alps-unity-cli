@@ -12,13 +12,17 @@ const PREFAB_COMMANDS = [
   "prefab.info",
   "prefab.instantiate",
   "prefab.modify",
+  "prefab.overrides.apply",
+  "prefab.overrides.revert",
+  "prefab.stage",
   "prefab.stage-close",
   "prefab.stage-open",
   "prefab.stage-save",
-  "prefab.unpack"
+  "prefab.unpack",
+  "prefab.variant.create"
 ];
 
-test("prefab group is contract-discovered with 9 tools", () => {
+test("prefab group is contract-discovered with 13 tools", () => {
   assert.deepEqual(contractToolNames("prefab"), [...PREFAB_COMMANDS].sort());
 });
 
@@ -63,6 +67,9 @@ test("bridge specs resolve for prefab tools", () => {
     info: "prefab.info",
     create: "prefab.create",
     modify: "prefab.modify",
+    "overrides-apply": "prefab.overrides.apply",
+    "overrides-revert": "prefab.overrides.revert",
+    "variant-create": "prefab.variant.create",
     "stage-open": "prefab.stage-open",
     "stage-save": "prefab.stage-save",
     "stage-close": "prefab.stage-close",
@@ -112,5 +119,7 @@ test("prefab bridge spec forwards structured --input fields", async () => {
   assert.match(spec, /stringField\(flags, "addChild"\)/, "bridge should forward structured addChild");
   assert.match(spec, /stringField\(flags, "removeChild"\)/, "bridge should forward structured removeChild");
   assert.doesNotMatch(spec, /boolField\(flags, "save"\)/, "stage-close must not expose implicit save behavior");
+  assert.match(spec, /instance: positionalTarget \?\? stringFlag\(flags, "instance"\) \?\? stringField\(flags, "instance"\)/, "bridge should preserve override instance identity");
+  assert.match(spec, /base: positionalTarget \?\? stringFlag\(flags, "base"\) \?\? stringField\(flags, "base"\)/, "bridge should preserve variant base identity");
   assert.match(spec, /numberField\(flags, "pageSize"\)/, "bridge should forward structured pageSize");
 });

@@ -3,10 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 
-const resultRoots = [
-  "unitypkg/Editor/Tools",
-  "unitypkg/Editor/Contexts",
-];
+const resultRoots = ["unitypkg/Editor/Tools"];
 
 // 递归读取受公开 Result DTO 约束的 C# 源文件。
 async function readCSharpFiles(directory: string): Promise<Array<{ path: string; source: string }>> {
@@ -39,7 +36,7 @@ function resultTypes(source: string): Array<{ name: string; body: string }> {
   return types;
 }
 
-test("public Tool and Context Result DTOs exclude generic execution and diagnostic fields", async () => {
+test("public Tool Result DTOs exclude generic execution and diagnostic fields", async () => {
   const extensions = (await readdir("extensions", { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => join("extensions", entry.name, "unitypkg"));

@@ -16,13 +16,11 @@ const publicDocs = [
   "docs/safety-boundaries.md",
   "skills/unity_cli/SKILL.md",
   "skills/unity_cli/references/custom-tools.md",
-  "skills/unity_cli/references/custom-contexts.md",
 ];
 
 test("stable session public docs contain only current identity and terminal semantics", async () => {
   const documents = await Promise.all(publicDocs.map(async (path) => ({ path, text: await readFile(join(root, path), "utf8") })));
   const forbidden = [
-    /tools run editor\.state/,
     /editor\.compile-diagnostics/,
     /waitReady/,
     /target (?:set|current|clear)/,
@@ -45,7 +43,7 @@ test("stable session public docs contain only current identity and terminal sema
   const readme = documents.find((document) => document.path === "README.md")!.text;
   const execution = documents.find((document) => document.path === "docs/tool-execution.md")!.text;
   const target = documents.find((document) => document.path === "docs/target-and-instance.md")!.text;
-  assert.match(readme, /context read editor\.state/);
+  assert.match(readme, /tools run editor\.state/);
   assert.match(execution, /E_EXECUTION_TIMEOUT/);
   assert.match(execution, /compile\.completed=true/);
   assert.match(target, /CanonicalPath v1/);

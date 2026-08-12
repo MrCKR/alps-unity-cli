@@ -24,9 +24,11 @@ function observer(outcome: "observed-empty" | "observed-blocked" | "unproven" | 
   } } as unknown as EditorBlockerObserver;
 }
 
-function selection(status: UnityInstanceStatus, generation = 1): InstanceSelection {
+function selection(status: UnityInstanceStatus, generation = 1, target: "editor" | "runtime" = "editor"): InstanceSelection {
   const session = {
-    editorSessionId: SESSION_ID,
+    target,
+    sessionId: SESSION_ID,
+    ...(target === "editor" ? { editorSessionId: SESSION_ID } : { runtimeSessionId: SESSION_ID, executablePath: process.execPath, buildId: "a".repeat(32) }),
     processId: 101,
     processStartedAt: "2026-07-16T00:00:00.000Z",
     lastHeartbeatAt: "2026-07-16T00:00:01.000Z",
@@ -57,11 +59,14 @@ function selection(status: UnityInstanceStatus, generation = 1): InstanceSelecti
     projectPath: "C:\\repo\\project",
     projectName: "project",
     status,
+    target,
     revision: generation,
     updatedAt: "2026-07-16T00:00:01.000Z",
     sessions: [session],
     activeSession: session,
-    editorSessionId: SESSION_ID,
+    allSessions: [session],
+    sessionId: SESSION_ID,
+    ...(target === "editor" ? { editorSessionId: SESSION_ID } : { runtimeSessionId: SESSION_ID }),
     processId: 101,
     lastHeartbeatAt: session.lastHeartbeatAt,
     lastUnitySnapshot: {},
@@ -73,10 +78,11 @@ function selection(status: UnityInstanceStatus, generation = 1): InstanceSelecti
   return { instance, matchedBy: "instanceId" };
 }
 
-function attestation(generation: number) {
+function attestation(generation: number, target: "editor" | "runtime" = "editor") {
   return {
+    target,
     instanceId: INSTANCE_ID,
-    editorSessionId: SESSION_ID,
+    sessionId: SESSION_ID,
     listenerId: `listener-${generation.toString(16).padStart(32, "0")}`,
     listenerGeneration: generation,
   };
@@ -123,13 +129,34 @@ test("supervisor consumes one absolute deadline and redelivers identical read by
     },
   });
 
-  const response = await supervisor.read({ requestId: "req_read", command: "context.read", input: { name: "scene.hierarchy" }, timeoutMs: 5_000 });
+  const response = await supervisor.read({ requestId: "req_read", command: "project-tool.run", input: { name: "scene.hierarchy" }, timeoutMs: 5_000 });
   assert.equal(response.ok, true);
   assert.equal(bodies.length, 2);
   assert.equal(bodies[0], bodies[1]);
   assert.match(bodies[0], /"absoluteDeadlineUtc":"1970-01-01T00:00:06.000Z"/);
   assert.ok(remaining[1] < remaining[0]);
   assert.ok(now < 6_000);
+});
+
+test("runtime-tool commands select only the development Player target", async () => {
+  const selectedTargets: string[] = [];
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => 10_000,
+    sleep: async () => undefined,
+    select: async (_flags, _dataDir, target) => {
+      selectedTargets.push(target);
+      return selection("ready", 1, target);
+    },
+    post: async (binding, request) => {
+      assert.equal(binding.target, "runtime");
+      assert.equal(binding.sessionId, SESSION_ID);
+      return { response: { ok: true, requestId: request.payload.requestId, data: { tools: [] } }, attestation: attestation(1, "runtime") };
+    },
+  });
+
+  const response = await supervisor.read({ requestId: "req_runtime_catalog", command: "runtime-tool.list", input: {} });
+  assert.equal(response.ok, true);
+  assert.deepEqual(selectedTargets, ["runtime"]);
 });
 
 test("caller absolute deadline is not truncated by the implicit execution default", async () => {
@@ -168,7 +195,7 @@ test("supervisor retains its execution default when no caller deadline exists", 
     },
   });
 
-  const response = await supervisor.read({ requestId: "req_default_deadline", command: "context.read", input: {} });
+  const response = await supervisor.read({ requestId: "req_default_deadline", command: "project-tool.run", input: {} });
   assert.equal(response.ok, true);
 });
 
@@ -193,7 +220,7 @@ test("query transport recovery rebinds generation without rebuilding request", a
     },
   });
 
-  const response = await supervisor.read({ requestId: "req_rebind", command: "context.read", input: {}, timeoutMs: 2_000 });
+  const response = await supervisor.read({ requestId: "req_rebind", command: "project-tool.run", input: {}, timeoutMs: 2_000 });
   assert.equal(response.ok, true);
   assert.deepEqual(bodies, [bodies[0], bodies[0]]);
   assert.equal(now, 10_100);
@@ -267,7 +294,7 @@ test("initial selector is bounded by the immutable deadline", async () => {
   });
   const startedAt = Date.now();
   await assert.rejects(
-    supervisor.execute({ requestId: "req_selector_timeout", command: "context.read", input: {}, timeoutMs: 30, mutation: false }),
+    supervisor.execute({ requestId: "req_selector_timeout", command: "project-tool.run", input: {}, timeoutMs: 30, mutation: false }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
   assert.ok(Date.now() - startedAt < 250);
@@ -306,7 +333,7 @@ test("successful direct response performs zero Windows blocker observations", as
     observer: observer("observed-empty", calls),
     post: async (_binding, request) => ({ response: { ok: true, requestId: request.payload.requestId, data: { done: true } }, attestation: attestation(1) }),
   });
-  const result = await supervisor.read({ requestId: "req_zero_observer", command: "context.read", input: {}, timeoutMs: 500 });
+  const result = await supervisor.read({ requestId: "req_zero_observer", command: "project-tool.run", input: {}, timeoutMs: 500 });
   assert.equal(result.ok, true);
   assert.equal(calls.value, 0);
 });
@@ -321,7 +348,7 @@ test("read transport failure returns observed blocker in the same error", async 
     post: async () => { throw new Error("modal blocked main thread"); },
   });
   await assert.rejects(
-    supervisor.read({ requestId: "req_read_blocker", command: "context.read", input: {}, timeoutMs: 500 }),
+    supervisor.read({ requestId: "req_read_blocker", command: "project-tool.run", input: {}, timeoutMs: 500 }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_UNITY_BLOCKED"
       && Array.isArray(error.details?.blockers) && error.details.blockers.length === 1,
   );
@@ -399,7 +426,7 @@ test("observeNow binds and posts once during a transitioning session without wai
     },
   });
 
-  const result = await supervisor.observeNow({ requestId: "req_observe", command: "context.read", input: { name: "editor.state" }, timeoutMs: 99_000 });
+  const result = await supervisor.observeNow({ requestId: "req_observe", command: "project-tool.run", input: { name: "editor.state" }, timeoutMs: 99_000 });
   assert.equal(result.ok, true);
   assert.equal(sleeps, 0);
   assert.equal(posts, 1);
@@ -425,7 +452,7 @@ test("observeNow freezes the caller absolute deadline after selector time is con
 
   const result = await supervisor.observeNow({
     requestId: "req_observe_deadline",
-    command: "context.read",
+    command: "project-tool.run",
     input: {},
     observationAbsoluteDeadlineMs: 50_500,
   });
@@ -451,8 +478,8 @@ test("observeNow preserves an already-consumed supplied budget and does not POST
   });
 
   await assert.rejects(
-    supervisor.observeNow({ requestId: "req_observe_expired", command: "context.read", input: {}, timeoutMs: 50 }),
-    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_CONTEXT_READ_TIMEOUT",
+    supervisor.observeNow({ requestId: "req_observe_expired", command: "project-tool.run", input: {}, timeoutMs: 50 }),
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
   assert.equal(posts, 0);
   assert.ok(Date.now() - startedAt < 150);
@@ -470,8 +497,8 @@ test("injected observeNow freezes the selected real instance and caps a suspende
     },
   });
   await assert.rejects(
-    supervisor.observeNow({ requestId: "req_injected_timeout", command: "context.read", input: {} }),
-    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_CONTEXT_READ_TIMEOUT",
+    supervisor.observeNow({ requestId: "req_injected_timeout", command: "project-tool.run", input: {} }),
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
   assert.equal(selected, 1);
   assert.ok(Date.now() - startedAt < 4_000);
@@ -487,7 +514,7 @@ test("observeNow does not POST for offline or conflict observations", async () =
       selectObservation: async () => selection(status, 1),
       post: async () => { posts += 1; throw new Error("must not post"); },
     });
-    await assert.rejects(() => supervisor.observeNow({ requestId: `req_${status}`, command: "context.read", input: {} }), SessionSupervisorError);
+    await assert.rejects(() => supervisor.observeNow({ requestId: `req_${status}`, command: "project-tool.run", input: {} }), SessionSupervisorError);
     assert.equal(posts, 0);
   }
 });
@@ -543,7 +570,7 @@ test("durable transition status uses the health-independent selector", async () 
 
 test("durable roots and root-bound controls retain one immutable deadline and permit only the private allowlist", async () => {
   let now = 10_000;
-  const commands = ["internal.editor.refresh.start", "internal.editor.refresh.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.prove", "internal.package.files.fail"];
+  const commands = ["internal.editor.refresh.start", "internal.editor.refresh.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.prove", "internal.package.files.fail", "internal.navmesh.bake.start", "internal.navmesh.bake.status", "internal.navmesh.bake.plan", "internal.navmesh.bake.snapshot", "internal.navmesh.bake.cancel"];
   for (const command of commands) {
     const bodies: string[] = [];
     const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
@@ -555,7 +582,8 @@ test("durable roots and root-bound controls retain one immutable deadline and pe
         return { response: { ok: true, requestId: request.payload.requestId, data: {} }, attestation: attestation(1) };
       },
     });
-    const response = await supervisor.execute({ requestId: `req_${command}`, command, input: {}, mutation: !command.endsWith("status"), absoluteDeadlineMs: 20_000, timeoutMs: 50_000, allowTransitionBinding: true });
+    const readOnly = command.endsWith("status") || command.endsWith("plan") || command.endsWith("snapshot");
+    const response = await supervisor.execute({ requestId: `req_${command}`, command, input: {}, mutation: !readOnly, absoluteDeadlineMs: 20_000, timeoutMs: 50_000, allowTransitionBinding: true });
     assert.equal(response.ok, true);
     assert.match(bodies[0]!, /"absoluteDeadlineUtc":"1970-01-01T00:00:20.000Z"/);
   }

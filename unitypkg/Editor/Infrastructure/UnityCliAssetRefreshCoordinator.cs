@@ -38,6 +38,30 @@ namespace UnityCli
                         throw new BridgeCommandException("E_ASSET_REFRESH_PROOF_MISSING", "asset.refresh requires one asset path because whole-database refresh has no attributable completion proof.", "Pass an Assets/* path to reimport one observable asset.");
                     if (EditorApplication.isPlaying || IsPlayModeChanging()) throw new BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "asset.refresh is editor-only and requires stable Edit Mode.");
                 }
+                protected override void ValidateLoadedRoot(Dictionary<string, object> root)
+                {
+                    ValidateRootContract(root, new[] { "path", "options", "beforeHash", "reloadObserved", "rootContractDigest" }, "queued", "dispatched", "waiting_stable");
+                    var path = Text(root, "path");
+                    ImportAssetOptions options;
+                    object beforeHash;
+                    if (string.IsNullOrWhiteSpace(path) || !path.StartsWith("Assets/", StringComparison.Ordinal)
+                        || !Enum.TryParse(Text(root, "options"), out options)
+                        || !root.TryGetValue("beforeHash", out beforeHash)
+                        || beforeHash != null && !IsSha256(beforeHash as string))
+                        throw new InvalidDataException("Asset refresh active root fields are invalid.");
+                    if (!string.Equals(Text(root, "rootContractDigest"), AssetRefreshRootContractDigest(root), StringComparison.Ordinal))
+                        throw new InvalidDataException("Asset refresh immutable root contract changed.");
+                    var phase = Text(root, "phase");
+                    var fenced = HasExactEffectFence("asset-refresh", root, "asset-import");
+                    if ((phase == "queued" || phase == "dispatched") == fenced)
+                        throw new InvalidDataException("Asset refresh effect fence is inconsistent with phase.");
+                }
+
+                private static string AssetRefreshRootContractDigest(Dictionary<string, object> root)
+                {
+                    return UnityCliSerializer.Sha256Canonical(new Dictionary<string, object> { { "path", root["path"] }, { "options", root["options"] }, { "beforeHash", root["beforeHash"] } });
+                }
+
                 protected override object Planned(object value)
                 {
                     var args = (Args)value; var path = args.Path ?? args.AssetPath ?? args.Target; var options = Options(args);
@@ -46,7 +70,9 @@ namespace UnityCli
                 protected override Dictionary<string, object> CreateRoot(BridgeRequest request, string digest, object value)
                 {
                     var args = (Args)value; var path = AssetToolSupport.RequireAssetPath(args.Path ?? args.AssetPath ?? args.Target); var fullPath = AssetToolSupport.AssetFullPath(path);
-                    return new Dictionary<string, object> { { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc }, { "phase", "queued" }, { "path", path }, { "options", Options(args).ToString() }, { "beforeHash", File.Exists(fullPath) ? FileSha256(fullPath) : null } };
+                    var root = new Dictionary<string, object> { { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc }, { "phase", "queued" }, { "path", path }, { "options", Options(args).ToString() }, { "beforeHash", File.Exists(fullPath) ? FileSha256(fullPath) : null } };
+                    root["rootContractDigest"] = AssetRefreshRootContractDigest(root);
+                    return root;
                 }
                 protected override void OnTick(Dictionary<string, object> root)
                 {
@@ -54,8 +80,8 @@ namespace UnityCli
                     if (phase == "queued") { if (BusyEditor()) return; Update(x => x["phase"] = "dispatched"); return; }
                     if (phase == "dispatched")
                     {
-                        // ImportAsset 可能在返回前触发 domain reload；必须先落盘，避免重载后重复执行副作用。
-                        Update(x => x["phase"] = "waiting_stable");
+                        // ImportAsset 可能在返回前触发 domain reload；fence与post phase确认后才调用effect。
+                        root = CrossEffectFence(root, "asset-import", "waiting_stable");
                         try { AssetDatabase.ImportAsset(Text(root, "path"), (ImportAssetOptions)Enum.Parse(typeof(ImportAssetOptions), Text(root, "options"))); }
                         catch (Exception exception) { Fail(root, "E_ASSET_REFRESH_PROOF_MISSING", "The reimported asset could not be dispatched: " + exception.Message); }
                         return;

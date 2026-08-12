@@ -1,5 +1,5 @@
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
-import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolHandler, type ToolMetadata, type ToolSupportStatus } from "./tools/metadata/index.js";
+import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolContractProfile, type ToolHandler, type ToolMetadata, type ToolSupportStatus } from "./tools/metadata/index.js";
 import { failure } from "./output.js";
 import type { CliResult } from "./types.js";
 import type { AnyJson } from "./schema/any-json.js";
@@ -51,9 +51,11 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
   const target = toolTargetProp(descriptor, "target");
   const availabilityScope = availabilityScopeProp(descriptor, "availabilityScope");
   const completionContract = completionContractProp(descriptor, "completionContract");
+  const contractProfile = toolContractProfileProp(descriptor, "contractProfile");
   const examples = inputSchema ? toolExamplesProp(descriptor, "examples", name, inputSchema) : undefined;
   if (!summary || !description || !group || !inputSchema || !outputSchema || destructiveHint === undefined
-      || supportsDryRun === undefined || !playModeSupport || !target || !availabilityScope || !completionContract || !examples) return undefined;
+      || supportsDryRun === undefined || !playModeSupport || !target || !availabilityScope || !completionContract || !contractProfile || !examples
+      || officialAttributeContractInvalidFields(descriptor).length > 0) return undefined;
   return ensureProjectToolDefaults({
     name,
     summary,
@@ -75,9 +77,28 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     available: booleanProp(descriptor, "available") ?? undefined,
     unavailableReason: stringProp(descriptor, "unavailableReason"),
     source: toolSourceProp(descriptor, "source"),
+    contractProfile,
     liveDescriptorFingerprint: stringProp(descriptor, "internalDescriptorFingerprint"),
     completionContract
   });
+}
+
+/** 返回 descriptor 公开字段级诊断，不回显 schema/example/内部值。 */
+function projectDescriptorInvalidFields(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return ["descriptor"];
+  const descriptor = value as Record<string, unknown>;
+  const name = stringProp(descriptor, "name");
+  const inputSchema = objectProp(descriptor, "inputSchema");
+  const checks: Array<[string, boolean]> = [
+    ["name", !!name], ["summary", !!stringProp(descriptor, "summary")], ["description", !!stringProp(descriptor, "description")],
+    ["group", !!stringProp(descriptor, "group")], ["inputSchema", !!inputSchema], ["outputSchema", !!objectProp(descriptor, "outputSchema")],
+    ["destructiveHint", booleanProp(descriptor, "destructiveHint") !== undefined], ["supportsDryRun", booleanProp(descriptor, "supportsDryRun") !== undefined],
+    ["playModeSupport", !!playModeSupportProp(descriptor, "playModeSupport")], ["target", !!toolTargetProp(descriptor, "target")],
+    ["availabilityScope", !!availabilityScopeProp(descriptor, "availabilityScope")], ["completionContract", !!completionContractProp(descriptor, "completionContract")],
+    ["contractProfile", !!toolContractProfileProp(descriptor, "contractProfile")],
+    ["examples", !!(name && inputSchema && toolExamplesProp(descriptor, "examples", name, inputSchema))],
+  ];
+  return [...new Set([...checks.filter(([, valid]) => !valid).map(([field]) => field), ...officialAttributeContractInvalidFields(descriptor)])];
 }
 
 function ensureProjectToolDefaults(tool: ToolMetadata): ResolvedToolMetadata {
@@ -124,6 +145,46 @@ function availabilityScopeProp(record: Record<string, unknown>, key: string): st
   return value === "always" || value === "projectFiles" || value === "editorSession" || value === "playModeSession" ? value : undefined;
 }
 
+function toolContractProfileProp(record: Record<string, unknown>, key: string): ToolContractProfile | undefined {
+  const value = record[key];
+  return value === "native" || value === "official-attribute" ? value : undefined;
+}
+
+/** official-attribute 是 sealed 保守档位，live descriptor 不得弱化任一风险或完成字段。 */
+function officialAttributeContractInvalidFields(descriptor: Record<string, unknown>): string[] {
+  if (descriptor.contractProfile !== "official-attribute") return [];
+  const invalid = new Set<string>();
+  const sideEffects = stringArrayProp(descriptor, "sideEffects");
+  const permissions = stringArrayProp(descriptor, "permissions");
+  const requiresPackages = stringArrayProp(descriptor, "requiresPackages");
+  const completion = completionContractProp(descriptor, "completionContract");
+  const playModeSupport = playModeSupportProp(descriptor, "playModeSupport");
+  const availabilityScope = availabilityScopeProp(descriptor, "availabilityScope");
+  if (!stringProp(descriptor, "name")?.startsWith("UnityPipeline_")) invalid.add("name");
+  if (descriptor.group !== "UnityPipeline") invalid.add("group");
+  if (descriptor.destructiveHint !== true) invalid.add("destructiveHint");
+  if (descriptor.supportsDryRun !== false) invalid.add("supportsDryRun");
+  if (!sideEffects || sideEffects.length !== 1 || sideEffects[0] !== "arbitrary-method-invocation") invalid.add("sideEffects");
+  if (!permissions || permissions.length !== 1 || permissions[0] !== "execute-user-code") invalid.add("permissions");
+  if ("requiresPackages" in descriptor && (!requiresPackages || requiresPackages.length !== 0)) invalid.add("requiresPackages");
+  if (descriptor.source !== "project") invalid.add("source");
+  if (descriptor.target !== "editor") invalid.add("target");
+  if (!(playModeSupport === "unknown" || playModeSupport === "runtime-only")) invalid.add("playModeSupport");
+  if ((playModeSupport === "runtime-only" && availabilityScope !== "playModeSession")
+      || (playModeSupport === "unknown" && availabilityScope !== "editorSession")) invalid.add("availabilityScope");
+  if (!completion
+      || completion.executionClass !== "external"
+      || completion.journalPolicy !== "required"
+      || completion.mutation !== true
+      || completion.completionPredicate !== "attributed-method-return-v1"
+      || completion.proofSource !== "official-attributed-method-return"
+      || completion.reloadPolicy !== "outcome-unknown-after-dispatch"
+      || completion.timeoutError !== "E_EXECUTION_TIMEOUT"
+      || completion.outcomeUnknownPolicy !== "method-may-still-be-running"
+      || completion.completionDriverId !== "official-method-return-v1") invalid.add("completionContract");
+  return [...invalid];
+}
+
 /** 读取 Unity descriptor 已给出的执行路由，避免 runtime 工具被误归类为普通 bridge。 */
 function toolHandlerProp(record: Record<string, unknown>, key: string): ToolHandler | undefined {
   const value = record[key];
@@ -155,7 +216,7 @@ function objectProp(record: Record<string, unknown>, key: string): Record<string
 
 function stringArrayProp(record: Record<string, unknown>, key: string): string[] | undefined {
   const value = record[key];
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+  return Array.isArray(value) && value.every((item): item is string => typeof item === "string") ? value : undefined;
 }
 
 /** 保留 live authoring 信息，并验证公开 argv 可直接调用同一个 Tool。 */
@@ -226,7 +287,16 @@ function parseBridgeToolCatalog(rawTools: unknown, requestId: string, command: s
   const tools: ResolvedToolMetadata[] = [];
   for (let index = 0; index < rawTools.length; index += 1) {
     const parsed = projectDescriptorToToolMetadata(rawTools[index]);
-    if (!parsed) return unhealthyToolCatalog(requestId, `${command} tools[${index}] is not a complete Tool descriptor.`, { index });
+    if (!parsed) {
+      const name = rawTools[index] && typeof rawTools[index] === "object" && !Array.isArray(rawTools[index])
+        ? (rawTools[index] as Record<string, unknown>).name
+        : undefined;
+      return unhealthyToolCatalog(requestId, `${command} tools[${index}] is not a complete Tool descriptor.`, {
+        index,
+        ...(typeof name === "string" ? { name } : {}),
+        invalidFields: projectDescriptorInvalidFields(rawTools[index]),
+      });
+    }
     tools.push(parsed);
   }
   const duplicates = [...new Set(tools.map((tool) => tool.name).filter((name, index, names) => names.indexOf(name) !== index))].sort();

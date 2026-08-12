@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getBoolean, getString } from "../args.js";
 import {
@@ -11,12 +11,10 @@ import {
 } from "../bridge/index.js";
 import { failure, success } from "../output.js";
 import { PackageManagerError } from "../package-manager.js";
-import { instanceSelectionFailure, selectInstanceForFlags, selectObservationInstanceForFlags } from "../instances.js";
+import { instanceSelectionFailure, selectInstanceForFlags, selectObservationInstanceForFlags, type InstanceSelection } from "../instances.js";
 import { EditorBlockerObserver, sanitizeEditorBlockers } from "../editor-blocker-observer.js";
 import { defaultDataDir } from "../platform.js";
-import type { ContextCatalogRuntime } from "../contexts/catalog.js";
 import type { ProjectToolRuntime } from "../project-tool-discovery.js";
-import type { ContextDescriptor } from "../project-context-discovery.js";
 import { validateSchema } from "../schema/validator.js";
 import type { CliResult } from "../types.js";
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../extension-availability.js";
@@ -26,7 +24,7 @@ import { findDefineTool, type ToolContext } from "./define.js";
 import { StructuredToolError } from "./errors.js";
 import { EXTENSION_GROUPS, findToolByName, toolIsMutation, type ToolMetadata } from "./metadata/index.js";
 
-export type ToolsRuntime = ProjectToolRuntime & ContextCatalogRuntime & Partial<BridgeRuntime> & {
+export type ToolsRuntime = ProjectToolRuntime & Partial<BridgeRuntime> & {
   dataDir?: string;
   fetch?: (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
 };
@@ -43,16 +41,28 @@ export async function dispatchTool(
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string,
-  seed: Record<string, unknown> = {}
+  seed: Record<string, unknown> = {},
+  resolvedTool?: ToolMetadata
 ): Promise<CliResult> {
   const dispatchStartedAtMs = Date.now();
   if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unity_cli tools group to see tool groups."]);
   const executionFlagError = validateExecutionTimeoutFlags(flags, requestId);
   if (executionFlagError) return executionFlagError;
 
-  const parsed = await parseTypedInput(flags, requestId);
+  const codeInputDeadlineMs = name === "code.exec"
+    ? dispatchStartedAtMs + (typeof flags["timeout-ms"] === "string" ? Number(flags["timeout-ms"]) : 60_000)
+    : undefined;
+  const parsed = await parseTypedInput(flags, requestId, name === "code.exec" ? 1024 * 1024 : undefined, codeInputDeadlineMs);
   if (!parsed.ok) return parsed.error;
   const dispatchFlags = withStructuredInput(flags, parsed.input);
+  // command入口已从同一次live catalog读取schema；直接使用该descriptor，避免二次发现改变绑定。
+  if (resolvedTool) {
+    if (resolvedTool.name !== name) return failure(requestId, "E_TOOL_SCHEMA_CONFLICT", `Resolved Tool name ${resolvedTool.name} does not match requested name ${name}.`, [
+      "Refresh the selected Unity instance catalog and retry the same command."
+    ], { requestedName: name, resolvedName: resolvedTool.name });
+    const input = requestFromInput(resolvedTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
+    return dispatchResolvedTool(resolvedTool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+  }
   const localMetadata = findToolByName(name);
   const localProperties = localMetadata?.inputSchema.properties as Record<string, unknown> | undefined;
   // TS-local schema 的 project 仅约束已选实例；不得把其他业务字段写入 selector/execution flags。
@@ -61,6 +71,11 @@ export async function dispatchTool(
     ? { ...dispatchFlags, project: parsed.input.project }
     : dispatchFlags;
   const coreSpec = bridgeCommandRegistry.specs().find((spec) => (spec.toolName === name || spec.bridgeCommand === name) && !EXTENSION_GROUPS.has(spec.group) && spec.internal !== true);
+  // Runtime descriptor 的唯一 owner 在 TS catalog；执行直接进入共享 runtime wrapper，目标缺失时返回 runtime selector 错误。
+  if (localMetadata?.handler === "bridge-runtime") {
+    const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
+    return dispatchResolvedTool(localMetadata, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+  }
   // 无 catalog fixture 的注入式 bridgeExecute 仅用于隔离测试；其余路径必须 catalog-first。
   if (runtime.bridgeExecute && runtime.projectTools === undefined && localMetadata) {
     const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
@@ -100,6 +115,9 @@ async function dispatchResolvedTool(
   const availabilityFlags = await extensionAvailabilityFlags(flags, runtime);
   const availability = await checkToolExtensionAvailability(executionTool, availabilityFlags);
   if (!availability.available) return failure(requestId, availability.errorCode, availability.message, availability.nextActions, { extensionId: availability.extensionId, missingPackageIds: availability.availabilityResult?.missingPackageIds ?? executionTool.requiresPackages ?? [] });
+  if (getBoolean(flags, "dry-run") && !executionTool.supportsDryRun) return failure(requestId, "E_DRY_RUN_UNSUPPORTED", `Tool ${executionTool.name} does not support dry-run.`, [
+    "Remove --dry-run and invoke the Tool only when its declared side effects are acceptable.",
+  ], { toolName: executionTool.name });
   const schemaErrors = validateSchema(executionTool.inputSchema, input);
   if (schemaErrors.length > 0) return failure(requestId, "E_SCHEMA_INVALID", `Input schema validation failed at ${schemaErrors[0].path}.`, [`Run unity_cli tools describe ${executionTool.name} to inspect inputSchema.`], {
     path: schemaErrors[0].path,
@@ -107,7 +125,9 @@ async function dispatchResolvedTool(
     actual: schemaErrors[0].actual,
     errors: schemaErrors
   });
-  return definition ? executeDefinition(executionTool, completion, definition, input, flags, runtime, requestId, dispatchStartedAtMs) : executeLiveTool(executionTool, input, flags, runtime, requestId);
+  return definition && executionTool.handler !== "bridge-runtime"
+    ? executeDefinition(executionTool, completion, definition, input, flags, runtime, requestId, dispatchStartedAtMs)
+    : executeLiveTool(executionTool, input, flags, runtime, requestId);
 }
 
 /** 已有 core bridge spec 使用统一参数构造，不进入 live custom wrapper。 */
@@ -143,12 +163,19 @@ async function executeDefinition(
   const absoluteDeadlineMs = dispatchStartedAtMs + Math.max(1, execution.timeoutMs ?? tool.timeoutMs ?? 30_000);
   // package 本地 Tool 也是当前实例的一等能力；生产调用必须先绑定实例，测试注入仍复用显式 fake catalog。
   try {
-    if (!runtime.bridgeExecute && runtime.projectTools === undefined && runtime.projectContexts === undefined) {
+    if (!runtime.bridgeExecute && runtime.projectTools === undefined) {
       // project 是所选实例的一致性约束，不是 selector；其余 typed input 永不进入控制 flags。
       const selectionFlags = typeof input.project === "string" && flags.project === undefined
         ? { ...flags, project: input.project }
         : flags;
-      const selected = await selectInstanceForFlags(selectionFlags, runtime.dataDir ?? defaultDataDir());
+      let selected: InstanceSelection;
+      try {
+        selected = await selectInstanceForFlags(selectionFlags, runtime.dataDir ?? defaultDataDir());
+      } catch (error) {
+        const selectionFailure = instanceSelectionFailure(requestId, error);
+        if (tool.group !== "tools" || selectionFailure?.ok !== false || selectionFailure.error.code !== "E_INSTANCE_NOT_RUNNING") throw error;
+        selected = await selectInstanceForFlags(selectionFlags, runtime.dataDir ?? defaultDataDir(), process.cwd(), "runtime");
+      }
       projectPath = selected.instance.canonicalProjectPath;
     }
   } catch (error) {
@@ -168,7 +195,6 @@ async function executeDefinition(
       logPath: typeof input.logPath === "string" ? input.logPath : undefined,
       flags,
       projectTools: runtime.projectTools,
-      projectContexts: runtime.projectContexts as ContextDescriptor[] | undefined,
       bridgeExecute: runtime.bridgeExecute,
       fetch: runtime.fetch,
       // 普通 TS 工具不保留请求级档案；兼容现有 mutation 工具的 effect hook。
@@ -308,7 +334,8 @@ function validateKnownLocalTerminal(
     const probeRequested = Object.prototype.hasOwnProperty.call(input ?? {}, "completionProbe");
     if (!Array.isArray(compile?.diagnostics) || !runtime
       || !Object.prototype.hasOwnProperty.call(runtime, "returnValue")
-      || typeof runtime.stdout !== "string" || typeof runtime.stderr !== "string") {
+      || typeof runtime.stdout !== "string" || typeof runtime.stderr !== "string"
+      || typeof runtime.stdoutTruncated !== "boolean" || typeof runtime.stderrTruncated !== "boolean") {
       throw invalidCompletionProof(toolName, completion, "did not return compilation and runtime results");
     }
     if (!probeRequested) return true;
@@ -346,6 +373,48 @@ function validateKnownLocalTerminal(
     const compile = objectRecord(record.compile);
     const status = compile?.status;
     if (compile?.completed !== true || compile.errorCount !== 0 || (status !== undefined && status !== "clean" && status !== "warnings")) throw invalidCompletionProof(toolName, completion, "did not prove a clean or warnings-only compile terminal");
+    return true;
+  }
+  if (toolName === "navmesh.bake" || toolName === "navmesh.surface.bake") {
+    if (record.dryRun === true) return true;
+    const expectedKind = toolName === "navmesh.bake" ? "legacy" : "surfaces";
+    const topology = objectRecord(record.topology);
+    const effects = Array.isArray(record.plannedEffects) ? record.plannedEffects : [];
+    const effect = effects.length === 1 ? objectRecord(effects[0]) : undefined;
+    const surfaces = Array.isArray(record.surfaces) ? record.surfaces : undefined;
+    if (!nonEmptyString(record.operationId) || record.kind !== expectedKind || record.status !== "completed" || !timestamp(record.startedAt) || !timestamp(record.finishedAt)
+      || !nonnegativeInteger(record.durationMs) || !topology || !nonnegativeInteger(topology.vertexCount) || !nonnegativeInteger(topology.indexCount) || !sha256(topology.sha256)
+      || !surfaces || (expectedKind === "legacy" ? surfaces.length !== 0 : surfaces.length === 0)
+      || !effect || effect.type !== toolName || !positiveInteger(effect.targetCount)) {
+      throw invalidCompletionProof(toolName, completion, "did not prove the exact durable NavMesh bake terminal");
+    }
+    if (expectedKind === "surfaces" && surfaces.some((value) => {
+      const surface = objectRecord(value);
+      return !surface || !nonEmptyString(surface.globalId) || !nonEmptyString(surface.dataPath) || !sha256(surface.dataHash) || !positiveInteger(surface.dataSizeBytes);
+    })) throw invalidCompletionProof(toolName, completion, "did not prove every NavMeshSurface data asset");
+    return true;
+  }
+  if (toolName === "occlusion.bake") {
+    if (record.dryRun === true) return true;
+    const effectiveSettings = objectRecord(record.effectiveSettings);
+    const before = objectRecord(record.before);
+    const after = objectRecord(record.after);
+    const afterSettings = objectRecord(after?.settings);
+    const scenes = Array.isArray(record.scenes) ? record.scenes : undefined;
+    const effects = Array.isArray(record.plannedEffects) ? record.plannedEffects : [];
+    const effect = effects.length === 1 ? objectRecord(effects[0]) : undefined;
+    if (!nonEmptyString(record.operationId) || record.status !== "completed" || !timestamp(record.startedAt) || !timestamp(record.finishedAt)
+      || Date.parse(record.finishedAt as string) < Date.parse(record.startedAt as string) || !nonnegativeInteger(record.durationMs)
+      || !effectiveSettings || !validOcclusionSettings(effectiveSettings) || !validOcclusionSnapshot(before) || !validOcclusionSnapshot(after)
+      || !afterSettings || !sameOcclusionSettings(effectiveSettings, afterSettings)
+      || !scenes || scenes.length === 0 || !effect || effect.type !== "occlusion.bake" || effect.target !== "open-scenes" || effect.targetCount !== scenes.length) {
+      throw invalidCompletionProof(toolName, completion, "did not prove the exact durable Occlusion bake terminal");
+    }
+    if (scenes.some((value) => {
+      const scene = objectRecord(value);
+      return !scene || !nonEmptyString(scene.path) || !String(scene.path).startsWith("Assets/") || !String(scene.path).endsWith(".unity")
+        || !/^[a-f0-9]{32}$/i.test(String(scene.guid)) || !sha256(scene.sha256) || !positiveInteger(scene.sizeBytes) || scene.dirty !== false;
+    })) throw invalidCompletionProof(toolName, completion, "did not prove every frozen Occlusion scene artifact");
     return true;
   }
   if (toolName === "build.run") {
@@ -439,6 +508,26 @@ function relativePublicPath(value: unknown): boolean {
   return typeof value === "string" && value.length > 0 && !/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value);
 }
 
+function validOcclusionSettings(value: Record<string, unknown> | undefined): boolean {
+  return !!value && positiveFiniteNumber(value.smallestOccluder) && positiveFiniteNumber(value.smallestHole)
+    && typeof value.backfaceThreshold === "number" && Number.isFinite(value.backfaceThreshold)
+    && value.backfaceThreshold >= 1 && value.backfaceThreshold <= 100;
+}
+
+function validOcclusionSnapshot(value: Record<string, unknown> | undefined): boolean {
+  return !!value && nonnegativeInteger(value.umbraDataSizeBytes) && typeof value.doesSceneHaveManualPortals === "boolean"
+    && validOcclusionSettings(objectRecord(value.settings));
+}
+
+function sameOcclusionSettings(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  return ["smallestOccluder", "smallestHole", "backfaceThreshold"].every((field) =>
+    typeof left[field] === "number" && typeof right[field] === "number" && Math.abs((left[field] as number) - (right[field] as number)) <= 0.00001);
+}
+
+function positiveFiniteNumber(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 function validLivePackageResolve(value: unknown): boolean {
   const result = objectRecord(value);
   return !!result && result.status === "resolved" && sha256(result.manifestHash) && sha256(result.lockHash)
@@ -516,7 +605,7 @@ export async function enrichTargetFailureWithDialogBlocker(result: CliResult, fl
     const details = result.error.details && typeof result.error.details === "object" && !Array.isArray(result.error.details) ? result.error.details : {};
     const title = blockers[0].title;
     return { ...result, error: { ...result.error, message: `${result.error.message} Modal dialog '${title}' was observed.`, details: { ...details, blockers }, nextActions: [
-      "Run unity_cli context read editor.dialogs to inspect the current modal dialog.",
+      "Run unity_cli tools run editor.dialogs to inspect the current modal dialog.",
       "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
     ] } };
   } catch {
@@ -525,15 +614,30 @@ export async function enrichTargetFailureWithDialogBlocker(result: CliResult, fl
   }
 }
 
-async function parseTypedInput(flags: Record<string, string | boolean>, requestId: string): Promise<ParsedInput> {
-  const inputFile = getString(flags, "input-file");
-  if (inputFile) return parseInputText(await readFile(resolve(inputFile), "utf8"), "--input-file", requestId);
-  if (getBoolean(flags, "stdin")) {
-    const stdin = await readStdin();
-    if (stdin.trim()) return parseInputText(stdin, "--stdin", requestId);
+async function parseTypedInput(flags: Record<string, string | boolean>, requestId: string, maxBytes?: number, absoluteDeadlineMs?: number): Promise<ParsedInput> {
+  try {
+    requireInputDeadline(absoluteDeadlineMs);
+    const inputFile = getString(flags, "input-file");
+    if (inputFile) {
+      const text = await readBoundedInputFile(resolve(inputFile), maxBytes, absoluteDeadlineMs);
+      if (text === undefined) return inputTooLarge(requestId, "--input-file", maxBytes!);
+      requireInputDeadline(absoluteDeadlineMs);
+      return parseInputText(text, "--input-file", requestId);
+    }
+    if (getBoolean(flags, "stdin")) {
+      const stdin = await readStdin(maxBytes, absoluteDeadlineMs);
+      if (stdin === undefined) return inputTooLarge(requestId, "--stdin", maxBytes!);
+      requireInputDeadline(absoluteDeadlineMs);
+      if (stdin.trim()) return parseInputText(stdin, "--stdin", requestId);
+    }
+    const input = getString(flags, "input");
+    if (input !== undefined && maxBytes !== undefined && Buffer.byteLength(input, "utf8") > maxBytes) return inputTooLarge(requestId, "--input", maxBytes);
+    requireInputDeadline(absoluteDeadlineMs);
+    return input === undefined ? { ok: true, input: {} } : parseInputText(input, "--input", requestId);
+  } catch (error) {
+    if (error instanceof InputDeadlineExceeded) return inputDeadlineExceeded(requestId);
+    throw error;
   }
-  const input = getString(flags, "input");
-  return input === undefined ? { ok: true, input: {} } : parseInputText(input, "--input", requestId);
 }
 
 function parseInputText(text: string, source: string, requestId: string): ParsedInput {
@@ -552,12 +656,96 @@ function parseInputText(text: string, source: string, requestId: string): Parsed
   }
 }
 
-async function readStdin(): Promise<string> {
+class InputDeadlineExceeded extends Error {}
+
+/** 从同一文件句柄读取typed input，并在JSON物化前执行字节和deadline上限。 */
+async function readBoundedInputFile(path: string, maxBytes?: number, absoluteDeadlineMs?: number): Promise<string | undefined> {
+  const openPromise = open(path, "r");
+  const handle = await beforeInputDeadline(openPromise, absoluteDeadlineMs, () => {
+    void openPromise.then((lateHandle) => lateHandle.close()).catch(() => undefined);
+  });
+  const chunks: Buffer[] = [];
+  let total = 0;
+  let closeDeferred = false;
+  try {
+    while (true) {
+      requireInputDeadline(absoluteDeadlineMs);
+      const capacity = maxBytes === undefined ? 64 * 1024 : Math.min(64 * 1024, maxBytes + 1 - total);
+      const buffer = Buffer.allocUnsafe(capacity);
+      const readPromise = handle.read(buffer, 0, buffer.length, null);
+      const { bytesRead } = await beforeInputDeadline(readPromise, absoluteDeadlineMs, () => {
+        closeDeferred = true;
+        void readPromise.then(() => handle.close(), () => handle.close()).catch(() => undefined);
+      });
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      if (maxBytes !== undefined && total > maxBytes) return undefined;
+      chunks.push(buffer.subarray(0, bytesRead));
+    }
+    requireInputDeadline(absoluteDeadlineMs);
+    return Buffer.concat(chunks, total).toString("utf8");
+  } finally {
+    if (!closeDeferred) await handle.close();
+  }
+}
+
+/** 事件式读取stdin，达到字节或deadline上限时立即解除监听。 */
+async function readStdin(maxBytes?: number, absoluteDeadlineMs?: number): Promise<string | undefined> {
   if (process.stdin.isTTY) return "";
-  let data = "";
-  process.stdin.setEncoding("utf8");
-  for await (const chunk of process.stdin) data += chunk;
-  return data;
+  requireInputDeadline(absoluteDeadlineMs);
+  return new Promise<string | undefined>((resolvePromise, rejectPromise) => {
+    let data = "";
+    let total = 0;
+    let timer: NodeJS.Timeout | undefined;
+    const cleanup = (): void => {
+      if (timer) clearTimeout(timer);
+      process.stdin.off("data", onData);
+      process.stdin.off("end", onEnd);
+      process.stdin.off("error", onError);
+      process.stdin.pause();
+    };
+    const finish = (value: string | undefined): void => { cleanup(); resolvePromise(value); };
+    const onData = (chunk: string | Buffer): void => {
+      const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      total += Buffer.byteLength(text, "utf8");
+      if (maxBytes !== undefined && total > maxBytes) { finish(undefined); return; }
+      data += text;
+    };
+    const onEnd = (): void => finish(data);
+    const onError = (error: Error): void => { cleanup(); rejectPromise(error); };
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", onData);
+    process.stdin.once("end", onEnd);
+    process.stdin.once("error", onError);
+    if (absoluteDeadlineMs !== undefined) timer = setTimeout(() => { cleanup(); rejectPromise(new InputDeadlineExceeded()); }, Math.max(1, absoluteDeadlineMs - Date.now()));
+    process.stdin.resume();
+  });
+}
+
+/** 将一个不可取消的本地I/O等待限制在入口deadline内，并由调用方安排迟到资源回收。 */
+async function beforeInputDeadline<T>(operation: Promise<T>, absoluteDeadlineMs?: number, onLate?: () => void): Promise<T> {
+  if (absoluteDeadlineMs === undefined) return operation;
+  requireInputDeadline(absoluteDeadlineMs);
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, rejectPromise) => { timer = setTimeout(() => { onLate?.(); rejectPromise(new InputDeadlineExceeded()); }, Math.max(1, absoluteDeadlineMs - Date.now())); }),
+    ]);
+  } finally { if (timer) clearTimeout(timer); }
+}
+
+function requireInputDeadline(absoluteDeadlineMs?: number): void {
+  if (absoluteDeadlineMs !== undefined && (!Number.isFinite(absoluteDeadlineMs) || Date.now() >= absoluteDeadlineMs)) throw new InputDeadlineExceeded();
+}
+
+/** 统一生成code.exec本地typed input超限错误。 */
+function inputTooLarge(requestId: string, source: string, maxBytes: number): ParsedInput {
+  return { ok: false, error: failure(requestId, "E_CODE_INPUT_TOO_LARGE", `${source} exceeds the ${maxBytes}-byte code.exec typed-input limit.`, ["Use a smaller JSON input and keep Runtime Code source below its documented local budget."]) };
+}
+
+function inputDeadlineExceeded(requestId: string): ParsedInput {
+  return { ok: false, error: failure(requestId, "E_EXECUTION_TIMEOUT", "code.exec typed input did not finish reading before the immutable deadline.", ["Provide bounded input from a responsive local source or submit a new request with a sufficient timeout."]) };
 }
 
 const TOOL_CONTROL_FLAGS = new Set([

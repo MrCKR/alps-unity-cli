@@ -16,10 +16,10 @@ namespace UnityCli
         public bool DryRun { get; set; }
 
         internal Action CommitEffectAction { get; set; }
-        private int commitEffectCalled;
+        private int commitEffectState;
 
-        /// <summary>sealed driver 用于区分 effect 前 timeout 与 effect 后终态恢复；不公开给 Tool。</summary>
-        internal bool EffectCommitted { get { return Volatile.Read(ref commitEffectCalled) != 0; } }
+        /// <summary>只有授权action成功返回才算跨过barrier；校验中或异常回滚均属于effect前。</summary>
+        internal bool EffectCommitted { get { return Volatile.Read(ref commitEffectState) == 1; } }
 
         /// <summary>
         /// 所有输入、目标、包和权限前置校验完成后，紧邻首个真实 mutation 调用。
@@ -31,9 +31,18 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_TOOL_EFFECT_BARRIER_INVALID", "dry-run must not cross the mutation commit barrier.", "Return planned effects without calling ctx.CommitEffect().");
             if (CommitEffectAction == null)
                 throw new UnityCliBridge.BridgeCommandException("E_TOOL_EFFECT_BARRIER_INVALID", "This request has no mutating commit boundary.", "Call ctx.CommitEffect() only for a Tool invocation classified as a mutation.");
-            if (Interlocked.Exchange(ref commitEffectCalled, 1) != 0)
+            if (Interlocked.CompareExchange(ref commitEffectState, -1, 0) != 0)
                 throw new UnityCliBridge.BridgeCommandException("E_TOOL_EFFECT_BARRIER_DUPLICATE", "The Tool crossed its mutation commit barrier more than once.", "Use one commit boundary immediately before the first business effect.");
-            CommitEffectAction();
+            try
+            {
+                CommitEffectAction();
+                Volatile.Write(ref commitEffectState, 1);
+            }
+            catch
+            {
+                Volatile.Write(ref commitEffectState, 0);
+                throw;
+            }
         }
 
         /// <summary>

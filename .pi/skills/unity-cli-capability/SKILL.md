@@ -1,6 +1,6 @@
 ---
 name: unity-cli-capability
-description: unity_cli 的 Tool、Context、Bridge、descriptor、schema、安全、Editor/PlayMode 与结构化输出硬规范。新增、修改或删除任何 Unity 能力、公开 metadata、summary/describe、错误 envelope、自定义 Tool/Context 或 destructive 语义时必须先完整读取并遵守；Extension 能力也必须同时使用本 Skill。
+description: unity_cli 的统一 Tool、Bridge、descriptor、schema、安全、Editor/PlayMode 与结构化输出硬规范。新增、修改或删除任何 Unity 能力、公开 metadata、summary/describe、错误 envelope、自定义 Tool 或 destructive 语义时必须先完整读取并遵守；Extension 能力也必须同时使用本 Skill。
 compatibility: 适用于 alps-unity-cli 仓库；需要 read 和项目现有验证工具。
 ---
 
@@ -8,23 +8,33 @@ compatibility: 适用于 alps-unity-cli 仓库；需要 read 和项目现有验�
 
 本 Skill 约束 `unity_cli` 的公开能力设计和实现。开始新增、修改或删除前先确认根 `AGENTS.md` 已加载；涉及 Extension、框架 wait 或完成验证时，还必须分别读取对应项目 Skill。
 
-## Tool 与 Context 契约
+## 统一Tool契约
 
-Tool 用于动作，Context 用于观察。
+所有Unity动作与观察能力都通过Tool暴露。公开调用语法只有同一catalog上的`tools run <tool> --input <json>`与`command <name> <business-args>`；`command`不得创建第二套descriptor、schema、dispatcher、安全、completion或envelope。读取型Tool依靠`destructiveHint: false`、空`sideEffects`和准确描述声明纯读取边界。
 
-Tool 必须满足：
+`command`必须满足：
+
+- 省略name时只投影当前实例的同一live Tool catalog。
+- native Tool使用完整精确名；official attribute Tool在`tools`中固定使用`UnityPipeline_<原名>`与`UnityPipeline`group，并可由attribute原名选择。
+- native精确重名优先，attribute仍可由完整前缀名选择；禁止相似名称、case、snake/camel或语义映射。
+- business argv只能按目标live `inputSchema`解析为typed input，随后复用统一dispatcher。
+- official attribute原名重复，或native占用保留前缀/group，必须使整个live registry fail closed。
+- official attribute method必须static且非泛型；只接受同步`void`/结果值或`Task`/`Task<T>`，拒绝`async void`和其他awaitable。`RuntimeOnly=true`只投影runtime-only。
+- `[CliArg]`与`IStructuredCommandInput`必须派生封闭typed schema；`object`、Json.NET token或无法静态派生的值才显式使用`x-unityCliAnyJson`。未知字段、缺失required、递归DTO和重复投影名必须在effect前失败。
+- official attribute Tool固定使用`official-attribute` profile、`arbitrary-method-invocation` side effect、`execute-user-code` permission和`supportsDryRun:false`；参数冻结后只跨一次effect barrier，`Task`超时不得声称取消底层method。
+
+Tool必须满足：
 
 - 任何可能修改 Unity 状态、项目文件、资源、Package、场景、GameObject、Component、PlayMode 状态或产生 artifact 的能力，都必须设计为 Tool。
 - descriptor 必须暴露 AI 调用所需的 `name`、`summary`、`description`、`group`、`inputSchema`、`outputSchema`、`destructiveHint`、`supportsDryRun`、`target`、`availabilityScope`、`playModeSupport`；内部路由和完成策略字段不得混入公开 descriptor。
 - 输出必须机器可读并返回稳定业务字段，不得只返回自然语言说明。
 - 错误必须结构化，包含稳定的 `error.code`、`message`、`transient`、`retryAfterMs`、`nextActions`。
 
-Context 必须满足：
+读取型 Tool 必须满足：
 
-- Context 必须只读。
 - 不得修改 Unity 状态、项目文件、资源、Package、场景、GameObject、Component。
 - 不得触发 import、compile、domain reload、PlayMode 切换或任何副作用。
-- 只要能力存在副作用，即使主要用途是读取，也必须设计为 Tool。
+- 只要能力存在副作用，就必须准确声明 `sideEffects`，并按真实持久化风险设置 `destructiveHint`。
 
 ## Editor 与 PlayMode
 
@@ -48,7 +58,7 @@ Context 必须满足：
 
 功能能运行不等于接口合格。Descriptor 必须让陌生 AI 不读源码也能一次性判断、构造并安全调用。
 
-每个 Tool / Context descriptor 必须满足：
+每个 Tool descriptor 必须满足：
 
 - 名称稳定、语义单一、与 group 一致。
 - `summary` 能让 AI 在发现阶段选对 group 和能力。
@@ -64,9 +74,9 @@ Context 必须满足：
 
 `summary` 只负责发现阶段路由，不是营销文案，也不替代完整文档。
 
-Group / Context group summary 必须：
+Group summary 必须：
 
-- 覆盖当前公开 Tool / Context 的主要能力类别，不能只描述历史子集或单个 happy path。
+- 覆盖当前公开 Tool 的主要能力类别，不能只描述历史子集或单个 happy path。
 - 说明领域对象和主要动作，例如 `Camera operations: list/info, create, aim, lens settings, screenshots, and multiview capture.`
 - 与相邻 group 保持清晰边界；易混 group 必须写明关键区别，如 `offline cache`、`live method call`、`schema generation`、`runtime component`、`asset editing`、`scene object`。
 - 明确默认入口关系；alias、兼容或诊断入口不得表现得比主入口更推荐。
@@ -95,7 +105,7 @@ Tool summary 必须：
 
 ### Describe 输出
 
-`tools describe <tool>` / `context describe <context>` 是单能力学习入口，必须自足。
+`tools describe <tool>` 是单能力学习入口，必须自足。
 
 字段职责：
 
@@ -112,7 +122,7 @@ Describe 必须按需覆盖：
 - 相邻工具选择，特别是 alias、兼容入口、fallback 和推荐主入口。
 - 持久化、副作用、PlayMode、session-affecting 与 `--dry-run` 语义。
 - 大输出的分页、截断、continuation、artifact path、`inlineBase64` 等控制。
-- Context 的只读边界，不得暗示刷新、修改或触发 Unity 状态变化。
+- 读取型 Tool 的只读边界，不得暗示刷新、修改或触发 Unity 状态变化。
 
 Describe 不得包含：
 
@@ -128,7 +138,7 @@ Describe 不得包含：
 
 ## 自定义 C# 能力目录
 
-项目自定义 `IUnityCliTool<TReq,TRes>` 和 `IUnityCliContext<TReq,TRes>` 文件必须位于名为 `UnityCLI` 的目录：
+项目自定义 `IUnityCliTool<TReq,TRes>` 文件必须位于名为 `UnityCLI` 的目录：
 
 - 合法示例：`Assets/UnityCLI/`、`Assets/Editor/UnityCLI/`、`Assets/SomeModule/UnityCLI/`。
 - 项目内可以存在多个 `UnityCLI` 目录，但目录名大小写必须完全一致。
@@ -165,7 +175,7 @@ Describe 不得包含：
 
 ## 临时文件与机制状态
 
-能力（Tool、Context、Bridge handler、Extension）产生的所有临时文件与机制状态必须遵守 AGENTS.md《临时文件与机制状态》三条铁律：
+能力（Tool、Bridge handler、Extension）产生的所有临时文件与机制状态必须遵守 AGENTS.md《临时文件与机制状态》三条铁律：
 
 - 机制状态（互斥锁、进行中标记、会话标记）只对 Unity 本次启动有效，必须携带本次启动标识，重启作废。
 - 临时文件数量与大小不得随调用次数和时间无限增长：状态文件一类一个固定路径、终态即删；产物（artifacts）保留最新 100 个；日志按大小滚动并保留最近 2 个。禁止一请求一文件。

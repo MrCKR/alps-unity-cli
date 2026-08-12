@@ -1,4 +1,4 @@
-import { readEditorState, type EditorStateResult } from "../../contexts/editor/state.js";
+import { readEditorState, type EditorStateResult } from "./state.js";
 
 interface EditorReadinessContext {
   flags?: Record<string, string | boolean>;
@@ -21,7 +21,7 @@ export async function waitForEditorTransitionEnd(
       flags: context.flags,
       dataDir: context.dataDir,
       bridgeExecute: context.bridgeExecute,
-      observationAbsoluteDeadlineMs: deadlineMs,
+      absoluteDeadlineMs: deadlineMs,
     } as never);
     if (state.status !== "transitioning") return state;
 

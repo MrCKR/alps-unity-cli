@@ -21,7 +21,6 @@
       { "name": "urp.settings.get" },
       { "name": "urp.settings.set" }
     ],
-    "contexts": [],
     "csharpEntries": [
       { "type": "UnityCli.UrpFeatureListTool", "description": "Implements urp.feature.list." },
       { "type": "UnityCli.UrpFeatureAddTool", "description": "Implements urp.feature.add." },

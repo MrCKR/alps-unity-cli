@@ -28,13 +28,6 @@ export async function checkToolExtensionAvailability(tool: ToolMetadata, flags: 
   return extensionId ? checkExtensionPhysicalAvailability(registry, extensionId, getString(flags, "project"), `Tool \"${tool.name}\"`, tool.requiresPackages) : available();
 }
 
-/** 对 live extension Context 执行与 Tool 相同的 physical install gate。 */
-export async function checkContextExtensionAvailability(contextKey: string, flags: Record<string, string | boolean>): Promise<ExtensionAvailabilityCheck> {
-  const registry = new ExtensionRegistry();
-  const extensionId = findExtensionForContext(registry, contextKey);
-  return extensionId ? checkExtensionPhysicalAvailability(registry, extensionId, getString(flags, "project"), `Context \"${contextKey}\"`) : available();
-}
-
 /**
  * physical gate 优先使用显式 project，否则复用实例选择语义推断当前目标项目。
  * bridge endpoint 没有可用 registry 项目时保留原 flags，使调用方返回可恢复的 unknown。
@@ -122,8 +115,4 @@ function findExtensionForTool(registry: ExtensionRegistry, toolName: string): Ex
   const contribution = findBuiltinExtensionToolContribution(toolName);
   if (contribution) return contribution.extensionId;
   return registry.extensionIds().find((id) => registry.getExtension(id)!.manifest.contributions.tools?.some((tool) => tool.name === toolName));
-}
-
-function findExtensionForContext(registry: ExtensionRegistry, contextKey: string): ExtensionId | undefined {
-  return registry.extensionIds().find((id) => registry.getExtension(id)!.manifest.contributions.contexts?.some((context) => context.key === contextKey));
 }

@@ -93,9 +93,10 @@ namespace UnityCli
             UnityCliPackageEmbedCoordinator.Register(registry);
             UnityCliPackageResolveCoordinator.Register(registry);
             UnityCliTestRunCoordinator.Register(registry);
+            UnityCliNavMeshBakeCoordinator.Register(registry);
+            UnityCliOcclusionBakeCoordinator.Register(registry);
             RegisterProjectToolCommands(registry);
             RegisterRuntimeToolCommands(registry);
-            RegisterContextCommands(registry);
             return registry;
         }
 

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 process.env.UNITY_CLI_GENERATING_CONTRACT = "1";
@@ -7,15 +7,13 @@ process.env.UNITY_CLI_GENERATING_CONTRACT = "1";
 const distRoot = existsSync("dist/bridge/index.js") ? "dist" : "dist/src";
 const { bridgeCommandRegistry } = await importFromDist("bridge/index.js");
 const { allRegisteredToolMetadata } = await importFromDist("tools/metadata/index.js");
+const staticCatalog = JSON.parse(await readFile("contracts/static-capability-catalog.json", "utf8"));
 await importFromDist("extensions/index.js");
 
 const OUTPUT_PATH = "contracts/command-contract.json";
 const DEFAULT_TIMEOUT_MS = 30000;
 
 const bridgeOnlyEntries = new Map([
-  ["context.describe", { handler_type: "bridge", destructive: false }],
-  ["context.list", { handler_type: "bridge", destructive: false }],
-  ["context.read", { handler_type: "bridge", destructive: false }],
   ["extension.status", { handler_type: "hybrid", destructive: false }],
   ["project-tool.list", { handler_type: "bridge", destructive: false }],
   ["project-tool.run", { handler_type: "bridge", destructive: false }],
@@ -35,6 +33,22 @@ for (const tool of allRegisteredToolMetadata()) {
     destructive: tool.destructiveHint,
     timeout: tool.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     ...(tool.requiresPackages?.length ? { requires_packages: [...tool.requiresPackages] } : {})
+  });
+}
+
+for (const descriptor of staticCatalog.tools) {
+  const name = String(descriptor.name);
+  if (entries.has(name)) continue;
+  const group = String(descriptor.group);
+  entries.set(name, {
+    bridgeCommand: name,
+    group,
+    command: commandName(name, group),
+    handler_type: "bridge",
+    csharp_handler: "present",
+    destructive: descriptor.destructiveHint === true,
+    timeout: DEFAULT_TIMEOUT_MS,
+    ...(Array.isArray(descriptor.requiresPackages) && descriptor.requiresPackages.length ? { requires_packages: [...descriptor.requiresPackages] } : {})
   });
 }
 
@@ -83,8 +97,8 @@ function importFromDist(relativePath) {
   return import(pathToFileURL(`${distRoot}/${relativePath}`).href);
 }
 
+/** 保留descriptor的真实dispatcher owner，禁止把Player transport降级为Editor Bridge。 */
 function normalizeHandler(handler) {
-  if (handler === "bridge-runtime") return "bridge";
   return handler ?? "bridge";
 }
 

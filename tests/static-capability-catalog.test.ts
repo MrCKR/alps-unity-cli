@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { handleContextCommand } from "../src/contexts/commands.js";
 import { handleToolsCommand } from "../src/tools/commands.js";
 import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import { staticCapabilityCatalog } from "../src/static-capability-catalog.js";
@@ -14,9 +13,9 @@ test("static catalog capture uses compiled public descriptor projections", async
   assert.match(source, /dist\/src\/bridge\/index\.js/);
   assert.match(source, /map\(withGeneratedCompletionContract\)[\s\S]*map\(toPublicToolDescriptor\)[\s\S]*map\(stripDynamicToolFields\)/);
   assert.match(source, /Missing generated completion contract for \$\{descriptor\.name\}/);
-  assert.match(source, /map\(toPublicContextDescriptor\)[\s\S]*map\(stripDynamicContextFields\)/);
   assert.match(source, /publicToolDescriptor\(metadata\)/);
-  assert.match(source, /publicContextDescriptor\(parsed\)/);
+  assert.match(source, /"supportsDryRun", "contractProfile", "permissions"/);
+  assert.doesNotMatch(source, /contextsResult|publicContextDescriptor|stripDynamicContextFields/);
   assert.doesNotMatch(source, /\.\.\/dist\/bridge\/index\.js/);
 });
 
@@ -34,9 +33,8 @@ test("packaged static catalog exactly covers C# built-in and Extension Tool inve
   assert.equal(new Set(actual).size, actual.length);
   assert.ok(catalog.tools.every((tool) => tool.inputSchema && tool.outputSchema));
   assert.ok(catalog.tools.every((tool) => tool.source === "built-in" || tool.source === "extension"));
-  assert.ok(catalog.contexts.every((context) => context.source === "built-in" || context.source === "extension"));
+  assert.equal(Object.hasOwn(catalog, "contexts"), false);
   const forbiddenToolFields = ["artifactKinds", "capabilityType", "cliCommand", "completionContract", "defaultTimeoutMs", "descriptorFingerprint", "fingerprint", "handler", "internalDescriptorFingerprint", "maxTimeoutMs", "supportStatus", "supportsJob", "version"];
-  const forbiddenContextFields = ["capabilityType", "cliCommand", "descriptorFingerprint", "fingerprint", "handler", "refreshBehavior", "supportStatus", "version"];
   for (const tool of catalog.tools) {
     for (const field of forbiddenToolFields) assert.equal(Object.hasOwn(tool, field), false, `${String(tool.name)} must not freeze ${field}`);
     const outputFields = schemaPropertyNames(tool.outputSchema);
@@ -45,15 +43,22 @@ test("packaged static catalog exactly covers C# built-in and Extension Tool inve
     for (const example of (tool.examples ?? []) as Array<Record<string, unknown>>) assert.deepEqual(Object.keys(example).sort(), ["argv", "description"], `${String(tool.name)} examples must be public argv only`);
     for (const field of ["permissions", "requiresPackages", "sideEffects"]) if (Object.hasOwn(tool, field)) assert.ok((tool[field] as unknown[]).length > 0, `${String(tool.name)} must omit empty ${field}`);
   }
-  for (const context of catalog.contexts) {
-    for (const field of forbiddenContextFields) assert.equal(Object.hasOwn(context, field), false, `${String(context.name)} must not freeze ${field}`);
-    for (const field of ["command", "execution", "logs", "logPath", "audit", "handlerFingerprint", "descriptorFingerprint", "endpoint", "port", "listenerId", "listenerGeneration", "sourceListenerGeneration", "hwnd", "commandLine"]) {
-      assert.equal(schemaPropertyNames(context.outputSchema).has(field), false, `${String(context.name)} outputSchema must not expose ${field}`);
-    }
-    for (const example of (context.examples ?? []) as Array<Record<string, unknown>>) assert.deepEqual(Object.keys(example).sort(), ["argv", "description"], `${String(context.name)} examples must be public argv only`);
-    if (Object.hasOwn(context, "requiresPackages")) assert.ok((context.requiresPackages as unknown[]).length > 0, `${String(context.name)} must omit empty requiresPackages`);
-  }
   assert.doesNotMatch(JSON.stringify(catalog), /bridgeEndpoint|listenerId|actualPort|sourceListenerGeneration/);
+});
+
+test("canonical Tools retain every approved duplicate successor", () => {
+  const catalog = staticCapabilityCatalog();
+  const tools = new Set(catalog.tools.map((tool) => String(tool.name)));
+  const successors: Record<string, string> = {
+    "prefab.hierarchy": "prefab.hierarchy",
+    "prefab.info": "prefab.info",
+    "scene.cameras": "camera.list",
+    "scene.opened": "scene.list-opened",
+    "scene.rendering-stats": "profiler.rendering-stats",
+  };
+  for (const canonicalTool of Object.values(successors)) {
+    assert.equal(tools.has(canonicalTool), true, `${canonicalTool} must remain the canonical Tool`);
+  }
 });
 
 test("session-mutating read-shaped Tools declare explicit side effects", () => {
@@ -126,13 +131,3 @@ function schemaPropertyNames(value: unknown, result = new Set<string>()): Set<st
   }
   return result;
 }
-
-test("public Context discovery rejects an offline explicit instance without static fallback", async () => {
-  const runtime = { dataDir: "Z:/definitely-missing-unity-cli-data" };
-  const flags = { instance: OFFLINE_INSTANCE };
-  for (const [command, args] of [["list", []], ["search", ["editor.state"]], ["describe", ["editor.state"]]] as const) {
-    const result = await handleContextCommand(command, [...args], flags, runtime, `req_offline_context_${command}`);
-    assert.equal(result.ok, false);
-    assert.equal(result.error?.code, "E_INSTANCE_NOT_FOUND");
-  }
-});

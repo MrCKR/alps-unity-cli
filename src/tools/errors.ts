@@ -52,7 +52,7 @@ export function blockerTimeoutMessage(operation: string, blockers: EditorBlocker
 
 export function blockerNextActions(): string[] {
   return [
-    "Run unity_cli context read editor.dialogs to inspect the current modal dialog.",
+    "Run unity_cli tools run editor.dialogs to inspect the current modal dialog.",
     "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
   ];
 }

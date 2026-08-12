@@ -54,7 +54,6 @@
         "name": "cinemachine.extension.remove"
       }
     ],
-    "contexts": [],
     "csharpEntries": [
       {
         "type": "UnityCli.Cinemachine.AimTool",

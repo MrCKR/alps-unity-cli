@@ -48,18 +48,16 @@ function countMatches(text, pattern) {
 function loadExtensionOwnership() {
   const manifests = [];
   const toolOwners = new Map();
-  const contextOwners = new Map();
   const extensionRoot = join(ROOT, "extensions");
   for (const manifestPath of collectFiles(extensionRoot, (path) => path.endsWith("extension.json"))) {
     const manifest = JSON.parse(readText(manifestPath));
     const tools = (manifest.contributions?.tools ?? []).map((entry) => entry.name).filter(Boolean);
-    const contexts = (manifest.contributions?.contexts ?? []).map((entry) => entry.key ?? entry.name).filter(Boolean);
-    manifests.push({ id: manifest.id, path: repoPath(manifestPath), tools, contexts });
+    if (Object.hasOwn(manifest.contributions ?? {}, "contexts")) throw new Error(`${repoPath(manifestPath)} contains forbidden legacy contexts contributions`);
+    manifests.push({ id: manifest.id, path: repoPath(manifestPath), tools });
     for (const name of tools) addOwner(toolOwners, name, manifest.id);
-    for (const name of contexts) addOwner(contextOwners, name, manifest.id);
   }
   manifests.sort((left, right) => left.id.localeCompare(right.id));
-  return { manifests, toolOwners, contextOwners };
+  return { manifests, toolOwners };
 }
 
 /** 保留全部 claim，后续可检测重复 owner。 */
@@ -76,16 +74,15 @@ function generatedNames(path, functionName) {
   return [...readText(path).matchAll(pattern)].map((match) => match[1]).sort();
 }
 
-/** 扫描一个 C# 文件中的 Tool/Context 接口实现数量。 */
+/** 扫描一个 C# 文件中的 Tool 接口实现数量。 */
 function csharpCapabilityFile(path) {
   const text = readText(path);
   const toolCount = countMatches(text, /:\s*IUnityCliTool\s*</g);
-  const contextCount = countMatches(text, /:\s*IUnityCliContext\s*</g);
-  const descriptor = text.match(/(?:Tool|Context)Descriptor\s+Describe\(\)\s*=>\s*new\(\)\s*\{([\s\S]*?)\};/);
+  const descriptor = text.match(/ToolDescriptor\s+Describe\(\)\s*=>\s*new\(\)\s*\{([\s\S]*?)\};/);
   const descriptorText = descriptor?.[1] ?? "";
   const name = descriptorText.match(/\bName\s*=\s*"([a-z0-9][a-z0-9.-]*)"/)?.[1] ?? null;
   const group = descriptorText.match(/\bGroup\s*=\s*"([a-z0-9][a-z0-9.-]*)"/)?.[1] ?? null;
-  return { path: repoPath(path), toolCount, contextCount, names: name ? [name] : [], group };
+  return { path: repoPath(path), toolCount, names: name ? [name] : [], group };
 }
 
 /** 提取命名 class/interface 的平衡花括号类型体，避免跨到相邻 Result 类型。 */
@@ -263,7 +260,7 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
     files: machinePathReferences
   });
 
-  const executionFiles = csharpFiles.filter((path) => /\/(ProjectTools|ProjectContexts|Infrastructure|Bridge|Contexts|Tools|Samples)\//.test(`/${repoPath(path)}`));
+  const executionFiles = csharpFiles.filter((path) => /\/(ProjectTools|Infrastructure|Bridge|Tools|Samples)\//.test(`/${repoPath(path)}`));
   const cancellationMatches = executionFiles
     .map((path) => ({ path: repoPath(path), count: countMatches(readText(path), /\bCancellationToken\.None\b/g) }))
     .filter((entry) => entry.count > 0);
@@ -284,7 +281,7 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
     files: updateMatches
   });
 
-  const generatedSchemaPaths = [join(ROOT, "src", "tools", ".generated-schemas.ts"), join(ROOT, "src", "contexts", ".generated-schemas.ts")];
+  const generatedSchemaPaths = [join(ROOT, "src", "tools", ".generated-schemas.ts")];
   const emptySchemaMatches = generatedSchemaPaths
     .filter(existsSync)
     .map((path) => ({
@@ -384,9 +381,8 @@ if (!existsSync(contractPath)) {
 
 const contract = JSON.parse(readText(contractPath));
 const tsTools = generatedNames(join(ROOT, "src", "tools", ".generated-schemas.ts"), "injectToolSchema");
-const tsContexts = generatedNames(join(ROOT, "src", "contexts", ".generated-schemas.ts"), "injectContextSchema");
 const tsToolSet = new Set(tsTools);
-const { manifests, toolOwners, contextOwners } = loadExtensionOwnership();
+const { manifests, toolOwners } = loadExtensionOwnership();
 
 const capabilities = contract.commands.map((entry) => {
   const name = entry.bridgeCommand;
@@ -403,8 +399,8 @@ const csharpFiles = [
   ...collectFiles(join(ROOT, "unitypkg"), (path) => path.endsWith(".cs")),
   ...collectFiles(join(ROOT, "extensions"), (path) => path.endsWith(".cs"))
 ];
-const capabilityFiles = csharpFiles.map(csharpCapabilityFile).filter((entry) => entry.toolCount > 0 || entry.contextCount > 0);
-const multiCapabilityFiles = capabilityFiles.filter((entry) => entry.toolCount + entry.contextCount > 1);
+const capabilityFiles = csharpFiles.map(csharpCapabilityFile).filter((entry) => entry.toolCount > 0);
+const multiCapabilityFiles = capabilityFiles.filter((entry) => entry.toolCount > 1);
 
 const textRoots = ["src", "unitypkg", "extensions", "tests", "docs", "skills"];
 const allTextFiles = textRoots.flatMap((root) => collectFiles(join(ROOT, root), (path) => /\.(?:cs|ts|js|mjs|cjs|json|md)$/.test(path)));
@@ -429,16 +425,15 @@ checks.push({
 
 const packageSamplesCapabilities = collectFiles(join(ROOT, "unitypkg", "Editor", "Samples"), (path) => path.endsWith(".cs"))
   .map(csharpCapabilityFile)
-  .filter((entry) => entry.toolCount > 0 || entry.contextCount > 0);
+  .filter((entry) => entry.toolCount > 0);
 checks.push({
   id: "packageSamplesCapabilities",
   expected: 0,
   actual: packageSamplesCapabilities.length,
-  files: packageSamplesCapabilities.map((entry) => ({ path: entry.path, count: entry.toolCount + entry.contextCount }))
+  files: packageSamplesCapabilities.map((entry) => ({ path: entry.path, count: entry.toolCount }))
 });
 
 const internalMetaRoutes = new Set([
-  "context.list", "context.describe", "context.read",
   "project-tool.list", "project-tool.run",
   "runtime-tool.list", "runtime-tool.run",
   "code.exec"
@@ -483,10 +478,6 @@ checks.push({
 const duplicateToolClaims = [...toolOwners.entries()]
   .filter(([, owners]) => owners.length > 1)
   .map(([name, owners]) => ({ name, owners }));
-const duplicateContextClaims = [...contextOwners.entries()]
-  .filter(([, owners]) => owners.length > 1)
-  .map(([name, owners]) => ({ name, owners }));
-
 const csharpToolNames = capabilityFiles.filter((entry) => entry.toolCount === 1).flatMap((entry) => entry.names);
 const publicToolOwners = new Map();
 for (const name of tsTools) publicToolOwners.set(name, [...(publicToolOwners.get(name) ?? []), "ts-local"]);
@@ -548,11 +539,10 @@ const csharpRequestExecutionAssignments = csharpFiles
   .filter((entry) => entry.count > 0);
 checks.push({ id: "csharpRequestExecutionAssignments", expected: 0, actual: csharpRequestExecutionAssignments.reduce((sum, entry) => sum + entry.count, 0), files: csharpRequestExecutionAssignments });
 
-const publicContextExampleGaps = capabilityFiles
-  .filter((entry) => entry.contextCount === 1)
-  .filter((entry) => !/\bExamples\s*=\s*new\[\]\s*\{\s*new\s+ContextExample/.test(readText(join(ROOT, entry.path))))
-  .map((entry) => ({ path: entry.path, count: 1, expected: "at least one Context example" }));
-checks.push({ id: "publicContextExamples", expected: 0, actual: publicContextExampleGaps.length, files: publicContextExampleGaps });
+const legacyContextAuthoring = allTextFiles
+  .map((path) => ({ path: repoPath(path), count: countMatches(readText(path), /\bdefineContext\s*(?:<|\()|\bIUnityCliContext\s*</g) }))
+  .filter((entry) => entry.count > 0);
+checks.push({ id: "legacyContextAuthoring", expected: 0, actual: legacyContextAuthoring.reduce((sum, entry) => sum + entry.count, 0), files: legacyContextAuthoring });
 
 const recoveryParserMatches = collectFiles(join(ROOT, "src"), (path) => path.endsWith(".ts"))
   .map((path) => ({ path: repoPath(path), count: countMatches(readText(path), /recoverPowerShell|parseRecovered|splitRecovered|cleanRecovered/g) }))
@@ -565,18 +555,15 @@ const report = {
   baseline: {
     contractCommands: capabilities.length,
     tsLocalTools: tsTools.length,
-    tsLocalContexts: tsContexts.length,
     extensionCount: manifests.length,
     extensionTools: [...toolOwners.keys()].length,
-    extensionContexts: [...contextOwners.keys()].length,
     csharpCapabilityFiles: capabilityFiles.length,
     csharpToolImplementations: capabilityFiles.reduce((sum, entry) => sum + entry.toolCount, 0),
-    csharpContextImplementations: capabilityFiles.reduce((sum, entry) => sum + entry.contextCount, 0),
     multiCapabilityFiles: multiCapabilityFiles.length,
     failedChecks: checks.filter((check) => check.actual !== check.expected).length
   },
   extensionManifests: manifests,
-  ownershipConflicts: { tools: duplicateToolClaims, contexts: duplicateContextClaims },
+  ownershipConflicts: { tools: duplicateToolClaims },
   capabilities,
   csharpCapabilityFiles: capabilityFiles,
   checks

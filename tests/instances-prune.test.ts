@@ -20,6 +20,7 @@ import {
   makeRegistry,
   makeRegistrySession,
   registryIdentity,
+  startStrictHealthServer,
   writeRegistry,
 } from "./helpers/instance-registry-v2.js";
 
@@ -101,6 +102,56 @@ test("observation reducer removes only OS-proven dead restart claims", async () 
   ]));
   assert.equal(reduced.status, "ready");
   assert.deepEqual(reduced.sessions.map((session) => session.editorSessionId), [live.editorSessionId]);
+});
+
+test("editor and runtime sessions share one project identity without cross-target conflict", async () => {
+  const projectPath = await project("unity-cli-cross-target-");
+  const identity = registryIdentity(projectPath);
+  let editorSession = `session-${"e".repeat(64)}`;
+  let runtimeSession = `session-${"f".repeat(64)}`;
+  const editorHealth = await startStrictHealthServer((request, port) => {
+    assert.equal(request.headers["x-unity-cli-expected-session-id"], editorSession);
+    return { version: 2, target: "editor", instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath, canonicalizationVersion: 1, sessionId: editorSession, listenerId: `listener-${"2".repeat(32)}`, actualPort: port, buildStamp: "test-build" };
+  });
+  const runtimeHealth = await startStrictHealthServer((request, port) => {
+    assert.equal(request.headers["x-unity-cli-expected-session-id"], runtimeSession);
+    return { version: 2, target: "runtime", instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath, canonicalizationVersion: 1, sessionId: runtimeSession, listenerId: `listener-${"3".repeat(32)}`, actualPort: port, buildStamp: "test-build", buildId: "a".repeat(32) };
+  });
+  try {
+    const editor = await makeRegistrySession(editorHealth.endpoint, { sessionId: editorSession, editorSessionId: editorSession });
+    const runtime = await makeRegistrySession(runtimeHealth.endpoint, {
+      target: "runtime", sessionId: runtimeSession, runtimeSessionId: runtimeSession,
+      listener: { ...editor.listener, listenerId: `listener-${"3".repeat(32)}`, endpoint: { ...editor.listener.endpoint, preferredPort: runtimeHealth.port, actualPort: runtimeHealth.port, url: runtimeHealth.endpoint } },
+    });
+    const observations = new Map([[process.pid, { processId: process.pid, state: "alive" as const, processStartedAt: editor.processStartedAt, executablePath: process.execPath }]]);
+    const record = makeRegistry(identity, [editor, runtime]);
+    const editorView = await reduceRegistryRecord(record, observations, Date.now(), "editor");
+    const runtimeView = await reduceRegistryRecord(record, observations, Date.now(), "runtime");
+    const allView = await reduceRegistryRecord(record, observations, Date.now(), "all");
+    assert.equal(editorView.status, "ready");
+    assert.equal(editorView.activeSession?.sessionId, editorSession);
+    assert.equal(runtimeView.status, "ready");
+    assert.equal(runtimeView.activeSession?.sessionId, runtimeSession);
+    assert.equal(allView.status, "ready");
+    assert.equal(allView.activeSession, undefined);
+    assert.deepEqual(instanceListSummary(allView).sessions, [
+      { target: "editor", sessionId: editorSession, editorSessionId: editorSession, processId: process.pid, processStartedAt: editor.processStartedAt, lastHeartbeatAt: editor.lastHeartbeatAt, state: "ready", claimVerification: "verified" },
+      { target: "runtime", sessionId: runtimeSession, runtimeSessionId: runtimeSession, processId: process.pid, processStartedAt: runtime.processStartedAt, lastHeartbeatAt: runtime.lastHeartbeatAt, state: "ready", claimVerification: "verified" },
+    ]);
+  } finally {
+    await Promise.all([editorHealth.close(), runtimeHealth.close()]);
+  }
+});
+
+test("duplicate runtime claims do not invalidate the editor target", async () => {
+  const projectPath = await project("unity-cli-runtime-conflict-");
+  const identity = registryIdentity(projectPath);
+  const editor = await makeRegistrySession("http://127.0.0.1:47991", { sessionId: `session-${"a".repeat(64)}` });
+  const firstRuntime = await makeRegistrySession("http://127.0.0.1:47992", { target: "runtime", sessionId: `session-${"b".repeat(64)}`, listener: { ...editor.listener, listenerId: `listener-${"3".repeat(32)}`, endpoint: { ...editor.listener.endpoint, preferredPort: 47992, actualPort: 47992, url: "http://127.0.0.1:47992" } } });
+  const secondRuntime = await makeRegistrySession("http://127.0.0.1:47993", { target: "runtime", sessionId: `session-${"c".repeat(64)}`, listener: { ...editor.listener, listenerId: `listener-${"4".repeat(32)}`, endpoint: { ...editor.listener.endpoint, preferredPort: 47993, actualPort: 47993, url: "http://127.0.0.1:47993" } } });
+  const record = makeRegistry(identity, [editor, firstRuntime, secondRuntime]);
+  assert.equal(reduceObservationRegistryRecord(record, undefined, "editor").status, "ready");
+  assert.equal(reduceObservationRegistryRecord(record, undefined, "runtime").status, "conflict");
 });
 
 test("dead PID/start identity reduces to offline", async () => {

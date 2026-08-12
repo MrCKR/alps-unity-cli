@@ -51,8 +51,7 @@
     "deferred": [
       "references/operation-protocol.md",
       "references/feedback.md",
-      "references/custom-tools.md",
-      "references/custom-contexts.md"
+      "references/custom-tools.md"
     ],
     "file-backed fixture": [
       "evals/output/fixtures/feedback-scenario.json",

@@ -13,6 +13,8 @@ export type ToolHandler = "bridge" | "bridge-runtime" | "offline" | "hybrid";
 export type ToolRiskLevel = "safe" | "low" | "medium" | "high" | "critical";
 export type ToolSupportStatus = "live-bridge" | "live-bridge-runtime" | "cli-only" | "planned";
 export type ToolSource = "built-in" | "project" | "extension";
+/** 区分本项目完整完成证明与官方 attribute 的保守方法返回边界。 */
+export type ToolContractProfile = "native" | "official-attribute";
 export type PlayModeSupport = "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
 
 export interface ToolCompletionContract {
@@ -60,6 +62,8 @@ export interface ToolMetadata {
   unavailableReason?: string;
   /** Unity package names required by this tool at runtime. When absent the tool has no package prerequisites. */
   requiresPackages?: string[];
+  /** descriptor 的完成保证来源；TS 本地和 IUnityCliTool 默认为 native。 */
+  contractProfile?: ToolContractProfile;
   /** Live Bridge 计算的 handler+descriptor 指纹；破坏性 proof 必须绑定此值。 */
   liveDescriptorFingerprint?: string;
   /** 每次直接调用必须命中的机器可执行 completion contract。 */
@@ -71,6 +75,7 @@ export type ResolvedToolMetadata = ToolMetadata & {
   handler: ToolHandler;
   playModeSupport: PlayModeSupport;
   availabilityScope: string;
+  contractProfile: ToolContractProfile;
   /** 仅供内部安全与路由计算使用，公开 catalog 不会投影。 */
   riskLevel?: ToolRiskLevel;
 };

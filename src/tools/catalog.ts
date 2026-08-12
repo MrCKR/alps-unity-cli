@@ -11,12 +11,16 @@ import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "./.generated-completion-reg
 import {
   builtinToolMetadata,
   toolAvailabilityScope,
+  toolContractProfile,
   toolSource,
   type ToolMetadata
 } from "./metadata/index.js";
 
 export type ToolCatalogRuntime = ProjectToolRuntime & { dataDir?: string };
 export type ToolCatalogResult = { ok: true; tools: ToolMetadata[] } | (CliResult & { ok: false });
+
+const OFFICIAL_ATTRIBUTE_PREFIX = "UnityPipeline_";
+const OFFICIAL_ATTRIBUTE_GROUP = "UnityPipeline";
 
 /** package snapshot 中的 C# built-in/Extension descriptor，仅供生成、契约和离线审计使用。 */
 export function staticBridgeToolMetadata(): ToolMetadata[] {
@@ -25,7 +29,7 @@ export function staticBridgeToolMetadata(): ToolMetadata[] {
     .map((contract) => [contract.toolName, contract]));
   return staticCapabilityCatalog().tools.filter((descriptor) => bridgeContracts.has(String(descriptor.name ?? ""))).map((descriptor) => {
     const name = String(descriptor.name ?? "");
-    const tool = projectDescriptorToToolMetadata({ ...descriptor, completionContract: bridgeContracts.get(name) });
+    const tool = projectDescriptorToToolMetadata({ ...descriptor, contractProfile: "native", completionContract: bridgeContracts.get(name) });
     if (!tool) throw new Error(`Malformed static Tool descriptor: ${String(descriptor.name ?? "unknown")}`);
     return tool;
   });
@@ -41,12 +45,14 @@ export async function loadToolCatalog(
   requestId: string,
 ): Promise<ToolCatalogResult> {
   const editor = await discoverProjectTools(flags, runtime, `${requestId}_editor_catalog`, { requireBridge: true });
-  if (editor.ok === false) return editor;
+  if (editor.ok === false && editor.error?.code !== "E_INSTANCE_NOT_RUNNING") return editor;
 
   const runtimeCatalog = await discoverRuntimeTools(flags, runtime, `${requestId}_runtime_catalog`, { requireBridge: true });
-  if (runtimeCatalog.ok === false) return runtimeCatalog;
+  if (runtimeCatalog.ok === false && runtimeCatalog.error?.code !== "E_RUNTIME_NOT_RUNNING") return runtimeCatalog;
+  if (editor.ok === false && runtimeCatalog.ok === false) return editor;
 
-  return mergeLiveToolCatalog(requestId, builtinToolMetadata(), editor.tools, runtimeCatalog.tools);
+  // 一个 target 离线不应隐藏另一个 target 的 catalog；descriptor 仍只有 live owner，不建立静态副本。
+  return mergeLiveToolCatalog(requestId, builtinToolMetadata(), editor.ok ? editor.tools : [], runtimeCatalog.ok ? runtimeCatalog.tools : []);
 }
 
 /** 按名称从同一实例完整目录解析 Tool；本地 Tool 也不能绕过实例连接。 */
@@ -72,6 +78,11 @@ function mergeLiveToolCatalog(
 ): ToolCatalogResult {
   const tools = new Map<string, ToolMetadata>();
   const liveNames = new Set<string>();
+
+  for (const tool of [...localTools, ...editorTools, ...runtimeTools]) {
+    const namespaceViolation = officialAttributeNamespaceViolation(tool);
+    if (namespaceViolation) return toolCatalogConflict(requestId, tool.name, namespaceViolation);
+  }
 
   for (const tool of localTools) tools.set(tool.name, tool);
   for (const tool of editorTools) {
@@ -102,9 +113,19 @@ function mergeLiveToolCatalog(
   return { ok: true, tools: [...tools.values()].sort((left, right) => left.name.localeCompare(right.name)) };
 }
 
+/** 保留namespace与contract profile必须双向一致，禁止native或伪attribute descriptor借名路由。 */
+function officialAttributeNamespaceViolation(tool: ToolMetadata): string | undefined {
+  const officialAttribute = toolContractProfile(tool) === "official-attribute";
+  const usesPrefix = tool.name.startsWith(OFFICIAL_ATTRIBUTE_PREFIX);
+  const usesGroup = tool.group === OFFICIAL_ATTRIBUTE_GROUP;
+  if (officialAttribute && (!usesPrefix || !usesGroup)) return "official-attribute registration must use the UnityPipeline_ prefix and UnityPipeline group";
+  if (!officialAttribute && (usesPrefix || usesGroup)) return "native registration cannot use the reserved UnityPipeline_ prefix or UnityPipeline group";
+  return undefined;
+}
+
 /** runtime availability 必须来自同一份 live descriptor，不能借同名切换 owner。 */
 function sameLiveRegistration(left: ToolMetadata, right: ToolMetadata): boolean {
-  if (left.group !== right.group || left.target !== right.target) return false;
+  if (left.group !== right.group || left.target !== right.target || toolContractProfile(left) !== toolContractProfile(right)) return false;
   if (left.liveDescriptorFingerprint || right.liveDescriptorFingerprint) {
     return left.liveDescriptorFingerprint === right.liveDescriptorFingerprint;
   }
@@ -140,6 +161,7 @@ export function publicToolDescriptor(tool: ToolMetadata): Record<string, unknown
     ...(tool.sideEffects?.length ? { sideEffects: tool.sideEffects } : {}),
     playModeSupport: tool.playModeSupport ?? "supported",
     supportsDryRun: tool.supportsDryRun ?? false,
+    contractProfile: toolContractProfile(tool),
     ...(tool.permissions?.length ? { permissions: tool.permissions } : {}),
     ...(tool.examples?.length ? { examples: tool.examples.map(({ description, argv }) => ({ description, argv })) } : {}),
     source: toolSource(tool),

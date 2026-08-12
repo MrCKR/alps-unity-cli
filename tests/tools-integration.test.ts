@@ -21,6 +21,15 @@ test("tools group, search, and describe use one connected instance catalog", asy
   assert.equal((describe.data as { name: string }).name, "scene.hierarchy");
   assert.ok((describe.data as { inputSchema?: unknown }).inputSchema);
   assert.ok((describe.data as { outputSchema?: unknown }).outputSchema);
+  assert.equal((describe.data as { contractProfile?: string }).contractProfile, "native");
+});
+
+test("tools group list声明返回name是exact且group不是前缀", async () => {
+  const result = await execute(["tools", "group", "list", "scene"], connected as never);
+  assert.ok(result.ok, JSON.stringify(result));
+  assert.deepEqual((result.data as { nameSemantics: unknown }).nameSemantics, { exact: true, groupPrefix: false });
+  const tools = (result.data as { tools: Array<{ name: string }> }).tools;
+  assert.ok(tools.every((tool) => !tool.name.startsWith("scene/")));
 });
 
 test("target both keeps default editor availability when runtime is not ready", async () => {
@@ -43,6 +52,69 @@ test("target both keeps default editor availability when runtime is not ready", 
   assert.ok(result.ok, JSON.stringify(result));
   assert.equal((result.data as { available: boolean }).available, true);
   assert.equal(Object.hasOwn(result.data as object, "unavailableReason"), false);
+});
+
+test("tools catalog对UnityPipeline保留namespace违规fail closed", async () => {
+  const malformed = [
+    makeLiveTool({
+      name: "UnityPipeline_native",
+      summary: "Invalid native prefix.",
+      description: "A native Tool cannot occupy the official attribute prefix.",
+      group: "project",
+      source: "project",
+      contractProfile: "native",
+    }),
+    makeLiveTool({
+      name: "project.invalid-group",
+      summary: "Invalid native group.",
+      description: "A native Tool cannot occupy the official attribute group.",
+      group: "UnityPipeline",
+      source: "project",
+      contractProfile: "native",
+    }),
+    makeLiveTool({
+      name: "validation.attribute",
+      summary: "Invalid attribute identity.",
+      description: "An official attribute Tool must use both reserved identity fields.",
+      group: "UnityPipeline",
+      source: "project",
+      contractProfile: "official-attribute",
+    }),
+  ];
+
+  for (const tool of malformed) {
+    const result = await execute(["tools", "group"], {
+      ...disconnected,
+      projectTools: [tool],
+    } as never);
+    assert.equal(result.ok, false, tool.name);
+    if (!result.ok) assert.equal(result.error.code, "E_TOOL_SCHEMA_CONFLICT", tool.name);
+  }
+});
+
+test("重复official attribute原名使整个live catalog fail closed", async () => {
+  const first = makeLiveTool({
+    name: "UnityPipeline_duplicate",
+    summary: "First duplicate attribute.",
+    description: "First attributed method with the same original command name.",
+    group: "UnityPipeline",
+    source: "project",
+    contractProfile: "official-attribute",
+    liveDescriptorFingerprint: "a".repeat(64),
+  });
+  const second = makeLiveTool({
+    ...first,
+    summary: "Second duplicate attribute.",
+    description: "Second attributed method with the same original command name.",
+    liveDescriptorFingerprint: "b".repeat(64),
+  });
+  const result = await execute(["command"], {
+    ...disconnected,
+    projectTools: [first, second],
+  } as never);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "E_TOOL_SCHEMA_CONFLICT");
 });
 
 test("tools run fails closed on a local and live ownership conflict", async () => {

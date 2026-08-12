@@ -15,12 +15,12 @@ import "../.generated-registry.js";
 import { defineToolMetadata } from "../define.js";
 import { builtinExtensionGroupNames } from "../../extensions/tool-manifest.js";
 import type { PlayModeSupport, ResolvedToolMetadata, ToolMetadata, ToolSource } from "./types.js";
-import { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolPublicRoute, toolSource } from "./derived.js";
+import { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolContractProfile, toolPublicRoute, toolSource } from "./derived.js";
 import { supportStatusForTool, toolHandler } from "./status.js";
 
 export { supportStatusForTool, toolHandler } from "./status.js";
-export { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolDocsTopic, toolIsMutation, toolPublicRoute, toolSource } from "./derived.js";
-export type { PlayModeSupport, ResolvedToolMetadata, ToolCompletionContract, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
+export { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolContractProfile, toolDocsTopic, toolIsMutation, toolPublicRoute, toolSource } from "./derived.js";
+export type { PlayModeSupport, ResolvedToolMetadata, ToolCompletionContract, ToolContractProfile, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
 
 /** Extension groups are discovered from extension manifests, not TS tool metadata. */
 export const EXTENSION_GROUPS = new Set(builtinExtensionGroupNames());
@@ -33,6 +33,7 @@ export function normalizeToolMetadata(tool: ToolMetadata, source: ToolSource = "
     handler: toolHandler(tool),
     playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool),
     availabilityScope: toolAvailabilityScope(tool),
+    contractProfile: toolContractProfile(tool),
     riskLevel: inferToolRiskLevel(tool),
   };
   return normalized;

@@ -10,44 +10,57 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { join, extname } from "node:path";
 
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const projectRoot = process.cwd();
 
 // ── Helpers ────────────────────────────────────────────────
 
 function readDocFile(relPath: string): string {
-  return readFileSync(join(__dirname, "..", relPath), "utf8");
+  return readFileSync(join(projectRoot, relPath), "utf8");
 }
 
-function listMarkdownFiles(dir: string): string[] {
-  const absDir = join(__dirname, "..", dir);
+const PUBLIC_TEXT_EXTENSIONS = new Set([".md", ".json", ".jsonl", ".yaml", ".yml"]);
+
+/** 递归列出公开说明与示例，确保嵌套 reference/eval 不逃逸治理。 */
+function listPublicTextFiles(dir: string): string[] {
+  const root = join(projectRoot, dir);
   const results: string[] = [];
-  try {
-    for (const entry of readdirSync(absDir)) {
-      const full = join(absDir, entry);
-      if (statSync(full).isFile() && extname(entry) === ".md") {
-        results.push(`${dir}/${entry}`);
+
+  function visit(absDir: string, relDir: string): void {
+    try {
+      for (const entry of readdirSync(absDir).sort()) {
+        const full = join(absDir, entry);
+        const relativePath = `${relDir}/${entry}`.replaceAll("\\", "/");
+        if (statSync(full).isDirectory()) visit(full, relativePath);
+        else if (PUBLIC_TEXT_EXTENSIONS.has(extname(entry))) results.push(relativePath);
       }
+    } catch {
+      // 可选公开目录不存在时没有待扫描文件。
     }
-  } catch {
-    // directory may not exist
   }
+
+  visit(root, dir);
   return results;
 }
 
 function allDocFiles(): string[] {
-  const files: string[] = [];
-  files.push("README.md");
-  files.push("skills/unity_cli/SKILL.md");
-  files.push(...listMarkdownFiles("docs"));
-  files.push(...listMarkdownFiles("examples"));
-  files.push(...listMarkdownFiles("extensions/probuilder/docs"));
-  files.push(...listMarkdownFiles("extensions/cinemachine/docs"));
-  files.push(...listMarkdownFiles("extensions/urp/docs"));
-  files.push(...listMarkdownFiles("extensions/hdrp/docs"));
-  return files;
+  return [...new Set([
+    "README.md",
+    "AGENTS.md",
+    ...listPublicTextFiles("docs"),
+    ...listPublicTextFiles("examples"),
+    ...listPublicTextFiles("skills/unity_cli"),
+    ...listPublicTextFiles("extensions/probuilder/docs"),
+    ...listPublicTextFiles("extensions/cinemachine/docs"),
+    ...listPublicTextFiles("extensions/urp/docs"),
+    ...listPublicTextFiles("extensions/hdrp/docs"),
+    ".pi/skills/unity-cli-capability/SKILL.md",
+    ".pi/skills/unity-cli-extension/SKILL.md",
+    ".pi/skills/unity-cli-validation/SKILL.md",
+    ".pi/skills/unity-cli-wait/SKILL.md",
+    ".pi/agents/unity-cli-gate.md",
+  ])].sort();
 }
 
 // ── Current commands that MUST appear in docs ──
@@ -58,9 +71,7 @@ const REQUIRED_COMMANDS = [
   "tools describe",         // actual command for full descriptor
   "tools run",              // actual command to execute
   "tools search",           // actual command for keyword search
-  "context list",           // actual command to list contexts
-  "context describe",       // actual command for context descriptor
-  "context read",           // actual command to read context
+  "command",                // same Tool catalog, schema argument invocation
   "extensions list",        // actual command to list extensions
   "extensions install",     // actual command to install extension
   "extensions remove",      // actual command to remove extension
@@ -113,7 +124,7 @@ test("docs contain required current command references", () => {
 });
 
 test("skill does not use stale CLI parameter/field/error names", () => {
-  const skillPath = fileURLToPath(new URL("../skills/unity_cli/SKILL.md", import.meta.url));
+  const skillPath = join(projectRoot, "skills", "unity_cli", "SKILL.md");
   const skill = readFileSync(skillPath, "utf8");
 
   // --input-json is not a CLI parameter; the CLI uses --input
@@ -203,15 +214,37 @@ test("public docs do not expose private Bridge HTTP routes", () => {
   assert.deepEqual(violations, []);
 });
 
-test("docs distinguish between current and planned features", () => {
-  // Verify that context and extensions commands are documented as available
+test("docs expose only the current Tool、command和extension surfaces", () => {
   const readme = readDocFile("README.md");
+  assert.doesNotMatch(readme, /\bcontext (?:list|search|describe|read)\b/);
+  assert.match(readme, /能力入口只允许：[\s\S]*`tools`[\s\S]*`command`/);
 
-  // Context commands should be documented as available
-  assert.ok(
-    readme.includes("context list") || readme.includes("context describe"),
-    "README must document context commands as available"
-  );
+  const staleContextDocs: string[] = [];
+  const staleCliDocs: string[] = [];
+  const staleCountDocs: string[] = [];
+  const oldCapabilityRoots = "scene|asset|camera|go|prefab|package|build|test|editor|profiler|context";
+  const oldCliPattern = new RegExp(`(?:unity_cli|dist/cli\\.js)\\s+(?:${oldCapabilityRoots})\\b`, "i");
+  const staleCountPattern = /\b(?:43|44|361|404|408|409|413|935|945)\b.{0,24}\b(?:TS-local|C# Tool|completion|command|tests?)\b/i;
+
+  for (const file of allDocFiles()) {
+    const content = readDocFile(file).replaceAll("UnityCliProjectToolContext", "");
+    if (/\bContext\b|\bcontext\s+(?:list|search|describe|read)\b|IUnityCliContext|ProjectContextRegistry|defineContext|registeredContext/.test(content)) {
+      staleContextDocs.push(file);
+    }
+    if (oldCliPattern.test(content)) staleCliDocs.push(file);
+    if (staleCountPattern.test(content)) staleCountDocs.push(file);
+  }
+
+  assert.deepEqual(staleContextDocs, [], "public text must not expose the deleted Context surface");
+  assert.deepEqual(staleCliDocs, [], "public text must not invoke Unity capability domains as top-level commands");
+  assert.deepEqual(staleCountDocs, [], "public text must not freeze obsolete generated inventory counts");
+
+  for (const file of ["README.md", "AGENTS.md", "skills/unity_cli/SKILL.md", "docs/availability-differences.md"]) {
+    const content = readDocFile(file);
+    for (const boundary of ["auth", "Unity Hub", "Cloud", "License", "proxy"]) {
+      assert.match(content, new RegExp(boundary, "i"), `${file} must state the external control-plane boundary for ${boundary}`);
+    }
+  }
 
   // Extensions commands should be documented as available
   assert.ok(

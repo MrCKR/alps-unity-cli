@@ -59,7 +59,6 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
         "name": "cinemachine.extension.remove"
       }
     ],
-    "contexts": [],
     "csharpEntries": [
       {
         "type": "UnityCli.Cinemachine.AimTool",
@@ -169,7 +168,6 @@ export const HDRP_MANIFEST: ExtensionManifest = {
         "name": "hdrp.settings.set"
       }
     ],
-    "contexts": [],
     "csharpEntries": [
       {
         "type": "UnityCli.HdrpVolumeListTool",
@@ -337,11 +335,9 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
       },
       {
         "name": "probuilder.repair-mesh"
-      }
-    ],
-    "contexts": [
+      },
       {
-        "key": "probuilder.scene"
+        "name": "probuilder.scene"
       }
     ],
     "csharpEntries": [
@@ -446,7 +442,7 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
         "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.ProBuilder.ProBuilderSceneContext",
+        "type": "UnityCli.ProBuilder.ProBuilderSceneTool",
         "description": "Live capability implementation."
       },
       {
@@ -560,7 +556,6 @@ export const URP_MANIFEST: ExtensionManifest = {
         "name": "urp.settings.set"
       }
     ],
-    "contexts": [],
     "csharpEntries": [
       {
         "type": "UnityCli.UrpFeatureListTool",
@@ -772,7 +767,6 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
         "requiresPackages": []
       }
     ],
-    "contexts": [],
     "csharpEntries": [
       {
         "type": "UnityCli.VfxGraphInfoTool",

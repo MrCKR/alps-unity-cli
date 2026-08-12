@@ -21,6 +21,6 @@ test("completion probe maps unconfirmed effects to execution timeout", async () 
 
   assert.match(source, /"E_EXECUTION_TIMEOUT"/);
   assert.match(source, /result cannot be confirmed/);
-  assert.match(source, /Check the declared Context and inspect the target resource/);
+  assert.match(source, /Run the declared read Tool and inspect the target resource/);
   assert.doesNotMatch(source, /E_REQUEST_OUTCOME_UNKNOWN/);
 });

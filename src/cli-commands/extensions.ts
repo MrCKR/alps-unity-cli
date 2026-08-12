@@ -154,8 +154,7 @@ async function handleExtensionsList(
       providedTools,
       installCommand: `unity_cli extensions install ${desc.manifest.id} --project <path>`,
       nextActions: physical?.nextActions ?? availability.nextActions,
-      toolCount: desc.tools.length,
-      contextCount: desc.contexts.length
+      toolCount: desc.tools.length
     };
   });
 
@@ -165,16 +164,6 @@ async function handleExtensionsList(
     count: extensions.length,
     extensions
   };
-
-  const format = getString(flags, "format");
-  if (format === "text") {
-    const lines = extensions.map((e) => {
-      const state = e.installed ? "installed" : e.status;
-      const avail = e.dependencyInstalled ? "✓" : "✗";
-      return `${e.id} [${state}] ${avail} ${e.name} — ${e.unityPackages.map((p) => p.packageId).join(", ")}`;
-    });
-    data.text = lines.join("\n");
-  }
 
   return success(requestId, data);
 }
@@ -436,19 +425,6 @@ async function handleExtensionsDoctor(
       ? ["All extensions are in a consistent state."]
       : allIssues
   };
-
-  const format = getString(flags, "format");
-  if (format === "text") {
-    const lines: string[] = [`extensions doctor — project: ${projectPath}`, `healthy: ${healthy}`];
-    for (const check of checks) {
-      const icon = check.issues.length === 0 ? "✓" : "✗";
-      lines.push(`  ${icon} ${check.id} [${check.installed ? "installed" : check.status}] (${check.availability}) ${check.name}`);
-      for (const issue of check.issues) {
-        lines.push(`      - ${issue}`);
-      }
-    }
-    data.text = lines.join("\n");
-  }
 
   return success(requestId, data);
 }

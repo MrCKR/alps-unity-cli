@@ -12,7 +12,7 @@ import { checkExtensionBundles, installExtensionBundle, readExtensionInstallMani
 import { readInstalledUnityPackages } from "../src/extensions/project-resolver.js";
 import { validateExtensionManifestContracts } from "../src/contracts/command-contract.js";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
-import { checkToolExtensionAvailability, checkContextExtensionAvailability, extensionAvailabilityFlags } from "../src/extension-availability.js";
+import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../src/extension-availability.js";
 import { builtinToolMetadata, builtinToolGroups, EXTENSION_GROUPS } from "../src/tools/metadata/index.js";
 import { builtinExtensionMetadata } from "../src/extensions/metadata/index.js";
 import { builtinExtensionToolContributions, findBuiltinExtensionToolContribution, requiredPackagesForContribution } from "../src/extensions/tool-manifest.js";
@@ -226,11 +226,12 @@ test("extension availability keeps explicit project and unresolved strict instan
   assert.equal(unresolved.errorCode, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN");
 });
 
-test("checkContextExtensionAvailability still resolves extension contexts from manifests", async () => {
-  const projectPath = await makeFakeProject();
-  const result = await checkContextExtensionAvailability("probuilder.scene", { project: projectPath });
-  assert.equal(result.available, false);
-  assert.equal(result.extensionId, "probuilder");
+test("probuilder.scene is exposed only as a Tool contribution", () => {
+  const probuilder = BUILTIN_EXTENSION_MANIFESTS.find((manifest) => manifest.id === "probuilder");
+  assert.ok(probuilder);
+  assert.ok(probuilder.contributions.tools?.some((entry) => entry.name === "probuilder.scene"));
+  assert.equal(Object.hasOwn(probuilder.contributions, "contexts"), false);
+  assert.equal(findBuiltinExtensionToolContribution("probuilder.scene")?.extensionId, "probuilder");
 });
 
 test("doctor and capabilities keep extension summaries available from manifests", async () => {
@@ -245,7 +246,7 @@ test("doctor and capabilities keep extension summaries available from manifests"
   assert.ok(extCheck);
   assert.equal(extCheck!.status, "fail");
 
-  const capabilities = await handleCapabilitiesCommand({ project: projectPath }, { projectTools: [], projectContexts: [] }, requestId);
+  const capabilities = await handleCapabilitiesCommand({ project: projectPath }, { projectTools: [] }, requestId);
   assert.ok(capabilities.ok);
   const ext = (capabilities.data as Record<string, unknown>).extensions as Record<string, unknown>;
   assert.equal(ext.total, 5);
@@ -314,11 +315,12 @@ test("extension registry helpers still expose contribution counts", async () => 
   const probuilderMetadata = builtinExtensionMetadata().find((entry) => entry.id === "probuilder");
   assert.ok(probuilderMetadata);
   assert.ok((probuilderMetadata?.providesTools ?? []).includes("probuilder.ping"));
+  assert.ok((probuilderMetadata?.providesTools ?? []).includes("probuilder.scene"));
   assert.ok(builtinToolMetadata().every((tool) => tool.source !== "extension"));
 
   const probuilder = registry.getExtension("probuilder");
   assert.ok(probuilder);
-  assert.equal(probuilder!.manifest.contributions.tools?.length, 36);
+  assert.equal(probuilder!.manifest.contributions.tools?.length, 37);
   assert.equal(probuilderDeleteFacesTool().source, "extension");
   assert.equal(probuilderDeleteFacesTool().destructiveHint, true);
   assert.equal(installedPackages.has("com.unity.probuilder"), true);

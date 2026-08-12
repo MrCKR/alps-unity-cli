@@ -3,8 +3,20 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { deployPackageSource } from "../src/package-manager.js";
+import { deployPackageSource, inspectPackageDeploymentFiles } from "../src/package-manager.js";
 import { runPackageFileMutationWorker } from "../src/tools/package/file-mutation-worker.js";
+
+async function deployWorkerPlan(project: string, plan: Awaited<ReturnType<typeof deployPackageSource>>): Promise<Record<string, unknown>> {
+  const observed = await inspectPackageDeploymentFiles(project, plan.packageName, plan.targetPath, plan.backupPath);
+  return {
+    ...plan,
+    previousTargetExists: observed.targetExists,
+    previousTargetHash: observed.targetHash,
+    previousRecordIdentity: observed.recordIdentity,
+    previousBackupExists: observed.backupExists,
+    previousBackupHash: observed.backupHash,
+  } as unknown as Record<string, unknown>;
+}
 
 /** 构造最小 Unity manifest，验证生产 Worker 在退出后才向父进程交付结果。 */
 async function projectFixture(): Promise<{ root: string; project: string; manifest: string }> {
@@ -53,7 +65,7 @@ test("Package deploy Worker consumes the frozen backup path for an existing targ
     const result = await runPackageFileMutationWorker(
       "deploy",
       fixture.project,
-      plan as unknown as Record<string, unknown>,
+      await deployWorkerPlan(fixture.project, plan),
       Date.now() + 5_000,
       new AbortController().signal,
     );
@@ -61,7 +73,7 @@ test("Package deploy Worker consumes the frozen backup path for an existing targ
     assert.equal(result.backupPath, plan.backupPath);
     assert.equal(await readFile(join(plan.backupPath, "old.txt"), "utf8"), "old\n");
     const backupEntries = await readdir(join(fixture.project, "Packages", ".unity_cli_deploy_backups"), { withFileTypes: true });
-    assert.equal(backupEntries.filter((entry) => entry.isDirectory()).length, 1);
+    assert.equal(backupEntries.filter((entry) => entry.isDirectory() && entry.name.startsWith(`${packageName}-`)).length, 1);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
@@ -83,7 +95,7 @@ test("Repeated deploy without an original target does not invent a backup path",
     const result = await runPackageFileMutationWorker(
       "deploy",
       fixture.project,
-      plan as unknown as Record<string, unknown>,
+      await deployWorkerPlan(fixture.project, plan),
       Date.now() + 5_000,
       new AbortController().signal,
     );

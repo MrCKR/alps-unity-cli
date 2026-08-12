@@ -22,23 +22,6 @@ namespace UnityCli
         ValueTask<TRes> ExecuteAsync(TReq request, UnityCliProjectToolContext ctx, CancellationToken ct = default);
     }
 
-    /// <summary>
-    /// Context 统一为语言原生异步接口。只读观察能力使用 ReadAsync。
-    /// </summary>
-    public interface IUnityCliContext<TReq, TRes>
-    {
-        ContextDescriptor Describe();
-
-        /// <summary>只读异步入口。成功返回 Result，报错抛 BridgeCommandException。</summary>
-        ValueTask<TRes> ReadAsync(TReq request, UnityCliProjectToolContext ctx, CancellationToken ct = default);
-    }
-
-    /// <summary>只有显式实现本接口的纯只读 Context 才能承担 completionProbe 资源归因。</summary>
-    public interface IUnityCliProofObserver<TReq>
-    {
-        UnityCliProofResourceClaim ResolveProofResource(TReq request);
-    }
-
     /// <summary>proof observer 的内部 canonical resource claim；不会投影到公开成功响应。</summary>
     public sealed class UnityCliProofResourceClaim
     {
@@ -48,12 +31,12 @@ namespace UnityCli
         public int SceneHandle { get; set; }
     }
 
-    /// <summary>高风险同步动作的声明式完成条件。</summary>
+    /// <summary>高风险同步动作的声明式完成条件；readTool 只选择公开读取契约，内部 observer 不参与目录。</summary>
     public sealed class UnityCliCompletionProbe
     {
         [UnityCliRequired]
         [UnityCliStringEnum("scene.gameobject", "scene.gameobject.component")]
-        public string Context { get; set; }
+        public string ReadTool { get; set; }
         [UnityCliRequired, UnityCliAnyJson]
         public object Input { get; set; }
         [UnityCliRequired]
@@ -127,24 +110,6 @@ namespace UnityCli
         public string CompletionDriverId { get; set; }
     }
 
-    /// <summary>
-    /// Context descriptor 的人写字段；只保留公开只读契约和内部指纹。
-    /// </summary>
-    public sealed class ContextDescriptor
-    {
-        public string Name { get; set; }
-        public string Summary { get; set; }
-        public string Description { get; set; }
-        public string Category { get; set; }
-        public string Source { get; set; }
-        public string Target { get; set; }
-        public string AvailabilityScope { get; set; }
-        public string PlayModeSupport { get; set; }
-        public string[] RequiresPackages { get; set; }
-        public ContextExample[] Examples { get; set; }
-        public string Fingerprint { get; set; }
-    }
-
     /// <summary>调用示例的内部 typed input，公开投影只保留 argv。</summary>
     public sealed class ToolExample
     {
@@ -157,13 +122,6 @@ namespace UnityCli
     {
         public bool? DryRun { get; set; }
         public int? TimeoutMs { get; set; }
-    }
-
-    /// <summary>Context 示例内部保留 typed input，公开投影只保留 argv。</summary>
-    public sealed class ContextExample
-    {
-        public string Description { get; set; }
-        public object Input { get; set; }
     }
 
     /// <summary>

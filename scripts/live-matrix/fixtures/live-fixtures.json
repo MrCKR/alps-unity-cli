@@ -39,8 +39,8 @@
    {
     "id": "read-proof-before",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "scene.gameobject",
      "--input",
      "{\"target\":\"Main Camera\",\"includeComponents\":false}"
@@ -61,7 +61,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-matrix-setup.cs\",\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":31337,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-matrix-setup.cs\",\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":31337,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -117,8 +117,8 @@
    {
     "id": "ready",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "editor.state",
      "--input",
      "{}"
@@ -173,8 +173,8 @@
    {
     "id": "read-proof-before",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "scene.gameobject",
      "--input",
      "{\"target\":\"Main Camera\",\"includeComponents\":false}"
@@ -195,7 +195,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-matrix-setup.cs\",\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":31337,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-matrix-setup.cs\",\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":31337,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -235,8 +235,8 @@
    {
     "id": "ready",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "editor.state",
      "--input",
      "{}"
@@ -291,7 +291,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"cinemachine-extension-absent\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"cinemachine-extension-absent\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -328,7 +328,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"probuilder-generic\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"probuilder-generic\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -361,7 +361,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-panel-settings-absent\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-panel-settings-absent\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -394,7 +394,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"vfx-parameter\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"vfx-parameter\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -427,7 +427,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-create\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-create\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -460,7 +460,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-main-open\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-main-open\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -493,7 +493,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-gameplay-open\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-gameplay-open\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -526,7 +526,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-level2-open\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scene-level2-open\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -559,7 +559,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-document-create\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-document-create\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -592,7 +592,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scriptable-object\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scriptable-object\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -625,7 +625,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scriptable-object-create-absent\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"scriptable-object-create-absent\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -658,7 +658,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-detach-target\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-detach-target\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -691,7 +691,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-visual-element\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"ui-visual-element\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -746,7 +746,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"vfx-line-target\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"vfx-line-target\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -779,7 +779,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"prefab-create\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"prefab-create\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -812,7 +812,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"prefab-unpack\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"prefab-unpack\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -852,8 +852,8 @@
    {
     "id": "verify",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "prefab.stage",
      "--input",
      "{}"
@@ -934,7 +934,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"profiler-snapshots\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-capability-setup.cs\",\"args\":{\"action\":\"profiler-snapshots\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":32000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -1011,7 +1011,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"urp\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":33000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"urp\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":33000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -1044,7 +1044,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"hdrp\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":33000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"hdrp\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":33000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -1073,8 +1073,8 @@
    {
     "id": "read-proof-before",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "scene.gameobject",
      "--input",
      "{\"target\":\"Main Camera\",\"includeComponents\":false}"
@@ -1095,7 +1095,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"restore\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":33000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-pipeline-setup.cs\",\"args\":{\"pipeline\":\"restore\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":${proofBefore},\"after\":33000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -1199,7 +1199,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-playmode-options.cs\",\"args\":{\"action\":\"enable\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":34000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-playmode-options.cs\",\"args\":{\"action\":\"enable\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":34000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -1232,7 +1232,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-playmode-options.cs\",\"args\":{\"action\":\"restore\"},\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":34000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-playmode-options.cs\",\"args\":{\"action\":\"restore\"},\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":34000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -1255,7 +1255,7 @@
  },
  "concurrency": {
   "assert": {
-   "serial": true
+   "minOverlapMs": 1
   },
   "calls": [
    {
@@ -1318,8 +1318,8 @@
    {
     "id": "late-side-effect",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "validation.wait-status",
      "--input",
      "{\"marker\":\"matrix-timeout-final\"}"
@@ -1341,8 +1341,8 @@
    {
     "id": "missing-instance",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "editor.state",
      "--input",
      "{}",
@@ -1356,8 +1356,8 @@
    {
     "id": "instance-recovery",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "editor.state",
      "--input",
      "{}"
@@ -1382,7 +1382,7 @@
      "run",
      "code.exec",
      "--input",
-     "{\"file\":\"scripts/live-matrix/fixtures/live-domain-reload-setup.cs\",\"completionProbe\":{\"context\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":35000,\"tolerance\":0.001}]}}"
+     "{\"file\":\"scripts/live-matrix/fixtures/live-domain-reload-setup.cs\",\"completionProbe\":{\"readTool\":\"scene.gameobject\",\"input\":{\"target\":\"Main Camera\",\"includeComponents\":false},\"assertions\":[{\"path\":\"/gameObject/transform/position/x\",\"operator\":\"approx\",\"before\":0,\"after\":35000,\"tolerance\":0.001}]}}"
     ],
     "expect": {
      "equals": {
@@ -1419,8 +1419,8 @@
    {
     "id": "ready-after-reload",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "editor.state",
      "--input",
      "{}"
@@ -1440,13 +1440,17 @@
      "--input",
      "{\"path\":\"Assets/UnityCLIValidation/MatrixReloadProbe.cs\"}"
     ],
-    "expect": {}
+    "expect": {
+     "acceptErrorCodes": [
+      "E_ASSET_NOT_FOUND"
+     ]
+    }
    },
    {
     "id": "ready-after-cleanup",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "editor.state",
      "--input",
      "{}"
@@ -1501,8 +1505,8 @@
    {
     "id": "read",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "prefab.stage",
      "--input",
      "{}"
@@ -1547,8 +1551,8 @@
    {
     "id": "read-import-cache",
     "argv": [
-     "context",
-     "read",
+     "tools",
+     "run",
      "validation.ui-cache",
      "--input",
      "{\"path\":\"Assets/UnityCLIValidation/Matrix.uxml\",\"elementName\":\"MatrixCacheLabel\"}"

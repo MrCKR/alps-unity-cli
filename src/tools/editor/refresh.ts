@@ -86,13 +86,15 @@ export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefr
     // 已被 durable root 接受后，任何轮询/transport 失败都不能改写为普通失败。
     if (root.terminal !== true) {
       if (root.terminal !== false || root.accepted !== true) throw invalid();
+      const rootRequestDigest = typeof root.rootRequestDigest === "string" && /^[a-f0-9]{64}$/.test(root.rootRequestDigest) ? root.rootRequestDigest : undefined;
+      if (!rootRequestDigest) throw invalid();
       accepted = true;
       const statusId = childId(context.requestId, "_refresh_status");
       while (root.terminal !== true) {
         if (Date.now() >= deadline) throw executionTimeout("E_EXECUTION_TIMEOUT");
         await delay(100);
         try {
-          root = record((await bridge(statusId, "internal.editor.refresh.status", { rootRequestId: context.requestId }, flags, context, observe)).data);
+          root = record((await bridge(statusId, "internal.editor.refresh.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe)).data);
         } catch (error) {
           throw executionTimeoutFrom(error);
         }

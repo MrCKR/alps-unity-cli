@@ -1,0 +1,108 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const officialPath = "unitypkg/Editor/ProjectTools/OfficialAttributeToolRegistry.cs";
+const settingsPath = "unitypkg/Editor/Infrastructure/UnityCliProjectSettings.cs";
+const handoffPath = "unitypkg/Editor/Infrastructure/UnityCliPipelineHandoff.cs";
+const instanceRegistryPath = "unitypkg/Editor/Infrastructure/UnityCliInstanceRegistry.cs";
+const bridgePath = "unitypkg/Editor/UnityCliBridge.cs";
+
+test("Pipeline provider suppression uses declaring assembly package identity only", async () => {
+  const source = await readFile(officialPath, "utf8");
+  assert.match(source, /PackageInfo\.FindForAssembly\(assembly\)/);
+  assert.match(source, /SuppressedOfficialAttributePackage = "com\.unity\.pipeline"/);
+  assert.match(source, /string\.Equals\(package\.name, SuppressedOfficialAttributePackage, StringComparison\.Ordinal\)/);
+  assert.doesNotMatch(source, /method\.Name.*Suppressed|type\.Namespace.*Suppressed|assembly\.GetName\(\)\.Name.*Suppressed/);
+  assert.ok(source.indexOf("IsSuppressedOfficialAttributeProvider(assembly)") < source.indexOf("CreateOfficialAttributeTool(assembly, type, method)"));
+});
+
+test("project settings default Bridge AutoStart on and keep handoff marker one-way", async () => {
+  const source = await readFile(settingsPath, "utf8");
+  assert.match(source, /FilePath\("ProjectSettings\/UnityCliSettings\.asset"/);
+  assert.match(source, /private bool bridgeAutoStart = true/);
+  assert.match(source, /private bool pipelineHandoffApplied/);
+  assert.match(source, /internal bool BridgeAutoStart/);
+  assert.match(source, /internal bool PipelineHandoffApplied/);
+  assert.match(source, /MarkPipelineHandoffApplied\(\)[\s\S]*?pipelineHandoffApplied = true;[\s\S]*?Save\(true\)/);
+  assert.doesNotMatch(source, /pipelineHandoffApplied = false/);
+  assert.match(source, /SettingsProvider\("Project\/Unity CLI", SettingsScope\.Project\)/);
+  assert.doesNotMatch(source, /SetBridgeAutoStart[\s\S]*?(StartListener|StopListener|UnregisterAndStop)/);
+});
+
+test("Pipeline handoff applies once and marks only after durable config and stop readback", async () => {
+  const source = await readFile(handoffPath, "utf8");
+  assert.match(source, /PipelinePackageName = "com\.unity\.pipeline"/);
+  assert.match(source, /if \(settings\.PipelineHandoffApplied\)[\s\S]*?state = "already-applied";[\s\S]*?return true/);
+  assert.match(source, /state = "pipeline-not-installed";[\s\S]*?return true/);
+  assert.match(source, /SerializedPropertyType\.Boolean/);
+  assert.match(source, /FindProperty\("m_AutoStart"\)\.boolValue = false/);
+  assert.match(source, /TypeCache\.GetTypesDerivedFrom\(managerType\)/);
+  assert.match(source, /AssetDatabase\.FindAssets\("t:" \+ candidateType\.Name\)/);
+  assert.match(source, /managerType\.IsInstanceOfType\(value\)/);
+  assert.doesNotMatch(source, /value\.GetType\(\) == managerType/);
+  assert.match(source, /EditorUtility\.IsDirty\(manager\)/);
+  assert.match(source, /AssetDatabase\.IsOpenForEdit\(path, StatusQueryOptions\.UseCachedIfPossible\)/);
+  assert.match(source, /AssetDatabase\.SaveAssetIfDirty\(manager\)/);
+  assert.doesNotMatch(source, /AssetDatabase\.SaveAssets\(\)/);
+  assert.match(source, /TryRestoreManagers\(managerType, managerSnapshots/);
+  assert.match(source, /var deleted = AssetDatabase\.DeleteAsset\(createdManagerPath\)/);
+  assert.match(source, /!deleted \|\| AssetDatabase\.LoadMainAssetAtPath\(createdManagerPath\) != null/);
+  assert.match(source, /Resources\.UnloadAsset\(manager\)/);
+  assert.match(source, /ImportAssetOptions\.ForceUpdate \| ImportAssetOptions\.ForceSynchronousImport/);
+  assert.match(source, /GetMethod\("StopServer"/);
+  assert.match(source, /server = serverProperty\.GetValue\(null, null\)/);
+  assert.match(source, /Process\.GetCurrentProcess\(\)\.Id/);
+  assert.match(source, /GetFileInformationByHandle/);
+  assert.match(source, /VolumeSerialNumber != snapshot\.VolumeSerialNumber/);
+  assert.match(source, /FileIndexHigh != snapshot\.FileIndexHigh/);
+  assert.match(source, /FileIndexLow != snapshot\.FileIndexLow/);
+  assert.match(source, /EnsureDescriptorPathHasNoReparsePoint/);
+  assert.match(source, /Path\.GetPathRoot\(root\)/);
+  assert.match(source, /if \(root\.Length > pathRoot\.Length\) root = root\.TrimEnd/);
+  assert.match(source, /FileAttributes\.ReparsePoint/);
+  assert.match(source, /CreateFileW/);
+  assert.match(source, /GenericRead \| GenericWrite \| DeleteAccess/);
+  assert.match(source, /StructLayout\(LayoutKind\.Sequential, Pack = 1\)[\s\S]*?internal byte DeleteFile/);
+  assert.match(source, /dispositionSize != 1u/);
+  assert.match(source, /SetFileInformationByHandle/);
+  assert.match(source, /finally[\s\S]*?handle\.Dispose\(\)/);
+  assert.match(source, /CreatePipelinePortGuard\(port\)/);
+  assert.match(source, /new TcpListener\(IPAddress\.Any, port\)/);
+  assert.match(source, /listener\.Server\.ExclusiveAddressUse = true/);
+  assert.match(source, /GetMethod\("GetDescriptorFilePath"/);
+  assert.doesNotMatch(source, /GetMethod\("RemoveFromProjectRoot"/);
+  assert.match(source, /GetMethod\("SetAutoTick"/);
+  assert.match(source, /GetField\("s_Enabled"/);
+  assert.match(source, /GetField\("s_Pump"/);
+  assert.match(source, /VerifyAutoStartDisabled\(managers\)/);
+  const mark = source.indexOf("settings.MarkPipelineHandoffApplied()");
+  assert.ok(mark > source.indexOf("SetAutoStartDisabledAndReload(managerType, managers, managerSnapshots)"));
+  assert.ok(mark > source.indexOf("StopAndGuardPipelineServer(managerType.Assembly)"));
+  assert.ok(mark > source.indexOf("DisableAndVerifyPipelineAutoTick(managerType.Assembly)"));
+  assert.ok(mark > source.indexOf("VerifyAutoStartDisabled(managers)"));
+  assert.ok(mark > source.indexOf("VerifyPipelineShutdownStable(managerType.Assembly)"));
+  assert.equal((source.match(/MarkPipelineHandoffApplied\(\)/g) ?? []).length, 1);
+});
+
+test("Bridge bootstrap drains Pipeline startup and AutoStart off publishes no reload instance", async () => {
+  const source = await readFile(bridgePath, "utf8");
+  assert.match(source, /EditorApplication\.delayCall \+= PrimeBridgeStartup/);
+  assert.match(source, /UnityCliPipelineHandoff\.PrimePipelineStartup/);
+  assert.match(source, /EditorApplication\.delayCall \+= QueueCompleteBridgeStartup/);
+  assert.match(source, /EditorApplication\.delayCall \+= CompleteBridgeStartup/);
+  assert.ok(source.indexOf("PrimePipelineStartup") < source.indexOf("private static void QueueCompleteBridgeStartup()"));
+  assert.ok(source.indexOf("private static void QueueCompleteBridgeStartup()") < source.indexOf("private static void CompleteBridgeStartup()"));
+  assert.match(source, /UnityCliPipelineHandoff\.EnsureAppliedOnce/);
+  assert.match(source, /if \(!UnityCliProjectSettings\.Current\.BridgeAutoStart\)[\s\S]*?DeleteInstanceRegistration\(\);[\s\S]*?StopListener\(\);[\s\S]*?return/);
+  const reloadStart = source.indexOf("private static void OnBeforeAssemblyReload()");
+  const reloadEnd = source.indexOf("private static void OnAfterAssemblyReload()", reloadStart);
+  const reloadSource = source.slice(reloadStart, reloadEnd);
+  assert.ok(reloadSource.indexOf("!UnityCliProjectSettings.Current.BridgeAutoStart") < reloadSource.indexOf('RegisterInstance("transitioning")'));
+  assert.match(reloadSource, /DeleteInstanceRegistration\(\);[\s\S]*?StopListener\(\);[\s\S]*?return/);
+  const registrySource = await readFile(instanceRegistryPath, "utf8");
+  assert.match(registrySource, /!UnityCliProjectSettings\.Current\.BridgeAutoStart[\s\S]*?domainReloading \|\| EditorApplication\.isCompiling \|\| EditorApplication\.isUpdating[\s\S]*?return true/);
+  assert.match(source, /bridge_after_assembly_reload scheduling bootstrap/);
+  assert.match(source, /ScheduleBridgeStartup\(\);/);
+  assert.doesNotMatch(source, /bridge_after_assembly_reload restarting listener/);
+});

@@ -24,7 +24,7 @@ namespace UnityCli
             private sealed class PackageActiveDecision { internal bool Execute; internal object TerminalEnvelope; }
             private sealed class ActivePackageOperationRecord
             {
-                internal string RequestId; internal string EditorSessionId; internal DateTimeOffset AbsoluteDeadlineUtc;
+                internal string RequestId; internal string RequestDigest; internal string EditorSessionId; internal DateTimeOffset AbsoluteDeadlineUtc;
                 internal string State; internal string Phase; internal DateTimeOffset? AcceptedAt; internal DateTimeOffset? StartedAt;
                 internal object TerminalEnvelope; internal Dictionary<string, object> PackageOperation;
             }
@@ -39,12 +39,21 @@ namespace UnityCli
                     else TerminalError(root, "E_EDITOR_SESSION_REPLACED", "The Editor session changed before Package files or Resolve began.", null);
                 }
                 foreach (var root in roots.Where(root => string.Equals(root.EditorSessionId, EditorSessionId(), StringComparison.Ordinal) && !IsTerminal(root)))
-                    if (UnityCliSessionMutationLease.IsOwnedBy(root.RequestId)) TickRoot(root);
+                    if (UnityCliSessionMutationLease.IsOwnedBy(root.RequestId, root.RequestDigest)) TickRoot(root);
             }
 
             private static void TickRoot(ActivePackageOperationRecord root)
             {
                 var phase = Text(root.PackageOperation, "phase");
+                if (!Same(Text(root.PackageOperation, "reloadEpoch"), CurrentReloadEpoch()))
+                {
+                    if (phase == "resolve_returned" || phase == "list_pending" || phase == "list_succeeded" || phase == "reload_observed")
+                    {
+                        AdvancePackageOperation(root.RequestId, current => { current.PackageOperation["reloadObserved"] = true; current.PackageOperation["reloadEpoch"] = CurrentReloadEpoch(); current.PackageOperation["phase"] = "reload_observed"; });
+                    }
+                    else TerminalTimeout(root, "Package root crossed a domain reload before its mutation effect obtained a read-only recovery fence.");
+                    return;
+                }
                 var expired = DateTimeOffset.UtcNow >= root.AbsoluteDeadlineUtc;
                 if (expired && !PackageEffectStarted(root.RequestId)) { TerminalError(root, "E_EXECUTION_TIMEOUT", "Package root did not begin before its immutable deadline.", null); return; }
                 if (phase == "awaiting_files") return;
@@ -92,6 +101,8 @@ namespace UnityCli
                 AdvancePackageOperation(root.RequestId, current => current.PackageOperation["phase"] = "resolve_dispatching");
                 try
                 {
+                    var dispatchRoot = RequiredRoot(root.RequestId);
+                    RequireLease(dispatchRoot);
                     Client.Resolve();
                     AdvancePackageOperation(root.RequestId, current => { current.PackageOperation["resolveReturned"] = true; current.PackageOperation["phase"] = "resolve_returned"; });
                 }
@@ -262,7 +273,7 @@ namespace UnityCli
                 root.State = "accepted"; root.Phase = "accepted_before_effect"; root.AcceptedAt = DateTimeOffset.UtcNow;
                 root.PackageOperation = new Dictionary<string, object> {
                     { "phase", args.Operation == "resolve" ? "files_proven" : "awaiting_files" }, { "operation", args.Operation },
-                    { "input", args.Input ?? new Dictionary<string, object>() }, { "resolveReturned", false }, { "reloadObserved", false }
+                    { "input", args.Input ?? new Dictionary<string, object>() }, { "resolveReturned", false }, { "reloadObserved", false }, { "reloadEpoch", CurrentReloadEpoch() }
                 };
                 if (args.Operation == "resolve") { root.PackageOperation["expectedManifestSha256"] = HashFile(ManifestPath()); root.PackageOperation["predicates"] = new List<object>(); root.PackageOperation["filesProof"] = null; root.PackageOperation["publicResultSeed"] = null; }
             }
@@ -291,6 +302,7 @@ namespace UnityCli
                 if (operation == "deploy")
                 {
                     if (!Same(Text(proof, "targetHash"), HashDirectory(target)) || Long(proof, "copiedFileCount") != CountFiles(target)) throw Unknown("Deployed package tree does not match the claimed file proof.");
+                    if (!OptionalSame(Text(proof, "backupPackageVersion"), Text(seed, "backupPackageVersion"))) throw Unknown("Deployed package backup version does not match the public result seed.");
                 }
                 else
                 {
@@ -353,7 +365,7 @@ namespace UnityCli
 
             private static string BusyEnvelope(string requestId) { return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(requestId, "E_UNITY_BUSY", "Another mutation owns the selected Unity instance.", null, new[] { "Wait for the current mutation to reach its terminal result, then retry." }, true, 250)); }
             private static bool UnityBusy() { return EditorApplication.isCompiling || EditorApplication.isUpdating; }
-            private static void RequireLease(string requestId) { if (!UnityCliSessionMutationLease.IsOwnedBy(requestId)) throw new BridgeCommandException("E_UNITY_BUSY", "Package root no longer owns the session mutation lease."); }
+            private static void RequireLease(ActivePackageOperationRecord root) { if (root == null || !UnityCliSessionMutationLease.IsOwnedBy(root.RequestId, root.RequestDigest)) throw new BridgeCommandException("E_UNITY_BUSY", "Package root no longer owns the exact session mutation lease."); }
             private static ActivePackageOperationRecord RequiredRoot(string requestId)
             {
                 ActivePackageOperationRecord terminal;
@@ -367,16 +379,25 @@ namespace UnityCli
                 var root = LoadPackageActiveOperation();
                 return root == null ? new List<ActivePackageOperationRecord>() : new List<ActivePackageOperationRecord> { root };
             }
-            private static PackageActiveDecision AcceptPackageActiveOperation(BridgeRequest request, byte[] raw, UnityCliToolCompletionContract contract, Action beforeAccess, Action beforeCreate, Action<ActivePackageOperationRecord> initialize)
+            private static PackageActiveDecision AcceptPackageActiveOperation(BridgeRequest request, byte[] raw, UnityCliToolCompletionContract contract, bool allowCreate, Action beforeAccess, Action beforeCreate, Action<ActivePackageOperationRecord> initialize)
             {
+                var requestDigest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
+                ActivePackageOperationRecord terminal;
+                if (TerminalRoots.TryGetValue(request.RequestId, out terminal))
+                {
+                    if (!string.Equals(terminal.RequestDigest, requestDigest, StringComparison.Ordinal))
+                        throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Package requestId was reused with different input.");
+                    return new PackageActiveDecision { TerminalEnvelope = terminal.TerminalEnvelope };
+                }
                 var root = LoadPackageActiveOperation();
                 if (root == null)
                 {
+                    if (!allowCreate) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Package active state is missing while the exact lease still exists; outcome is unknown.");
                     if (beforeCreate != null) beforeCreate();
                     if (beforeAccess != null) beforeAccess();
                     DateTimeOffset deadline;
                     if (!DateTimeOffset.TryParse(request.Execution.AbsoluteDeadlineUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline)) throw Schema("Package deadline is invalid.");
-                    root = new ActivePackageOperationRecord { RequestId = request.RequestId, EditorSessionId = EditorSessionId(), AbsoluteDeadlineUtc = deadline, State = "accepted", Phase = "accepted_before_effect", AcceptedAt = DateTimeOffset.UtcNow };
+                    root = new ActivePackageOperationRecord { RequestId = request.RequestId, RequestDigest = requestDigest, EditorSessionId = EditorSessionId(), AbsoluteDeadlineUtc = deadline, State = "accepted", Phase = "accepted_before_effect", AcceptedAt = DateTimeOffset.UtcNow };
                     initialize(root);
                     SavePackageActiveOperation(root);
                     return new PackageActiveDecision { Execute = true };
@@ -386,7 +407,12 @@ namespace UnityCli
                     TerminalTimeout(root, "The Editor session changed while a Package operation was active.");
                     return new PackageActiveDecision { TerminalEnvelope = RequiredRoot(root.RequestId).TerminalEnvelope };
                 }
-                if (string.Equals(root.RequestId, request.RequestId, StringComparison.Ordinal)) return new PackageActiveDecision { Execute = true };
+                if (string.Equals(root.RequestId, request.RequestId, StringComparison.Ordinal))
+                {
+                    if (!string.Equals(root.RequestDigest, requestDigest, StringComparison.Ordinal))
+                        throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Package requestId was reused with different input.");
+                    return new PackageActiveDecision { Execute = true };
+                }
                 return new PackageActiveDecision { TerminalEnvelope = ProtocolEnvelopeFactory.Error(request.RequestId, "E_UNITY_BUSY", "Another Package operation is active.", null) };
             }
 
@@ -406,6 +432,7 @@ namespace UnityCli
             {
                 AdvancePackageOperation(requestId, root =>
                 {
+                    RequireLease(root);
                     if (root.Phase != "accepted_before_effect" || Text(root.PackageOperation, "phase") != "awaiting_files" || root.PackageOperation.ContainsKey("filePlan")) throw new BridgeCommandException("E_EXECUTION_FAILED", "Package active operation is not awaiting its file barrier.");
                     root.PackageOperation["filePlan"] = plan; root.PackageOperation["phase"] = "files_committing";
                     root.Phase = "effect_started"; root.State = "running"; root.StartedAt = DateTimeOffset.UtcNow;
@@ -413,7 +440,7 @@ namespace UnityCli
             }
             private static void MarkPackageResolveEffectStarted(string requestId, string kind, object continuation)
             {
-                AdvancePackageOperation(requestId, root => { root.Phase = "effect_started"; root.State = "running"; root.StartedAt = DateTimeOffset.UtcNow; });
+                AdvancePackageOperation(requestId, root => { RequireLease(root); root.Phase = "effect_started"; root.State = "running"; root.StartedAt = DateTimeOffset.UtcNow; });
             }
             private static void MarkPackageResolveEffectProven(string requestId, string kind, byte[] proof, object envelope)
             {
@@ -422,42 +449,53 @@ namespace UnityCli
             private static object PersistPackageTerminal(string requestId, object envelope, string state)
             {
                 var root = RequiredRoot(requestId);
+                bool isOwned;
+                if (!UnityCliSessionMutationLease.TryIsOwnedBy(root.RequestId, root.RequestDigest, out isOwned) || !isOwned)
+                    envelope = ProtocolEnvelopeFactory.Error(root.RequestId, "E_EXECUTION_TIMEOUT", "Package operation lost its exact mutation lease after effect; outcome is unknown.", null, new[] { "Inspect Package Manager and package files before submitting another mutation." });
                 root.State = state; root.Phase = "result_persisted"; root.TerminalEnvelope = envelope;
+                SavePackageActiveOperation(root);
+                var selectorDigest = UnityCliSerializer.Sha256Canonical(root.PackageOperation["input"]);
+                var first = UnityCliActiveOperation.StoreTerminalFirst(ActiveScope, root.RequestId, root.RequestDigest, selectorDigest, envelope);
+                root.TerminalEnvelope = first;
                 TerminalRoots[requestId] = root;
-                UnityCliActiveOperation.Clear(ActiveScope);
-                UnityCliSessionMutationLease.Release(requestId);
-                return envelope;
+                UnityCliActiveOperation.BeginExactTerminalCleanup(ActiveScope, root.RequestId, root.RequestDigest);
+                return first;
             }
             private static bool IsTerminal(ActivePackageOperationRecord root) { return root != null && root.Phase == "result_persisted"; }
             private static void SavePackageActiveOperation(ActivePackageOperationRecord root)
             {
                 ValidatePackageActiveOperation(root);
                 UnityCliActiveOperation.Save(ActiveScope, new Dictionary<string, object> {
-                    { "requestId", root.RequestId }, { "editorSessionId", root.EditorSessionId }, { "absoluteDeadlineUtc", root.AbsoluteDeadlineUtc.ToString("O", CultureInfo.InvariantCulture) },
+                    { "requestId", root.RequestId }, { "requestDigest", root.RequestDigest }, { "editorSessionId", root.EditorSessionId }, { "absoluteDeadlineUtc", root.AbsoluteDeadlineUtc.ToString("O", CultureInfo.InvariantCulture) },
                     { "state", root.State }, { "phase", root.Phase }, { "acceptedAt", root.AcceptedAt.Value.ToString("O", CultureInfo.InvariantCulture) },
-                    { "startedAt", root.StartedAt.HasValue ? (object)root.StartedAt.Value.ToString("O", CultureInfo.InvariantCulture) : null }, { "packageOperation", root.PackageOperation }
+                    { "startedAt", root.StartedAt.HasValue ? (object)root.StartedAt.Value.ToString("O", CultureInfo.InvariantCulture) : null }, { "terminalEnvelope", root.TerminalEnvelope }, { "packageOperation", root.PackageOperation }
                 });
             }
             private static ActivePackageOperationRecord LoadPackageActiveOperation()
             {
-                if (!UnityCliActiveOperation.Exists(ActiveScope)) return null;
                 try
                 {
-                    var data = UnityCliActiveOperation.Load(ActiveScope); var allowed = new HashSet<string>(new[] { "requestId", "editorSessionId", "absoluteDeadlineUtc", "state", "phase", "acceptedAt", "startedAt", "packageOperation" }, StringComparer.Ordinal);
+                    var data = UnityCliActiveOperation.Load(ActiveScope);
+                    if (data == null) return null;
+                    var allowed = new HashSet<string>(new[] { "requestId", "requestDigest", "editorSessionId", "absoluteDeadlineUtc", "state", "phase", "acceptedAt", "startedAt", "terminalEnvelope", "packageOperation" }, StringComparer.Ordinal);
                     if (data.Keys.Any(key => !allowed.Contains(key))) throw new InvalidDataException("Package active state has unknown fields.");
                     DateTimeOffset deadline; DateTimeOffset accepted; DateTimeOffset started;
                     if (!DateTimeOffset.TryParse(Text(data, "absoluteDeadlineUtc"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline) || !DateTimeOffset.TryParse(Text(data, "acceptedAt"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out accepted)) throw new InvalidDataException("Package active state timestamps are invalid.");
-                    var root = new ActivePackageOperationRecord { RequestId = Text(data, "requestId"), EditorSessionId = Text(data, "editorSessionId"), AbsoluteDeadlineUtc = deadline, State = Text(data, "state"), Phase = Text(data, "phase"), AcceptedAt = accepted, PackageOperation = data.ContainsKey("packageOperation") ? data["packageOperation"] as Dictionary<string, object> : null };
+                    var root = new ActivePackageOperationRecord { RequestId = Text(data, "requestId"), RequestDigest = Text(data, "requestDigest"), EditorSessionId = Text(data, "editorSessionId"), AbsoluteDeadlineUtc = deadline, State = Text(data, "state"), Phase = Text(data, "phase"), AcceptedAt = accepted, TerminalEnvelope = data.ContainsKey("terminalEnvelope") ? data["terminalEnvelope"] : null, PackageOperation = data.ContainsKey("packageOperation") ? data["packageOperation"] as Dictionary<string, object> : null };
                     if (data.ContainsKey("startedAt") && data["startedAt"] != null) { if (!DateTimeOffset.TryParse(Text(data, "startedAt"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out started)) throw new InvalidDataException("Package active state start time is invalid."); root.StartedAt = started; }
                     ValidatePackageActiveOperation(root); return root;
                 }
-                catch (Exception exception) { UnityCliActiveOperation.Clear(ActiveScope); throw new BridgeCommandException("E_EXECUTION_FAILED", "Package active state is corrupt: " + exception.Message); }
+                catch (IOException) { throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Package active state cannot be read; outcome is unknown."); }
+                catch (UnauthorizedAccessException) { throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Package active state cannot be read; outcome is unknown."); }
+                catch (BridgeCommandException) { throw; }
+                catch (Exception) { throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Package active state is corrupt; outcome is unknown."); }
             }
             private static void ValidatePackageActiveOperation(ActivePackageOperationRecord root)
             {
-                if (root == null || !IsSafeId(root.RequestId) || !IsPrefixedLowerHex(root.EditorSessionId, "session-", 64) || root.AcceptedAt == null || root.PackageOperation == null || (root.Phase != "accepted_before_effect" && root.Phase != "effect_started" && root.Phase != "effect_proven")) throw new InvalidDataException("Package active state is incomplete.");
-                var operation = root.PackageOperation; var allowed = new HashSet<string>(new[] { "phase", "operation", "input", "filePlan", "fileExecutorPid", "fileExecutorStartIdentity", "fileExecutorCapabilitySha256", "expectedManifestSha256", "predicates", "filesProof", "publicResultSeed", "resolveReturned", "reloadObserved", "listAfterReload", "listSucceeded", "listPackages", "stableFrames", "observedPackageSnapshotHash", "registeredMismatchHash", "registeredMismatchStableFrames", "listRefreshAttempts" }, StringComparer.Ordinal);
-                if (operation.Keys.Any(key => !allowed.Contains(key)) || !operation.ContainsKey("phase") || !operation.ContainsKey("operation") || !operation.ContainsKey("input") || !operation.ContainsKey("resolveReturned") || !operation.ContainsKey("reloadObserved")) throw new InvalidDataException("Package active operation fields are incomplete or unknown.");
+                if (root == null || !IsSafeId(root.RequestId) || !IsSha256Text(root.RequestDigest) || !IsPrefixedLowerHex(root.EditorSessionId, "session-", 64) || root.AcceptedAt == null || root.PackageOperation == null || (root.Phase != "accepted_before_effect" && root.Phase != "effect_started" && root.Phase != "effect_proven" && root.Phase != "result_persisted")) throw new InvalidDataException("Package active state is incomplete.");
+                if (root.Phase == "result_persisted" && root.TerminalEnvelope == null) throw new InvalidDataException("Package terminal envelope is missing.");
+                var operation = root.PackageOperation; var allowed = new HashSet<string>(new[] { "phase", "operation", "input", "filePlan", "fileExecutorPid", "fileExecutorStartIdentity", "fileExecutorCapabilitySha256", "expectedManifestSha256", "predicates", "filesProof", "publicResultSeed", "resolveReturned", "reloadObserved", "reloadEpoch", "listAfterReload", "listSucceeded", "listPackages", "stableFrames", "observedPackageSnapshotHash", "registeredMismatchHash", "registeredMismatchStableFrames", "listRefreshAttempts" }, StringComparer.Ordinal);
+                if (operation.Keys.Any(key => !allowed.Contains(key)) || !operation.ContainsKey("phase") || !operation.ContainsKey("operation") || !operation.ContainsKey("input") || !operation.ContainsKey("resolveReturned") || !operation.ContainsKey("reloadObserved") || string.IsNullOrWhiteSpace(Text(operation, "reloadEpoch"))) throw new InvalidDataException("Package active operation fields are incomplete or unknown.");
                 var phase = Text(operation, "phase"); if (new[] { "awaiting_files", "files_committing", "files_proven", "resolve_dispatching", "resolve_returned", "list_pending", "list_succeeded", "reload_observed" }.All(value => value != phase)) throw new InvalidDataException("Package active operation phase is invalid.");
                 var operationName = Text(operation, "operation"); if (operationName != "resolve" && operationName != "install" && operationName != "remove" && operationName != "deploy" && operationName != "restore") throw new InvalidDataException("Package active operation kind is invalid.");
                 if (!(operation["input"] is Dictionary<string, object>) || !(operation["resolveReturned"] is bool) || !(operation["reloadObserved"] is bool)) throw new InvalidDataException("Package active operation input is invalid.");
@@ -475,7 +513,35 @@ namespace UnityCli
             private static string ManifestPath() { return Path.Combine(ProjectPath(), "Packages", "manifest.json"); }
             private static bool IsUnderPackages(string path) { if (string.IsNullOrWhiteSpace(path)) return false; var root = Path.GetFullPath(Path.Combine(ProjectPath(), "Packages") + Path.DirectorySeparatorChar); return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase); }
             private static string HashFile(string path) { if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null; using (var sha = SHA256.Create()) using (var stream = File.OpenRead(path)) return HexText(sha.ComputeHash(stream)); }
-            private static string HashDirectory(string root) { if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return null; using (var sha = SHA256.Create()) { foreach (var path in Directory.GetFileSystemEntries(root, "*", SearchOption.AllDirectories).OrderBy(path => path.Substring(root.Length).Replace('\\', '/'), StringComparer.Ordinal)) { var relative = path.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/'); var prefix = Encoding.UTF8.GetBytes(Directory.Exists(path) ? "dir:" + relative + "/\n" : "file:" + relative + "\n"); sha.TransformBlock(prefix, 0, prefix.Length, null, 0); if (File.Exists(path)) { var bytes = File.ReadAllBytes(path); sha.TransformBlock(bytes, 0, bytes.Length, null, 0); var newline = new byte[] { 10 }; sha.TransformBlock(newline, 0, 1, null, 0); } } sha.TransformFinalBlock(new byte[0], 0, 0); return HexText(sha.Hash); } }
+            /// <summary>与Node逐目录Ordinal排序和深度优先遍历完全一致，目录.meta不得跨过目录子树。</summary>
+            private static string HashDirectory(string root)
+            {
+                if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return null;
+                using (var sha = SHA256.Create())
+                {
+                    HashDirectoryEntries(sha, root, root);
+                    sha.TransformFinalBlock(new byte[0], 0, 0);
+                    return HexText(sha.Hash);
+                }
+            }
+            private static void HashDirectoryEntries(HashAlgorithm sha, string root, string directory)
+            {
+                foreach (var path in Directory.GetFileSystemEntries(directory).OrderBy(Path.GetFileName, StringComparer.Ordinal))
+                {
+                    var relative = path.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/');
+                    var isDirectory = Directory.Exists(path);
+                    var prefix = Encoding.UTF8.GetBytes(isDirectory ? "dir:" + relative + "/\n" : "file:" + relative + "\n");
+                    sha.TransformBlock(prefix, 0, prefix.Length, null, 0);
+                    if (isDirectory) HashDirectoryEntries(sha, root, path);
+                    else
+                    {
+                        var bytes = File.ReadAllBytes(path);
+                        sha.TransformBlock(bytes, 0, bytes.Length, null, 0);
+                        var newline = new byte[] { 10 };
+                        sha.TransformBlock(newline, 0, 1, null, 0);
+                    }
+                }
+            }
             private static long CountFiles(string root) { return Directory.Exists(root) ? Directory.GetFiles(root, "*", SearchOption.AllDirectories).LongLength : 0L; }
             private static string HashJson(object value) { using (var sha = SHA256.Create()) return HexText(sha.ComputeHash(Encoding.UTF8.GetBytes(UnityCliSerializer.Serialize(value)))); }
             private static string HexText(byte[] bytes) { return string.Concat(bytes.Select(value => value.ToString("x2", CultureInfo.InvariantCulture))); }

@@ -81,7 +81,7 @@ test("named core atomic tools prevalidate, commit, and return independently obse
   assert.doesNotMatch(preflight, /SideEffects\s*=/);
 });
 
-test("shared undo and redo require request-specific Context readback", async () => {
+test("shared undo and redo require request-specific read Tool proof", async () => {
   const [undo, redo, bridge] = await Promise.all([
     source("Tools/editor/undo.cs"),
     source("Tools/editor/redo.cs"),

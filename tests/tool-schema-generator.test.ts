@@ -67,17 +67,11 @@ test("schema generator resolves the supported TypeScript type surface through Ty
       }
       type Result = { ok: true; payload: AnyJson } | { ok: false; reason: string };
       export default defineTool<Request, Result>({ name: "fixture.types" });
-    `,
-    "src/contexts/define.ts": "export declare function defineContext<TReq, TRes>(value: unknown): unknown;\n",
-    "src/contexts/fixture.ts": `
-      import { defineContext } from "./define.js";
-      import type { TreeNode } from "../shared.js";
-      export default defineContext<{}, TreeNode>({ name: "fixture.context" });
     `
   });
 
   const { stdout } = await execFileAsync(process.execPath, [generator, root]);
-  assert.match(stdout, /generated 1 tool schema\(s\), 1 context schema\(s\), 0 errors/);
+  assert.match(stdout, /generated 1 tool schema\(s\), 0 errors/);
 
   const toolModule = await readFile(join(root, "src", "tools", ".generated-schemas.ts"), "utf8");
   const [, input, output] = generatedArguments(toolModule, "injectToolSchema", "fixture.types") as [string, any, any];
@@ -126,5 +120,18 @@ test("schema generator fails closed with capability and property diagnostics", a
       assert.match(error.stderr, /src\/tools\/missing\.ts: Tool "fixture\.missing".*exactly two explicit generic arguments are required/);
       return true;
     }
+  );
+});
+
+test("schema generator rejects removed read schema inputs", async () => {
+  const removedFactory = "define" + "Context";
+  const root = await writeFixture({
+    "src/tools/define.ts": "export declare function defineTool<TReq, TRes>(value: unknown): unknown;\n",
+    "src/tools/fixture.ts": 'export default defineTool<{}, {}>({ name: "fixture.tool" });\n',
+    "src/contexts/removed.ts": `export default ${removedFactory}<{}, {}>({ name: "removed.read" });\n`,
+  });
+  await assert.rejects(
+    execFileAsync(process.execPath, [generator, root]),
+    /Context schema input is forbidden/,
   );
 });

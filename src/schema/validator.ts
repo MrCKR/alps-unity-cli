@@ -9,7 +9,7 @@ export function validateSchema(schema: unknown, value: unknown, path = "$", root
   if (!isRecord(schema)) return [issue(path, "valid schema", "missing schema")];
   const rule = schema;
   if (rule["x-unityCliAnyJson"] === true) return [];
-  const supportedKeywords = new Set(["$schema", "$id", "title", "description", "$ref", "$defs", "allOf", "oneOf", "anyOf", "const", "enum", "type", "properties", "required", "additionalProperties", "items", "prefixItems", "minItems", "maxItems", "minLength", "maxLength", "minimum", "maximum", "pattern", "format", "uniqueItems"]);
+  const supportedKeywords = new Set(["$schema", "$id", "title", "description", "default", "$ref", "$defs", "allOf", "oneOf", "anyOf", "const", "enum", "type", "properties", "required", "additionalProperties", "items", "prefixItems", "minItems", "maxItems", "minLength", "maxLength", "minimum", "maximum", "pattern", "format", "uniqueItems"]);
   const unsupported = Object.keys(rule).find((key) => !supportedKeywords.has(key));
   if (unsupported) return [issue(path, "supported schema keyword", `unsupported keyword ${unsupported}`)];
   if (Object.keys(rule).length === 0) return [issue(path, "constrained schema", "unconstrained schema")];

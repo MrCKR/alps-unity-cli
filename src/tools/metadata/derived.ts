@@ -1,5 +1,5 @@
 import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "../.generated-completion-registry.js";
-import type { ToolMetadata, ToolRiskLevel, ToolSource } from "./types.js";
+import type { ToolContractProfile, ToolMetadata, ToolRiskLevel, ToolSource } from "./types.js";
 
 const TOOL_MUTATION_CONTRACTS = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((contract) => [contract.toolName, contract.mutation]));
 
@@ -26,6 +26,9 @@ const LONG_RUNNING_TOOL_NAMES = new Set<string>([
   "editor.compile",
   "editor.refresh",
   "graphics.bake-start",
+  "navmesh.bake",
+  "navmesh.surface.bake",
+  "occlusion.bake",
   "package.resolve",
   "probuilder.create-poly-shape",
   "probuilder.create-shape",
@@ -69,6 +72,11 @@ const MEDIUM_RISK_TOOL_NAMES = new Set([
   "console.clear",
   "graphics.bake-reflection-probe",
   "graphics.bake-start",
+  "navmesh.bake",
+  "navmesh.bake-clear",
+  "navmesh.surface.bake",
+  "occlusion.bake",
+  "occlusion.bake-clear",
   "material.assign",
   "package.resolve",
   "prefab.stage-open",
@@ -101,6 +109,11 @@ export function toolAvailabilityScope(tool: { availabilityScope?: string; target
 /** 生成工具来源，注册扩展和项目工具时由调用方提供 fallback。 */
 export function toolSource(tool: ToolMetadata | { source?: ToolSource }, fallback: ToolSource = "built-in"): ToolSource {
   return (tool as { source?: ToolSource }).source ?? fallback;
+}
+
+/** 统一 completion 保证档位；只有官方 attribute discovery 可声明弱保证。 */
+export function toolContractProfile(tool: { contractProfile?: ToolContractProfile }): ToolContractProfile {
+  return tool.contractProfile ?? "native";
 }
 
 /** 判断工具是否可能长时间运行，用于 capability summary。 */

@@ -21,11 +21,47 @@ namespace UnityCli
         {
             internal const string Command = "internal.build.run.start";
             private const string Scope = "build";
+            private static bool reloadRecoveryPending;
             internal static bool IsCommand(string command) { return command == Command; }
             internal static void Register(BridgeCommandRegistry registry)
             {
                 registry.Register<BridgeRequest>(Command, "internal", true, 600000, (r, c) => { throw new InvalidOperationException("Build is coordinator-owned."); });
             }
+
+            /// <summary>reload后先持久化outcome-unknown标记，再释放已终止旧domain的exact lease。</summary>
+            internal static void Initialize() { RecoverTerminalCleanup(); reloadRecoveryPending = true; MarkReloadOutcomeUnknownAndRelease(); }
+            internal static void Tick() { RecoverTerminalCleanup(); if (reloadRecoveryPending) MarkReloadOutcomeUnknownAndRelease(); }
+
+            private static void MarkReloadOutcomeUnknownAndRelease()
+            {
+                Dictionary<string, object> active;
+                try { active = UnityCliActiveOperation.Load(Scope); }
+                catch { return; }
+                if (active == null) { reloadRecoveryPending = false; return; }
+                var requestId = Value(active, "requestId");
+                var requestDigest = Value(active, "requestDigest");
+                var editorSessionId = Value(active, "editorSessionId");
+                if (!IsSafeId(requestId) || !IsSha256(requestDigest)) return;
+                if (!string.Equals(editorSessionId, EditorSessionId(), StringComparison.Ordinal))
+                {
+                    try { UnityCliActiveOperation.Clear(Scope); reloadRecoveryPending = false; } catch { }
+                    return;
+                }
+                object marked;
+                if (!active.TryGetValue("reloadOutcomeUnknown", out marked) || !(marked is bool) || !(bool)marked)
+                {
+                    active["reloadOutcomeUnknown"] = true;
+                    try { UnityCliActiveOperation.Save(Scope, active); }
+                    catch { return; }
+                }
+                UnityCliSessionMutationLease.Release(requestId, requestDigest);
+                bool isOwned;
+                if (UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned) && !isOwned)
+                    reloadRecoveryPending = false;
+            }
+
+            internal static void BeforeReload() { }
+            internal static void Shutdown() { reloadRecoveryPending = false; }
 
             internal static async Task<string> Execute(BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAccept, CancellationToken cancellationToken)
             {
@@ -35,20 +71,31 @@ namespace UnityCli
                     Validate(args);
                     return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Success(request.RequestId, new Dictionary<string, object> { { "dryRun", true }, { "plannedEffects", args.Targets.Select(x => (object)new Dictionary<string, object> { { "type", "build-player" }, { "target", x.Target }, { "outputPath", x.OutputPath } }).ToList() } }));
                 }
-                bool newlyAcquiredLease;
                 var digest = UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId);
-                if (!UnityCliSessionMutationLease.TryAcquire(request.RequestId, digest, out newlyAcquiredLease)) return Busy(request.RequestId);
+                object recoveredTerminal;
+                if (UnityCliActiveOperation.TryGetTerminal(Scope, request.RequestId, digest, out recoveredTerminal))
+                {
+                    try { UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, request.RequestId, digest); } catch { }
+                    return Terminal(request.RequestId, recoveredTerminal);
+                }
+                Dictionary<string, object> active;
+                try { active = UnityCliActiveOperation.Load(Scope); }
+                catch (Exception) { return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build active state cannot be read; outcome is unknown.")); }
+                if (active != null)
+                {
+                    if (!string.Equals(Value(active, "requestId"), request.RequestId, StringComparison.Ordinal)) return Busy(request.RequestId);
+                    if (!string.Equals(Value(active, "requestDigest"), digest, StringComparison.Ordinal))
+                        return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException("E_REQUEST_ID_REUSED", "Build requestId was reused with different input."));
+                    object reloadUnknown;
+                    if (!active.TryGetValue("reloadOutcomeUnknown", out reloadUnknown) || !(reloadUnknown is bool) || !(bool)reloadUnknown)
+                        return Busy(request.RequestId);
+                    var unknown = ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "A previous build did not reach a terminal result before reload or timeout.", null, new[] { "Inspect build output and editor.state before retrying." });
+                    return FinishTerminal(request.RequestId, digest, unknown);
+                }
+                bool newlyAcquiredLease;
+                if (!UnityCliSessionMutationLease.TryAcquire(request.RequestId, digest, out newlyAcquiredLease) || !newlyAcquiredLease) return Busy(request.RequestId);
                 try
                 {
-                    Dictionary<string, object> active;
-                    try { active = UnityCliActiveOperation.Load(Scope); }
-                    catch (Exception ex) { UnityCliActiveOperation.Clear(Scope); return Terminal(request.RequestId, ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Build active state is corrupt: " + ex.Message, null, new[] { "Inspect editor.state and retry." })); }
-                    if (active != null)
-                    {
-                        // BuildPlayer 无法在 reload 后重放；清理遗留状态并把恢复请求归约为超时。
-                        UnityCliActiveOperation.Clear(Scope);
-                        return Terminal(request.RequestId, ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "A previous build did not reach a terminal result before reload or timeout.", null, new[] { "Inspect build output and editor.state before retrying." }));
-                    }
                     if (tryAccept == null || !tryAccept()) throw new OperationCanceledException();
                     Validate(args);
                     var prepared = args.Targets.Select(Prepare).ToList();
@@ -58,28 +105,97 @@ namespace UnityCli
                     active["phase"] = "running";
                     UnityCliActiveOperation.Save(Scope, active);
                     var reports = new List<object>();
-                    foreach (var item in prepared) reports.Add(Build(item));
+                    foreach (var item in prepared)
+                    {
+                        bool ownedBefore;
+                        if (!UnityCliSessionMutationLease.TryIsOwnedBy(request.RequestId, digest, out ownedBefore) || !ownedBefore)
+                            return FinishTerminal(request.RequestId, digest, UnknownLeaseTerminal(request.RequestId));
+                        reports.Add(Build(item));
+                        bool ownedAfter;
+                        if (!UnityCliSessionMutationLease.TryIsOwnedBy(request.RequestId, digest, out ownedAfter) || !ownedAfter)
+                            return FinishTerminal(request.RequestId, digest, UnknownLeaseTerminal(request.RequestId));
+                    }
                     var data = new Dictionary<string, object> { { "targets", reports } };
                     var failed = reports.Cast<Dictionary<string, object>>().Any(x => !string.Equals(x["result"] as string, "Succeeded", StringComparison.Ordinal));
                     object envelope = failed ? (object)ProtocolEnvelopeFactory.Error(request.RequestId, "E_BUILD_FAILED", "One or more BuildPlayer reports were not successful.", data, new[] { "Inspect the returned BuildReport summaries and Unity Console." }) : ProtocolEnvelopeFactory.Success(request.RequestId, data);
-                    UnityCliActiveOperation.Clear(Scope);
-                    return Terminal(request.RequestId, envelope);
+                    return FinishTerminal(request.RequestId, digest, envelope);
                 }
                 catch (OperationCanceledException)
                 {
-                    UnityCliActiveOperation.Clear(Scope);
-                    return Terminal(request.RequestId, ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Build did not complete before the request deadline.", null, new[] { "Inspect editor.state and retry." }));
+                    return FinishTerminal(request.RequestId, digest, ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Build did not complete before the request deadline.", null, new[] { "Inspect editor.state and retry." }));
+                }
+                catch (BridgeCommandException ex)
+                {
+                    return SerializeBridgeExceptionEnvelope(request.RequestId, ex);
                 }
                 catch (Exception ex)
                 {
-                    UnityCliActiveOperation.Clear(Scope);
-                    return Terminal(request.RequestId, SerializeException(request.RequestId, ex));
+                    return FinishTerminal(request.RequestId, digest, SerializeException(request.RequestId, ex));
                 }
-                finally { UnityCliSessionMutationLease.Release(request.RequestId); await Task.FromResult(0); }
+                finally
+                {
+                    try
+                    {
+                        UnityCliActiveOperation.RetryExactTerminalCleanup(Scope);
+                        if (!UnityCliActiveOperation.Exists(Scope) && !UnityCliActiveOperation.Exists(Scope + "-terminal-cleanup"))
+                            UnityCliSessionMutationLease.Release(request.RequestId, digest);
+                    }
+                    catch { }
+                    await Task.FromResult(0);
+                }
             }
 
             private static Dictionary<string, object> NewActive(BridgeRequest request, string digest, Args args) { return new Dictionary<string, object> { { "requestId", request.RequestId }, { "requestDigest", digest }, { "editorSessionId", EditorSessionId() }, { "phase", "accepted" }, { "startedAt", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture) }, { "targets", args.Targets.Select(x => (object)new Dictionary<string, object> { { "target", x.Target }, { "outputPath", x.OutputPath } }).ToList() } }; }
+            private static string Value(IDictionary<string, object> value, string key) { object item; return value != null && value.TryGetValue(key, out item) ? item as string : null; }
             private static string Busy(string id) { return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(id, "E_UNITY_BUSY", "Another mutation owns the selected Unity instance.", null, new[] { "Wait for the current mutation to reach its terminal result, then retry." }, true, 250)); }
+            private static string FinishTerminal(string id, string digest, object envelope)
+            {
+                bool isOwned;
+                if (!UnityCliSessionMutationLease.TryIsOwnedBy(id, digest, out isOwned) || !isOwned) envelope = UnknownLeaseTerminal(id);
+                var active = UnityCliActiveOperation.Load(Scope);
+                if (active != null)
+                {
+                    if (!string.Equals(Value(active, "requestId"), id, StringComparison.Ordinal)
+                        || !string.Equals(Value(active, "requestDigest"), digest, StringComparison.Ordinal))
+                        throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build terminal active identity cannot be proven.");
+                    active["phase"] = "terminal_pending";
+                    active["terminalEnvelope"] = envelope;
+                    UnityCliActiveOperation.Save(Scope, active);
+                }
+                var first = UnityCliActiveOperation.StoreTerminalFirst(Scope, id, digest, envelope);
+                UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, id, digest);
+                return Terminal(id, first);
+            }
+            private static void RecoverTerminalCleanup()
+            {
+                try
+                {
+                    if (UnityCliActiveOperation.RetryExactTerminalCleanup(Scope)) return;
+                    var active = UnityCliActiveOperation.Load(Scope);
+                    if (active == null) return;
+                    var requestId = Value(active, "requestId");
+                    var requestDigest = Value(active, "requestDigest");
+                    object terminal = null;
+                    var hasTerminal = IsSafeId(requestId) && IsSha256(requestDigest)
+                        && UnityCliActiveOperation.TryGetTerminal(Scope, requestId, requestDigest, out terminal);
+                    if (!hasTerminal)
+                    {
+                        object pending;
+                        if (!active.TryGetValue("terminalEnvelope", out pending) || pending == null)
+                        {
+                            if (!string.Equals(Value(active, "phase"), "running", StringComparison.Ordinal)) return;
+                            pending = UnknownLeaseTerminal(requestId);
+                            active["phase"] = "terminal_pending";
+                            active["terminalEnvelope"] = pending;
+                            UnityCliActiveOperation.Save(Scope, active);
+                        }
+                        terminal = UnityCliActiveOperation.StoreTerminalFirst(Scope, requestId, requestDigest, pending);
+                    }
+                    if (terminal != null) UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, requestDigest);
+                }
+                catch { }
+            }
+            private static object UnknownLeaseTerminal(string id) { return ProtocolEnvelopeFactory.Error(id, "E_EXECUTION_TIMEOUT", "Build lost its exact mutation lease after BuildPlayer; outcome is unknown.", null, new[] { "Inspect build artifacts before submitting another mutation." }); }
             private static string Terminal(string id, object envelope) { return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Success(id, new Dictionary<string, object> { { "terminal", true }, { "rootEnvelope", envelope } })); }
             private static object SerializeException(string id, Exception ex) { return ProtocolEnvelopeFactory.Error(id, "E_BRIDGE_COMMAND_FAILED", ex.Message, null, new[] { "Check Unity Console and UnityCliBridge.log." }); }
             private static Prepared Prepare(TargetArgs input)

@@ -30,11 +30,13 @@ export default defineTool<TestRunRequest, TestRunResult>({
     try {
       let root = record((await call(context.requestId, "internal.test.run.start", { ...request, platform: request.platform ?? "EditMode", expectedEditorSessionId: state.session.editorSessionId }, flags, context, execute)).data);
       accepted = root.accepted === true || root.terminal === true;
+      const rootRequestDigest = root.terminal === true ? undefined : string(root.rootRequestDigest);
+      if (root.terminal !== true && !sha(rootRequestDigest)) throw invalid();
       while (root.terminal !== true) {
         if (root.terminal !== false || root.accepted !== true) throw invalid();
         if (Date.now() >= deadline) throw executionTimeout("E_EXECUTION_TIMEOUT");
         await delay(100);
-        root = record((await call(childId(context.requestId, "_test_status"), "internal.test.run.status", { rootRequestId: context.requestId }, flags, context, observe)).data);
+        root = record((await call(childId(context.requestId, "_test_status"), "internal.test.run.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe)).data);
       }
       terminalReceived = true;
       return terminal(root, context.requestId);

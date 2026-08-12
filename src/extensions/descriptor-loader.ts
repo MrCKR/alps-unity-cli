@@ -1,6 +1,6 @@
 /**
- * Extension descriptor loader: loads extension contributions (tool/context
- * descriptors, bridge commands, C# entries, docs fragments) with resolved
+ * Extension descriptor loader: loads Tool contributions, bridge commands,
+ * C# entries, and docs fragments with resolved
  * availability status.
  *
  * The descriptor loader bridges the extension registry with the CLI's
@@ -13,7 +13,6 @@ import { ExtensionRegistry } from "./registry.js";
 import type {
   ExtensionAvailabilityResult,
   ExtensionCSharpEntry,
-  ExtensionContextContribution,
   ExtensionId,
   ExtensionToolContribution,
   LoadedExtensionDescriptor
@@ -62,7 +61,6 @@ export function loadExtensionDescriptor(
     manifest: ext.manifest,
     availability,
     tools: contributions.tools ?? [],
-    contexts: contributions.contexts ?? [],
     csharpEntries: contributions.csharpEntries ?? []
   };
 }
@@ -137,17 +135,6 @@ export function collectAllTools(
       available: desc.availability.status === "available"
     }))
   );
-}
-
-/**
- * Collect all context contributions across available extensions.
- */
-export function collectAvailableContexts(
-  registry: ExtensionRegistry,
-  installedPackages?: ReadonlyMap<string, string> | Readonly<Record<string, string>>
-): ExtensionContextContribution[] {
-  const available = loadAvailableDescriptors(registry, installedPackages);
-  return available.flatMap((desc) => desc.contexts);
 }
 
 /**

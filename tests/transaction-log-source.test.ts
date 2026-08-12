@@ -4,7 +4,7 @@ import test from "node:test";
 
 const sourcePath = "../unitypkg/Editor/Infrastructure/UnityCliTransactionLog.cs";
 
-test("transaction log appends embedded JSONL transactions and rotates once per session", async () => {
+test("transaction log appends embedded JSONL transactions within two bounded segments", async () => {
   const source = await readFile(new URL(sourcePath, import.meta.url), "utf8");
 
   assert.match(source, /internal static class UnityCliTransactionLog/);
@@ -21,12 +21,20 @@ test("transaction log appends embedded JSONL transactions and rotates once per s
   assert.match(source, /DateTime\.UtcNow\.ToString\("O", CultureInfo\.InvariantCulture\)/);
   assert.match(source, /UnityCliSerializer\.Parse\(requestJson\)/);
   assert.match(source, /UnityCliSerializer\.Parse\(responseJson\)/);
-  assert.match(source, /File\.AppendAllText\(path, UnityCliSerializer\.Serialize\(entry\) \+ Environment\.NewLine\)/);
+  assert.match(source, /MaxLogFileBytes = 16L \* 1024L \* 1024L/);
+  assert.match(source, /private static readonly object Sync/);
+  assert.match(source, /encoding\.GetByteCount\(line\)/);
+  assert.match(source, /if \(lineBytes > MaxLogFileBytes\)/);
+  assert.match(source, /EnsureBoundedCapacity\(path, oldPath, lineBytes\)/);
+  assert.match(source, /File\.AppendAllText\(path, line, encoding\)/);
   assert.match(source, /SessionState\.GetBool\(SessionRotatedKey, false\)/);
   assert.match(source, /SessionState\.SetBool\(SessionRotatedKey, true\)/);
   assert.match(source, /"UnityCli\.TransactionLog\.Rotated"/);
-  assert.match(source, /if \(File\.Exists\(oldPath\)\) File\.Delete\(oldPath\);/);
-  assert.match(source, /File\.Move\(logPath, oldPath\)/);
+  assert.match(source, /if \(File\.Exists\(oldPath\) && new FileInfo\(oldPath\)\.Length > MaxLogFileBytes\) File\.Delete\(oldPath\)/);
+  assert.match(source, /if \(currentBytes <= MaxLogFileBytes && currentBytes \+ incomingBytes <= MaxLogFileBytes\) return/);
+  assert.match(source, /if \(File\.Exists\(oldPath\)\) File\.Delete\(oldPath\)/);
+  assert.match(source, /if \(new FileInfo\(path\)\.Length <= MaxLogFileBytes\) File\.Move\(path, oldPath\)/);
+  assert.match(source, /else File\.Delete\(path\)/);
 });
 
 test("transaction logging is wired into bridge completion and startup", async () => {

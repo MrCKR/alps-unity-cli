@@ -67,7 +67,7 @@ function validateManifest(manifest, directoryName, extensionDir, owners) {
     packageIds.add(dependency.packageId);
   }
   if (!manifest.contributions || typeof manifest.contributions !== "object" || Array.isArray(manifest.contributions)) fail(`${label(manifest.id, "contributions")} must be an object`);
-  for (const field of ["tools", "contexts", "csharpEntries"]) {
+  for (const field of ["tools", "csharpEntries"]) {
     if (manifest.contributions[field] !== undefined && !Array.isArray(manifest.contributions[field])) fail(`${label(manifest.id, `contributions.${field}`)} must be an array`);
   }
   for (const tool of manifest.contributions.tools ?? []) {
@@ -82,7 +82,6 @@ function validateManifest(manifest, directoryName, extensionDir, owners) {
       }
     }
   }
-  for (const context of manifest.contributions.contexts ?? []) claim(owners, "context", context?.key, manifest.id);
   for (const entry of manifest.contributions.csharpEntries ?? []) {
     assertString(entry?.type, label(manifest.id, "csharp entry type"));
     if (entry.method !== undefined) assertString(entry.method, label(manifest.id, `csharp entry ${JSON.stringify(entry.type)} method`));
@@ -184,7 +183,8 @@ function inspectCsharpCapabilities(extensionDir, id) {
       let cursor = index + 2;
       while (tokens[cursor] && tokens[cursor].value !== "{" && tokens[cursor].value !== ";") cursor++;
       const header = tokens.slice(index + 2, cursor).map((token) => token.value);
-      const kind = header.includes("IUnityCliTool") ? "tool" : header.includes("IUnityCliContext") ? "context" : undefined;
+      if (header.includes("IUnityCliContext")) fail(`${relativePath}: legacy IUnityCliContext authoring is forbidden; define an IUnityCliTool instead`);
+      const kind = header.includes("IUnityCliTool") ? "tool" : undefined;
       if (!kind) continue;
       let name;
       for (let body = cursor; body < tokens.length - 2; body++) {
@@ -209,7 +209,7 @@ function validateCsharpCapabilities(manifest, extensionDir) {
   }
   const claims = new Set((manifest.contributions.csharpEntries ?? []).map((entry) => entry.type));
   if (claims.size !== (manifest.contributions.csharpEntries ?? []).length) fail(`${label(manifest.id, "manifest csharpEntries")} duplicates a type claim`);
-  for (const type of [...claims].sort()) if (!actualTypes.has(type)) fail(`${label(manifest.id, "manifest csharpEntries claim")} ${JSON.stringify(type)} has no IUnityCliTool/IUnityCliContext implementation`);
+  for (const type of [...claims].sort()) if (!actualTypes.has(type)) fail(`${label(manifest.id, "manifest csharpEntries claim")} ${JSON.stringify(type)} has no IUnityCliTool implementation`);
   for (const type of [...actualTypes.keys()].sort()) if (!claims.has(type)) fail(`${label(manifest.id, "C# implementation")} ${JSON.stringify(type)} is not claimed by contributions.csharpEntries`);
   for (const kind of ["tool", "context"]) {
     const claimed = new Set((manifest.contributions[`${kind}s`] ?? []).map((entry) => kind === "tool" ? entry.name : entry.key));

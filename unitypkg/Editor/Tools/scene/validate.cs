@@ -54,7 +54,7 @@ namespace UnityCli
                 scene = SceneManager.GetSceneByPath(path);
                 if (!scene.IsValid())
                 {
-                    throw new UnityCliBridge.BridgeCommandException("E_SCENE_NOT_OPEN", "Scene is not loaded: " + path, "Load the scene first or run context read scene.opened.");
+                    throw new UnityCliBridge.BridgeCommandException("E_SCENE_NOT_OPEN", "Scene is not loaded: " + path, "Load the scene first or run tools run scene.list-opened.");
                 }
             }
             var issues = new List<string>();

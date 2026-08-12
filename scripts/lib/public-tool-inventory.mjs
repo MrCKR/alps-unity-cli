@@ -47,31 +47,6 @@ function collectCSharpTools(root) {
   return tools;
 }
 
-/** 提取 C# Context 的公开 descriptor 身份。 */
-function collectCSharpContexts(root) {
-  const files = [
-    ...filesUnder(root, "unitypkg/Editor/Contexts", ".cs"),
-    ...filesUnder(root, "extensions", ".cs"),
-  ];
-  const contexts = [];
-  for (const file of files) {
-    const sourceText = fs.readFileSync(file, "utf8");
-    if (!/\bIUnityCliContext\s*</.test(sourceText)) continue;
-    const name = sourceText.match(/\bName\s*=\s*"([^"]+)"/)?.[1];
-    if (!name) throw new Error(`${relativeSource(root, file)}: IUnityCliContext 缺少公开 Name`);
-    const source = relativeSource(root, file);
-    const extensionMatch = source.match(/^extensions\/([^/]+)\//);
-    contexts.push({
-      name,
-      descriptorOwner: extensionMatch ? `extension:${extensionMatch[1]}` : "built-in",
-      source,
-      handler: "bridge",
-      asyncSignals: collectAsyncSignals(sourceText, "csharp"),
-    });
-  }
-  return contexts;
-}
-
 /** 提取 TS defineTool 的公开 descriptor 身份。 */
 function collectTypeScriptTools(root) {
   const tools = [];
@@ -92,27 +67,6 @@ function collectTypeScriptTools(root) {
     });
   }
   return tools;
-}
-
-/** 提取 TS defineContext 的公开 descriptor 身份。 */
-function collectTypeScriptContexts(root) {
-  const contexts = [];
-  for (const file of filesUnder(root, "src/contexts", ".ts")) {
-    const source = relativeSource(root, file);
-    if (source.endsWith("/define.ts") || source.includes("/.generated-")) continue;
-    const sourceText = fs.readFileSync(file, "utf8");
-    if (!/\bdefineContext(?:<[^>]+>)?\s*\(/.test(sourceText)) continue;
-    const name = sourceText.match(/\bname:\s*"([^"]+)"/)?.[1];
-    if (!name) throw new Error(`${source}: defineContext 缺少公开 name`);
-    contexts.push({
-      name,
-      descriptorOwner: "ts-local",
-      source,
-      handler: sourceText.match(/\bhandler:\s*"([^"]+)"/)?.[1] ?? "offline",
-      asyncSignals: collectAsyncSignals(sourceText, "typescript"),
-    });
-  }
-  return contexts;
 }
 
 /** 记录跨帧、callback 和外部 operation 信号，供 completion contract 审计。 */
@@ -136,8 +90,23 @@ function collectAsyncSignals(sourceText, language) {
   return patterns.filter(([, pattern]) => pattern.test(sourceText)).map(([name]) => name);
 }
 
+/** 旧 Context authoring 重新出现时，所有 inventory/generator consumer 必须 fail closed。 */
+function assertNoLegacyContextAuthoring(root) {
+  const files = [
+    ...filesUnder(root, "src", ".ts"),
+    ...filesUnder(root, "unitypkg/Editor", ".cs"),
+    ...filesUnder(root, "extensions", ".cs"),
+  ];
+  const forbidden = /\bdefineContext\s*(?:<|\()|\bIUnityCliContext\s*</;
+  for (const file of files) {
+    const sourceText = fs.readFileSync(file, "utf8");
+    if (forbidden.test(sourceText)) throw new Error(`${relativeSource(root, file)}: legacy Context authoring is forbidden; define a Tool instead`);
+  }
+}
+
 /** 返回全部产品 public Tool；同名 Tool 直接 fail closed。 */
 export function collectPublicToolInventory(root) {
+  assertNoLegacyContextAuthoring(root);
   const tools = [...collectCSharpTools(root), ...collectTypeScriptTools(root)]
     .sort((left, right) => left.name.localeCompare(right.name) || left.source.localeCompare(right.source));
   const seen = new Map();
@@ -147,17 +116,4 @@ export function collectPublicToolInventory(root) {
     seen.set(tool.name, tool.source);
   }
   return tools;
-}
-
-/** 返回全部产品 public Context；同名 Context 直接 fail closed。 */
-export function collectPublicContextInventory(root) {
-  const contexts = [...collectCSharpContexts(root), ...collectTypeScriptContexts(root)]
-    .sort((left, right) => left.name.localeCompare(right.name) || left.source.localeCompare(right.source));
-  const seen = new Map();
-  for (const context of contexts) {
-    const previous = seen.get(context.name);
-    if (previous) throw new Error(`duplicate public Context ${context.name}: ${previous} / ${context.source}`);
-    seen.set(context.name, context.source);
-  }
-  return contexts;
 }

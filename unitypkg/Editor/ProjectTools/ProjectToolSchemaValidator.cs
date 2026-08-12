@@ -22,7 +22,24 @@ namespace UnityCli
         /// <summary>验证 Tool 输入；调用方将失败转换为统一 E_SCHEMA_INVALID。</summary>
         private static SchemaValidationFailure ValidateProjectToolInput(RegisteredTool definition, string inputJson)
         {
-            return ValidateTypedInput(definition.RequestType, inputJson);
+            return definition.OfficialAttributeBinding != null
+                ? ValidateOfficialAttributeInput(definition.OfficialAttributeBinding, inputJson)
+                : ValidateTypedInput(definition.RequestType, inputJson);
+        }
+
+        /// <summary>验证 Tool 输出；官方 attribute 的任意 JSON fallback 不伪造 CLR schema。</summary>
+        private static SchemaValidationFailure ValidateProjectToolOutput(RegisteredTool definition, string outputJson)
+        {
+            if (definition.OfficialAttributeBinding == null) return ValidateTypedInput(definition.ResultType, outputJson);
+            if (definition.ResultType == typeof(object)) return null;
+            if (definition.ResultType == typeof(void))
+            {
+                object value;
+                try { value = UnityCliSerializer.Parse(outputJson); }
+                catch (Exception exception) { return Failure("$", "null", "malformed JSON", exception.Message); }
+                return value == null ? null : Failure("$", "null", ActualType(value));
+            }
+            return ValidateTypedInput(definition.ResultType, outputJson);
         }
 
         /// <summary>按 Request CLR 类型递归验证 JSON，不依赖手写 schema 文本。</summary>
@@ -54,7 +71,7 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run unity_cli tools describe <tool> or unity_cli context describe <context> to inspect inputSchema.",
+                    "Run unity_cli tools describe <tool> or unity_cli tools describe <tool> to inspect inputSchema.",
                     "Retry with JSON matching the reported path, expected type, and required fields."
                 },
                 false);

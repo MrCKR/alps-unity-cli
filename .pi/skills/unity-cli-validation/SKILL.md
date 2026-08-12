@@ -1,6 +1,6 @@
 ---
 name: unity-cli-validation
-description: unity_cli 的验证规划、契约校验、自动化测试、Dev Unity 实测矩阵、安装同步和干净子代理门禁硬规范。任何 Tool、Context、Extension、Bridge、descriptor、安全、wait、公开行为或项目治理规范修改在设计、实施、验证和宣称完成前必须完整读取并执行。
+description: unity_cli 的验证规划、契约校验、自动化测试、Dev Unity 实测矩阵、安装同步和干净子代理门禁硬规范。任何 Tool、Extension、Bridge、descriptor、安全、wait、公开行为或项目治理规范修改在设计、实施、验证和宣称完成前必须完整读取并执行。
 compatibility: 适用于 alps-unity-cli；Unity 真实验证使用 ./Dev，子代理使用项目级 unity-cli-gate。
 ---
 
@@ -35,7 +35,7 @@ compatibility: 适用于 alps-unity-cli；Unity 真实验证使用 ./Dev，子�
 
 自动化测试不能替代真实 Unity 调用：
 
-- 新增或修改 Tool / Context / Extension 时，必须建立真实调用矩阵；单元测试、契约测试和源码断言只能补充。
+- 新增或修改Tool / Extension时，必须建立真实调用矩阵；单元测试、契约测试和源码断言只能补充。
 - 矩阵必须覆盖每类公开用法：默认调用、主要可选参数、筛选/分页/精读/续读、边界值、错误路径、权限、可选 `--dry-run`、Editor/PlayMode 差异。
 - 组合较多时可以按等价类压缩，但不能跳过公开行为类别，且必须说明等价依据。
 - 正向用例必须验证关键业务字段，不得只检查 `ok: true`。
@@ -90,8 +90,10 @@ Dev 调用矩阵：
 门禁子代理只负责：
 
 - 像第一次接触项目的 AI 一样完成一个简短、真实的用户任务。
-- 仅凭公开 help、discovery、describe、examples 和错误输出自主选择 Tool/Context、参数与调用顺序。
-- 在实际调用前说明选择依据来自哪些公开信息。
+- 仅凭公开help、discovery、describe、examples和错误输出自主选择Tool、调用语法、参数与调用顺序。
+- schema default与example只表示合法默认行为和调用形状；任务明确业务值优先，禁止把default/example作为连通性、smoke或probe调用。
+- 在实际调用前说明选择依据来自哪些公开信息，并把任务literal映射到schema业务字段。
+- 多个实际业务调用必须严格串行，每次等待并验证业务结果后才能提交下一次；禁止在同一assistant turn并行或批量提交。
 - 成功后检查关键业务结果，并清理自己产生的副作用。
 
 不得要求门禁子代理执行全量测试矩阵、固定 case 顺序、recorder、case 编号、assertion spec、audit 或主 Agent 的验收脚本。这些内容会污染被测模型，使门禁退化为指令遵循测试。
@@ -113,11 +115,11 @@ Dev 调用矩阵：
 - 必要的项目、instance、夹具事实。
 - 允许和禁止的副作用、安全边界。
 
-不得提供具体发现链、目标 Tool/Context、启动前缀之外的最终命令、输入 JSON、预期输出、源码路径、实现细节、参数解释或失败后的纠正方案。子代理不得为定位入口枚举或读取工作区；获得启动前缀后必须直接从公开 CLI help 开始。需要其他信息才能完成任务，说明公开接口不自足。
+不得提供具体发现链、目标Tool、启动前缀之外的最终命令、输入JSON、预期输出、源码路径、实现细节、参数解释或失败后的纠正方案。子代理不得为定位入口枚举或读取工作区；获得启动前缀后必须直接从公开 CLI help 开始。需要其他信息才能完成任务，说明公开接口不自足。
 
 ### 首次失败与原因追问
 
-- 子代理任何公开 CLI 调用（包括 help、discovery、describe、业务调用和 cleanup）第一次出现非预期失败后必须立即停止；即使 envelope 为 `ok:true`，紧随其后的首次业务验证若证明预期效果未发生，也必须把前一调用判为失败。不得重试、纠参、换工具或根据主 Agent 提示恢复。
+- 子代理任何公开 CLI 调用（包括 help、discovery、describe、业务调用和 cleanup）第一次出现非预期失败后必须立即停止；即使 envelope 为 `ok:true`，紧随其后的首次业务验证若证明预期效果未发生，也必须把前一调用判为失败。不得重试、纠参、换工具或根据主 Agent 提示恢复；不得用预先并行提交的后续业务调用绕过停止边界。
 - transient Unity/instance 环境错误判定为 BLOCKED；选择、接口理解或调用错误判定为 FAIL。原正式门禁结论不得用后续解释或成功调用改写。
 - descriptor 调用失败也视为已经使用过一次，不得再次读取同一 descriptor。
 - 主 Agent 可以恢复同一个 agent ID，且只发送一次诊断问题，要求说明首次选择的公开依据、误解来源和缺失信息。

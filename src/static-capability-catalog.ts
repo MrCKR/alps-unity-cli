@@ -5,7 +5,6 @@ interface StaticCapabilityCatalogFile {
   version: number;
   semantics: string;
   tools: Array<Record<string, unknown>>;
-  contexts: Array<Record<string, unknown>>;
 }
 
 let cached: StaticCapabilityCatalogFile | undefined;
@@ -30,11 +29,10 @@ export function clearStaticCapabilityCatalogCache(): void {
 
 /** snapshot 结构异常必须在内部生成/审计边界 fail closed。 */
 function validateCatalog(catalog: StaticCapabilityCatalogFile): void {
-  if (catalog.version !== 1 || !Array.isArray(catalog.tools) || !Array.isArray(catalog.contexts)) {
-    throw new Error("Static capability catalog must be version 1 with tools and contexts arrays.");
+  if (catalog.version !== 1 || !Array.isArray(catalog.tools) || Object.hasOwn(catalog, "contexts")) {
+    throw new Error("Static capability catalog must be version 1 with one tools array and no legacy contexts field.");
   }
   validateEntries(catalog.tools, "Tool");
-  validateEntries(catalog.contexts, "Context");
 }
 
 function validateEntries(entries: Array<Record<string, unknown>>, kind: string): void {

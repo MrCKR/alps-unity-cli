@@ -4,13 +4,14 @@ import { buildBridgeSpecs } from "./domains/build.js";
 import { cameraBridgeSpecs } from "./domains/camera.js";
 import { codeBridgeSpecs } from "./domains/code.js";
 import { consoleBridgeSpecs } from "./domains/console.js";
-import { contextBridgeSpecs } from "./domains/context.js";
 import { diagnoseBridgeSpecs } from "./domains/diagnose.js";
 import { editorBridgeSpecs } from "./domains/editor.js";
 import { extensionBridgeSpecs } from "./domains/extension.js";
 import { gameObjectBridgeSpecs } from "./domains/game-object.js";
 import { graphicsBridgeSpecs } from "./domains/graphics.js";
 import { materialBridgeSpecs } from "./domains/material.js";
+import { navMeshBridgeSpecs } from "./domains/navmesh.js";
+import { occlusionBridgeSpecs } from "./domains/occlusion.js";
 import { objectBridgeSpecs } from "./domains/object.js";
 import { packageBridgeSpecs } from "./domains/package.js";
 import { physicsBridgeSpecs } from "./domains/physics.js";
@@ -22,6 +23,7 @@ import { screenshotBridgeSpecs } from "./domains/screenshot.js";
 import { scriptableObjectBridgeSpecs } from "./domains/scriptable-object.js";
 import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
+import { timelineBridgeSpecs } from "./domains/timeline.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
 import { projectToolBridgeSpecs } from "./domains/project-tool.js";
 import { runtimeToolBridgeSpecs } from "./domains/runtime-tool.js";
@@ -44,6 +46,9 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...profilerBridgeSpecs,
   ...shaderBridgeSpecs,
   ...textureBridgeSpecs,
+  ...timelineBridgeSpecs,
+  ...navMeshBridgeSpecs,
+  ...occlusionBridgeSpecs,
   ...animationBridgeSpecs,
   ...uiBridgeSpecs,
   ...editorBridgeSpecs,
@@ -57,7 +62,6 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...buildBridgeSpecs,
   ...runtimeToolBridgeSpecs,
   ...projectToolBridgeSpecs,
-...contextBridgeSpecs,
   ...extensionBridgeSpecs
 ];
 

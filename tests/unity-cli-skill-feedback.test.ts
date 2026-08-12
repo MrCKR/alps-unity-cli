@@ -185,7 +185,7 @@ test("feedback recorder serializes concurrent writers", async () => {
       "-Category", "failure",
       "-Summary", `Concurrent feedback ${index}`,
       "-Capability", "sample.tool",
-      "-ErrorCode", "E_CONTEXT_UNAVAILABLE",
+      "-ErrorCode", "E_TOOL_NOT_FOUND_FOR_TARGET",
       "-Phase", "execute",
     ])));
     const path = join(localAppData, "UnityCli", "feedback", "feedback.jsonl");
@@ -238,7 +238,7 @@ test("Skill feedback contract is opt-in, friction-only, local, and caller-contro
   const script = await readFile(scriptPath);
   assert.equal((skill.match(/^FeedbackMode:\s*(?:off|on)$/gm) ?? []).length, 1);
   assert.match(skill, /^FeedbackMode: off$/m);
-  assert.match(skill, /context search <keyword>/);
+  assert.match(skill, /tools search <keyword>/);
   assert.match(skill, /是否立即重试、重复调用或继续 mutation 完全由调用方决定/);
   assert.match(skill, /transient:true.*nextActions.*只是建议，不构成权限或重放门/);
   assert.match(operationProtocol, /Skill 不替调用方设置限制/);

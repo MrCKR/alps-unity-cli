@@ -7,6 +7,7 @@ import {
   selectObservationInstanceForFlags,
   selectTransitionInstanceForFlags,
   type InstanceSelection,
+  type InstanceTarget,
   type RegistrySession,
   type UnityInstance,
 } from "../instances.js";
@@ -39,6 +40,19 @@ const ROOT_TRANSITION_COMMANDS = new Set([
   "internal.package.files.fail",
   "internal.test.run.start",
   "internal.test.run.status",
+  "internal.test.run.cancel.plan",
+  "internal.test.run.cancel",
+  "internal.test.run.cancel.status",
+  "internal.navmesh.bake.start",
+  "internal.navmesh.bake.status",
+  "internal.navmesh.bake.plan",
+  "internal.navmesh.bake.snapshot",
+  "internal.navmesh.bake.cancel",
+  "internal.occlusion.bake.start",
+  "internal.occlusion.bake.status",
+  "internal.occlusion.bake.plan",
+  "internal.occlusion.bake.snapshot",
+  "internal.occlusion.bake.cancel",
 ]);
 const TRANSITION_CODES = new Set([
   "E_UNITY_DOMAIN_RELOAD",
@@ -75,9 +89,10 @@ export interface FrozenBridgeRequest {
 }
 
 interface ValidatedBinding {
+  readonly target: InstanceTarget;
   readonly instanceId: string;
   readonly canonicalProjectPath: string;
-  readonly editorSessionId: string;
+  readonly sessionId: string;
   readonly listenerId: string;
   readonly listenerGeneration: number;
   readonly endpoint: string;
@@ -86,8 +101,9 @@ interface ValidatedBinding {
 }
 
 interface TransportAttestation {
+  target: InstanceTarget;
   instanceId: string;
-  editorSessionId: string;
+  sessionId: string;
   listenerId: string;
   listenerGeneration: number;
 }
@@ -98,6 +114,7 @@ interface TransportReply {
 }
 
 interface SupervisorTarget {
+  readonly target: InstanceTarget;
   readonly instanceId: string;
   readonly initialSelection?: InstanceSelection;
   readonly injected: boolean;
@@ -106,9 +123,9 @@ interface SupervisorTarget {
 export interface SessionSupervisorDependencies {
   now(): number;
   sleep(ms: number): Promise<void>;
-  select(flags: BridgeFlags, dataDir: string): Promise<InstanceSelection>;
-  selectObservation(flags: BridgeFlags, dataDir: string, remainingMs: number): Promise<InstanceSelection>;
-  selectTransition(flags: BridgeFlags, dataDir: string, remainingMs: number): Promise<InstanceSelection>;
+  select(flags: BridgeFlags, dataDir: string, target: InstanceTarget): Promise<InstanceSelection>;
+  selectObservation(flags: BridgeFlags, dataDir: string, remainingMs: number, target: InstanceTarget): Promise<InstanceSelection>;
+  selectTransition(flags: BridgeFlags, dataDir: string, remainingMs: number, target: InstanceTarget): Promise<InstanceSelection>;
   post(binding: ValidatedBinding, request: FrozenBridgeRequest, remainingMs: number): Promise<TransportReply>;
   observer: EditorBlockerObserver;
 }
@@ -144,12 +161,12 @@ export class SessionSupervisor {
     this.dependencies = {
       now: dependencies.now ?? Date.now,
       sleep: dependencies.sleep ?? sleep,
-      select: injectedSelect ?? selectInstanceForFlags,
-      selectObservation: dependencies.selectObservation ?? selectObservationInstanceForFlags,
+      select: injectedSelect ?? ((flags, dataDir, target) => selectInstanceForFlags(flags, dataDir, process.cwd(), target)),
+      selectObservation: dependencies.selectObservation ?? ((flags, dataDir, remainingMs, target) => selectObservationInstanceForFlags(flags, dataDir, remainingMs, process.cwd(), target)),
       // 隔离测试若注入普通 selector，则 transition 路径复用该 fake；真实运行使用严格 transition selector。
       selectTransition: dependencies.selectTransition ?? (injectedSelect
-        ? async (flags, dataDir) => injectedSelect(flags, dataDir)
-        : selectTransitionInstanceForFlags),
+        ? async (flags, dataDir, _remainingMs, target) => injectedSelect(flags, dataDir, target)
+        : (flags, dataDir, remainingMs, target) => selectTransitionInstanceForFlags(flags, dataDir, remainingMs, process.cwd(), target)),
       post: dependencies.post ?? postFrozenBridgeRequest,
       observer: dependencies.observer ?? new EditorBlockerObserver(),
     };
@@ -160,7 +177,7 @@ export class SessionSupervisor {
     return this.run("execute", template);
   }
 
-  /** 普通 Context 与 live catalog 入口；generation 变化后只允许整次重新读取。 */
+  /** 普通读取型Tool与live catalog入口；generation变化后只允许整次重新读取。 */
   public read(template: BridgeRequestTemplate): Promise<BridgeResponse> {
     return this.run("read", { ...template, mutation: false });
   }
@@ -186,7 +203,8 @@ export class SessionSupervisor {
     if (mode === "observeNow") return this.runObservation(template, startedAtMs, absoluteDeadlineMs);
     // 首次 dispatch 前必须保留一次 bounded blocker probe；ready 快路径不会等待这段预算。
     const preDispatchDeadlineMs = reserveBlockerObservationBudget(startedAtMs, absoluteDeadlineMs);
-    const target = await this.resolveTarget(preDispatchDeadlineMs, startedAtMs, absoluteDeadlineMs, template.allowTransitionBinding === true);
+    const sessionTarget = bridgeTarget(template.command);
+    const target = await this.resolveTarget(sessionTarget, preDispatchDeadlineMs, startedAtMs, absoluteDeadlineMs, template.allowTransitionBinding === true);
     const request = freezeRequest(template, target.instanceId, absoluteDeadlineMs);
 
     if (target.injected) {
@@ -265,6 +283,7 @@ export class SessionSupervisor {
 
   /** 失败路径的 observer 严格复用调用 deadline。 */
   private async observeBlockers(binding: ValidatedBinding, deadlineMs: number): Promise<EditorBlockerObservation | undefined> {
+    if (binding.target === "runtime") return undefined;
     return this.observeIdentity({
       instanceId: binding.instanceId,
       canonicalProjectPath: binding.canonicalProjectPath,
@@ -274,6 +293,7 @@ export class SessionSupervisor {
 
   /** selector/bind 尚未建立 listener 时仍可基于 canonical identity 观察唯一进程。 */
   private async observeInstance(instance: UnityInstance, deadlineMs: number): Promise<EditorBlockerObservation | undefined> {
+    if (instance.target === "runtime") return undefined;
     const session = instance.activeSession
       ? { processId: instance.activeSession.processId, processStartedAt: instance.activeSession.processStartedAt }
       : undefined;
@@ -318,7 +338,7 @@ export class SessionSupervisor {
   private async selectObservation(absoluteDeadlineMs: number, startedAtMs: number): Promise<InstanceSelection> {
     const selectorBudgetMs = remainingBudget(absoluteDeadlineMs, this.dependencies.now());
     if (selectorBudgetMs <= 0) throw deadlineError("observeNow", "unknown", startedAtMs, absoluteDeadlineMs);
-    return this.dependencies.selectObservation(this.flags, this.runtime.dataDir ?? defaultDataDir(), selectorBudgetMs);
+    return this.dependencies.selectObservation(this.flags, this.runtime.dataDir ?? defaultDataDir(), selectorBudgetMs, "editor");
   }
 
   /** 测试 transport 仍通过 supervisor，但不伪造 registry/listener generation。 */
@@ -328,7 +348,7 @@ export class SessionSupervisor {
       const operation = this.runtime.bridgeExecute(request.payload);
       const response = timeoutMs === undefined ? await operation : await Promise.race([
         operation,
-        sleep(timeoutMs).then(() => { throw new SessionSupervisorError("E_CONTEXT_READ_TIMEOUT", "The injected Bridge observation exceeded its absolute deadline.", ["Inspect editor.state and retry only after Unity is responsive."], { instanceId: request.payload.instanceId, timeoutMs }); }),
+        sleep(timeoutMs).then(() => { throw new SessionSupervisorError("E_EXECUTION_TIMEOUT", "The injected Bridge observation exceeded its absolute deadline.", ["Inspect editor.state and retry only after Unity is responsive."], { instanceId: request.payload.instanceId, timeoutMs }); }),
       ]);
       assertResponseRequestId(request.payload.requestId, response);
       return response;
@@ -339,17 +359,17 @@ export class SessionSupervisor {
   }
 
   /** 首次 selector 解析只发生一次；后续恢复固定使用 instanceId，alias 变化不会改绑目标。 */
-  private async resolveTarget(selectionDeadlineMs: number, startedAtMs: number, observationDeadlineMs: number, allowTransitionBinding: boolean): Promise<SupervisorTarget> {
-    if (this.runtime.bridgeExecute) return { instanceId: INJECTED_INSTANCE_ID, injected: true };
+  private async resolveTarget(target: InstanceTarget, selectionDeadlineMs: number, startedAtMs: number, observationDeadlineMs: number, allowTransitionBinding: boolean): Promise<SupervisorTarget> {
+    if (this.runtime.bridgeExecute) return { target, instanceId: INJECTED_INSTANCE_ID, injected: true };
     try {
-      const selection = await this.selectWithinDeadline(this.flags, selectionDeadlineMs, () => deadlineError("execute", "unknown", startedAtMs, observationDeadlineMs), allowTransitionBinding);
-      return { instanceId: selection.instance.instanceId, initialSelection: selection, injected: false };
+      const selection = await this.selectWithinDeadline(this.flags, target, selectionDeadlineMs, () => deadlineError("execute", "unknown", startedAtMs, observationDeadlineMs), allowTransitionBinding);
+      return { target, instanceId: selection.instance.instanceId, initialSelection: selection, injected: false };
     } catch (selectionError) {
-      // registry 尚未注册时，普通 Tool/Context 仍应在同一次失败中报告唯一 canonical Unity process 的 modal。
+      // registry尚未注册时，普通Tool仍应在同一次失败中报告唯一canonical Unity process的modal。
       const remainingMs = remainingBudget(observationDeadlineMs, this.dependencies.now());
-      if (remainingMs > 0) {
+      if (target === "editor" && remainingMs > 0) {
         try {
-          const observationSelection = await this.dependencies.selectObservation(this.flags, this.runtime.dataDir ?? defaultDataDir(), remainingMs);
+          const observationSelection = await this.dependencies.selectObservation(this.flags, this.runtime.dataDir ?? defaultDataDir(), remainingMs, target);
           const observed = await this.observeInstance(observationSelection.instance, observationDeadlineMs);
           if (observed?.outcome === "observed-blocked") throw blockedObservation(observationSelection.instance.instanceId, observed);
           if (observed?.outcome === "conflict") throw blockerObservationConflict(observationSelection.instance.instanceId, observed);
@@ -362,14 +382,14 @@ export class SessionSupervisor {
   }
 
   /** selector 也消费 immutable deadline；超时后的后台读取结果不得触发 POST。 */
-  private async selectWithinDeadline(flags: BridgeFlags, absoluteDeadlineMs: number, timeoutError: () => SessionSupervisorError, allowTransitionBinding = false): Promise<InstanceSelection> {
+  private async selectWithinDeadline(flags: BridgeFlags, target: InstanceTarget, absoluteDeadlineMs: number, timeoutError: () => SessionSupervisorError, allowTransitionBinding = false): Promise<InstanceSelection> {
     const remainingMs = remainingBudget(absoluteDeadlineMs, this.dependencies.now());
     if (remainingMs <= 0) throw timeoutError();
     let timer: NodeJS.Timeout | undefined;
     try {
       const selection = allowTransitionBinding
-        ? this.dependencies.selectTransition(flags, this.runtime.dataDir ?? defaultDataDir(), remainingMs)
-        : this.dependencies.select(flags, this.runtime.dataDir ?? defaultDataDir());
+        ? this.dependencies.selectTransition(flags, this.runtime.dataDir ?? defaultDataDir(), remainingMs, target)
+        : this.dependencies.select(flags, this.runtime.dataDir ?? defaultDataDir(), target);
       return await Promise.race([
         selection,
         new Promise<InstanceSelection>((_resolve, reject) => { timer = setTimeout(() => reject(timeoutError()), remainingMs); }),
@@ -390,7 +410,7 @@ export class SessionSupervisor {
     let selection = initialSelection;
     for (;;) {
       if (!selection) {
-        selection = await this.selectWithinDeadline({ instance: target.instanceId }, absoluteDeadlineMs, () => selectionTransitionTimeout(target.instanceId, absoluteDeadlineMs), allowTransitionBinding);
+        selection = await this.selectWithinDeadline({ instance: target.instanceId }, target.target, absoluteDeadlineMs, () => selectionTransitionTimeout(target.instanceId, absoluteDeadlineMs), allowTransitionBinding);
       }
       const instance = selection.instance;
       if (instance.status === "blocked") throw blocked(instance);
@@ -407,7 +427,7 @@ export class SessionSupervisor {
   /** response attestation 不匹配时必须等到 registry 出现不同 generation，禁止向同一旧 listener 反复 POST。 */
   private async bindReplacement(target: SupervisorTarget, absoluteDeadlineMs: number, previous: ValidatedBinding, allowTransitionBinding = false): Promise<ValidatedBinding> {
     for (;;) {
-      const selection = await this.selectWithinDeadline({ instance: target.instanceId }, absoluteDeadlineMs, () => selectionTransitionTimeout(target.instanceId, absoluteDeadlineMs), allowTransitionBinding);
+      const selection = await this.selectWithinDeadline({ instance: target.instanceId }, target.target, absoluteDeadlineMs, () => selectionTransitionTimeout(target.instanceId, absoluteDeadlineMs), allowTransitionBinding);
       if (selection.instance.status === "blocked") throw blocked(selection.instance);
       if (selection.instance.status === "ready" || (allowTransitionBinding && selection.instance.status === "transitioning" && selection.instance.activeSession)) {
         const candidate = bindingFrom(selection.instance);
@@ -479,7 +499,8 @@ async function postFrozenBridgeRequest(binding: ValidatedBinding, request: Froze
       headers: {
         "content-type": "application/json",
         "x-unity-cli-expected-instance-id": binding.instanceId,
-        "x-unity-cli-expected-editor-session-id": binding.editorSessionId,
+        "x-unity-cli-expected-session-id": binding.sessionId,
+        "x-unity-cli-expected-target": binding.target,
         "x-unity-cli-expected-listener-id": binding.listenerId,
         "x-unity-cli-expected-listener-generation": String(binding.listenerGeneration),
       },
@@ -491,8 +512,9 @@ async function postFrozenBridgeRequest(binding: ValidatedBinding, request: Froze
     return {
       response: envelope,
       attestation: {
+        target: (response.headers.get("x-unity-cli-target") ?? "") as InstanceTarget,
         instanceId: response.headers.get("x-unity-cli-instance-id") ?? "",
-        editorSessionId: response.headers.get("x-unity-cli-editor-session-id") ?? "",
+        sessionId: response.headers.get("x-unity-cli-session-id") ?? "",
         listenerId: response.headers.get("x-unity-cli-listener-id") ?? "",
         listenerGeneration: Number(response.headers.get("x-unity-cli-listener-generation")),
       },
@@ -511,9 +533,10 @@ function bindingFrom(instance: UnityInstance): ValidatedBinding {
     ], publicSessionDetails(instance));
   }
   return {
+    target: session.target,
     instanceId: instance.instanceId,
     canonicalProjectPath: instance.canonicalProjectPath,
-    editorSessionId: session.editorSessionId,
+    sessionId: session.sessionId,
     listenerId: session.listener.listenerId,
     listenerGeneration: session.listener.generation,
     endpoint: session.listener.endpoint.url,
@@ -523,14 +546,20 @@ function bindingFrom(instance: UnityInstance): ValidatedBinding {
 }
 
 function bindingKey(binding: ValidatedBinding): string {
-  return `${binding.editorSessionId}:${binding.listenerId}:${binding.listenerGeneration}`;
+  return `${binding.target}:${binding.sessionId}:${binding.listenerId}:${binding.listenerGeneration}`;
 }
 
 function attestationMatches(binding: ValidatedBinding, attestation: TransportAttestation): boolean {
-  return attestation.instanceId === binding.instanceId
-    && attestation.editorSessionId === binding.editorSessionId
+  return attestation.target === binding.target
+    && attestation.instanceId === binding.instanceId
+    && attestation.sessionId === binding.sessionId
     && attestation.listenerId === binding.listenerId
     && attestation.listenerGeneration === binding.listenerGeneration;
+}
+
+/** runtime-tool namespace 始终绑定独立 development Player；其余命令绑定 Editor。 */
+function bridgeTarget(command: string): InstanceTarget {
+  return command === "runtime-tool.list" || command === "runtime-tool.run" ? "runtime" : "editor";
 }
 
 function normalizeTimeoutMs(value: number | undefined, mode: SessionSupervisorMode): number {
@@ -551,6 +580,8 @@ function normalizeTimeoutMs(value: number | undefined, mode: SessionSupervisorMo
 function publicSessionDetails(instance: UnityInstance): Record<string, unknown> {
   return {
     instanceId: instance.instanceId,
+    target: instance.target ?? null,
+    sessionId: instance.sessionId ?? null,
     status: instance.status,
     progress: instance.progress,
     blockers: sanitizeEditorBlockers(instance.blockers),
@@ -560,7 +591,7 @@ function publicSessionDetails(instance: UnityInstance): Record<string, unknown> 
 
 function blocked(instance: UnityInstance): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_BLOCKED", "Unity Editor is blocked by an external modal window or non-recoverable session condition.", [
-    "Run unity_cli context read editor.state for the current blocker snapshot.",
+    "Run unity_cli tools run editor.state for the current blocker snapshot.",
     "Resolve the reported blocker in the selected Unity Editor process, then retry.",
   ], publicSessionDetails(instance));
 }
@@ -573,20 +604,20 @@ function observedTransition(instance: UnityInstance): SessionSupervisorError {
 
 function selectionTransitionTimeout(instanceId: string, absoluteDeadlineMs: number): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_TRANSITION_TIMEOUT", "Unity instance selection did not complete before the request deadline.", [
-    "Run unity_cli context read editor.state to inspect current progress or blockers.",
+    "Run unity_cli tools run editor.state to inspect current progress or blockers.",
   ], { instanceId, absoluteDeadlineUtc: new Date(absoluteDeadlineMs).toISOString() });
 }
 
 function transitionTimeout(instance: UnityInstance, absoluteDeadlineMs: number): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_TRANSITION_TIMEOUT", "Unity Editor did not reach a validated ready generation before the request deadline.", [
-    "Run unity_cli context read editor.state to inspect current progress or blockers.",
+    "Run unity_cli tools run editor.state to inspect current progress or blockers.",
     "Retry with a larger --timeout-ms only when the transition is expected to take longer.",
   ], { ...publicSessionDetails(instance), absoluteDeadlineUtc: new Date(absoluteDeadlineMs).toISOString() });
 }
 
 function deadlineError(mode: SessionSupervisorMode, instanceId: string, startedAtMs: number, absoluteDeadlineMs: number): SessionSupervisorError {
   return new SessionSupervisorError(
-    mode === "read" || mode === "observeNow" ? "E_CONTEXT_READ_TIMEOUT" : "E_EXECUTION_TIMEOUT",
+    "E_EXECUTION_TIMEOUT",
     "The absolute request deadline elapsed before a terminal result was proven.",
     ["Inspect editor.state and retry only after Unity is responsive."],
     { instanceId, elapsedMs: Math.max(0, absoluteDeadlineMs - startedAtMs), absoluteDeadlineUtc: new Date(absoluteDeadlineMs).toISOString() },
@@ -609,7 +640,7 @@ function blockedObservation(instanceId: string, observation: EditorBlockerObserv
 
 function blockerNextActions(): string[] {
   return [
-    "Run unity_cli context read editor.dialogs to inspect the current modal dialog.",
+    "Run unity_cli tools run editor.dialogs to inspect the current modal dialog.",
     "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
   ];
 }
@@ -629,7 +660,7 @@ function identityMismatch(instanceId: string): SessionSupervisorError {
 function connectionFailure(instanceId: string, error: unknown): SessionSupervisorError {
   return new SessionSupervisorError("BRIDGE_CONNECTION_FAILED", errorMessage(error), [
     "Run unity_cli instances list and inspect the selected Unity session.",
-    "Run unity_cli context read editor.state for transition or blocker details.",
+    "Run unity_cli tools run editor.state for transition or blocker details.",
   ], { instanceId }, true, REGISTRY_POLL_INTERVAL_MS);
 }
 

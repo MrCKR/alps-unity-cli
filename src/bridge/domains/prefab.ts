@@ -6,6 +6,9 @@ export const prefabBridgeSpecs: BridgeCommandSpec[] = [
   { group: "prefab", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "prefab.hierarchy", buildArgs: prefabArgs },
   { group: "prefab", command: "create", bridgeCommand: "project-tool.run", toolName: "prefab.create", buildArgs: prefabArgs, destructiveHint: true },
   { group: "prefab", command: "modify", bridgeCommand: "project-tool.run", toolName: "prefab.modify", buildArgs: prefabArgs, destructiveHint: true },
+  { group: "prefab", command: "overrides-apply", bridgeCommand: "project-tool.run", toolName: "prefab.overrides.apply", buildArgs: prefabOverridesArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "prefab", command: "overrides-revert", bridgeCommand: "project-tool.run", toolName: "prefab.overrides.revert", buildArgs: prefabOverridesArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "prefab", command: "variant-create", bridgeCommand: "project-tool.run", toolName: "prefab.variant.create", buildArgs: prefabVariantArgs, destructiveHint: true, supportsDryRun: true },
   { group: "prefab", command: "stage-open", bridgeCommand: "project-tool.run", toolName: "prefab.stage-open", buildArgs: prefabArgs },
   { group: "prefab", command: "stage-save", bridgeCommand: "project-tool.run", toolName: "prefab.stage-save", buildArgs: prefabArgs, destructiveHint: true },
   { group: "prefab", command: "stage-close", bridgeCommand: "project-tool.run", toolName: "prefab.stage-close", buildArgs: prefabArgs },
@@ -70,6 +73,21 @@ function prefabArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
     includeSummaryDetails: boolFlag(flags, "include-summary-details") ?? boolField(flags, "includeSummaryDetails"),
     pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
     cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor")
+  });
+}
+
+// 显式保留 override instance selector，确保 static fallback 与 live registry 使用同一输入契约。
+function prefabOverridesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    instance: positionalTarget ?? stringFlag(flags, "instance") ?? stringField(flags, "instance")
+  });
+}
+
+// variant 的 base/path 都是业务 identity，不能退化为通用 prefab path 参数。
+function prefabVariantArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    base: positionalTarget ?? stringFlag(flags, "base") ?? stringField(flags, "base"),
+    path: stringFlag(flags, "path") ?? stringField(flags, "path")
   });
 }
 

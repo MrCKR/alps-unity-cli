@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
@@ -19,25 +20,51 @@ namespace UnityCli
             return Path.Combine(projectRoot, "Library", "UnityCli", "compile-event-sequence.txt");
         }
 
-        /// <summary>读取 durable 序列；文件缺失视为 0，损坏立即失败（不得静默继续）。</summary>
+        private static bool sequenceCorrupt;
+        internal static bool SequenceCorrupt { get { return sequenceCorrupt; } }
+
+        /// <summary>读取durable序列；损坏且存在相关root时置poison，无root时安全重建。</summary>
         internal static long CurrentCompilationEventSequence()
         {
             var path = SequencePath();
-            if (!File.Exists(path)) return 0;
-            var text = File.ReadAllText(path).Trim();
-            if (!long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var current) || current < 0 || text != current.ToString(CultureInfo.InvariantCulture))
-                throw new InvalidDataException("Compilation event sequence sidecar is corrupt.");
+            string text;
+            try { text = File.ReadAllText(path).Trim(); }
+            catch (FileNotFoundException) { return 0; }
+            catch (DirectoryNotFoundException) { return 0; }
+            long current;
+            if (text.Length > 20 || !long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out current) || current < 0 || text != current.ToString(CultureInfo.InvariantCulture))
+            {
+                if (UnityCliActiveOperation.Exists("compile") || UnityCliActiveOperation.Exists("refresh")) { sequenceCorrupt = true; return 0; }
+                WriteSequence(0);
+                sequenceCorrupt = false;
+                return 0;
+            }
+            sequenceCorrupt = false;
             return current;
         }
 
         /// <summary>分配下一个 durable 序列并立即落盘，reload 后从这里续接。</summary>
         internal static long NextCompilationEventSequence()
         {
-            var next = CurrentCompilationEventSequence() + 1;
+            var next = checked(CurrentCompilationEventSequence() + 1);
+            if (sequenceCorrupt) throw new InvalidDataException("Compilation event sequence is corrupt while an attributed root is active.");
+            WriteSequence(next);
+            return next;
+        }
+
+        private static void WriteSequence(long value)
+        {
             var path = SequencePath();
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            File.WriteAllText(path, next.ToString(CultureInfo.InvariantCulture));
-            return next;
+            var temporary = path + ".tmp";
+            try
+            {
+                using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false))) { writer.Write(value.ToString(CultureInfo.InvariantCulture)); writer.Flush(); stream.Flush(true); }
+                try { File.Replace(temporary, path, null); }
+                catch (FileNotFoundException) { File.Move(temporary, path); }
+            }
+            finally { try { File.Delete(temporary); } catch { } }
         }
 
         internal sealed class Snapshot
@@ -83,7 +110,18 @@ namespace UnityCli
             initialized = false;
         }
 
-        internal static void Tick() { }
+        internal static void Tick()
+        {
+            if (!sequenceCorrupt) return;
+            try
+            {
+                if (UnityCliActiveOperation.Exists("compile") || UnityCliActiveOperation.Exists("refresh")) return;
+                WriteSequence(0);
+                sequence = 0;
+                sequenceCorrupt = false;
+            }
+            catch { }
+        }
 
         internal static Snapshot ReadSnapshot()
         {

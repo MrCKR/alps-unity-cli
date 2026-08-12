@@ -30,6 +30,8 @@ namespace UnityCli
     public static partial class UnityCliBridge
     {
         private const string ProjectToolFingerprintAlgorithm = "unity-cli-project-tool-fingerprint-v2";
+        private const string OfficialAttributeToolPrefix = "UnityPipeline_";
+        private const string OfficialAttributeToolGroup = "UnityPipeline";
         private static readonly Dictionary<string, RegisteredTool> ProjectTools = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
         private static Dictionary<string, RegisteredTool> discoveryTools;
         private static RegistryOwnershipResolver registryOwnership;
@@ -54,12 +56,30 @@ namespace UnityCli
             definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
             definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
             definition.PlayModeSupport = NormalizeProjectToolPlayModeSupport(definition.PlayModeSupport, definition.Target);
+            if (!string.Equals(definition.ContractProfile, "native", StringComparison.Ordinal)
+                && !string.Equals(definition.ContractProfile, "official-attribute", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Tool registration requires a known contract profile: " + definition.Name);
+            }
+            ValidateOfficialAttributeNamespace(definition);
             definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
             definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "runtime-registration" : definition.DescriptorSource;
             RefreshProjectToolFingerprint(definition);
             target.Add(definition.Name, definition);
+        }
+
+        /// <summary>保留namespace只属于official attribute投影；任一owner违规使整轮pending registry作废。</summary>
+        private static void ValidateOfficialAttributeNamespace(RegisteredTool definition)
+        {
+            var officialAttribute = string.Equals(definition.ContractProfile, "official-attribute", StringComparison.Ordinal);
+            var usesPrefix = definition.Name.StartsWith(OfficialAttributeToolPrefix, StringComparison.Ordinal);
+            var usesGroup = string.Equals(definition.Group, OfficialAttributeToolGroup, StringComparison.Ordinal);
+            if (officialAttribute && (!usesPrefix || !usesGroup))
+                throw new InvalidOperationException("Official attribute Tool must use the reserved UnityPipeline_ name prefix and UnityPipeline group: " + definition.Name + ".");
+            if (!officialAttribute && (usesPrefix || usesGroup))
+                throw new InvalidOperationException("Native Tool cannot use the reserved UnityPipeline_ name prefix or UnityPipeline group: " + definition.Name + ".");
         }
 
         private static void DiscoverProjectTools()
@@ -75,11 +95,13 @@ namespace UnityCli
                 {
                     Type[] types;
                     try { types = assembly.GetTypes(); }
-                    catch (ReflectionTypeLoadException exception) { types = exception.Types; }
+                    catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in assembly " + assembly.FullName + ".", exception); }
                     catch (Exception exception) { throw new InvalidOperationException("Unable to inspect assembly " + assembly.FullName + ".", exception); }
                     foreach (var type in types)
                     {
-                        if (type != null) TryRegisterInterfaceProjectTool(assembly, type);
+                        if (type == null) continue;
+                        TryRegisterInterfaceProjectTool(assembly, type);
+                        TryRegisterOfficialAttributeTools(assembly, type);
                     }
                 }
 
@@ -90,7 +112,7 @@ namespace UnityCli
             catch (Exception exception)
             {
                 // 失败前从未写入公开 registry；下一次请求可在 Unity reload 后重新发现。
-                throw new BridgeCommandException("E_REGISTRY_UNHEALTHY", "Tool registry discovery failed: " + exception.Message,
+                throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool registry discovery failed: " + exception.Message,
                     new Dictionary<string, object> { { "registry", "tools" } },
                     new[] { "Fix the extension manifest or capability implementation, then retry discovery.", "Run unity_cli extensions doctor --project <path> to inspect extension installation state." }, true, 1000);
             }
@@ -156,11 +178,6 @@ namespace UnityCli
             catch (Exception exception)
             {
                 var diagnostics = ExceptionChain(exception);
-                if (string.Equals(ownership, "project", StringComparison.Ordinal) && diagnostics.Contains("E_TOOL_COMPLETION_CONTRACT_REQUIRED"))
-                {
-                    WriteLog("custom_tool_registration_rejected type=" + type.FullName + " error=" + diagnostics);
-                    return;
-                }
                 WriteLog("custom_tool_registration_failed type=" + type.FullName + " error=" + diagnostics);
                 throw new InvalidOperationException("Tool registration failed: " + type.FullName + ": " + diagnostics, exception);
             }
@@ -203,6 +220,7 @@ namespace UnityCli
                 Examples = descriptor.Examples ?? Array.Empty<ToolExample>(),
                 Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
                 PlayModeSupport = string.IsNullOrEmpty(descriptor.PlayModeSupport) ? "editor-only" : descriptor.PlayModeSupport,
+                ContractProfile = "native",
                 DefaultTimeoutMs = descriptor.DefaultTimeoutMs <= 0 ? 30000 : descriptor.DefaultTimeoutMs,
                 MaxTimeoutMs = descriptor.MaxTimeoutMs <= 0 ? 600000 : descriptor.MaxTimeoutMs,
                 RequiredInput = Array.Empty<string>(),
@@ -331,6 +349,18 @@ namespace UnityCli
                     },
                     new[] { "Exit Play Mode before running this tool, or use a runtime tool with PlayModeSupport=runtime-only." });
             }
+            if (!EditorApplication.isPlaying && string.Equals(definition.PlayModeSupport, "runtime-only", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE",
+                    "Tool " + name + " is runtime-only and cannot run outside Play Mode.",
+                    new Dictionary<string, object>
+                    {
+                        { "toolName", name },
+                        { "playModeSupport", definition.PlayModeSupport },
+                        { "isPlaying", false }
+                    },
+                    new[] { "Enter Play Mode before running this Tool." });
+            }
 
             // If the tool has Target=runtime, reject from project-tool.run and suggest runtime-tool.run
             if (definition.Target == "runtime")
@@ -384,15 +414,23 @@ namespace UnityCli
             catch (BridgeCommandException bce)
             {
                 WriteLog("custom_tool_error requestId=" + request.RequestId + " name=" + name + " error=" + bce.Code);
-                if (executionContext != null && executionContext.EffectCommitted && bce.Code != "E_EXECUTION_TIMEOUT")
-                    throw PostEffectExecutionTimeout(name, "invoke", bce.Code + ": " + bce.Message);
+                if (executionContext != null && executionContext.EffectCommitted
+                    && (definition.OfficialAttributeBinding != null || bce.Code != "E_EXECUTION_TIMEOUT"))
+                    throw PostEffectExecutionTimeout(name, "invoke", ProjectToolFailureReason(definition, bce.Code + ": " + bce.Message));
                 throw;
             }
             catch (TargetInvocationException exception)
             {
                 var inner = exception.InnerException ?? exception;
                 var innerBce = inner as BridgeCommandException;
-                if (innerBce != null) throw innerBce;
+                if (innerBce != null)
+                {
+                    WriteLog("custom_tool_error requestId=" + request.RequestId + " name=" + name + " error=" + innerBce.Code);
+                    if (executionContext != null && executionContext.EffectCommitted
+                        && (definition.OfficialAttributeBinding != null || innerBce.Code != "E_EXECUTION_TIMEOUT"))
+                        throw PostEffectExecutionTimeout(name, "invoke", ProjectToolFailureReason(definition, innerBce.Code + ": " + innerBce.Message));
+                    throw innerBce;
+                }
                 if (inner is OperationCanceledException)
                 {
                     if (executionContext != null && executionContext.EffectCommitted)
@@ -400,7 +438,7 @@ namespace UnityCli
                     throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "The immutable request deadline elapsed before the Tool reached its terminal proof.", "Inspect editor.state before submitting a new request.");
                 }
                 if (executionContext != null && executionContext.EffectCommitted)
-                    throw PostEffectExecutionTimeout(name, "invoke", inner.GetType().Name + ": " + inner.Message);
+                    throw PostEffectExecutionTimeout(name, "invoke", ProjectToolFailureReason(definition, inner.GetType().Name + ": " + inner.Message));
                 throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
             catch (OperationCanceledException)
@@ -412,31 +450,44 @@ namespace UnityCli
             catch (Exception exception)
             {
                 if (executionContext != null && executionContext.EffectCommitted)
-                    throw PostEffectExecutionTimeout(name, "invoke", exception.GetType().Name + ": " + exception.Message);
+                    throw PostEffectExecutionTimeout(name, "invoke", ProjectToolFailureReason(definition, exception.GetType().Name + ": " + exception.Message));
                 throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", exception.GetType().Name + ": " + exception.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
 
-            var outputJson = UnityCliSerializer.Serialize(result);
-            var outputError = ValidateTypedInput(definition.ResultType, outputJson);
-            if (outputError != null)
+            // method 返回后仍可能在序列化 getter、schema 或 completion driver 中失败；整个 postcondition 区域必须服从同一 effect 边界。
+            try
             {
-                if (executionContext != null && executionContext.EffectCommitted)
-                    throw PostEffectExecutionTimeout(name, "postcondition", "Tool result failed its derived output schema at " + outputError.Path + ".");
-                throw new BridgeCommandException(
-                    "E_TOOL_COMPLETION_PROOF_INVALID",
-                    "Tool result failed its derived output schema at " + outputError.Path + ".",
-                    new Dictionary<string, object> { { "toolName", definition.Name }, { "path", outputError.Path }, { "expected", outputError.Expected }, { "actual", outputError.Actual } },
-                    new[] { "Fix the Tool result DTO or completion driver before retrying." });
+                var outputJson = UnityCliSerializer.Serialize(result);
+                var outputError = ValidateProjectToolOutput(definition, outputJson);
+                if (outputError != null)
+                {
+                    throw new BridgeCommandException(
+                        "E_TOOL_COMPLETION_PROOF_INVALID",
+                        "Tool result failed its derived output schema at " + outputError.Path + ".",
+                        new Dictionary<string, object> { { "toolName", definition.Name }, { "path", outputError.Path }, { "expected", outputError.Expected }, { "actual", outputError.Actual } },
+                        new[] { "Fix the Tool result DTO or completion driver before retrying." });
+                }
+                var terminalData = CompleteProjectToolSuccess(request, definition, result);
+                RecordToolCompletionEvidence(request, definition, result, terminalData);
+                return terminalData;
             }
-            var terminalData = CompleteProjectToolSuccess(request, definition, result);
-            try { RecordToolCompletionEvidence(request, definition, result, terminalData); }
             catch (BridgeCommandException exception)
             {
-                if (executionContext != null && executionContext.EffectCommitted)
-                    throw PostEffectExecutionTimeout(name, "postcondition", exception.Code + ": " + exception.Message);
+                if (executionContext != null && executionContext.EffectCommitted
+                    && (definition.OfficialAttributeBinding != null || exception.Code != "E_EXECUTION_TIMEOUT"))
+                    throw PostEffectExecutionTimeout(name, "postcondition", ProjectToolFailureReason(definition, exception.Code + ": " + exception.Message));
                 throw;
             }
-            return terminalData;
+            catch (Exception exception)
+            {
+                if (executionContext != null && executionContext.EffectCommitted)
+                    throw PostEffectExecutionTimeout(name, "postcondition", ProjectToolFailureReason(definition, exception.GetType().Name + ": " + exception.Message));
+                throw new BridgeCommandException(
+                    "E_TOOL_COMPLETION_PROOF_INVALID",
+                    "Tool result could not be serialized or proven against its declared output contract.",
+                    new Dictionary<string, object> { { "toolName", definition.Name }, { "stage", "postcondition" } },
+                    new[] { "Fix the Tool result DTO or completion driver before retrying." });
+            }
         }
 
         /// <summary>内部 raw discovery 需要 completion contract；公开投影与 static capture 会移除此字段。</summary>
@@ -475,6 +526,7 @@ namespace UnityCli
                 { "inputSchema", UnityCliSerializer.Parse(definition.InputSchema) }, { "outputSchema", UnityCliSerializer.Parse(definition.OutputSchema) },
                 { "destructiveHint", definition.DestructiveHint },
                 { "supportsDryRun", definition.SupportsDryRun },
+                { "contractProfile", definition.ContractProfile },
                 { "target", definition.Target }, { "availabilityScope", definition.AvailabilityScope }, { "playModeSupport", definition.PlayModeSupport },
                 { "examples", definition.Examples },
                 { "defaultTimeoutMs", definition.DefaultTimeoutMs },
@@ -495,6 +547,8 @@ namespace UnityCli
         {
             if (BuildProfileApiRequired(definition) && BuildToolSupport.BuildProfileType() == null)
                 return false;
+            if (EditorElementCaptureApiRequired(definition) && !EditorElementCaptureApiAvailable())
+                return false;
             if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
                 return EditorApplication.isPlaying && !IsPlayModeChanging();
             if (definition.PlayModeSupport == "editor-only")
@@ -511,6 +565,8 @@ namespace UnityCli
                 return "E_TOOL_PLAYMODE_UNAVAILABLE: Exit Play Mode before executing this editor-only Tool.";
             if (BuildProfileApiRequired(definition) && BuildToolSupport.BuildProfileType() == null)
                 return "E_BUILD_PROFILE_API_UNAVAILABLE: This Unity Editor version does not expose the Build Profile API.";
+            if (EditorElementCaptureApiRequired(definition) && !EditorElementCaptureApiAvailable())
+                return "E_EDITOR_ELEMENT_CAPTURE_UNAVAILABLE: screenshot.editor-element requires Unity 6000.7 or newer because VisualElement CaptureToRenderTexture is unavailable in this Editor.";
             return "E_UNITY_TRANSITIONING: Wait until the Editor mode transition finishes.";
         }
 
@@ -520,6 +576,21 @@ namespace UnityCli
             return definition.Name == "build.profile.create"
                 || definition.Name == "build.profile.modify"
                 || definition.Name == "build.profile.switch";
+        }
+
+        private static bool EditorElementCaptureApiRequired(RegisteredTool definition)
+        {
+            return definition.Name == "screenshot.editor-element";
+        }
+
+        /// <summary>UI Toolkit capture API availability由Unity编译符号精确证明。</summary>
+        private static bool EditorElementCaptureApiAvailable()
+        {
+#if UNITY_6000_7_OR_NEWER
+            return true;
+#else
+            return false;
+#endif
         }
 
         private static object CompleteProjectToolSuccess(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, object result)
@@ -675,6 +746,7 @@ namespace UnityCli
                 + "\ntarget=" + (definition.Target ?? string.Empty)
                 + "\navailabilityScope=" + (definition.AvailabilityScope ?? string.Empty)
                 + "\nplayModeSupport=" + (definition.PlayModeSupport ?? string.Empty)
+                + "\ncontractProfile=" + (definition.ContractProfile ?? string.Empty)
                 + "\ndefaultTimeoutMs=" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture)
                 + "\nmaxTimeoutMs=" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture)
                 + "\nrequiredInput=" + string.Join(",", (definition.RequiredInput ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using UnityEditor;
 
 namespace UnityCli
@@ -17,9 +18,59 @@ namespace UnityCli
         private static readonly Dictionary<string, string> CompletionProbeResourceOwners = new Dictionary<string, string>(StringComparer.Ordinal);
         private static string CompletionProbeSessionOwner;
 
+        /// <summary>completion proof 的私有读取入口；不会进入公开 Tool registry 或 descriptor。</summary>
+        private sealed class CompletionProofObserverDefinition
+        {
+            public string ReadTool { get; set; }
+            public Type RequestType { get; set; }
+            public Func<object, UnityCliProjectToolContext, CancellationToken, ValueTask<object>> ReadAsync { get; set; }
+            public Func<object, UnityCliProofResourceClaim> ResolveProofResource { get; set; }
+        }
+
+        private static readonly Dictionary<string, CompletionProofObserverDefinition> CompletionProofObservers = CreateCompletionProofObservers();
+
+        /// <summary>只登记完成证明当前支持的 canonical 读取 Tool，禁止项目或 Extension 动态注入。</summary>
+        private static Dictionary<string, CompletionProofObserverDefinition> CreateCompletionProofObservers()
+        {
+            var observers = new Dictionary<string, CompletionProofObserverDefinition>(StringComparer.Ordinal);
+            var gameObject = new SceneGameObjectTool();
+            var component = new SceneGameObjectComponentTool();
+            RegisterCompletionProofObserver(observers, CreateCompletionProofObserver<SceneGameObjectTool.Request, SceneGameObjectTool.Result>(
+                "scene.gameobject", gameObject.ExecuteAsync, gameObject.ResolveProofResource));
+            RegisterCompletionProofObserver(observers, CreateCompletionProofObserver<SceneGameObjectComponentTool.Request, SceneGameObjectComponentTool.Result>(
+                "scene.gameobject.component", component.ExecuteAsync, component.ResolveProofResource));
+            return observers;
+        }
+
+        private static CompletionProofObserverDefinition CreateCompletionProofObserver<TReq, TRes>(
+            string readTool,
+            Func<TReq, UnityCliProjectToolContext, CancellationToken, ValueTask<TRes>> readAsync,
+            Func<TReq, UnityCliProofResourceClaim> resolveProofResource)
+        {
+            return new CompletionProofObserverDefinition
+            {
+                ReadTool = readTool,
+                RequestType = typeof(TReq),
+                ReadAsync = async (input, context, cancellationToken) => (object)await readAsync((TReq)input, context, cancellationToken),
+                ResolveProofResource = input => resolveProofResource((TReq)input)
+            };
+        }
+
+        private static void RegisterCompletionProofObserver(
+            IDictionary<string, CompletionProofObserverDefinition> observers,
+            CompletionProofObserverDefinition observer)
+        {
+            if (observer == null || string.IsNullOrWhiteSpace(observer.ReadTool) || observer.RequestType == null
+                || observer.ReadAsync == null || observer.ResolveProofResource == null)
+                throw new InvalidOperationException("Completion proof observer registration is incomplete.");
+            if (observers.ContainsKey(observer.ReadTool))
+                throw new InvalidOperationException("Duplicate completion proof observer: " + observer.ReadTool);
+            observers.Add(observer.ReadTool, observer);
+        }
+
         private sealed class CompletionProbePrepared
         {
-            public RegisteredContext Context { get; set; }
+            public CompletionProofObserverDefinition Observer { get; set; }
             public object Input { get; set; }
             public UnityCliProofResourceClaim Resource { get; set; }
             public string SessionId { get; set; }
@@ -36,7 +87,7 @@ namespace UnityCli
 
         /// <summary>
         /// 在同一主线程调用内执行 pre-read、唯一 effect barrier 与 fresh post-read。
-        /// Context、输入 schema、断言、资源 identity、session identity 与互斥 lease 都必须在 effect 前成立。
+        /// 内部 observer、输入 schema、断言、资源 identity、session identity 与互斥 lease 都必须在 effect 前成立。
         /// </summary>
         public static UnityCliCompletionProbeReadback ExecuteCompletionProbe(
             UnityCliProjectToolContext ctx,
@@ -49,7 +100,7 @@ namespace UnityCli
             AcquireCompletionProbeLease(ctx.RequestId, prepared.Resource.ResourceKey);
             try
             {
-                var beforeSnapshot = ReadCompletionProbeSnapshot(ctx, prepared.Context, prepared.Input, "before");
+                var beforeSnapshot = ReadCompletionProbeSnapshot(ctx, prepared.Observer, prepared.Input, "before");
                 prepared.BeforeHash = CanonicalCompletionProbeHash(beforeSnapshot);
                 prepared.BeforeValues = ResolveCompletionProbePointers(beforeSnapshot, probe.Assertions);
                 ValidateCompletionProbeBefore(probe.Assertions, prepared.BeforeValues);
@@ -68,7 +119,7 @@ namespace UnityCli
                 UnityCliProofResourceClaim afterResource;
                 try
                 {
-                    afterResource = ResolveCompletionProbeResource(prepared.Context, prepared.Input);
+                    afterResource = ResolveCompletionProbeResource(prepared.Observer, prepared.Input);
                 }
                 catch (Exception exception)
                 {
@@ -80,7 +131,7 @@ namespace UnityCli
                 object afterSnapshot;
                 try
                 {
-                    afterSnapshot = ReadCompletionProbeSnapshot(ctx, prepared.Context, prepared.Input, "after");
+                    afterSnapshot = ReadCompletionProbeSnapshot(ctx, prepared.Observer, prepared.Input, "after");
                 }
                 catch (Exception exception)
                 {
@@ -125,7 +176,7 @@ namespace UnityCli
         private static CompletionProbePrepared PrepareCompletionProbe(UnityCliProjectToolContext ctx, UnityCliCompletionProbe probe)
         {
             if (probe == null)
-                throw new BridgeCommandException("E_COMPLETION_PROBE_REQUIRED", "This Tool requires completionProbe before it can execute.", "Pass a supported read-only Context, input, and before/after assertions.");
+                throw new BridgeCommandException("E_COMPLETION_PROBE_REQUIRED", "This Tool requires completionProbe before it can execute.", "Pass a supported read Tool, input, and before/after assertions.");
             if (probe.Assertions == null || probe.Assertions.Count == 0)
                 throw new BridgeCommandException("E_COMPLETION_PROBE_ASSERTION_INVALID", "completionProbe requires at least one assertion.", "Declare one or more JSON Pointer assertions with before and after values.");
             if (probe.Assertions.Count > 32)
@@ -133,29 +184,28 @@ namespace UnityCli
             if (EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || IsPlayModeChanging())
                 throw new BridgeCommandException("E_UNITY_BUSY", "Unity Editor is not stable enough to capture completionProbe pre-state.", "Wait for editor.state to report ready, then submit a new request.");
 
-            DiscoverContexts();
-            RegisteredContext definition;
-            if (!Contexts.TryGetValue(probe.Context ?? string.Empty, out definition) || definition.ResolveProofResource == null)
-                throw new BridgeCommandException("E_COMPLETION_PROBE_CONTEXT_UNSUPPORTED", "Context is not an approved completion proof observer: " + (probe.Context ?? "<null>") + ".", "Use a Context listed by the completionProbe context schema enum.");
+            CompletionProofObserverDefinition observer;
+            if (!CompletionProofObservers.TryGetValue(probe.ReadTool ?? string.Empty, out observer))
+                throw new BridgeCommandException("E_COMPLETION_PROBE_READ_TOOL_UNSUPPORTED", "Read Tool is not approved for completion proof: " + (probe.ReadTool ?? "<null>") + ".", "Use a readTool listed by the completionProbe schema enum.");
 
             object typedInput;
             try
             {
                 var inputJson = UnityCliSerializer.Serialize(probe.Input);
-                var schemaFailure = ValidateTypedInput(definition.RequestType, inputJson);
+                var schemaFailure = ValidateTypedInput(observer.RequestType, inputJson);
                 if (schemaFailure != null) throw SchemaValidationException(schemaFailure);
-                typedInput = UnityCliSerializer.Deserialize(inputJson, definition.RequestType);
+                typedInput = UnityCliSerializer.Deserialize(inputJson, observer.RequestType);
             }
             catch (Exception exception)
             {
-                throw new BridgeCommandException("E_COMPLETION_PROBE_INPUT_INVALID", "completionProbe Context input is invalid: " + exception.Message, "Validate the input against context describe output before submitting the Tool.");
+                throw new BridgeCommandException("E_COMPLETION_PROBE_INPUT_INVALID", "completionProbe read Tool input is invalid: " + exception.Message, "Validate the input against tools describe " + observer.ReadTool + " before submitting the Tool.");
             }
 
             ValidateCompletionProbeAssertionSyntax(probe.Assertions);
-            var resource = ResolveCompletionProbeResource(definition, typedInput);
+            var resource = ResolveCompletionProbeResource(observer, typedInput);
             return new CompletionProbePrepared
             {
-                Context = definition,
+                Observer = observer,
                 Input = typedInput,
                 Resource = resource,
                 SessionId = EditorSessionId(),
@@ -163,8 +213,8 @@ namespace UnityCli
             };
         }
 
-        /// <summary>只执行已注册 Context delegate；异步或跨帧 Context 不可用于同调用 proof。</summary>
-        private static object ReadCompletionProbeSnapshot(UnityCliProjectToolContext parent, RegisteredContext definition, object input, string stage)
+        /// <summary>只执行内部 observer delegate；异步或跨帧读取不可用于同调用 proof。</summary>
+        private static object ReadCompletionProbeSnapshot(UnityCliProjectToolContext parent, CompletionProofObserverDefinition observer, object input, string stage)
         {
             var readContext = new UnityCliProjectToolContext
             {
@@ -174,24 +224,24 @@ namespace UnityCli
                 CancellationToken = parent.CancellationToken,
                 Wait = null
             };
-            var pending = definition.ReadAsync(input, readContext, parent.CancellationToken);
+            var pending = observer.ReadAsync(input, readContext, parent.CancellationToken);
             if (!pending.IsCompleted)
-                throw new BridgeCommandException("E_COMPLETION_PROBE_CONTEXT_ASYNC", "completionProbe Context did not finish synchronously during " + stage + " read.", "Use a synchronous built-in proof observer Context.");
+                throw new BridgeCommandException("E_COMPLETION_PROBE_OBSERVER_ASYNC", "completionProbe observer did not finish synchronously during " + stage + " read.", "Use a synchronous read Tool supported by the completionProbe schema.");
             var result = pending.GetAwaiter().GetResult();
             return UnityCliSerializer.Parse(UnityCliSerializer.Serialize(result));
         }
 
-        private static UnityCliProofResourceClaim ResolveCompletionProbeResource(RegisteredContext definition, object input)
+        private static UnityCliProofResourceClaim ResolveCompletionProbeResource(CompletionProofObserverDefinition observer, object input)
         {
             UnityCliProofResourceClaim claim;
-            try { claim = definition.ResolveProofResource(input); }
+            try { claim = observer.ResolveProofResource(input); }
             catch (BridgeCommandException) { throw; }
             catch (Exception exception)
             {
-                throw new BridgeCommandException("E_COMPLETION_PROBE_RESOURCE_INVALID", "completionProbe could not resolve a canonical resource: " + exception.Message, "Use an exact Context target that resolves one stable resource.");
+                throw new BridgeCommandException("E_COMPLETION_PROBE_RESOURCE_INVALID", "completionProbe could not resolve a canonical resource: " + exception.Message, "Use an exact read Tool target that resolves one stable resource.");
             }
             if (claim == null || string.IsNullOrWhiteSpace(claim.ResourceKey) || string.IsNullOrWhiteSpace(claim.Identity))
-                throw new BridgeCommandException("E_COMPLETION_PROBE_RESOURCE_INVALID", "completionProbe observer returned an incomplete canonical resource claim.", "Use an exact Context target that resolves one stable resource.");
+                throw new BridgeCommandException("E_COMPLETION_PROBE_RESOURCE_INVALID", "completionProbe observer returned an incomplete canonical resource claim.", "Use an exact read Tool target that resolves one stable resource.");
             return claim;
         }
 
@@ -284,7 +334,7 @@ namespace UnityCli
                 var assertion = assertions[index];
                 var observed = values[index.ToString(CultureInfo.InvariantCulture)];
                 if (!EvaluateCompletionProbeAssertion(assertion, assertion.Before, observed))
-                    throw new BridgeCommandException("E_COMPLETION_PROBE_PRECONDITION_FAILED", "completionProbe before assertion failed at " + assertion.Path + ".", "Read the Context again and submit assertions that match the current resource state.");
+                    throw new BridgeCommandException("E_COMPLETION_PROBE_PRECONDITION_FAILED", "completionProbe before assertion failed at " + assertion.Path + ".", "Run the declared read Tool again and submit assertions that match the current resource state.");
                 if (!EvaluateCompletionProbeAssertion(assertion, assertion.After, observed)) anyAfterUnsatisfied = true;
             }
             if (!anyAfterUnsatisfied)
@@ -458,7 +508,7 @@ namespace UnityCli
                     { "stage", stage },
                     { "cause", cause == null ? null : cause.Message }
                 },
-                new[] { "Check the declared Context and inspect the target resource before submitting another request." });
+                new[] { "Run the declared read Tool and inspect the target resource before submitting another request." });
         }
     }
 }

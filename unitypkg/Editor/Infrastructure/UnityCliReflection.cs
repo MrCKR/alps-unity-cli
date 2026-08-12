@@ -297,7 +297,7 @@ namespace UnityCli
                 return data;
             }
 
-            /// <summary>completionProbe 只允许同步方法；void 由独立 Context after proof 覆盖。</summary>
+            /// <summary>completionProbe 只允许同步方法；void 由内部 observer 的 fresh after proof 覆盖。</summary>
             private static void RequireSynchronousResult(MethodInfo method)
             {
                 var returnType = method.ReturnType;

@@ -52,7 +52,14 @@ function gameObjectArgs({ command, flags, positionalTarget }: Parameters<BridgeC
   const scale = vectorValue(structured.scale);
   const offset = vectorValue(structured.offset);
   const baseTargetArgs = command === "go.create"
-    ? compactArgs({ target: positionalTarget ?? stringFlag(flags, "target"), name: stringFlag(flags, "name") })
+    ? compactArgs({
+      target: positionalTarget ?? stringFlag(flags, "target") ?? stringValue(structured.target),
+      name: stringFlag(flags, "name") ?? stringValue(structured.name),
+      count: numberFlag(flags, "count") ?? numberValue(structured.count),
+      positions: structured.positions,
+      rotations: structured.rotations,
+      scales: structured.scales
+    })
     : targetArgs(flags, positionalTarget);
 
   return compactArgs({
@@ -71,18 +78,18 @@ function gameObjectArgs({ command, flags, positionalTarget }: Parameters<BridgeC
     layerValue: stringFlag(flags, "layer-value") ?? stringFlag(flags, "set-layer") ?? stringValue(structured.layerValue),
     tagValue: stringFlag(flags, "tag-value") ?? stringFlag(flags, "set-tag") ?? stringValue(structured.tagValue),
     primitive: stringFlag(flags, "primitive") ?? stringValue(structured.primitive),
-    x: floatFlag(flags, "x") ?? numberValue(position?.x),
-    y: floatFlag(flags, "y") ?? numberValue(position?.y),
-    z: floatFlag(flags, "z") ?? numberValue(position?.z),
+    x: floatFlag(flags, "x") ?? numberValue(structured.x) ?? numberValue(position?.x),
+    y: floatFlag(flags, "y") ?? numberValue(structured.y) ?? numberValue(position?.y),
+    z: floatFlag(flags, "z") ?? numberValue(structured.z) ?? numberValue(position?.z),
     offsetX: floatFlag(flags, "offset-x") ?? floatFlag(flags, "dx") ?? numberValue(offset?.x),
     offsetY: floatFlag(flags, "offset-y") ?? floatFlag(flags, "dy") ?? numberValue(offset?.y),
     offsetZ: floatFlag(flags, "offset-z") ?? floatFlag(flags, "dz") ?? numberValue(offset?.z),
-    rotationX: floatFlag(flags, "rotation-x") ?? numberValue(rotation?.x),
-    rotationY: floatFlag(flags, "rotation-y") ?? numberValue(rotation?.y),
-    rotationZ: floatFlag(flags, "rotation-z") ?? numberValue(rotation?.z),
-    scaleX: floatFlag(flags, "scale-x") ?? numberValue(scale?.x),
-    scaleY: floatFlag(flags, "scale-y") ?? numberValue(scale?.y),
-    scaleZ: floatFlag(flags, "scale-z") ?? numberValue(scale?.z),
+    rotationX: floatFlag(flags, "rotation-x") ?? numberValue(structured.rotationX) ?? numberValue(rotation?.x),
+    rotationY: floatFlag(flags, "rotation-y") ?? numberValue(structured.rotationY) ?? numberValue(rotation?.y),
+    rotationZ: floatFlag(flags, "rotation-z") ?? numberValue(structured.rotationZ) ?? numberValue(rotation?.z),
+    scaleX: floatFlag(flags, "scale-x") ?? numberValue(structured.scaleX) ?? numberValue(scale?.x),
+    scaleY: floatFlag(flags, "scale-y") ?? numberValue(structured.scaleY) ?? numberValue(scale?.y),
+    scaleZ: floatFlag(flags, "scale-z") ?? numberValue(structured.scaleZ) ?? numberValue(scale?.z),
     worldPositionStays: boolFlag(flags, "world-position-stays") ?? boolValue(structured.worldPositionStays),
     dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight") ?? boolValue(structured.dryRun)
   });

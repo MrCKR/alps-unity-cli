@@ -6,7 +6,7 @@
 
 每个独立问题最多记录一次：
 
-- `failure`：公开 CLI/Tool/Context 调用失败，且失败对完成任务有实际影响。
+- `failure`：公开 CLI/Tool 调用失败，且失败对完成任务有实际影响。
 - `ambiguity`：descriptor、schema、availability、错误或 nextActions 存在多种合理理解。
 - `missing`：所需能力、字段、说明或可验证业务状态缺失。
 - `misleading`：公开名称、示例或建议把 Agent 引向错误调用。
@@ -19,7 +19,7 @@
 - `Category`：以上五类之一。
 - `Summary`：1-512 字符的单行问题摘要。
 - `Workaround`：0-512 字符；`workaround` 类必填。
-- `Capability`：可选 Tool、Context 或控制面名称，只允许字母、数字、点、下划线和连字符。
+- `Capability`：可选Tool或控制面名称，只允许字母、数字、点、下划线和连字符。
 - `ErrorCode`：可选稳定错误码，如 `E_SCHEMA_INVALID`。
 - `Phase`：`discovery`、`describe`、`execute`、`verify`、`install` 或 `other`。
 
@@ -33,7 +33,7 @@
 powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/record-feedback.ps1 `
   -Category ambiguity `
   -Summary "Descriptor did not distinguish two valid target forms." `
-  -Workaround "Used context readback to identify the canonical target." `
+  -Workaround "Used a read Tool to identify the canonical target." `
   -Capability "sample.tool" `
   -ErrorCode "E_SCHEMA_INVALID" `
   -Phase describe

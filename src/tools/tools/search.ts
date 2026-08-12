@@ -4,9 +4,9 @@ import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
 import { toolAvailabilityScope, toolSource } from "../metadata/index.js";
 
-export interface ToolsSearchRequest { keyword: string; format?: "json" | "text" }
+export interface ToolsSearchRequest { keyword: string }
 export interface ToolsSearchItem { name: string; summary: string; group: string; source: string; destructiveHint: boolean; playModeSupport: string; target: string; availabilityScope: string; available: boolean; unavailableReason?: string; requiresPackages?: string[]; extensionId?: string }
-export interface ToolsSearchResult { keyword: string; count: number; tools: ToolsSearchItem[]; text?: string }
+export interface ToolsSearchResult { keyword: string; count: number; tools: ToolsSearchItem[] }
 
 export default defineTool<ToolsSearchRequest, ToolsSearchResult>({
   name: "tools.search",
@@ -22,7 +22,7 @@ export default defineTool<ToolsSearchRequest, ToolsSearchResult>({
   async execute(request, context) {
     if (!request.keyword) throw new StructuredToolError("TOOLS_SEARCH_KEYWORD_REQUIRED", "Pass a keyword: unity_cli tools search <keyword>.", ["Run unity_cli tools group to see tool groups."]);
     const flags = context.flags ?? {};
-    const catalog = await loadToolCatalog(flags, context, context.requestId);
+    const catalog = await loadToolCatalog(flags, context, `${context.requestId}_search_execution`);
     if (catalog.ok === false) throw StructuredToolError.from(catalog.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
     const availabilityFlags = await extensionAvailabilityFlags(flags, context);
     const keyword = request.keyword.toLowerCase();
@@ -44,6 +44,6 @@ export default defineTool<ToolsSearchRequest, ToolsSearchResult>({
         ...(availability.extensionId ? { extensionId: availability.extensionId } : {})
       };
     }));
-    return { keyword: request.keyword, count: tools.length, tools, ...(request.format === "text" ? { text: tools.map((tool) => `${tool.name} [${tool.group}] ${tool.available ? "available" : "unavailable"} - ${tool.summary}`).join("\n") } : {}) };
+    return { keyword: request.keyword, count: tools.length, tools };
   }
 });

@@ -12,7 +12,7 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "editor.redo", Summary = "Perform one shared Redo entry and prove the declared object state.",
-            Description = "Call Undo.PerformRedo() exactly once. completionProbe must identify an eligible read-only Context and a before/after state for the affected resource; the Redo callback alone is not completion proof.",
+            Description = "Call Undo.PerformRedo() exactly once. completionProbe must identify an eligible read Tool and a before/after state for the affected resource; the Redo callback alone is not completion proof.",
             Group = "editor", DestructiveHint = false, SideEffects = new[] { "undo-redo-replay", "undo-stack" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[]
             {
@@ -23,7 +23,7 @@ namespace UnityCli
                     {
                         CompletionProbe = new UnityCliCompletionProbe
                         {
-                            Context = "scene.gameobject", Input = new Dictionary<string, object> { { "target", "Main Camera" } },
+                            ReadTool = "scene.gameobject", Input = new Dictionary<string, object> { { "target", "Main Camera" } },
                             Assertions = new List<UnityCliCompletionAssertion>
                             {
                                 new UnityCliCompletionAssertion { Path = "/gameObject/transform/position/x", Operator = "approx", Before = 0.0, After = 1.0, Tolerance = 0.0001 }

@@ -4,7 +4,7 @@
   "frictionOccurred": true,
   "category": "workaround",
   "summary": "Descriptor target wording required an extra discovery step.",
-  "workaround": "Used context search and descriptor readback to select the capability.",
+  "workaround": "Used Tool search and descriptor readback to select the capability.",
   "capability": "sample.tool",
   "errorCode": "E_SCHEMA_INVALID",
   "phase": "describe",

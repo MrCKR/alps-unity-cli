@@ -51,16 +51,14 @@ test("doctor uses strict instance selection and live diagnose.preflight", async 
           result: {
             project: { path: fixture.projectPath },
             editor: { compiling: false, importing: false },
-            bridge: { ready: true, toolCount: 327, contextCount: 22 },
+            bridge: { ready: true, toolCount: 327 },
             customTools: { fingerprint: { algorithm: "unity-cli-project-tool-fingerprint-v2", toolCount: 327, blockedCount: 0, tools: [] } },
-            customContexts: { fingerprint: { algorithm: "unity-cli-project-context-fingerprint-v2", contextCount: 2, blockedCount: 0, contexts: [] } },
             checks: [],
           },
         },
       };
     }
     if (payload.command === "project-tool.list") return { ok: true as const, requestId: payload.requestId, data: { tools: [] } };
-    if (payload.command === "context.list") return { ok: true as const, requestId: payload.requestId, data: { contexts: [] } };
     return { ok: true as const, requestId: payload.requestId, data: {} };
   };
   const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, {
@@ -72,7 +70,7 @@ test("doctor uses strict instance selection and live diagnose.preflight", async 
   const data = result.data as { checks: Array<{ name: string; status: string }> };
   assert.equal(data.checks.find((check) => check.name === "bridge_connectivity")?.status, "pass");
   assert.equal(data.checks.find((check) => check.name === "project_tool_fingerprint")?.status, "pass");
-  assert.equal(data.checks.find((check) => check.name === "project_context_fingerprint")?.status, "pass");
+  assert.equal(data.checks.some((check) => check.name.includes("context")), false);
   assert.ok(requests.some((request) => request.command === "project-tool.run" && request.input?.name === "diagnose.preflight"));
   assert.doesNotMatch(JSON.stringify(result), /endpoint|listenerId|listenerGeneration|actualPort|logPath|warnCount|fingerprintMode/);
 });

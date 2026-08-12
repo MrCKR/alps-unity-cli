@@ -15,7 +15,13 @@ export interface PackageRestoreResult {
   backupPath?: string; restoredFromBackup: boolean; removedDeployedPackage: boolean; copiedFileCount: number; dryRun: boolean;
   plannedEffects: PackageRestorePlannedEffect[]; metadataPath: string; files?: PackageRestoreFilesProof; resolve?: LiveResolveResult;
 }
-interface RestorePlan extends PackageRestoreFileResult { expectedBackupHash?: string; }
+interface RestorePlan extends PackageRestoreFileResult {
+  expectedTargetExists: boolean;
+  expectedTargetHash?: string;
+  expectedRecordIdentity: string;
+  expectedBackupExists: boolean;
+  expectedBackupHash?: string;
+}
 
 /** restore 删除/还原、UPM fence 与 PackageInfo readback 共用一个公开 root。 */
 async function runPackageRestore(request: PackageRestoreRequest, context: ToolContext): Promise<PackageRestoreResult> {
@@ -32,7 +38,14 @@ async function runPackageRestore(request: PackageRestoreRequest, context: ToolCo
       const prepared = await restoreDeployedPackage(projectPath, request.packageName, { dryRun: true });
       const observed = await inspectPackageDeploymentFiles(projectPath, prepared.packageName, prepared.targetPath, prepared.backupPath);
       signal.throwIfAborted();
-      return { ...prepared, expectedBackupHash: observed.backupHash } as unknown as Record<string, unknown>;
+      return {
+        ...prepared,
+        expectedTargetExists: observed.targetExists,
+        expectedTargetHash: observed.targetHash,
+        expectedRecordIdentity: observed.recordIdentity,
+        expectedBackupExists: observed.backupExists,
+        expectedBackupHash: observed.backupHash,
+      } as unknown as Record<string, unknown>;
     },
     async apply(plan, signal, stopAtMs) {
       const projectPath = resolve(context.projectPath);
@@ -112,7 +125,9 @@ function publicRestoreResult(
 function restorePlan(value: Record<string, unknown>): RestorePlan {
   for (const key of ["projectPath", "manifestPath", "packageName", "targetPath", "metadataPath"])
     if (typeof value[key] !== "string") throw new Error(`Durable package.restore file plan is missing ${key}.`);
-  if (typeof value.restoredFromBackup !== "boolean" || typeof value.removedDeployedPackage !== "boolean" || typeof value.copiedFileCount !== "number" || !Array.isArray(value.plannedEffects)) throw new Error("Durable package.restore file plan is corrupt.");
+  if (typeof value.restoredFromBackup !== "boolean" || typeof value.removedDeployedPackage !== "boolean" || typeof value.copiedFileCount !== "number"
+    || typeof value.expectedTargetExists !== "boolean" || typeof value.expectedRecordIdentity !== "string"
+    || typeof value.expectedBackupExists !== "boolean" || !Array.isArray(value.plannedEffects)) throw new Error("Durable package.restore file plan is corrupt.");
   return value as unknown as RestorePlan;
 }
 async function hash(path: string): Promise<string> { return createHash("sha256").update(await readFile(path)).digest("hex"); }

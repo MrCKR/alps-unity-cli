@@ -47,10 +47,12 @@ export default defineTool<AssetRefreshRequest, AssetRefreshResult | AssetRefresh
     const observe = withTransitionBinding({ mode: "read", mutation: false, absoluteDeadlineMs: deadline });
     let root = record((await bridge(context.requestId, "internal.asset.refresh.start", { ...request }, flags, context, execute)).data);
     if (root.terminal !== true && (root.terminal !== false || root.accepted !== true)) throw invalid();
+    const rootRequestDigest = root.terminal === true ? undefined : typeof root.rootRequestDigest === "string" && /^[a-f0-9]{64}$/.test(root.rootRequestDigest) ? root.rootRequestDigest : undefined;
+    if (root.terminal !== true && !rootRequestDigest) throw invalid();
     while (root.terminal !== true) {
       if (Date.now() >= deadline) throw timeout();
       await delay(100);
-      try { root = record((await bridge(childId(context.requestId, "_asset_refresh_status"), "internal.asset.refresh.status", { rootRequestId: context.requestId }, flags, context, observe)).data); }
+      try { root = record((await bridge(childId(context.requestId, "_asset_refresh_status"), "internal.asset.refresh.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe)).data); }
       catch { throw timeout(); }
     }
     return terminal(root, context.requestId);

@@ -66,7 +66,7 @@ test("file-backed output evals and governed reports are internally reachable", a
   assert.match(scorecard, /missing evidence/i);
 });
 
-test("product installer projects only the six runtime files", async () => {
+test("product installer projects only the five runtime files", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-governed-install-"));
   const sourcePath = join(skillRoot, "SKILL.md");
   try {
@@ -75,7 +75,6 @@ test("product installer projects only the six runtime files", async () => {
     const target = join(project, ".pi", "skills", "unity_cli");
     assert.deepEqual(await listFiles(target), [
       "SKILL.md",
-      "references/custom-contexts.md",
       "references/custom-tools.md",
       "references/feedback.md",
       "references/operation-protocol.md",

@@ -49,13 +49,7 @@ function rejectUnknownToolFlags(
   const common = ["instance", "raw"];
   const allowed = command === "run"
     ? [...common, "input", "input-file", "stdin", "dry-run", "timeout-ms", "artifact-dir", "runtime"]
-    : command === "group"
-      ? [...common, "format"]
-      : command === "search"
-        ? [...common, "format"]
-        : command === "describe"
-          ? common
-          : common;
+    : common;
   const unknown = Object.keys(flags).find((flag) => !allowed.includes(flag));
   if (!unknown) return undefined;
   return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for tools ${command ?? ""}: --${unknown}.`, [

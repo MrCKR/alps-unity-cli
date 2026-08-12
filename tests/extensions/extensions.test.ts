@@ -31,7 +31,6 @@ import {
   loadUnavailableDescriptors,
   collectAvailableTools,
   collectAllTools,
-  collectAvailableContexts,
   collectAvailableCSharpEntries,
   extensionAvailabilitySummary
 } from "../../src/extensions/descriptor-loader.js";
@@ -354,18 +353,17 @@ test("loadExtensionDescriptor loads a specific extension", () => {
   });
   assert.equal(desc.manifest.id, "probuilder");
   assert.equal(desc.availability.status, "available");
-  assert.equal(desc.tools.length, 36);
-  assert.equal(desc.contexts.length, 1);
-  assert.deepEqual(desc.contexts[0], { key: "probuilder.scene" });
+  assert.equal(desc.tools.length, 37);
+  assert.equal(Object.hasOwn(desc, "contexts"), false);
   assert.equal(desc.csharpEntries.length, 37);
-  assert.ok(desc.csharpEntries.some((entry) => entry.type === "UnityCli.ProBuilder.ProBuilderSceneContext"));
+  assert.ok(desc.csharpEntries.some((entry) => entry.type === "UnityCli.ProBuilder.ProBuilderSceneTool"));
 });
 
 test("loadExtensionDescriptor for unavailable extension has unavailable status", () => {
   const registry = new ExtensionRegistry();
   const desc = loadExtensionDescriptor(registry, "probuilder", {});
   assert.equal(desc.availability.status, "unavailable");
-  assert.equal(desc.tools.length, 36);
+  assert.equal(desc.tools.length, 37);
   assert.ok(desc.availability.missingPackageIds.length > 0);
 });
 
@@ -403,7 +401,7 @@ test("collectAvailableTools returns available extension tools and built-in VFX c
     "com.unity.probuilder": "5.2.4"
   });
   const toolNames = tools.map((t) => t.name);
-  assert.equal(toolNames.filter((name) => name.startsWith("probuilder.")).length, 36);
+  assert.equal(toolNames.filter((name) => name.startsWith("probuilder.")).length, 37);
   assert.equal(toolNames.filter((name) => name.startsWith("vfx.")).length, VFX_GRAPH_MANIFEST.contributions.tools!.filter((tool) => !(tool.requiresPackages ?? []).includes("com.unity.visualeffectgraph")).length);
   assert.ok(toolNames.includes("vfx.particle-create"));
   assert.ok(toolNames.includes("vfx.line-create"));
@@ -437,10 +435,10 @@ test("collectAllTools includes unavailable extension tools with availability fla
   const tools = collectAllTools(registry, {
     "com.unity.probuilder": "5.2.4"
   });
-  assert.ok(tools.length >= 36); // At least ProBuilder's tools
+  assert.ok(tools.length >= 37); // At least ProBuilder's tools
 
   const probuilderTools = tools.filter((t) => t.extensionId === "probuilder");
-  assert.equal(probuilderTools.length, 36);
+  assert.equal(probuilderTools.length, 37);
   assert.ok(probuilderTools.every((t) => t.available));
 
   // Cinemachine exposes one descriptor per manifest contribution.
@@ -449,18 +447,7 @@ test("collectAllTools includes unavailable extension tools with availability fla
   assert.ok(cinemachineTools.every((t) => !t.available)); // Not installed
 });
 
-// ── collectAvailableContexts / Docs / CSharpEntries ─────────────────────────
-
-test("collectAvailableContexts returns implemented contexts from available extensions", () => {
-  const registry = new ExtensionRegistry();
-  const contexts = collectAvailableContexts(registry, {
-    "com.unity.probuilder": "5.2.4",
-    "com.unity.visualeffectgraph": "14.0.0"
-  });
-  const probuilderScene = contexts.find((c) => c.key === "probuilder.scene");
-  assert.deepEqual(probuilderScene, { key: "probuilder.scene" });
-  assert.ok(!contexts.some((c) => c.key === "vfx.assets"));
-});
+// ── Docs / CSharpEntries ────────────────────────────────────────────────────
 
 test("collectAvailableCSharpEntries returns entries from available extensions", () => {
   const registry = new ExtensionRegistry();
@@ -607,7 +594,7 @@ test("resolveExtensionAvailabilityForProject resolves against real project", asy
 // ── Registry data: specific manifest content checks ────────────────────────
 
 test("ProBuilder manifest has correct tool contributions", () => {
-  assert.equal(PROBUILDER_MANIFEST.contributions.tools!.length, 36);
+  assert.equal(PROBUILDER_MANIFEST.contributions.tools!.length, 37);
   const toolNames = PROBUILDER_MANIFEST.contributions.tools!.map((t) => t.name);
   assert.ok(toolNames.includes("probuilder.ping"));
   assert.ok(toolNames.includes("probuilder.create-shape"));
@@ -639,9 +626,9 @@ test("VFX Graph manifest has one contribution per operation", () => {
   assert.equal(graphOnly.length, VFX_GRAPH_MANIFEST.contributions.tools!.filter((tool) => tool.requiresPackages?.includes("com.unity.visualeffectgraph")).length);
 });
 
-test("Cinemachine manifest has split tools and no unimplemented contexts", () => {
+test("Cinemachine manifest has one C# entry per Tool", () => {
   assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, CINEMACHINE_MANIFEST.contributions.csharpEntries!.length);
-  assert.equal(CINEMACHINE_MANIFEST.contributions.contexts!.length, 0);
+  assert.equal(Object.hasOwn(CINEMACHINE_MANIFEST.contributions, "contexts"), false);
   const toolNames = CINEMACHINE_MANIFEST.contributions.tools!.map((t) => t.name);
   assert.ok(toolNames.includes("cinemachine.ping"));
 });
@@ -687,14 +674,14 @@ test("URP manifest has one tool per feature, volume, and settings operation", ()
   assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.feature.")).map((tool) => tool.name), ["urp.feature.list", "urp.feature.add", "urp.feature.toggle", "urp.feature.configure", "urp.feature.remove"]);
   assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.volume.")).map((tool) => tool.name), ["urp.volume.list", "urp.volume.create", "urp.volume.info", "urp.volume.add-effect", "urp.volume.set"]);
   assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.settings.")).map((tool) => tool.name), ["urp.settings.get", "urp.settings.set"]);
-  assert.equal(URP_MANIFEST.contributions.contexts!.length, 0);
+  assert.equal(Object.hasOwn(URP_MANIFEST.contributions, "contexts"), false);
 });
 
 test("HDRP manifest has one tool per volume and settings operation", () => {
   assert.equal(HDRP_MANIFEST.contributions.tools!.length, 7);
   assert.deepEqual(HDRP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("hdrp.volume.")).map((tool) => tool.name), ["hdrp.volume.list", "hdrp.volume.create", "hdrp.volume.info", "hdrp.volume.add-effect", "hdrp.volume.set"]);
   assert.deepEqual(HDRP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("hdrp.settings.")).map((tool) => tool.name), ["hdrp.settings.get", "hdrp.settings.set"]);
-  assert.equal(HDRP_MANIFEST.contributions.contexts!.length, 0);
+  assert.equal(Object.hasOwn(HDRP_MANIFEST.contributions, "contexts"), false);
 });
 
 test("all five manifests have unique IDs", () => {
@@ -828,9 +815,18 @@ test("all five manifests have valid contributions", () => {
   for (const m of BUILTIN_EXTENSION_MANIFESTS) {
     assert.ok(m.contributions, `${m.id} should have contributions`);
     assert.ok(Array.isArray(m.contributions.tools), `${m.id} contributions.tools should be array`);
-    assert.ok(Array.isArray(m.contributions.contexts), `${m.id} contributions.contexts should be array`);
+    assert.equal(Object.hasOwn(m.contributions, "contexts"), false, `${m.id} must expose only Tool contributions`);
     assert.ok(Array.isArray(m.contributions.csharpEntries), `${m.id} contributions.csharpEntries should be array`);
   }
+});
+
+test("extension schemas expose only Tool contributions", async () => {
+  const [descriptorSchema, manifestSchema] = await Promise.all([
+    readFile(join(process.cwd(), "schemas", "extension-descriptor.schema.json"), "utf8"),
+    readFile(join(process.cwd(), "schemas", "extension-manifest.schema.json"), "utf8"),
+  ]);
+  assert.doesNotMatch(descriptorSchema, /providesContexts/);
+  assert.doesNotMatch(manifestSchema, /"contexts"\s*:/);
 });
 
 // ── Core package independence ──────────────────────────────────────────────
@@ -844,8 +840,7 @@ test("core package extension types do not reference optional Unity packages at c
   // to com.unity.* package strings.
   const typesModule = `
     ExtensionId, ExtensionAvailability, UnityPackageRequirement,
-    ExtensionToolContribution, ExtensionContextContribution,
-    ExtensionCSharpEntry,
+    ExtensionToolContribution, ExtensionCSharpEntry,
     ExtensionContributions, ExtensionManifest,
     PackageResolution, ExtensionAvailabilityResult, RegistryExtension,
     LoadedExtensionDescriptor

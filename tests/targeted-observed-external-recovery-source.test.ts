@@ -17,15 +17,15 @@ test("targeted observed-state tools use stable fresh readback before returning",
   for (const path of paths) assert.match(await source(path), /ctx\.Wait\.UntilStable\(/, path);
 });
 
-test("plain tools do not recover across reloads and active operation files keep fixed names", async () => {
+test("plain tools abort exact direct owners across reloads and active operation files keep fixed names", async () => {
   const [coordinator, activeOperation, context] = await Promise.all([
     source("../unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs"),
     source("../unitypkg/Editor/Infrastructure/UnityCliActiveOperation.cs"),
     source("../unitypkg/Editor/ProjectTools/UnityCliProjectToolContext.cs"),
   ]);
 
-  assert.match(coordinator, /普通 Tool 不跨重载恢复；active operation 由专用 coordinator 管理/);
-  assert.match(coordinator, /TryFinalizeRecoveredPlayModeRoot[\s\S]*return false/);
+  assert.match(coordinator, /普通direct mutation没有durable recovery root，只能使用本次新取得的exact lease/);
+  assert.match(coordinator, /TryFinalizeRecoveredPlayModeRoot[\s\S]*DirectMutationCleanupPendingSessionKey[\s\S]*ReleaseDirectMutationLease\(requestId, requestDigest\)/);
   assert.match(activeOperation, /"active-" \+ scope \+ "\.json"/);
   assert.doesNotMatch(`${coordinator}\n${context}`, /RequestJournal|E_REQUEST_OUTCOME_UNKNOWN|E_REQUEST_JOURNAL|ProofOnly/);
 });

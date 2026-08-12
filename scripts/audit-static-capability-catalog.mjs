@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { collectPublicContextInventory, collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
+import { collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
 
 const root = process.cwd();
 const catalogPath = path.join(root, "contracts", "static-capability-catalog.json");
@@ -11,14 +11,9 @@ const expectedTools = collectPublicToolInventory(root)
   .filter((tool) => tool.descriptorOwner === "built-in" || tool.descriptorOwner.startsWith("extension:"))
   .map((tool) => tool.name)
   .sort();
-const expectedContexts = collectPublicContextInventory(root)
-  .filter((context) => context.descriptorOwner === "built-in" || context.descriptorOwner.startsWith("extension:"))
-  .map((context) => context.name)
-  .sort();
 const actualTools = names(catalog.tools, "Tool");
-const actualContexts = names(catalog.contexts, "Context");
 compareSets("Tool", expectedTools, actualTools);
-compareSets("Context", expectedContexts, actualContexts);
+if (Object.hasOwn(catalog, "contexts")) failures.push("Static catalog contains forbidden legacy contexts field");
 
 const forbiddenDescriptorFields = new Set([
   "artifactKinds", "capabilityType", "cliCommand", "completionContract", "defaultTimeoutMs", "descriptorFingerprint",
@@ -35,17 +30,10 @@ for (const tool of catalog.tools ?? []) {
   validatePublicDescriptorFields(tool, "Tool", forbiddenDescriptorFields);
   failures.push(...findSchemaProperties(tool.outputSchema, `Tool ${tool.name}.outputSchema`, forbiddenOutputFields));
 }
-for (const context of catalog.contexts ?? []) {
-  validateDescriptor(context, "Context");
-  validatePublicDescriptorFields(context, "Context", forbiddenDescriptorFields);
-  failures.push(...findSchemaProperties(context.outputSchema, `Context ${context.name}.outputSchema`, forbiddenOutputFields));
-}
-
 const result = {
   ok: failures.length === 0,
   catalog: path.relative(root, catalogPath).replaceAll("\\", "/"),
   toolCount: actualTools.length,
-  contextCount: actualContexts.length,
   failures,
 };
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

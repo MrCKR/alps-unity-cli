@@ -11,6 +11,9 @@ const SCENE_COMMANDS = [
   "scene.build-settings",
   "scene.create",
   "scene.data",
+  "scene.gameobject",
+  "scene.gameobject.component",
+  "scene.gameobject.components",
   "scene.hierarchy",
   "scene.list-opened",
   "scene.load",
@@ -22,7 +25,7 @@ const SCENE_COMMANDS = [
   "scene.view-frame"
 ];
 
-test("scene group is contract-discovered with 13 tools", () => {
+test("scene group is contract-discovered with 16 tools", () => {
   assert.deepEqual(contractToolNames("scene"), [...SCENE_COMMANDS].sort());
 });
 

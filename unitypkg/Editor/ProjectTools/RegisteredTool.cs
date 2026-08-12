@@ -47,6 +47,7 @@ namespace UnityCli
         public string Target { get; set; }
         public string AvailabilityScope { get; set; }
         public string PlayModeSupport { get; set; }
+        public string ContractProfile { get; set; }
         public int DefaultTimeoutMs { get; set; }
         public int MaxTimeoutMs { get; set; }
         public string[] RequiredInput { get; set; }
@@ -67,6 +68,7 @@ namespace UnityCli
         public Type RequestType { get; set; }
         public Type ResultType { get; set; }
         public UnityCliToolCompletionContract CompletionContract { get; set; }
+        internal OfficialAttributeToolBinding OfficialAttributeBinding { get; set; }
         public Func<object, UnityCliProjectToolContext, CancellationToken, ValueTask<object>> InvokeAsync { get; set; }
     }
 }

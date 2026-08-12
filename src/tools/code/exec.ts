@@ -17,7 +17,7 @@ export interface CodeExecJsonObject { [key: string]: AnyJson; }
 export interface CodeExecDiagnostic { severity: string; id: string; message: string; file: string; line: number; column: number; span: AnyJson; }
 export interface CodeExecResult {
   compile: { diagnostics: CodeExecDiagnostic[] };
-  runtime: { returnValue: AnyJson; stdout: string; stderr: string };
+  runtime: { returnValue: AnyJson; stdout: string; stderr: string; stdoutTruncated: boolean; stderrTruncated: boolean };
   completion: CompletionProbeReadback | null;
 }
 export interface CodeExecDryRunResult {
@@ -39,7 +39,7 @@ const returnValueExample: CodeExecRequest = {
 const moveProbeExample: CodeExecRequest = {
   code: "var go = GameObject.Find(\"ProbeTarget\"); go.transform.position = new Vector3(1f, go.transform.position.y, go.transform.position.z); return null;",
   completionProbe: {
-    context: "scene.gameobject",
+    readTool: "scene.gameobject",
     input: { target: "ProbeTarget", includeComponents: false },
     assertions: [{ path: "/gameObject/transform/position/x", operator: "approx", before: 0, after: 1, tolerance: 0.0001 }],
   },
@@ -51,6 +51,7 @@ async function runCodeExec(request: CodeExecRequest, context: ToolContext): Prom
     ...request,
     args: request.args as Record<string, unknown> | undefined,
     timeoutMs: context.execution.timeoutMs,
+    absoluteDeadlineMs: context.absoluteDeadlineMs,
     dryRun: context.execution.dryRun,
     instance: instanceFlag(context),
   }, {
@@ -61,8 +62,8 @@ async function runCodeExec(request: CodeExecRequest, context: ToolContext): Prom
 
 export default defineTool<CodeExecRequest, CodeExecResult | CodeExecDryRunResult>({
   name: "code.exec",
-  summary: "Execute trusted synchronous C# in the live Editor and optionally prove declared state.",
-  description: "The snippet is injected as the body of public static object Run(string argsJson) inside UnityCli.RuntimeCode.Script (common usings: System, System.IO, System.Linq, System.Collections.Generic, UnityEngine, UnityEditor are pre-imported). It must end with a return statement; the returned value is surfaced via runtime.returnValue. If the source already contains a full public static object Run( definition it is compiled as-is. argsJson carries the --input args JSON. Compiler: Unity-bundled Roslyn csc (C# 8), the same compiler Unity uses for project scripts; local functions, out var, pattern matching, and similar features work. completionProbe is optional: omit it for plain execute-and-return usage such as logging, reading or writing runtime state, and Editor API calls; provide it only when you need to assert an Editor state change. A call that times out before terminal proof returns E_EXECUTION_TIMEOUT; inspect state and decide whether to submit a new call. Each execution loads one small in-memory assembly into the Editor AppDomain which cannot be unloaded until the next domain reload; avoid very high-frequency loops. Use dry-run to inspect the source hash before execution.",
+  summary: "Execute trusted synchronous C# in the live Editor; started code cannot be force-stopped by timeout.",
+  description: "The snippet is injected as the body of public static object Run(string argsJson) inside UnityCli.RuntimeCode.Script (common usings: System, System.IO, System.Linq, System.Collections.Generic, UnityEngine, UnityEditor are pre-imported). It must end with a return statement; the returned value is surfaced via runtime.returnValue. If the source already contains a full public static object Run( definition it is compiled as-is. argsJson carries the --input args JSON. Compiler: Unity-bundled Roslyn csc (C# 8), the same compiler Unity uses for project scripts; local functions, out var, pattern matching, and similar features work. The submitted code executes synchronously on the Unity Editor main thread without capability reduction: this Tool does not reject infinite loops, long sleeps, blocking waits, lock contention, synchronous process/network/file waits, or long-running Unity API calls. Before submitting code with any of those behaviors, explicitly decide whether running it is necessary for the requested result and consider whether a bounded alternative can achieve the same result. If it is necessary, the Tool will still execute it unchanged. Once Run begins, --timeout-ms and cancellation can stop the CLI from waiting but cannot interrupt the C# already running. Such code can leave the Editor unresponsive, keep the mutation owner active, produce a partially changed or unknown Unity state, and require terminating the Editor process to recover. A timeout after execution may therefore be an outcome-unknown result, not proof that execution stopped; inspect business state before deciding whether to retry. completionProbe is optional: omit it for plain execute-and-return usage such as logging, reading or writing runtime state, and Editor API calls; provide it only when you need to assert an Editor state change. Each execution loads one small in-memory assembly into the Editor AppDomain which cannot be unloaded until the next domain reload; consider that cost before high-frequency use. Dry-run only reports the source hash and planned effect; it does not compile the code, execute it, or prove that it will terminate.",
   group: "code",
   destructiveHint: true,
   supportsDryRun: true,
@@ -72,6 +73,7 @@ export default defineTool<CodeExecRequest, CodeExecResult | CodeExecDryRunResult
   handler: "hybrid",
   supportStatus: "live-bridge",
   target: "editor",
+  timeoutMs: 60_000,
   examples: [{
     description: "Execute C# and return a value (no completion probe needed).",
     argv: ["tools", "run", "code.exec", "--input", JSON.stringify(returnValueExample)],

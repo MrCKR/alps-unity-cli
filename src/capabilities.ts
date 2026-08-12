@@ -1,7 +1,5 @@
 import { getString } from "./args.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-import { loadContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
-import type { ContextDescriptor } from "./contexts/types.js";
 import { readInstalledExtensions } from "./cli-commands/extensions.js";
 import { extensionAvailabilityFlags } from "./extension-availability.js";
 import { ExtensionRegistry, extensionAvailabilitySummary } from "./extensions/index.js";
@@ -16,15 +14,13 @@ import type { CliResult } from "./types.js";
 /** 公开 capability summary 只汇总当前实例完整目录，不按实现来源拆成不同发现入口。 */
 export async function handleCapabilitiesCommand(
   flags: Record<string, string | boolean>,
-  runtime: BridgeRuntime & ProjectToolRuntime & ContextCatalogRuntime,
+  runtime: BridgeRuntime & ProjectToolRuntime,
   requestId: string
 ): Promise<CliResult> {
   const toolCatalog = await loadToolCatalog(flags, runtime, `${requestId}_tools`);
   if (toolCatalog.ok === false) return toolCatalog;
-  const contextCatalog = await loadContextCatalog(flags, runtime, `${requestId}_contexts`);
-  if (contextCatalog.ok === false) return contextCatalog;
 
-  const catalogSummary = buildCatalogSummary(toolCatalog.tools, contextCatalog.contexts);
+  const catalogSummary = buildCatalogSummary(toolCatalog.tools);
   const extensionSummary = await buildExtensionSummary(flags, runtime);
   const runtimeSummary = await readRuntimeSummary(flags, runtime, `${requestId}_runtime`);
 
@@ -74,38 +70,26 @@ async function readRuntimeSummary(
     const bridge = (result.data as Record<string, unknown>).bridge;
     if (!bridge || typeof bridge !== "object" || Array.isArray(bridge)) return undefined;
     const value = bridge as Record<string, unknown>;
-    if (typeof value.ready !== "boolean" || typeof value.toolCount !== "number" || typeof value.contextCount !== "number") return undefined;
-    return { bridge: { ready: value.ready, toolCount: value.toolCount, contextCount: value.contextCount } };
+    if (typeof value.ready !== "boolean" || typeof value.toolCount !== "number") return undefined;
+    return { bridge: { ready: value.ready, toolCount: value.toolCount } };
   } catch {
     return undefined;
   }
 }
 
-/** catalog summary 使用统一计数；source 只作为说明维度，不改变公开路由。 */
-function buildCatalogSummary(tools: ToolMetadata[], contexts: ContextDescriptor[]): Record<string, unknown> {
+/** catalog summary 只汇总唯一 Tool 目录；source 仅作说明维度。 */
+function buildCatalogSummary(tools: ToolMetadata[]): Record<string, unknown> {
   const groups: Record<string, number> = {};
-  const toolSources: Record<string, number> = {};
+  const sources: Record<string, number> = {};
   for (const tool of tools) {
     groups[tool.group] = (groups[tool.group] ?? 0) + 1;
     const source = toolSource(tool);
-    toolSources[source] = (toolSources[source] ?? 0) + 1;
-  }
-  const categories: Record<string, number> = {};
-  const contextSources: Record<string, number> = {};
-  for (const context of contexts) {
-    categories[context.category] = (categories[context.category] ?? 0) + 1;
-    contextSources[context.source] = (contextSources[context.source] ?? 0) + 1;
+    sources[source] = (sources[source] ?? 0) + 1;
   }
   return {
     toolCount: tools.length,
-    contextCount: contexts.length,
     groupCount: Object.keys(groups).length,
-    contextCategoryCount: Object.keys(categories).length,
     groups: Object.fromEntries(Object.entries(groups).sort(([left], [right]) => left.localeCompare(right))),
-    contextCategories: Object.fromEntries(Object.entries(categories).sort(([left], [right]) => left.localeCompare(right))),
-    sources: {
-      tools: Object.fromEntries(Object.entries(toolSources).sort(([left], [right]) => left.localeCompare(right))),
-      contexts: Object.fromEntries(Object.entries(contextSources).sort(([left], [right]) => left.localeCompare(right))),
-    },
+    sources: Object.fromEntries(Object.entries(sources).sort(([left], [right]) => left.localeCompare(right))),
   };
 }

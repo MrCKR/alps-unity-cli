@@ -26,6 +26,8 @@ import {
   MATRIX_OWNED_DIALOG,
   directPhaseIds,
   extensionAvailabilityIssues,
+  fixtureError,
+  fixtureExpectationIssue,
   fixtureStepRetriesReadyAssertion,
   FROZEN_DIRECT_TOOL_NAMES,
   hasReusableDirectCase,
@@ -254,7 +256,7 @@ test("parsePublicExampleArgv uses public input and rejects removed execution fla
     { input: { message: "hello" }, flags: [] }
   );
   assert.deepEqual(
-    parsePublicExampleArgv({ argv: ["context", "read", "sample.info", "--include-disabled", "false"] }, "context", "sample.info"),
+    parsePublicExampleArgv({ argv: ["tools", "run", "sample.info", "--include-disabled", "false"] }, "tool", "sample.info"),
     { input: { includeDisabled: false }, flags: [] }
   );
   for (const flag of ["--job", "--wait", "--wait-timeout-ms=1000"]) {
@@ -283,6 +285,16 @@ test("external-state-dependent Tools do not use descriptor placeholders as posit
   assert.match(source, /MATRIX_OWNED_DIALOG/);
   const removedToolName = `editor.launch${"-dialog.dismiss"}`;
   assert.doesNotMatch(source, new RegExp(removedToolName.replaceAll(".", "\\.")));
+});
+
+test("test.cancel coverage freezes and cancels one coordinator-owned run identity", async () => {
+  const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
+  assert.match(source, /external-state\.save-scene[\s\S]*scene\.save[\s\S]*Pre-cancellation scene\.save did not prove a clean MatrixScene/);
+  assert.match(source, /WaitForExplicitCancellation/);
+  assert.match(source, /E_TEST_CANCEL_IDENTITY_UNPROVEN/);
+  assert.match(source, /test\.cancel actual did not prove the planned GUID inactive/);
+  assert.match(source, /E_TEST_RUN_CANCELLED/);
+  assert.match(source, /tool\.test\.cancel\.external-state\.post-idle/);
 });
 
 test("matrix dialog coverage never runs an unknown modal and uses the fresh owned dialog", async () => {
@@ -324,7 +336,7 @@ test("matrix dialog coverage never runs an unknown modal and uses the fresh owne
   assert.equal(unknown.toolRuns.length, 0);
   assert.deepEqual(unknown.records.map((record) => record.status), ["N/A", "N/A", "BLOCKED"]);
   assert.match(unknown.records.at(-1).reason, /Unknown external modal/);
-  assert.equal(unknown.calls.some((call) => call.argv[0] === "tools" && call.argv[1] === "run"), false);
+  assert.equal(unknown.calls.some((call) => call.argv[0] === "tools" && call.argv[1] === "run" && call.argv[2] === "editor.dialog.click"), false);
 
   const multiple = await runCoverage([ownedDialog("owned-a"), ownedDialog("owned-b")]);
   assert.equal(multiple.toolRuns.length, 0);
@@ -352,7 +364,7 @@ test("matrix readiness uses the current immediate editor.state shape", () => {
 });
 
 test("fixture assertion retry is limited to explicit editor ready convergence", () => {
-  const readyStep = { argv: ["context", "read", "editor.state", "--input", "{}"], expect: { equals: { "data.status": "ready" } } };
+  const readyStep = { argv: ["tools", "run", "editor.state", "--input", "{}"], expect: { equals: { "data.status": "ready" } } };
   assert.equal(fixtureStepRetriesReadyAssertion(readyStep), true);
   assert.equal(fixtureStepRetriesReadyAssertion({ ...readyStep, argv: ["tools", "run", "editor.state"] }), false);
   assert.equal(fixtureStepRetriesReadyAssertion({ ...readyStep, expect: { equals: { "data.status": "transitioning" } } }), false);
@@ -503,8 +515,8 @@ test("matrix assertions validate the exact public envelope and business schema",
 
 test("matrix routes capabilities by instance and reserves project for control commands", () => {
   assert.deepEqual(publicMatrixArgv(["tools", "run", "sample.echo", "--input", "{}"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "sample.echo", "--input", "{}", "--instance", "unity-main", "--raw"]);
-  assert.deepEqual(publicMatrixArgv(["context", "read", "editor.state", "--input", "{}"], "D:/Main", "D:/Main", "unity-main"), ["context", "read", "editor.state", "--input", "{}", "--instance", "unity-main", "--raw"]);
-  assert.deepEqual(publicMatrixArgv(["context", "read", "editor.state", "--input", "{}", "--instance", "unity-stale"], "D:/Main", "D:/Main", "unity-main"), ["context", "read", "editor.state", "--input", "{}", "--instance", "unity-stale", "--raw"]);
+  assert.deepEqual(publicMatrixArgv(["tools", "run", "editor.state", "--input", "{}"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-main", "--raw"]);
+  assert.deepEqual(publicMatrixArgv(["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-stale"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-stale", "--raw"]);
   assert.deepEqual(publicMatrixArgv(["extensions", "doctor"], "D:/Main", "D:/Main", "unity-main"), ["extensions", "doctor", "--project", "D:/Main", "--raw"]);
   assert.doesNotMatch(publicMatrixArgv(["tools", "run", "sample.echo"], "D:/Main", "D:/Main", "unity-main").join(" "), /--project/);
 });
@@ -521,27 +533,22 @@ test("matrix routes isolated project fields without changing the primary project
 });
 
 test("extension doctor validation consumes the current checks envelope", () => {
-  const listData = { extensions: [{ id: "probuilder", toolCount: 36, contextCount: 1, providedTools: ["probuilder.create-shape"] }] };
+  const listData = { extensions: [{ id: "probuilder", toolCount: 37, providedTools: ["probuilder.create-shape"] }] };
   const healthy = { checks: [{ id: "probuilder", availability: "available", installed: true, missingPackageIds: [], missingFiles: [], changedFiles: [], unknownFiles: [] }] };
   assert.deepEqual(extensionAvailabilityIssues(listData, healthy), []);
   assert.deepEqual(extensionAvailabilityIssues(listData, { extensions: healthy.checks }).map((issue) => issue.id), ["probuilder"]);
   assert.deepEqual(extensionAvailabilityIssues(listData, { checks: [{ ...healthy.checks[0], installed: false }] }).map((issue) => issue.id), ["probuilder"]);
-  assert.deepEqual(extensionAvailabilityIssues({ extensions: [{ id: "empty", toolCount: 0, contextCount: 0 }] }, { checks: [] }), []);
+  assert.deepEqual(extensionAvailabilityIssues({ extensions: [{ id: "empty", toolCount: 0 }] }, { checks: [] }), []);
 });
 
 test("runtime inventory is exact for product capabilities and requires Dev fixtures", async () => {
   const baseline = await loadRuntimeInventoryBaseline();
-  assert.equal(baseline.tools.length, 359);
-  assert.equal(baseline.contexts.length, 24);
+  assert.equal(baseline.tools.length, 417);
   assert.equal(baseline.tools.includes("docs.list") || baseline.tools.includes("docs.topic"), false);
-  assert.equal(baseline.contexts.includes("tools.custom") || baseline.contexts.includes("tools.groups"), false);
-  const projectTools = ["validation.echo", "validation.wait"];
-  const projectContexts = ["validation.ui-cache", "validation.wait-status"];
+  const projectTools = ["validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"];
   const discovered = {
     tools: [...baseline.tools, ...projectTools],
-    contexts: [...baseline.contexts, ...projectContexts],
-    toolSources: new Map([...baseline.tools.map((name) => [name, "built-in"]), ...projectTools.map((name) => [name, "project"])]),
-    contextSources: new Map([...baseline.contexts.map((name) => [name, "built-in"]), ...projectContexts.map((name) => [name, "project"])])
+    toolSources: new Map([...baseline.tools.map((name) => [name, "built-in"]), ...projectTools.map((name) => [name, "project"])])
   };
   assert.deepEqual(runtimeInventoryIssues(discovered, baseline), []);
   discovered.tools = discovered.tools.filter((name) => name !== "probuilder.create-shape");
@@ -553,7 +560,7 @@ test("runtime inventory is exact for product capabilities and requires Dev fixtu
 
 test("frozen direct cases are a complete request-specific closed set", async () => {
   assert.deepEqual(Object.keys(DIRECT_LIVE_CASES).sort(), [...FROZEN_DIRECT_TOOL_NAMES].sort());
-  assert.equal(FROZEN_DIRECT_TOOL_NAMES.length, 22);
+  assert.equal(FROZEN_DIRECT_TOOL_NAMES.length, 30);
   assert.equal(FROZEN_DIRECT_TOOL_NAMES.filter((name) => name.startsWith("probuilder.")).length, 15);
   assert.equal(capabilityFixtureId("probuilder.create-shape"), null);
   assert.equal(capabilityFixtureId("probuilder.center-pivot"), "probuilder_generic");
@@ -585,9 +592,48 @@ test("frozen direct cases are a complete request-specific closed set", async () 
   assert.match(source, /direct-recovery\.json/);
   // direct Tool 不可重放；仅最终只读 ready 汇总允许收敛重试。
   assert.match(source, /cleanupAttempted: true \}, retryAssertion: true \}, project\)/);
-  assert.match(source, /const retryReadiness = meta\.retryAssertion === true[\s\S]*base\[0\] === "context"[\s\S]*base\[1\] === "read"[\s\S]*base\[2\] === "editor\.state"/);
+  assert.match(source, /const retryReadiness = meta\.retryAssertion === true[\s\S]*base\[0\] === "tools"[\s\S]*base\[1\] === "run"[\s\S]*base\[2\] === "editor\.state"/);
   assert.match(source, /if \(!issue \|\| !retryReadiness \|\| attempt === TRANSIENT_MAX_ATTEMPTS\) break/);
   assert.doesNotMatch(source, /envelope\?\.error\?\.transient !== true/);
+});
+
+test("NavMeshSurface direct case owns one saved fixture, fresh asset proof, and exact cleanup", () => {
+  const recipe = DIRECT_LIVE_CASES["navmesh.surface.bake"];
+  assert.deepEqual(recipe.setup.map((item) => item.name), ["go.create", "component.add", "go.create", "scene.save"]);
+  assert.equal(recipe.setup[1].input.component, "Unity.AI.Navigation.NavMeshSurface");
+  assert.deepEqual(recipe.before[0].flags, ["--dry-run"]);
+  assert.equal(recipe.before[0].expect.equals["/data/targetCount"], 1);
+  assert.equal(recipe.invocation.capture.dataPath, "/data/surfaces/0/dataPath");
+  assert.deepEqual(recipe.after.map((item) => item.name), ["navmesh.bake-status", "asset.info"]);
+  assert.deepEqual(recipe.cleanup.map((item) => item.name), ["go.delete", "go.delete", "asset.delete", "scene.save"]);
+  assert.deepEqual(recipe.cleanup[2].when, ["dataPath"]);
+  assert.ok(recipe.invariants.some((item) => item.left === "dataGuid" && item.right === "assetGuid"));
+});
+
+test("Prefab and Timeline direct cases own unique assets, fresh readback, and cleanup", () => {
+  const prefabNames = ["prefab.overrides.apply", "prefab.overrides.revert", "prefab.variant.create"];
+  const timelineNames = ["timeline.create", "timeline.info", "timeline.track.add", "timeline.clip.add"];
+  for (const name of [...prefabNames, ...timelineNames]) {
+    const recipe = DIRECT_LIVE_CASES[name];
+    assert.equal(recipe.invocation.name, name);
+    const assetCleanup = recipe.cleanup.find((item) => item.name === "asset.delete");
+    assert.ok(assetCleanup, `${name} must delete its owned asset`);
+    assert.ok(assetCleanup.acceptErrorCodes.includes("E_ASSET_NOT_FOUND"));
+  }
+  const apply = DIRECT_LIVE_CASES["prefab.overrides.apply"];
+  assert.deepEqual(apply.setup.map((item) => item.name), ["asset.duplicate", "prefab.instantiate", "go.create"]);
+  assert.deepEqual(apply.after.map((item) => item.name), ["prefab.instantiate", "scene.gameobject"]);
+  assert.ok(apply.cleanup[1].acceptErrorCodes.includes("E_TARGET_NOT_FOUND"));
+  assert.equal(apply.before[0].expect.equals["/data/changed"], true);
+  assert.ok(apply.invariants.some((item) => item.operator === "notEquals"));
+  const revert = DIRECT_LIVE_CASES["prefab.overrides.revert"];
+  assert.equal(revert.after[0].expectedErrorCode, "E_TARGET_NOT_FOUND");
+  const variant = DIRECT_LIVE_CASES["prefab.variant.create"];
+  assert.equal(variant.before[0].expectedErrorCode, "E_ASSET_NOT_FOUND");
+  assert.equal(DIRECT_LIVE_CASES["timeline.create"].before[0].expectedErrorCode, "E_ASSET_NOT_FOUND");
+  const clip = DIRECT_LIVE_CASES["timeline.clip.add"];
+  assert.deepEqual(clip.invocation.input.trackLocalId, { $var: "trackLocalId" });
+  assert.equal(clip.after[0].name, "timeline.info");
 });
 
 test("each ProBuilder direct case owns a distinct geometry recipe", () => {
@@ -631,6 +677,8 @@ test("active fixtures use only current public execution semantics", async () => 
   ]) assert.match(serialized, new RegExp(`scripts/live-matrix/fixtures/${name.replace(".", "\\.")}`));
   assert.equal(fixtures.setup.steps[0].argv[2], "profiler.stop");
   assert.equal(fixtures.reset.steps[0].argv[2], "profiler.stop");
+  assert.deepEqual(fixtures.concurrency.assert, { minOverlapMs: 1 });
+  assert.equal(fixtures.concurrency.calls.every((item) => item.argv[2] === "validation.wait"), true);
   const setupSceneLoad = fixtures.setup.steps.find((step) => step.id === "load-baseline-scene");
   const resetSceneLoad = fixtures.reset.steps.find((step) => step.id === "load-baseline-scene");
   assert.equal(setupSceneLoad.argv[2], "scene.load");
@@ -657,9 +705,9 @@ test("active fixtures use only current public execution semantics", async () => 
       const input = inputIndex < 0 ? {} : JSON.parse(argv[inputIndex + 1].replace(/\$\{[A-Za-z][A-Za-z0-9_]*\}/g, "0"));
       if (argv[0] === "tools" && argv[2] === "code.exec") {
         assert.ok(input.completionProbe, `${call.id ?? argv[2]} code.exec must declare completionProbe`);
-        assert.equal(input.completionProbe.context, "scene.gameobject");
+        assert.equal(input.completionProbe.readTool, "scene.gameobject");
       }
-      if (argv[0] === "context" && argv[2] === "editor.state") assert.deepEqual(input, {});
+      if (argv[0] === "tools" && argv[1] === "run" && argv[2] === "editor.state") assert.deepEqual(input, {});
     }
   }
   for (const path of [
@@ -765,11 +813,12 @@ test("direct case templates and captures preserve JSON types", () => {
 });
 
 test("direct invariant comparisons cover identity, topology and finite numerics", () => {
-  const variables = { before: 3, after: 4, left: 1, right: 2, actual: 0.996076, objectA: { x: 1 }, objectB: { x: 1 } };
+  const variables = { before: 3, after: 4, left: 1, right: 2, actual: 0.996076, objectA: { x: 1 }, objectB: { x: 1 }, hashA: "a", hashB: "b" };
   assert.equal(directInvariantIssue([
     { left: "after", operator: "deltaEquals", right: "before", value: 1 },
     { left: "after", operator: "sumEquals", operands: ["left", "right", "left"] },
     { left: "actual", operator: "approx", value: 0.996, tolerance: 0.001 },
+    { left: "hashA", operator: "notEquals", right: "hashB" },
     { left: "objectA", operator: "deepEquals", right: "objectB" }
   ], variables), null);
   assert.match(directInvariantIssue([{ left: "before", operator: "greaterThan", right: "after" }], variables), /Direct invariant failed/);
@@ -836,6 +885,22 @@ test("concurrency overlap requires measured child process intervals", () => {
   assert.equal(concurrencyOverlapMs(left, { process: { startedAtMs: 400, endedAtMs: 500 } }, 9999), 0);
 });
 
+test("fixture cleanup accepts only declared stable error codes", () => {
+  const missing = { ok: false, error: { code: "E_ASSET_NOT_FOUND" } };
+  assert.equal(fixtureExpectationIssue(missing, { exitCode: 1 }, { acceptErrorCodes: ["E_ASSET_NOT_FOUND"] }), null);
+  assert.match(fixtureExpectationIssue(missing, { exitCode: 1 }, { acceptErrorCodes: ["E_TARGET_NOT_FOUND"] }), /Fixture exited/);
+  assert.equal(fixtureExpectationIssue({ ok: true, requestId: "req_fixture", data: {} }, { exitCode: 0 }, { acceptErrorCodes: ["E_ASSET_NOT_FOUND"] }), null);
+});
+
+test("concurrency fixture selects exactly one proof mode", () => {
+  const calls = [{ argv: [], expect: {} }, { argv: [], expect: {} }];
+  assert.equal(fixtureError({ assert: { serial: true }, calls }, "concurrency"), null);
+  assert.equal(fixtureError({ assert: { minOverlapMs: 1 }, calls }, "concurrency"), null);
+  assert.match(fixtureError({ assert: {}, calls }, "concurrency"), /exactly one/);
+  assert.match(fixtureError({ assert: { serial: true, minOverlapMs: 1 }, calls }, "concurrency"), /exactly one/);
+  assert.match(fixtureError({ assert: { minOverlapMs: 0 }, calls }, "concurrency"), /exactly one/);
+});
+
 test("concurrency serial proof accepts only disjoint execution intervals", () => {
   const sequential = concurrencySerialProof(
     { process: { startedAtMs: 100, endedAtMs: 300 } },
@@ -865,9 +930,12 @@ test("final recovery proves ready EditMode before EditMode-only recovery fixture
   assert.ok(recovery >= 0 && enterEdit > recovery && pipeline > enterEdit, "recovery must re-enter EditMode before any recovery fixture");
 });
 
-test("playmode unavailable code overrides cover exactly editor.compile's contracted code", () => {
+test("playmode unavailable code overrides cover exactly editor.compile's contracted code", async () => {
   assert.equal(PLAYMODE_UNAVAILABLE_CODE_OVERRIDES.size, 1);
   assert.equal(PLAYMODE_UNAVAILABLE_CODE_OVERRIDES.get("editor.compile"), "E_UNITY_COMPILE_REQUIRES_EDIT_MODE");
+  const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
+  assert.match(source, /phase === "play"[\s\S]*"E_RUNTIME_NOT_RUNNING"/);
+  assert.doesNotMatch(source, /E_RUNTIME_TOOL_TARGET_MISMATCH/);
 });
 
 test("playmode resolve blocked tools exactly cover package file mutations", () => {

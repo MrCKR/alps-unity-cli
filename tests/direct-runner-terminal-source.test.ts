@@ -41,5 +41,7 @@ test("C# Tool runner reports effect-barrier timeouts uniformly", async () => {
   ]);
   assert.match(registry, /executionContext\.EffectCommitted[\s\S]*E_EXECUTION_TIMEOUT/);
   assert.match(runtime, /executionContext\.EffectCommitted[\s\S]*E_EXECUTION_TIMEOUT/);
+  assert.match(context, /EffectCommitted \{ get \{ return Volatile\.Read\(ref commitEffectState\) == 1; \} \}/);
+  assert.match(context, /Interlocked\.CompareExchange\(ref commitEffectState, -1, 0\)[\s\S]*CommitEffectAction\(\);[\s\S]*Volatile\.Write\(ref commitEffectState, 1\)[\s\S]*catch[\s\S]*Volatile\.Write\(ref commitEffectState, 0\)/);
   assert.doesNotMatch(`${registry}\n${runtime}\n${context}`, /E_REQUEST_OUTCOME_UNKNOWN|E_REQUEST_JOURNAL/);
 });

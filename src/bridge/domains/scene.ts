@@ -7,11 +7,14 @@ export const sceneBridgeSpecs: BridgeCommandSpec[] = [
   { group: "scene", command: "build-settings", bridgeCommand: "project-tool.run", toolName: "scene.build-settings", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "create", bridgeCommand: "project-tool.run", toolName: "scene.create", buildArgs: sceneFileArgs, destructiveHint: true },
   { group: "scene", command: "load", bridgeCommand: "project-tool.run", toolName: "scene.load", buildArgs: sceneFileArgs },
-  { group: "scene", command: "save", bridgeCommand: "project-tool.run", toolName: "scene.save", buildArgs: sceneFileArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "scene", command: "save", bridgeCommand: "project-tool.run", toolName: "scene.save", buildArgs: sceneSaveArgs, destructiveHint: true, supportsDryRun: true },
   { group: "scene", command: "unload", bridgeCommand: "project-tool.run", toolName: "scene.unload", buildArgs: sceneFileArgs, destructiveHint: true, supportsDryRun: true },
   { group: "scene", command: "set-active", bridgeCommand: "project-tool.run", toolName: "scene.set-active", buildArgs: sceneFileArgs },
   { group: "scene", command: "list-opened", bridgeCommand: "project-tool.run", toolName: "scene.list-opened", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "data", bridgeCommand: "project-tool.run", toolName: "scene.data", buildArgs: sceneDataArgs },
+  { group: "scene", command: "gameobject", bridgeCommand: "project-tool.run", toolName: "scene.gameobject", buildArgs: sceneGameObjectReadArgs },
+  { group: "scene", command: "gameobject-component", bridgeCommand: "project-tool.run", toolName: "scene.gameobject.component", buildArgs: sceneGameObjectReadArgs },
+  { group: "scene", command: "gameobject-components", bridgeCommand: "project-tool.run", toolName: "scene.gameobject.components", buildArgs: sceneGameObjectReadArgs },
   { group: "scene", command: "move-object", bridgeCommand: "project-tool.run", toolName: "scene.move-object", buildArgs: sceneMoveObjectArgs, supportsDryRun: true },
   { group: "scene", command: "validate", bridgeCommand: "project-tool.run", toolName: "scene.validate", buildArgs: sceneValidateArgs },
   { group: "scene", command: "view-frame", bridgeCommand: "project-tool.run", toolName: "scene.view-frame", buildArgs: ({ flags }) => { const s = structuredInput(flags); return compactArgs({ target: stringFlag(flags, "target") ?? stringValue(s.target), path: stringFlag(flags, "path") ?? stringValue(s.path), frameAll: boolFlag(flags, "frame-all") ?? boolValue(s.frameAll) }); } }
@@ -22,9 +25,31 @@ function sceneFileArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec
   return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path") ?? stringValue(structured.path), name: stringFlag(flags, "name") ?? stringValue(structured.name), dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight") ?? boolValue(structured.dryRun) });
 }
 
+// scene.save 的 all 是显式业务模式，不能泄漏到其他 scene file Tool。
+function sceneSaveArgs(context: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(context.flags);
+  return compactArgs({
+    ...sceneFileArgs(context),
+    all: boolFlag(context.flags, "all") ?? boolValue(structured.all)
+  });
+}
+
 function sceneDataArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
   return compactArgs({ maxDepth: numberFlag(flags, "max-depth") ?? numberValue(structured.maxDepth), maxResults: numberFlag(flags, "max-results") ?? numberValue(structured.maxResults), nameFilter: stringFlag(flags, "name-filter") ?? stringValue(structured.nameFilter), includeComponents: boolFlag(flags, "include-components") ?? boolValue(structured.includeComponents) });
+}
+
+/** 统一投影三个 GameObject 读取 Tool 的可选 selector 与读取深度字段。 */
+function sceneGameObjectReadArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringValue(structured.target),
+    id: numberFlag(flags, "id") ?? numberValue(structured.id),
+    path: stringFlag(flags, "path") ?? stringValue(structured.path),
+    component: stringFlag(flags, "component") ?? stringValue(structured.component),
+    includeComponents: boolFlag(flags, "include-components") ?? boolValue(structured.includeComponents),
+    includeProperties: boolFlag(flags, "include-properties") ?? boolValue(structured.includeProperties)
+  });
 }
 
 // scene.move-object: target GameObject + destination scene path

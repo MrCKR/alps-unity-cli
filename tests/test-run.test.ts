@@ -12,7 +12,9 @@ import "../src/tools/.generated-schemas.js";
 import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v2.js";
 
 const tool = findDefineTool("test.run");
+const cancelTool = findDefineTool("test.cancel");
 if (!tool) throw new Error("test.run is unavailable");
+if (!cancelTool) throw new Error("test.cancel is unavailable");
 const blocker = { type: "dialog" as const, dialogId: "dialog_test", title: "Third Party Dialog", message: "Third Party Dialog", buttons: ["OK"], requiresUserAction: true as const, source: "windows-ui" as const, confidence: "exact" as const };
 
 test("test.run reserves the coordinator test deadline", () => {
@@ -32,6 +34,60 @@ test("test.run schema excludes project and unity", async () => { const f = await
 test("test.run projects a RunFinished success with XML proof", async () => { const f = await fixture(); try { const result = await dispatchTool("test.run", undefined, { input: "{\"platform\":\"EditMode\",\"xml\":true}", instance: f.project }, { dataDir: f.dataDir, bridgeExecute: bridge(f, terminal("req_test")) }, "req_test"); assert.equal(result.ok, true); } finally { await rm(f.root, { recursive: true, force: true }); } });
 test("test.run exposes RunFinished failures as E_TESTS_FAILED", async () => { const f = await fixture(); try { await assert.rejects(async () => await tool.execute({}, { requestId: "req_test", projectPath: f.project, dataDir: f.dataDir, artifactDir: f.dataDir, flags: { instance: f.project }, absoluteDeadlineMs: Date.now() + 5000, execution: {}, bridgeExecute: bridge(f, terminal("req_test", true)), commitEffect: async () => undefined }), (error: unknown) => error instanceof StructuredToolError && error.code === "E_TESTS_FAILED"); } finally { await rm(f.root, { recursive: true, force: true }); } });
 
+test("test.cancel dry-run reads one exact coordinator plan without cancellation", async () => {
+  const f = await fixture();
+  const runId = "71dc3a77-98cf-4dfc-9b31-c4b2dc67ff85";
+  try {
+    const result = await cancelTool.execute({}, {
+      requestId: "req_cancel_plan", projectPath: f.project, dataDir: f.dataDir, artifactDir: f.dataDir,
+      flags: { instance: f.project }, absoluteDeadlineMs: Date.now() + 5000, execution: { dryRun: true }, commitEffect: async () => undefined,
+      bridgeExecute: async (payload: BridgeRequest): Promise<BridgeResponse> => {
+        if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: f.session.lastUnitySnapshot, progress: [], blockers: [] } };
+        if (payload.command === "internal.test.run.cancel.plan") return { ok: true, requestId: payload.requestId, data: cancelProof(runId, true, [runId]) };
+        throw new Error(`unexpected ${payload.command}`);
+      },
+    });
+    assert.equal((result as { dryRun: boolean }).dryRun, true);
+    assert.equal((result as { runId: string }).runId, runId);
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test("test.cancel accepts only an inactive exact GUID terminal", async () => {
+  const f = await fixture();
+  const runId = "71dc3a77-98cf-4dfc-9b31-c4b2dc67ff85";
+  const rootRequestDigest = "c".repeat(64);
+  try {
+    let calls = 0;
+    const result = await cancelTool.execute({}, {
+      requestId: "req_cancel", projectPath: f.project, dataDir: f.dataDir, artifactDir: f.dataDir,
+      flags: { instance: f.project }, absoluteDeadlineMs: Date.now() + 5000, execution: {}, commitEffect: async () => undefined,
+      bridgeExecute: async (payload: BridgeRequest): Promise<BridgeResponse> => {
+        if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: f.session.lastUnitySnapshot, progress: [], blockers: [] } };
+        if (payload.command === "internal.test.run.cancel") { calls++; return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestId: "req_root", rootRequestDigest, runId } }; }
+        if (payload.command === "internal.test.run.cancel.status") { calls++; assert.equal((payload.input as Record<string, unknown>).rootRequestDigest, rootRequestDigest); return { ok: true, requestId: payload.requestId, data: { terminal: true, result: cancelProof(runId, false, []) } }; }
+        throw new Error(`unexpected ${payload.command}`);
+      },
+    });
+    assert.equal(calls, 2);
+    assert.equal((result as { cancelled: boolean }).cancelled, true);
+
+    await assert.rejects(async () => cancelTool.execute({}, {
+      requestId: "req_cancel_invalid", projectPath: f.project, dataDir: f.dataDir, artifactDir: f.dataDir,
+      flags: { instance: f.project }, absoluteDeadlineMs: Date.now() + 5000, execution: {}, commitEffect: async () => undefined,
+      bridgeExecute: async (payload: BridgeRequest): Promise<BridgeResponse> => {
+        if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: f.session.lastUnitySnapshot, progress: [], blockers: [] } };
+        if (payload.command === "internal.test.run.cancel") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestId: "req_root", rootRequestDigest, runId } };
+        if (payload.command === "internal.test.run.cancel.status") return { ok: true, requestId: payload.requestId, data: { terminal: true, result: cancelProof(runId, false, [runId]) } };
+        throw new Error(`unexpected ${payload.command}`);
+      },
+    }), (error: unknown) => error instanceof StructuredToolError && error.code === "E_EXECUTION_TIMEOUT" && error.details?.causeCode === "E_TOOL_COMPLETION_PROOF_INVALID");
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+function cancelProof(runId: string, dryRun: boolean, activeRunIds: string[]) {
+  return { cancelled: !dryRun, dryRun, rootRequestId: "req_root", runId, platform: "EditMode", activeRunIds, editorSessionId: "session-test", plannedEffects: [{ type: "test-run-cancel", rootRequestId: "req_root", runId }] };
+}
+
 test("test.run converts a blocker observed after acceptance to execution timeout", async () => {
   const f = await fixture();
   try {
@@ -40,7 +96,7 @@ test("test.run converts a blocker observed after acceptance to execution timeout
       flags: { instance: f.project }, absoluteDeadlineMs: Date.now() + 5000, execution: {}, commitEffect: async () => undefined,
       bridgeExecute: async (payload: BridgeRequest): Promise<BridgeResponse> => {
         if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: f.session.lastUnitySnapshot, progress: [], blockers: [] } };
-        if (payload.command === "internal.test.run.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true } };
+        if (payload.command === "internal.test.run.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestDigest: "d".repeat(64) } };
         if (payload.command === "internal.test.run.status") return { ok: false, requestId: payload.requestId, error: { code: "E_UNITY_BLOCKED", message: "blocked", nextActions: [], transient: false, retryAfterMs: 0, details: { blockers: [blocker] } } };
         throw new Error(`unexpected ${payload.command}`);
       },
@@ -51,7 +107,7 @@ test("test.run converts a blocker observed after acceptance to execution timeout
       assert.equal(error.retryAfterMs, 0);
       assert.deepEqual(error.details?.blockers, [blocker]);
       assert.match(error.message, /Third Party Dialog/);
-      assert.deepEqual(error.nextActions, ["Run unity_cli context read editor.dialogs to inspect the current modal dialog.", "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label."]);
+      assert.deepEqual(error.nextActions, ["Run unity_cli tools run editor.dialogs to inspect the current modal dialog.", "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label."]);
       return true;
     });
   } finally { await rm(f.root, { recursive: true, force: true }); }

@@ -16,7 +16,6 @@
       { "name": "hdrp.settings.get" },
       { "name": "hdrp.settings.set" }
     ],
-    "contexts": [],
     "csharpEntries": [
       { "type": "UnityCli.HdrpVolumeListTool", "description": "Implements hdrp.volume.list." },
       { "type": "UnityCli.HdrpVolumeInfoTool", "description": "Implements hdrp.volume.info." },

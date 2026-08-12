@@ -23,9 +23,9 @@ npm 包名：`@alpsckr/unity_cli`
 能力入口只允许：
 
 - `tools`
-- `context`
+- `command`
 
-CLI 控制面只允许：
+CLI控制面只允许：
 
 - `init`
 - `extensions`
@@ -33,11 +33,13 @@ CLI 控制面只允许：
 - `instances`
 - `doctor`
 
-Unity 项目内容与 Editor 能力域必须继续通过 `tools run <tool>` 或 `context read <context>` 暴露，例如 scene、asset、game-object、prefab、editor、screenshot、package、docs、reflect、build、test、code、profiler、physics、graphics 等。
+Unity项目内容与Editor能力域必须进入唯一Tool catalog，例如scene、asset、game-object、prefab、editor、screenshot、package、docs、reflect、build、test、code、profiler、physics、graphics等。`tools run <tool> --input <json>`与`command <name> <business-args>`只是同一descriptor和dispatcher的两种调用语法。
 
 `target`、`instances`、`doctor` 是 CLI 自身的状态、路由和诊断控制面；它们可以作为顶层命令存在，但不得重新引入 Unity 能力域的顶层入口。
 
 内部 Bridge、协调器和 registry 可以作为实现细节存在，但不得定义超出上述清单的用户可见顶层命令形态。
+
+本产品只吸收必须由已打开 Unity Editor 或 development Player 提供的项目内自动化价值。auth、Unity Hub、Editor 安装或打开、Cloud、License 和 proxy 配置属于外部控制面，必须直接使用系统或官方控制面工具，不进入 Tool catalog，也不新增顶层命令。
 
 ### 3. AI-First Tool Interface
 
@@ -49,8 +51,8 @@ AI 的标准流程是：
 unity_cli tools group/search
 unity_cli tools describe <tool>
 unity_cli tools run <tool> --input <json>
-
-unity_cli context list/search/describe/read
+unity_cli command
+unity_cli command <name> --field <value>
 
 unity_cli target alias list/set/unset
 unity_cli instances list/prune
@@ -60,7 +62,7 @@ unity_cli extensions list/install/remove/doctor
 unity_cli init
 ```
 
-具体有哪些工具、工具参数是什么、风险边界是什么，应由 AI 通过本 CLI 内置的 `tools describe`、`context describe` 等能力自发现。
+具体有哪些工具、工具参数是什么、风险边界是什么，应由AI通过本CLI内置的`tools group/search/describe`自发现。省略name的`command`只返回同一live catalog的command投影，不是第二份能力目录。
 
 ## 快速开始
 
@@ -70,6 +72,9 @@ npm install -g @alps_ckr/unity_cli
 
 # 初始化项目（安装 Bridge 包；若项目已有 .pi/.claude/.agents，则自动安装 Skill）
 unity_cli init --project C:\path\MyProject
+
+# Bridge AutoStart默认开启；项目级开关位于Unity的Project Settings > Unity CLI
+# 修改后从下一次Domain Reload或Editor启动生效
 
 # 查看帮助
 unity_cli --help
@@ -125,16 +130,15 @@ unity_cli tools run reflect.type UnityEngine.Camera
 unity_cli tools run reflect.member UnityEngine.Camera.fieldOfView
 ```
 
-> **注意**：项目与 Editor 状态通过 `context list` / `context describe <name>` / `context read <name>` 读取。
+> **注意**：项目与 Editor 状态同样通过 `tools group/search/describe/run` 发现和读取；读取型 Tool 明确声明无副作用。
 
 ### 4. 项目注册能力
 
-Unity 项目可通过异步 C# `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 注册能力；完成编译后自动进入该实例的完整目录，与 package 内置和 Extension 能力使用同一路径：
+Unity 项目可通过异步 C# `IUnityCliTool<TReq,TRes>` 注册能力；完成编译后自动进入该实例的完整目录，与 package 内置和 Extension 能力使用同一路径：
 
 ```powershell
-# 从当前实例目录发现真实 group/category
+# 从当前实例目录发现真实 group
 unity_cli tools group --instance <id|projectPath|alias>
-unity_cli context list --instance <id|projectPath|alias>
 
 # 描述并执行项目 Tool
 unity_cli tools describe my.custom-tool --instance <id|projectPath|alias>
@@ -143,7 +147,27 @@ unity_cli tools run my.custom-tool --input '{"key":"value"}' --instance <id|proj
 
 > **注意**：不要假设项目能力位于 `custom` 分组。可通过 `extensions list` 查看已安装扩展，`extensions install <id>` / `extensions remove <id>` 管理扩展，`extensions doctor` 诊断扩展状态。
 
-### 5. 诊断与健康检查
+### 5. 使用command语法
+
+`command`按目标Tool的live `inputSchema`解析named、attached、boolean裸开关和声明顺序positional参数，然后进入与`tools run`相同的dispatcher和JSON envelope：
+
+```powershell
+# 列出当前实例可调用名称
+unity_cli command --project-path C:\path\MyProject
+
+# native Tool使用完整Tool名
+unity_cli command editor.compile --refresh true --includeWarnings true
+
+# [CliCommand("test")]在tools中名为UnityPipeline_test，command可用attribute原名
+unity_cli command test --mode EditMode
+unity_cli command UnityPipeline_test --mode EditMode
+```
+
+命令名和业务字段exact匹配，不做snake_case、camelCase、相似名称或语义映射。native完整精确名优先；重名attribute仍通过`UnityPipeline_`完整名调用。
+
+`com.unity.pipeline` package自身的attribute命令已由native能力矩阵吸收，不进入live目录；项目和其他Package声明的`[CliCommand]`继续正常导入。本package首次检测到Pipeline时只执行一次`AutoStart=false`持久化和当前server停服，成功后不再覆盖用户后续手动操作。
+
+### 6. 诊断与健康检查
 
 ```powershell
 # 运行完整诊断
@@ -158,7 +182,7 @@ unity_cli tools run diagnose.preflight
 | 规则 | 说明 |
 |------|------|
 | Tool 可有副作用 | 调用即授权；`destructiveHint`、`sideEffects` 与 `supportsDryRun` 仅描述风险和可选预览 |
-| Context 只负责观察 | Context 不承载写入、artifact 或 destructive 语义 |
+| 读取型 Tool 纯只读 | 读取型 Tool 不触发写入、import、compile、domain reload 或 PlayMode 变化 |
 | Extension 不能绕过 descriptor/envelope | 项目工具必须可描述、可审计、可阻断 |
 | 内部完整性不匹配默认阻止 | 自定义工具的 handler 代码与 descriptor 不一致时，默认阻止执行 |
 
@@ -205,11 +229,11 @@ npm link
 
 ## Live Editor 执行
 
-需要 Unity 执行的 Tool 只连接已打开的 Unity Editor，并在同一次 direct 调用中返回最终业务结果。`build.run`、`test.run`、`editor.refresh`、`code.exec` 以及需要 Editor 刷新的 Package Tool 都会等待已证明的终态；它们不创建可查询的后台任务。
+需要 Unity 执行的 Tool 只连接已打开的 Unity Editor，并在同一次 direct 调用中返回最终业务结果。`build.run`、`test.run`、`editor.refresh`、`code.exec` 以及需要 Editor 刷新的 Package Tool 都会等待终态；它们不创建可查询的后台任务。`code.exec`保留完整同步C#执行能力：它不会拒绝死循环、阻塞等待或长期占用Unity主线程的代码。提交这类代码前应先判断是否确有必要；一旦开始执行，timeout只能停止CLI等待，不能中止代码，结果可能未知且Unity可能需要结束进程才能恢复。完整边界见`tools describe code.exec`和`docs/safety-boundaries.md`。
 
 ## 能力发现与执行
 
-公开能力不维护静态命令清单。Tool 和 Context 的当前 schema、可用性、示例与结果契约以 CLI discovery 为准：
+公开能力不维护静态命令清单。Tool 的当前 schema、可用性、示例与结果契约以 CLI discovery 为准：
 
 ```powershell
 unity_cli tools group
@@ -217,16 +241,11 @@ unity_cli tools group list <group>
 unity_cli tools search <keyword>
 unity_cli tools describe <tool-name>
 unity_cli tools run <tool-name> --input '<json>' [--instance <id|projectPath|alias>]
-
-unity_cli context list
-unity_cli context search <keyword>
-unity_cli context describe <context-name>
-unity_cli context read <context-name> --input '<json>' [--instance <id|projectPath|alias>]
 ```
 
-Tool/Context discovery 必须绑定已连接实例；未连接时返回稳定 instance error，不返回静态或空目录。连接后完整显示 package 内置、Extension、项目注册、Editor 与 Runtime 能力，不按 `source` 或当前模式过滤。`source` 只作描述/审计。`examples[].argv` 是可执行参数 token 数组；业务参数全部放入 `--input`、`--input-file` 或 `--stdin`，命令控制项不混入业务 JSON。
+Tool discovery 必须绑定已连接实例；未连接时返回稳定 instance error，不返回静态或空目录。连接后完整显示 package 内置、Extension、项目注册、Editor 与 Runtime 能力，不按 `source` 或当前模式过滤。`source` 只作描述/审计。`examples[].argv` 是可执行参数 token 数组，表示合法默认行为和调用形状；调用方明确要求的业务值优先于schema default和example值。业务参数全部放入 `--input`、`--input-file` 或 `--stdin`，命令控制项不混入业务 JSON。
 
-Bridge-backed Tool 在 Unity 主线程执行。CLI 的 session supervisor 在一个不可变 deadline 内透明处理 compile、import、domain reload 和 listener restart，并在同一次 direct 调用中返回已证明的业务终态或结构化失败。观察当前进度和 blocker 使用 `unity_cli context read editor.state`；该 Context 立即返回，不等待状态变化。
+Bridge-backed Tool 在 Unity 主线程执行。CLI 的 session supervisor 在一个不可变 deadline 内透明处理 compile、import、domain reload 和 listener restart，并在同一次 direct 调用中返回已证明的业务终态或结构化失败。观察当前进度和 blocker 使用 `unity_cli tools run editor.state`；该读取型 Tool 立即返回，不等待状态变化。
 
 ### 实例与目标
 
@@ -240,9 +259,9 @@ unity_cli target alias unset <alias>
 unity_cli target alias list
 ```
 
-实例与目标属于 CLI 控制面，只使用顶层 `instances` / `target`；不要通过 `context read` 或 `tools run` 访问这些状态。
+实例与目标属于 CLI 控制面，只使用顶层 `instances` / `target`；不要通过 `tools run` 包装这些控制面状态。
 
-`doctor`、`instances`、`target alias` 和 `extensions` 属于 CLI 控制面。扩展源码以 `extensions/<id>/` 组织，安装后投影到 `Packages/com.unity_cli/Extensions/<id>/`；Extension 贡献的 Tool/Context 仍通过统一 discovery 入口发现。
+`doctor`、`instances`、`target alias` 和 `extensions` 属于 CLI 控制面。扩展源码以 `extensions/<id>/` 组织，安装后投影到 `Packages/com.unity_cli/Extensions/<id>/`；Extension 贡献的 Tool 仍通过统一 discovery 入口发现。
 
 ## 初始化（init）
 
@@ -278,11 +297,11 @@ unity_cli init --check --project C:\path\MyProject
 
 Bridge command、handler、journal、fingerprint、listener generation 和 completion contract 都是内部实现，不构成第二套用户入口。mutation 在首个真实 effect 前持久化 effect barrier；effect 后只有 fresh business readback 或 artifact proof 能完成。同一次调用可在 compile、reload 或 listener restart 后续接完全相同的请求以取得 terminal；调用返回后 CLI 不会自行启动新的用户调用。无法证明终态时返回 `E_EXECUTION_TIMEOUT`，是否观察状态、重试、重复调用或继续 mutation 由调用方决定。
 
-当前能力、Extension 依赖和 Editor/PlayMode 可用性只通过 `tools` / `context` discovery 获取，不在 README 冻结能力名清单。
+当前能力、Extension 依赖和 Editor/PlayMode 可用性只通过 `tools` discovery 获取，不在 README 冻结能力名清单。
 
 ## 项目自定义工具（Custom Tools）
 
-Unity 项目 C# 代码可通过异步 `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 注册自定义能力。schema 由 DTO 派生；Tool 必须声明完整 direct completion contract，并在全部可预见校验后、首个 mutation 前调用一次 `ctx.CommitEffect()`。当前接口与完整示例见 [Custom Tools](skills/unity_cli/references/custom-tools.md) 和 [Custom Contexts](skills/unity_cli/references/custom-contexts.md)。
+Unity 项目 C# 代码可通过异步 `IUnityCliTool<TReq,TRes>` 注册自定义能力。schema 由 DTO 派生；Tool 必须声明完整 direct completion contract，并在全部可预见校验后、首个 mutation 前调用一次 `ctx.CommitEffect()`。当前接口与完整示例见 [Custom Tools](skills/unity_cli/references/custom-tools.md)。
 
 ```powershell
 unity_cli tools group --instance <id|projectPath|alias>
@@ -326,7 +345,6 @@ unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":
 |----------|---------|---------|
 | 项目自定义 Tool (`target=editor`) | ✅ 已实现 | 当前实例 `tools group/list/describe/run` |
 | 项目自定义 Tool (`target=runtime`) | ✅ 已实现 | 当前实例 `tools group/list/describe/run`；EditMode 仍显示，执行通常需 PlayMode |
-| 项目自定义 Context | ✅ 已实现 | `context list/search/describe/read` |
 | 扩展包管理 | ✅ 已实现 | `extensions list/install/remove/doctor` |
 | ProBuilder 扩展 | ✅ 已实现 | `tools group/list/describe/run`（需要 `com.unity.probuilder@5.2.4` + `extensions install probuilder`） |
 | Cinemachine/VFX/URP/HDRP 扩展 | ✅ 已实现 | `tools group/list/describe/run`（需要对应 Unity package + `extensions install <id>`） |
@@ -343,7 +361,6 @@ unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":
 - [可用性差异](docs/availability-differences.md) — 不同实例的工具有效性
 - [扩展包](docs/extensions.md) — 可选扩展安装、卸载与诊断
 - [自定义 Tool](skills/unity_cli/references/custom-tools.md) — 项目侧 Tool 注册开发
-- [自定义 Context](skills/unity_cli/references/custom-contexts.md) — 项目侧只读 Context 注册开发
 - [AI Agent Skill](skills/unity_cli/SKILL.md) — Agent 最小入口卡片
 
 ## 本地开发

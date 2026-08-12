@@ -3,22 +3,22 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import "../src/contexts/.generated-registry.js";
-import { dispatchContext } from "../src/contexts/dispatcher.js";
-import { observeVerifiedRegistrySession, readEditorState } from "../src/contexts/editor/state.js";
-import { defineContextMetadata } from "../src/contexts/define.js";
+import "../src/tools/.generated-registry.js";
+import { dispatchTool } from "../src/tools/dispatcher.js";
+import { observeVerifiedRegistrySession, readEditorState } from "../src/tools/editor/state.js";
+import { defineToolMetadata } from "../src/tools/define.js";
 import { EditorBlockerObserver } from "../src/editor-blocker-observer.js";
 import type { ProjectProcessClaimInspection, SessionProcessVerification } from "../src/instances.js";
 import { registryIdentity, createUnityProject, makeRegistry, makeRegistrySession, writeRegistry } from "./helpers/instance-registry-v2.js";
 
-const sourcePath = "src/contexts/editor/state.ts";
+const sourcePath = "src/tools/editor/state.ts";
 
 test("editor.state is the sole hybrid observation owner with bounded fallback", async () => {
   const source = await readFile(sourcePath, "utf8");
   assert.match(source, /selectObservationInstanceForFlags/);
   assert.match(source, /verifyRegistrySessionProcess/);
   assert.match(source, /OBSERVATION_BUDGET_MS = 10_000/);
-  assert.match(source, /observationDeadlineMs = Math\.min\(startedAt \+ OBSERVATION_BUDGET_MS, context\.observationAbsoluteDeadlineMs/);
+  assert.match(source, /observationDeadlineMs = Math\.min\(startedAt \+ OBSERVATION_BUDGET_MS, context\.absoluteDeadlineMs/);
   assert.match(source, /if \(instance\.status === "conflict"\) return makeResult\(instance, undefined, "conflict"/);
   assert.match(source, /selectObservationInstanceForFlags\(context\.flags \?\? \{\}, context\.dataDir, remaining\(observationDeadlineMs\)\)/);
   assert.match(source, /probeBridge\(context, observationDeadlineMs, session, selection\)/);
@@ -125,15 +125,12 @@ test("editor.state fallback performs zero UI probes for unverified, duplicate, o
   }
 });
 
-test("readEditorState and dispatchContext use one live bounded bridge observation and sanitize sensitive progress", async () => {
+test("readEditorState and dispatchTool use one live bounded bridge observation and sanitize sensitive progress", async () => {
   const fixture = await stateFixture();
   const startedAt = Date.now();
   const observationDeadlines: number[] = [];
   const bridgeExecute = async (payload: { requestId: string; command: string; execution: { absoluteDeadlineUtc: string } }) => {
     observationDeadlines.push(Date.parse(payload.execution.absoluteDeadlineUtc));
-    if (payload.command === "context.list") {
-      return { ok: true as const, requestId: payload.requestId, data: { contexts: [] } };
-    }
     return {
       ok: true as const,
       requestId: payload.requestId,
@@ -153,11 +150,11 @@ test("readEditorState and dispatchContext use one live bounded bridge observatio
     assert.doesNotMatch(JSON.stringify(direct), /secret|bridgeEndpoint/i);
 
     const dispatchedStartedAt = Date.now();
-    const dispatched = await dispatchContext("read", "editor.state", { instance: fixture.project }, { dataDir: fixture.dataDir, bridgeExecute }, "state-dispatch");
+    const dispatched = await dispatchTool("editor.state", undefined, { instance: fixture.project }, { dataDir: fixture.dataDir, bridgeExecute }, "state-dispatch");
     assert.ok(dispatched.ok);
     assert.equal((dispatched.data as { observation: { live: boolean } }).observation.live, true);
-    assert.ok(observationDeadlines[2] >= dispatchedStartedAt);
-    assert.ok(observationDeadlines[2] <= Date.now() + 10_000);
+    assert.ok(observationDeadlines[1] >= dispatchedStartedAt);
+    assert.ok(observationDeadlines[1] <= Date.now() + 10_000);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
@@ -206,7 +203,7 @@ test("readEditorState rejects future snapshots and reports conflict or offline f
 });
 
 test("generated editor.state descriptor is exactly the stable public output schema and validates actual output", async () => {
-  const generated = defineContextMetadata().find((context) => context.name === "editor.state")?.outputSchema as Record<string, unknown>;
+  const generated = defineToolMetadata().find((tool) => tool.name === "editor.state")?.outputSchema as Record<string, unknown>;
   const stable = JSON.parse(await readFile("contracts/stable-session/editor-state.schema.json", "utf8")) as Record<string, unknown>;
   const observation = (stable.properties as Record<string, { properties: Record<string, { maximum?: number }> }>).observation;
   // 3 秒是内部观察 deadline，不是受事件循环和 schema 校验开销约束的公共耗时上限。

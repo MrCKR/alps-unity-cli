@@ -4,6 +4,8 @@ import {
   installPackage,
   removePackage,
   restoreDeployedPackage,
+  type PackageDeployExpectedPreState,
+  type PackageRestoreExpectedPreState,
 } from "../../package-manager.js";
 
 export type PackageFileMutationOperation = "install" | "remove" | "deploy" | "restore";
@@ -97,13 +99,35 @@ async function executeWorker(input: WorkerInput): Promise<Record<string, unknown
       }) as unknown as Record<string, unknown>;
     case "deploy": {
       const plannedBackupPath = optionalString(input.plan, "backupPath");
+      const expectedPreState: PackageDeployExpectedPreState = {
+        sourcePath: requiredString(input.plan, "sourcePath"),
+        sourceHash: requiredString(input.plan, "sourceHash"),
+        targetExists: requiredBoolean(input.plan, "previousTargetExists"),
+        ...(optionalString(input.plan, "previousTargetHash") ? { targetHash: optionalString(input.plan, "previousTargetHash") } : {}),
+        recordIdentity: requiredString(input.plan, "previousRecordIdentity"),
+        backupExists: requiredBoolean(input.plan, "previousBackupExists"),
+        ...(plannedBackupPath ? { backupPath: plannedBackupPath } : {}),
+        ...(optionalString(input.plan, "previousBackupHash") ? { backupHash: optionalString(input.plan, "previousBackupHash") } : {}),
+      };
       return await deployPackageSource(input.projectPath, requiredString(input.plan, "sourcePath"), {
         packageName: requiredString(input.plan, "packageName"),
         ...(plannedBackupPath ? { plannedBackupPath } : {}),
+        expectedPreState,
       }) as unknown as Record<string, unknown>;
     }
-    case "restore":
-      return await restoreDeployedPackage(input.projectPath, requiredString(input.plan, "packageName")) as unknown as Record<string, unknown>;
+    case "restore": {
+      const backupPath = optionalString(input.plan, "backupPath");
+      const expectedPreState: PackageRestoreExpectedPreState = {
+        targetPath: requiredString(input.plan, "targetPath"),
+        targetExists: requiredBoolean(input.plan, "expectedTargetExists"),
+        ...(optionalString(input.plan, "expectedTargetHash") ? { targetHash: optionalString(input.plan, "expectedTargetHash") } : {}),
+        recordIdentity: requiredString(input.plan, "expectedRecordIdentity"),
+        backupExists: requiredBoolean(input.plan, "expectedBackupExists"),
+        ...(backupPath ? { backupPath } : {}),
+        ...(optionalString(input.plan, "expectedBackupHash") ? { backupHash: optionalString(input.plan, "expectedBackupHash") } : {}),
+      };
+      return await restoreDeployedPackage(input.projectPath, requiredString(input.plan, "packageName"), { expectedPreState }) as unknown as Record<string, unknown>;
+    }
   }
 }
 

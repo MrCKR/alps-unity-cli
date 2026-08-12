@@ -1,8 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { executeBridgeCommand, executeBridgePayload } from "../dist/src/bridge/index.js";
-import { parseLiveDescriptor } from "../dist/src/contexts/catalog.js";
-import { publicContextDescriptor } from "../dist/src/contexts/dispatcher.js";
+import { executeBridgeCommand } from "../dist/src/bridge/index.js";
 import { createRequestId } from "../dist/src/output.js";
 import { defaultDataDir } from "../dist/src/platform.js";
 import { projectDescriptorToToolMetadata } from "../dist/src/project-tool-discovery.js";
@@ -28,17 +26,6 @@ const toolsResult = await executeBridgeCommand(
 );
 if (!toolsResult.ok) throw new Error(`${toolsResult.error.code}: ${toolsResult.error.message}`);
 
-const contextsResult = await executeBridgePayload(
-  createRequestId(),
-  "context.list",
-  {},
-  flags,
-  runtime,
-  undefined,
-  { mode: "read", mutation: false, defaultTimeoutMs: 120_000 },
-);
-if (!contextsResult.ok) throw new Error(`${contextsResult.error.code}: ${contextsResult.error.message}`);
-
 const completionContracts = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((contract) => [contract.toolName, contract]));
 const tools = arrayField(toolsResult.data, "tools")
   .filter((item) => item.source === "built-in" || item.source === "extension")
@@ -57,23 +44,16 @@ for (const inventoryEntry of expectedTools) {
   }
 }
 tools.sort(byName);
-const contexts = arrayField(contextsResult.data, "contexts")
-  .filter((item) => item.source === "built-in" || item.source === "extension")
-  .map(toPublicContextDescriptor)
-  .map(stripDynamicContextFields)
-  .sort(byName);
 assertUnique(tools, "Tool");
-assertUnique(contexts, "Context");
 
 const catalog = {
   version: 1,
   semantics: "Offline built-in and Extension metadata captured from one successfully compiled Live Editor package; project-defined capabilities are never packaged here.",
   tools,
-  contexts,
 };
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
-process.stdout.write(`${JSON.stringify({ ok: true, output, tools: tools.length, contexts: contexts.length })}\n`);
+process.stdout.write(`${JSON.stringify({ ok: true, output, tools: tools.length })}\n`);
 
 /** 解析生成器参数；该脚本只在 Dev Bridge 已通过 strict identity 后运行。 */
 function parseArgs(argv) {
@@ -113,30 +93,14 @@ function toPublicToolDescriptor(descriptor) {
   return publicToolDescriptor(metadata);
 }
 
-/** Bridge authoring descriptor 必须先经过与 context describe 相同的公开投影。 */
-function toPublicContextDescriptor(descriptor) {
-  const parsed = parseLiveDescriptor(descriptor);
-  if (typeof parsed === "string") throw new Error(`Malformed Live Context descriptor ${String(descriptor.name ?? "unknown")}: ${parsed}`);
-  return publicContextDescriptor(parsed);
-}
-
 /** session 可用性由调用时重新计算，不能冻结进 package snapshot。 */
 function stripDynamicToolFields(tool) {
   const stable = pickFields(tool, [
     "name", "summary", "description", "group", "inputSchema", "outputSchema",
-    "destructiveHint", "sideEffects", "playModeSupport", "supportsDryRun", "permissions",
+    "destructiveHint", "sideEffects", "playModeSupport", "supportsDryRun", "contractProfile", "permissions",
     "examples", "source", "target", "availabilityScope", "requiresPackages", "extensionId"
   ]);
   return omitEmptyOptionalArrays(stable, new Set(["permissions", "requiresPackages", "sideEffects"]));
-}
-
-/** Context snapshot 同样只保留稳定 descriptor 契约。 */
-function stripDynamicContextFields(context) {
-  const stable = pickFields(context, [
-    "name", "summary", "description", "category", "inputSchema", "outputSchema",
-    "examples", "source", "target", "availabilityScope", "playModeSupport", "requiresPackages", "extensionId"
-  ]);
-  return omitEmptyOptionalArrays(stable, new Set(["requiresPackages"]));
 }
 
 /** snapshot 使用公开 schema allowlist，未知内部字段默认不落盘。 */

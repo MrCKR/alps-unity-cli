@@ -29,7 +29,7 @@ namespace UnityCli
         {
             Name = "physics.simulation",
             Summary = "Step manual Physics and Physics2D simulation and prove one declared body state.",
-            Description = "simulate=true advances manual 3D and 2D physics synchronously. completionProbe is mandatory and must prove a target resource before/after state through an eligible read-only Context; API return values are not completion proof. deltaTime defaults to Time.fixedDeltaTime.",
+            Description = "simulate=true advances manual 3D and 2D physics synchronously. completionProbe is mandatory and must prove a target resource before/after state through an eligible read Tool; API return values are not completion proof. deltaTime defaults to Time.fixedDeltaTime.",
             Group = "physics",DestructiveHint = false, SideEffects = new[] { "scene-modify" },
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
@@ -43,7 +43,7 @@ namespace UnityCli
                         Steps = 1, Simulate = true, DeltaTime = 0.02f,
                         CompletionProbe = new UnityCliCompletionProbe
                         {
-                            Context = "scene.gameobject", Input = new Dictionary<string, object> { { "target", "PhysicsProbe" } },
+                            ReadTool = "scene.gameobject", Input = new Dictionary<string, object> { { "target", "PhysicsProbe" } },
                             Assertions = new List<UnityCliCompletionAssertion>
                             {
                                 new UnityCliCompletionAssertion { Path = "/gameObject/transform/position/y", Operator = "approx", Before = 1.0, After = 0.996076, Tolerance = 0.001 }

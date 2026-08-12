@@ -1,6 +1,6 @@
 # 安全边界（Safety Boundaries）
 
-alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但必须声明、Context 必须只读、Extension 不能绕过 descriptor/envelope。
+alps-unity-cli的安全模型围绕三个核心原则：Tool副作用必须准确声明、读取型Tool必须纯只读、Extension和command入口不能绕过descriptor/envelope。
 
 ## 风险标记体系
 
@@ -48,6 +48,8 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `tools run package.bridge-remove` | 移除 init 复制的 Bridge 包 |
 | `tools run code.exec` | 在已打开的 Unity Editor 中执行代码 |
 
+`code.exec`保留完整的同步C#执行能力，不按代码内容拒绝死循环、长时间sleep、阻塞等待、锁等待、同步I/O或长期占用Unity API。调用方在提交这类代码前必须先判断它对当前结果是否确有必要，并考虑有界写法或现有Tool能否达到同一结果；确有必要时仍可原样执行。代码一旦在Unity Editor主线程开始，`--timeout-ms`和取消只能停止CLI等待，不能强制中止正在运行的C#。Unity可能无响应，mutation owner可能无法收尾，业务状态可能部分改变或无法证明，恢复可能需要结束Editor进程。此时timeout不表示代码已经停止，不能据此直接重试。`--dry-run`只返回source hash和planned effect，不编译、不执行，也不验证代码能够结束。
+
 ### 可选预览
 
 ```text
@@ -68,14 +70,16 @@ tools run <tool>             -> 公开调用即授权并执行
 - `editor-only`：没有合理运行态语义，Play Mode 下返回 `E_TOOL_PLAYMODE_UNAVAILABLE`。
 - `unknown`：当前安装无法证明该状态，调用方必须先重新发现或检查可用性。
 
-## Context 只读硬边界
+## 读取型Tool硬边界
 
-Context 不得：
-- 修改 Unity 状态（场景、资产、GameObject、Component）
+读取型Tool不得：
+- 修改Unity状态（场景、资产、GameObject、Component）
 - 修改文件系统
-- 修改 Package 依赖
-- 触发 Play Mode 变化
+- 修改Package依赖
+- 触发import、compile、domain reload或PlayMode变化
 - 产生任何副作用
+
+`tools run`与`command`调用同一Tool时共享该风险分类、安全检查和completion contract。
 
 
 ## Extension 安全边界

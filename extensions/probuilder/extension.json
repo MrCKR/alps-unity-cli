@@ -119,11 +119,9 @@
       },
       {
         "name": "probuilder.repair-mesh"
-      }
-    ],
-    "contexts": [
+      },
       {
-        "key": "probuilder.scene"
+        "name": "probuilder.scene"
       }
     ],
     "csharpEntries": [
@@ -228,7 +226,7 @@
         "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.ProBuilder.ProBuilderSceneContext",
+        "type": "UnityCli.ProBuilder.ProBuilderSceneTool",
         "description": "Live capability implementation."
       },
       {

@@ -111,6 +111,12 @@ namespace UnityCli
     {
         private static readonly object PendingLock = new object();
         private static readonly List<IPendingWait> Pending = new List<IPendingWait>();
+        private static readonly System.Diagnostics.Stopwatch AutoTickStopwatch = new System.Diagnostics.Stopwatch();
+        private static Action AutoTickSignal;
+        private static bool AutoTickEnabled;
+        private static long AutoTickIntervalMs = 16L;
+        private static long AutoTickForcedCount;
+        private static string AutoTickLastError;
 
         /// <summary>
         /// 自定义 awaitable 的 continuation 只进入显式主线程队列。
@@ -524,16 +530,96 @@ namespace UnityCli
 
         private static readonly Dictionary<string, string> CoordinatorFailures = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        /// <summary>effect前只验证当前Unity是否仍提供SignalTick，不改变scheduler状态。</summary>
+        internal static void PrepareAutoTick(bool enable)
+        {
+            if (!enable) return;
+            var method = SignalTickMethod();
+            if (method == null)
+                throw new UnityCliBridge.BridgeCommandException("E_EDITOR_AUTOTICK_UNAVAILABLE", "EditorApplication.SignalTick is unavailable in Unity " + UnityEngine.Application.unityVersion + ".", "Use a supported Unity version before enabling editor.autotick.set.");
+            try
+            {
+                if (AutoTickSignal == null) AutoTickSignal = (Action)Delegate.CreateDelegate(typeof(Action), method);
+            }
+            catch (Exception exception)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_EDITOR_AUTOTICK_UNAVAILABLE", "EditorApplication.SignalTick could not be bound: " + exception.GetType().Name + ".", "Inspect the Unity version before retrying.");
+            }
+        }
+
+        /// <summary>Tool跨过唯一barrier后更新current-session状态；不注册第二个update callback。</summary>
+        internal static void ConfigureAutoTick(bool enable, long intervalMs)
+        {
+            PrepareAutoTick(enable);
+            AutoTickIntervalMs = Math.Max(0L, Math.Min(60000L, intervalMs));
+            AutoTickEnabled = enable;
+            AutoTickLastError = null;
+            if (enable) AutoTickStopwatch.Restart();
+            else AutoTickStopwatch.Stop();
+        }
+
+        internal static EditorAutoTickState ReadAutoTickState()
+        {
+            return new EditorAutoTickState
+            {
+                EditorSessionId = UnityCliBridge.EditorSessionId(),
+                Enabled = AutoTickEnabled,
+                IntervalMs = AutoTickIntervalMs,
+                ForcedTickCount = AutoTickForcedCount,
+                SignalTickAvailable = SignalTickMethod() != null,
+                LastError = AutoTickLastError
+            };
+        }
+
+        private static System.Reflection.MethodInfo SignalTickMethod()
+        {
+            return typeof(EditorApplication).GetMethod("SignalTick", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+        }
+
+        /// <summary>中央update尾部唯一调用；SignalTick故障立即关闭，避免每帧重复占用CPU。</summary>
+        private static void PumpAutoTick()
+        {
+            if (!AutoTickEnabled || AutoTickSignal == null) return;
+            if (AutoTickIntervalMs > 0 && AutoTickStopwatch.ElapsedMilliseconds < AutoTickIntervalMs) return;
+            AutoTickStopwatch.Restart();
+            try
+            {
+                AutoTickSignal();
+                AutoTickForcedCount += 1L;
+            }
+            catch (Exception exception)
+            {
+                AutoTickEnabled = false;
+                AutoTickStopwatch.Stop();
+                AutoTickLastError = exception.GetType().Name;
+                throw;
+            }
+        }
+
+        private static void ResetAutoTick()
+        {
+            AutoTickEnabled = false;
+            AutoTickIntervalMs = 16L;
+            AutoTickForcedCount = 0L;
+            AutoTickLastError = null;
+            AutoTickSignal = null;
+            AutoTickStopwatch.Reset();
+        }
+
         public static void Tick()
         {
             // 所有跨帧 coordinator 由唯一 Bridge 主循环推进；单个坏 journal 不得中断其他 root 或 heartbeat。
             TickCoordinator("compilation-events", UnityCliCompilationEventBroker.Tick);
             TickCoordinator("editor.compile", UnityCliBridge.UnityCliCompileCoordinator.Tick);
+            TickCoordinator("build.run", UnityCliBridge.UnityCliLiveBuildCoordinator.Tick);
             TickCoordinator("editor.refresh", UnityCliBridge.UnityCliLiveRefreshCoordinator.Tick);
             TickCoordinator("asset.refresh", UnityCliBridge.UnityCliAssetRefreshCoordinator.Tick);
             TickCoordinator("package.embed", UnityCliBridge.UnityCliPackageEmbedCoordinator.Tick);
             TickCoordinator("package.resolve", UnityCliBridge.UnityCliPackageResolveCoordinator.Tick);
             TickCoordinator("test.run", UnityCliBridge.UnityCliTestRunCoordinator.Tick);
+            TickCoordinator("navmesh.bake", UnityCliBridge.UnityCliNavMeshBakeCoordinator.Tick);
+            TickCoordinator("occlusion.bake", UnityCliBridge.UnityCliOcclusionBakeCoordinator.Tick);
+            TickCoordinator("editor.autotick", PumpAutoTick);
             MainThreadContinuations.Drain();
             var now = DateTime.UtcNow;
             List<IPendingWait> completed = null;
@@ -573,6 +659,7 @@ namespace UnityCli
             {
                 wait.Cancel(exception);
             }
+            ResetAutoTick();
         }
 
         internal static void QueueOnMainThread(Action continuation)

@@ -34,7 +34,6 @@
       { "name": "vfx.trail.create", "requiresPackages": [] },
       { "name": "vfx.trail.set", "requiresPackages": [] }
     ],
-    "contexts": [],
     "csharpEntries": [
       { "type": "UnityCli.VfxGraphInfoTool", "description": "Implements vfx.graph.info." },
       { "type": "UnityCli.VfxGraphCreateTool", "description": "Implements vfx.graph.create." },

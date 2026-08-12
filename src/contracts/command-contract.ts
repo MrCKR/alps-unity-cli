@@ -5,8 +5,9 @@ import { toolPublicRoute } from "../tools/metadata/derived.js";
 import { toolHandler } from "../tools/metadata/status.js";
 import type { ToolMetadata } from "../tools/metadata/types.js";
 import type { ExtensionManifest } from "../extensions/types.js";
+import { staticCapabilityCatalog } from "../static-capability-catalog.js";
 
-export type CommandHandlerType = "bridge" | "hybrid" | "offline" | "cli_only";
+export type CommandHandlerType = "bridge" | "bridge-runtime" | "hybrid" | "offline" | "cli_only";
 
 /** Bridge 内部路由的唯一清单；这些 command 永远不得进入 public command contract。 */
 export const PRIVATE_BRIDGE_COMMANDS: ReadonlySet<string> = new Set([
@@ -28,6 +29,11 @@ export const PRIVATE_BRIDGE_COMMANDS: ReadonlySet<string> = new Set([
   "internal.package.files.fail",
   "internal.test.run.start",
   "internal.test.run.status",
+  "internal.navmesh.bake.start",
+  "internal.navmesh.bake.status",
+  "internal.navmesh.bake.plan",
+  "internal.navmesh.bake.snapshot",
+  "internal.navmesh.bake.cancel",
 ]);
 
 export interface CommandContractEntry {
@@ -75,6 +81,7 @@ export function findCommandContract(bridgeCommand: string): CommandContractEntry
 }
 
 export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry, skipGroups?: Set<string>): void {
+  const staticProjectTools = new Set(staticCapabilityCatalog().tools.map((tool) => String(tool.name)));
   const registryCommands = new Set<string>();
   const registryToolNames = new Set<string>();
   for (const spec of registry.specs()) {
@@ -89,7 +96,7 @@ export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry,
 
   for (const contract of commandContracts()) {
     if (skipGroups?.has(contract.group)) continue;
-    if (contract.csharp_handler === "present" && (contract.handler_type === "bridge" || contract.handler_type === "hybrid") && !registryCommands.has(contract.bridgeCommand) && !registryToolNames.has(contract.bridgeCommand)) {
+    if (contract.csharp_handler === "present" && (contract.handler_type === "bridge" || contract.handler_type === "hybrid") && !registryCommands.has(contract.bridgeCommand) && !registryToolNames.has(contract.bridgeCommand) && !staticProjectTools.has(contract.bridgeCommand)) {
       throw new Error(`Contract command missing from BridgeCommandRegistry: ${contract.bridgeCommand}`);
     }
   }

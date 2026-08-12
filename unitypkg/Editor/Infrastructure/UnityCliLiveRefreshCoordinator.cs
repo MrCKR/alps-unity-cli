@@ -44,6 +44,48 @@ namespace UnityCli
                     if (!string.Equals(args.ExpectedEditorSessionId, EditorSessionId(), StringComparison.Ordinal)) throw new BridgeCommandException("E_EDITOR_SESSION_REPLACED", "The selected Editor session changed before refresh execution.");
                     if (EditorApplication.isPlaying || IsPlayModeChanging()) throw new BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "editor.refresh is editor-only and requires stable Edit Mode.");
                 }
+                protected override void ValidateLoadedRoot(Dictionary<string, object> root)
+                {
+                    ValidateRootContract(root, new[] { "compile", "compilationRequested", "compilationObserved", "compilePhase", "compileDispatchSequence", "compileStartedSequence", "compileFinishedSequence", "compileStartedCycle", "compileDiagnostics", "compileErrorCount", "compileWarningCount", "compileInfoCount", "compileDiagnosticsTruncated", "stableFrames", "beforeSourceFingerprint", "beforeDependencyVersion", "reloadObserved", "rootContractDigest" },
+                        "queued", "prepared", "dispatching", "refresh_returned", "waiting_stable");
+                    object compile; object requested; object observed; object diagnostics; object errorCount; object warningCount; object infoCount; object truncated; object stableFrames;
+                    if (!root.TryGetValue("compile", out compile) || !(compile is bool)
+                        || !root.TryGetValue("compilationRequested", out requested) || !(requested is bool)
+                        || !root.TryGetValue("compilationObserved", out observed) || !(observed is bool)
+                        || !root.TryGetValue("compileDiagnostics", out diagnostics) || !(diagnostics is List<object>)
+                        || !root.TryGetValue("compileErrorCount", out errorCount) || !(errorCount is long) || (long)errorCount < 0 || (long)errorCount > 1000000
+                        || !root.TryGetValue("compileWarningCount", out warningCount) || !(warningCount is long) || (long)warningCount < 0 || (long)warningCount > 1000000
+                        || !root.TryGetValue("compileInfoCount", out infoCount) || !(infoCount is long) || (long)infoCount < 0 || (long)infoCount > 1000000
+                        || !root.TryGetValue("compileDiagnosticsTruncated", out truncated) || !(truncated is long) || (long)truncated < 0 || (long)truncated > 1000000
+                        || !root.TryGetValue("stableFrames", out stableFrames) || !(stableFrames is long) || (long)stableFrames < 0
+                        || !IsSha256(Text(root, "beforeSourceFingerprint")) || !IsSha256(Text(root, "beforeDependencyVersion")))
+                        throw new InvalidDataException("Refresh active root fields are invalid.");
+                    if (!string.Equals(Text(root, "rootContractDigest"), RefreshRootContractDigest(root), StringComparison.Ordinal))
+                        throw new InvalidDataException("Refresh immutable root contract changed.");
+                    UnityCliCompileCoordinator.ValidateBoundedDiagnostics(root, "compileDiagnostics", "compileErrorCount", "compileWarningCount", "compileInfoCount", "compileDiagnosticsTruncated", true);
+                    var compilePhase = Text(root, "compilePhase");
+                    if (Array.IndexOf(new[] { "idle", "dispatching", "awaiting_started", "compiling", "cycle_finished" }, compilePhase) < 0)
+                        throw new InvalidDataException("Refresh compile phase is invalid.");
+                    var refreshFenced = HasExactEffectFence("refresh", root, "refresh-dispatch");
+                    var phase = Text(root, "phase");
+                    if ((phase == "queued" || phase == "prepared") == refreshFenced)
+                        throw new InvalidDataException("Refresh effect fence is inconsistent with phase.");
+                    var compileFenced = HasExactEffectFence("refresh", root, "compile-dispatch");
+                    if ((compilePhase == "idle") == compileFenced)
+                        throw new InvalidDataException("Refresh compile fence is inconsistent with phase.");
+                    if (Bool(root, "compilationObserved")
+                        && (Long(root, "compileStartedCycle") <= 0 || Long(root, "compileStartedSequence") <= Long(root, "compileDispatchSequence")))
+                        throw new InvalidDataException("Refresh compile attribution is invalid.");
+                }
+
+                private static string RefreshRootContractDigest(Dictionary<string, object> root)
+                {
+                    return UnityCliSerializer.Sha256Canonical(new Dictionary<string, object>
+                    {
+                        { "compile", root["compile"] }, { "beforeSourceFingerprint", root["beforeSourceFingerprint"] }, { "beforeDependencyVersion", root["beforeDependencyVersion"] }
+                    });
+                }
+
                 protected override object Planned(object value)
                 {
                     var args = (Args)value;
@@ -55,20 +97,32 @@ namespace UnityCli
                 {
                     var args = (Args)value;
                     var before = CaptureProof();
-                    return new Dictionary<string, object> { { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc }, { "phase", "queued" }, { "compile", args.Compile }, { "compilationRequested", false }, { "compilationObserved", false }, { "compilePhase", "idle" }, { "compileStartedCycle", 0L }, { "compileDiagnostics", new List<object>() }, { "stableFrames", 0L }, { "beforeSourceFingerprint", before.SourceFingerprint }, { "beforeDependencyVersion", before.DependencyVersion } };
+                    var root = new Dictionary<string, object> { { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc }, { "phase", "queued" }, { "compile", args.Compile }, { "compilationRequested", false }, { "compilationObserved", false }, { "compilePhase", "idle" }, { "compileDispatchSequence", 0L }, { "compileStartedSequence", 0L }, { "compileFinishedSequence", 0L }, { "compileStartedCycle", 0L }, { "compileDiagnostics", new List<object>() }, { "compileErrorCount", 0L }, { "compileWarningCount", 0L }, { "compileInfoCount", 0L }, { "compileDiagnosticsTruncated", 0L }, { "stableFrames", 0L }, { "beforeSourceFingerprint", before.SourceFingerprint }, { "beforeDependencyVersion", before.DependencyVersion } };
+                    root["rootContractDigest"] = RefreshRootContractDigest(root);
+                    return root;
                 }
                 protected override void OnTick(Dictionary<string, object> root)
                 {
+                    if (UnityCliCompilationEventBroker.SequenceCorrupt && Bool(root, "compile")) { Fail(root, "E_EXECUTION_TIMEOUT", "Refresh compilation event sequence is corrupt; attributed outcome is unknown."); return; }
                     var phase = Text(root, "phase");
                     if (phase == "queued") { if (BusyEditor()) return; Update(x => x["phase"] = "prepared"); return; }
-                    if (phase == "prepared") { Update(x => x["phase"] = "dispatching"); try { AssetDatabase.Refresh(); Update(x => x["phase"] = "refresh_returned"); } catch (Exception e) { Fail(root, "E_EXECUTION_TIMEOUT", "Refresh result cannot be confirmed: " + e.Message + "; check the business state."); } return; }
+                    if (phase == "prepared") { root = CrossEffectFence(root, "refresh-dispatch", "dispatching"); try { AssetDatabase.Refresh(); Update(x => x["phase"] = "refresh_returned"); } catch (Exception e) { Fail(root, "E_EXECUTION_TIMEOUT", "Refresh result cannot be confirmed: " + e.Message + "; check the business state."); } return; }
                     if (phase == "refresh_returned")
                     {
-                        if (Bool(root, "compile") && !Bool(root, "compilationObserved") && !Bool(root, "compilationRequested")) { if (BusyEditor()) return; UnityCliCompileCoordinator.RequestRefreshCompilation(Text(root, "requestId")); return; }
+                        if (Bool(root, "compile") && !Bool(root, "compilationObserved") && !Bool(root, "compilationRequested")) { if (BusyEditor()) return; UnityCliCompileCoordinator.RequestRefreshCompilation(Text(root, "requestId"), Text(root, "requestDigest")); return; }
                         Update(x => x["phase"] = "waiting_stable"); return;
                     }
                     if (phase != "waiting_stable" || BusyEditor()) return;
                     if (Bool(root, "compile") && (!Bool(root, "compilationObserved") || Text(root, "compilePhase") != "cycle_finished")) { Fail(root, "E_EXECUTION_TIMEOUT", "Refresh compilation result cannot be confirmed; check the business state."); return; }
+                    if (Long(root, "compileErrorCount") > 0)
+                    {
+                        var details = new Dictionary<string, object>
+                        {
+                            { "compile", new Dictionary<string, object> { { "completed", true }, { "errorCount", Long(root, "compileErrorCount") }, { "warningCount", Long(root, "compileWarningCount") }, { "status", "errors" }, { "diagnosticsTruncated", Long(root, "compileDiagnosticsTruncated") } } },
+                            { "diagnostics", root["compileDiagnostics"] }
+                        };
+                        Fail(root, "E_UNITY_COMPILE_FAILED", "Refresh compilation reported compiler errors.", details, new[] { "Fix the listed compiler diagnostics before retrying refresh." }); return;
+                    }
                     var frames = Long(root, "stableFrames") + 1; Update(x => x["stableFrames"] = frames); if (frames >= 3) Succeed(root);
                 }
                 protected override object BuildSuccessData(Dictionary<string, object> root)

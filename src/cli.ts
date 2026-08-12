@@ -3,10 +3,10 @@ import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs, getBoolean, getString } from "./args.js";
+import { parseArgs, getBoolean, getString, type CliArgsSpec } from "./args.js";
 import { registerBuiltinExtensionContributions } from "./extensions/index.js";
+import { handleCommand } from "./cli-commands/command.js";
 import { handleExtensionsCommand } from "./cli-commands/extensions.js";
-import { handleContextCommand } from "./contexts/commands.js";
 import { handleInit } from "./cli-commands/package.js";
 import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
 import { createRequestId, failure, printResult, success } from "./output.js";
@@ -17,12 +17,12 @@ import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
 import type { CliResult } from "./types.js";
 
 /**
- * 用户可见顶层命令分为能力入口(tools/context)与 CLI 控制面。
- * Unity 能力域不得恢复 scene/asset/package 等顶层入口。
+ * 用户可见能力入口只有tools与command，二者复用唯一Tool catalog和dispatcher。
+ * Unity能力域不得恢复context/scene/asset/package等顶层入口。
  */
 const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["tools", { run: ({ command, args, flags, runtime, requestId }) => handleToolsCommand(command, args, flags, runtime, requestId) }],
-  ["context", { run: ({ command, args, flags, runtime, requestId }) => handleContextCommand(command, args, flags, runtime, requestId) }],
+  ["command", { run: ({ args, flags, runtime, requestId }) => handleCommand(args, flags, runtime, requestId) }],
   ["extensions", { run: ({ command, args, flags, runtime, requestId }) => handleExtensionsCommand(command, args, flags, runtime, requestId) }],
   ["init", { run: ({ flags, runtime, requestId }) => handleInit(flags, runtime, requestId) }],
   ["target", { run: ({ command, args, flags, runtime, requestId }) => handleTopLevelTarget(command, args, flags, runtime, requestId) }],
@@ -30,15 +30,57 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["doctor", { run: ({ flags, runtime, requestId }) => handleDoctorCommand(flags, runtime, requestId) }]
 ]);
 
+/** CLI option 的唯一 arity 表；命令 handler 继续负责校验该 option 是否适用于具体命令。 */
+export const CLI_ARGS_SPEC: CliArgsSpec = {
+  commandNames: new Set(CLI_COMMANDS.keys()),
+  passthroughAfterCommand: "command",
+  options: {
+    help: "boolean",
+    version: "boolean",
+    raw: "boolean",
+    instance: "value",
+    project: "value",
+    input: "value",
+    "input-file": "value",
+    stdin: "boolean",
+    "dry-run": "boolean",
+    "timeout-ms": "value",
+    "artifact-dir": "value",
+    runtime: "boolean",
+    agent: "value",
+    "pkg-only": "boolean",
+    "skill-only": "boolean",
+    check: "boolean",
+    force: "boolean",
+    job: "boolean",
+    wait: "boolean",
+    "wait-timeout-ms": "value",
+    "bridge-endpoint": "value",
+    retry: "value",
+    target: "value",
+    unity: "value",
+  },
+};
+
 export async function execute(argv: string[], runtime = createRuntime()): Promise<CliResult> {
   // Register built-in extension contributions before any tool discovery or bridge command routing.
   registerBuiltinExtensionContributions();
 
   const requestId = createRequestId();
-  const parsed = parseArgs(argv);
+  const parsed = parseArgs(argv, CLI_ARGS_SPEC);
   const [group, command] = parsed.positional;
 
   try {
+    if (parsed.issue) {
+      const option = `--${parsed.issue.option}`;
+      if (parsed.issue.code === "E_UNKNOWN_OPTION") {
+        return failure(requestId, parsed.issue.code, `Unknown option: ${option}.`, ["Run unity_cli --help for the supported options."], { option });
+      }
+      if (parsed.issue.code === "E_OPTION_VALUE_REQUIRED") {
+        return failure(requestId, parsed.issue.code, `Option ${option} requires a value.`, [`Pass ${option}=<value> or ${option} <value>.`], { option, expected: "value", ...(parsed.issue.actual ? { actual: parsed.issue.actual } : {}) });
+      }
+      return failure(requestId, parsed.issue.code, `Boolean option ${option} accepts only true or false when using an attached value.`, [`Use ${option}, ${option}=true, or ${option}=false.`], { option, expected: "boolean", actual: parsed.issue.actual });
+    }
     if (getBoolean(parsed.flags, "version")) {
       return success(requestId, { version: await packageVersion() });
     }
@@ -72,12 +114,22 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       ]);
     }
 
+    const allowedOptions = commandOptionNames(group, command);
+    if (allowedOptions) {
+      const unknownOption = Object.keys(parsed.flags).find((name) => !allowedOptions.has(name));
+      if (unknownOption) {
+        return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for ${[group, command].filter(Boolean).join(" ")}: --${unknownOption}.`, [
+          "Run unity_cli --help for the supported options.",
+        ], { option: `--${unknownOption}`, command: [group, command].filter(Boolean).join(" ") });
+      }
+    }
+
     ensureWindows();
 
     const cliModule = CLI_COMMANDS.get(group);
     const cliResult = await cliModule?.run({
       command,
-      args: parsed.positional.slice(2),
+      args: parsed.passthrough ?? parsed.positional.slice(2),
       flags: parsed.flags,
       runtime,
       requestId
@@ -88,8 +140,8 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     // Bridge registry 是内部能力路由，公开 Unity 能力统一从 tools run 进入。
     return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, [
-      "Top-level commands are: tools, context, extensions, init, target, instances, doctor.",
-      "Run unity_cli tools group to discover Unity tools, then unity_cli tools run <tool> --input <json>.",
+      "Top-level commands are: tools, command, extensions, init, target, instances, doctor.",
+      "Run unity_cli tools group or unity_cli command to discover Unity tools.",
       "Run unity_cli instances list, then pass --instance <id|projectPath|alias> or use a Unity project CWD.",
       "Run unity_cli --help."
     ]);
@@ -102,6 +154,26 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 }
 
 function createRuntime(dataDir = defaultDataDir()): Runtime { return { dataDir }; }
+
+/** 返回当前 route 可用的 option 集；undefined 表示顶层命令本身未知，应由 UNKNOWN_COMMAND 处理。 */
+function commandOptionNames(group: string | undefined, command: string | undefined): ReadonlySet<string> | undefined {
+  if (!group || !CLI_COMMANDS.has(group)) return undefined;
+  const global = ["help", "version", "raw"];
+  if (group === "tools") {
+    const common = [...global, "instance"];
+    if (command === "run") return new Set([...common, "input", "input-file", "stdin", "dry-run", "timeout-ms", "artifact-dir", "runtime"]);
+    return new Set(common);
+  }
+  if (group === "command") return new Set([...global, "instance", "timeout-ms", "artifact-dir", "dry-run", "runtime"]);
+  if (group === "extensions") {
+    const common = [...global, "project"];
+    return new Set(command === "install" || command === "remove" ? [...common, "timeout-ms"] : common);
+  }
+  if (group === "init") return new Set([...global, "project", "agent", "pkg-only", "skill-only", "check", "timeout-ms", "unity"]);
+  if (group === "target") return new Set([...global, "force"]);
+  if (group === "instances") return new Set(global);
+  return new Set([...global, "instance", "project"]);
+}
 
 /** 顶层 target 控制面只管理 canonical project identity alias。 */
 async function handleTopLevelTarget(
@@ -133,8 +205,7 @@ async function handleTopLevelInstances(
 
 /** 业务 Tool input 可拥有 target 字段，但控制面和 discovery 不得把 --target 当 instance selector。 */
 function usesLegacyTargetSelector(group: string, command: string | undefined): boolean {
-  return group === "context"
-    || group === "doctor"
+  return group === "doctor"
     || group === "instances"
     || group === "target"
     || (group === "tools" && command !== "run");
@@ -148,21 +219,18 @@ async function packageVersion(): Promise<string> {
 
 function help(): Record<string, unknown> {
   return {
-    usage: "unity_cli <command> [options]",
+    usage: "unity_cli [options] <command> [options]",
     commands: [
-      "tools group [--instance <id|projectPath|alias>] [--format json|text]",
-      "tools group list <group> [--instance <id|projectPath|alias>] [--format json|text]",
+      "tools group [--instance <id|projectPath|alias>]",
+      "tools group list <group> [--instance <id|projectPath|alias>]",
       "tools describe <tool> [--instance <id|projectPath|alias>]",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--artifact-dir <path>] [--runtime] [--instance <id|projectPath|alias>]",
-      "tools search <keyword> [--instance <id|projectPath|alias>] [--format json|text]",
-      "context list [--category <cat>] [--instance <id|projectPath|alias>] [--format json|text]",
-      "context search <keyword> [--category <cat>] [--instance <id|projectPath|alias>] [--format json|text]",
-      "context describe <name> [--instance <id|projectPath|alias>]",
-      "context read <name> [--input <json>] [--input-file <path>] [--instance <id|projectPath|alias>]",
-      "extensions list [--project <path>] [--format json|text]",
+      "tools search <keyword> [--instance <id|projectPath|alias>]",
+      "command [--project-path <path>] [<name> [--field <value>|<positional>...]]",
+      "extensions list [--project <path>]",
       "extensions install <id|name> [--project <path>]",
       "extensions remove <id|name> [--project <path>]",
-      "extensions doctor [--project <path>] [--format json|text]",
+      "extensions doctor [--project <path>]",
       "init [--project <path>] [--agent <pi|claude|.agents>]  # auto-installs Skill when .pi/.claude/.agents exists",
       "init --pkg-only [--project <path>]",
       "init --skill-only --agent <pi|claude|.agents,...> [--project <path>]",
@@ -177,7 +245,7 @@ function help(): Record<string, unknown> {
     options: [
       "--raw  Print the same JSON envelope as compact single-line JSON for pipes and scripts."
     ],
-    note: "Top-level commands are: tools, context, extensions, init, target, instances, doctor. Unity capabilities are exposed through `tools run <tool> --input <json>` and `context read <name>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>` or the nearest Unity project root from CWD. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Descriptor `examples[].argv` is a JSON token array. In PowerShell, wrap inline `--input` JSON in single quotes, or use `--input-file` for complex input."
+    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Descriptor `examples[].argv` is a JSON token array. In PowerShell, wrap inline JSON in single quotes."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {
@@ -230,9 +298,7 @@ function stripOutputOnlyFlags(argv: string[]): string[] {
       if (next === "true" || next === "false") index += 1;
       continue;
     }
-    if (token.startsWith("--raw=")) {
-      continue;
-    }
+    if (token === "--raw=true" || token === "--raw=false") continue;
     stripped.push(token);
   }
   return stripped;

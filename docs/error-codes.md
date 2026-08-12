@@ -24,9 +24,19 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 `error` 只允许上述协议字段；`details` 仅承载业务诊断，不公开内部日志、审计、endpoint、port、listener/process identity、native window handle 或 Windows command line。blocker 使用固定公开 DTO。
 
-普通 Tool 或 Context 在业务 effect 前确认阻断时返回 `E_UNITY_BLOCKED`，同一响应的 `details.blockers` 包含已清洗 blocker。session recovery 可在同一次调用内续接完全相同的请求；调用返回后 CLI 不会自行启动新调用，也不提供请求级重放门。超时或断连后统一返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；是否观察状态、重试、重复调用或继续 mutation 由调用方决定。
+普通 Tool 在业务 effect 前确认阻断时返回 `E_UNITY_BLOCKED`，同一响应的 `details.blockers` 包含已清洗 blocker。session recovery 可在同一次调用内续接完全相同的请求；调用返回后 CLI 不会自行启动新调用，也不提供请求级重放门。超时或断连后统一返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；是否观察状态、重试、重复调用或继续 mutation 由调用方决定。
 
 ## 错误分类
+
+### CLI 参数错误
+
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `UNKNOWN_COMMAND` | 顶层命令不在冻结的公开命令集合中 | 运行 `unity_cli --help` |
+| `E_UNKNOWN_OPTION` | option 未在 CLI arity 表中声明，或不属于当前命令 | 删除该 option 并查看 help |
+| `E_OPTION_VALUE_REQUIRED` | 带值 option 缺少值；命令 token 不会被当作值消费 | 传 `--option <value>` 或 `--option=<value>` |
+| `E_OPTION_VALUE_INVALID` | boolean option 的 attached value 不是 `true` 或 `false` | 使用 `--option`、`--option=true` 或 `--option=false` |
+| `E_OBSOLETE_OPTION` | option 已从当前公开语义删除 | 按 `nextActions` 删除旧 option |
 
 ### Project Identity / Instance 错误
 
@@ -54,10 +64,8 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
 | `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search` |
-| `E_CONTEXT_NOT_FOUND` | 名称不属于当前实例完整 Context 目录 | 重新运行 `context list` / `context search` |
 | `E_TOOL_REGISTRY_UNHEALTHY` | 当前实例 Tool catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
-| `E_CONTEXT_REGISTRY_UNHEALTHY` | 当前实例 Context catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
-| `E_SCHEMA_INVALID` | 输入不符合 schema | 查看对应 `tools describe` / `context describe` 的 inputSchema |
+| `E_SCHEMA_INVALID` | 输入不符合 schema | 查看对应 `tools describe` 的 inputSchema |
 
 ### 可选预览错误
 
@@ -79,6 +87,63 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_SCENE_AMBIGUOUS` | 场景资产名匹配多个 `.unity` 文件；改传精确 `Assets/*.unity` path |
 | `E_SCENE_VIEW_NOT_AVAILABLE` | Scene 视图不可用 |
 | `E_GAMEOBJECT_DELETE_FAILED` | GameObject 在同步删除后仍存在；按 `nextActions` 检查目标与 Unity Console |
+
+### Occlusion 错误
+
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_OCCLUSION_BAKE_ACTIVE` | 已存在原生或本CLI拥有的Occlusion bake | 读取`occlusion.bake-status`，等待或精确取消当前operation |
+| `E_OCCLUSION_SCENE_REQUIRED` | 没有loaded saved scene，或scene文件/GUID不可证明 | 保存并加载明确的目标scene后重试 |
+| `E_OCCLUSION_SCENE_DIRTY` | effect前目标scene已有未保存改动 | 先保存或丢弃该scene的既存改动 |
+| `E_OCCLUSION_SETTINGS_VALUE_INVALID` | bake setting不是有限正数，或backface threshold不在`[1,100]` | 按`tools describe occlusion.bake`修正输入 |
+| `E_OCCLUSION_TARGET_CHANGED` | frozen scene集合、GUID、文件或Umbra状态在dispatch前漂移 | 检查当前scene和status后提交全新请求 |
+| `E_OCCLUSION_OPERATION_MISMATCH` | cancel的operationId不是当前active Occlusion operation | 重新读取`occlusion.bake-status`，只对exact operation调用cancel |
+| `E_OCCLUSION_BAKE_CANCELLED` | exact queued Occlusion operation已到达cancelled terminal | 这是effect前已证明的取消终态，不应把原bake调用重试为同一effect；running operation因无native identity返回cancelled=false |
+
+### Project Settings 错误
+
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_PROJECT_SETTINGS_UNAVAILABLE` | 对应ProjectSettings asset不存在或Unity无法加载 | 检查目标项目和Unity版本后重试 |
+| `E_PROJECT_SETTINGS_VERSION_UNAVAILABLE` | 当前Unity版本、active build target或serialized字段surface未经过支持验证 | 使用descriptor声明的Unity版本；不要猜测字段fallback |
+| `E_PROJECT_SETTINGS_NO_FIELDS` | setter没有提供任何批准字段 | 按`tools describe project.*-settings.set`提供至少一个字段 |
+| `E_PROJECT_SETTINGS_INVALID` | 数值边界、分页、axis或Player enum输入非法 | 按错误中的精确字段约束修正输入 |
+| `E_PROJECT_SETTINGS_LIMIT_EXCEEDED` | legacy Input Manager超过4096个axis，无法在公开有界读取内安全扫描 | 减少Input Manager axis数量后重试 |
+| `E_PROJECT_INPUT_AXIS_NOT_FOUND` | 没有完全同名的legacy Input Manager axis | 先分页读取`project.input-settings`并传精确名称 |
+| `E_PROJECT_SETTINGS_TARGET_CHANGED` | 冻结的Input axis index/name在effect前漂移 | fresh读取Input设置后提交新请求 |
+| `E_PROJECT_SETTINGS_VERIFY_FAILED` | typed readback或ProjectSettings文件SHA未证明持久化终态 | 读取对应`project.*-settings`后再决定是否重试 |
+
+### Editor Utility 错误
+
+| 错误码 | 含义 | 建议 |
+|--------|------|------|
+| `E_EDITOR_AUTOTICK_UNAVAILABLE` | 当前Unity没有可调用的`EditorApplication.SignalTick` | 保持autotick disabled，使用支持该API的Editor |
+| `E_EDITOR_AUTOTICK_INTERVAL_INVALID` | `intervalMs`不在`0..60000` | 按`tools describe editor.autotick.set`修正输入 |
+| `E_EDITOR_FOCUS_UNAVAILABLE` | 当前平台不支持Win32 exact foreground proof | 在Windows Unity Editor执行 |
+| `E_EDITOR_FOCUS_WINDOW_NOT_FOUND` | selected Unity process没有visible top-level main window | 打开该实例主窗口后重试 |
+| `E_EDITOR_FOCUS_TARGET_CHANGED` | frozen HWND不再属于selected process | fresh读取`editor.state`后重试 |
+| `E_EDITOR_FOCUS_UNPROVEN` | frozen HWND未成为稳定native foreground window | 检查OS foreground限制和selected instance |
+| `E_EDITOR_SEARCH_QUERY_REQUIRED` | Unity Search query为空 | 提供非空query |
+| `E_EDITOR_SEARCH_QUERY_TOO_LONG` | query超过2048字符 | 缩短query |
+| `E_EDITOR_SEARCH_PAGE_INVALID` | offset不在`0..10000`或limit不在`1..200` | 使用bounded分页参数 |
+| `E_EDITOR_SEARCH_PROVIDER_INVALID` | providers不是1..16个unique exact ID | 使用descriptor与result返回的provider ID |
+| `E_EDITOR_SEARCH_PROVIDER_NOT_FOUND` | exact provider当前未active | 删除该ID或在Unity Search启用provider |
+| `E_EDITOR_SEARCH_FAILED` | Unity Search同步请求未产生有效页 | 检查query/provider后重试 |
+| `E_EDITOR_ELEMENT_CAPTURE_UNAVAILABLE` | 当前Unity早于6000.7，没有`CaptureToRenderTexture` | 使用Unity6000.7+实例 |
+| `E_EDITOR_ELEMENT_WINDOW_REQUIRED` | 没有提供window type/title | 提供exact EditorWindow type或title |
+| `E_EDITOR_ELEMENT_WINDOW_NOT_FOUND` | 没有attached EditorWindow匹配 | 打开对应Editor window后重试 |
+| `E_EDITOR_ELEMENT_SELECTOR_INVALID` | selector为空、过长或超过16段 | 使用bounded type/#id/.class链 |
+| `E_EDITOR_ELEMENT_NOT_FOUND` | frozen window中没有匹配元素 | 收紧或修正selector |
+| `E_EDITOR_ELEMENT_LIMIT_INVALID` | dimension或byte ceiling超出公开上限 | 使用1..4096尺寸与1024..33554432 bytes |
+| `E_EDITOR_ELEMENT_LIMIT_EXCEEDED` | window/element scan、resolved尺寸或PNG超过上限 | 缩小selector、元素或上限内的capture目标 |
+| `E_EDITOR_ELEMENT_TARGET_CHANGED` | element detach或尺寸在effect后漂移 | fresh解析window/selector后重试 |
+| `E_EDITOR_ELEMENT_CAPTURE_FAILED` | UI Toolkit render未产生有效texture | 检查元素attached/layout状态 |
+| `E_EDITOR_ELEMENT_ARTIFACT_UNAVAILABLE` | request artifact目录不可用 | 检查CLI临时目录权限 |
+| `E_EDITOR_ELEMENT_ARTIFACT_INVALID` | 落盘PNG与encoded size/hash proof不一致 | 检查磁盘后再决定是否重试 |
+| `E_TEST_RUN_NOT_ACTIVE` | 没有本CLI跟踪的active`test.run` | 先启动`test.run` |
+| `E_TEST_CANCEL_NOT_OWNED` | active Test Framework run不属于当前coordinator root | 不控制该run；等待其自然终态 |
+| `E_TEST_CANCEL_IDENTITY_UNPROVEN` | root/run GUID/native TestJobData无法唯一匹配 | 等待running identity或检查原`test.run` |
+| `E_TEST_RUN_CANCELLED` | exact tracked run已取消且GUID不再active | 这是原`test.run`的已证明取消终态，不应重放 |
 
 ### Package 错误
 
@@ -102,7 +167,6 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 |--------|------|
 | `E_UNITY_BLOCKED` | effect 前已证明 Unity/UI blocker；原错误的 `details.blockers` 含结构化弹窗摘要 |
 | `E_UNITY_TRANSITION_TIMEOUT` | 可恢复 lifecycle transition 未在 absolute deadline 内稳定 |
-| `E_CONTEXT_READ_TIMEOUT` | Context 未在同一 validated generation 上完成读取 |
 | `E_EXECUTION_TIMEOUT` | Tool 未在调用 deadline 内返回终态，或连接在终态前断开；调用返回后 CLI 不自行启动新调用，是否观察、重试、重复调用或继续 mutation 由调用方决定 |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
@@ -124,7 +188,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 - Instance 错误的 `nextActions` 必须指向 `instances list`、显式 `--instance`、项目路径或关闭重复 Editor
 - Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
 - Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search` 或 `tools describe`
-- 弹窗 blocker 的 `nextActions` 必须指向先 `context read editor.dialogs`，再 `tools run editor.dialog.click`；不得要求人工处理、预定义按钮列表、launch-only 入口或额外确认
+- 弹窗 blocker 的 `nextActions` 必须指向先 `tools run editor.dialogs`，再 `tools run editor.dialog.click`；不得要求人工处理、预定义按钮列表、launch-only 入口或额外确认
 - 诊断错误的 `nextActions` 必须指向 `doctor` 或 `tools run diagnose.preflight`
 
 ## JSON 字段命名

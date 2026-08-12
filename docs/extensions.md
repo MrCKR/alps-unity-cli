@@ -4,7 +4,7 @@
 
 ## 当前状态：已实现
 
-扩展包系统已完成，包括 Bridge 包安装、项目工具发现、内部完整性校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前准源是 package-local `defineTool` registry、连接实例中的 typed Tool/Context registry 与目录扩展包 `extensions/<id>/`；公开 discovery 只返回选定实例合并后的完整目录。
+扩展包系统已完成，包括 Bridge 包安装、项目工具发现、内部完整性校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前准源是 package-local `defineTool` registry、连接实例中的 typed Tool registry 与目录扩展包 `extensions/<id>/`；公开 discovery 只返回选定实例合并后的完整目录。
 
 ## 当前扩展能力
 
@@ -30,14 +30,13 @@ unity_cli init --check --project C:\path\MyProject
 
 ### 项目能力发现
 
-Bridge 包安装并连接 Unity Editor 后，项目可以通过 `IUnityCliTool<TReq,TRes>` 和 `IUnityCliContext<TReq,TRes>` 注册能力。它们自动进入该实例的完整目录，与 package 内置和 Extension 能力使用相同入口：
+Bridge 包安装并连接 Unity Editor 后，项目可以通过 `IUnityCliTool<TReq,TRes>` 注册能力。它们自动进入该实例的完整目录，与 package 内置和 Extension 能力使用相同入口：
 
 ```powershell
 unity_cli tools group
 unity_cli tools group list <group>
 unity_cli tools describe my.custom-tool
 unity_cli tools run my.custom-tool --input '{}'
-unity_cli context list
 ```
 
 分组名称来自实际 discovery 输出，不假设项目能力位于 `custom` 分组。
@@ -84,8 +83,8 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 | 组件 | 说明 |
 |------|------|
 | Manifest | 扩展元数据（名称、版本、依赖） |
-| Descriptor | 工具/Context 的 descriptor 与派生 JSON Schema |
-| C# Bridge 实现 | `unitypkg/Editor` 下的 `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 实现，安装后位于 `Packages/com.unity_cli/Extensions/<id>/Editor` |
+| Descriptor | Tool descriptor 与派生 JSON Schema |
+| C# Bridge 实现 | `unitypkg/Editor` 下的 `IUnityCliTool<TReq,TRes>` 实现，安装后位于 `Packages/com.unity_cli/Extensions/<id>/Editor` |
 | 测试 | 单元测试和集成测试 |
 | 文档片段 | 扩展使用说明 |
 

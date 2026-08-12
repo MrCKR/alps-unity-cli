@@ -38,12 +38,6 @@ export interface ExtensionToolContribution {
   requiresPackages?: string[];
 }
 
-/** Extension Context 的离线 ownership 标识；完整 descriptor 仅来自 live Bridge。 */
-export interface ExtensionContextContribution {
-  /** Context key, e.g. "probuilder.scene". */
-  key: string;
-}
-
 /** A C# implementation entry contributed by an extension. */
 export interface ExtensionCSharpEntry {
   /** Fully-qualified C# type name, e.g. "UnityCli.ProBuilderCommands". */
@@ -58,8 +52,6 @@ export interface ExtensionCSharpEntry {
 export interface ExtensionContributions {
   /** Tool descriptors contributed by this extension. */
   tools?: ExtensionToolContribution[];
-  /** Context descriptors contributed by this extension. */
-  contexts?: ExtensionContextContribution[];
   /** C# implementation entry points. */
   csharpEntries?: ExtensionCSharpEntry[];
 }
@@ -136,8 +128,6 @@ export interface LoadedExtensionDescriptor {
   availability: ExtensionAvailabilityResult;
   /** Tool descriptors contributed by this extension. */
   tools: ExtensionToolContribution[];
-  /** Context descriptors contributed by this extension. */
-  contexts: ExtensionContextContribution[];
   /** C# implementation entries. */
   csharpEntries: ExtensionCSharpEntry[];
 }

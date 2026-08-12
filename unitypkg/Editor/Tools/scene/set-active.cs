@@ -69,7 +69,7 @@ namespace UnityCli
                     });
                 }
             }
-            throw new UnityCliBridge.BridgeCommandException("E_SCENE_NOT_OPEN", "Scene is not currently open: " + path, "Run context read scene.opened, then scene.load if needed.");
+            throw new UnityCliBridge.BridgeCommandException("E_SCENE_NOT_OPEN", "Scene is not currently open: " + path, "Run tools run scene.list-opened, then scene.load if needed.");
         }
     }
 }

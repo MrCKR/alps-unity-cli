@@ -1,12 +1,12 @@
 ---
 name: unity-cli-extension
-description: unity_cli Extension 的目录结构、manifest、Unity package 依赖、Bridge descriptor、安装投影、availability 与同步更新硬规范。新增、修改、删除任何 extensions/<id> 内容或扩展贡献的 Tool/Context 时必须先完整读取；同时必须加载 unity-cli-capability。
+description: unity_cli Extension 的目录结构、manifest、Unity package 依赖、Bridge descriptor、安装投影、availability 与同步更新硬规范。新增、修改、删除任何 extensions/<id> 内容或扩展贡献的 Tool 时必须先完整读取；同时必须加载 unity-cli-capability。
 compatibility: 适用于 alps-unity-cli 仓库的 extensions 目录和 Unity 安装投影。
 ---
 
 # Unity CLI Extension
 
-修改任何 Extension 前，先完整读取 `../unity-cli-capability/SKILL.md`。Extension 贡献的 Tool / Context 仍受所有能力、PlayMode、descriptor、安全与输出规则约束。
+修改任何Extension前，先完整读取`../unity-cli-capability/SKILL.md`。Extension贡献的Tool仍受所有能力、PlayMode、descriptor、安全与输出规则约束。
 
 ## 标准结构
 
@@ -30,7 +30,7 @@ Packages/com.unity_cli/Extensions/<id>/
 
 ## Manifest 与依赖
 
-- manifest 必须声明 Unity package 依赖、tools、contexts 和 csharpEntries。
+- manifest必须声明Unity package依赖、tools和csharpEntries；不得出现contexts贡献。
 - 必须通过 `unityInstall.include` 声明需要投影的 `unitypkg` 与 docs 文件。
 - Core 不得对可选 Unity package 建立编译期依赖。
 - 扩展可用性必须根据目标项目实际安装的 Unity package 判断。

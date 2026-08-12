@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unity-cli.local/schemas/extension-descriptor.schema.json",
   "title": "Unity CLI Extension Descriptor",
-  "description": "Describes an optional capability pack (extension) for the Unity CLI. Extensions depend on optional Unity packages and provide additional tools, contexts, or both. Baseline schema for this descriptor type.",
+  "description": "Describes an optional capability pack (extension) for the Unity CLI. Extensions depend on optional Unity packages and provide additional tools.",
   "type": "object",
   "required": ["id", "title", "description", "kind", "source", "status", "installMode"],
   "properties": {
@@ -45,11 +45,6 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Tools provided by this extension (dotted names)."
-    },
-    "providesContexts": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Contexts provided by this extension (dotted names)."
     },
     "requiresUnityPackages": {
       "type": "array",

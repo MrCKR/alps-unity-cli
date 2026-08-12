@@ -35,15 +35,12 @@ test("Bridge fallback errors do not expose exception text or depend on internal 
   assert.match(http, /"Unhandled Bridge error\."/);
 });
 
-test("typed Tool and Context schemas use the shared serializer value tree", async () => {
-  const [tools, contexts, schema] = await Promise.all([
+test("typed Tool schemas use the shared serializer value tree", async () => {
+  const [tools, schema] = await Promise.all([
     readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8"),
-    readFile(new URL("../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8"),
     readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolSchemaValidator.cs", import.meta.url), "utf8"),
   ]);
   assert.match(tools, /UnityCliSerializer\.Parse\(definition\.InputSchema\)/);
   assert.match(tools, /UnityCliSerializer\.Parse\(definition\.OutputSchema\)/);
-  assert.match(contexts, /UnityCliSerializer\.Parse\(definition\.InputSchema\)/);
-  assert.match(contexts, /UnityCliSerializer\.Parse\(definition\.OutputSchema\)/);
   assert.match(schema, /UnityCliSerializer\.(?:Deserialize|Parse)/);
 });

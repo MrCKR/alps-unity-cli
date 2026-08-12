@@ -59,7 +59,7 @@ namespace UnityCli
             var component = GameObjectToolSupport.ResolveComponent(gameObject, componentName, request.ComponentIndex);
             if (component == null)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli tools run component.get or context read scene.gameobject.components to list components.");
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli tools run component.get or tools run scene.gameobject.components to list components.");
             }
 
             if (string.IsNullOrEmpty(request.Property) && (request.Properties == null || request.Properties.Count == 0))

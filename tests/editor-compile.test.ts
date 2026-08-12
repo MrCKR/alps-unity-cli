@@ -13,6 +13,7 @@ import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity
 
 const tool = findDefineTool("editor.compile");
 if (!tool) throw new Error("editor.compile definition is unavailable");
+const mockRootRequestDigest = "d".repeat(64);
 const blocker = { type: "dialog" as const, dialogId: "dialog_compile", title: "Third Party Dialog", message: "Third Party Dialog", buttons: ["OK"], requiresUserAction: true as const, source: "windows-ui" as const, confidence: "exact" as const };
 
 async function fixture(playMode: "edit" | "play" = "edit") {
@@ -73,8 +74,8 @@ function context(project: string, dataDir: string, bridgeExecute?: ToolContext["
   return {
     requestId: "req_compile_behavior",
     projectPath: project,
-    absoluteDeadlineMs: Date.now() + 5_000,
-    execution: { timeoutMs: 5_000, ...overrides },
+    absoluteDeadlineMs: Date.now() + 15_000,
+    execution: { timeoutMs: 15_000, ...overrides },
     dataDir,
     artifactDir: dataDir,
     flags: { instance: project },
@@ -124,7 +125,7 @@ test("editor.compile consumes private acknowledgement and returns only the root 
   const bridgeExecute = async (payload: BridgeRequest): Promise<BridgeResponse> => {
     payloads.push(payload);
     if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
-    if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, phase: "queued", runId: "private-id" } };
+    if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, phase: "queued", runId: "private-id", rootRequestDigest: mockRootRequestDigest } };
     if (payload.command === "internal.editor.compile.status") {
       statusReads += 1;
       return statusReads === 1
@@ -181,7 +182,7 @@ test("editor.compile rejects malformed or transitioning success proof", async ()
     try {
       await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
         if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
-        if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true } };
+        if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestDigest: mockRootRequestDigest } };
         return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: { ok: true, requestId: "req_compile_behavior", data } } };
       })), (error: unknown) => error instanceof StructuredToolError && error.code === "E_TOOL_COMPLETION_PROOF_INVALID", entry.name);
     } finally {
@@ -229,8 +230,8 @@ test("editor.compile classifies lost status transport as execution timeout", asy
   try {
     await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
       if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
-      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true } };
-      return { ok: false, requestId: payload.requestId, error: { code: "E_CONTEXT_READ_TIMEOUT", message: "status read expired", nextActions: [], transient: false, retryAfterMs: 0 } };
+      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestDigest: mockRootRequestDigest } };
+      return { ok: false, requestId: payload.requestId, error: { code: "E_EXECUTION_TIMEOUT", message: "status read expired", nextActions: [], transient: false, retryAfterMs: 0 } };
     })), (error: unknown) => error instanceof StructuredToolError && error.code === "E_EXECUTION_TIMEOUT" && error.transient === false && error.retryAfterMs === 0);
   } finally {
     await rm(f.root, { recursive: true, force: true });
@@ -242,7 +243,7 @@ test("editor.compile converts a status blocker after acceptance to execution tim
   try {
     await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
       if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
-      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true } };
+      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestDigest: mockRootRequestDigest } };
       return { ok: false, requestId: payload.requestId, error: { code: "E_UNITY_BLOCKED", message: "blocked", nextActions: [], transient: false, retryAfterMs: 0, details: { blockers: [blocker] } } };
     })), (error: unknown) => {
       assert.ok(error instanceof StructuredToolError);
@@ -261,7 +262,7 @@ test("editor.compile rejects private operation fields in root error details", as
   try {
     await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
       if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
-      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true } };
+      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestDigest: mockRootRequestDigest } };
       return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: { ok: false, requestId: "req_compile_behavior", error: { code: "E_EXECUTION_TIMEOUT", message: "unknown", nextActions: [], transient: false, retryAfterMs: 0, details: { phase: "compiling", listenerId: "private" } } } } };
     })), (error: unknown) => error instanceof StructuredToolError && error.code === "E_TOOL_COMPLETION_PROOF_INVALID" && !String(JSON.stringify(error.details)).includes("private"));
   } finally {
@@ -274,7 +275,7 @@ test("editor.compile rejects private paths in root error text", async () => {
   try {
     await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
       if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
-      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true } };
+      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestDigest: mockRootRequestDigest } };
       return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: { ok: false, requestId: "req_compile_behavior", error: { code: "E_EXECUTION_TIMEOUT", message: "Failed at C:\\Users\\builder\\journal.json", nextActions: [], transient: false, retryAfterMs: 0 } } } };
     })), (error: unknown) => error instanceof StructuredToolError && error.code === "E_TOOL_COMPLETION_PROOF_INVALID");
   } finally {
@@ -303,7 +304,7 @@ test("editor.compile preserves the attributed root compiler error", async () => 
   try {
     await assert.rejects(async () => await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
       if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
-      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true } };
+      if (payload.command === "internal.editor.compile.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, rootRequestDigest: mockRootRequestDigest } };
       return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: compileError } };
     })), (error: unknown) => {
       assert.ok(error instanceof StructuredToolError);

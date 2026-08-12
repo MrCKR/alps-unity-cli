@@ -7,6 +7,8 @@ export const assetBridgeSpecs: BridgeCommandSpec[] = [
   { group: "asset", command: "create", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs, destructiveHint: true },
   { group: "asset", command: "mkdir", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs, destructiveHint: true },
   { group: "asset", command: "import", bridgeCommand: "project-tool.run", toolName: "asset.import", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "asset", command: "import-settings", bridgeCommand: "project-tool.run", toolName: "asset.import-settings", buildArgs: assetQueryArgs },
+  { group: "asset", command: "import-settings-set", bridgeCommand: "project-tool.run", toolName: "asset.import-settings.set", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
   { group: "asset", command: "modify", bridgeCommand: "project-tool.run", toolName: "asset.modify", buildArgs: assetMutationArgs, destructiveHint: true },
   { group: "asset", command: "delete", bridgeCommand: "project-tool.run", toolName: "asset.delete", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
   { group: "asset", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "asset.duplicate", buildArgs: assetMutationArgs, destructiveHint: true },

@@ -8,7 +8,7 @@ import type { ToolMetadata, PlayModeSupport, ToolHandler } from "./metadata/type
 
 // ─── 工具定义输入(defineTool 接收的形态)────────────────────────────────
 
-/** defineTool 的输入。schema 不在此处(构建期从 Request/Result 类型生成注入)。 */
+/** defineTool 的输入。schema 不在此处，由构建期从 Request/Result 类型生成注入。 */
 export interface ToolDefinition<TReq = unknown, TRes = unknown> {
   name: string;
   summary: string;
@@ -27,7 +27,7 @@ export interface ToolDefinition<TReq = unknown, TRes = unknown> {
   target?: string;
   requiresPackages?: string[];
   examples?: import("./metadata/types.js").ToolExample[];
-  /** handler。结构体进结构体出。报错抛 Error(框架转结构化错误)。 */
+  /** bridge-runtime 定义仍提供 fail-closed guard；dispatcher 按 handler 选择唯一 Bridge executor。 */
   execute: (req: TReq, ctx: ToolContext) => Promise<TRes> | TRes;
 }
 
@@ -56,8 +56,6 @@ export interface ToolContext {
   flags?: Record<string, string | boolean>;
   /** 测试或宿主注入的实例 Tool descriptor。 */
   projectTools?: ToolMetadata[];
-  /** 运行时已发现的项目自定义 Context,供 diagnose.capabilities 保持统一 discovery 语义。 */
-  projectContexts?: unknown[];
   /** 可选 live Bridge 执行器，仅供 defineTool 的隔离测试 transport。 */
   bridgeExecute?: BridgeRuntime["bridgeExecute"];
   /** 测试或宿主注入的文档抓取器,用于 docs online fallback,避免工具内部直接绑定全局网络。 */

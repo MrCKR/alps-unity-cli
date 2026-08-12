@@ -40,8 +40,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "reflection.method.call",
-            Summary = "Call one synchronous C# method in the live Editor and prove declared state through a read-only Context.",
-            Description = "Resolve the exact type, overload, arguments, and optional instance before invoking one synchronous method. completionProbe is mandatory and proves declared before/after state through an eligible read-only Context in the same Editor turn. Task/ValueTask, iterator, yield, and AsyncOperation methods are rejected; a method return value is never accepted as completion proof.",
+            Summary = "Call one synchronous C# method in the live Editor and prove declared state through a read Tool.",
+            Description = "Resolve the exact type, overload, arguments, and optional instance before invoking one synchronous method. completionProbe is mandatory and proves declared before/after state through an eligible read Tool in the same Editor turn. Task/ValueTask, iterator, yield, and AsyncOperation methods are rejected; a method return value is never accepted as completion proof.",
             Group = "reflection",
             DestructiveHint = true,
             SideEffects = new[] { "arbitrary-method-invocation" },
@@ -60,7 +60,7 @@ namespace UnityCli
                         TypeName = "UnityEngine.Mathf", MethodName = "Abs", Args = new object[] { -2.5f }, ParameterTypes = new List<string> { "System.Single" },
                         CompletionProbe = new UnityCliCompletionProbe
                         {
-                            Context = "scene.gameobject", Input = new Dictionary<string, object> { { "target", "Main Camera" } },
+                            ReadTool = "scene.gameobject", Input = new Dictionary<string, object> { { "target", "Main Camera" } },
                             Assertions = new List<UnityCliCompletionAssertion>
                             {
                                 new UnityCliCompletionAssertion { Path = "/gameObject/transform/position/x", Operator = "approx", Before = 0.0, After = 1.0, Tolerance = 0.0001 }

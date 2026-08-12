@@ -59,7 +59,7 @@ namespace UnityCli
             var destScenePath = request.Scene;
             if (string.IsNullOrEmpty(destScenePath))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_SCENE_DESTINATION_REQUIRED", "scene.move-object requires --scene (destination scene path).", "Run context read scene.opened to list loaded scenes.");
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_DESTINATION_REQUIRED", "scene.move-object requires --scene (destination scene path).", "Run tools run scene.list-opened to list loaded scenes.");
             }
             GameObject go = null;
             if (instanceId.HasValue && instanceId.Value != 0)
@@ -77,7 +77,7 @@ namespace UnityCli
             var destScene = SceneManager.GetSceneByPath(destScenePath);
             if (!destScene.IsValid() || !destScene.isLoaded)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_SCENE_NOT_OPEN", "Destination scene is not loaded: " + destScenePath, "Load the destination scene first via scene.load, or run context read scene.opened.");
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_NOT_OPEN", "Destination scene is not loaded: " + destScenePath, "Load the destination scene first via scene.load, or run tools run scene.list-opened.");
             }
             if (go.scene == destScene)
             {

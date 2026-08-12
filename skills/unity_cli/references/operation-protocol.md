@@ -4,9 +4,9 @@
 
 ## 实例与目录
 
-`--instance <full-id|canonical-project-path|alias>` 是唯一显式实例选择器。显式空值必须失败；业务 `input.instance` 不是 selector。未传 selector 时只从当前 Unity 项目 CWD 解析；无法确定实例即稳定失败，`--project` 和 Tool input 都不能选实例。
+`--instance <full-id|canonical-project-path|alias>`是通用显式实例选择器；`command --project-path <path>`是同一canonical identity选择语法。显式空值必须失败；业务`input.instance`不是selector。未传selector时只从当前Unity项目CWD解析；无法确定实例即稳定失败，`--project`和Tool input都不能选实例。
 
-`target alias` 只维护 canonical project identity alias。`source` 只供说明和审计，不影响显示、describe、owner 路由或执行。连接实例的 Tool/Context 目录是权威目录；离线静态 catalog 不能替代它。
+`target alias` 只维护 canonical project identity alias。`source` 只供说明和审计，不影响显示、describe、owner 路由或执行。连接实例的 Tool 目录是权威目录；离线静态 catalog 不能替代它。
 
 ## Descriptor
 
@@ -20,7 +20,7 @@ Tool descriptor 常用字段：
 - `requiresPackages`：所需 Unity Package 或 Extension。
 - `examples[].argv`：JSON token array；可按当前 schema 调整，不要把它当字符串命令。
 
-Context descriptor 必须声明只读边界、schema、target、availability 和 PlayMode 语义。Context 不得触发 import、compile、domain reload、PlayMode 变化或文件写入。
+读取型Tool descriptor必须声明纯只读边界、schema、target、availability和PlayMode语义，不得触发import、compile、domain reload、PlayMode变化或文件写入。`command`只按同一`inputSchema`构造typed input，不改变descriptor语义。
 
 ## JSON envelope
 
@@ -57,9 +57,9 @@ compile、import、domain reload 和 listener restart 由 session supervisor 在
 
 ## 弹窗与长操作
 
-原错误包含 `details.blockers` 时，先 `context read editor.dialogs`。点击前使用当前返回的 dialogId 和规范化 button label；只能选择当前可见且 enabled 的按钮。点击后必须证明弹窗消失或状态改变。
+原错误包含 `details.blockers` 时，先 `tools run editor.dialogs`。点击前使用当前返回的 dialogId 和规范化 button label；只能选择当前可见且 enabled 的按钮。点击后必须证明弹窗消失或状态改变。
 
-`build.run`、`test.run`、`editor.refresh`、`code.exec` 和需要刷新 Editor 的 Package Tool 在一次调用内等待最终业务结果。超时只表示该次调用没有可信终态，后续动作由调用方决定。
+`build.run`、`test.run`、`editor.refresh`、`code.exec` 和需要刷新 Editor 的 Package Tool 在一次调用内等待最终业务结果。超时只表示该次调用没有可信终态，后续动作由调用方决定。`code.exec`的同步C#一旦在Unity主线程开始，timeout不能中止它；死循环、阻塞等待或长期Unity API调用可继续占用Editor。调用方应先判断这类代码是否确有必要；决定执行后应把timeout视为outcome unknown并在重试前观察业务状态。
 
 ## 扩展与安装
 

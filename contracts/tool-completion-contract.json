@@ -166,6 +166,33 @@
       ]
     },
     {
+      "toolName": "animator.crossfade",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/animation/animator/crossfade.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "observed-state",
+      "completionPredicate": {
+        "kind": "animator-state-transition-readback",
+        "description": "fresh current/next state, transition and normalized-time readback matches the requested state and layer."
+      },
+      "proofSource": {
+        "kind": "fresh-request-specific-readback",
+        "description": "fresh current/next state, transition and normalized-time readback matches the requested state and layer."
+      },
+      "reloadPolicy": {
+        "kind": "same-turn-no-replay",
+        "description": "effect_started 后只以同一 session 的 fresh identity readback 证明；无法证明绝不重放。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "animator.get-info",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/animation/animator/get-info.cs",
@@ -209,33 +236,6 @@
       "reloadPolicy": {
         "kind": "caller-responsibility",
         "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
-      },
-      "timeoutError": "E_EXECUTION_TIMEOUT",
-      "outcomeUnknownPolicy": {
-        "kind": "caller-responsibility",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
-      },
-      "asyncSignals": [
-        "value-task"
-      ]
-    },
-    {
-      "toolName": "animator.crossfade",
-      "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/animator/crossfade.cs",
-      "deliveryMode": "direct-terminal",
-      "executionClass": "observed-state",
-      "completionPredicate": {
-        "kind": "animator-state-transition-readback",
-        "description": "fresh current/next state, transition and normalized-time readback matches the requested state and layer."
-      },
-      "proofSource": {
-        "kind": "fresh-request-specific-readback",
-        "description": "fresh current/next state, transition and normalized-time readback matches the requested state and layer."
-      },
-      "reloadPolicy": {
-        "kind": "same-turn-no-replay",
-        "description": "effect_started 后只以同一 session 的 fresh identity readback 证明；无法证明绝不重放。"
       },
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
@@ -484,6 +484,60 @@
       "outcomeUnknownPolicy": {
         "kind": "external-proof-or-unknown",
         "description": "外部 operation 已开始但无法取得 terminal proof 时返回 E_EXECUTION_TIMEOUT，调用方负责检查业务状态并决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "asset.import-settings",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/asset/import-settings.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "asset.import-settings 返回当前 importer、GUID、Unity version、默认设置和指定平台 override 的 typed snapshot。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "AssetImporter.GetAtPath、AssetDatabase GUID 与只读设置投影；执行路径不调用 refresh、import 或写入 API。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "纯读取不跨 effect barrier；session 变化时调用方重新读取当前 importer snapshot。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取未返回完整 snapshot 时不产生业务效果，调用方可在当前稳定 session 重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "asset.import-settings.set",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/asset/import-settings/set.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "全部 setting 在 effect 前冻结；SaveAndReimport 后 GUID、importer type 与每个 expected member 均从 fresh importer 验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "同步 SaveAndReimport terminal、fresh AssetImporter.GetAtPath、稳定 GUID 与逐 setting expected value readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "reload-risk importer 在 effect 前拒绝；其他 importer 若 effect 后失去 terminal response 则不重放，调用方先读取当前设置。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后 reimport 或 proof 未完成时返回 E_EXECUTION_TIMEOUT；调用方必须读取 asset.import-settings 后再决定后续写入。"
       },
       "asyncSignals": [
         "value-task"
@@ -2328,6 +2382,33 @@
       "asyncSignals": []
     },
     {
+      "toolName": "editor.active-tool",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/active-tool.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.active-tool 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "editor.active-tool 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "editor.active-tool.set",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/editor/active-tool/set.cs",
@@ -2349,6 +2430,33 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "editor.autotick.set",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/autotick/set.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.autotick.set返回current editor session中央scheduler的exact enabled/interval状态。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "单次effect barrier后的UnityCliWaitScheduler session state与forcedTickCount readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "autotick状态在domain reload和process restart时按设计失效；调用方可在新session重新设置。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect后未收到terminal response时读取editor.state并在current session重新调用所需状态。"
       },
       "asyncSignals": [
         "value-task"
@@ -2439,6 +2547,62 @@
       ]
     },
     {
+      "toolName": "editor.dialogs",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/editor/dialogs.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.dialogs 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "editor.dialogs 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "promise"
+      ]
+    },
+    {
+      "toolName": "editor.focus",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/focus.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "冻结的Unity process/HWND连续两帧成为Win32 exact foreground window。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "GetForegroundWindow exact HWND、PID ownership与minimized状态fresh readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "window focus不跨reload续接；session变化后重新解析selected instance window。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "foreground proof失败时返回稳定错误，调用方读取editor.state后决定是否重试。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "async",
+        "await"
+      ]
+    },
+    {
       "toolName": "editor.menu",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/editor/menu.cs",
@@ -2460,6 +2624,33 @@
       "outcomeUnknownPolicy": {
         "kind": "external-proof-or-unknown",
         "description": "外部 operation 已开始但无法取得 terminal proof 时返回 E_EXECUTION_TIMEOUT，调用方负责检查业务状态并决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "editor.menu-items",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/menu-items.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.menu-items 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "editor.menu-items 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
       },
       "asyncSignals": [
         "value-task"
@@ -2527,7 +2718,7 @@
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "completion-probe-after-state",
-        "description": "一次 Redo 后全部声明 after 断言由同回合 fresh Context readback 满足。"
+        "description": "一次 Redo 后全部声明 after 断言由同回合 fresh read Tool observation 满足。"
       },
       "proofSource": {
         "kind": "eligible-context-fresh-readback",
@@ -2603,6 +2794,60 @@
       ]
     },
     {
+      "toolName": "editor.search",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/search.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "Unity Search同步context返回requested bounded page与provider metadata。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "SearchService active provider与offset+limit+1 bounded enumeration。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读Search不跨reload；Editor稳定后可重新查询。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取失败无业务effect，可用相同分页参数重新查询。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "editor.selection",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/selection.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.selection 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "editor.selection 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "editor.selection.set",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/editor/selection/set.cs",
@@ -2627,6 +2872,33 @@
       },
       "asyncSignals": [
         "value-task"
+      ]
+    },
+    {
+      "toolName": "editor.state",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/editor/state.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.state 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "editor.state 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "promise"
       ]
     },
     {
@@ -2657,6 +2929,33 @@
       ]
     },
     {
+      "toolName": "editor.tool-states",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/tool-states.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.tool-states 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "editor.tool-states 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "editor.undo",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/editor/undo.cs",
@@ -2664,7 +2963,7 @@
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "completion-probe-after-state",
-        "description": "一次 Undo 后全部声明 after 断言由同回合 fresh Context readback 满足。"
+        "description": "一次 Undo 后全部声明 after 断言由同回合 fresh read Tool observation 满足。"
       },
       "proofSource": {
         "kind": "eligible-context-fresh-readback",
@@ -2678,6 +2977,33 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "editor.windows",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/windows.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.windows 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "editor.windows 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
       },
       "asyncSignals": [
         "value-task"
@@ -2718,20 +3044,20 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "go.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "全部请求对象在一个 effect boundary 后按冻结顺序存在，count/instance id/name/parent 与请求 transform/tag/layer/active 一致。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "go.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "冻结的 ordered item plan、唯一 instance id 集合、EditorUtility fresh object readback 与完整 typed GameObjectDetail collection。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
-        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+        "description": "go.create 不跨 reload 重放；terminal 丢失时调用方通过 scene.hierarchy 或 go.find 检查请求名称集合。"
       },
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+        "description": "effect 后无法证明完整 created set 时返回 E_EXECUTION_TIMEOUT；调用方检查全部请求名称/parent 后再决定。"
       },
       "asyncSignals": [
         "value-task"
@@ -3846,6 +4172,33 @@
       ]
     },
     {
+      "toolName": "instances.list",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/instances/list.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "instances.list 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "instances.list 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "material.assign",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/material/assign.cs",
@@ -3981,6 +4334,197 @@
       ]
     },
     {
+      "toolName": "navmesh.bake",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/navmesh/bake.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "resumable",
+      "completionPredicate": {
+        "kind": "durable-operation-terminal",
+        "description": "navmesh.bake 的 session-scoped durable root 已到达 terminal，并返回 fresh NavMesh topology。"
+      },
+      "proofSource": {
+        "kind": "journal-continuation-and-terminal-proof",
+        "description": "navmesh.bake 的 active operation、native isRunning terminal 与 fresh triangulation readback。"
+      },
+      "reloadPolicy": {
+        "kind": "durable-same-session-resume",
+        "description": "同一 Editor process 的 domain reload 从固定 active journal 恢复；dispatch 不明确时不重放 effect。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "durable-proof-or-unknown",
+        "description": "deadline、session replacement 或 reload 后 dispatch proof 不足时返回 E_EXECUTION_TIMEOUT，并要求读取 navmesh.bake-status。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "async-unity-operation"
+      ]
+    },
+    {
+      "toolName": "navmesh.bake-cancel",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/navmesh/bake-cancel.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "navmesh.bake-cancel 仅在 frozen operationId 达到 cancelled terminal 后返回 cancelled=true。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "cancel private control 与同一 session status snapshot 的 operationId/state readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "取消调用不重放；transition 或 timeout 后调用方读取 navmesh.bake-status。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "取消结果无法确认时返回 E_EXECUTION_TIMEOUT；新的 operation 不会被误取消。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "navmesh.bake-clear",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/navmesh/bake-clear.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "navmesh.bake-clear 返回前 fresh triangulation 的 vertex/index count 必须同时为零。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "effect 前后 NavMesh.CalculateTriangulation typed topology/hash readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该 Tool 不触发 reload；终态不明时调用方重新读取 NavMesh topology/status。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后无法证明空 topology 时返回 E_EXECUTION_TIMEOUT。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "navmesh.bake-status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/navmesh/bake-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "navmesh.bake-status 返回当前 session 的 bounded status 与 fresh topology snapshot。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "固定 session-scoped status file、active root 与 fresh triangulation readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读调用不触发 reload；Editor process restart 后旧 mechanism state 自动失效。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取失败不改变业务状态；Editor ready 后可提交新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "navmesh.settings",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/navmesh/settings.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "navmesh.settings 来自 default agent 的 fresh NavMeshProjectSettings SerializedObject 与 NavMeshAreas.asset hash。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "required serialized properties 与 ProjectSettings/NavMeshAreas.asset SHA-256/size typed readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读调用不触发 import、save 或 reload。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取失败不改变 ProjectSettings；调用方可在 Editor ready 后重读。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "navmesh.settings.set",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/navmesh/settings/set.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "navmesh.settings.set 返回前必须证明全部 requested fields 与 NavMeshAreas.asset persistence。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "one barrier 后 fresh NavMeshProjectSettings exact-value 与 NavMeshAreas.asset hash/size readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该 Tool 不触发 reload；effect 后 proof failure 由调用方使用 navmesh.settings 检查。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后无法证明 requested values 时返回 E_EXECUTION_TIMEOUT。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "navmesh.surface.bake",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/navmesh/surface-bake.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "resumable",
+      "completionPredicate": {
+        "kind": "durable-operation-terminal",
+        "description": "navmesh.surface.bake 的 durable root 已 terminal，且每个 frozen surface 都有 fresh data asset identity/hash。"
+      },
+      "proofSource": {
+        "kind": "journal-continuation-and-terminal-proof",
+        "description": "NavMeshAssetManager operations、surface GlobalObjectId 与 generated .asset GUID/localId/hash readback。"
+      },
+      "reloadPolicy": {
+        "kind": "durable-same-session-resume",
+        "description": "同一 Editor process 跨 reload 保留 root；package operation attribution丢失时 fail unknown，不重放 surface bake。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "durable-proof-or-unknown",
+        "description": "不能证明 exact surface terminal 时返回 E_EXECUTION_TIMEOUT，并要求检查 assets/scenes/status。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "async-unity-operation"
+      ]
+    },
+    {
       "toolName": "object.get-data",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/object/get-data.cs",
@@ -4029,6 +4573,115 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "occlusion.bake",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/occlusion/bake.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "resumable",
+      "completionPredicate": {
+        "kind": "durable-operation-terminal",
+        "description": "occlusion.bake的session-scoped durable root已到达terminal，并返回fresh Umbra与scene persistence proof。"
+      },
+      "proofSource": {
+        "kind": "journal-continuation-and-terminal-proof",
+        "description": "Occlusion active operation、StaticOcclusionCulling.isRunning terminal、effective settings与scene file readback。"
+      },
+      "reloadPolicy": {
+        "kind": "durable-same-session-resume",
+        "description": "同一Editor process的domain reload从固定active root恢复；dispatch证据不足时不重放effect。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "durable-proof-or-unknown",
+        "description": "deadline、session replacement或reload后dispatch proof不足时返回E_EXECUTION_TIMEOUT，并要求读取occlusion.bake-status。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "async-unity-operation"
+      ]
+    },
+    {
+      "toolName": "occlusion.bake-cancel",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/occlusion/bake-cancel.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "occlusion.bake-cancel仅在frozen operationId达到cancelled terminal后返回cancelled=true。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "cancel private control与同一session status snapshot的operationId/state readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "cancel调用不重放；transition或timeout后调用方读取occlusion.bake-status。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "cancel结果无法确认时返回E_EXECUTION_TIMEOUT；新的operation不会被误取消。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "occlusion.bake-clear",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/occlusion/bake-clear.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "occlusion.bake-clear返回前fresh Umbra data size必须为零，并完成冻结scene持久化。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "effect前后StaticOcclusionCulling snapshot与scene GUID/hash/dirty=false typed readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该Tool不触发reload；终态不明时调用方读取occlusion.bake-status并检查scene。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect后无法证明zero Umbra与scene持久化时返回E_EXECUTION_TIMEOUT。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "occlusion.bake-status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/occlusion/bake-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "occlusion.bake-status返回当前process session的bounded status、effective settings与fresh Umbra snapshot。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "固定session-scoped status file、active root与StaticOcclusionCulling fresh readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读调用不触发reload；Editor process restart后旧mechanism state自动失效。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取失败不改变业务状态；Editor ready后可提交新读取。"
       },
       "asyncSignals": [
         "value-task"
@@ -4875,7 +5528,7 @@
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "completion-probe-after-state",
-        "description": "同步物理步进后全部声明 after 断言由同回合 fresh Context readback 满足。"
+        "description": "同步物理步进后全部声明 after 断言由同回合 fresh read Tool observation 满足。"
       },
       "proofSource": {
         "kind": "eligible-context-fresh-readback",
@@ -5057,6 +5710,87 @@
       ]
     },
     {
+      "toolName": "prefab.overrides.apply",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/prefab/overrides/apply.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "apply 后 source prefab hash 已变化，scene instance 保持同一 source path/GUID、Connected 且无 non-default overrides。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "fresh instance id、PrefabUtility source/status/override readback、source GUID 与 serialized file SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "普通 Prefab Tool 不跨 reload 重放；terminal 丢失时调用方先读取 prefab.info 和 scene instance 状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后无法证明 source/instance 终态时返回 E_EXECUTION_TIMEOUT，调用方检查 source asset 和 scene instance。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "prefab.overrides.revert",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/prefab/overrides/revert.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "revert 后 source hash 不变，scene instance 保持 Connected 且无 non-default overrides。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "fresh instance id、PrefabUtility source/status/override readback、source GUID 与 unchanged serialized file SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "普通 Prefab Tool 不跨 reload 重放；terminal 丢失时调用方先读取 scene instance 和 prefab.info。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后无法证明 clean instance/source unchanged 时返回 E_EXECUTION_TIMEOUT。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "prefab.stage",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/prefab/stage.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "prefab.stage 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "prefab.stage 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "prefab.stage-close",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/prefab/stage-close.cs",
@@ -5159,6 +5893,33 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "prefab.variant.create",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/prefab/variant/create.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "output GUID resolves to the requested path and PrefabAssetType.Variant whose corresponding source path/GUID is the unchanged base prefab。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "preview-scene cleanup、fresh output GUID/asset type/source identity 与 unchanged base file SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "variant create 不跨 reload 重放；terminal 丢失时调用方先读取 output path 与 prefab.info。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后 output terminal 无法证明时返回 E_EXECUTION_TIMEOUT，调用方检查目标 asset 后再决定。"
       },
       "asyncSignals": [
         "value-task"
@@ -5861,6 +6622,33 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "probuilder.scene",
+      "descriptorOwner": "extension:probuilder",
+      "source": "extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderSceneTool.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "probuilder.scene 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "probuilder.scene 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
       },
       "asyncSignals": [
         "value-task"
@@ -6817,6 +7605,141 @@
       ]
     },
     {
+      "toolName": "project.audio-settings",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/audio-settings.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.audio-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "fresh SerializedObject或PlayerSettings API readback与精确ProjectSettings文件SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该Tool不跨reload；effect后失去terminal response时先读取对应project.*-settings Tool。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时不产生业务副作用，可在Editor恢复ready后重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.audio-settings.set",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/audio-settings/set.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.audio-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "单次effect barrier、fresh typed readback与精确ProjectSettings文件SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该Tool不跨reload；effect后失去terminal response时先读取对应project.*-settings Tool。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect后无法证明终态时返回E_EXECUTION_TIMEOUT；调用方必须fresh读取对应设置后再决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.info",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/info.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.info 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "project.info 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.input-settings",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/input-settings.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.input-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "fresh SerializedObject或PlayerSettings API readback与精确ProjectSettings文件SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该Tool不跨reload；effect后失去terminal response时先读取对应project.*-settings Tool。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时不产生业务副作用，可在Editor恢复ready后重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.input-settings.set",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/input-settings/set.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.input-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "单次effect barrier、fresh typed readback与精确ProjectSettings文件SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该Tool不跨reload；effect后失去terminal response时先读取对应project.*-settings Tool。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect后无法证明终态时返回E_EXECUTION_TIMEOUT；调用方必须fresh读取对应设置后再决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "project.layer.add",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/project/layer/add.cs",
@@ -6871,6 +7794,87 @@
       ]
     },
     {
+      "toolName": "project.layers",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/layers.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.layers 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "project.layers 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.player-settings",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/player-settings.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.player-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "fresh SerializedObject或PlayerSettings API readback与精确ProjectSettings文件SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该Tool不跨reload；effect后失去terminal response时先读取对应project.*-settings Tool。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时不产生业务副作用，可在Editor恢复ready后重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.player-settings.set",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/player-settings/set.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.player-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "单次effect barrier、fresh typed readback与精确ProjectSettings文件SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "scriptingBackend或apiCompatibilityLevel可能触发reload；若未收到terminal response，调用方先读project.player-settings且不得盲目重放。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect后无法证明终态时返回E_EXECUTION_TIMEOUT；调用方必须fresh读取对应设置后再决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "project.tag.add",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/project/tag/add.cs",
@@ -6919,6 +7923,87 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.tags",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/tags.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.tags 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "project.tags 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.time-settings",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/time-settings.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.time-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "fresh SerializedObject或PlayerSettings API readback与精确ProjectSettings文件SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该Tool不跨reload；effect后失去terminal response时先读取对应project.*-settings Tool。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时不产生业务副作用，可在Editor恢复ready后重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "project.time-settings.set",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/project/time-settings/set.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "project.time-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "单次effect barrier、fresh typed readback与精确ProjectSettings文件SHA-256。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该Tool不跨reload；effect后失去terminal response时先读取对应project.*-settings Tool。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect后无法证明终态时返回E_EXECUTION_TIMEOUT；调用方必须fresh读取对应设置后再决定后续操作。"
       },
       "asyncSignals": [
         "value-task"
@@ -7007,11 +8092,11 @@
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "completion-probe-after-state",
-        "description": "一次同步反射调用后全部声明 after 断言由同回合 fresh Context readback 满足。"
+        "description": "一次同步反射调用后全部声明 after 断言由同回合 fresh read Tool observation 满足。"
       },
       "proofSource": {
         "kind": "eligible-context-fresh-readback",
-        "description": "方法返回值之外的资源 identity、session 与 canonical Context readback。"
+        "description": "方法返回值之外的资源 identity、session 与 canonical read Tool observation。"
       },
       "reloadPolicy": {
         "kind": "same-turn-no-replay",
@@ -7052,6 +8137,206 @@
       "asyncSignals": [
         "value-task"
       ]
+    },
+    {
+      "toolName": "runtime.console",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/runtime/console.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "当前 development Player session 的 bounded console page 通过 output schema，并返回同一 buffer cursor。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "进程内固定 1000 条 log buffer 的 sequence、cursor 与 runtimeSessionId fresh readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "Player 进程退出即销毁 buffer/cursor；调用方只可在新 session 从新 cursor 读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时没有业务 effect；调用方可在当前 fresh runtime session 重新读取。"
+      },
+      "asyncSignals": []
+    },
+    {
+      "toolName": "runtime.input.key",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/runtime/input/key.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "observed-terminal-readback",
+        "description": "live Input System keyboard control 按请求完成 down/up/press，并返回 flush 后 pressed-state 序列。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "current keyboard control path、before/after isPressed 与每次 InputSystem.Update 后的状态观察。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "Player session 内按 exact request bytes 去重；进程退出后旧 input request 不得重放。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "terminal 缺失时由调用方观察游戏业务状态；不得用新 requestId 重放未知 input effect。"
+      },
+      "asyncSignals": []
+    },
+    {
+      "toolName": "runtime.input.pointer",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/runtime/input/pointer.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "observed-terminal-readback",
+        "description": "live Input System mouse 在屏幕边界内完成 move/down/up/click，并返回 position 与 pressed-state 序列。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "current mouse control path、before/after position 与每次 InputSystem.Update 后的 button 状态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "Player session 内按 exact request bytes 去重；进程退出后旧 pointer request 不得重放。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "terminal 缺失时由调用方观察游戏业务状态；不得用新 requestId 重放未知 pointer effect。"
+      },
+      "asyncSignals": []
+    },
+    {
+      "toolName": "runtime.log",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/runtime/log.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "observed-terminal-readback",
+        "description": "exact bounded message 由同一 session log callback 观察，并返回其 fresh sequence。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "runtimeSessionId、level、message 与进程内 console buffer exact sequence readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "请求由 Player session 内 bounded request cache 去重；进程退出后不得向新 session 重放旧请求。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后 terminal 丢失时只读取 runtime.console；不得用新 requestId 重放未知 log effect。"
+      },
+      "asyncSignals": []
+    },
+    {
+      "toolName": "runtime.state",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/runtime/state.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "同一 development Player 主线程采样的 application、scene、frame、time、screen 与 memory typed snapshot。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "runtimeSessionId/buildId 与单次主线程 fresh Unity runtime readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读调用不跨 Player restart；新 session 必须提交新请求。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时没有业务 effect；调用方可在当前 fresh runtime session 重新读取。"
+      },
+      "asyncSignals": []
+    },
+    {
+      "toolName": "runtime.target-framerate.set",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/runtime/target-framerate/set.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "observed-terminal-readback",
+        "description": "Application.targetFrameRate fresh readback 等于 effect 前冻结的目标整数。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "同一 runtimeSessionId 的 before/after Application.targetFrameRate readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "session 内请求按 exact bytes 去重；Player restart 后设置自然失效。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "terminal 缺失时先读取 runtime.state；不得用新 requestId 重放未知设置 effect。"
+      },
+      "asyncSignals": []
+    },
+    {
+      "toolName": "runtime.time-scale.set",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/runtime/time-scale/set.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "observed-terminal-readback",
+        "description": "Time.timeScale fresh readback 等于 effect 前冻结的有限非负目标值。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "同一 runtimeSessionId 的 before/after Time.timeScale readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "session 内请求按 exact bytes 去重；Player restart 后设置自然失效。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "terminal 缺失时先读取 runtime.state；不得用新 requestId 重放未知设置 effect。"
+      },
+      "asyncSignals": []
+    },
+    {
+      "toolName": "runtime.ui.capture-element",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/runtime/ui/capture-element.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "Unity 6000.7+ attached runtime element 生成 fixed bounded PNG，并返回 fresh size/SHA-256。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "runtimeSessionId、resolved element dimensions 与固定 artifact fresh file hash/size readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "capture 不跨 Player restart；版本不支持时在 effect 前 fail closed。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "terminal 缺失时只检查固定 runtime-element.png，不用新 requestId 重放未知 capture effect。"
+      },
+      "asyncSignals": []
     },
     {
       "toolName": "scene.active",
@@ -7156,6 +8441,87 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "scene.gameobject",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/scene/gameobject.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "scene.gameobject 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "scene.gameobject 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "scene.gameobject.component",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/scene/gameobject/component.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "scene.gameobject.component 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "scene.gameobject.component 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "scene.gameobject.components",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/scene/gameobject/components.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "scene.gameobject.components 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "scene.gameobject.components 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
       },
       "asyncSignals": [
         "value-task"
@@ -7277,20 +8643,20 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "scene.save 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "single mode 的 active scene 或 all mode 冻结的完整 dirty scene set 在保存后保持同一 handle/path，全部 loaded、clean 且 GUID round-trip。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "scene.save 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "effect 前 loaded dirty handle/path set、SaveScene/SaveOpenScenes 返回值、逐 handle fresh Scene readback、AssetDatabase GUID 与 terminal all-loaded-scenes-clean scan。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
-        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+        "description": "scene.save 不跨 reload 重放；terminal 丢失时调用方通过 scene.list-opened 检查每个 scene dirty/path 状态。"
       },
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+        "description": "effect 后任一 scene 无法证明 clean identity 时返回 E_EXECUTION_TIMEOUT；调用方检查全部 open scenes 后再决定。"
       },
       "asyncSignals": [
         "value-task"
@@ -7399,6 +8765,33 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "screenshot.editor-element",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/screenshot/editor-element.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "frozen UI Toolkit element生成bounded PNG并完成落盘hash/size proof。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "CaptureToRenderTexture尺寸readback与PNG fresh file SHA-256、size proof。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "capture不跨reload续接；Unity 6000.7+ current session重新解析window/element。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "terminal缺失时只检查request artifact目录，不重放未知capture effect。"
       },
       "asyncSignals": [
         "value-task"
@@ -7837,6 +9230,35 @@
       ]
     },
     {
+      "toolName": "test.cancel",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/test/cancel.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "observed-terminal-readback",
+        "description": "tracked root的exact Test Runner GUID从active TestJobData集合消失。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "coordinator root/session/runId与TestJobDataHolder active GUID fresh readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "cancel调用不重放；transition或timeout后调用方检查原test.run终态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "accepted cancel无法证明exact GUID inactive时返回E_EXECUTION_TIMEOUT，不取消任何新run。"
+      },
+      "asyncSignals": [
+        "promise",
+        "async",
+        "await"
+      ]
+    },
+    {
       "toolName": "test.run",
       "descriptorOwner": "ts-local",
       "source": "src/tools/test/run.ts",
@@ -7863,6 +9285,33 @@
         "promise",
         "async",
         "await"
+      ]
+    },
+    {
+      "toolName": "tests.list",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/tests/list.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "tests.list 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "tests.list 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
       ]
     },
     {
@@ -8049,6 +9498,114 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "timeline.clip.add",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/timeline/clip/add.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "timeline.clip.add 返回前必须以 fresh target track 证明 clip count、timing、playable localId、source binding 与 serialized hash。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "timeline.clip.add 的 typed result、output schema validation 与 Tool-owned fresh Timeline structure/file readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该 Tool 不触发 script reload；asset import 后的 fresh structure readback 在同一调用内完成。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后 timeout 或 proof failure 返回 E_EXECUTION_TIMEOUT；调用方使用 timeline.info 检查 track/clip 终态。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "timeline.create",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/timeline/create.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "timeline.create 返回 typed result 前，必须以 fresh AssetDatabase 状态证明 path、GUID、TimelineAsset type、frameRate 与 serialized file artifact。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "timeline.create 的 typed result、output schema validation，以及 Tool 内 fresh AssetDatabase/GUID/file readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该 Tool 不触发 script reload；若外部 package/import 状态改变导致终态无法确认，由调用方重新读取业务状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后 timeout 或 proof failure 统一返回 E_EXECUTION_TIMEOUT；调用方检查目标 path/GUID 后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "timeline.info",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/timeline/info.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "timeline.info 的 bounded typed result 必须来自同一 fresh TimelineAsset 的 track hierarchy、clip timing 与 stable asset identity readback。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "timeline.info 通过 fresh AssetDatabase/GUID/localId 与 package-optional Timeline reflection 直接构造只读业务结果。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读调用不触发 import、compile 或 reload；外部状态改变时调用方提交新的读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取 timeout 不改变 Timeline；调用方可在 Editor ready 后提交新的读取。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "timeline.track.add",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/timeline/track/add.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "timeline.track.add 返回前必须以 fresh Timeline structure 证明 count、track GUID/localId、exact type/name/parent 与 serialized hash。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "timeline.track.add 的 typed result、output schema validation 与 Tool-owned fresh Timeline structure/file readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "该 Tool 不触发 script reload；asset import 后的 fresh structure readback 在同一调用内完成。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "effect 后 timeout 或 proof failure 返回 E_EXECUTION_TIMEOUT；调用方使用 timeline.info 检查 track 终态。"
       },
       "asyncSignals": [
         "value-task"

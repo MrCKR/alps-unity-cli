@@ -124,7 +124,7 @@ test("temporary EditMode cleanup descriptors avoid shared Undo probing", async (
 
   const undoSource = await source("unitypkg/Editor/Tools/editor/undo.cs");
   assert.match(undoSource, /Call Undo\.PerformUndo\(\) exactly once/);
-  assert.match(undoSource, /completionProbe must identify an eligible read-only Context/);
+  assert.match(undoSource, /completionProbe must identify an eligible read Tool/);
   assert.match(undoSource, /Undo\.undoRedoPerformed \+= callback[\s\S]*ctx\.RunCompletionProbe\([\s\S]*Undo\.PerformUndo\(\)[\s\S]*if \(!performed\)[\s\S]*Undo\.undoRedoPerformed -= callback/);
   assert.match(undoSource, /SideEffects = new\[\] \{ "undo-redo-replay", "undo-stack" \}/);
   assert.doesNotMatch(undoSource, /performed=true proves|business success without attribution/);

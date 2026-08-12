@@ -45,7 +45,7 @@ test("shared schema validator rejects nested, tuple, dictionary, and unknown-pro
 });
 
 test("shared schema validator enforces numeric ranges and supported string formats", () => {
-  assert.deepEqual(validateSchema({ type: "integer", minimum: 0, maximum: 10 }, 5), []);
+  assert.deepEqual(validateSchema({ type: "integer", minimum: 0, maximum: 10, default: 1 }, 5), []);
   assert.equal(validateSchema({ type: "integer", minimum: 0 }, -1)[0].expected, ">= 0");
   assert.equal(validateSchema({ type: "integer", maximum: 10 }, 11)[0].expected, "<= 10");
   assert.deepEqual(validateSchema({ type: "string", format: "date-time" }, "2026-07-16T00:00:00.000Z"), []);

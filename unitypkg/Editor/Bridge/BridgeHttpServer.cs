@@ -68,6 +68,8 @@ namespace UnityCli
                 { "instanceId", InstanceId() },
                 { "canonicalProjectPath", ProjectIdentity().CanonicalProjectPath },
                 { "canonicalizationVersion", (long)UnityCliCanonicalProjectPath.CanonicalizationVersion },
+                { "target", "editor" },
+                { "sessionId", EditorSessionId() },
                 { "editorSessionId", EditorSessionId() },
                 { "listenerId", ListenerId },
                 { "actualPort", (long)port },
@@ -211,9 +213,15 @@ namespace UnityCli
             if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/health")
             {
                 var expectedInstanceId = context.Request.Headers["x-unity-cli-expected-instance-id"];
-                var expectedSessionId = context.Request.Headers["x-unity-cli-expected-editor-session-id"];
-                if ((!string.IsNullOrEmpty(expectedInstanceId) && !string.Equals(expectedInstanceId, InstanceId(), StringComparison.Ordinal))
-                    || (!string.IsNullOrEmpty(expectedSessionId) && !string.Equals(expectedSessionId, EditorSessionId(), StringComparison.Ordinal)))
+                var expectedSessionId = context.Request.Headers["x-unity-cli-expected-session-id"];
+                var expectedTarget = context.Request.Headers["x-unity-cli-expected-target"];
+                var expectedListenerId = context.Request.Headers["x-unity-cli-expected-listener-id"];
+                var expectedGeneration = context.Request.Headers["x-unity-cli-expected-listener-generation"];
+                if (!string.Equals(expectedInstanceId, InstanceId(), StringComparison.Ordinal)
+                    || !string.Equals(expectedSessionId, EditorSessionId(), StringComparison.Ordinal)
+                    || !string.Equals(expectedTarget, "editor", StringComparison.Ordinal)
+                    || !string.Equals(expectedListenerId, ListenerId, StringComparison.Ordinal)
+                    || !string.Equals(expectedGeneration, CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
                 {
                     WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                         string.Empty,
@@ -237,15 +245,18 @@ namespace UnityCli
             }
 
             var expectedExecuteInstanceId = context.Request.Headers["x-unity-cli-expected-instance-id"];
-            var expectedExecuteSessionId = context.Request.Headers["x-unity-cli-expected-editor-session-id"];
+            var expectedExecuteSessionId = context.Request.Headers["x-unity-cli-expected-session-id"];
+            var expectedExecuteTarget = context.Request.Headers["x-unity-cli-expected-target"];
             var expectedExecuteListenerId = context.Request.Headers["x-unity-cli-expected-listener-id"];
             var expectedExecuteGeneration = context.Request.Headers["x-unity-cli-expected-listener-generation"];
             if (string.IsNullOrEmpty(expectedExecuteInstanceId)
                 || string.IsNullOrEmpty(expectedExecuteSessionId)
+                || string.IsNullOrEmpty(expectedExecuteTarget)
                 || string.IsNullOrEmpty(expectedExecuteListenerId)
                 || string.IsNullOrEmpty(expectedExecuteGeneration)
                 || !string.Equals(expectedExecuteInstanceId, InstanceId(), StringComparison.Ordinal)
                 || !string.Equals(expectedExecuteSessionId, EditorSessionId(), StringComparison.Ordinal)
+                || !string.Equals(expectedExecuteTarget, "editor", StringComparison.Ordinal)
                 || !string.Equals(expectedExecuteListenerId, ListenerId, StringComparison.Ordinal)
                 || !string.Equals(expectedExecuteGeneration, CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
             {
@@ -321,7 +332,7 @@ namespace UnityCli
                 WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
                 return;
             }
-            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
+            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
             if (cachedIsCompiling && !allowedDuringCompileOrImport)
             {
                 WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000), 200);
@@ -336,7 +347,7 @@ namespace UnityCli
             {
                 // 只在 PlayMode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续入队执行。
                 // 这里必须与 UnityCliBridge.Execute() 的切换期 allowlist 保持一致。
-                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command)
+                var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command)
                     || IsEditorStateSnapshotCommand(request.Command)
                     || request.Command == "editor.console"
                     || request.Command == "editor.pause"
@@ -345,9 +356,6 @@ namespace UnityCli
                     || request.Command == "runtime-tool.run"
                     || request.Command == "project-tool.list"
                     || request.Command == "diagnose.preflight"
-                    || request.Command == "context.list"
-                    || request.Command == "context.describe"
-                    || request.Command == "context.read"
                     || request.Command == "extension.status";
 
                 WriteLog("http_play_mode_guard requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlayingOrWillChange=" + Bool(cachedIsPlayingOrWillChangePlaymode) + " cachedIsPlaying=" + Bool(cachedIsPlaying) + " transitionAllowed=" + Bool(allowedDuringPlayModeTransition));

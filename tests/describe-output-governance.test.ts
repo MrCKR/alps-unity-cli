@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { allRegisteredToolMetadata, findToolByName, type ResolvedToolMetadata } from "../src/tools/metadata/index.js";
-import { builtinContextDescriptors } from "../src/contexts/registry.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
 import "../src/extensions/index.js";
 
@@ -18,6 +17,9 @@ const P0_EXAMPLE_TOOLS = new Set([
   "package.restore",
   "editor.compile",
   "build.run",
+  "navmesh.bake",
+  "navmesh.surface.bake",
+  "test.cancel",
   "test.run"
 ]);
 
@@ -27,6 +29,9 @@ const P0_OUTPUT_SCHEMA_TOOLS = new Set([
   "docs.get",
   "reflect.search",
   "build.run",
+  "navmesh.bake",
+  "navmesh.surface.bake",
+  "test.cancel",
   "test.run"
 ]);
 
@@ -57,16 +62,20 @@ function assertNoInternalSourceText(subject: string, text: string): void {
   assert.doesNotMatch(text, INTERNAL_SOURCE_PATTERN, `${subject} must not expose internal reference-project wording`);
 }
 
-test("TS-local descriptor registry owns exactly the current offline/hybrid tools", () => {
+test("TS-local descriptor registry owns exactly the current package-local tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
     "asset.refresh", "build.run", "code.exec", "diagnose.capabilities",
-    "docs.get", "docs.search", "editor.compile",
-    "editor.dialog.click", "editor.refresh", "package.bridge-remove", "package.deploy",
+    "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
+    "editor.dialogs", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
+    "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
+    "occlusion.bake-status", "package.bridge-remove", "package.deploy",
     "package.embed", "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get",
     "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add",
     "package.scoped-registry.list", "package.scoped-registry.remove", "package.search", "package.status",
-    "reflect.member", "reflect.search", "reflect.type", "test.run", "tools.describe", "tools.group",
+    "reflect.member", "reflect.search", "reflect.type", "runtime.console", "runtime.input.key", "runtime.input.pointer",
+    "runtime.log", "runtime.state", "runtime.target-framerate.set", "runtime.time-scale.set", "runtime.ui.capture-element",
+    "test.cancel", "test.run", "tools.describe", "tools.group",
     "tools.group-list", "tools.search"
   ]);
   assert.equal(findToolByName("asset.refresh")?.handler, "hybrid");
@@ -75,10 +84,6 @@ test("TS-local descriptor registry owns exactly the current offline/hybrid tools
 test("offline describe descriptors do not expose internal reference-project wording", () => {
   for (const tool of allRegisteredToolMetadata()) {
     assertNoInternalSourceText(tool.name, descriptorText(tool));
-  }
-
-  for (const context of builtinContextDescriptors()) {
-    assertNoInternalSourceText(context.name, JSON.stringify(context));
   }
 
   for (const manifest of BUILTIN_EXTENSION_MANIFESTS) {
@@ -108,13 +113,15 @@ test("descriptions are call guidance, not duplicated summaries or embedded comma
   }
 });
 
-test("local context describe entries disclose read-only observation boundaries", () => {
-  for (const context of builtinContextDescriptors()) {
-    assert.ok(context.description.trim(), `${context.name} context description must not be empty`);
-    const text = context.description.toLowerCase();
-    const readSignal = /read|snapshot|observes|observation|without|does not|no unity connection|available|list|metadata/.test(text);
-    assert.ok(readSignal, `${context.name} description should read as observation/read-only guidance`);
-  }
+test("code.exec discovery requires a necessity decision without reducing arbitrary execution", () => {
+  const tool = findToolByName("code.exec");
+  assert.ok(tool);
+  assert.match(tool.summary, /cannot be force-stopped by timeout/i);
+  assert.match(tool.description, /does not reject infinite loops/);
+  assert.match(tool.description, /decide whether running it is necessary/);
+  assert.match(tool.description, /execute it unchanged/);
+  assert.match(tool.description, /cannot interrupt the C# already running/);
+  assert.match(tool.description, /outcome-unknown/);
 });
 
 test("large-output TS-local descriptors disclose output controls", () => {
@@ -127,6 +134,8 @@ test("large-output TS-local descriptors disclose output controls", () => {
 
 test("diagnose.preflight exposes health counts without Bridge routes or logs", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/diagnose/preflight.cs", import.meta.url), "utf8");
-  assert.match(source, /public bool Ready \{ get; set; \}[\s\S]*public long ToolCount[\s\S]*public long ContextCount/);
+  assert.match(source, /public bool Ready \{ get; set; \}[\s\S]*public long ToolCount/);
+  assert.match(source, /BuildCompileStatus\(ct\)[\s\S]*maxScannedEntries = 5000[\s\S]*maxScanMilliseconds = 50[\s\S]*ct\.ThrowIfCancellationRequested\(\)[\s\S]*compileErrorsTruncated = true/);
+  assert.doesNotMatch(source, /ContextCount|CustomContexts|ProjectContexts/);
   assert.doesNotMatch(source, /public long Port|public string LogPath|BuildCapabilities\(|POST \/bridge\/execute/);
 });

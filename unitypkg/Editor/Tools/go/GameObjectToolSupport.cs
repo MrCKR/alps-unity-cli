@@ -332,7 +332,7 @@ namespace UnityCli
             var components = gameObject.GetComponents(type);
             if (componentIndex.Value < 0 || componentIndex.Value >= components.Length)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_INDEX_OUT_OF_RANGE", "componentIndex " + componentIndex.Value + " is out of range for " + componentName + ".", "Run context read scene.gameobject.components to discover component indices.");
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_INDEX_OUT_OF_RANGE", "componentIndex " + componentIndex.Value + " is out of range for " + componentName + ".", "Run tools run scene.gameobject.components to discover component indices.");
             }
             return components[componentIndex.Value];
         }
