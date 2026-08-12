@@ -17,6 +17,7 @@ FeedbackMode: off
 - auth、Unity Hub、Editor安装或打开、Cloud、License、proxy配置属于外部控制面；直接使用系统或官方工具，不在catalog中猜测替代Tool。
 - Extension 管理只用 `extensions list`、`extensions install`、`extensions remove`、`extensions doctor`。
 - 已连接实例的目录同时包含 built-in、Extension、project、Editor 和 Runtime 能力，不按 `source` 或当前模式过滤。
+- 完全兼容 Unity 官方 CLI 特性体系：项目与第三方 Package 中以官方 `[CliCommand]`/`[CliArg]`/`IStructuredCommandInput` 声明的命令直接进入同一 catalog，固定投影为 `UnityPipeline_<原名>`、group `UnityPipeline`，用 `command <原名>` 或完整前缀名调用；`com.unity.pipeline` 包自身命令已由 native 能力吸收并按 provider identity 抑制。native 精确重名优先。
 
 ## 执行骨架
 
@@ -35,7 +36,7 @@ unity_cli command <name> --field <value> --instance <id|projectPath|alias>
 
 显式`--instance`优先；`command --project-path <path>`绑定同一canonical项目实例；未传时只能从当前Unity项目CWD解析。没有连接实例时discovery返回稳定instance error，不返回静态或空目录。执行不了解的Tool前必须`tools describe`，输入和行为以当前descriptor为准。schema default与`examples[].argv`描述合法默认行为和调用形状；任务明确要求的业务值优先，不能把default/example当作连通性或probe调用。`tools group list`/`tools search`返回的Tool `name`就是exact调用名；group只用于筛选，不能拼到name前。
 
-`command`不建立第二套目录：native Tool使用完整精确名；项目或其他Package的`[CliCommand("test")]`在`tools`中固定名为`UnityPipeline_test`、group为`UnityPipeline`，可由`command test`或完整前缀名选择。`com.unity.pipeline` package自身命令已由native能力吸收并按provider identity抑制，不应期待其attribute原名存在。native精确重名优先；不得把不存在的名称映射到相似Tool。业务参数支持`--field value`、`--field=value`、boolean裸开关和按schema声明顺序的positional。
+`command`不建立第二套目录：native Tool使用完整精确名；Unity官方`[CliCommand]`完全兼容，项目或其他Package的`[CliCommand("test")]`在`tools`中固定名为`UnityPipeline_test`、group为`UnityPipeline`，可由`command test`或完整前缀名选择。`com.unity.pipeline` package自身命令已由native能力吸收并按provider identity抑制，不应期待其attribute原名存在。native精确重名优先；不得把不存在的名称映射到相似Tool。业务参数支持`--field value`、`--field=value`、boolean裸开关和按schema声明顺序的positional。
 
 ## 使用说明
 
