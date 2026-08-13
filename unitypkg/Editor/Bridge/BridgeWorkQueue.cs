@@ -65,6 +65,7 @@ namespace UnityCli
             cachedIsPlaying = EditorApplication.isPlaying;
             cachedIsBuilding = BuildPipeline.isBuildingPlayer;
             cachedIsPlayModeChanging = IsPlayModeChanging();
+            AdvanceBridgeStartup();
             UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
             UnityCliWaitScheduler.Tick();
 

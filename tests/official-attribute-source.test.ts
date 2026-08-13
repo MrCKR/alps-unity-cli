@@ -6,16 +6,35 @@ const registryPath = "unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs";
 const officialPath = "unitypkg/Editor/ProjectTools/OfficialAttributeToolRegistry.cs";
 const ownershipPath = "unitypkg/Editor/Infrastructure/RegistryOwnershipResolver.cs";
 const coordinatorPath = "unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs";
-const fixturePath = "Dev/UnityProject/Assets/Editor/UnityCLI/official-attribute-fixtures.cs";
 const commandDocsPath = "docs/command-execution.md";
 
-test("official attribute discovery uses exact full names without a package compile dependency", async () => {
-  const [registry, official] = await Promise.all([readFile(registryPath, "utf8"), readFile(officialPath, "utf8")]);
+test("official attribute discovery binds exact owners and uses a cycle-safe provider closure", async () => {
+  const [registry, official, ownership] = await Promise.all([
+    readFile(registryPath, "utf8"),
+    readFile(officialPath, "utf8"),
+    readFile(ownershipPath, "utf8"),
+  ]);
   assert.match(registry, /TryRegisterOfficialAttributeTools\(assembly, type\)/);
+  assert.match(registry, /ConfigureOfficialAuthoringApi\(assemblies\)/);
+  assert.match(registry, /ToolProviderAssemblies\(assemblies, officialRoots\)/);
+  assert.match(registry, /RegistryOwnershipResolver\.Load\(candidates\)/);
+  assert.match(registry, /typeof\(IUnityCliTool<,>\)\.Assembly\.GetName\(\)\.FullName/);
+  assert.match(registry, /while \(changed\)[\s\S]*?references\.Any\(reference => reachable\.Contains\(reference\.FullName\)\)/);
+  assert.doesNotMatch(registry, /ReferencesToolAuthoringApi|Dictionary<Assembly, bool> memo|HashSet<Assembly> visiting/);
+  assert.match(registry, /foreach \(var assembly in candidates\)[\s\S]*?assembly\.GetTypes\(\)/);
+  assert.doesNotMatch(registry, /foreach \(var assembly in AppDomain\.CurrentDomain\.GetAssemblies\(\)\)[\s\S]*?assembly\.GetTypes\(\)/);
+  assert.match(ownership, /Load\(IEnumerable<Assembly> candidateAssemblies\)/);
+  assert.match(ownership, /foreach \(var assembly in candidateAssemblies\)[\s\S]*?assembly\.GetTypes\(\)/);
+  assert.doesNotMatch(ownership, /AppDomain\.CurrentDomain\.GetAssemblies/);
+  assert.match(ownership, /Dictionary<Type, string> extensionClaims/);
+  assert.match(ownership, /extensionClaims\.TryGetValue\(implementationType, out extensionId\)/);
   assert.match(official, /Unity\.Pipeline\.Commands\.CliCommandAttribute/);
   assert.match(official, /Unity\.Pipeline\.Commands\.CliArgAttribute/);
   assert.match(official, /Unity\.Pipeline\.Commands\.IStructuredCommandInput/);
-  assert.match(official, /CustomAttributeData\.GetCustomAttributes/);
+  assert.match(official, /PackageInfo\.FindForAssembly\(assembly\)/);
+  assert.match(official, /BindOfficialType\(ref OfficialCliCommandAttributeType/);
+  assert.match(official, /attribute\.AttributeType == exactType/);
+  assert.match(official, /!IsOfficialAttributeName\(fullName\)/);
   assert.doesNotMatch(official, /using Unity\.Pipeline/);
 });
 
@@ -37,7 +56,9 @@ test("Pipeline package provider在注册前抑制且其他attribute继续共享p
   assert.match(official, /if \(IsSuppressedOfficialAttributeProvider\(assembly\)\)[\s\S]*?return;[\s\S]*?foreach \(var method in methods\)/);
   assert.match(official, /Official CLI command method must be static/);
   assert.match(official, /duplicate projected parameter name/);
-  assert.doesNotMatch(ownership, /PackageInfo\.FindForAssembly|IsOwnedByPackage/);
+  assert.doesNotMatch(ownership, /PackageInfo\.FindForAssembly|IsOwnedByPackage|AppDomain\.CurrentDomain\.GetAssemblies/);
+  assert.match(ownership, /ReflectionTypeLoadException exception\)[^\n]*throw new InvalidOperationException/);
+  assert.match(ownership, /matches\.Count != 1/);
   assert.match(official, /var toolName = OfficialAttributeToolPrefix \+ name/);
   assert.match(official, /Name = toolName/);
   assert.match(official, /Group = OfficialAttributeToolGroup/);
@@ -132,25 +153,10 @@ test("official conversion and structured schema fail closed", async () => {
   assert.match(official, /ValidateOfficialAttributeValue/);
   assert.match(official, /knownMembers\.ContainsKey/);
   assert.match(official, /member\.Required[\s\S]*?required property/);
-  assert.match(official, /string\.Equals\(type\.FullName, OfficialStructuredInput/);
+  assert.match(official, /type == OfficialStructuredInputType/);
+  assert.match(official, /candidate == OfficialStructuredInputType/);
+  assert.doesNotMatch(official, /string\.Equals\(type\.FullName, OfficialStructuredInput/);
   assert.match(official, /NormalizeOfficialInput\(child, member\.Type\)/);
   assert.match(official, /unknown property/);
   assert.doesNotMatch(official, /conversion failed.*default/i);
-});
-
-test("Dev fixture mirrors official authoring shape and covers sync Task structured runtime timeout", async () => {
-  const fixture = await readFile(fixturePath, "utf8");
-  assert.match(fixture, /namespace Unity\.Pipeline\.Commands/);
-  for (const name of ["sync", "task", "structured", "any-output", "dictionary", "jobject", "result-getter-throw", "runtime", "timeout", "timeout-status", "throw"])
-    assert.match(fixture, new RegExp(`validation\\.official\\.${name.replace("-", "\\-")}`));
-  assert.match(fixture, /\[CliCommand\("test"/);
-  assert.match(fixture, /Name = "test"/);
-  assert.match(fixture, /IUnityCliTool<UnityCliNativeTestTool\.Request/);
-  assert.match(fixture, /IStructuredCommandInput/);
-  assert.match(fixture, /Task<FixtureResult>/);
-  assert.match(fixture, /RuntimeOnly = true/);
-  assert.match(fixture, /BridgeCommandException/);
-  assert.match(fixture, /fixture-sensitive-value/);
-  assert.match(fixture, /Dictionary<string, StructuredInput>/);
-  assert.match(fixture, /getter-sensitive-value/);
 });

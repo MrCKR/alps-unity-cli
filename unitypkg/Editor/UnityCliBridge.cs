@@ -61,7 +61,7 @@ namespace UnityCli
         private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
         private static HttpListener listener;
         private static bool started;
-        private static bool startupScheduled;
+        private static readonly BridgeStartupStateMachine StartupState = new BridgeStartupStateMachine();
         private static bool projectToolsDiscovered;
         private static volatile bool domainReloading;
         private static int port;
@@ -106,69 +106,56 @@ namespace UnityCli
             ScheduleBridgeStartup();
         }
 
-        /// <summary>
-        /// 先显式触发Pipeline owner静态构造，再跨两轮delay排空其初始化callback；
-        /// 同一domain只允许一个待执行bootstrap，最终handoff不依赖package构造顺序。
-        /// </summary>
+        /// <summary>为当前domain安排唯一启动链；实际推进由Package现有主线程update入口负责。</summary>
         private static void ScheduleBridgeStartup()
         {
-            if (startupScheduled) return;
-            startupScheduled = true;
-            EditorApplication.delayCall += PrimeBridgeStartup;
-        }
-
-        private static void PrimeBridgeStartup()
-        {
-            EditorApplication.delayCall -= PrimeBridgeStartup;
-            if (domainReloading || AssetDatabase.IsAssetImportWorkerProcess())
+            if (!StartupState.Schedule())
             {
-                startupScheduled = false;
+                WriteLog("bridge_start_schedule_skipped phase=" + StartupState.Phase);
                 return;
             }
-            string primeState;
-            string primeError;
-            if (!UnityCliPipelineHandoff.PrimePipelineStartup(out primeState, out primeError))
+            WriteLog("bridge_start_scheduled phase=prime");
+        }
+
+        /// <summary>
+        /// 每次Editor update只推进一个阶段；busy保持phase，失败后状态机归零且不得重放attempt。
+        /// </summary>
+        private static void AdvanceBridgeStartup()
+        {
+            if (domainReloading || AssetDatabase.IsAssetImportWorkerProcess()) return;
+            string state = null;
+            string error = null;
+            var transition = StartupState.Tick(
+                EditorApplication.isCompiling || EditorApplication.isUpdating,
+                delegate { return UnityCliPipelineHandoff.PrimePipelineStartup(out state, out error); },
+                delegate { return CompleteBridgeStartup(out state, out error); });
+            if (transition == BridgeStartupTransition.PrimeSucceeded)
             {
-                startupScheduled = false;
+                WriteLog("bridge_start_advanced phase=prime pipelinePrime=" + state);
+                return;
+            }
+            if (transition == BridgeStartupTransition.DrainAdvanced)
+            {
+                WriteLog("bridge_start_advanced phase=drain-pipeline-callbacks");
+                return;
+            }
+            if (transition == BridgeStartupTransition.PrimeFailed)
+            {
                 DeleteInstanceRegistration();
                 StopListener();
                 WriteRuntimeLoadDiagnostics("pipeline_prime_failed");
-                WriteLog("bridge_start_blocked pipelinePrime=" + primeState + " error=" + primeError);
+                WriteLog("bridge_start_blocked pipelinePrime=" + state + " error=" + error);
                 return;
             }
-            EditorApplication.delayCall += QueueCompleteBridgeStartup;
-        }
-
-        private static void QueueCompleteBridgeStartup()
-        {
-            EditorApplication.delayCall -= QueueCompleteBridgeStartup;
-            if (domainReloading || AssetDatabase.IsAssetImportWorkerProcess())
-            {
-                startupScheduled = false;
-                return;
-            }
-            EditorApplication.delayCall += CompleteBridgeStartup;
-        }
-
-        /// <summary>
-        /// Pipeline初始化callback排空后执行最终停服proof与一次性标记，再按项目AutoStart发布listener与实例。
-        /// </summary>
-        private static void CompleteBridgeStartup()
-        {
-            EditorApplication.delayCall -= CompleteBridgeStartup;
-            startupScheduled = false;
-            if (domainReloading || AssetDatabase.IsAssetImportWorkerProcess()) return;
-
-            string handoffState;
-            string handoffError;
-            if (!UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError))
+            if (transition == BridgeStartupTransition.CompleteFailed)
             {
                 DeleteInstanceRegistration();
                 StopListener();
                 WriteRuntimeLoadDiagnostics("pipeline_handoff_failed");
-                WriteLog("bridge_start_blocked pipelineHandoff=" + handoffState + " error=" + handoffError);
+                WriteLog("bridge_start_blocked pipelineHandoff=" + state + " error=" + error);
                 return;
             }
+            if (transition != BridgeStartupTransition.CompleteSucceeded) return;
 
             StopStaleBridgeListeners();
             if (!UnityCliProjectSettings.Current.BridgeAutoStart)
@@ -176,12 +163,19 @@ namespace UnityCli
                 DeleteInstanceRegistration();
                 StopListener();
                 WriteRuntimeLoadDiagnostics("listener_autostart_disabled");
-                WriteLog("bridge_autostart_disabled pipelineHandoff=" + handoffState);
+                WriteLog("bridge_autostart_disabled pipelineHandoff=" + state);
                 return;
             }
 
-            WriteLog("bridge_bootstrap pipelineHandoff=" + handoffState + " autoStart=true");
+            WriteLog("bridge_bootstrap pipelineHandoff=" + state + " autoStart=true");
             StartListener();
+        }
+
+        /// <summary>状态机调用的handoff attempt；返回后由调用方发布listener或fail closed。</summary>
+        private static bool CompleteBridgeStartup(out string handoffState, out string handoffError)
+        {
+            WriteLog("bridge_pipeline_handoff_started");
+            return UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError);
         }
 
         private static void StartListener()
@@ -251,6 +245,7 @@ namespace UnityCli
             UnityCliTestRunCoordinator.Initialize();
             UnityCliNavMeshBakeCoordinator.Initialize();
             UnityCliOcclusionBakeCoordinator.Initialize();
+            StartupState.Reset();
             WriteLog("bridge_after_assembly_reload scheduling bootstrap");
             ScheduleBridgeStartup();
 
@@ -262,10 +257,7 @@ namespace UnityCli
         private static void UnregisterAndStop()
         {
             ReleaseActiveDirectMutationLease();
-            EditorApplication.delayCall -= PrimeBridgeStartup;
-            EditorApplication.delayCall -= QueueCompleteBridgeStartup;
-            EditorApplication.delayCall -= CompleteBridgeStartup;
-            startupScheduled = false;
+            StartupState.Reset();
             UnityCliCompilationEventBroker.Shutdown();
             UnityCliCompileCoordinator.Shutdown();
             UnityCliLiveBuildCoordinator.Shutdown();

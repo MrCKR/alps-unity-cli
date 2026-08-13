@@ -718,9 +718,10 @@ export async function reduceRegistryRecord(
     const active = claims[0];
     if (!active) return { target: candidateTarget, status: "offline" as UnityInstanceStatus, claims };
     if (active.blockers.length > 0 || active.state === "blocked") return { target: candidateTarget, status: "blocked" as UnityInstanceStatus, claims };
+    if (active.state === "transitioning") return { target: candidateTarget, status: "transitioning" as UnityInstanceStatus, claims };
     const heartbeatFresh = isFreshTimestamp(active.lastHeartbeatAt, now, HEARTBEAT_FRESH_MS);
-    const health = await probeHealthIdentity(record.identity, active);
-    return { target: candidateTarget, status: active.state === "ready" && heartbeatFresh && health ? "ready" as UnityInstanceStatus : "transitioning" as UnityInstanceStatus, claims };
+    const health = heartbeatFresh ? await probeHealthIdentity(record.identity, active) : undefined;
+    return { target: candidateTarget, status: heartbeatFresh && health ? "ready" as UnityInstanceStatus : "transitioning" as UnityInstanceStatus, claims };
   }));
   const priority: UnityInstanceStatus[] = ["conflict", "blocked", "ready", "transitioning", "offline"];
   const status = priority.find((candidate) => evaluations.some((evaluation) => evaluation.status === candidate)) ?? "offline";
@@ -867,6 +868,9 @@ function validateRegistryRecord(record: InstanceRegistryV2): void {
     const endpoint = listener?.endpoint;
     const snapshot = session?.lastUnitySnapshot as Record<string, unknown> | undefined;
     const expectedUrl = endpoint ? `http://127.0.0.1:${endpoint.actualPort}` : "";
+    // 新domain尚未启动listener时，Bridge以严格的端口0占位发布transitioning身份；ready仍必须有真实端口。
+    const endpointPortValid = endpoint != null && (validPort(endpoint.actualPort)
+      || session?.state === "transitioning" && endpoint.actualPort === 0 && endpoint.fallback === true);
     const targetIdentityValid = session?.target === "editor"
       ? session.editorSessionId === session.sessionId && session.runtimeSessionId === undefined
         && validEditorRegistrySnapshot(snapshot, session.sessionId, listener?.generation)
@@ -884,7 +888,7 @@ function validateRegistryRecord(record: InstanceRegistryV2): void {
       || !listener || !LISTENER_ID_PATTERN.test(listener.listenerId) || listenerIds.has(listener.listenerId)
       || !Number.isInteger(listener.generation) || listener.generation < 1 || !validTimestamp(listener.startedAt)
       || !endpoint || endpoint.host !== "127.0.0.1"
-      || !validPort(endpoint.preferredPort) || !validPort(endpoint.actualPort)
+      || !validPort(endpoint.preferredPort) || !endpointPortValid
       || typeof endpoint.fallback !== "boolean" || endpoint.url !== expectedUrl
       || !targetIdentityValid
       || !Array.isArray(session.progress) || !Array.isArray(session.blockers)

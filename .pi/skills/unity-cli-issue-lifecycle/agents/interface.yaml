@@ -1,0 +1,27 @@
+interface:
+  display_name: "Unity CLI Issue Lifecycle"
+  short_description: "Track, validate, sync, and close Unity CLI defects"
+  default_prompt: "Use $unity-cli-issue-lifecycle to register this Unity CLI defect, validate the fix in the target Package, sync the canonical product source, and archive it only after all gates pass."
+compatibility:
+  canonical_format: "agent-skills"
+  adapter_targets:
+    - "openai"
+    - "claude"
+    - "generic"
+  activation:
+    mode: "path_scoped"
+    paths:
+      - ".issues/**"
+      - "unitypkg/**"
+      - "**/Packages/com.unity_cli/**"
+  execution:
+    context: "inline"
+    shell: "powershell"
+  trust:
+    source_tier: "local"
+    remote_inline_execution: "forbid"
+    remote_metadata_policy: "allow-metadata-only"
+  degradation:
+    openai: "metadata-adapter"
+    claude: "neutral-source-plus-adapter"
+    generic: "neutral-source"

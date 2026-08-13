@@ -86,6 +86,57 @@ test("observation reducer fails closed for unverifiable claims", async () => {
   assert.equal(reduceObservationRegistryRecord(makeRegistry(identity, [unverifiable])).status, "conflict");
 });
 
+test("transitioning Editor claim accepts only the strict listener-zero placeholder", async () => {
+  const projectPath = await project("unity-cli-transitioning-");
+  const identity = registryIdentity(projectPath);
+  const base = await makeRegistrySession("http://127.0.0.1:47991");
+  const transitioning = {
+    ...base,
+    state: "transitioning" as const,
+    listener: {
+      ...base.listener,
+      endpoint: {
+        ...base.listener.endpoint,
+        actualPort: 0,
+        fallback: true,
+        url: "http://127.0.0.1:0",
+      },
+    },
+  };
+  const observations = new Map([[process.pid, {
+    processId: process.pid,
+    state: "alive" as const,
+    processStartedAt: transitioning.processStartedAt,
+    executablePath: process.execPath,
+  }]]);
+
+  const record = makeRegistry(identity, [transitioning]);
+  const reduced = await reduceRegistryRecord(record, observations);
+  assert.equal(reduced.status, "transitioning");
+  assert.equal(reduced.activeSession?.listener.endpoint.actualPort, 0);
+
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-transitioning-list-"));
+  await writeRegistry(dataDir, record);
+  const listed = await execute(["instances", "list"], { dataDir } as never);
+  assert.equal(listed.ok, true);
+  const instances = (listed.data as { instances: Array<{ instanceId: string; status: string }> }).instances;
+  assert.deepEqual(instances.map((instance) => ({ instanceId: instance.instanceId, status: instance.status })), [
+    { instanceId: identity.instanceId, status: "transitioning" },
+  ]);
+
+  await assert.rejects(
+    () => reduceRegistryRecord(makeRegistry(identity, [{ ...transitioning, state: "ready" as const }]), observations),
+    (error: unknown) => error instanceof InstanceRegistryError && error.code === "E_INSTANCE_IDENTITY_MISMATCH",
+  );
+  await assert.rejects(
+    () => reduceRegistryRecord(makeRegistry(identity, [{
+      ...transitioning,
+      listener: { ...transitioning.listener, endpoint: { ...transitioning.listener.endpoint, fallback: false } },
+    }]), observations),
+    (error: unknown) => error instanceof InstanceRegistryError && error.code === "E_INSTANCE_IDENTITY_MISMATCH",
+  );
+});
+
 test("observation reducer removes only OS-proven dead restart claims", async () => {
   const projectPath = await project("unity-cli-restart-observation-");
   const identity = registryIdentity(projectPath);

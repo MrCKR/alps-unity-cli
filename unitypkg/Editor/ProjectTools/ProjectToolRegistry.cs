@@ -90,13 +90,18 @@ namespace UnityCli
             try
             {
                 discoveryTools = pending;
-                registryOwnership = RegistryOwnershipResolver.Load();
-                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+                var officialRoots = ConfigureOfficialAuthoringApi(assemblies);
+                var candidates = ToolProviderAssemblies(assemblies, officialRoots);
+                registryOwnership = RegistryOwnershipResolver.Load(candidates);
+                WriteLog("tool_discovery_started assemblies=" + assemblies.Length.ToString(CultureInfo.InvariantCulture)
+                    + " candidates=" + candidates.Count.ToString(CultureInfo.InvariantCulture));
+                foreach (var assembly in candidates)
                 {
                     Type[] types;
                     try { types = assembly.GetTypes(); }
-                    catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in assembly " + assembly.FullName + ".", exception); }
-                    catch (Exception exception) { throw new InvalidOperationException("Unable to inspect assembly " + assembly.FullName + ".", exception); }
+                    catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in Tool provider assembly " + assembly.FullName + ".", exception); }
+                    catch (Exception exception) { throw new InvalidOperationException("Unable to inspect Tool provider assembly " + assembly.FullName + ".", exception); }
                     foreach (var type in types)
                     {
                         if (type == null) continue;
@@ -104,6 +109,8 @@ namespace UnityCli
                         TryRegisterOfficialAttributeTools(assembly, type);
                     }
                 }
+                WriteLog("tool_discovery_completed candidates=" + candidates.Count.ToString(CultureInfo.InvariantCulture)
+                    + " tools=" + pending.Count.ToString(CultureInfo.InvariantCulture));
 
                 ProjectTools.Clear();
                 foreach (var item in pending) ProjectTools.Add(item.Key, item.Value);
@@ -120,6 +127,38 @@ namespace UnityCli
             {
                 discoveryTools = null;
             }
+        }
+
+        /// <summary>
+        /// 只读取依赖 CLI authoring API 或官方 Pipeline attribute API 的程序集。
+        /// 无关第三方程序集即使存在不可加载类型，也不能阻断 Bridge listener 启动。
+        /// </summary>
+        private static List<Assembly> ToolProviderAssemblies(Assembly[] assemblies, IEnumerable<Assembly> officialRoots)
+        {
+            var reachable = new HashSet<string>(StringComparer.Ordinal)
+            {
+                typeof(IUnityCliTool<,>).Assembly.GetName().FullName
+            };
+            foreach (var root in officialRoots) reachable.Add(root.GetName().FullName);
+
+            // 反向闭包按完整AssemblyName收敛；依赖环不会产生递归负缓存或扫描顺序差异。
+            var changed = true;
+            while (changed)
+            {
+                changed = false;
+                foreach (var assembly in assemblies)
+                {
+                    var identity = assembly.GetName().FullName;
+                    if (reachable.Contains(identity)) continue;
+                    AssemblyName[] references;
+                    try { references = assembly.GetReferencedAssemblies(); }
+                    catch (Exception exception) { throw new InvalidOperationException("Unable to inspect Tool provider dependencies for assembly " + assembly.FullName + ".", exception); }
+                    if (!references.Any(reference => reachable.Contains(reference.FullName))) continue;
+                    reachable.Add(identity);
+                    changed = true;
+                }
+            }
+            return assemblies.Where(assembly => reachable.Contains(assembly.GetName().FullName)).ToList();
         }
 
         private static void TryRegisterInterfaceProjectTool(Assembly assembly, Type type)

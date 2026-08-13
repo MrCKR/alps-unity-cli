@@ -3,21 +3,24 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using UnityEngine;
 
 namespace UnityCli
 {
     internal sealed class RegistryOwnershipResolver
     {
-        private readonly Dictionary<string, string> extensionClaims;
+        private readonly Dictionary<Type, string> extensionClaims;
 
-        private RegistryOwnershipResolver(Dictionary<string, string> extensionClaims)
+        private RegistryOwnershipResolver(Dictionary<Type, string> extensionClaims)
         {
             this.extensionClaims = extensionClaims;
         }
 
-        public static RegistryOwnershipResolver Load()
+        /// <summary>只在已证明可能贡献Tool的程序集内解析Extension类型owner。</summary>
+        public static RegistryOwnershipResolver Load(IEnumerable<Assembly> candidateAssemblies)
         {
+            if (candidateAssemblies == null) throw new ArgumentNullException("candidateAssemblies");
             var claims = new Dictionary<string, string>(StringComparer.Ordinal);
             var packageRoot = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Packages", "com.unity_cli");
             var extensionRoot = Path.Combine(packageRoot, "Extensions");
@@ -25,7 +28,7 @@ namespace UnityCli
             if (!Directory.Exists(extensionRoot))
             {
                 if (installedIds.Count > 0) throw new InvalidOperationException("Extension registry has installed entries but no Extensions directory.");
-                return new RegistryOwnershipResolver(claims);
+                return new RegistryOwnershipResolver(new Dictionary<Type, string>());
             }
 
             var manifestIds = new HashSet<string>(StringComparer.Ordinal);
@@ -71,27 +74,38 @@ namespace UnityCli
                 if (!manifestIds.Contains(extensionId)) throw new InvalidOperationException("Extension install manifest has an orphan entry: " + extensionId);
             }
 
-            var loadedTypes = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            var loadedTypes = new Dictionary<string, List<Type>>(StringComparer.Ordinal);
+            foreach (var assembly in candidateAssemblies)
             {
                 Type[] types;
                 try { types = assembly.GetTypes(); }
-                catch (System.Reflection.ReflectionTypeLoadException exception) { types = exception.Types; }
-                catch { continue; }
-                foreach (var type in types) if (type != null && type.FullName != null) loadedTypes.Add(type.FullName);
+                catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in Tool provider assembly " + assembly.FullName + ".", exception); }
+                catch (Exception exception) { throw new InvalidOperationException("Unable to inspect Tool provider assembly " + assembly.FullName + ".", exception); }
+                foreach (var type in types)
+                {
+                    if (type == null || type.FullName == null) continue;
+                    List<Type> matches;
+                    if (!loadedTypes.TryGetValue(type.FullName, out matches)) loadedTypes[type.FullName] = matches = new List<Type>();
+                    matches.Add(type);
+                }
             }
+
+            var resolvedClaims = new Dictionary<Type, string>();
             foreach (var claim in claims)
             {
-                if (!loadedTypes.Contains(claim.Key)) throw new InvalidOperationException("Extension registry has an orphan C# type claim: " + claim.Key + " (" + claim.Value + ").");
+                List<Type> matches;
+                if (!loadedTypes.TryGetValue(claim.Key, out matches)) throw new InvalidOperationException("Extension registry has an orphan C# type claim: " + claim.Key + " (" + claim.Value + ").");
+                if (matches.Count != 1) throw new InvalidOperationException("Extension registry C# type claim is ambiguous: " + claim.Key + " (" + claim.Value + ").");
+                resolvedClaims.Add(matches[0], claim.Value);
             }
-            return new RegistryOwnershipResolver(claims);
+            return new RegistryOwnershipResolver(resolvedClaims);
         }
 
         public string Resolve(Type implementationType)
         {
             if (implementationType == null) throw new ArgumentNullException("implementationType");
             string extensionId;
-            if (extensionClaims.TryGetValue(implementationType.FullName, out extensionId)) return "extension";
+            if (extensionClaims.TryGetValue(implementationType, out extensionId)) return "extension";
             return implementationType.Assembly == typeof(UnityCliBridge).Assembly ? "built-in" : "project";
         }
 

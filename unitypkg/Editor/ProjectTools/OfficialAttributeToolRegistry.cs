@@ -40,12 +40,56 @@ namespace UnityCli
         private const string OfficialCliArgAttribute = "Unity.Pipeline.Commands.CliArgAttribute";
         private const string OfficialStructuredInput = "Unity.Pipeline.Commands.IStructuredCommandInput";
         private const string SuppressedOfficialAttributePackage = "com.unity.pipeline";
+        private static Type OfficialCliCommandAttributeType;
+        private static Type OfficialCliArgAttributeType;
+        private static Type OfficialStructuredInputType;
         private static readonly Dictionary<Assembly, bool> SuppressedOfficialAttributeAssemblies = new Dictionary<Assembly, bool>();
         private static readonly HashSet<Assembly> LoggedSuppressedOfficialAttributeAssemblies = new HashSet<Assembly>();
         // 超时后的 observer 只消费后台 fault，不参与业务取消、执行或完成判定。
         private static readonly CancellationToken FaultObservationToken = new CancellationToken();
         private const string NewtonsoftJsonIgnoreAttribute = "Newtonsoft.Json.JsonIgnoreAttribute";
         private const string NewtonsoftJsonPropertyAttribute = "Newtonsoft.Json.JsonPropertyAttribute";
+
+        /// <summary>
+        /// 从exact com.unity.pipeline Package绑定官方authoring Type identity；同名项目类型不得冒充官方API。
+        /// Pipeline未安装时返回空root，出现部分或重复定义时fail closed。
+        /// </summary>
+        private static List<Assembly> ConfigureOfficialAuthoringApi(Assembly[] assemblies)
+        {
+            OfficialCliCommandAttributeType = null;
+            OfficialCliArgAttributeType = null;
+            OfficialStructuredInputType = null;
+            var roots = new List<Assembly>();
+            foreach (var assembly in assemblies)
+            {
+                var commandType = assembly.GetType(OfficialCliCommandAttribute, false);
+                var argumentType = assembly.GetType(OfficialCliArgAttribute, false);
+                var structuredType = assembly.GetType(OfficialStructuredInput, false);
+                if (commandType == null && argumentType == null && structuredType == null) continue;
+
+                PackageInfo package;
+                try { package = PackageInfo.FindForAssembly(assembly); }
+                catch (Exception exception) { throw new InvalidOperationException("Official authoring API package ownership could not be resolved for " + assembly.FullName + ".", exception); }
+                if (package == null || !string.Equals(package.name, SuppressedOfficialAttributePackage, StringComparison.Ordinal)) continue;
+                if (!roots.Contains(assembly)) roots.Add(assembly);
+                BindOfficialType(ref OfficialCliCommandAttributeType, commandType, OfficialCliCommandAttribute);
+                BindOfficialType(ref OfficialCliArgAttributeType, argumentType, OfficialCliArgAttribute);
+                BindOfficialType(ref OfficialStructuredInputType, structuredType, OfficialStructuredInput);
+            }
+
+            var present = (OfficialCliCommandAttributeType == null ? 0 : 1)
+                + (OfficialCliArgAttributeType == null ? 0 : 1)
+                + (OfficialStructuredInputType == null ? 0 : 1);
+            if (present != 0 && present != 3) throw new InvalidOperationException("Official Pipeline authoring API is only partially loaded.");
+            return roots;
+        }
+
+        private static void BindOfficialType(ref Type target, Type candidate, string fullName)
+        {
+            if (candidate == null) return;
+            if (target != null && target != candidate) throw new InvalidOperationException("Official Pipeline authoring API type is ambiguous: " + fullName + ".");
+            target = candidate;
+        }
 
         /// <summary>
         /// 扫描一个类型声明的官方 attributed static method。所有候选都先写入 pending registry；
@@ -711,8 +755,8 @@ namespace UnityCli
 
         private static bool IsOfficialStructuredInput(Type type)
         {
-            return string.Equals(type.FullName, OfficialStructuredInput, StringComparison.Ordinal)
-                || type.GetInterfaces().Any(candidate => string.Equals(candidate.FullName, OfficialStructuredInput, StringComparison.Ordinal));
+            return OfficialStructuredInputType != null
+                && (type == OfficialStructuredInputType || type.GetInterfaces().Any(candidate => candidate == OfficialStructuredInputType));
         }
 
         private static bool IsAwaitableType(Type type)
@@ -879,12 +923,31 @@ namespace UnityCli
 
         private static CustomAttributeData FindAttribute(MemberInfo member, string fullName)
         {
-            return CustomAttributeData.GetCustomAttributes(member).SingleOrDefault(attribute => string.Equals(attribute.AttributeType.FullName, fullName, StringComparison.Ordinal));
+            var exactType = OfficialAttributeType(fullName);
+            return CustomAttributeData.GetCustomAttributes(member).SingleOrDefault(attribute => exactType != null
+                ? attribute.AttributeType == exactType
+                : !IsOfficialAttributeName(fullName) && string.Equals(attribute.AttributeType.FullName, fullName, StringComparison.Ordinal));
         }
 
         private static CustomAttributeData FindAttribute(ParameterInfo parameter, string fullName)
         {
-            return CustomAttributeData.GetCustomAttributes(parameter).SingleOrDefault(attribute => string.Equals(attribute.AttributeType.FullName, fullName, StringComparison.Ordinal));
+            var exactType = OfficialAttributeType(fullName);
+            return CustomAttributeData.GetCustomAttributes(parameter).SingleOrDefault(attribute => exactType != null
+                ? attribute.AttributeType == exactType
+                : !IsOfficialAttributeName(fullName) && string.Equals(attribute.AttributeType.FullName, fullName, StringComparison.Ordinal));
+        }
+
+        private static Type OfficialAttributeType(string fullName)
+        {
+            if (string.Equals(fullName, OfficialCliCommandAttribute, StringComparison.Ordinal)) return OfficialCliCommandAttributeType;
+            if (string.Equals(fullName, OfficialCliArgAttribute, StringComparison.Ordinal)) return OfficialCliArgAttributeType;
+            return null;
+        }
+
+        private static bool IsOfficialAttributeName(string fullName)
+        {
+            return string.Equals(fullName, OfficialCliCommandAttribute, StringComparison.Ordinal)
+                || string.Equals(fullName, OfficialCliArgAttribute, StringComparison.Ordinal);
         }
 
         private static string ConstructorString(CustomAttributeData attribute, int index, string field, MethodInfo method)

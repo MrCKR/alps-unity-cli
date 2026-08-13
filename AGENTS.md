@@ -100,6 +100,17 @@ CLI控制面：
 - 未登记文件、未授权公开契约、能力范围、版本支持、proof 语义或验证范围变化必须硬阻断，由项目所有者决定。
 - execution log 只追加工程事件；动态上下文必须 fresh 核验，旧摘要、PID、session、stamp 或历史 PASS 不能替代当前事实。
 
+### `unity-cli-issue-lifecycle`
+
+路径：`.pi/skills/unity-cli-issue-lifecycle/SKILL.md`
+
+在真实 Unity 项目或 Dev 项目发现产品缺陷，准备先修改已安装的 `Packages/com.unity_cli` 做验证、再同步 `unitypkg` 产品源码时必须读取。用户要求问题登记、`in-progress`/`completed` 状态管理、根因与修复闭环时也必须读取。
+
+- 问题必须先登记到 `.issues/in-progress/`；Skill 启用前已经修改的现场必须立即补登记并如实标注。
+- 目标项目 Package 验证通过后才能同步 canonical 产品源码；产品验证全部通过后才能把同一文件移动到 `.issues/completed/`。
+- 状态目录只使用英文；不得复制问题文件形成双份状态，不得把部分 PASS 写成完成。
+- 用户明确不要任务包时不创建 `.plan`，但问题记录流程仍然执行。
+
 ### `unity-cli-capability`
 
 路径：`.pi/skills/unity-cli-capability/SKILL.md`

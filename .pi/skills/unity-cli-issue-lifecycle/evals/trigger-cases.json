@@ -1,0 +1,61 @@
+{
+  "recommended_threshold": 0.42,
+  "should_trigger": [
+    {
+      "text": "Client-Jump 的 Packages/com.unity_cli 连接失败，先在这个真实 Unity 项目热修验证，再同步 unitypkg 产品源码并登记问题。",
+      "family": "target-package-hotfix"
+    },
+    {
+      "text": "Register this Unity CLI defect as in-progress, validate the installed Package fix in the target Editor, then sync the canonical product source.",
+      "family": "issue-lifecycle"
+    },
+    {
+      "text": "Dev 项目里的 CLI Package 测试发现产品 bug，记录根因和修复方法，验证成功后移到 completed。",
+      "family": "dev-defect"
+    },
+    {
+      "text": "真实项目里的 com.unity_cli reload 后没有 listener，我准备改 Package 做实验并把最终修复回写仓库。",
+      "family": "live-reload-defect"
+    },
+    {
+      "text": "Update the in-progress issue after the target Package validation failed; do not archive it yet.",
+      "family": "issue-update"
+    }
+  ],
+  "should_not_trigger": [
+    {
+      "text": "解释一下 unity_cli 的 Tool catalog 是什么，不要修改代码。",
+      "family": "pure-question"
+    },
+    {
+      "text": "普通 TypeScript 单元测试失败了，直接修 src 里的函数。",
+      "family": "ordinary-unit-test"
+    },
+    {
+      "text": "为下一次发布创建版本计划并更新 changelog。",
+      "family": "release-plan"
+    },
+    {
+      "text": "Review this React component bug and suggest a fix.",
+      "family": "unrelated-product"
+    },
+    {
+      "text": "只调查 Unity Editor 为什么忙，先不要修改 Package 或产品代码。",
+      "family": "investigation-only"
+    }
+  ],
+  "near_neighbor": [
+    {
+      "text": "alps-unity-cli 仓库自己的测试发现 Bridge bug，直接在 canonical 源码中修复，没有目标项目 Package 热修流程。",
+      "family": "canonical-only-fix"
+    },
+    {
+      "text": "在 Client-Jump 里修改游戏业务代码并验证战斗逻辑。",
+      "family": "game-business-code"
+    },
+    {
+      "text": "把一个已完成的排查写成普通技术总结，不维护 issue 状态。",
+      "family": "documentation-only"
+    }
+  ]
+}

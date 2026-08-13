@@ -1,6 +1,6 @@
 ---
 name: unity_cli
-description: 所有涉及 Unity 或 Unity Editor 的任务都优先使用本 Skill，以便发现唯一可用的 `unity_cli` 控制入口。适用于 Scene、GameObject、Prefab、Asset、Package、Build、Test、GameView、SceneView、日志、截图、Bridge、instance、Editor/PlayMode 状态和项目自定义能力；纯源码或文本工作可直接处理，但需要观察、操作或验证已打开 Editor 时必须使用 CLI。
+description: 所有涉及 Unity 或 Unity Editor 或 UnityPipeline 的任务都优先使用本 Skill，以便发现唯一可用的 `unity_cli` 控制入口。适用于 Scene、GameObject、Prefab、Asset、Package、Build、Test、GameView、SceneView、日志、截图、Bridge、instance、Editor/PlayMode 状态和项目自定义能力；纯源码或文本工作可直接处理，但需要观察、操作或验证已打开 Editor 时必须使用 CLI。
 ---
 
 # unity_cli

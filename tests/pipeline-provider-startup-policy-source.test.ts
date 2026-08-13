@@ -7,6 +7,8 @@ const settingsPath = "unitypkg/Editor/Infrastructure/UnityCliProjectSettings.cs"
 const handoffPath = "unitypkg/Editor/Infrastructure/UnityCliPipelineHandoff.cs";
 const instanceRegistryPath = "unitypkg/Editor/Infrastructure/UnityCliInstanceRegistry.cs";
 const bridgePath = "unitypkg/Editor/UnityCliBridge.cs";
+const startupStateMachinePath = "unitypkg/Editor/BridgeStartupStateMachine.cs";
+const workQueuePath = "unitypkg/Editor/Bridge/BridgeWorkQueue.cs";
 
 test("Pipeline provider suppression uses declaring assembly package identity only", async () => {
   const source = await readFile(officialPath, "utf8");
@@ -85,14 +87,36 @@ test("Pipeline handoff applies once and marks only after durable config and stop
   assert.equal((source.match(/MarkPipelineHandoffApplied\(\)/g) ?? []).length, 1);
 });
 
-test("Bridge bootstrap drains Pipeline startup and AutoStart off publishes no reload instance", async () => {
-  const source = await readFile(bridgePath, "utf8");
-  assert.match(source, /EditorApplication\.delayCall \+= PrimeBridgeStartup/);
-  assert.match(source, /UnityCliPipelineHandoff\.PrimePipelineStartup/);
-  assert.match(source, /EditorApplication\.delayCall \+= QueueCompleteBridgeStartup/);
-  assert.match(source, /EditorApplication\.delayCall \+= CompleteBridgeStartup/);
-  assert.ok(source.indexOf("PrimePipelineStartup") < source.indexOf("private static void QueueCompleteBridgeStartup()"));
-  assert.ok(source.indexOf("private static void QueueCompleteBridgeStartup()") < source.indexOf("private static void CompleteBridgeStartup()"));
+test("Bridge bootstrap advances on the existing update loop and AutoStart off publishes no reload instance", async () => {
+  const [source, stateMachine, workQueue] = await Promise.all([
+    readFile(bridgePath, "utf8"),
+    readFile(startupStateMachinePath, "utf8"),
+    readFile(workQueuePath, "utf8"),
+  ]);
+  assert.match(stateMachine, /enum BridgeStartupPhase[\s\S]*?Prime[\s\S]*?DrainPipelineCallbacks[\s\S]*?Complete/);
+  assert.match(stateMachine, /internal BridgeStartupTransition Tick\(bool busy, Func<bool> prime, Func<bool> complete\)/);
+  assert.match(stateMachine, /if \(busy\) return BridgeStartupTransition\.Busy/);
+  assert.match(stateMachine, /Phase = BridgeStartupPhase\.DrainPipelineCallbacks;[\s\S]*?return BridgeStartupTransition\.PrimeSucceeded/);
+  assert.match(stateMachine, /Phase = BridgeStartupPhase\.Complete;[\s\S]*?return BridgeStartupTransition\.DrainAdvanced/);
+  assert.match(stateMachine, /Phase = BridgeStartupPhase\.None;[\s\S]*?return complete\(\)/);
+  const primeReset = stateMachine.indexOf("Phase = BridgeStartupPhase.None", stateMachine.indexOf("if (Phase == BridgeStartupPhase.Prime)"));
+  const primeAttempt = stateMachine.indexOf("if (!prime())", primeReset);
+  const primeSuccess = stateMachine.indexOf("Phase = BridgeStartupPhase.DrainPipelineCallbacks", primeAttempt);
+  assert.ok(primeReset >= 0 && primeReset < primeAttempt);
+  assert.ok(primeAttempt < primeSuccess);
+  assert.match(stateMachine.slice(primeReset, primeSuccess), /if \(!prime\(\)\) return BridgeStartupTransition\.PrimeFailed/);
+  assert.doesNotMatch(stateMachine, /EditorApplication|AssetDatabase|UnityEngine/);
+  assert.match(source, /private static readonly BridgeStartupStateMachine StartupState = new BridgeStartupStateMachine\(\)/);
+  assert.match(source, /private static void AdvanceBridgeStartup\(\)/);
+  const busyInput = source.indexOf("EditorApplication.isCompiling || EditorApplication.isUpdating");
+  assert.ok(busyInput > source.indexOf("private static void AdvanceBridgeStartup()"));
+  assert.ok(busyInput < source.indexOf("UnityCliPipelineHandoff.PrimePipelineStartup"));
+  assert.match(source, /StartupState\.Tick\([\s\S]*?UnityCliPipelineHandoff\.PrimePipelineStartup[\s\S]*?CompleteBridgeStartup/);
+  assert.match(source, /transition == BridgeStartupTransition\.PrimeFailed/);
+  assert.match(source, /transition == BridgeStartupTransition\.CompleteFailed/);
+  assert.doesNotMatch(source, /EditorApplication\.delayCall[\s\S]*?BridgeStartup/);
+  assert.doesNotMatch(source, /PrimeBridgeStartup|QueueCompleteBridgeStartup|startupScheduled|startupPhase/);
+  assert.match(workQueue, /cachedIsPlayModeChanging = IsPlayModeChanging\(\);[\s\S]*?AdvanceBridgeStartup\(\);[\s\S]*?UnityCliSessionMutationLease\.TryFinalizeOwnedPlayModeRoot\(\)/);
   assert.match(source, /UnityCliPipelineHandoff\.EnsureAppliedOnce/);
   assert.match(source, /if \(!UnityCliProjectSettings\.Current\.BridgeAutoStart\)[\s\S]*?DeleteInstanceRegistration\(\);[\s\S]*?StopListener\(\);[\s\S]*?return/);
   const reloadStart = source.indexOf("private static void OnBeforeAssemblyReload()");
@@ -103,6 +127,6 @@ test("Bridge bootstrap drains Pipeline startup and AutoStart off publishes no re
   const registrySource = await readFile(instanceRegistryPath, "utf8");
   assert.match(registrySource, /!UnityCliProjectSettings\.Current\.BridgeAutoStart[\s\S]*?domainReloading \|\| EditorApplication\.isCompiling \|\| EditorApplication\.isUpdating[\s\S]*?return true/);
   assert.match(source, /bridge_after_assembly_reload scheduling bootstrap/);
-  assert.match(source, /ScheduleBridgeStartup\(\);/);
+  assert.match(source, /StartupState\.Reset\(\);[\s\S]*?ScheduleBridgeStartup\(\);/);
   assert.doesNotMatch(source, /bridge_after_assembly_reload restarting listener/);
 });

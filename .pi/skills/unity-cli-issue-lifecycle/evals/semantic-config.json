@@ -1,0 +1,112 @@
+{
+  "fallback_positive_concepts": [
+    "target_package",
+    "defect_lifecycle",
+    "product_sync"
+  ],
+  "positive_concepts": {
+    "target_package": {
+      "weight": 0.4,
+      "phrases": [
+        "packages com unity cli",
+        "com unity cli",
+        "installed package",
+        "target package",
+        "目标 package",
+        "真实 unity 项目",
+        "真实项目",
+        "dev 项目",
+        "package 热修"
+      ]
+    },
+    "defect_lifecycle": {
+      "weight": 0.35,
+      "phrases": [
+        "unity cli defect",
+        "product bug",
+        "产品 bug",
+        "产品缺陷",
+        "登记问题",
+        "记录根因",
+        "修复方法",
+        "in progress",
+        "in-progress",
+        "completed",
+        "issue"
+      ]
+    },
+    "product_sync": {
+      "weight": 0.3,
+      "phrases": [
+        "sync the canonical product source",
+        "canonical product source",
+        "sync unitypkg",
+        "同步 unitypkg",
+        "同步产品源码",
+        "回写仓库",
+        "再同步仓库"
+      ]
+    },
+    "live_validation": {
+      "weight": 0.2,
+      "phrases": [
+        "真实 editor",
+        "target editor",
+        "live validation",
+        "真实验证",
+        "验证成功",
+        "validation failed"
+      ]
+    }
+  },
+  "negative_concepts": {
+    "investigation_only": {
+      "weight": 0.8,
+      "exclusive": true,
+      "phrases": [
+        "不要修改代码",
+        "先不要修改",
+        "只调查",
+        "只解释",
+        "just explain",
+        "investigation only"
+      ]
+    },
+    "unrelated_product": {
+      "weight": 0.75,
+      "exclusive": true,
+      "phrases": [
+        "react",
+        "游戏业务代码",
+        "game business code"
+      ]
+    },
+    "canonical_only": {
+      "weight": 0.55,
+      "exclusive": true,
+      "phrases": [
+        "直接在 canonical 源码",
+        "没有目标项目 package",
+        "canonical only"
+      ]
+    },
+    "documentation_only": {
+      "weight": 0.65,
+      "exclusive": true,
+      "phrases": [
+        "普通技术总结",
+        "documentation only",
+        "不维护 issue 状态"
+      ]
+    },
+    "release_only": {
+      "weight": 0.6,
+      "exclusive": true,
+      "phrases": [
+        "发布创建版本计划",
+        "release plan",
+        "changelog"
+      ]
+    }
+  }
+}
