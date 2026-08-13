@@ -4624,6 +4624,20 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
+    "toolName": "screenshot.screen",
+    "descriptorOwner": "built-in",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "external",
+    "completionPredicate": "external-operation-terminal",
+    "proofSource": "operation-terminal-and-readback",
+    "reloadPolicy": "reattach-or-reobserve",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "external-proof-or-unknown",
+    "completionDriverId": "external-terminal-readback-v1",
+    "journalPolicy": "required",
+    "mutation": true
+  },
+  {
     "toolName": "screenshot.surround",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",

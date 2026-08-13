@@ -88,7 +88,7 @@ export async function dispatchTool(
   const resolved = await resolveCatalogTool(name, catalogFlags, runtime, requestId);
   if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime);
   const tool = resolved.tool;
-  if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <keyword> to find related tools."]);
+  if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <k1|k2|...> to find related tools."]);
 
   const input = requestFromInput(tool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
   return dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);

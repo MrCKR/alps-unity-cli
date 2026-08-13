@@ -206,6 +206,7 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
+            WriteReloadingMarker();
             ReleaseActiveDirectMutationLease();
             UnityCliCompilationEventBroker.BeforeReload();
             UnityCliCompileCoordinator.BeforeReload();
@@ -234,6 +235,7 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
+            DeleteReloadingMarker();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
             UnityCliCompileCoordinator.Initialize();
@@ -252,6 +254,37 @@ namespace UnityCli
             // After domain reload, static fields are reset. Re-initialize the Runtime Executor
             // and restore session state if we are already in Play Mode.
             ReinitializeRuntimeExecutorAfterDomainReload();
+        }
+
+        // 跨域重载标记：beforeAssemblyReload 写、afterAssemblyReload 删，供 CLI 在 bridge 断时识别“重载中”。
+        private const string ReloadingMarkerFileName = "reloading.json";
+        private const double ReloadingMarkerWindowMinutes = 3;
+
+        private static string ReloadingMarkerPath()
+        {
+            return Path.Combine(ProjectRoot(), "Library", "UnityCli", ReloadingMarkerFileName);
+        }
+
+        private static void WriteReloadingMarker()
+        {
+            try
+            {
+                var path = ReloadingMarkerPath();
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                var deadlineUtc = DateTime.UtcNow.AddMinutes(ReloadingMarkerWindowMinutes);
+                File.WriteAllText(path, "{\"deadlineUtc\":\"" + deadlineUtc.ToString("o") + "\"}", new UTF8Encoding(false));
+            }
+            catch { /* 标记写失败不影响重载流程 */ }
+        }
+
+        private static void DeleteReloadingMarker()
+        {
+            try
+            {
+                var path = ReloadingMarkerPath();
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch { /* 标记删除失败不影响重载流程 */ }
         }
 
         private static void UnregisterAndStop()

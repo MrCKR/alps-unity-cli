@@ -188,13 +188,20 @@ export function clearInstanceHealthCache(): void {
 /** 顶层 instances 控制面只读 registry；prune 由 C# writer 的 PID/start-time reducer 完成。 */
 export async function handleInstancesCommand(
   command: string | undefined,
-  _flags: Record<string, string | boolean>,
+  flags: Record<string, string | boolean>,
   dataDir: string,
   requestId: string,
 ): Promise<CliResult> {
+  const includeAll = getBoolean(flags, "all");
   if (command === "list" || !command) {
     const instances = await readInstancesWithProjectProcessClaims(dataDir);
-    return success(requestId, { instances: instances.map(instanceListSummary) });
+    // 默认只展示有 session 的活跃实例；offline 历史残留用 --all 展开，避免上下文污染。
+    const visible = includeAll ? instances : instances.filter((instance) => instance.status !== "offline");
+    const hiddenOfflineCount = instances.length - visible.length;
+    return success(requestId, {
+      instances: visible.map(instanceListSummary),
+      ...(includeAll || hiddenOfflineCount === 0 ? {} : { hiddenOfflineCount }),
+    });
   }
 
   if (command === "prune") {
@@ -757,7 +764,7 @@ export async function reduceRegistryRecord(
   };
 }
 
-/** public summary 不包含 endpoint、port 或 listener generation。 */
+/** public summary 不包含 endpoint、port 或 listener generation；null/空字段不输出以控制上下文。 */
 export function instanceListSummary(instance: UnityInstance): Record<string, unknown> {
   return {
     instanceId: instance.instanceId,
@@ -769,27 +776,31 @@ export function instanceListSummary(instance: UnityInstance): Record<string, unk
     revision: instance.revision,
     updatedAt: instance.updatedAt,
     claimVerification: instance.claimVerification,
-    ...(instance.processClaimIds ? { processClaimIds: instance.processClaimIds } : {}),
-    sessions: instance.allSessions.map((session) => ({
-      target: session.target,
-      sessionId: session.sessionId,
-      ...(session.editorSessionId ? { editorSessionId: session.editorSessionId } : {}),
-      ...(session.runtimeSessionId ? { runtimeSessionId: session.runtimeSessionId } : {}),
-      processId: session.processId,
-      processStartedAt: session.processStartedAt,
-      lastHeartbeatAt: session.lastHeartbeatAt,
-      state: session.state,
-      claimVerification: session.claimVerification,
-    })),
-    lastUnitySnapshot: instance.lastUnitySnapshot ? {
-      schemaVersion: instance.lastUnitySnapshot.schemaVersion,
-      observedAt: instance.lastUnitySnapshot.observedAt,
-      fields: instance.lastUnitySnapshot.fields,
-    } : null,
-    progress: instance.progress,
-    blockers: instance.blockers,
-    unityVersion: instance.unityVersion ?? null,
-    buildStamp: instance.buildStamp ?? null,
+    ...(instance.processClaimIds?.length ? { processClaimIds: instance.processClaimIds } : {}),
+    ...(instance.allSessions.length ? {
+      sessions: instance.allSessions.map((session) => ({
+        target: session.target,
+        sessionId: session.sessionId,
+        ...(session.editorSessionId ? { editorSessionId: session.editorSessionId } : {}),
+        ...(session.runtimeSessionId ? { runtimeSessionId: session.runtimeSessionId } : {}),
+        processId: session.processId,
+        processStartedAt: session.processStartedAt,
+        lastHeartbeatAt: session.lastHeartbeatAt,
+        state: session.state,
+        claimVerification: session.claimVerification,
+      })),
+    } : {}),
+    ...(instance.lastUnitySnapshot ? {
+      lastUnitySnapshot: {
+        schemaVersion: instance.lastUnitySnapshot.schemaVersion,
+        observedAt: instance.lastUnitySnapshot.observedAt,
+        fields: instance.lastUnitySnapshot.fields,
+      },
+    } : {}),
+    ...(instance.progress?.length ? { progress: instance.progress } : {}),
+    ...(instance.blockers?.length ? { blockers: instance.blockers } : {}),
+    ...(instance.unityVersion ? { unityVersion: instance.unityVersion } : {}),
+    ...(instance.buildStamp ? { buildStamp: instance.buildStamp } : {}),
   };
 }
 

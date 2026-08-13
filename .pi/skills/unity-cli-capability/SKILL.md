@@ -133,7 +133,7 @@ Describe 不得包含：
 修改 describe 后必须检查：
 
 - 陌生 AI 能否仅凭 describe 一次调用成功。
-- `tools search <keyword>` 是否会因 describe 文本误导到错误能力。
+- `tools search <k1|k2|...>` 是否会因 describe 文本误导到错误能力。
 - discovery summary、schema、examples、风险字段、Bridge 行为、错误 envelope 和文档是否一致。
 
 ## 自定义 C# 能力目录

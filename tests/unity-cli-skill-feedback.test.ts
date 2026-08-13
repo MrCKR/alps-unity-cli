@@ -87,6 +87,21 @@ test("feedback recorder writes one bounded local record", async () => {
   }
 });
 
+test("feedback recorder accepts dotted tool names without misjudging them as hostnames", async () => {
+  const localAppData = await mkdtemp(join(tmpdir(), "unity-cli-feedback-toolname-"));
+  try {
+    const { stdout } = await runFeedback(localAppData, [
+      "-Category", "ambiguity",
+      "-Summary", "scene.gameobject.components returned two component interpretations.",
+      "-Phase", "describe",
+    ]);
+    const result = JSON.parse(stdout) as { ok: boolean };
+    assert.equal(result.ok, true);
+  } finally {
+    await rm(localAppData, { recursive: true, force: true });
+  }
+});
+
 test("feedback recorder emits UTF-8 JSON when LOCALAPPDATA contains non-ASCII characters", async () => {
   const parent = await mkdtemp(join(tmpdir(), "unity-cli-feedback-unicode-"));
   const localAppData = join(parent, "本地数据");
@@ -238,7 +253,7 @@ test("Skill feedback contract is opt-in, friction-only, local, and caller-contro
   const script = await readFile(scriptPath);
   assert.equal((skill.match(/^FeedbackMode:\s*(?:off|on)$/gm) ?? []).length, 1);
   assert.match(skill, /^FeedbackMode: off$/m);
-  assert.match(skill, /tools search <keyword>/);
+  assert.match(skill, /tools search <k1\|k2\|\.\.\.>/);
   assert.match(skill, /是否立即重试、重复调用或继续 mutation 完全由调用方决定/);
   assert.match(skill, /transient:true.*nextActions.*只是建议，不构成权限或重放门/);
   assert.match(operationProtocol, /Skill 不替调用方设置限制/);

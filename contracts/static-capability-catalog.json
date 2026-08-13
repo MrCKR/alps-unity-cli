@@ -36203,6 +36203,141 @@
       "availabilityScope": "editorSession"
     },
     {
+      "name": "screenshot.screen",
+      "summary": "Capture the final composited screen including screen-space UI to a PNG file.",
+      "description": "Capture the final composited frame (including Screen Space Overlay Canvas UI) via ScreenCapture. Resolution follows the Game View size and cannot be set arbitrarily; capture is most reliable in Play Mode and the file is written at the end of the frame.",
+      "group": "screenshot",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "inlineBase64": {
+            "type": "boolean"
+          },
+          "overwrite": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "superSize": {
+            "oneOf": [
+              {
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactPath": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "height": {
+            "maximum": 9223372036854776000,
+            "minimum": -9223372036854776000,
+            "type": "integer"
+          },
+          "imageBase64": {
+            "type": "string"
+          },
+          "imageHeight": {
+            "oneOf": [
+              {
+                "maximum": 9223372036854776000,
+                "minimum": -9223372036854776000,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "imageMimeType": {
+            "type": "string"
+          },
+          "imageWidth": {
+            "oneOf": [
+              {
+                "maximum": 9223372036854776000,
+                "minimum": -9223372036854776000,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quality": {
+            "maximum": 9223372036854776000,
+            "minimum": -9223372036854776000,
+            "type": "integer"
+          },
+          "screenshotPath": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "maximum": 9223372036854776000,
+            "minimum": -9223372036854776000,
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "transparent": {
+            "type": "boolean"
+          },
+          "width": {
+            "maximum": 9223372036854776000,
+            "minimum": -9223372036854776000,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "destructiveHint": true,
+      "sideEffects": [
+        "asset-write"
+      ],
+      "playModeSupport": "supported",
+      "supportsDryRun": false,
+      "contractProfile": "native",
+      "examples": [
+        {
+          "description": "Capture the final screen with UI",
+          "argv": [
+            "tools",
+            "run",
+            "screenshot.screen",
+            "--input",
+            "{\"inlineBase64\":false,\"overwrite\":false,\"path\":\"Assets/Shots/screen.png\"}"
+          ]
+        }
+      ],
+      "source": "built-in",
+      "target": "editor",
+      "availabilityScope": "editorSession"
+    },
+    {
       "name": "screenshot.surround",
       "summary": "Capture six fixed-angle screenshots and compose a 3x2 contact sheet; dry-run supported.",
       "description": "Capture six fixed angles (front, back, left, right, top, bird_eye) around a GameObject and compose a 3x2 contact sheet PNG. Supports --dry-run to preview planned artifacts. Editor-only.",

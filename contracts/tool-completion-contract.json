@@ -8906,6 +8906,33 @@
       ]
     },
     {
+      "toolName": "screenshot.screen",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/screenshot/screen.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "external",
+      "completionPredicate": {
+        "kind": "external-operation-terminal",
+        "description": "screenshot.screen 的跨帧 ScreenCapture 已达到自己的业务 terminal，且落盘 artifact readback 已验证。"
+      },
+      "proofSource": {
+        "kind": "operation-terminal-and-readback",
+        "description": "screenshot.screen 的落盘 PNG fresh readback、尺寸与 SHA-256 proof。"
+      },
+      "reloadPolicy": {
+        "kind": "reattach-or-reobserve",
+        "description": "仅在存在稳定 operation identity/proof 时于同一 editor session 附着或重新观察；否则不重复 effect。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "external-proof-or-unknown",
+        "description": "ScreenCapture 已开始但无法取得 terminal proof 时返回 E_EXECUTION_TIMEOUT，调用方负责检查业务状态并决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "screenshot.surround",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/screenshot/surround.cs",

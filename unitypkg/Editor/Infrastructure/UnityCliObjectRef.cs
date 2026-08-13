@@ -122,11 +122,14 @@ namespace UnityCli
                 {
                     var go = FindGameObjectByPath(path);
                     if (go != null) return go;
+                    throw new BridgeCommandException("E_OBJECTREF_GAMEOBJECT_REQUIRED",
+                        "No GameObject matched path/name '" + path + "' in any loaded scene.",
+                        "Run go.find to locate the GameObject and obtain its instanceId, then pass that instanceId.");
                 }
 
                 throw new BridgeCommandException("E_OBJECTREF_GAMEOBJECT_REQUIRED",
                     "GameObject reference required: pass instanceId or path/name.",
-                    "Run tools run scene.gameobject or go.find to locate the GameObject.");
+                    "Run go.find to locate the GameObject and obtain its instanceId.");
             }
 
             /// <summary>
@@ -183,63 +186,91 @@ namespace UnityCli
                     "Run component.get --input '{\"instanceId\":123,\"component\":\"Transform\"}'.");
             }
 
-            /// <summary>按路径或名称查找 GameObject，支持 "A/B/C" 层级路径与全场景名称匹配。</summary>
+            /// <summary>
+            /// 按路径或名称查找 GameObject，分层匹配：
+            /// 层1 精确匹配（从场景顶层起、大小写敏感）→ 层2 放宽匹配（任意层级起点、路径后缀、忽略大小写）。
+            /// 任何层命中多个即报歧义并列候选完整路径；0 命中返回 null 由调用方报错。
+            /// </summary>
             public static GameObject FindGameObjectByPath(string path)
             {
                 if (string.IsNullOrEmpty(path)) return null;
-                // 先按层级路径精确匹配
+                var roots = new List<Transform>();
                 for (var i = 0; i < SceneManager.sceneCount; i++)
                 {
                     var scene = SceneManager.GetSceneAt(i);
                     if (!scene.isLoaded) continue;
-                    foreach (var root in scene.GetRootGameObjects())
-                    {
-                        var found = FindByPath(root.transform, path);
-                        if (found != null) return found;
-                    }
+                    foreach (var root in scene.GetRootGameObjects()) roots.Add(root.transform);
                 }
-                // 回退：全场景按名称匹配
-                if (path.IndexOf('/') < 0)
-                {
-                    for (var i = 0; i < SceneManager.sceneCount; i++)
-                    {
-                        var scene = SceneManager.GetSceneAt(i);
-                        if (!scene.isLoaded) continue;
-                        foreach (var root in scene.GetRootGameObjects())
-                        {
-                            var found = FindByName(root.transform, path);
-                            if (found != null) return found;
-                        }
-                    }
-                }
+
+                // 层1：精确匹配（从场景顶层起、大小写敏感）
+                var exact = new List<GameObject>();
+                foreach (var root in roots) CollectExact(root, path, exact);
+                if (exact.Count == 1) return exact[0];
+                if (exact.Count > 1) ThrowAmbiguousPath(path, exact);
+
+                // 层2：放宽匹配（任意层级起点、路径后缀、忽略大小写）
+                var segments = path.Split('/');
+                var relaxed = new List<GameObject>();
+                foreach (var root in roots) CollectRelaxed(root, segments, relaxed);
+                if (relaxed.Count == 1) return relaxed[0];
+                if (relaxed.Count > 1) ThrowAmbiguousPath(path, relaxed);
+
                 return null;
             }
 
-            private static GameObject FindByPath(Transform current, string path)
+            // 层1：从当前节点起精确匹配 path（大小写敏感），收集所有命中。
+            private static void CollectExact(Transform current, string path, List<GameObject> results)
             {
-                if (string.Equals(current.name, path, StringComparison.Ordinal)) return current.gameObject;
+                if (string.Equals(current.name, path, StringComparison.Ordinal)) { results.Add(current.gameObject); return; }
                 var slash = path.IndexOf('/');
-                if (slash < 0) return null;
+                if (slash < 0) return;
                 var head = path.Substring(0, slash);
                 var rest = path.Substring(slash + 1);
-                if (!string.Equals(current.name, head, StringComparison.Ordinal)) return null;
-                for (var i = 0; i < current.childCount; i++)
-                {
-                    var found = FindByPath(current.GetChild(i), rest);
-                    if (found != null) return found;
-                }
-                return null;
+                if (!string.Equals(current.name, head, StringComparison.Ordinal)) return;
+                for (var i = 0; i < current.childCount; i++) CollectExact(current.GetChild(i), rest, results);
             }
 
-            private static GameObject FindByName(Transform current, string name)
+            // 层2：任意层级起点、路径后缀、忽略大小写，收集所有命中。
+            private static void CollectRelaxed(Transform current, string[] segments, List<GameObject> results)
             {
-                if (string.Equals(current.name, name, StringComparison.Ordinal)) return current.gameObject;
-                for (var i = 0; i < current.childCount; i++)
+                if (PathEndsWith(current, segments)) results.Add(current.gameObject);
+                for (var i = 0; i < current.childCount; i++) CollectRelaxed(current.GetChild(i), segments, results);
+            }
+
+            // 判断 current 到根的路径链是否以 segments 结尾（忽略大小写）。
+            private static bool PathEndsWith(Transform current, string[] segments)
+            {
+                var node = current;
+                for (var i = segments.Length - 1; i >= 0; i--)
                 {
-                    var found = FindByName(current.GetChild(i), name);
-                    if (found != null) return found;
+                    if (node == null) return false;
+                    if (!string.Equals(node.name, segments[i], StringComparison.OrdinalIgnoreCase)) return false;
+                    node = node.parent;
                 }
-                return null;
+                return true;
+            }
+
+            // 从场景顶层起的完整路径，用于歧义候选展示。
+            private static string FullPath(Transform current)
+            {
+                var parts = new List<string>();
+                var node = current;
+                while (node != null) { parts.Add(node.name); node = node.parent; }
+                parts.Reverse();
+                return string.Join("/", parts);
+            }
+
+            // 多命中时抛歧义错误，列候选完整路径（从顶层起），不静默取错。
+            private static void ThrowAmbiguousPath(string path, List<GameObject> matches)
+            {
+                var candidates = matches
+                    .Select(m => FullPath(m.transform))
+                    .Distinct()
+                    .Take(10)
+                    .ToList();
+                throw new BridgeCommandException("E_OBJECTREF_AMBIGUOUS",
+                    "Path '" + path + "' matches " + matches.Count + " GameObjects: " + string.Join(", ", candidates),
+                    "Pass the full hierarchy path from a scene root, or use go.find to obtain the instanceId.");
             }
         }
     }

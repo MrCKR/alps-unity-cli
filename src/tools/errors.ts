@@ -50,8 +50,10 @@ export function blockerTimeoutMessage(operation: string, blockers: EditorBlocker
   return blockers?.[0] ? `${operation} did not return a terminal result before the request deadline; modal dialog '${blockers[0].title}' was observed.` : `${operation} did not return a terminal result before the request deadline.`;
 }
 
+/** 超时恢复操作：先引导读 editor.state 等待过渡完成，再处理 modal dialog；两者同时给出，不因 dialog 丢弃等待引导。 */
 export function blockerNextActions(): string[] {
   return [
+    "Run unity_cli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.",
     "Run unity_cli tools run editor.dialogs to inspect the current modal dialog.",
     "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
   ];

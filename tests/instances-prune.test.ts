@@ -64,6 +64,34 @@ test("instances prune only reports C# writer-owned cleanup and never rewrites re
   assert.equal(after, before);
 });
 
+test("instances list hides offline instances by default and reveals with --all", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-instances-filter-"));
+  const activePath = await project("unity-cli-filter-active-");
+  const activeIdentity = registryIdentity(activePath);
+  const session = await makeRegistrySession("http://127.0.0.1:47991");
+  await writeRegistry(dataDir, makeRegistry(activeIdentity, [session]));
+
+  const offlinePath = await project("unity-cli-filter-offline-");
+  const offlineIdentity = registryIdentity(offlinePath);
+  await writeRegistry(dataDir, makeRegistry(offlineIdentity, []));
+
+  const list = await execute(["instances", "list"], { dataDir } as never);
+  assert.ok(list.ok, JSON.stringify(list));
+  const data = list.data as { instances: Array<{ instanceId: string }>; hiddenOfflineCount?: number };
+  assert.deepEqual(data.instances.map((instance) => instance.instanceId), [activeIdentity.instanceId]);
+  assert.equal(data.hiddenOfflineCount, 1);
+
+  const all = await execute(["instances", "list", "--all"], { dataDir } as never);
+  assert.ok(all.ok, JSON.stringify(all));
+  const allData = all.data as { instances: Array<{ instanceId: string }> };
+  assert.equal(allData.instances.length, 2);
+  assert.deepEqual(
+    allData.instances.map((instance) => instance.instanceId).sort(),
+    [activeIdentity.instanceId, offlineIdentity.instanceId].sort(),
+  );
+  assert.equal(Object.hasOwn(all.data as object, "hiddenOfflineCount"), false);
+});
+
 test("Windows process observation proves the current PID under the production startup budget", { skip: process.platform !== "win32" }, async () => {
   const observation = (await probeProcessObservations([process.pid])).get(process.pid);
   assert.equal(observation?.state, "alive");

@@ -52,6 +52,7 @@ export const CLI_ARGS_SPEC: CliArgsSpec = {
     "skill-only": "boolean",
     check: "boolean",
     force: "boolean",
+    all: "boolean",
     job: "boolean",
     wait: "boolean",
     "wait-timeout-ms": "value",
@@ -171,7 +172,7 @@ function commandOptionNames(group: string | undefined, command: string | undefin
   }
   if (group === "init") return new Set([...global, "project", "agent", "pkg-only", "skill-only", "check", "timeout-ms", "unity"]);
   if (group === "target") return new Set([...global, "force"]);
-  if (group === "instances") return new Set(global);
+  if (group === "instances") return new Set([...global, "all"]);
   return new Set([...global, "instance", "project"]);
 }
 
@@ -225,7 +226,7 @@ function help(): Record<string, unknown> {
       "tools group list <group> [--instance <id|projectPath|alias>]",
       "tools describe <tool> [--instance <id|projectPath|alias>]",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--artifact-dir <path>] [--runtime] [--instance <id|projectPath|alias>]",
-      "tools search <keyword> [--instance <id|projectPath|alias>]",
+      "tools search <k1|k2|...> [--instance <id|projectPath|alias>]",
       "command [--project-path <path>] [<name> [--field <value>|<positional>...]]",
       "extensions list [--project <path>]",
       "extensions install <id|name> [--project <path>]",
@@ -238,7 +239,7 @@ function help(): Record<string, unknown> {
       "target alias list",
       "target alias set <projectPath|instanceId> <alias> [--force]",
       "target alias unset <alias>",
-      "instances list",
+      "instances list [--all]",
       "instances prune",
       "doctor [--instance <id|projectPath|alias>] [--project <path>]"
     ],

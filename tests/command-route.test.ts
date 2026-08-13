@@ -76,7 +76,7 @@ test("command help结构化声明native优先、attribute显式名与零映射",
   });
   assert.deepEqual((result.data as { catalogDiscovery: unknown }).catalogDiscovery, {
     commandListing: "unity_cli command --project-path <path>",
-    toolSearch: "unity_cli tools search <keyword> --instance <id|projectPath|alias>",
+    toolSearch: "unity_cli tools search <k1|k2|...> --instance <id|projectPath|alias>",
     toolDescribe: "unity_cli tools describe <tool> --instance <id|projectPath|alias>",
   });
 });
@@ -85,7 +85,7 @@ test("command省略name时投影同一live Tool catalog", async () => {
   const result = await execute(["command"], runtimeFor([attributeEvalTool()], []) as never);
   assert.ok(result.ok, JSON.stringify(result));
   const commands = (result.data as { commands: Array<Record<string, unknown>> }).commands;
-  const descriptor = commands.find((item) => item.toolName === "UnityPipeline_eval");
+  const descriptor = commands.find((item) => item.name === "eval");
   assert.equal(descriptor?.name, "eval");
   assert.equal(descriptor?.group, "UnityPipeline");
   assert.deepEqual(descriptor?.parameters, ["code", "count", "pdb", "ratio", "tags", "config", "payload", "display_name", "nullable"]);
@@ -165,8 +165,8 @@ test("command名称选择保持native exact优先且不做相似能力映射", a
   const missing = await execute(["command", "recompile"], runtime as never);
 
   assert.ok(listing.ok, JSON.stringify(listing));
-  const names = (listing.data as { commands: Array<{ name: string; toolName: string }> }).commands
-    .filter((item) => item.toolName === "eval" || item.toolName === "UnityPipeline_eval")
+  const names = (listing.data as { commands: Array<{ name: string }> }).commands
+    .filter((item) => item.name === "eval" || item.name === "UnityPipeline_eval")
     .map((item) => item.name);
   assert.deepEqual(names.sort(), ["UnityPipeline_eval", "eval"]);
   assert.ok(bare.ok, JSON.stringify(bare));

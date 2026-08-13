@@ -22,7 +22,7 @@ tools group
     -> tools run <tool> --input '<json>'
 ```
 
-不确定分组时使用 `unity_cli tools search <keyword>`。
+不确定分组时使用 `unity_cli tools search <k1|k2|...>`，多个关键词用 `|` 分隔按 OR 匹配。
 
 ### `tools group`
 

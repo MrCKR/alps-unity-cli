@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -199,6 +199,46 @@ test("readEditorState rejects future snapshots and reports conflict or offline f
     assert.equal(result.observation.live, false);
   } finally {
     await rm(offline, { recursive: true, force: true });
+  }
+});
+
+test("editor.state reports transitioning when a live reloading marker covers a broken bridge", async () => {
+  const fixture = await stateFixture();
+  try {
+    const markerDir = join(fixture.project, "Library", "UnityCli");
+    await mkdir(markerDir, { recursive: true });
+    await writeFile(join(markerDir, "reloading.json"), JSON.stringify({ deadlineUtc: new Date(Date.now() + 60_000).toISOString() }));
+
+    const result = await readEditorState({
+      requestId: "state-reloading",
+      flags: { instance: fixture.project },
+      dataDir: fixture.dataDir,
+      bridgeExecute: async () => { throw new Error("bridge broken during reload"); },
+    });
+    assert.equal(result.status, "transitioning");
+    assert.equal(result.observation.live, false);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("editor.state falls through to process verification when the reloading marker is expired or absent", async () => {
+  const expired = await stateFixture();
+  try {
+    const markerDir = join(expired.project, "Library", "UnityCli");
+    await mkdir(markerDir, { recursive: true });
+    await writeFile(join(markerDir, "reloading.json"), JSON.stringify({ deadlineUtc: new Date(Date.now() - 1_000).toISOString() }));
+
+    // 标记已超时：单 session 的进程验证路径不得因标记而被跳过，结果不应是 transitioning。
+    const result = await readEditorState({
+      requestId: "state-reloading-expired",
+      flags: { instance: expired.project },
+      dataDir: expired.dataDir,
+      bridgeExecute: async () => { throw new Error("bridge broken"); },
+    });
+    assert.notEqual(result.status, "transitioning");
+  } finally {
+    await rm(expired.root, { recursive: true, force: true });
   }
 });
 

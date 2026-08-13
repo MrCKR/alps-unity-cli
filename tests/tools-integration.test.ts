@@ -21,7 +21,33 @@ test("tools group, search, and describe use one connected instance catalog", asy
   assert.equal((describe.data as { name: string }).name, "scene.hierarchy");
   assert.ok((describe.data as { inputSchema?: unknown }).inputSchema);
   assert.ok((describe.data as { outputSchema?: unknown }).outputSchema);
-  assert.equal((describe.data as { contractProfile?: string }).contractProfile, "native");
+  assert.equal((describe.data as { contractProfile?: string }).contractProfile, undefined);
+  assert.equal((describe.data as { summary?: string }).summary, undefined);
+});
+
+test("tools search splits keywords by | with OR matching and routing-only fields", async () => {
+  const result = await execute(["tools", "search", "hierarchy|console|screenshot"], connected as never);
+  assert.ok(result.ok, JSON.stringify(result));
+  const data = result.data as { tokens: string[]; count: number; tools: Array<Record<string, unknown>> };
+  assert.deepEqual(data.tokens, ["hierarchy", "console", "screenshot"]);
+  assert.ok(data.count > 0);
+  for (const tool of data.tools) {
+    assert.deepEqual(Object.keys(tool).sort(), ["group", "name", "source", "summary"]);
+  }
+  const names = data.tools.map((tool) => tool.name as string);
+  assert.ok(names.includes("scene.hierarchy"));
+  assert.ok(names.some((name) => name.includes("console")));
+  assert.ok(names.some((name) => name.startsWith("screenshot.") || name === "camera.screenshot"));
+});
+
+test("tools search filters empty tokens and rejects a keyword of only separators", async () => {
+  const spaced = await execute(["tools", "search", "hierarchy||console"], connected as never);
+  assert.ok(spaced.ok, JSON.stringify(spaced));
+  assert.deepEqual((spaced.data as { tokens: string[] }).tokens, ["hierarchy", "console"]);
+
+  const empty = await execute(["tools", "search", "|"], connected as never);
+  assert.ok(!empty.ok);
+  assert.equal(empty.error?.code, "TOOLS_SEARCH_KEYWORD_REQUIRED");
 });
 
 test("tools group list声明返回name是exact且group不是前缀", async () => {

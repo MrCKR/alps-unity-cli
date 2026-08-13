@@ -25,7 +25,7 @@ FeedbackMode: off
 unity_cli instances list
 unity_cli tools group --instance <id|projectPath|alias>
 unity_cli tools group list <group> --instance <id|projectPath|alias>
-unity_cli tools search <keyword> --instance <id|projectPath|alias>
+unity_cli tools search <k1|k2|...> --instance <id|projectPath|alias>
 unity_cli tools describe <tool> --instance <id|projectPath|alias>
 unity_cli tools run <tool> --input '<json>' --instance <id|projectPath|alias>
 

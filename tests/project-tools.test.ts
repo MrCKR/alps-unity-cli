@@ -136,7 +136,7 @@ test("public custom Tool descriptor hides internal execution and fingerprint met
   assert.equal(published.internalDescriptorFingerprint, undefined);
   assert.equal(published.completionContract, undefined);
   assert.equal(published.handler, undefined);
-  assert.equal(published.contractProfile, "native");
+  assert.equal(published.contractProfile, undefined);
   assert.deepEqual(published.outputSchema, parsed.outputSchema);
   assert.deepEqual(published.examples, [{ description: "Echo hello.", argv: ["tools", "run", "sample.echo", "--input", "{\"value\":\"hello\"}"] }]);
 });
@@ -148,7 +148,7 @@ test("official attribute descriptors retain their conservative contract profile"
   assert.equal(parsed.destructiveHint, true);
   assert.deepEqual(parsed.permissions, ["execute-user-code"]);
   assert.equal(parsed.completionContract?.outcomeUnknownPolicy, "method-may-still-be-running");
-  assert.equal(publicToolDescriptor(parsed).contractProfile, "official-attribute");
+  assert.equal(publicToolDescriptor(parsed).contractProfile, undefined);
   const omittedEmptyPackages = officialDescriptor();
   delete omittedEmptyPackages.requiresPackages;
   assert.ok(projectDescriptorToToolMetadata(omittedEmptyPackages));

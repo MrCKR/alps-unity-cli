@@ -45,7 +45,8 @@ function Assert-SafeFeedbackText {
     }
     $containsNetworkAddress = $Value -match '(?i)\b(?:https?|wss?|file)://'
     $containsEndpointLabel = $Value -match '(?i)\bendpoint\s*[:=]'
-    $containsHostName = $Value -match '(?i)\b(?:localhost|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b'
+    # 只拒绝明显 hostname：localhost 或已知公共/保留 TLD 结尾，避免误伤三段式工具名。
+    $containsHostName = $Value -match '(?i)\b(?:localhost|(?:[A-Za-z0-9-]+\.)+(?:com|org|net|edu|gov|mil|info|biz|io|dev|app|ai|co|me|tv|cc|gg|sh|xyz|top|tech|cloud|site|online|store|shop|club|live|news|media|world|email|blog|wiki|page|link|fun|run|one|pro|plus|space|host|cn|uk|us|jp|de|fr|ru|in|br|au|ca|it|es|nl|se|ch|kr|tw|hk|sg|example|test|invalid))\b'
     $containsIpAddress = $Value -match '\b(?:\d{1,3}\.){3}\d{1,3}\b'
     $containsHostPort = $Value -match '(?i)\b(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*):\d{2,5}\b'
     $containsAbsolutePath = $Value -match '(?i)(?:[A-Z]:[\\/]|(?:^|\s)/(?:[^/\s]+/)*[^/\s]+)'

@@ -63,7 +63,7 @@ export async function handleCommand(
       },
       catalogDiscovery: {
         commandListing: "unity_cli command --project-path <path>",
-        toolSearch: "unity_cli tools search <keyword> --instance <id|projectPath|alias>",
+        toolSearch: "unity_cli tools search <k1|k2|...> --instance <id|projectPath|alias>",
         toolDescribe: "unity_cli tools describe <tool> --instance <id|projectPath|alias>",
       },
       note: "Omit name without --help to list the selected instance live catalog command projection.",
@@ -84,7 +84,7 @@ export async function handleCommand(
   if (!tool) {
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Command not found: ${commandName}.`, [
       "Run unity_cli command to list commands registered by the selected Unity instance.",
-      "Run unity_cli tools search <keyword> to find related Tools.",
+      "Run unity_cli tools search <k1|k2|...> to find related Tools.",
     ], { commandName });
   }
 
@@ -489,13 +489,9 @@ function commandDescriptor(tool: ToolMetadata, commandName: string): Record<stri
   const properties = schemaRecord(tool.inputSchema.properties);
   return {
     name: commandName,
-    toolName: tool.name,
     summary: tool.summary,
-    description: tool.description,
     group: tool.group,
     parameters: commandParameterOrder(tool.inputSchema, properties),
-    schema: tool.inputSchema,
-    target: tool.target ?? "editor",
     available: tool.available ?? true,
     ...((tool.available ?? true) ? {} : { unavailableReason: tool.unavailableReason }),
   };

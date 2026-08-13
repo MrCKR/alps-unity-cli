@@ -15,6 +15,7 @@ test("screenshot domain exposes game-view/scene-view/isolated-object/orbit/surro
   assert.ok(screenshotTools.includes("screenshot.isolated-object"));
   assert.ok(screenshotTools.includes("screenshot.orbit"));
   assert.ok(screenshotTools.includes("screenshot.surround"));
+  assert.ok(screenshotTools.includes("screenshot.screen"));
   assert.equal(screenshotTools.includes("screenshot.camera"), false);
 });
 

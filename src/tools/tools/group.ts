@@ -1,26 +1,11 @@
 import { loadToolCatalog } from "../catalog.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
+import { groupSummary } from "./group-summaries.js";
 
 export interface ToolsGroupRequest {}
 export interface ToolsGroupItem { name: string; summary: string; toolCount: number }
 export interface ToolsGroupResult { count: number; groups: ToolsGroupItem[] }
-
-const GROUP_SUMMARIES: Record<string, string> = {
-  docs: "Offline documentation lookup and search.",
-  tools: "Tool catalog grouping, search, describe, and execution.",
-  package: "Unity package inspection and package management.",
-  scene: "Scene hierarchy, load, save, validation, and view operations.",
-  probuilder: "ProBuilder shape, mesh, face, edge, and repair operations.",
-  build: "Live Unity build execution with terminal BuildReport and artifact proof.",
-  test: "Unity test execution and result collection.",
-  editor: "Unity Editor refresh, diagnostics, and session controls.",
-  reflect: "Offline C# and Unity type reflection search.",
-  code: "C# code execution with explicit safety controls.",
-  diagnose: "CLI, target, and Bridge capability diagnostics.",
-  asset: "Unity asset discovery, import, editing, and refresh operations.",
-  runtime: "Development Player state, console, capture, timing, and input operations."
-};
 
 function discoveryError(result: { error?: { code: string; message: string; nextActions?: string[]; details?: unknown; transient?: boolean; retryAfterMs?: number } }): never {
   throw StructuredToolError.from(result.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
@@ -44,7 +29,7 @@ export default defineTool<ToolsGroupRequest, ToolsGroupResult>({
     for (const tool of catalog.tools) groups.set(tool.group, (groups.get(tool.group) ?? 0) + 1);
     const items = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([name, toolCount]) => ({
       name,
-      summary: GROUP_SUMMARIES[name] ?? `${name} capability operations.`,
+      summary: groupSummary(name),
       toolCount
     }));
     return { count: items.length, groups: items };

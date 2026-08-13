@@ -106,7 +106,7 @@ unity_cli tools group
 
 # 第二步：按组查看工具摘要
 unity_cli tools group list camera
-# 或搜索关键词
+# 或搜索关键词（支持 | 分隔多关键词，OR 匹配）
 unity_cli tools search screenshot
 
 # 第三步：查看工具完整描述（执行前必做）

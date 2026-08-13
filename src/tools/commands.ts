@@ -33,7 +33,7 @@ export async function handleToolsCommand(
     const name = positional[0] ?? getString(flags, "name") ?? getString(flags, "tool");
     return dispatchTool("tools.describe", undefined, flags, runtime, requestId, { name });
   }
-  return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools group, tools group list <group>, tools describe <tool>, tools run <tool>, or tools search <keyword>.", [
+  return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools group, tools group list <group>, tools describe <tool>, tools run <tool>, or tools search <k1|k2|...>.", [
     "Run unity_cli tools group to see tool categories.",
     "Run unity_cli tools describe <tool> for full metadata."
   ]);

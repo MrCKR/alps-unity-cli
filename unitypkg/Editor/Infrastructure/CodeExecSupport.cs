@@ -11,6 +11,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -31,6 +33,9 @@ namespace UnityCli
         private const int MaxCodeTerminalBytes = 1536 * 1024;
         private const int MaxRoslynOutputBytes = 512 * 1024;
         private const int MaxRoslynDiagnostics = 100;
+
+        // code.exec 编译核心开关：默认 in-process Roslyn（官方方案）；置 false 回退到 csc.exe 子进程。
+        private const bool CodeExecUseInProcessRoslyn = true;
 
         // 注册运行时代码执行命令。
         private static void RegisterCodeExecCommand(BridgeCommandRegistry registry)
@@ -82,49 +87,28 @@ namespace UnityCli
             {
                 return CodeExecutionResult.Fail("E_EXECUTION_TIMEOUT", "Runtime Code reference discovery exceeded the immutable deadline.", new Dictionary<string, object>(), "Submit a new request after the Editor is responsive.");
             }
-            var editorDataPath = EditorDataPath();
-            if (string.IsNullOrEmpty(editorDataPath))
-            {
-                var message = "Unity Editor Data directory was not found.";
-                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", message, new Dictionary<string, object> { { "referenceError", message } }, "Check the Unity Editor installation path.");
-            }
-
-            var temporaryRoot = Path.Combine(ProjectRoot(), "Library", "UnityCli", "code-exec-temp");
-            Directory.CreateDirectory(temporaryRoot);
-            var sourceFilePath = Path.Combine(temporaryRoot, "source.cs");
-            var responseFilePath = Path.Combine(temporaryRoot, "references.rsp");
-            var assemblyFilePath = Path.Combine(temporaryRoot, "assembly.dll");
-            var pdbFilePath = Path.Combine(temporaryRoot, "assembly.pdb");
             byte[] assemblyBytes;
             try
             {
-                File.WriteAllText(sourceFilePath, WrapCodeSource(source), new UTF8Encoding(true));
-                WriteReferenceResponseFile(responseFilePath, references);
-                var compilation = CompileWithRoslyn(editorDataPath, sourceFilePath, responseFilePath, assemblyFilePath, request.StringArg("defines"), request, cancellationToken);
+                var compilation = CodeExecUseInProcessRoslyn
+                    ? CompileInProcess(source, references, request.StringArg("defines"), request, cancellationToken)
+                    : CompileWithCscFallback(source, references, request.StringArg("defines"), request, cancellationToken);
                 if (compilation.TimedOut)
-                    return CodeExecutionResult.Fail("E_EXECUTION_TIMEOUT", "Runtime Code compilation timed out.", new Dictionary<string, object>(), "Inspect the Editor state before submitting a new request.");
-                var diagnostics = RoslynDiagnostics(compilation.Output);
-                if (compilation.ExitCode != 0 || diagnostics.Any(item => string.Equals((string)item["severity"], "error", StringComparison.Ordinal)))
+                    return CodeExecutionResult.Fail("E_EXECUTION_TIMEOUT", "Runtime Code compilation exceeded the immutable deadline.", new Dictionary<string, object>(), "Inspect the Editor state before submitting a new request.");
+                if (!compilation.Success)
                 {
-                    var errors = diagnostics.Where(item => string.Equals((string)item["severity"], "error", StringComparison.Ordinal)).ToList();
+                    var errors = compilation.Diagnostics;
                     var details = new Dictionary<string, object> { { "diagnostics", CompactRoslynDiagnostics(errors) } };
-                    var referenceFailure = RoslynReferenceFailure(compilation.Output);
+                    var referenceFailure = RoslynReferenceFailureFromDiagnostics(errors);
                     return !string.IsNullOrEmpty(referenceFailure)
                         ? CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceFailure, details, "Check Unity/Editor/project assembly references and --refs.")
                         : CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", RoslynCompileFailureMessage(errors), details, "Fix compiler diagnostics and rerun code exec.");
                 }
-                assemblyBytes = File.ReadAllBytes(assemblyFilePath);
+                assemblyBytes = compilation.AssemblyBytes;
             }
             catch (Exception exception)
             {
                 return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, ExceptionDetails(exception, "", ""), "Check Unity/Editor/project assembly references and --refs.");
-            }
-            finally
-            {
-                DeleteTemporaryCodeFile(sourceFilePath);
-                DeleteTemporaryCodeFile(responseFilePath);
-                DeleteTemporaryCodeFile(assemblyFilePath);
-                DeleteTemporaryCodeFile(pdbFilePath);
             }
 
             var compiledAssembly = Assembly.Load(assemblyBytes);
@@ -231,13 +215,12 @@ namespace UnityCli
         }
 
         /// <summary>
-        /// 在编译前汇总 Roslyn 所需引用；排除 facade 与 UnityEngine 主程序集，避免类型转发和重复定义。
-        /// 输入为调用方附加引用，输出只包含实际磁盘程序集；不修改 Editor 或项目状态。
+        /// 汇总 in-process Roslyn 所需引用；跟随官方 Editor 模式全包含 AppDomain 已加载程序集，
+        /// 不排除 mscorlib/System*/netstandard，避免针对 mscorlib 编译的项目程序集缺核心库引用。
         /// </summary>
         private static IEnumerable<string> DefaultCodeReferences(string refsCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             var references = new List<string>();
-            var editorDataPath = EditorDataPath();
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 EnsureCodePreEffectDeadline(request, cancellationToken);
@@ -251,27 +234,6 @@ namespace UnityCli
                 EnsureCodePreEffectDeadline(request, cancellationToken);
                 AddReference(references, reference);
             }
-
-            var excludedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "mscorlib", "System.Private.CoreLib", "System.Runtime", "System.Collections", "netstandard"
-            };
-            var unityEnginePath = string.IsNullOrEmpty(editorDataPath) ? null : Path.Combine(editorDataPath, "Managed", "UnityEngine.dll");
-            // Mono 运行目录下的 System*.dll 实现程序集针对 mscorlib 编译，与 netstandard ref 混用时
-            // lambda/LINQ 的委托签名会被强制解析到 mscorlib（CS0012）；netstandard 2.1 ref 已含全部
-            // System.* API 定义，因此整体排除，第三方包内针对 netstandard 编译的 System.* 不受影响。
-            var monoLibPrefix = string.IsNullOrEmpty(editorDataPath) ? null : Path.GetFullPath(Path.Combine(editorDataPath, "MonoBleedingEdge", "lib"));
-            references = references.Where(reference =>
-            {
-                var fileName = Path.GetFileNameWithoutExtension(reference);
-                if (excludedNames.Contains(fileName)) return false;
-                if (unityEnginePath != null && string.Equals(Path.GetFullPath(reference), Path.GetFullPath(unityEnginePath), StringComparison.OrdinalIgnoreCase)) return false;
-                if (monoLibPrefix != null && fileName.StartsWith("System", StringComparison.OrdinalIgnoreCase)
-                    && Path.GetFullPath(reference).StartsWith(monoLibPrefix, StringComparison.OrdinalIgnoreCase)) return false;
-                return true;
-            }).ToList();
-            if (!string.IsNullOrEmpty(editorDataPath))
-                AddReference(references, Path.Combine(editorDataPath, "NetStandard", "ref", "2.1.0", "netstandard.dll"));
             EnsureCodePreEffectDeadline(request, cancellationToken);
             return references;
         }
@@ -281,6 +243,132 @@ namespace UnityCli
         {
             if (string.IsNullOrEmpty(reference)) return;
             if (!references.Contains(reference)) references.Add(reference);
+        }
+
+        // in-process 与 csc.exe 回退共用的编译结果；成功时携带程序集字节，失败时携带错误诊断。
+        private sealed class CodeCompilationResult
+        {
+            public bool Success;
+            public byte[] AssemblyBytes;
+            public List<Dictionary<string, object>> Diagnostics = new List<Dictionary<string, object>>();
+            public bool TimedOut;
+        }
+
+        /// <summary>
+        /// 用 in-process Roslyn（Microsoft.CodeAnalysis.CSharp）编译源码。
+        /// 引用集全包含 AppDomain 已加载程序集，与官方 Editor 模式一致；
+        /// 编译无法中途终止，只能在编译前后重验 immutable deadline。
+        /// </summary>
+        private static CodeCompilationResult CompileInProcess(string source, IEnumerable<string> references, string definesCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
+        {
+            var result = new CodeCompilationResult();
+            try
+            {
+                EnsureCodePreEffectDeadline(request, cancellationToken);
+                var parseOptions = new CSharpParseOptions(preprocessorSymbols: SplitCsv(definesCsv));
+                var tree = CSharpSyntaxTree.ParseText(WrapCodeSource(source), parseOptions);
+                var metadataReferences = new List<MetadataReference>();
+                foreach (var reference in references)
+                {
+                    if (string.IsNullOrEmpty(reference)) continue;
+                    try { metadataReferences.Add(MetadataReference.CreateFromFile(reference)); }
+                    catch { /* 跳过不可读引用，避免个别文件缺失中断整次编译 */ }
+                }
+                var compilation = CSharpCompilation.Create(
+                    "UnityCli.RuntimeCode",
+                    new[] { tree },
+                    metadataReferences,
+                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                using (var ms = new MemoryStream())
+                {
+                    var emitResult = compilation.Emit(ms);
+                    foreach (var diagnostic in emitResult.Diagnostics)
+                    {
+                        if (diagnostic.Severity != DiagnosticSeverity.Error) continue;
+                        if (result.Diagnostics.Count >= MaxRoslynDiagnostics) continue;
+                        var lineSpan = diagnostic.Location.GetLineSpan();
+                        result.Diagnostics.Add(new Dictionary<string, object>
+                        {
+                            { "severity", "error" }, { "id", BoundedText(diagnostic.Id, 64) },
+                            { "message", BoundedText(diagnostic.GetMessage(), 4096) },
+                            { "file", BoundedText(lineSpan.Path ?? string.Empty, 2048) },
+                            { "line", (long)(lineSpan.StartLinePosition.Line + 1) },
+                            { "column", (long)(lineSpan.StartLinePosition.Character + 1) },
+                            { "span", null }
+                        });
+                    }
+                    result.Success = emitResult.Success;
+                    if (emitResult.Success) result.AssemblyBytes = ms.ToArray();
+                }
+                // in-process 无法中途终止；编译完成后重验 deadline，拒绝超时结果。
+                int remainingMs;
+                if (cancellationToken.IsCancellationRequested || request == null || !request.TryDeadlineRemainingMs(out remainingMs))
+                {
+                    result.TimedOut = true;
+                    result.Success = false;
+                    result.AssemblyBytes = null;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                result.TimedOut = true;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// csc.exe 子进程编译回退；保留原临时文件与子进程超时终止逻辑，仅在 in-process 编译不可用时切换回来。
+        /// </summary>
+        private static CodeCompilationResult CompileWithCscFallback(string source, IEnumerable<string> references, string definesCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
+        {
+            var result = new CodeCompilationResult();
+            var editorDataPath = EditorDataPath();
+            if (string.IsNullOrEmpty(editorDataPath))
+            {
+                result.Diagnostics.Add(new Dictionary<string, object> { { "severity", "error" }, { "id", "E_REFERENCE_RESOLUTION_FAILED" }, { "message", "Unity Editor Data directory was not found." }, { "file", "" }, { "line", 0L }, { "column", 0L }, { "span", null } });
+                return result;
+            }
+
+            var temporaryRoot = Path.Combine(ProjectRoot(), "Library", "UnityCli", "code-exec-temp");
+            Directory.CreateDirectory(temporaryRoot);
+            var sourceFilePath = Path.Combine(temporaryRoot, "source.cs");
+            var responseFilePath = Path.Combine(temporaryRoot, "references.rsp");
+            var assemblyFilePath = Path.Combine(temporaryRoot, "assembly.dll");
+            var pdbFilePath = Path.Combine(temporaryRoot, "assembly.pdb");
+            try
+            {
+                File.WriteAllText(sourceFilePath, WrapCodeSource(source), new UTF8Encoding(true));
+                WriteReferenceResponseFile(responseFilePath, references);
+                var compilation = CompileWithRoslyn(editorDataPath, sourceFilePath, responseFilePath, assemblyFilePath, definesCsv, request, cancellationToken);
+                if (compilation.TimedOut)
+                {
+                    result.TimedOut = true;
+                    return result;
+                }
+                var diagnostics = RoslynDiagnostics(compilation.Output);
+                if (compilation.ExitCode != 0 || diagnostics.Any(item => string.Equals((string)item["severity"], "error", StringComparison.Ordinal)))
+                {
+                    result.Diagnostics = diagnostics.Where(item => string.Equals((string)item["severity"], "error", StringComparison.Ordinal)).ToList();
+                    return result;
+                }
+                result.AssemblyBytes = File.ReadAllBytes(assemblyFilePath);
+                result.Success = true;
+                return result;
+            }
+            finally
+            {
+                DeleteTemporaryCodeFile(sourceFilePath);
+                DeleteTemporaryCodeFile(responseFilePath);
+                DeleteTemporaryCodeFile(assemblyFilePath);
+                DeleteTemporaryCodeFile(pdbFilePath);
+            }
+        }
+
+        // 从结构化错误诊断识别引用缺失错误（CS0006），保持为引用解析错误而非普通编译错误。
+        private static string RoslynReferenceFailureFromDiagnostics(List<Dictionary<string, object>> errors)
+        {
+            var referenceError = errors.FirstOrDefault(item => string.Equals((string)item["id"], "CS0006", StringComparison.OrdinalIgnoreCase));
+            return referenceError != null ? "Runtime Code reference was not found or readable: " + (string)referenceError["message"] : null;
         }
 
         // 引用枚举只做内存处理；真实文件解析由可按deadline终止的Roslyn子进程负责。
@@ -366,13 +454,6 @@ namespace UnityCli
         {
             using (var writer = new StreamWriter(responseFilePath, false, new UTF8Encoding(false)))
                 foreach (var reference in references) writer.WriteLine("/r:\"" + reference + "\"");
-        }
-
-        // 将Roslyn的缺失/不可读引用错误保持为引用解析错误，而不是普通代码编译错误。
-        private static string RoslynReferenceFailure(string output)
-        {
-            var match = Regex.Match(output ?? string.Empty, "(?:error\\s+)?CS0006:\\s*Metadata file ['\"]([^'\"]+)['\"] could not be found", RegexOptions.IgnoreCase);
-            return match.Success ? "Runtime Code reference was not found or readable: " + BoundedText(match.Groups[1].Value, 2048) : null;
         }
 
         // 解析 Roslyn 标准诊断行，无法解析的输出不作为协议诊断公开。

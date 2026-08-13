@@ -2,11 +2,11 @@ import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../.
 import { loadToolCatalog } from "../catalog.js";
 import { defineTool } from "../define.js";
 import { StructuredToolError } from "../errors.js";
-import { toolAvailabilityScope, toolSource } from "../metadata/index.js";
+import { groupSummary } from "./group-summaries.js";
 
 export interface ToolsGroupListRequest { group: string }
-export interface ToolsGroupListItem { name: string; summary: string; group: string; source: string; destructiveHint: boolean; playModeSupport: string; target: string; availabilityScope: string; available: boolean; unavailableReason?: string; requiresPackages?: string[]; extensionId?: string }
-export interface ToolsGroupListResult { group: string; count: number; nameSemantics: { exact: true; groupPrefix: false }; tools: ToolsGroupListItem[] }
+export interface ToolsGroupListItem { name: string; summary: string; available: boolean }
+export interface ToolsGroupListResult { group: string; summary: string; count: number; nameSemantics: { exact: true; groupPrefix: false }; tools: ToolsGroupListItem[] }
 
 export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
   name: "tools.group-list",
@@ -32,18 +32,9 @@ export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
       return {
         name: tool.name,
         summary: tool.summary,
-        group: tool.group,
-        source: toolSource(tool),
-        destructiveHint: tool.destructiveHint,
-        playModeSupport: tool.playModeSupport ?? "supported",
-        target: tool.target ?? "editor",
-        availabilityScope: toolAvailabilityScope(tool),
-        available: availability.available && (tool.available ?? true),
-        ...(!availability.available ? { unavailableReason: `${availability.errorCode}: ${availability.message}` } : tool.unavailableReason ? { unavailableReason: tool.unavailableReason } : {}),
-        ...(tool.requiresPackages?.length ? { requiresPackages: tool.requiresPackages } : {}),
-        ...(availability.extensionId ? { extensionId: availability.extensionId } : {})
+        available: availability.available && (tool.available ?? true)
       };
     }));
-    return { group: request.group, count: tools.length, nameSemantics: { exact: true, groupPrefix: false }, tools };
+    return { group: request.group, summary: groupSummary(request.group), count: tools.length, nameSemantics: { exact: true, groupPrefix: false }, tools };
   }
 });

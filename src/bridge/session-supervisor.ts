@@ -640,6 +640,7 @@ function blockedObservation(instanceId: string, observation: EditorBlockerObserv
 
 function blockerNextActions(): string[] {
   return [
+    "Run unity_cli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.",
     "Run unity_cli tools run editor.dialogs to inspect the current modal dialog.",
     "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
   ];

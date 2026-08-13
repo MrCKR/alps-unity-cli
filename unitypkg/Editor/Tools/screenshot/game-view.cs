@@ -26,7 +26,7 @@ namespace UnityCli
         {
             Name = "screenshot.game-view",
             Summary = "Capture a Game View screenshot by rendering all active cameras to a PNG/JPG file.",
-            Description = "Capture a Game View screenshot by rendering all active cameras to a temporary RenderTexture and saving to a PNG/JPG file. Defaults to 1280x720.",
+            Description = "Capture a Game View screenshot by rendering all active cameras to a temporary RenderTexture and saving to a PNG/JPG file. Renders camera content only and does not include screen-space UI; use screenshot.screen for the final composited frame. Defaults to 1280x720.",
             Group = "screenshot",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },

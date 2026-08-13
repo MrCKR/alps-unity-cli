@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { executeBridgePayload } from "../../bridge/index.js";
 import { withObservationSelection } from "../../bridge/types.js";
 import {
@@ -109,6 +111,14 @@ export async function readEditorState(context: EditorStateReadContext): Promise<
     return makeResult(inspected, session, observedStatus(bridge.snapshot, progress, blockers), bridge.snapshot, progress, blockers, true, ["bridge", "registry"], startedAt);
   }
 
+  // bridge 断：优先检查跨域重载标记，标记未超时判 transitioning（重载中），避免进程验证误报 conflict。
+  if (!bridge) {
+    const reloadingDeadline = readReloadingDeadline(instance);
+    if (reloadingDeadline !== undefined && Date.now() < reloadingDeadline) {
+      return makeResult(instance, session, "transitioning", undefined, [], [], false, ["registry", "process"], startedAt);
+    }
+  }
+
   // Windows UI 读取必须晚于唯一 PID、project path 与 start identity 的完整证明。
   const [verification, processClaims] = await Promise.all([verificationPromise, processClaimsPromise]);
   const inspected = applyProjectProcessClaimInspection(instance, processClaims);
@@ -207,6 +217,19 @@ function makeResult(instance: UnityInstance, session: RegistrySession | undefine
 
 function identityOf(instance: UnityInstance): RegistryIdentity {
   return { instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath };
+}
+
+// 读跨域重载标记（Library/UnityCli/reloading.json）；存在且未超时表示域重载进行中，否则视为无标记。
+function readReloadingDeadline(instance: UnityInstance): number | undefined {
+  try {
+    const path = join(instance.canonicalProjectPath, "Library", "UnityCli", "reloading.json");
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    if (typeof parsed.deadlineUtc === "string") {
+      const deadline = Date.parse(parsed.deadlineUtc);
+      if (Number.isFinite(deadline)) return deadline;
+    }
+  } catch { /* 文件不存在或不可读，视为无标记 */ }
+  return undefined;
 }
 function remaining(observationDeadlineMs: number): number { return Math.max(0, observationDeadlineMs - Date.now()); }
 function isLiveSnapshot(snapshot: Snapshot): boolean {

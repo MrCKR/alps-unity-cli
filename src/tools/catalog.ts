@@ -152,7 +152,6 @@ export function publicToolDescriptor(tool: ToolMetadata): Record<string, unknown
   const available = tool.available ?? true;
   return {
     name: tool.name,
-    summary: tool.summary,
     description: tool.description,
     group: tool.group,
     inputSchema: tool.inputSchema,
@@ -161,7 +160,6 @@ export function publicToolDescriptor(tool: ToolMetadata): Record<string, unknown
     ...(tool.sideEffects?.length ? { sideEffects: tool.sideEffects } : {}),
     playModeSupport: tool.playModeSupport ?? "supported",
     supportsDryRun: tool.supportsDryRun ?? false,
-    contractProfile: toolContractProfile(tool),
     ...(tool.permissions?.length ? { permissions: tool.permissions } : {}),
     ...(tool.examples?.length ? { examples: tool.examples.map(({ description, argv }) => ({ description, argv })) } : {}),
     source: toolSource(tool),
