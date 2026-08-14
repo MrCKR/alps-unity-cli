@@ -145,6 +145,12 @@ CLI控制面：
 
 未加载命中的 Skill，不得开始实现或宣称完成。无法判断时加载范围更大的相关 Skill，不得用普通 docs 或已有记忆替代。
 
+### `unity-cli-release`
+
+路径：`.pi/skills/unity-cli-release/SKILL.md`
+
+升版本号、打 tag、npm publish、push 或本地安装验证发布产物时必须读取；判断一次改动应升大版本（b）还是小版本（c）、判断是否达到正式发布标准（a）时也必须读取。该 Skill 规定版本号语义 `a.b.c`（a=正式版本号，b=大版本，c=小版本）、版本同步点、发布前置门禁与 commit/tag/publish/push 顺序。
+
 ## 命名与兼容性
 
 项目仍处于开发期，不承担旧版本兼容义务，但当前公开契约必须保持一致。
