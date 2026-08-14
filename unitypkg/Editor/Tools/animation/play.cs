@@ -10,7 +10,7 @@ namespace UnityCli
     public class AnimationPlayTool : IUnityCliTool<AnimationPlayTool.Request, AnimationPlayTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public string State { get; set; } public int? Layer { get; set; } public float? NormalizedTime { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public AnimatorInfo Animator { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public AnimatorInfo Animator { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "animation.play", Summary = "Play a named Animator state on a target GameObject.", Description = "Resolve a target with an Animator and play the named state on the given layer.", Group = "animation",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Play Walk state", Input = new Request { Target = "Player", State = "Walk" } } } };
         public async System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -34,7 +34,7 @@ namespace UnityCli
             if (!observed) throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_STATE_TIMEOUT", "Animator did not reach the requested state before timeout: " + r.State, "Check Animator transitions and retry after the requested state is reachable.");
             UnityCliSceneMutation.MarkSceneObjectDirty(animator);
             var finalAnimator = AnimationToolSupport.BuildAnimatorInfo(animator, layer);
-            return new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Animator = finalAnimator, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animation.play", Target = GameObjectToolSupport.HierarchyPath(go), State = r.State } } };
+            return new Result { Animator = finalAnimator, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animation.play", Target = GameObjectToolSupport.HierarchyPath(go), State = r.State } } };
         }
     }
 }

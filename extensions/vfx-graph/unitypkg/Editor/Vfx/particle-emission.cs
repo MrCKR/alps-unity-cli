@@ -23,7 +23,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public GameObjectRef Target { get; set; }
             public VfxParticleEmissionInfo Emission { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
         }
@@ -112,7 +111,6 @@ namespace UnityCli
             VfxToolSupport.MarkSceneDirty(observed.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject),
                 Emission = new VfxParticleEmissionInfo
                 {
                     Enabled = observed.emission.enabled,

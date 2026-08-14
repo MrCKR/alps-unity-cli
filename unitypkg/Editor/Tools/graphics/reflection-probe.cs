@@ -12,7 +12,7 @@ namespace UnityCli
     public class GraphicsReflectionProbeTool : IUnityCliTool<GraphicsReflectionProbeTool.Request, GraphicsReflectionProbeTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public bool? Create { get; set; } public string Mode { get; set; } public int? Resolution { get; set; } public int? Bounces { get; set; } public bool? Hdr { get; set; } public string BoxSize { get; set; } public string BoxOffset { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public ReflectionProbeInfo Probe { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public ReflectionProbeInfo Probe { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "graphics.reflection-probe", Summary = "Add, configure, or read a ReflectionProbe component on a target.", Description = "Resolve a target GameObject, optionally create a ReflectionProbe, and configure mode/resolution/bounces/hdr/boxSize/boxOffset.", Group = "graphics",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read reflection probe", Input = new Request { Target = "ReflectionProbe" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -58,7 +58,7 @@ namespace UnityCli
             if (observedProbe == null) throw new UnityCliBridge.BridgeCommandException("E_REFLECTION_PROBE_STATE_MISMATCH", "ReflectionProbe could not be read after mutation.", "Retry after the editor is idle.");
             var observed = GraphicsToolSupport.BuildReflectionProbeInfo(observedProbe);
             if ((hasMode && observedProbe.mode != mode) || (r.Resolution.HasValue && observedProbe.resolution != r.Resolution.Value) || (r.Bounces.HasValue && observed.Bounces != r.Bounces.Value) || (r.Hdr.HasValue && observedProbe.hdr != r.Hdr.Value) || (boxSize.HasValue && observedProbe.size != boxSize.Value) || (boxOffset.HasValue && observedProbe.center != boxOffset.Value)) throw new UnityCliBridge.BridgeCommandException("E_REFLECTION_PROBE_STATE_MISMATCH", "ReflectionProbe readback did not match the request.", "Retry after the editor is idle.");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = observedObject.GetInstanceID(), Name = observedObject.name, Path = GameObjectToolSupport.HierarchyPath(observedObject) }, Probe = observed, PlannedEffects = effects });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Probe = observed, PlannedEffects = effects });
         }
         private static void SetBounces(ReflectionProbe p, int v)
         {

@@ -11,7 +11,7 @@ namespace UnityCli
     public class ControllerAddStateTool : IUnityCliTool<ControllerAddStateTool.Request, ControllerAddStateTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string StateName { get; set; } public string ClipPath { get; set; } public int? LayerIndex { get; set; } public float? Speed { get; set; } public bool? IsDefault { get; set; } }
-        public sealed class Result { public string Path { get; set; } public string StateName { get; set; } public long LayerIndex { get; set; } public bool HasMotion { get; set; } public string MotionName { get; set; } public double Speed { get; set; } public bool IsDefault { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string Path { get; set; } public string StateName { get; set; } public bool HasMotion { get; set; } public string MotionName { get; set; } public double Speed { get; set; } public bool IsDefault { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "controller.add-state", Summary = "Add a new state to an AnimatorController layer.", Description = "Add a state to the specified layer. Optionally assign a motion clip and set as default state.", Group = "controller",DestructiveHint = true, SideEffects = new[] { "asset-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Add MatrixWalk state", Input = new Request { ControllerPath = "Assets/Animations/Player.controller", StateName = "MatrixWalk" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -37,7 +37,7 @@ namespace UnityCli
             var observedState = observedController == null || layerIndex >= observedController.layers.Length ? null : AnimationToolSupport.FindStateInLayer(observedController.layers[layerIndex].stateMachine, r.StateName);
             if (observedState == null || !Mathf.Approximately(observedState.speed, r.Speed ?? 1f) || (clip != null && observedState.motion != clip) || (isDefault && observedController.layers[layerIndex].stateMachine.defaultState != observedState))
                 throw AnimationToolSupport.StateMismatch("E_CONTROLLER_ADD_STATE_STATE_MISMATCH", "AnimatorController state");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = observedState.name, LayerIndex = layerIndex, HasMotion = observedState.motion != null, MotionName = observedState.motion?.name, Speed = observedState.speed, IsDefault = observedController.layers[layerIndex].stateMachine.defaultState == observedState, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-state", Path = path, State = observedState.name } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = observedState.name, HasMotion = observedState.motion != null, MotionName = observedState.motion?.name, Speed = observedState.speed, IsDefault = observedController.layers[layerIndex].stateMachine.defaultState == observedState, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.add-state", Path = path, State = observedState.name } } });
         }
     }
 }

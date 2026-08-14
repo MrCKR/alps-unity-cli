@@ -11,7 +11,7 @@ namespace UnityCli
     public class ControllerAssignTool : IUnityCliTool<ControllerAssignTool.Request, ControllerAssignTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string Target { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public string ControllerName { get; set; } public string ControllerPath { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string ControllerName { get; set; } public string ControllerPath { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "controller.assign", Summary = "Assign an AnimatorController asset to a target GameObject's Animator.", Description = "Resolve a target GameObject, add an Animator if missing, and assign the controller asset.", Group = "controller",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Assign controller", Input = new Request { ControllerPath = "Assets/Animations/Player.controller", Target = "Player" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -31,7 +31,7 @@ namespace UnityCli
             var observedController = observedAnimator == null ? null : observedAnimator.runtimeAnimatorController;
             var observedPath = observedController == null ? null : AssetDatabase.GetAssetPath(observedController);
             if (observedController != controller || observedPath != path) throw AnimationToolSupport.StateMismatch("E_CONTROLLER_ASSIGN_STATE_MISMATCH", "Animator controller assignment");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, ControllerName = observedController.name, ControllerPath = observedPath, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.assign", Path = observedPath, Target = GameObjectToolSupport.HierarchyPath(go) } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { ControllerName = observedController.name, ControllerPath = observedPath, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.assign", Path = observedPath, Target = GameObjectToolSupport.HierarchyPath(go) } } });
         }
     }
 }

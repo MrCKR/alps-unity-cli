@@ -22,9 +22,8 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public bool DryRun { get; set; }
-            public GameObjectTargetRef Target { get; set; }
             public ColliderAssignmentInfo Collider { get; set; }
+            public bool DryRun { get; set; }
             public List<PhysicsPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -73,8 +72,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_ASSIGN_MATERIAL_STATE_MISMATCH", "Collider material did not match the requested PhysicMaterial.", "Inspect the Collider material after the Editor is idle and retry.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                DryRun = dryRun,
-                Target = new GameObjectTargetRef { Id = observedTarget.GetInstanceID(), Name = observedTarget.name, Path = GameObjectToolSupport.HierarchyPath(observedTarget) },
                 Collider = new ColliderAssignmentInfo
                 {
                     Type = observedCollider.GetType().Name,
@@ -82,6 +79,7 @@ namespace UnityCli
                     PreviousMaterial = previous == null ? null : new PhysicMaterialRef { Name = previous.name, Path = AssetDatabase.GetAssetPath(previous) },
                     Material = observedMaterial == null ? null : new PhysicMaterialRef { Name = observedMaterial.name, Path = AssetDatabase.GetAssetPath(observedMaterial) }
                 },
+                DryRun = dryRun,
                 PlannedEffects = new List<PhysicsPlannedEffect> { new PhysicsPlannedEffect { Type = "physics.assign-material", Target = GameObjectToolSupport.HierarchyPath(observedTarget) } }
             });
         }

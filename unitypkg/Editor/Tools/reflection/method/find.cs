@@ -21,7 +21,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string TypeName { get; set; }
             public long Count { get; set; }
             public List<UnityCliBridge.ReflectionMethodDescriptor> Methods { get; set; }
         }
@@ -64,7 +63,6 @@ namespace UnityCli
             var methods = UnityCliBridge.ReflectionInvoker.FindMethods(request.TypeName, request.MethodName, bindings);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                TypeName = request.TypeName,
                 Count = methods.Count,
                 Methods = methods
             });

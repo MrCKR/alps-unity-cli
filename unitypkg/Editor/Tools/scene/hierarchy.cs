@@ -28,13 +28,6 @@ namespace UnityCli
         public sealed class Result
         {
             public SceneSummary Scene { get; set; }
-            public string Parent { get; set; }
-            public long MaxDepth { get; set; }
-            public string Query { get; set; }
-            public string NameFilter { get; set; }
-            public string ComponentType { get; set; }
-            public bool IncludeInactive { get; set; }
-            public bool IncludeComponents { get; set; }
             public List<HierarchyItem> Items { get; set; }
             public PageInfo PageInfo { get; set; }
         }
@@ -133,13 +126,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scene = new SceneSummary { Name = scene.name, Path = scene.path },
-                Parent = parent,
-                MaxDepth = maxDepth,
-                Query = query,
-                NameFilter = query,
-                ComponentType = componentType,
-                IncludeInactive = includeInactive,
-                IncludeComponents = includeComponents,
                 Items = page,
                 PageInfo = BuildPageInfo(pageSize, cursor, total, page.Count)
             });

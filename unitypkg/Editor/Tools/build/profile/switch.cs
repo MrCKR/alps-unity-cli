@@ -15,7 +15,7 @@ namespace UnityCli
         {
             var type = BuildToolSupport.RequireBuildProfileType("build.profile.switch");
             var profile = BuildToolSupport.LoadProfile(type, request.Path, "build.profile.switch");
-            if (ctx.DryRun) return new BuildProfileMutationResult { Available = true, Path = request.Path, ActivePath = AssetDatabase.GetAssetPath(profile), DryRun = true };
+            if (ctx.DryRun) return new BuildProfileMutationResult { Available = true, ActivePath = AssetDatabase.GetAssetPath(profile), DryRun = true };
             ctx.CommitEffect();
             BuildToolSupport.SetActiveBuildProfile(type, profile);
             var ready = await ctx.Wait.UntilEditorReady(TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
@@ -23,7 +23,7 @@ namespace UnityCli
             var activePath = active == null ? null : AssetDatabase.GetAssetPath(active);
             if (!ready || active != profile || !string.Equals(activePath, request.Path, StringComparison.Ordinal))
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_PROOF_MISSING", "The active Build Profile does not match the requested profile after recovery.", "Run build.profile.list and inspect Editor state before submitting a new request.");
-            return new BuildProfileMutationResult { Available = true, Path = request.Path, ActivePath = activePath };
+            return new BuildProfileMutationResult { Available = true, ActivePath = activePath };
         }
     }
 }

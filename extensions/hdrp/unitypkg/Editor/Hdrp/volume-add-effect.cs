@@ -7,7 +7,7 @@ namespace UnityCli
     public sealed class HdrpVolumeAddEffectTool : IUnityCliTool<HdrpVolumeAddEffectTool.Request, HdrpVolumeAddEffectTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Target { get; set; } [UnityCliRequired] public string EffectType { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public string EffectType { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new()
         {
             Name = "hdrp.volume.add-effect", Summary = "Add a VolumeComponent effect to a scene-session HDRP Volume profile.",
@@ -21,7 +21,7 @@ namespace UnityCli
             HdrpVolumeOperations.ValidateAddEffect(request.Target, request.EffectType, "E_HDRP", HdrpToolSupport.FindVolumeEffectType);
             ctx.CommitEffect();
             var added = HdrpVolumeOperations.AddEffect(request.Target, request.EffectType, "E_HDRP", HdrpToolSupport.FindVolumeEffectType);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(added.GameObject), EffectType = added.ObservedEffectType, PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.add-effect", Target = GameObjectToolSupport.HierarchyPath(added.GameObject), EffectType = added.ObservedEffectType } }});
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.add-effect", Target = GameObjectToolSupport.HierarchyPath(added.GameObject), EffectType = added.ObservedEffectType } }});
         }
     }
 }

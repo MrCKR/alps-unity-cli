@@ -13,7 +13,7 @@ namespace UnityCli
     public class ProfilerLoadTool : IUnityCliTool<ProfilerLoadTool.Request, ProfilerLoadTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Path { get; set; } }
-        public sealed class Result { public string Path { get; set; } public long InputSizeBytes { get; set; } public string InputSha256 { get; set; } public long FirstFrameIndex { get; set; } public long LastFrameIndex { get; set; } public bool Loaded { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public long InputSizeBytes { get; set; } public string InputSha256 { get; set; } public long FirstFrameIndex { get; set; } public long LastFrameIndex { get; set; } public bool Loaded { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -78,7 +78,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_LOAD_PROOF_MISSING", "ProfilerDriver did not expose an attributable loaded frame range for " + resolvedPath + ".", "Verify that the capture contains readable frames and matches this Unity version.");
             if (new FileInfo(resolvedPath).Length != inputSizeBytes || !string.Equals(ProfilerToolSupport.FileSha256(resolvedPath), inputSha256, StringComparison.Ordinal))
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_LOAD_PROOF_MISSING", "Profiler capture input changed while loading: " + resolvedPath, "Keep the capture file unchanged and retry.");
-            return new Result { Path = resolvedPath, InputSizeBytes = inputSizeBytes, InputSha256 = inputSha256, FirstFrameIndex = observedFirst, LastFrameIndex = observedLast, Loaded = true, PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.load", Path = resolvedPath, SideEffects = "sha256=" + inputSha256 } } };
+            return new Result { InputSizeBytes = inputSizeBytes, InputSha256 = inputSha256, FirstFrameIndex = observedFirst, LastFrameIndex = observedLast, Loaded = true, PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.load", Path = resolvedPath, SideEffects = "sha256=" + inputSha256 } } };
         }
     }
 }

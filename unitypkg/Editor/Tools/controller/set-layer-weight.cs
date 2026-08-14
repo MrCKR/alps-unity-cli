@@ -11,7 +11,7 @@ namespace UnityCli
     public class ControllerSetLayerWeightTool : IUnityCliTool<ControllerSetLayerWeightTool.Request, ControllerSetLayerWeightTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public int? LayerIndex { get; set; } public string LayerName { get; set; } public float? Weight { get; set; } }
-        public sealed class Result { public string Path { get; set; } public long LayerIndex { get; set; } public string LayerName { get; set; } public double Weight { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string Path { get; set; } public string LayerName { get; set; } public double Weight { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "controller.set-layer-weight", Summary = "Set the default weight of an AnimatorController layer.", Description = "Set the default weight of a layer by index or name. Weight 0 disables the layer.", Group = "controller",DestructiveHint = true, SideEffects = new[] { "asset-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set layer weight", Input = new Request { ControllerPath = "Assets/Animations/Player.controller", LayerIndex = 1, Weight = 0.5f } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -35,7 +35,7 @@ namespace UnityCli
             var observedController = AnimationToolSupport.ReloadControllerAsset(path, controllerGuid);
             var observedLayers = observedController == null ? null : observedController.layers;
             if (observedLayers == null || idx >= observedLayers.Length || observedLayers[idx].name != expectedLayer.Name || !Mathf.Approximately(observedLayers[idx].defaultWeight, weight)) throw AnimationToolSupport.StateMismatch("E_CONTROLLER_LAYER_WEIGHT_STATE_MISMATCH", "AnimatorController layer weight");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, LayerIndex = idx, LayerName = observedLayers[idx].name, Weight = observedLayers[idx].defaultWeight, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.set-layer-weight", Path = path } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, LayerName = observedLayers[idx].name, Weight = observedLayers[idx].defaultWeight, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.set-layer-weight", Path = path } } });
         }
     }
 }

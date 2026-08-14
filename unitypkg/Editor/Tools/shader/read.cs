@@ -26,8 +26,6 @@ namespace UnityCli
             public ShaderInfo Shader { get; set; }
             public string Content { get; set; }
             public string Encoding { get; set; }
-            public long Offset { get; set; }
-            public long MaxBytes { get; set; }
             public long SizeBytes { get; set; }
             public long ReturnedBytes { get; set; }
             public bool Truncated { get; set; }
@@ -75,8 +73,6 @@ namespace UnityCli
                 Shader = ShaderToolSupport.BuildShaderInfo(path, AssetDatabase.LoadAssetAtPath<Shader>(path), true),
                 Content = content,
                 Encoding = "utf-8",
-                Offset = offset,
-                MaxBytes = maxBytes,
                 SizeBytes = bytes.Length,
                 ReturnedBytes = returnedBytes,
                 Truncated = nextOffset != null,

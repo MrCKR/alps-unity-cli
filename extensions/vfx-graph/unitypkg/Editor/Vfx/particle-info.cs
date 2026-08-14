@@ -13,7 +13,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public GameObjectRef Target { get; set; }
             public VfxParticleSystemInfo ParticleSystem { get; set; }
         }
 
@@ -48,7 +47,6 @@ namespace UnityCli
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
                 ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem)
             });
         }

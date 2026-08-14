@@ -28,14 +28,10 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string MainObjectType { get; set; }
             public AssetImporterInfo Importer { get; set; }
             public bool IsGameObjectAsset { get; set; }
-            public bool IncludeInactive { get; set; }
-            public string Query { get; set; }
-            public string ComponentType { get; set; }
             public long ComponentCount { get; set; }
             public List<AssetComponentRow> Components { get; set; }
             public AssetPageInfo PageInfo { get; set; }
@@ -111,7 +107,6 @@ namespace UnityCli
             long? nextCursor = cursor + page.Count < rows.Count ? (long?)(cursor + page.Count) : null;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                AssetPath = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 MainObjectType = asset == null ? null : asset.GetType().FullName,
                 Importer = new AssetImporterInfo
@@ -121,9 +116,6 @@ namespace UnityCli
                     UserData = importer == null ? null : importer.userData
                 },
                 IsGameObjectAsset = root != null,
-                IncludeInactive = includeInactive,
-                Query = query,
-                ComponentType = componentType,
                 ComponentCount = rows.Count,
                 Components = page,
                 PageInfo = new AssetPageInfo

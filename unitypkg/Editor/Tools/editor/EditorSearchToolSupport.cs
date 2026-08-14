@@ -43,7 +43,6 @@ namespace UnityCli
             if (missing.Count > 0)
                 throw new UnityCliBridge.BridgeCommandException("E_EDITOR_SEARCH_PROVIDER_NOT_FOUND", "Unity Search provider is not active: " + string.Join(", ", missing) + ".", "Remove unavailable provider IDs or enable them in Unity Search.");
 
-            var providers = requested.Select(id => Provider(byId[id])).ToList();
             var results = new List<EditorSearchItem>((int)limit);
             var matched = 0L;
             var hasMore = false;
@@ -74,16 +73,14 @@ namespace UnityCli
                 else context?.Dispose();
             }
 
+            var providers = requested.Select(id => Provider(byId[id])).ToList();
             return new EditorSearchResult
             {
-                Query = request.Query,
-                Offset = offset,
-                Limit = limit,
                 ReturnedCount = results.Count,
                 HasMore = hasMore,
                 NextOffset = hasMore ? offset + results.Count : (long?)null,
-                Providers = providers,
-                Results = results
+                Results = results,
+                Providers = providers
             };
         }
 

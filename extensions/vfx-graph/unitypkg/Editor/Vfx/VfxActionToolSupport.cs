@@ -201,7 +201,6 @@ namespace UnityCli
         {
             return new VfxControlActionResult
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(effect.gameObject),
                 Action = action,
                 IsPaused = ReadBool(effect, "pause"),
                 AliveParticleCount = ReadLong(effect, "aliveParticleCount"),
@@ -213,7 +212,6 @@ namespace UnityCli
         {
             return new VfxParticleActionResult
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
                 Action = action,
                 IsPlaying = particleSystem.isPlaying,
                 IsPaused = particleSystem.isPaused,
@@ -225,19 +223,14 @@ namespace UnityCli
 
     public sealed class VfxControlActionResult
     {
-        public GameObjectRef Target { get; set; }
         public string Action { get; set; }
         public bool? IsPaused { get; set; }
         public long? AliveParticleCount { get; set; }
-        public double? Rate { get; set; }
-        public long? Seed { get; set; }
-        public bool? ResetSeedOnPlay { get; set; }
         public List<VfxPlannedEffect> PlannedEffects { get; set; }
     }
 
     public sealed class VfxEffectActionResult
     {
-        public GameObjectRef Target { get; set; }
         public string Action { get; set; }
         public VfxEffectInfo Effect { get; set; }
         public List<VfxPlannedEffect> PlannedEffects { get; set; }
@@ -245,7 +238,6 @@ namespace UnityCli
 
     public sealed class VfxParticleActionResult
     {
-        public GameObjectRef Target { get; set; }
         public string Action { get; set; }
         public bool IsPlaying { get; set; }
         public bool IsPaused { get; set; }

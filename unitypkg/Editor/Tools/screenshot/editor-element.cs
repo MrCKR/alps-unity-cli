@@ -77,7 +77,6 @@ namespace UnityCli
     {
         public bool Available { get; set; }
         public bool DryRun { get; set; }
-        public EditorElementWindowIdentity Window { get; set; }
         public EditorElementIdentity Element { get; set; }
         public long Width { get; set; }
         public long Height { get; set; }

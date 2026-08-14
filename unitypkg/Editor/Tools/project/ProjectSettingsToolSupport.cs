@@ -140,8 +140,6 @@ namespace UnityCli
                 Asset = ReadFileIdentity(InputAssetPath),
                 TotalAxisCount = totalCount,
                 MatchedAxisCount = matchedCount,
-                Offset = offset,
-                Limit = limit,
                 ReturnedCount = page.Count,
                 HasMore = offset + page.Count < matchedCount,
                 Axes = page
@@ -667,8 +665,6 @@ namespace UnityCli
         public ProjectSettingsFileIdentity Asset { get; set; }
         public long TotalAxisCount { get; set; }
         public long MatchedAxisCount { get; set; }
-        public long Offset { get; set; }
-        public long Limit { get; set; }
         public long ReturnedCount { get; set; }
         public bool HasMore { get; set; }
         public List<ProjectInputAxisSnapshot> Axes { get; set; }

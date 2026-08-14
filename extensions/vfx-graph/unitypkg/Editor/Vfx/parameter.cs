@@ -35,7 +35,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public GameObjectRef Target { get; set; }
             public string ParameterName { get; set; }
             public string ParameterType { get; set; }
             public List<VfxPlannedEffect> PlannedEffects { get; set; }
@@ -172,7 +171,6 @@ namespace UnityCli
             VfxToolSupport.MarkSceneDirty(component.gameObject);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(component.gameObject),
                 ParameterName = request.Name,
                 ParameterType = parameterType,
                 PlannedEffects = effects

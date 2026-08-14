@@ -16,7 +16,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string TypeName { get; set; }
             public bool HasPreview { get; set; }
@@ -70,7 +69,6 @@ namespace UnityCli
             var hasPreview = preview != null;
             var result = new Result
             {
-                AssetPath = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 TypeName = asset.GetType().FullName,
                 HasPreview = hasPreview,

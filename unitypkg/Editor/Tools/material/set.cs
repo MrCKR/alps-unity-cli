@@ -21,7 +21,6 @@ namespace UnityCli
         public sealed class Result
         {
             public MaterialInfo Material { get; set; }
-            public string Property { get; set; }
             public string PropertyType { get; set; }
             [UnityCliAnyJson] public object AppliedValue { get; set; }
             public List<MaterialPlannedEffect> PlannedEffects { get; set; }
@@ -87,7 +86,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Material = MaterialToolSupport.BuildMaterialInfo(observedPath, observedMaterial, null),
-                Property = propertyName,
                 PropertyType = propertyType,
                 AppliedValue = appliedValue,
                 PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.set", Path = path, Property = propertyName } }

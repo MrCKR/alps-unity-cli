@@ -19,7 +19,6 @@ namespace UnityCli
         public sealed class Result
         {
             public string Scene { get; set; }
-            public string Path { get; set; }
             public bool Valid { get; set; }
             public long MissingScriptCount { get; set; }
             public long NullReferenceCount { get; set; }
@@ -103,7 +102,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scene = scene.name,
-                Path = scene.path,
                 Valid = ok,
                 MissingScriptCount = missingScriptCount,
                 NullReferenceCount = nullReferenceCount,

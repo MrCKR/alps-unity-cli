@@ -31,7 +31,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Target { get; set; }
             public bool Framed { get; set; }
             public bool Changed { get; set; }
             public string NoOpReason { get; set; }
@@ -82,7 +81,7 @@ namespace UnityCli
             var bounds = go == null ? ReadAllBounds() : ReadTargetBounds(go);
             var before = ReadView(sceneView, bounds);
             if (before != null && before.BoundsContained)
-                return new Result { Target = target, Framed = true, Changed = false, NoOpReason = "target-bounds-already-contained", View = before };
+                return new Result { Framed = true, Changed = false, NoOpReason = "target-bounds-already-contained", View = before };
 
             ctx.CommitEffect();
             try
@@ -114,7 +113,7 @@ namespace UnityCli
             }
             var readback = ReadView(sceneView, bounds);
             if (readback == null || !readback.BoundsContained) throw Unknown("postcondition", "Fresh SceneView readback does not contain the requested bounds.");
-            return new Result { Target = target, Framed = true, Changed = true, View = readback };
+            return new Result { Framed = true, Changed = true, View = readback };
         }
 
         /// <summary>合并目标及子层级 Renderer bounds；无 Renderer 时回退到 Transform 原点。</summary>

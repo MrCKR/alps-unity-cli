@@ -24,11 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Filter { get; set; }
-            public string Query { get; set; }
-            public string Type { get; set; }
-            public string Path { get; set; }
-            public List<string> SearchInFolders { get; set; }
             public List<AssetSummary> Items { get; set; }
             public AssetPageInfo PageInfo { get; set; }
         }
@@ -72,11 +67,6 @@ namespace UnityCli
             long? nextCursor = cursor + items.Count < guids.Length ? (long?)(cursor + items.Count) : null;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Filter = resolvedFilter,
-                Query = request.Query,
-                Type = request.Type,
-                Path = searchInFolders.Length == 1 ? searchInFolders[0] : null,
-                SearchInFolders = new List<string>(searchInFolders),
                 Items = items,
                 PageInfo = new AssetPageInfo
                 {

@@ -10,7 +10,7 @@ namespace UnityCli
     public class AnimatorGetParameterTool : IUnityCliTool<AnimatorGetParameterTool.Request, AnimatorGetParameterTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public string ParameterName { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public AnimatorParameterWithValue Parameter { get; set; } }
+        public sealed class Result { public AnimatorParameterWithValue Parameter { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "animator.get-parameter", Summary = "Read a single Animator parameter's current or default value.", Description = "Resolve a target with an Animator and read a named parameter. Returns runtime value if available, otherwise the controller default.", Group = "animation",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read Speed parameter", Input = new Request { Target = "Player", ParameterName = "Speed" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -29,7 +29,7 @@ namespace UnityCli
                 case AnimatorControllerParameterType.Bool:
                 case AnimatorControllerParameterType.Trigger: value = hasRuntime ? animator.GetBool(r.ParameterName) : param.defaultBool; break;
             }
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Parameter = new AnimatorParameterWithValue { Name = param.name, Type = param.type.ToString(), Value = value } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Parameter = new AnimatorParameterWithValue { Name = param.name, Type = param.type.ToString(), Value = value } });
         }
     }
 }

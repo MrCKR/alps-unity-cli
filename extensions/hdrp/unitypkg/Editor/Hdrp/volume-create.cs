@@ -7,7 +7,7 @@ namespace UnityCli
     public sealed class HdrpVolumeCreateTool : IUnityCliTool<HdrpVolumeCreateTool.Request, HdrpVolumeCreateTool.Result>
     {
         public sealed class Request { public string Name { get; set; } public bool? IsGlobal { get; set; } public double? Priority { get; set; } public double? Weight { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public bool IsGlobal { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public GameObjectRef Target { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new()
         {
             Name = "hdrp.volume.create", Summary = "Create a scene-session HDRP Volume with a new in-memory profile.",
@@ -21,7 +21,7 @@ namespace UnityCli
             var plan = HdrpVolumeOperations.ValidateCreate(request.Priority, request.Weight, "E_HDRP");
             ctx.CommitEffect();
             var created = HdrpVolumeOperations.Create(request.Name, request.IsGlobal, plan, "HDRP", "E_HDRP");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(created.GameObject), IsGlobal = created.IsGlobal, PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.create", Name = created.GameObject.name } }});
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(created.GameObject), PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.create", Name = created.GameObject.name } }});
         }
     }
 }

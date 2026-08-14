@@ -105,7 +105,7 @@ namespace UnityCli
 
         private static EditorElementCaptureResult Result(Plan plan, bool dryRun, ScreenshotArtifactProof artifact)
         {
-            return new EditorElementCaptureResult { Available = true, Window = new EditorElementWindowIdentity { Type = plan.WindowType, Title = plan.WindowTitle, InstanceId = plan.WindowInstanceId }, Element = new EditorElementIdentity { Selector = plan.Selector, Type = plan.ElementType, Name = plan.ElementName, Classes = plan.ElementClasses }, Width = plan.Width, Height = plan.Height, Artifact = artifact, DryRun = dryRun, PlannedEffects = new List<EditorElementCapturePlannedEffect> { new EditorElementCapturePlannedEffect { Type = "screenshot.editor-element", WindowInstanceId = plan.WindowInstanceId, Width = plan.Width, Height = plan.Height, MaxBytes = plan.MaxBytes } } };
+            return new EditorElementCaptureResult { Available = true, Element = new EditorElementIdentity { Selector = plan.Selector, Type = plan.ElementType, Name = plan.ElementName, Classes = plan.ElementClasses }, Width = plan.Width, Height = plan.Height, Artifact = artifact, DryRun = dryRun, PlannedEffects = new List<EditorElementCapturePlannedEffect> { new EditorElementCapturePlannedEffect { Type = "screenshot.editor-element", WindowInstanceId = plan.WindowInstanceId, Width = plan.Width, Height = plan.Height, MaxBytes = plan.MaxBytes } } };
         }
 
 #if UNITY_6000_7_OR_NEWER

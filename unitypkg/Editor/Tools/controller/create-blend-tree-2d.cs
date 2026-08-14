@@ -11,7 +11,7 @@ namespace UnityCli
     public class ControllerCreateBlendTree2DTool : IUnityCliTool<ControllerCreateBlendTree2DTool.Request, ControllerCreateBlendTree2DTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string StateName { get; set; } public string BlendParameterX { get; set; } public string BlendParameterY { get; set; } public int? LayerIndex { get; set; } public string BlendType { get; set; } }
-        public sealed class Result { public string Path { get; set; } public string StateName { get; set; } public string BlendType { get; set; } public long LayerIndex { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string Path { get; set; } public string StateName { get; set; } public string BlendType { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "controller.create-blend-tree-2d", Summary = "Create a 2D BlendTree state in an AnimatorController layer.", Description = "Add a new state with a 2D BlendTree motion. blendType: simpledirectional2d, simpledirectional, freesystemlessdirectional.", Group = "controller",DestructiveHint = true, SideEffects = new[] { "asset-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Create 2D blend tree", Input = new Request { ControllerPath = "Assets/Animations/Player.controller", StateName = "Locomotion", BlendParameterX = "SpeedX", BlendParameterY = "SpeedY" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -35,7 +35,7 @@ namespace UnityCli
             var observedState = observedController == null ? null : AnimationToolSupport.FindStateInLayer(observedController.layers[layerIndex].stateMachine, r.StateName);
             var observedTree = observedState == null ? null : observedState.motion as BlendTree;
             if (observedTree == null || observedTree.blendType != blendType || observedTree.blendParameter != (r.BlendParameterX ?? "") || observedTree.blendParameterY != (r.BlendParameterY ?? "")) throw AnimationToolSupport.StateMismatch("E_CONTROLLER_BLEND_TREE_2D_STATE_MISMATCH", "2D BlendTree");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = observedState.name, BlendType = observedTree.blendType.ToString(), LayerIndex = layerIndex, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.create-blend-tree-2d", Path = path, State = observedState.name } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Path = path, StateName = observedState.name, BlendType = observedTree.blendType.ToString(), PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "controller.create-blend-tree-2d", Path = path, State = observedState.name } } });
         }
     }
 }

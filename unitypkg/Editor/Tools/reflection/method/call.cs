@@ -23,8 +23,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string TypeName { get; set; }
-            public string MethodName { get; set; }
             [UnityCliAnyJson] public object Data { get; set; }
             public List<PlannedEffect> PlannedEffects { get; set; }
             public UnityCliCompletionProbeReadback Completion { get; set; }
@@ -92,8 +90,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    TypeName = request.TypeName,
-                    MethodName = request.MethodName,
                     PlannedEffects = new List<PlannedEffect>
                     {
                         new PlannedEffect { Type = "reflection.method.call", Target = request.TypeName + "." + request.MethodName, SideEffects = "arbitrary-method-invocation" }
@@ -105,8 +101,6 @@ namespace UnityCli
             var completion = ctx.RunCompletionProbe(request.CompletionProbe, () => data = UnityCliBridge.ReflectionInvoker.InvokePrepared(prepared));
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                TypeName = request.TypeName,
-                MethodName = request.MethodName,
                 Data = data,
                 Completion = completion,
                 PlannedEffects = new List<PlannedEffect>

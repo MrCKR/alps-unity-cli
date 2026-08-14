@@ -25,7 +25,7 @@ namespace UnityCli
             if (string.IsNullOrEmpty(request.Name))
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_NAME_REQUIRED", "build.profile.modify requires name.", "Pass the new profile name.");
             if (ctx.DryRun)
-                return new(new BuildProfileMutationResult { Available = true, Path = request.Path, Name = request.Name, DryRun = true });
+                return new(new BuildProfileMutationResult { Available = true, Action = "modify", DryRun = true });
 
             ctx.CommitEffect();
             profile.name = request.Name;
@@ -35,7 +35,7 @@ namespace UnityCli
             var observed = AssetDatabase.LoadAssetAtPath(request.Path, type);
             if (observed == null || observed.name != request.Name)
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_MODIFY_MISMATCH", "Build Profile name readback did not match the requested value.", "Inspect build.profile.list and the target asset before retrying.");
-            return new(new BuildProfileMutationResult { Available = true, Path = request.Path, Name = observed.name });
+            return new(new BuildProfileMutationResult { Available = true, Action = "modify" });
         }
     }
 }

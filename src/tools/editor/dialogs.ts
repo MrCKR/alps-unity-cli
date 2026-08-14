@@ -4,7 +4,7 @@ import { defineTool, type ToolContext } from "../define.js";
 import { StructuredToolError } from "../errors.js";
 
 export interface EditorDialogsRequest { dialogId?: string; }
-export interface EditorDialogsResult { observedAt: string; dialogs: EditorDialog[]; }
+export interface EditorDialogsResult { dialogs: EditorDialog[]; }
 
 export default defineTool<EditorDialogsRequest, EditorDialogsResult>({
   name: "editor.dialogs",
@@ -35,6 +35,6 @@ export async function readEditorDialogs(request: EditorDialogsRequest, context: 
   if (observed.outcome === "unsupported") throw new StructuredToolError("E_DIALOG_OBSERVATION_FAILED", "Windows dialog observation is unavailable on this platform.", ["Run tools run editor.dialogs on Windows."]);
   if (observed.outcome !== "observed") throw new StructuredToolError("E_DIALOG_OBSERVATION_FAILED", "Windows dialog observation could not be proven for the selected Unity project.", ["Run tools run editor.dialogs after the selected Unity process is stable."]);
   const dialogs = observed.dialogs.map(publicDialog);
-  if (request.dialogId) { const dialog = dialogs.find((value) => value.dialogId === request.dialogId); if (!dialog) throw new StructuredToolError("E_DIALOG_NOT_FOUND", "The requested dialogId is not currently visible for the selected Unity project.", ["Run tools run editor.dialogs to obtain the current dialogId."]); return { observedAt: new Date().toISOString(), dialogs: [dialog] }; }
-  return { observedAt: new Date().toISOString(), dialogs };
+  if (request.dialogId) { const dialog = dialogs.find((value) => value.dialogId === request.dialogId); if (!dialog) throw new StructuredToolError("E_DIALOG_NOT_FOUND", "The requested dialogId is not currently visible for the selected Unity project.", ["Run tools run editor.dialogs to obtain the current dialogId."]); return { dialogs: [dialog] }; }
+  return { dialogs };
 }

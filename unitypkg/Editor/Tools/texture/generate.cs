@@ -26,10 +26,6 @@ namespace UnityCli
         public sealed class Result
         {
             public bool? DryRun { get; set; }
-            public string Path { get; set; }
-            public long Width { get; set; }
-            public long Height { get; set; }
-            public string Pattern { get; set; }
             public long SizeBytes { get; set; }
             public List<TexturePlannedEffect> PlannedEffects { get; set; }
         }
@@ -73,10 +69,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     DryRun = true,
-                    Path = path,
-                    Width = width,
-                    Height = height,
-                    Pattern = pattern,
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.generate", Path = path } }
                 });
             }
@@ -116,10 +108,6 @@ namespace UnityCli
             var sizeBytes = new FileInfo(fullPath).Length;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Path = path,
-                Width = importedTexture.width,
-                Height = importedTexture.height,
-                Pattern = pattern,
                 SizeBytes = sizeBytes,
                 PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.generate", Path = path } }
             });

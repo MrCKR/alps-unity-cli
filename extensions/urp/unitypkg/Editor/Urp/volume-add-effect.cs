@@ -7,7 +7,7 @@ namespace UnityCli
     public sealed class UrpVolumeAddEffectTool : IUnityCliTool<UrpVolumeAddEffectTool.Request, UrpVolumeAddEffectTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Target { get; set; } [UnityCliRequired] public string EffectType { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public string EffectType { get; set; } public List<UrpPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public List<UrpPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -26,7 +26,7 @@ namespace UnityCli
             UrpVolumeOperations.ValidateAddEffect(request.Target, request.EffectType, "E_URP", UrpToolSupport.FindVolumeEffectType);
             ctx.CommitEffect();
             var added = UrpVolumeOperations.AddEffect(request.Target, request.EffectType, "E_URP", UrpToolSupport.FindVolumeEffectType);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(added.GameObject), EffectType = added.ObservedEffectType, PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.add-effect", Target = GameObjectToolSupport.HierarchyPath(added.GameObject), EffectType = added.ObservedEffectType } }});
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.add-effect", Target = GameObjectToolSupport.HierarchyPath(added.GameObject), EffectType = added.ObservedEffectType } }});
         }
     }
 }

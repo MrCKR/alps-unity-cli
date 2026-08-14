@@ -20,7 +20,6 @@ namespace UnityCli
         public sealed class Result
         {
             public bool? DryRun { get; set; }
-            public GameObjectRef Target { get; set; }
             public List<PrefabPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -60,7 +59,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     DryRun = true,
-                    Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
                 });
             }
@@ -74,7 +72,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_UNPACK_STATE_MISMATCH", "Prefab instance remained linked after unpack.", "Inspect the scene object and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(observed),
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(observed) } }
             });
         }

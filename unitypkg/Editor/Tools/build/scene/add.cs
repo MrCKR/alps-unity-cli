@@ -34,7 +34,6 @@ namespace UnityCli
             }
             return new(new BuildSceneMutationResult
             {
-                Path = path,
                 Count = scenes.LongLength,
                 Changed = !ctx.DryRun && changed,
                 NoOpReason = !ctx.DryRun && !changed ? "scene-already-enabled" : null,

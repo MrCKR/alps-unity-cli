@@ -10,7 +10,7 @@ namespace UnityCli
     public class AnimatorSetParameterTool : IUnityCliTool<AnimatorSetParameterTool.Request, AnimatorSetParameterTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public string ParameterName { get; set; } public string Value { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public AnimatorParameterRef Parameter { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public AnimatorParameterRef Parameter { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "animator.set-parameter", Summary = "Set an Animator parameter default value by editing the AnimatorController asset.", Description = "In edit mode, modifies the AnimatorController asset parameter defaults. Requires an AnimatorController assigned to the Animator.", Group = "animation",DestructiveHint = true, SideEffects = new[] { "asset-write" }, Target = "editor", PlayModeSupport = "editor-only", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set Speed default", Input = new Request { Target = "Player", ParameterName = "Speed", Value = "0.5" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -53,7 +53,7 @@ namespace UnityCli
             AnimatorControllerParameter observedParameter = null;
             if (observedController != null) foreach (var candidate in observedController.parameters) if (candidate.name == r.ParameterName) { observedParameter = candidate; break; }
             if (observedParameter == null || !DefaultValueMatches(observedParameter, r.Value)) throw AnimationToolSupport.StateMismatch("E_ANIMATOR_PARAMETER_STATE_MISMATCH", "AnimatorController parameter default");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Parameter = new AnimatorParameterRef { Name = observedParameter.name, Type = observedParameter.type.ToString() }, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-parameter", Target = GameObjectToolSupport.HierarchyPath(go), Parameter = observedParameter.name } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Parameter = new AnimatorParameterRef { Name = observedParameter.name, Type = observedParameter.type.ToString() }, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-parameter", Target = GameObjectToolSupport.HierarchyPath(go), Parameter = observedParameter.name } } });
         }
 
         private static bool DefaultValueMatches(AnimatorControllerParameter parameter, string value)

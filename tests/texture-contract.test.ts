@@ -126,6 +126,6 @@ test("texture delete and generate return only observed disk and AssetDatabase st
   assert.match(generateSource, /bytes == null \|\| bytes\.Length == 0/);
   assert.match(generateSource, /File\.Exists\(fullPath\) \|\| new FileInfo\(fullPath\)\.Length <= 0/);
   assert.match(generateSource, /AssetDatabase\.ImportAsset\(path,[\s\S]*LoadAssetAtPath<Texture2D>\(path\)/);
-  assert.match(generateSource, /Width = importedTexture\.width[\s\S]*Height = importedTexture\.height[\s\S]*SizeBytes = sizeBytes/);
+  assert.match(generateSource, /SizeBytes = sizeBytes/);
   assert.match(generateSource, /E_TEXTURE_GENERATE_FAILED/);
 });

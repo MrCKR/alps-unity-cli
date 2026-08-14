@@ -16,7 +16,6 @@ namespace UnityCli
         public sealed class Result
         {
             public bool? DryRun { get; set; }
-            public GameObjectRef Target { get; set; }
             public GameObjectRef Deleted { get; set; }
             public bool Destroyed { get; set; }
             public List<GameObjectPlannedEffect> PlannedEffects { get; set; }
@@ -56,7 +55,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     DryRun = true,
-                    Target = targetRef,
                     Destroyed = false,
                     PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.delete", Target = targetRef.Path, SideEffects = "none" } }
                 });

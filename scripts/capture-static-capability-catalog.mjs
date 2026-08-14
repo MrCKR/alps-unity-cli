@@ -86,11 +86,17 @@ function withGeneratedCompletionContract(descriptor) {
   return { ...descriptor, completionContract };
 }
 
-/** Bridge authoring descriptor 必须先经过与 tools describe 相同的公开投影。 */
+/** Bridge authoring descriptor 必须先经过与 tools describe 相同的公开投影；source/availabilityScope/summary/contractProfile 只在此处从完整 metadata 恢复，不进入 tools describe 输出。 */
 function toPublicToolDescriptor(descriptor) {
   const metadata = projectDescriptorToToolMetadata(descriptor);
   if (!metadata) throw new Error(`Malformed Live Tool descriptor: ${String(descriptor.name ?? "unknown")}`);
-  return publicToolDescriptor(metadata);
+  return {
+    ...publicToolDescriptor(metadata),
+    summary: metadata.summary,
+    availabilityScope: metadata.availabilityScope,
+    contractProfile: metadata.contractProfile,
+    source: descriptor.source,
+  };
 }
 
 /** session 可用性由调用时重新计算，不能冻结进 package snapshot。 */

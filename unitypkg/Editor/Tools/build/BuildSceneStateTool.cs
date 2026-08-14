@@ -25,7 +25,7 @@ namespace UnityCli
                 if (!scenes.Any(scene => scene.path == path && scene.enabled == enabled))
                     throw new UnityCliBridge.BridgeCommandException("E_BUILD_SCENE_STATE_MISMATCH", "Build Settings did not apply the requested enabled state for " + path + ".", "Inspect build.scene.list and retry.");
             }
-            return new(new BuildSceneMutationResult { Path = path, Count = scenes.LongLength, DryRun = ctx.DryRun });
+            return new(new BuildSceneMutationResult { Count = scenes.LongLength, DryRun = ctx.DryRun });
         }
 
         public static EditorBuildSettingsScene[] ReadScenes()

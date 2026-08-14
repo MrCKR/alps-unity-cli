@@ -17,8 +17,6 @@ namespace UnityCli
         public sealed class Result
         {
             public long TotalEvents { get; set; }
-            public long PageSize { get; set; }
-            public long Cursor { get; set; }
             public List<FrameDebuggerEvent> Events { get; set; }
             public string Note { get; set; }
             public long? NextCursor { get; set; }
@@ -66,8 +64,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     TotalEvents = 0,
-                    PageSize = pageSize,
-                    Cursor = cursor,
                     Events = new List<FrameDebuggerEvent>(),
                     Note = "Frame Debugger has no events. Is it enabled?"
                 });
@@ -135,8 +131,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 TotalEvents = totalEvents,
-                PageSize = pageSize,
-                Cursor = cursor,
                 Events = events,
                 NextCursor = end < totalEvents ? (long?)end : null
             });

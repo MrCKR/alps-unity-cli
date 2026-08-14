@@ -32,7 +32,7 @@ test("request digest fixture binds the exact direct-call bytes", () => {
 
 test("editor.state 公开 schema 不泄漏 transport generation", () => {
   const state = JSON.stringify(readFixture("editor-state.schema.json"));
-  for (const field of ["ready", "transitioning", "blocked", "offline", "conflict", "freshness", "unknownFields"]) {
+  for (const field of ["ready", "transitioning", "blocked", "offline", "conflict", "freshness"]) {
     assert.match(state, new RegExp(field));
   }
   assert.doesNotMatch(state, /endpoint|listenerId|actualPort|preferredPort|journalPhase/);

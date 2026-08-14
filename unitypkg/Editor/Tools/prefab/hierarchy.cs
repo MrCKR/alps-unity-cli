@@ -28,9 +28,6 @@ namespace UnityCli
         public sealed class Result
         {
             public PrefabInfo Prefab { get; set; }
-            public string Parent { get; set; }
-            public string Query { get; set; }
-            public string ComponentType { get; set; }
             public List<PrefabHierarchyItem> Items { get; set; }
             public List<PrefabHierarchyItem> Children { get; set; }
             public AssetPageInfo PageInfo { get; set; }
@@ -99,9 +96,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Prefab = PrefabToolSupport.BuildPrefabInfo(path, root, root, includeSummaryDetails),
-                    Parent = parent,
-                    Query = query,
-                    ComponentType = componentType,
                     Items = page,
                     Children = page,
                     PageInfo = new AssetPageInfo

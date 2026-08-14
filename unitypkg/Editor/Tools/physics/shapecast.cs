@@ -41,8 +41,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Mode { get; set; }
-            public string Shape { get; set; }
             public RaycastQuery Query { get; set; }
             public long HitCount { get; set; }
             public List<RaycastHitInfo> Hits { get; set; }
@@ -91,7 +89,7 @@ namespace UnityCli
                 }
                 var hitList = new List<RaycastHitInfo>();
                 foreach (var h in hits2d) hitList.Add(PhysicsToolSupport.BuildRaycast2DHit(h));
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "2d", Shape = shape, Query = PhysicsToolSupport.BuildRaycast2DQuery(origin2d, direction2d, distance, layerMask), HitCount = hits2d.Length, Hits = hitList });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Query = PhysicsToolSupport.BuildRaycast2DQuery(origin2d, direction2d, distance, layerMask), HitCount = hits2d.Length, Hits = hitList });
             }
             RaycastHit[] hits;
             if (shape == "box")
@@ -122,7 +120,7 @@ namespace UnityCli
             }
             var list = new List<RaycastHitInfo>();
             foreach (var h in hits) list.Add(PhysicsToolSupport.BuildRaycast3DHit(h));
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "3d", Shape = shape, Query = PhysicsToolSupport.BuildRaycast3DQuery(origin, direction, distance, layerMask), HitCount = hits.Length, Hits = list });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Query = PhysicsToolSupport.BuildRaycast3DQuery(origin, direction, distance, layerMask), HitCount = hits.Length, Hits = list });
         }
     }
 }

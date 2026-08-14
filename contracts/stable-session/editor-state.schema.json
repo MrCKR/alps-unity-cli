@@ -19,11 +19,10 @@
     "session": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["known", "editorSessionId", "processId"],
+      "required": ["known", "editorSessionId"],
       "properties": {
         "known": { "type": "boolean" },
-        "editorSessionId": { "type": ["string", "null"] },
-        "processId": { "type": ["integer", "null"], "minimum": 1 }
+        "editorSessionId": { "type": ["string", "null"] }
       }
     },
     "status": { "enum": ["ready", "transitioning", "blocked", "offline", "conflict"] },
@@ -46,18 +45,9 @@
     "observation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["live", "sources", "windowsUi", "observedAt", "elapsedMs", "freshness", "lastHeartbeatAt", "dataObservedAt", "dataAgeMs", "unknownFields"],
+      "required": ["freshness"],
       "properties": {
-        "live": { "type": "boolean" },
-        "sources": { "type": "array", "items": { "enum": ["bridge", "registry", "windows-ui", "process"] }, "uniqueItems": true },
-        "windowsUi": { "enum": ["not-observed", "observed-empty", "observed-blocked", "unproven", "unsupported"] },
-        "observedAt": { "type": "string", "format": "date-time" },
-        "elapsedMs": { "type": "integer", "minimum": 0 },
-        "freshness": { "enum": ["live", "fresh", "stale", "unknown"] },
-        "lastHeartbeatAt": { "type": ["string", "null"], "format": "date-time" },
-        "dataObservedAt": { "type": ["string", "null"], "format": "date-time" },
-        "dataAgeMs": { "type": ["integer", "null"], "minimum": 0 },
-        "unknownFields": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+        "freshness": { "enum": ["live", "fresh", "stale", "unknown"] }
       }
     }
   },
@@ -92,11 +82,10 @@
     "observedField": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["known", "freshness"],
+      "required": ["known"],
       "properties": {
         "known": { "type": "boolean" },
-        "value": { "x-unityCliAnyJson": true },
-        "freshness": { "enum": ["live", "fresh", "stale", "unknown"] }
+        "value": { "x-unityCliAnyJson": true }
       }
     }
   }

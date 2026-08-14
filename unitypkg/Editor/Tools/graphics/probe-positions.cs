@@ -11,7 +11,7 @@ namespace UnityCli
     public class GraphicsProbePositionsTool : IUnityCliTool<GraphicsProbePositionsTool.Request, GraphicsProbePositionsTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public string Type { get; set; } public string Positions { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public string ProbeType { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string ProbeType { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "graphics.probe-positions", Summary = "Read or update probe positions for a ReflectionProbe or LightProbeGroup.", Description = "Resolve a probe component by type (reflection or light), then optionally set positions.", Group = "graphics",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read probe positions", Input = new Request { Target = "Probes" } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -37,7 +37,7 @@ namespace UnityCli
                 if (observedComponent == null || (observedComponent is ReflectionProbe observedReflection && (positions.Length == 0 || observedReflection.center != positions[0])) || (observedComponent is LightProbeGroup observedLight && !SamePositions(observedLight.probePositions, positions))) throw new UnityCliBridge.BridgeCommandException("E_PROBE_STATE_MISMATCH", "Probe positions did not retain the request.", "Retry after the editor is idle.");
                 component = observedComponent;
             }
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = component.gameObject.GetInstanceID(), Name = component.gameObject.name, Path = GameObjectToolSupport.HierarchyPath(component.gameObject) }, ProbeType = probeType, PlannedEffects = effects });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { ProbeType = probeType, PlannedEffects = effects });
         }
         private static bool SamePositions(Vector3[] actual, Vector3[] expected)
         {

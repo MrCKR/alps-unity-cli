@@ -20,7 +20,21 @@ namespace UnityCli
             public bool InlineBase64 { get; set; }
         }
 
-        public sealed class Result : ScreenshotCaptureResult { }
+        public sealed class Result
+        {
+            public string ScreenshotPath { get; set; }
+            public string ArtifactPath { get; set; }
+            public string Format { get; set; }
+            public long Quality { get; set; }
+            public string Source { get; set; }
+            public string Target { get; set; }
+            public string ImageBase64 { get; set; }
+            public long? ImageWidth { get; set; }
+            public long? ImageHeight { get; set; }
+            public string ImageMimeType { get; set; }
+            public long SizeBytes { get; set; }
+            public string Sha256 { get; set; }
+        }
 
         public ToolDescriptor Describe() => new()
         {
@@ -80,11 +94,22 @@ namespace UnityCli
             var result = new Result
             {
                 ScreenshotPath = outputPath, ArtifactPath = outputPath, Format = format,
-                Width = width, Height = height, Quality = 95, Source = "game-view", Target = "Camera.main/allCameras",
+                Quality = 95, Source = "game-view", Target = "Camera.main/allCameras",
                 SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256
             };
-            ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
+            MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
             return new System.Threading.Tasks.ValueTask<Result>(result);
+        }
+
+        private static void MaybeAppendInline(Result result, byte[] bytes, int width, int height, string mimeType, bool inlineBase64)
+        {
+            if (inlineBase64 && bytes != null && bytes.Length <= 512 * 1024)
+            {
+                result.ImageBase64 = Convert.ToBase64String(bytes);
+                result.ImageWidth = width;
+                result.ImageHeight = height;
+                result.ImageMimeType = mimeType;
+            }
         }
     }
 }

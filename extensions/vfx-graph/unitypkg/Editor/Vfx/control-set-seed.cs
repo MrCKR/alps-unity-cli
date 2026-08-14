@@ -32,12 +32,9 @@ namespace UnityCli
             var observedObject = VfxToolSupport.FindGameObjectByTarget(gameObjectId.ToString(System.Globalization.CultureInfo.InvariantCulture));
             effect = observedObject == null ? null : observedObject.GetComponent(effectType);
             if (effect == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.control.set-seed target/component disappeared after commit.", "Retry after checking the target still exists.");
-            var seed = VfxActionToolSupport.SetAndReadRequired(effect, "startSeed", (uint)request.Seed.Value);
-            bool? resetSeedOnPlay = null;
-            if (request.ResetSeedOnPlay.HasValue) resetSeedOnPlay = VfxActionToolSupport.SetAndReadRequired(effect, "resetSeedOnPlay", request.ResetSeedOnPlay.Value);
+            VfxActionToolSupport.SetAndReadRequired(effect, "startSeed", (uint)request.Seed.Value);
+            if (request.ResetSeedOnPlay.HasValue) VfxActionToolSupport.SetAndReadRequired(effect, "resetSeedOnPlay", request.ResetSeedOnPlay.Value);
             var result = VfxActionToolSupport.BuildControlResult(effect, "vfx.control.set-seed", ctx.LogPath);
-            result.Seed = seed;
-            result.ResetSeedOnPlay = resetSeedOnPlay;
             return new System.Threading.Tasks.ValueTask<VfxControlActionResult>(result);
         }
     }

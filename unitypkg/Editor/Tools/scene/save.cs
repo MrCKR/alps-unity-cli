@@ -19,7 +19,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public bool All { get; set; }
             public long SavedCount { get; set; }
             public SceneInfo Scene { get; set; }
             public List<SceneSaveReadback> Scenes { get; set; }
@@ -91,7 +90,7 @@ namespace UnityCli
             if (ctx.DryRun)
             {
                 var preview = Readback(scene, plan, false, false);
-                return new Result { All = false, SavedCount = 0, Scene = preview.Scene, Scenes = new List<SceneSaveReadback> { preview }, RequestedPath = path, DryRun = true, PlannedEffects = effects };
+                return new Result { SavedCount = 0, Scene = preview.Scene, Scenes = new List<SceneSaveReadback> { preview }, RequestedPath = path, DryRun = true, PlannedEffects = effects };
             }
 
             ct.ThrowIfCancellationRequested();
@@ -103,7 +102,6 @@ namespace UnityCli
             var readback = Prove(observed, plan);
             return new Result
             {
-                All = false,
                 SavedCount = 1,
                 Scene = readback.Scene,
                 Scenes = new List<SceneSaveReadback> { readback },
@@ -127,9 +125,9 @@ namespace UnityCli
                 preview.Add(Readback(scene, plan, false, false));
             }
             if (ctx.DryRun)
-                return new Result { All = true, SavedCount = 0, Scenes = preview, DryRun = true, PlannedEffects = effects };
+                return new Result { SavedCount = 0, Scenes = preview, DryRun = true, PlannedEffects = effects };
             if (plans.Count == 0)
-                return new Result { All = true, SavedCount = 0, Scenes = preview, DryRun = false, PlannedEffects = effects };
+                return new Result { SavedCount = 0, Scenes = preview, DryRun = false, PlannedEffects = effects };
 
             ct.ThrowIfCancellationRequested();
             CommitEffect(ctx);
@@ -140,7 +138,7 @@ namespace UnityCli
             foreach (var plan in plans)
                 observed.Add(Prove(FindSceneByHandle(plan.Handle), plan));
             EnsureAllLoadedScenesClean();
-            return new Result { All = true, SavedCount = observed.Count, Scenes = observed, DryRun = false, PlannedEffects = effects };
+            return new Result { SavedCount = observed.Count, Scenes = observed, DryRun = false, PlannedEffects = effects };
         }
 
         private static List<SceneSavePlan> CaptureDirtyScenes()

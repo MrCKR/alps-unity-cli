@@ -106,17 +106,6 @@ namespace UnityCli
             var timelineIdentity = RequirePersistentIdentity(plan.Asset, "Timeline asset");
             return new TimelineInfoResult
             {
-                Timeline = new TimelineAssetInfo
-                {
-                    Path = plan.Path,
-                    Guid = plan.Guid,
-                    Name = plan.Asset.name,
-                    Type = plan.Asset.GetType().FullName,
-                    FrameRate = RequireFinite(ReadFrameRate(plan.Asset), "Timeline frameRate"),
-                    Duration = RequireFinite(ReadDouble(plan.Asset, "duration"), "Timeline duration"),
-                    TrackCount = nodes.Count,
-                    SizeBytes = new System.IO.FileInfo(AssetToolSupport.AssetFullPath(plan.Path)).Length
-                },
                 Identity = timelineIdentity,
                 Tracks = tracks,
                 PageInfo = new PageInfo
@@ -126,8 +115,6 @@ namespace UnityCli
                     Total = nodes.Count,
                     NextCursor = end < nodes.Count ? (long?)end : null
                 },
-                MaxDepth = plan.MaxDepth,
-                MaxClipsPerTrack = plan.MaxClipsPerTrack,
                 DepthTruncated = depthTruncated
             };
         }
@@ -391,12 +378,9 @@ namespace UnityCli
 
     public sealed class TimelineInfoResult
     {
-        public TimelineAssetInfo Timeline { get; set; }
         public TimelineObjectIdentity Identity { get; set; }
         public List<TimelineTrackInfo> Tracks { get; set; }
         public PageInfo PageInfo { get; set; }
-        public long MaxDepth { get; set; }
-        public long MaxClipsPerTrack { get; set; }
         public bool DepthTruncated { get; set; }
     }
 

@@ -33,7 +33,6 @@ namespace UnityCli
         public sealed class Result
         {
             public string TypeName { get; set; }
-            public long InstanceId { get; set; }
             [UnityCliAnyJson] public object Data { get; set; }
         }
 
@@ -62,7 +61,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 TypeName = target.GetType().FullName,
-                InstanceId = target.GetInstanceID(),
                 Data = data
             });
         }

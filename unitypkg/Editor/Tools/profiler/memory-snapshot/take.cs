@@ -24,7 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Path { get; set; }
             public long SizeBytes { get; set; }
             public List<ProfilerPlannedEffect> PlannedEffects { get; set; }
         }
@@ -108,7 +107,6 @@ namespace UnityCli
                         }
                         complete(new Result
                         {
-                            Path = finalPath,
                             SizeBytes = info.Length,
                             PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.memory-snapshot.take", Path = finalPath } }
                         });

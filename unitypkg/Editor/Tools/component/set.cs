@@ -24,10 +24,7 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public GameObjectRef Target { get; set; }
             public ComponentSummary Component { get; set; }
-            public string Property { get; set; }
-            public string ComponentIndex { get; set; }
             public List<ChangedProperty> ChangedProperties { get; set; }
             public List<GameObjectPlannedEffect> PlannedEffects { get; set; }
         }
@@ -86,10 +83,7 @@ namespace UnityCli
             var observedComponent = ComponentAddTool.VerifyComponentReadback(gameObject.GetInstanceID(), component.GetInstanceID(), component.GetType(), propertyChanges);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 Component = GameObjectToolSupport.BuildComponentSummary(observedComponent),
-                Property = request.Property,
-                ComponentIndex = request.ComponentIndex.HasValue ? request.ComponentIndex.Value.ToString(CultureInfo.InvariantCulture) : null,
                 ChangedProperties = ComponentAddTool.BuildChangedProperties(propertyChanges),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.set", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = component.GetType().Name } }
             });

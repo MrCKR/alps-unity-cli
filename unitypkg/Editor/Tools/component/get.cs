@@ -34,7 +34,6 @@ namespace UnityCli
         public sealed class Result
         {
             public string TypeName { get; set; }
-            public long ComponentInstanceId { get; set; }
             public GameObjectRef GameObject { get; set; }
             [UnityCliAnyJson] public object Data { get; set; }
         }
@@ -65,7 +64,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 TypeName = component.GetType().FullName,
-                ComponentInstanceId = component.GetInstanceID(),
                 GameObject = GameObjectToolSupport.BuildGameObjectRef(component.gameObject),
                 Data = data
             });

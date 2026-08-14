@@ -25,8 +25,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Target { get; set; }
-            public long Count { get; set; }
             public List<ScreenshotArtifactEntry> Artifacts { get; set; }
         }
 
@@ -98,7 +96,7 @@ namespace UnityCli
                 else { cam.transform.position = previousPosition; cam.transform.rotation = previousRotation; }
             }
 
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = go.name, Count = artifacts.Count, Artifacts = artifacts });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Artifacts = artifacts });
         }
     }
 }

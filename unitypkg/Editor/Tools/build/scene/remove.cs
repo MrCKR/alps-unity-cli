@@ -22,7 +22,7 @@ namespace UnityCli
                 if (scenes.Any(scene => scene.path == path))
                     throw new UnityCliBridge.BridgeCommandException("E_BUILD_SCENE_REMOVE_MISMATCH", "Build Settings did not remove scene: " + path, "Inspect build.scene.list and retry.");
             }
-            return new(new BuildSceneMutationResult { Path = path, Count = scenes.LongLength, DryRun = ctx.DryRun });
+            return new(new BuildSceneMutationResult { Count = scenes.LongLength, DryRun = ctx.DryRun });
         }
     }
 }

@@ -24,7 +24,6 @@ namespace UnityCli.ProBuilder
             public int SceneCount { get; set; }
             public int ObjectCount { get; set; }
             public int SelectedObjectCount { get; set; }
-            public int PageSize { get; set; }
             public bool Truncated { get; set; }
             public List<ProBuilderSceneRow> Objects { get; set; }
             public ProBuilderSceneSelection Selection { get; set; }
@@ -98,7 +97,6 @@ namespace UnityCli.ProBuilder
                 SceneCount = SceneManager.sceneCount,
                 ObjectCount = objectCount,
                 SelectedObjectCount = selectedProBuilderNames.Count,
-                PageSize = pageSize,
                 Truncated = objectCount > visibleCount,
                 Objects = visibleRows,
                 Selection = new ProBuilderSceneSelection

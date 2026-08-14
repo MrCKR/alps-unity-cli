@@ -23,7 +23,6 @@ namespace UnityCli
         public sealed class Result
         {
             public PrefabInfo Prefab { get; set; }
-            public string Source { get; set; }
             public string Mode { get; set; }
             public List<PrefabPlannedEffect> PlannedEffects { get; set; }
         }
@@ -94,7 +93,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Prefab = PrefabToolSupport.BuildPrefabInfo(observedPath, observedCopy, null, true),
-                    Source = source,
                     Mode = "copy",
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.create", Path = path, Source = source } }
                 });
@@ -118,7 +116,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Prefab = PrefabToolSupport.BuildPrefabInfo(sceneObservedPath, observedPrefab, null, true),
-                Source = source,
                 Mode = "scene",
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.create", Path = path, Source = source } }
             });

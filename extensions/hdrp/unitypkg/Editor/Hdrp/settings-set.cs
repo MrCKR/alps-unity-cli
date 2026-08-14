@@ -10,7 +10,7 @@ namespace UnityCli
     public sealed class HdrpSettingsSetTool : IUnityCliTool<HdrpSettingsSetTool.Request, HdrpSettingsSetTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Property { get; set; } [UnityCliRequired] public string Value { get; set; } }
-        public sealed class Result { public string Property { get; set; } public string ObservedValue { get; set; } [UnityCliAnyJson] public Dictionary<string, object> Settings { get; set; } public bool DryRun { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string ObservedValue { get; set; } [UnityCliAnyJson] public Dictionary<string, object> Settings { get; set; } public bool DryRun { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -40,7 +40,7 @@ namespace UnityCli
                 observedValue = HdrpToolSupport.VerifySettingReadback(plan, AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(pipelinePath));
             }
             var observedPipeline = ctx.DryRun ? pipeline : HdrpToolSupport.GetActivePipelineAsset();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Property = request.Property, ObservedValue = observedValue, Settings = HdrpToolSupport.ReadSettings(observedPipeline), DryRun = ctx.DryRun, PlannedEffects = effects});
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { ObservedValue = observedValue, Settings = HdrpToolSupport.ReadSettings(observedPipeline), DryRun = ctx.DryRun, PlannedEffects = effects});
         }
     }
 }

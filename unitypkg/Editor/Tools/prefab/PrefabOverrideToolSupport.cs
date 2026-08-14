@@ -111,7 +111,6 @@ namespace UnityCli
                 Action = action,
                 Changed = plan.Before.HasOverrides,
                 DryRun = false,
-                Instance = GameObjectToolSupport.BuildGameObjectRef(root),
                 Source = BuildAssetIdentity(sourcePath, source),
                 Before = plan.Before,
                 After = after,
@@ -130,7 +129,6 @@ namespace UnityCli
                 Action = action,
                 Changed = plan.Before.HasOverrides,
                 DryRun = true,
-                Instance = GameObjectToolSupport.BuildGameObjectRef(plan.Root),
                 Source = BuildAssetIdentity(plan.SourcePath, plan.Source),
                 Before = plan.Before,
                 After = plan.Before,
@@ -228,7 +226,6 @@ namespace UnityCli
             {
                 Created = true,
                 DryRun = false,
-                Base = BuildAssetIdentity(plan.BasePath, baseAsset),
                 Variant = BuildAssetIdentity(outputPath, output),
                 PlannedEffects = VariantEffects(plan)
             };
@@ -240,7 +237,6 @@ namespace UnityCli
             {
                 Created = false,
                 DryRun = true,
-                Base = BuildAssetIdentity(plan.BasePath, plan.BaseAsset),
                 Variant = new PrefabAssetIdentity { Path = plan.OutputPath, AssetType = PrefabAssetType.Variant.ToString(), IsVariant = true, BasePath = plan.BasePath, BaseGuid = plan.BaseGuid },
                 PlannedEffects = VariantEffects(plan)
             };
@@ -338,7 +334,6 @@ namespace UnityCli
         public string Action { get; set; }
         public bool Changed { get; set; }
         public bool DryRun { get; set; }
-        public GameObjectRef Instance { get; set; }
         public PrefabAssetIdentity Source { get; set; }
         public PrefabOverrideSummary Before { get; set; }
         public PrefabOverrideSummary After { get; set; }
@@ -353,7 +348,6 @@ namespace UnityCli
     {
         public bool Created { get; set; }
         public bool DryRun { get; set; }
-        public PrefabAssetIdentity Base { get; set; }
         public PrefabAssetIdentity Variant { get; set; }
         public List<PrefabPlannedEffect> PlannedEffects { get; set; }
     }

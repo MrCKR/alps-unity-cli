@@ -5,7 +5,7 @@ namespace UnityCli
     public sealed class VfxEffectInfoTool : IUnityCliTool<VfxEffectInfoTool.Request, VfxEffectInfoTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Target { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public VfxEffectInfo Effect { get; set; } }
+        public sealed class Result { public VfxEffectInfo Effect { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -22,7 +22,6 @@ namespace UnityCli
             var effect = VfxActionToolSupport.RequireEffect(request.Target, "vfx.effect.info");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(effect.gameObject),
                 Effect = VfxToolSupport.BuildEffectInfo(effect)
             });
         }

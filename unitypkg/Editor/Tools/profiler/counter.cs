@@ -13,7 +13,7 @@ namespace UnityCli
     public class ProfilerCounterTool : IUnityCliTool<ProfilerCounterTool.Request, ProfilerCounterTool.Result>
     {
         public sealed class Request { public string Category { get; set; } public string Counter { get; set; } }
-        public sealed class Result { public ProfilerState Profiler { get; set; } public string Category { get; set; } public string Counter { get; set; } public List<ProfilerCounterEntry> Counters { get; set; } }
+        public sealed class Result { public ProfilerState Profiler { get; set; } public List<ProfilerCounterEntry> Counters { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -27,7 +27,6 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default) => new System.Threading.Tasks.ValueTask<Result>(new Result
         {
             Profiler = ProfilerToolSupport.BuildProfilerState(),
-            Category = request.Category, Counter = request.Counter,
             Counters = ProfilerToolSupport.BuildProfilerCounters(request.Category, request.Counter)
         });
     }

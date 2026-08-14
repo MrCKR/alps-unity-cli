@@ -68,11 +68,9 @@ namespace UnityCli
             var importer = RequireImporter(path);
             var snapshot = new AssetImportSettingsSnapshot
             {
-                Path = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 ImporterType = importer.GetType().Name,
                 ImporterCategory = Category(importer),
-                Platform = platform,
                 UnityVersion = Application.unityVersion,
                 Settings = ReadDefaultSettings(importer),
                 PlatformOverride = ReadPlatformSettings(importer, platform)
@@ -609,11 +607,9 @@ namespace UnityCli
     /// <summary>一个 importer 的 stable path/GUID/type/version 和当前设置快照。</summary>
     public sealed class AssetImportSettingsSnapshot
     {
-        public string Path { get; set; }
         public string Guid { get; set; }
         public string ImporterType { get; set; }
         public string ImporterCategory { get; set; }
-        public string Platform { get; set; }
         public string UnityVersion { get; set; }
         [UnityCliAnyJson] public Dictionary<string, object> Settings { get; set; }
         [UnityCliAnyJson] public Dictionary<string, object> PlatformOverride { get; set; }

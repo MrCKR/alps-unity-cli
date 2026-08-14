@@ -23,8 +23,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public bool Validate { get; set; }
-            public GameObjectTargetRef Target { get; set; }
             public bool HasRigidbody { get; set; }
             public RigidbodyInfo Rigidbody { get; set; }
             public Rigidbody2DInfo Rigidbody2D { get; set; }
@@ -54,8 +52,6 @@ namespace UnityCli
                 var rigidbody2D = target.GetComponent<Rigidbody2D>();
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Validate = true,
-                    Target = new GameObjectTargetRef { Id = target.GetInstanceID(), Name = target.name, Path = GameObjectToolSupport.HierarchyPath(target) },
                     HasRigidbody = rigidbody != null,
                     Rigidbody = rigidbody == null ? null : PhysicsToolSupport.BuildRigidbodyInfo(rigidbody),
                     Rigidbody2D = rigidbody2D == null ? null : PhysicsToolSupport.BuildRigidbody2DInfo(rigidbody2D),
@@ -67,7 +63,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Target = new GameObjectTargetRef { Id = target.GetInstanceID(), Name = target.name, Path = GameObjectToolSupport.HierarchyPath(target) },
                     HasRigidbody = true,
                     Rigidbody = PhysicsToolSupport.BuildRigidbodyInfo(rigidbody),
                     PlannedEffects = new List<PhysicsPlannedEffect>()
@@ -92,7 +87,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_RIGIDBODY_STATE_MISMATCH", "Rigidbody state did not match the requested values.", "Inspect the Rigidbody component and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = new GameObjectTargetRef { Id = observedTarget.GetInstanceID(), Name = observedTarget.name, Path = GameObjectToolSupport.HierarchyPath(observedTarget) },
                 HasRigidbody = observedRigidbody != null,
                 Rigidbody = PhysicsToolSupport.BuildRigidbodyInfo(observedRigidbody),
                 PlannedEffects = new List<PhysicsPlannedEffect> { new PhysicsPlannedEffect { Type = "physics.rigidbody", Target = GameObjectToolSupport.HierarchyPath(observedTarget) } }

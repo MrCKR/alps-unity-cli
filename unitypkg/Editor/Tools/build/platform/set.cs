@@ -17,7 +17,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_TARGET_REQUIRED", "build.platform.set requires target.", "Pass a BuildTarget such as StandaloneWindows64, Android, or iOS.");
             if (!Enum.TryParse(request.Target, true, out BuildTarget target))
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_TARGET_UNKNOWN", "Unknown BuildTarget: " + request.Target, "Pass a valid BuildTarget enum name.");
-            if (ctx.DryRun) return new BuildPlatformResult { Target = request.Target, DryRun = true };
+            if (ctx.DryRun) return new BuildPlatformResult { DryRun = true };
             // effect 前现场采集当前平台，用于 Switched/Changed 证明本次切换是否真实发生。
             var changed = EditorUserBuildSettings.activeBuildTarget != target;
             BuildToolSupport.EnsureEditorNotBusy("build.platform.set");
@@ -33,7 +33,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_TARGET_PROOF_MISSING", "The active build target does not match the requested target after recovery.", "Inspect editor.state and installed platform support before submitting a new request.");
             return new BuildPlatformResult
             {
-                Target = request.Target,
                 Switched = changed,
                 Changed = changed,
                 NoOpReason = changed ? null : "active-target-already-matched",

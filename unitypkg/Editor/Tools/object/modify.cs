@@ -36,7 +36,6 @@ namespace UnityCli
         public sealed class Result
         {
             public bool DryRun { get; set; }
-            public long InstanceId { get; set; }
             public string TypeName { get; set; }
             public List<string> ChangedPaths { get; set; }
             [UnityCliAnyJson] public object UpdatedData { get; set; }
@@ -90,7 +89,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     DryRun = true,
-                    InstanceId = target.GetInstanceID(),
                     TypeName = target.GetType().FullName,
                     PlannedEffects = new List<PlannedEffect>
                     {
@@ -118,7 +116,6 @@ namespace UnityCli
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                InstanceId = target.GetInstanceID(),
                 TypeName = target.GetType().FullName,
                 ChangedPaths = result.ChangedPaths,
                 UpdatedData = updatedData

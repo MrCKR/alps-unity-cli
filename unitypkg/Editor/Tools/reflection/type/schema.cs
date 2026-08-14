@@ -17,7 +17,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string TypeName { get; set; }
             [UnityCliAnyJson] public object Schema { get; set; }
         }
 
@@ -49,7 +48,6 @@ namespace UnityCli
             var schema = UnityCliBridge.TypeSchemaGenerator.Generate(request.TypeName, request.MaxDepth);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                TypeName = request.TypeName,
                 Schema = schema
             });
         }

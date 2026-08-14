@@ -24,7 +24,6 @@ namespace UnityCli
         public sealed class Result
         {
             public AssetDetail Asset { get; set; }
-            public string Source { get; set; }
             public bool DryRun { get; set; }
             public List<AssetPlannedEffect> PlannedEffects { get; set; }
         }
@@ -60,7 +59,6 @@ namespace UnityCli
                 return new Result
                 {
                     Asset = new AssetDetail { Path = path, Name = Path.GetFileNameWithoutExtension(path), Extension = Path.GetExtension(path), Exists = File.Exists(AssetToolSupport.AssetFullPath(path)) },
-                    Source = source,
                     DryRun = true,
                     PlannedEffects = effects
                 };
@@ -108,7 +106,7 @@ namespace UnityCli
             VerifyContentProof(path, expectedHash);
             if (!asset.Exists || string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_IMPORT_PROOF_MISSING", "The imported asset is not resolvable after import: " + path, "Inspect import/compile diagnostics before submitting a new request.");
-            return new Result { Asset = asset, Source = source, PlannedEffects = effects };
+            return new Result { Asset = asset, PlannedEffects = effects };
         }
 
         /// <summary>校验 import 后目标文件字节仍与 effect 落盘时一致，避免把预存资产误当成本次 import proof。</summary>

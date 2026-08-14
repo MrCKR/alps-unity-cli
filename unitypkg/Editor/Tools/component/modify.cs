@@ -31,7 +31,6 @@ namespace UnityCli
         public sealed class Result
         {
             public bool? DryRun { get; set; }
-            public long ComponentInstanceId { get; set; }
             public string TypeName { get; set; }
             public List<string> ChangedPaths { get; set; }
             [UnityCliAnyJson] public object UpdatedData { get; set; }
@@ -69,7 +68,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     DryRun = true,
-                    ComponentInstanceId = component.GetInstanceID(),
                     TypeName = component.GetType().FullName,
                     PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.modify", Target = component.gameObject.name } }
                 });
@@ -95,7 +93,6 @@ namespace UnityCli
             var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedComponent, new UnityCliBridge.ObjectSerializer.Options { MaxDepth = maxDepth, IncludeFields = true, IncludeProperties = true, DeepSerialization = false });
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                ComponentInstanceId = component.GetInstanceID(),
                 TypeName = component.GetType().FullName,
                 ChangedPaths = new List<string>(result.ChangedPaths),
                 UpdatedData = updatedData

@@ -57,8 +57,7 @@ namespace UnityCli
             var (width, height) = ReadPngDimensions(outputPath);
             var result = new Result
             {
-                ScreenshotPath = outputPath, ArtifactPath = outputPath, Format = "png",
-                Width = width, Height = height, Quality = 100, Source = "screen", Target = "final-composited-frame",
+                ScreenshotPath = outputPath, ArtifactPath = outputPath, Source = "screen",
                 SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256
             };
             if (request.InlineBase64)

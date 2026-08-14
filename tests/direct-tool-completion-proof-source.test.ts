@@ -40,6 +40,6 @@ test("camera captures and texture generation prove their observed artifacts", as
   assert.match(multiview, /CaptureCamera\(camera, width, height, false, 95, plan\.Value, format/);
   assert.match(generate, /!File\.Exists\(fullPath\) \|\| new FileInfo\(fullPath\)\.Length <= 0/);
   assert.match(generate, /AssetDatabase\.ImportAsset\(path,[\s\S]*LoadAssetAtPath<Texture2D>\(path\)/);
-  assert.match(generate, /Width = importedTexture\.width[\s\S]*Height = importedTexture\.height[\s\S]*SizeBytes = sizeBytes/);
+  assert.match(generate, /SizeBytes = sizeBytes/);
   assert.match(generate, /E_TEXTURE_GENERATE_FAILED/);
 });

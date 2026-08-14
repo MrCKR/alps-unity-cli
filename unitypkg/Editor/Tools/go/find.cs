@@ -33,10 +33,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Query { get; set; }
-            public string SearchMethod { get; set; }
-            public bool IncludeInactive { get; set; }
-            public bool PreferPrefabStage { get; set; }
             public bool PrefabStageOpen { get; set; }
             public long MatchCount { get; set; }
             public List<GoFindItem> Items { get; set; }
@@ -92,10 +88,6 @@ namespace UnityCli
             long? nextCursor = cursor + page.Count < total ? (long?)(cursor + page.Count) : null;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Query = searchTerm,
-                SearchMethod = searchMethod,
-                IncludeInactive = includeInactive,
-                PreferPrefabStage = preferPrefabStage,
                 PrefabStageOpen = prefabStageOpen,
                 MatchCount = total,
                 Items = page.ConvertAll(BuildItem),

@@ -24,7 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string TypeName { get; set; }
             [UnityCliAnyJson] public object Data { get; set; }
@@ -63,7 +62,6 @@ namespace UnityCli
             var data = UnityCliBridge.ObjectSerializer.Serialize(asset, options);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                AssetPath = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 TypeName = asset.GetType().FullName,
                 // ObjectSerializer 输出为动态 JSON 树);解析为嵌套结构供框架序列化(IDictionary 支持)

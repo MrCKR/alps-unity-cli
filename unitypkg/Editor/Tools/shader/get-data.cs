@@ -27,7 +27,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Name { get; set; }
             public long RenderQueue { get; set; }
             public bool IsSupported { get; set; }
             public long PassCount { get; set; }
@@ -109,7 +108,6 @@ namespace UnityCli
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Name = shader.name,
                 RenderQueue = shader.renderQueue,
                 IsSupported = shader.isSupported,
                 PassCount = shader.passCount,

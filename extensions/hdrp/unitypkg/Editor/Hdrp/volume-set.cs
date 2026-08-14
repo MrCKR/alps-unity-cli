@@ -7,7 +7,7 @@ namespace UnityCli
     public sealed class HdrpVolumeSetTool : IUnityCliTool<HdrpVolumeSetTool.Request, HdrpVolumeSetTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Target { get; set; } [UnityCliRequired] public string EffectType { get; set; } [UnityCliRequired] public string Property { get; set; } [UnityCliRequired] public string Value { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public string EffectType { get; set; } public string Property { get; set; } public string Value { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public List<HdrpPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new()
         {
             Name = "hdrp.volume.set", Summary = "Set a scalar serialized parameter on a scene-session HDRP Volume effect.",
@@ -21,7 +21,7 @@ namespace UnityCli
             var plan = HdrpVolumeOperations.ValidateSet(request.Target, request.EffectType, request.Property, request.Value, "E_HDRP", HdrpToolSupport.FindVolumeEffectType);
             ctx.CommitEffect();
             var set = HdrpVolumeOperations.Set(plan, "E_HDRP");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(set.GameObject), EffectType = set.ObservedEffectType, Property = request.Property, Value = set.Value, PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.set", Target = GameObjectToolSupport.HierarchyPath(set.GameObject), EffectType = set.ObservedEffectType, Property = request.Property, Value = set.Value } }});
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.set", Target = GameObjectToolSupport.HierarchyPath(set.GameObject), EffectType = set.ObservedEffectType, Property = request.Property, Value = set.Value } }});
         }
     }
 }

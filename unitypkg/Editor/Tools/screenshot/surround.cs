@@ -27,9 +27,7 @@ namespace UnityCli
         public sealed class Result
         {
             public bool DryRun { get; set; }
-            public string Target { get; set; }
             public double[] Center { get; set; }
-            public double Radius { get; set; }
             public long Count { get; set; }
             public ScreenshotArtifactEntry ContactSheet { get; set; }
             public List<SurroundShot> Artifacts { get; set; }
@@ -101,8 +99,8 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    DryRun = true, Target = go.name,
-                    Center = new double[] { center.x, center.y, center.z }, Radius = radius,
+                    DryRun = true,
+                    Center = new double[] { center.x, center.y, center.z },
                     ContactSheet = new ScreenshotArtifactEntry { Source = "surround-contact-sheet", Path = contactSheetPath, Width = width * 3, Height = height * 2, Format = "png" },
                     Artifacts = BuildPlannedShots(labels, shotPaths, width, height, positions)
                 });
@@ -150,8 +148,7 @@ namespace UnityCli
             var contactProof = ScreenshotToolSupport.VerifyScreenshotArtifact(contactSheetPath, "png");
             var result = new Result
             {
-                Target = go.name,
-                Center = new double[] { center.x, center.y, center.z }, Radius = radius, Count = 6,
+                Center = new double[] { center.x, center.y, center.z }, Count = 6,
                 ContactSheet = new ScreenshotArtifactEntry { Source = "surround-contact-sheet", Path = contactSheetPath, Width = width * 3, Height = height * 2, Format = "png", SizeBytes = contactProof.SizeBytes, Sha256 = contactProof.Sha256 },
                 Artifacts = artifacts
             };

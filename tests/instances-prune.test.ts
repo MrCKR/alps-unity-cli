@@ -213,10 +213,17 @@ test("editor and runtime sessions share one project identity without cross-targe
     assert.equal(runtimeView.activeSession?.sessionId, runtimeSession);
     assert.equal(allView.status, "ready");
     assert.equal(allView.activeSession, undefined);
-    assert.deepEqual(instanceListSummary(allView).sessions, [
-      { target: "editor", sessionId: editorSession, editorSessionId: editorSession, processId: process.pid, processStartedAt: editor.processStartedAt, lastHeartbeatAt: editor.lastHeartbeatAt, state: "ready", claimVerification: "verified" },
-      { target: "runtime", sessionId: runtimeSession, runtimeSessionId: runtimeSession, processId: process.pid, processStartedAt: runtime.processStartedAt, lastHeartbeatAt: runtime.lastHeartbeatAt, state: "ready", claimVerification: "verified" },
-    ]);
+    const summary = instanceListSummary(allView);
+    assert.equal(summary.instanceId, identity.instanceId);
+    assert.equal(summary.status, "ready");
+    assert.equal(summary.sessions, undefined);
+    assert.equal(summary.lastUnitySnapshot, undefined);
+    assert.equal(summary.claimVerification, undefined);
+    assert.equal(summary.processClaimIds, undefined);
+    assert.equal(summary.revision, undefined);
+    assert.equal(summary.updatedAt, undefined);
+    assert.equal(summary.buildStamp, undefined);
+    assert.equal(summary.canonicalizationVersion, undefined);
   } finally {
     await Promise.all([editorHealth.close(), runtimeHealth.close()]);
   }

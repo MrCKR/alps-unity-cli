@@ -24,11 +24,8 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public bool? DryRun { get; set; }
-            public GameObjectRef Target { get; set; }
-            public string Property { get; set; }
-            public long? Slot { get; set; }
             public MaterialColor Color { get; set; }
+            public bool? DryRun { get; set; }
             public List<MaterialPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -80,10 +77,8 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    DryRun = true,
-                    Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
-                    Property = propertyName,
                     Color = new MaterialColor { R = color.r, G = color.g, B = color.b, A = color.a },
+                    DryRun = true,
                     PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.set-renderer-color", Target = GameObjectToolSupport.HierarchyPath(gameObject), Property = propertyName } }
                 });
             }
@@ -104,10 +99,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_RENDERER_COLOR_STATE_MISMATCH", "Renderer color did not match the requested property value.", "Inspect the Renderer property block and retry.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
-                Property = propertyName,
-                Slot = slot,
-                Color = new MaterialColor { R = color.r, G = color.g, B = color.b, A = color.a },
+                Color = new MaterialColor { R = observedColor.r, G = observedColor.g, B = observedColor.b, A = observedColor.a },
                 PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.set-renderer-color", Target = GameObjectToolSupport.HierarchyPath(gameObject), Property = propertyName } }
             });
         }

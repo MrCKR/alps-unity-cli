@@ -82,8 +82,7 @@ namespace UnityCli
             var artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, format);
             var result = new Result
             {
-                ScreenshotPath = outputPath, ArtifactPath = outputPath, Format = format,
-                Width = width, Height = height, Quality = 95, Source = "isolated-object", Target = go.name,
+                ScreenshotPath = outputPath, ArtifactPath = outputPath, Source = "isolated-object",
                 SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256
             };
             ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);

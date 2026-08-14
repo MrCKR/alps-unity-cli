@@ -10,9 +10,7 @@ import type { CliResult } from "../types.js";
 import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "./.generated-completion-registry.js";
 import {
   builtinToolMetadata,
-  toolAvailabilityScope,
   toolContractProfile,
-  toolSource,
   type ToolMetadata
 } from "./metadata/index.js";
 
@@ -162,9 +160,7 @@ export function publicToolDescriptor(tool: ToolMetadata): Record<string, unknown
     supportsDryRun: tool.supportsDryRun ?? false,
     ...(tool.permissions?.length ? { permissions: tool.permissions } : {}),
     ...(tool.examples?.length ? { examples: tool.examples.map(({ description, argv }) => ({ description, argv })) } : {}),
-    source: toolSource(tool),
     target: tool.target ?? "editor",
-    availabilityScope: toolAvailabilityScope(tool),
     available,
     ...(!available && tool.unavailableReason ? { unavailableReason: tool.unavailableReason } : {}),
     ...(tool.requiresPackages?.length ? { requiresPackages: tool.requiresPackages } : {})

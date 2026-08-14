@@ -13,7 +13,7 @@ namespace UnityCli
     public class ProfilerObjectMemoryTool : IUnityCliTool<ProfilerObjectMemoryTool.Request, ProfilerObjectMemoryTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public string Path { get; set; } }
-        public sealed class Result { public string Target { get; set; } public List<ObjectMemoryEntry> Objects { get; set; } public long TotalBytes { get; set; } }
+        public sealed class Result { public List<ObjectMemoryEntry> Objects { get; set; } public long TotalBytes { get; set; } }
         public sealed class ObjectMemoryEntry { public string Name { get; set; } public long InstanceId { get; set; } public long SizeBytes { get; set; } }
 
         public ToolDescriptor Describe() => new()
@@ -29,7 +29,7 @@ namespace UnityCli
         {
             var target = request.Target ?? request.Path;
             var go = string.IsNullOrEmpty(target) ? null : UnityCliBridge.ObjectRefResolver.FindGameObjectByPath(target);
-            var result = new Result { Target = target, Objects = new List<ObjectMemoryEntry>() };
+            var result = new Result { Objects = new List<ObjectMemoryEntry>() };
             if (go != null)
             {
                 long total = 0;

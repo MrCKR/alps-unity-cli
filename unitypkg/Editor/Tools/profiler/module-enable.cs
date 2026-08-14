@@ -13,7 +13,7 @@ namespace UnityCli
     public class ProfilerModuleEnableTool : IUnityCliTool<ProfilerModuleEnableTool.Request, ProfilerModuleEnableTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Module { get; set; } public bool Enabled { get; set; } = true; }
-        public sealed class Result { public string Module { get; set; } public bool Enabled { get; set; } public bool WasEnabled { get; set; } public bool IsEnabled { get; set; } }
+        public sealed class Result { public bool WasEnabled { get; set; } public bool IsEnabled { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -45,7 +45,7 @@ namespace UnityCli
             var isEnabled = (bool)getAreaMethod.Invoke(null, new object[] { areaValue });
             if (isEnabled != request.Enabled)
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_MODULE_STATE_MISMATCH", "Profiler area did not reach the requested enabled state.", "Inspect the Profiler module state and retry.");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Module = request.Module, Enabled = isEnabled, WasEnabled = wasEnabled, IsEnabled = isEnabled });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { WasEnabled = wasEnabled, IsEnabled = isEnabled });
         }
     }
 }

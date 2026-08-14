@@ -17,10 +17,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public long Frame { get; set; }
-            public long Thread { get; set; }
-            public long Top { get; set; }
-            public long Depth { get; set; }
             public List<HierarchyItem> RootItems { get; set; }
         }
 
@@ -121,13 +117,8 @@ namespace UnityCli
                     "Record profiler frames first, then query a valid frame.");
             }
 
-            var resolvedFrame = frame < 0 ? (int)hierarchyViewType.GetProperty("frameIndex").GetValue(view, null) : frame;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Frame = resolvedFrame,
-                Thread = threadIndex,
-                Top = top,
-                Depth = maxDepth,
                 RootItems = BuildHierarchyItems(view, hierarchyViewType, 0, top, maxDepth, 0)
             });
         }

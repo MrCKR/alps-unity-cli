@@ -33,7 +33,6 @@ test("editor.state is the sole hybrid observation owner with bounded fallback", 
   assert.match(source, /Promise\.all\(\[verificationPromise, processClaimsPromise\]\)[\s\S]*observeVerifiedRegistrySession/);
   assert.doesNotMatch(source, /probeWindowsEditorState/);
   assert.match(source, /verification !== "verified" \|\| processClaims\.verification !== "verified"[\s\S]*processClaims\.processIds\.length !== 1[\s\S]*session-process-mismatch[\s\S]*observer\.observe/);
-  assert.match(source, /windowsUi: "not-observed" \| "observed-empty" \| "observed-blocked" \| "unproven" \| "unsupported"/);
   assert.match(source, /applyProjectProcessClaimInspection[\s\S]*inspected\.status === "conflict"/);
   assert.match(source, /verification === "dead"/);
   assert.match(source, /verification !== "verified"/);
@@ -52,8 +51,6 @@ test("editor.state accepts only a complete matching v1 snapshot and strips trans
   assert.match(source, /observedAtMs > Date\.now\(\)/);
   assert.doesNotMatch(source, /FUTURE_SNAPSHOT_TOLERANCE_MS/);
   assert.match(source, /key\.replace\(\/\[\^a-z0-9\]\/gi, ""\)\.toLowerCase\(\)/);
-  assert.match(source, /dataObservedAt/);
-  assert.match(source, /dataAgeMs/);
   assert.match(source, /observedAtMs <= now/);
   assert.match(source, /field\.known \? Object\.prototype\.hasOwnProperty\.call\(field, "value"\)/);
   assert.match(source, /typeof record\.kind !== "string" \|\| record\.kind\.length === 0/);
@@ -143,16 +140,15 @@ test("readEditorState and dispatchTool use one live bounded bridge observation a
   };
   try {
     const direct = await readEditorState({ requestId: "state-direct", flags: { instance: fixture.project }, dataDir: fixture.dataDir, bridgeExecute });
-    assert.equal(direct.observation.live, true);
+    assert.equal(direct.observation.freshness, "live");
     assert.equal(direct.status, "blocked");
-    assert.ok(direct.observation.elapsedMs <= 10_100);
     assert.ok(Date.now() - startedAt <= 10_100);
     assert.doesNotMatch(JSON.stringify(direct), /secret|bridgeEndpoint/i);
 
     const dispatchedStartedAt = Date.now();
     const dispatched = await dispatchTool("editor.state", undefined, { instance: fixture.project }, { dataDir: fixture.dataDir, bridgeExecute }, "state-dispatch");
     assert.ok(dispatched.ok);
-    assert.equal((dispatched.data as { observation: { live: boolean } }).observation.live, true);
+    assert.equal((dispatched.data as { observation: { freshness: string } }).observation.freshness, "live");
     assert.ok(observationDeadlines[1] >= dispatchedStartedAt);
     assert.ok(observationDeadlines[1] <= Date.now() + 10_000);
   } finally {
@@ -172,8 +168,7 @@ test("readEditorState rejects future snapshots and reports conflict or offline f
       bridgeExecute: async (payload) => { posts += 1; return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(future.session, new Date(fixedNow + 1).toISOString()) } }; },
     });
     assert.equal(posts, 1);
-    assert.equal(result.observation.live, false);
-    assert.notEqual(result.observation.freshness, "live");
+    assert.equal(result.observation.freshness, "unknown");
   } finally {
     Date.now = realNow;
     await rm(future.root, { recursive: true, force: true });
@@ -183,7 +178,7 @@ test("readEditorState rejects future snapshots and reports conflict or offline f
   try {
     const result = await readEditorState({ requestId: "state-conflict", flags: { instance: conflict.project }, dataDir: conflict.dataDir, bridgeExecute: async () => { throw new Error("must not post"); } });
     assert.equal(result.status, "conflict");
-    assert.equal(result.observation.live, false);
+    assert.equal(result.observation.freshness, "unknown");
   } finally {
     await rm(conflict.root, { recursive: true, force: true });
   }
@@ -196,7 +191,7 @@ test("readEditorState rejects future snapshots and reports conflict or offline f
   try {
     const result = await readEditorState({ requestId: "state-offline", flags: { instance: project }, dataDir, bridgeExecute: async () => { throw new Error("must not post"); } });
     assert.equal(result.status, "offline");
-    assert.equal(result.observation.live, false);
+    assert.equal(result.observation.freshness, "unknown");
   } finally {
     await rm(offline, { recursive: true, force: true });
   }
@@ -216,7 +211,7 @@ test("editor.state reports transitioning when a live reloading marker covers a b
       bridgeExecute: async () => { throw new Error("bridge broken during reload"); },
     });
     assert.equal(result.status, "transitioning");
-    assert.equal(result.observation.live, false);
+    assert.equal(result.observation.freshness, "unknown");
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
@@ -245,9 +240,6 @@ test("editor.state falls through to process verification when the reloading mark
 test("generated editor.state descriptor is exactly the stable public output schema and validates actual output", async () => {
   const generated = defineToolMetadata().find((tool) => tool.name === "editor.state")?.outputSchema as Record<string, unknown>;
   const stable = JSON.parse(await readFile("contracts/stable-session/editor-state.schema.json", "utf8")) as Record<string, unknown>;
-  const observation = (stable.properties as Record<string, { properties: Record<string, { maximum?: number }> }>).observation;
-  // 3 秒是内部观察 deadline，不是受事件循环和 schema 校验开销约束的公共耗时上限。
-  assert.equal(observation.properties.elapsedMs.maximum, undefined);
   assert.deepEqual(generated, stable);
   const fixture = await stateFixture();
   try {

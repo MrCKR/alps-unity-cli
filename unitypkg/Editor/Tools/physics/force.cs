@@ -34,11 +34,9 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public GameObjectTargetRef Target { get; set; }
             public Vector3Data Force { get; set; }
             public Vector3Data Velocity { get; set; }
             public Vector3Data Position { get; set; }
-            public string Mode { get; set; }
             public List<PhysicsPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -109,8 +107,7 @@ namespace UnityCli
             target = observedTarget;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = new GameObjectTargetRef { Id = target.GetInstanceID(), Name = target.name, Path = GameObjectToolSupport.HierarchyPath(target) },
-                Force = new Vector3Data(force), Velocity = new Vector3Data(observedVelocity), Position = new Vector3Data(observedPosition), Mode = mode.ToString(),
+                Force = new Vector3Data(force), Velocity = new Vector3Data(observedVelocity), Position = new Vector3Data(observedPosition),
                 PlannedEffects = new List<PhysicsPlannedEffect> { new PhysicsPlannedEffect { Type = "physics.force", Target = GameObjectToolSupport.HierarchyPath(target) } }
             });
         }

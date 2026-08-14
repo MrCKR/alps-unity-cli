@@ -89,9 +89,14 @@ export async function handleCommand(
   }
 
   if (flags.help === true || flags.help === "true") {
+    const descriptor = commandDescriptor(tool, commandName);
     return success(requestId, {
       usage: `unity_cli command ${commandName} [business-args]`,
-      command: commandDescriptor(tool, commandName),
+      command: {
+        name: descriptor.name,
+        summary: descriptor.summary,
+        parameters: descriptor.parameters,
+      },
       tool: publicToolDescriptor(tool),
     });
   }

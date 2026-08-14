@@ -163,13 +163,7 @@ namespace UnityCli
     {
         public string ScreenshotPath { get; set; }
         public string ArtifactPath { get; set; }
-        public string Format { get; set; }
-        public long Width { get; set; }
-        public long Height { get; set; }
-        public bool Transparent { get; set; }
-        public long Quality { get; set; }
         public string Source { get; set; }
-        public string Target { get; set; }
         public string ImageBase64 { get; set; }
         public long? ImageWidth { get; set; }
         public long? ImageHeight { get; set; }

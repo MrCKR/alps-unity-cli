@@ -45,7 +45,6 @@ namespace UnityCli
             VfxToolSupport.MarkSceneDirty(observedObject);
             return new System.Threading.Tasks.ValueTask<VfxEffectActionResult>(new VfxEffectActionResult
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(observedObject),
                 Action = added ? "added" : "already-present",
                 Effect = VfxToolSupport.BuildEffectInfo(effect),
                 PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Graph = request.Graph } }

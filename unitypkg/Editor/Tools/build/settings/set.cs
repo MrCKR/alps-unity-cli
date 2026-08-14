@@ -5,7 +5,7 @@ using UnityEditor;
 
 namespace UnityCli
 {
-    public class BuildSettingsSetTool : IUnityCliTool<BuildSettingsSetTool.Request, BuildSettingsResult>
+    public class BuildSettingsSetTool : IUnityCliTool<BuildSettingsSetTool.Request, BuildSettingsMutationResult>
     {
         public sealed class Request
         {
@@ -28,7 +28,7 @@ namespace UnityCli
         };
 
         /// <summary>先解析全部枚举和空请求，再以单一 commit boundary 写入并读回 PlayerSettings。</summary>
-        public System.Threading.Tasks.ValueTask<BuildSettingsResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public System.Threading.Tasks.ValueTask<BuildSettingsMutationResult> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var hasValue = !string.IsNullOrEmpty(request.ProductName)
                 || !string.IsNullOrEmpty(request.BundleVersion)
@@ -47,7 +47,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_SETTINGS_ENUM_INVALID", "Unknown apiCompatibilityLevel: " + request.ApiCompatibilityLevel, "Pass a Unity ApiCompatibilityLevel enum name.");
 
             if (ctx.DryRun)
-                return new(new BuildSettingsResult { ProductName = request.ProductName, BundleVersion = request.BundleVersion, CompanyId = request.CompanyId, ApplicationIdentifier = request.ApplicationIdentifier, ScriptingBackend = request.ScriptingBackend, ApiCompatibilityLevel = request.ApiCompatibilityLevel, DryRun = true });
+                return new(new BuildSettingsMutationResult { Changed = new List<string> { "productName", "bundleVersion", "companyId", "applicationIdentifier", "scriptingBackend", "apiCompatibilityLevel" }.FindAll(name => (name == "productName" && !string.IsNullOrEmpty(request.ProductName)) || (name == "bundleVersion" && !string.IsNullOrEmpty(request.BundleVersion)) || (name == "companyId" && !string.IsNullOrEmpty(request.CompanyId)) || (name == "applicationIdentifier" && !string.IsNullOrEmpty(request.ApplicationIdentifier)) || (name == "scriptingBackend" && !string.IsNullOrEmpty(request.ScriptingBackend)) || (name == "apiCompatibilityLevel" && !string.IsNullOrEmpty(request.ApiCompatibilityLevel))), DryRun = true });
 
             ctx.CommitEffect();
             var changed = new List<string>();
@@ -67,8 +67,7 @@ namespace UnityCli
                 || (!string.IsNullOrEmpty(request.ApiCompatibilityLevel) && !string.Equals(result.ApiCompatibilityLevel, compatibilityLevel.ToString(), StringComparison.OrdinalIgnoreCase));
             if (mismatch)
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_SETTINGS_STATE_MISMATCH", "PlayerSettings readback did not match every requested value.", "Inspect build.settings.get before retrying.");
-            result.Changed = changed;
-            return new(result);
+            return new(new BuildSettingsMutationResult { Changed = changed });
         }
     }
 }

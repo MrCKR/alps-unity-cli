@@ -26,7 +26,7 @@ namespace UnityCli
             if (AssetDatabase.LoadMainAssetAtPath(request.Path) != null)
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_ALREADY_EXISTS", "An asset already exists at " + request.Path + ".", "Pass a new Assets/*.asset path.");
             if (ctx.DryRun)
-                return new(new BuildProfileMutationResult { Available = true, Path = request.Path, Name = request.Name, DryRun = true });
+                return new(new BuildProfileMutationResult { Available = true, Action = "create", DryRun = true });
 
             ctx.CommitEffect();
             var profile = ScriptableObject.CreateInstance(type);
@@ -37,7 +37,7 @@ namespace UnityCli
             var observed = AssetDatabase.LoadAssetAtPath(request.Path, type);
             if (observed == null || (!string.IsNullOrEmpty(request.Name) && observed.name != request.Name))
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_CREATE_MISMATCH", "Build Profile readback did not match the requested path and name.", "Inspect build.profile.list and the target asset before retrying.");
-            return new(new BuildProfileMutationResult { Available = true, Path = request.Path, Name = observed.name });
+            return new(new BuildProfileMutationResult { Available = true, Action = "create" });
         }
     }
 }

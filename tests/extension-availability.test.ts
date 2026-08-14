@@ -143,7 +143,6 @@ test("tools describe resolves extension availability against live-discovered ext
   assert.ok(describe.ok);
   const describeData = describe.data as Record<string, unknown>;
   assert.equal(describeData.available, false);
-  assert.equal(describeData.extensionId, "probuilder");
   assert.match(String(describeData.unavailableReason), /E_EXTENSION_DEPENDENCY_MISSING/);
   assert.ok((describeData.requiresPackages as string[]).includes("com.unity.probuilder"));
 });
@@ -158,7 +157,6 @@ test("tools describe requires a healthy physical extension installation", async 
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.available, true);
-  assert.equal(data.extensionId, "probuilder");
   assert.equal(data.unavailableReason, undefined);
 });
 
@@ -191,7 +189,6 @@ test("non-extension live-discovered descriptors are unaffected by package checks
   const data = result.data as Record<string, unknown>;
   assert.equal(data.available, true);
   assert.equal(data.unavailableReason, undefined);
-  assert.equal(data.extensionId, undefined);
 });
 
 test("checkToolExtensionAvailability works with constructed live descriptors", async () => {

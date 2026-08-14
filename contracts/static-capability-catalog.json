@@ -522,9 +522,6 @@
           "dryRun": {
             "type": "boolean"
           },
-          "path": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.AnimationPlannedEffect"
@@ -1118,23 +1115,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -1147,9 +1127,6 @@
               "$ref": "#/$defs/UnityCli.AnimationPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -1373,32 +1350,12 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
         "properties": {
           "animator": {
             "$ref": "#/$defs/UnityCli.AnimatorInfo"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -1634,23 +1591,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -1663,9 +1603,6 @@
               "$ref": "#/$defs/UnityCli.AnimationPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -1799,23 +1736,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -1834,9 +1754,6 @@
           },
           "state": {
             "$ref": "#/$defs/UnityCli.AnimatorCrossfadeTool.Readback"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           },
           "transition": {
             "$ref": "#/$defs/UnityCli.CrossfadeInfo"
@@ -2051,32 +1968,12 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
         "properties": {
           "animator": {
             "$ref": "#/$defs/UnityCli.AnimatorInfo"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -2134,32 +2031,12 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
         "properties": {
           "parameter": {
             "$ref": "#/$defs/UnityCli.AnimatorParameterWithValue"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -2236,23 +2113,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -2265,9 +2125,6 @@
               "$ref": "#/$defs/UnityCli.AnimationPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -2355,23 +2212,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -2384,9 +2224,6 @@
               "$ref": "#/$defs/UnityCli.AnimationPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -2466,23 +2303,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -2495,9 +2315,6 @@
           },
           "speed": {
             "type": "number"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -2863,9 +2680,6 @@
               "$ref": "#/$defs/UnityCli.AssetPlannedEffect"
             },
             "type": "array"
-          },
-          "source": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -3044,16 +2858,10 @@
         },
         "additionalProperties": false,
         "properties": {
-          "assetPath": {
-            "type": "string"
-          },
           "componentCount": {
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
-          },
-          "componentType": {
-            "type": "string"
           },
           "components": {
             "items": {
@@ -3067,9 +2875,6 @@
           "importer": {
             "$ref": "#/$defs/UnityCli.AssetGetComponentsTool.AssetImporterInfo"
           },
-          "includeInactive": {
-            "type": "boolean"
-          },
           "isGameObjectAsset": {
             "type": "boolean"
           },
@@ -3078,9 +2883,6 @@
           },
           "pageInfo": {
             "$ref": "#/$defs/UnityCli.AssetPageInfo"
-          },
-          "query": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -3191,9 +2993,6 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "assetPath": {
-            "type": "string"
-          },
           "data": {
             "x-unityCliAnyJson": true
           },
@@ -3325,9 +3124,6 @@
               "$ref": "#/$defs/UnityCli.AssetPlannedEffect"
             },
             "type": "array"
-          },
-          "source": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -3394,12 +3190,6 @@
             "type": "string"
           },
           "importerType": {
-            "type": "string"
-          },
-          "path": {
-            "type": "string"
-          },
-          "platform": {
             "type": "string"
           },
           "platformOverride": {
@@ -3512,12 +3302,6 @@
                 "type": "string"
               },
               "importerType": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              },
-              "platform": {
                 "type": "string"
               },
               "platformOverride": {
@@ -3892,9 +3676,6 @@
               "$ref": "#/$defs/UnityCli.AssetPlannedEffect"
             },
             "type": "array"
-          },
-          "source": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -3942,9 +3723,6 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "assetPath": {
-            "type": "string"
-          },
           "guid": {
             "type": "string"
           },
@@ -4249,9 +4027,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "filter": {
-            "type": "string"
-          },
           "items": {
             "items": {
               "$ref": "#/$defs/UnityCli.AssetSummary"
@@ -4260,21 +4035,6 @@
           },
           "pageInfo": {
             "$ref": "#/$defs/UnityCli.AssetPageInfo"
-          },
-          "path": {
-            "type": "string"
-          },
-          "query": {
-            "type": "string"
-          },
-          "searchInFolders": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "type": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -4425,9 +4185,6 @@
           },
           "switched": {
             "type": "boolean"
-          },
-          "target": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -4489,9 +4246,6 @@
           },
           "switched": {
             "type": "boolean"
-          },
-          "target": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -4553,6 +4307,9 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "action": {
+            "type": "string"
+          },
           "activePath": {
             "type": "string"
           },
@@ -4561,12 +4318,6 @@
           },
           "dryRun": {
             "type": "boolean"
-          },
-          "name": {
-            "type": "string"
-          },
-          "path": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -4684,6 +4435,9 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "action": {
+            "type": "string"
+          },
           "activePath": {
             "type": "string"
           },
@@ -4692,12 +4446,6 @@
           },
           "dryRun": {
             "type": "boolean"
-          },
-          "name": {
-            "type": "string"
-          },
-          "path": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -4746,6 +4494,9 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "action": {
+            "type": "string"
+          },
           "activePath": {
             "type": "string"
           },
@@ -4754,12 +4505,6 @@
           },
           "dryRun": {
             "type": "boolean"
-          },
-          "name": {
-            "type": "string"
-          },
-          "path": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -4820,9 +4565,6 @@
             "type": "boolean"
           },
           "noOpReason": {
-            "type": "string"
-          },
-          "path": {
             "type": "string"
           }
         },
@@ -4885,9 +4627,6 @@
           },
           "noOpReason": {
             "type": "string"
-          },
-          "path": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -4948,9 +4687,6 @@
             "type": "boolean"
           },
           "noOpReason": {
-            "type": "string"
-          },
-          "path": {
             "type": "string"
           }
         },
@@ -5079,9 +4815,6 @@
           },
           "noOpReason": {
             "type": "string"
-          },
-          "path": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -5205,32 +4938,14 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "apiCompatibilityLevel": {
-            "type": "string"
-          },
-          "applicationIdentifier": {
-            "type": "string"
-          },
-          "bundleVersion": {
-            "type": "string"
-          },
           "changed": {
             "items": {
               "type": "string"
             },
             "type": "array"
           },
-          "companyId": {
-            "type": "string"
-          },
           "dryRun": {
             "type": "boolean"
-          },
-          "productName": {
-            "type": "string"
-          },
-          "scriptingBackend": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -5878,14 +5593,6 @@
               "artifactPath": {
                 "type": "string"
               },
-              "format": {
-                "type": "string"
-              },
-              "height": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
               "imageBase64": {
                 "type": "string"
               },
@@ -5916,11 +5623,6 @@
                   }
                 ]
               },
-              "quality": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
               "screenshotPath": {
                 "type": "string"
               },
@@ -5934,17 +5636,6 @@
               },
               "source": {
                 "type": "string"
-              },
-              "target": {
-                "type": "string"
-              },
-              "transparent": {
-                "type": "boolean"
-              },
-              "width": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
               }
             },
             "type": "object"
@@ -6091,14 +5782,6 @@
           "artifactPath": {
             "type": "string"
           },
-          "format": {
-            "type": "string"
-          },
-          "height": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "imageBase64": {
             "type": "string"
           },
@@ -6129,11 +5812,6 @@
               }
             ]
           },
-          "quality": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "screenshotPath": {
             "type": "string"
           },
@@ -6147,17 +5825,6 @@
           },
           "source": {
             "type": "string"
-          },
-          "target": {
-            "type": "string"
-          },
-          "transparent": {
-            "type": "boolean"
-          },
-          "width": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           }
         },
         "type": "object"
@@ -7421,8 +7088,8 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "extensionType": {
-            "type": "string"
+          "added": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -7535,8 +7202,8 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "extensionType": {
-            "type": "string"
+          "removed": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -8530,23 +8197,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -8565,9 +8215,6 @@
               "$ref": "#/$defs/UnityCli.GameObjectPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -8752,11 +8399,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "componentInstanceId": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "data": {
             "x-unityCliAnyJson": true
           },
@@ -9051,11 +8693,6 @@
             },
             "type": "array"
           },
-          "componentInstanceId": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "dryRun": {
             "oneOf": [
               {
@@ -9176,32 +8813,12 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
         "properties": {
           "component": {
             "$ref": "#/$defs/UnityCli.ComponentSummary"
-          },
-          "componentIndex": {
-            "type": "string"
           },
           "components": {
             "items": {
@@ -9219,9 +8836,6 @@
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -9353,23 +8967,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -9383,20 +8980,11 @@
           "component": {
             "$ref": "#/$defs/UnityCli.ComponentSummary"
           },
-          "componentIndex": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.GameObjectPlannedEffect"
             },
             "type": "array"
-          },
-          "property": {
-            "type": "string"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -9602,9 +9190,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "filter": {
-            "type": "string"
-          },
           "items": {
             "items": {
               "$ref": "#/$defs/UnityCli.ConsoleEntry"
@@ -10076,11 +9661,6 @@
           "isDefault": {
             "type": "boolean"
           },
-          "layerIndex": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "motionName": {
             "type": "string"
           },
@@ -10230,9 +9810,6 @@
           "duration": {
             "type": "number"
           },
-          "fromState": {
-            "type": "string"
-          },
           "hasExitTime": {
             "type": "boolean"
           },
@@ -10319,23 +9896,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -10351,9 +9911,6 @@
               "$ref": "#/$defs/UnityCli.AnimationPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -10554,11 +10111,6 @@
           "blendParameter": {
             "type": "string"
           },
-          "layerIndex": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "path": {
             "type": "string"
           },
@@ -10669,11 +10221,6 @@
         "properties": {
           "blendType": {
             "type": "string"
-          },
-          "layerIndex": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           },
           "path": {
             "type": "string"
@@ -10992,11 +10539,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "layerIndex": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "layerName": {
             "type": "string"
           },
@@ -11263,9 +10805,6 @@
         "properties": {
           "editorTool": {
             "type": "string"
-          },
-          "tool": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -11526,9 +11065,6 @@
           },
           "pageInfo": {
             "$ref": "#/$defs/UnityCli.PageInfo"
-          },
-          "type": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -12694,11 +12230,6 @@
           "hasMore": {
             "type": "boolean"
           },
-          "limit": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "nextOffset": {
             "oneOf": [
               {
@@ -12711,19 +12242,11 @@
               }
             ]
           },
-          "offset": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "providers": {
             "items": {
               "$ref": "#/$defs/UnityCli.EditorSearchProvider"
             },
             "type": "array"
-          },
-          "query": {
-            "type": "string"
           },
           "results": {
             "items": {
@@ -14131,9 +13654,6 @@
               "$ref": "#/$defs/UnityCli.GameObjectPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -14529,9 +14049,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "includeInactive": {
-            "type": "boolean"
-          },
           "items": {
             "items": {
               "$ref": "#/$defs/UnityCli.GoFindItem"
@@ -14548,15 +14065,6 @@
           },
           "prefabStageOpen": {
             "type": "boolean"
-          },
-          "preferPrefabStage": {
-            "type": "boolean"
-          },
-          "query": {
-            "type": "string"
-          },
-          "searchMethod": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -15517,23 +15025,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -15548,20 +15039,11 @@
               }
             ]
           },
-          "parent": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.GameObjectPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
-          },
-          "worldPositionStays": {
-            "type": "boolean"
           }
         },
         "type": "object"
@@ -16251,23 +15733,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.GraphicsPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -16299,9 +15764,6 @@
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -16719,23 +16181,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.GraphicsPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -16765,9 +16210,6 @@
           },
           "probeType": {
             "type": "string"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -17126,23 +16568,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.GraphicsPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -17220,9 +16645,6 @@
           },
           "probe": {
             "$ref": "#/$defs/UnityCli.ReflectionProbeInfo"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -18752,9 +18174,6 @@
             },
             "type": "array"
           },
-          "property": {
-            "type": "string"
-          },
           "settings": {
             "additionalProperties": {
               "x-unityCliAnyJson": true
@@ -18814,23 +18233,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.HdrpPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -18858,17 +18260,11 @@
         },
         "additionalProperties": false,
         "properties": {
-          "effectType": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.HdrpPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -18990,9 +18386,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "isGlobal": {
-            "type": "boolean"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.HdrpPlannedEffect"
@@ -19286,23 +18679,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.HdrpPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -19330,23 +18706,11 @@
         },
         "additionalProperties": false,
         "properties": {
-          "effectType": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.HdrpPlannedEffect"
             },
             "type": "array"
-          },
-          "property": {
-            "type": "string"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
-          },
-          "value": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -19494,35 +18858,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.MaterialAssignTarget": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
-          "UnityCli.MaterialAssignTool.MaterialRef": {
-            "additionalProperties": false,
-            "properties": {
-              "guid": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.MaterialPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -19547,22 +18882,11 @@
           "componentType": {
             "type": "string"
           },
-          "material": {
-            "$ref": "#/$defs/UnityCli.MaterialAssignTool.MaterialRef"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.MaterialPlannedEffect"
             },
             "type": "array"
-          },
-          "slot": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.MaterialAssignTarget"
           }
         },
         "type": "object"
@@ -20222,9 +19546,6 @@
             },
             "type": "array"
           },
-          "property": {
-            "type": "string"
-          },
           "propertyType": {
             "type": "string"
           }
@@ -20294,23 +19615,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.MaterialColor": {
             "additionalProperties": false,
             "properties": {
@@ -20368,24 +19672,6 @@
               "$ref": "#/$defs/UnityCli.MaterialPlannedEffect"
             },
             "type": "array"
-          },
-          "property": {
-            "type": "string"
-          },
-          "slot": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -20973,11 +20259,6 @@
           "data": {
             "x-unityCliAnyJson": true
           },
-          "instanceId": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "typeName": {
             "type": "string"
           }
@@ -21172,11 +20453,6 @@
           },
           "dryRun": {
             "type": "boolean"
-          },
-          "instanceId": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           },
           "plannedEffects": {
             "items": {
@@ -21413,23 +20689,6 @@
             },
             "type": "object"
           },
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.PhysicMaterialRef": {
             "additionalProperties": false,
             "properties": {
@@ -21474,9 +20733,6 @@
               "$ref": "#/$defs/UnityCli.PhysicsPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           }
         },
         "type": "object"
@@ -21744,23 +21000,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.PhysicsPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -21800,9 +21039,6 @@
           "force": {
             "$ref": "#/$defs/UnityCli.Vector3Data"
           },
-          "mode": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.PhysicsPlannedEffect"
@@ -21811,9 +21047,6 @@
           },
           "position": {
             "$ref": "#/$defs/UnityCli.Vector3Data"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
           },
           "velocity": {
             "$ref": "#/$defs/UnityCli.Vector3Data"
@@ -21869,23 +21102,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.PhysicsPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -21923,12 +21139,6 @@
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
-          },
-          "type": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -22000,23 +21210,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.PhysicsPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -22054,12 +21247,6 @@
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
-          },
-          "type": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -22205,9 +21392,6 @@
           },
           "hitInfo": {
             "$ref": "#/$defs/UnityCli.RaycastHitInfo"
-          },
-          "mode": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -22459,9 +21643,6 @@
             },
             "type": "array"
           },
-          "mode": {
-            "type": "string"
-          },
           "origin": {
             "$ref": "#/$defs/UnityCli.Vector3Data"
           }
@@ -22630,9 +21811,6 @@
             },
             "type": "array"
           },
-          "mode": {
-            "type": "string"
-          },
           "nextActions": {
             "items": {
               "type": "string"
@@ -22780,9 +21958,6 @@
               "$ref": "#/$defs/UnityCli.RaycastHitInfo"
             },
             "type": "array"
-          },
-          "mode": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -22876,23 +22051,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectTargetRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.PhysicsPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -23042,12 +22200,6 @@
           },
           "rigidbody2D": {
             "$ref": "#/$defs/UnityCli.Rigidbody2DInfo"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectTargetRef"
-          },
-          "validate": {
-            "type": "boolean"
           }
         },
         "type": "object"
@@ -23552,14 +22704,8 @@
             },
             "type": "array"
           },
-          "mode": {
-            "type": "string"
-          },
           "query": {
             "$ref": "#/$defs/UnityCli.RaycastQuery"
-          },
-          "shape": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -23904,9 +23050,6 @@
             },
             "type": "array"
           },
-          "target": {
-            "type": "string"
-          },
           "valid": {
             "type": "boolean"
           }
@@ -24150,9 +23293,6 @@
           },
           "prefab": {
             "$ref": "#/$defs/UnityCli.PrefabInfo"
-          },
-          "source": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -24484,9 +23624,6 @@
             },
             "type": "array"
           },
-          "componentType": {
-            "type": "string"
-          },
           "items": {
             "items": {
               "$ref": "#/$defs/UnityCli.PrefabHierarchyItem"
@@ -24496,14 +23633,8 @@
           "pageInfo": {
             "$ref": "#/$defs/UnityCli.AssetPageInfo"
           },
-          "parent": {
-            "type": "string"
-          },
           "prefab": {
             "$ref": "#/$defs/UnityCli.PrefabInfo"
-          },
-          "query": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -25125,23 +24256,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.PrefabAssetIdentity": {
             "additionalProperties": false,
             "properties": {
@@ -25230,9 +24344,6 @@
           },
           "dryRun": {
             "type": "boolean"
-          },
-          "instance": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           },
           "plannedEffects": {
             "items": {
@@ -25317,23 +24428,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.PrefabAssetIdentity": {
             "additionalProperties": false,
             "properties": {
@@ -25422,9 +24516,6 @@
           },
           "dryRun": {
             "type": "boolean"
-          },
-          "instance": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           },
           "plannedEffects": {
             "items": {
@@ -25855,23 +24946,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.PrefabPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -25917,9 +24991,6 @@
               "$ref": "#/$defs/UnityCli.PrefabPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -26027,9 +25098,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "base": {
-            "$ref": "#/$defs/UnityCli.PrefabAssetIdentity"
-          },
           "created": {
             "type": "boolean"
           },
@@ -28260,11 +27328,6 @@
             },
             "type": "array"
           },
-          "pageSize": {
-            "maximum": 2147483647,
-            "minimum": -2147483648,
-            "type": "integer"
-          },
           "sceneCount": {
             "maximum": 2147483647,
             "minimum": -2147483648,
@@ -29262,23 +28325,12 @@
           "artifactPath": {
             "type": "string"
           },
-          "captureTag": {
-            "type": "string"
-          },
           "durationMs": {
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
           },
           "endFrame": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "format": {
-            "type": "string"
-          },
-          "frames": {
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
@@ -29474,12 +28526,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "category": {
-            "type": "string"
-          },
-          "counter": {
-            "type": "string"
-          },
           "counters": {
             "items": {
               "$ref": "#/$defs/UnityCli.ProfilerCounterEntry"
@@ -29689,9 +28735,6 @@
           "artifactPath": {
             "type": "string"
           },
-          "captureTag": {
-            "type": "string"
-          },
           "durationMs": {
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
@@ -29701,9 +28744,6 @@
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
-          },
-          "format": {
-            "type": "string"
           },
           "frames": {
             "maximum": 9223372036854776000,
@@ -30095,11 +29135,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "cursor": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "events": {
             "items": {
               "$ref": "#/$defs/UnityCli.ProfilerFrameDebuggerEventsTool.FrameDebuggerEvent"
@@ -30120,11 +29155,6 @@
           },
           "note": {
             "type": "string"
-          },
-          "pageSize": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           },
           "totalEvents": {
             "maximum": 9223372036854776000,
@@ -30259,31 +29289,11 @@
         },
         "additionalProperties": false,
         "properties": {
-          "depth": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "frame": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "rootItems": {
             "items": {
               "$ref": "#/$defs/UnityCli.ProfilerHierarchyTool.HierarchyItem"
             },
             "type": "array"
-          },
-          "thread": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "top": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           }
         },
         "type": "object"
@@ -30375,9 +29385,6 @@
           },
           "loaded": {
             "type": "boolean"
-          },
-          "path": {
-            "type": "string"
           },
           "plannedEffects": {
             "items": {
@@ -30716,9 +29723,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "path": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.ProfilerPlannedEffect"
@@ -30782,14 +29786,8 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
           "isEnabled": {
             "type": "boolean"
-          },
-          "module": {
-            "type": "string"
           },
           "wasEnabled": {
             "type": "boolean"
@@ -30908,9 +29906,6 @@
               "$ref": "#/$defs/UnityCli.ProfilerObjectMemoryTool.ObjectMemoryEntry"
             },
             "type": "array"
-          },
-          "target": {
-            "type": "string"
           },
           "totalBytes": {
             "maximum": 9223372036854776000,
@@ -31862,17 +30857,7 @@
           "hasMore": {
             "type": "boolean"
           },
-          "limit": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "matchedAxisCount": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "offset": {
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
@@ -32176,9 +31161,6 @@
               }
             ]
           },
-          "name": {
-            "type": "string"
-          },
           "noOpReason": {
             "type": "string"
           },
@@ -32280,9 +31262,6 @@
                 "type": "null"
               }
             ]
-          },
-          "name": {
-            "type": "string"
           },
           "noOpReason": {
             "type": "string"
@@ -32689,9 +31668,6 @@
               }
             ]
           },
-          "name": {
-            "type": "string"
-          },
           "noOpReason": {
             "type": "string"
           },
@@ -32781,9 +31757,6 @@
                 "type": "null"
               }
             ]
-          },
-          "name": {
-            "type": "string"
           },
           "noOpReason": {
             "type": "string"
@@ -33273,17 +32246,11 @@
           "data": {
             "x-unityCliAnyJson": true
           },
-          "methodName": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.ReflectionMethodCallTool.PlannedEffect"
             },
             "type": "array"
-          },
-          "typeName": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -33401,9 +32368,6 @@
               "$ref": "#/$defs/UnityCli.UnityCliBridge.ReflectionMethodDescriptor"
             },
             "type": "array"
-          },
-          "typeName": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -33756,11 +32720,6 @@
               "$ref": "#/$defs/UnityCli.SceneDataTool.DataItem"
             },
             "type": "array"
-          },
-          "maxDepth": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           },
           "scene": {
             "$ref": "#/$defs/UnityCli.SceneInfo"
@@ -34357,37 +33316,14 @@
         },
         "additionalProperties": false,
         "properties": {
-          "componentType": {
-            "type": "string"
-          },
-          "includeComponents": {
-            "type": "boolean"
-          },
-          "includeInactive": {
-            "type": "boolean"
-          },
           "items": {
             "items": {
               "$ref": "#/$defs/UnityCli.SceneHierarchyTool.HierarchyItem"
             },
             "type": "array"
           },
-          "maxDepth": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "nameFilter": {
-            "type": "string"
-          },
           "pageInfo": {
             "$ref": "#/$defs/UnityCli.SceneHierarchyTool.PageInfo"
-          },
-          "parent": {
-            "type": "string"
-          },
-          "query": {
-            "type": "string"
           },
           "scene": {
             "$ref": "#/$defs/UnityCli.SceneHierarchyTool.SceneSummary"
@@ -34704,9 +33640,6 @@
           "reason": {
             "type": "string"
           },
-          "target": {
-            "type": "string"
-          },
           "toScene": {
             "type": "string"
           }
@@ -34820,9 +33753,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "all": {
-            "type": "boolean"
-          },
           "dryRun": {
             "oneOf": [
               {
@@ -35210,9 +34140,6 @@
             "minimum": -9223372036854776000,
             "type": "integer"
           },
-          "path": {
-            "type": "string"
-          },
           "scene": {
             "type": "string"
           },
@@ -35323,9 +34250,6 @@
             "type": "boolean"
           },
           "noOpReason": {
-            "type": "string"
-          },
-          "target": {
             "type": "string"
           },
           "view": {
@@ -35467,23 +34391,6 @@
             },
             "type": "object"
           },
-          "UnityCli.EditorElementWindowIdentity": {
-            "additionalProperties": false,
-            "properties": {
-              "instanceId": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "title": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.ScreenshotArtifactProof": {
             "additionalProperties": false,
             "properties": {
@@ -35534,9 +34441,6 @@
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
-          },
-          "window": {
-            "$ref": "#/$defs/UnityCli.EditorElementWindowIdentity"
           }
         },
         "type": "object"
@@ -35582,7 +34486,7 @@
     {
       "name": "screenshot.game-view",
       "summary": "Capture a Game View screenshot by rendering all active cameras to a PNG/JPG file.",
-      "description": "Capture a Game View screenshot by rendering all active cameras to a temporary RenderTexture and saving to a PNG/JPG file. Defaults to 1280x720.",
+      "description": "Capture a Game View screenshot by rendering all active cameras to a temporary RenderTexture and saving to a PNG/JPG file. Renders camera content only and does not include screen-space UI; use screenshot.screen for the final composited frame. Defaults to 1280x720.",
       "group": "screenshot",
       "inputSchema": {
         "additionalProperties": false,
@@ -35635,11 +34539,6 @@
           "format": {
             "type": "string"
           },
-          "height": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "imageBase64": {
             "type": "string"
           },
@@ -35691,14 +34590,6 @@
           },
           "target": {
             "type": "string"
-          },
-          "transparent": {
-            "type": "boolean"
-          },
-          "width": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           }
         },
         "type": "object"
@@ -35796,14 +34687,6 @@
           "artifactPath": {
             "type": "string"
           },
-          "format": {
-            "type": "string"
-          },
-          "height": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "imageBase64": {
             "type": "string"
           },
@@ -35834,11 +34717,6 @@
               }
             ]
           },
-          "quality": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "screenshotPath": {
             "type": "string"
           },
@@ -35852,17 +34730,6 @@
           },
           "source": {
             "type": "string"
-          },
-          "target": {
-            "type": "string"
-          },
-          "transparent": {
-            "type": "boolean"
-          },
-          "width": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           }
         },
         "type": "object"
@@ -36005,14 +34872,6 @@
               "$ref": "#/$defs/UnityCli.ScreenshotArtifactEntry"
             },
             "type": "array"
-          },
-          "count": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "target": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -36108,14 +34967,6 @@
           "artifactPath": {
             "type": "string"
           },
-          "format": {
-            "type": "string"
-          },
-          "height": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "imageBase64": {
             "type": "string"
           },
@@ -36146,11 +34997,6 @@
               }
             ]
           },
-          "quality": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "screenshotPath": {
             "type": "string"
           },
@@ -36164,17 +35010,6 @@
           },
           "source": {
             "type": "string"
-          },
-          "target": {
-            "type": "string"
-          },
-          "transparent": {
-            "type": "boolean"
-          },
-          "width": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           }
         },
         "type": "object"
@@ -36243,14 +35078,6 @@
           "artifactPath": {
             "type": "string"
           },
-          "format": {
-            "type": "string"
-          },
-          "height": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "imageBase64": {
             "type": "string"
           },
@@ -36281,11 +35108,6 @@
               }
             ]
           },
-          "quality": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "screenshotPath": {
             "type": "string"
           },
@@ -36299,17 +35121,6 @@
           },
           "source": {
             "type": "string"
-          },
-          "target": {
-            "type": "string"
-          },
-          "transparent": {
-            "type": "boolean"
-          },
-          "width": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           }
         },
         "type": "object"
@@ -36521,12 +35332,6 @@
                 "type": "null"
               }
             ]
-          },
-          "radius": {
-            "type": "number"
-          },
-          "target": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -36611,17 +35416,8 @@
           "dryRun": {
             "type": "boolean"
           },
-          "overwrite": {
-            "type": "boolean"
-          },
-          "path": {
-            "type": "string"
-          },
           "scriptableObject": {
             "$ref": "#/$defs/UnityCli.ScriptableObjectInfo"
-          },
-          "type": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -37526,9 +36322,6 @@
           "isSupported": {
             "type": "boolean"
           },
-          "name": {
-            "type": "string"
-          },
           "passCount": {
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
@@ -37941,18 +36734,8 @@
           "encoding": {
             "type": "string"
           },
-          "maxBytes": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "nextOffset": {
             "type": "string"
-          },
-          "offset": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
           },
           "returnedBytes": {
             "maximum": 9223372036854776000,
@@ -38711,17 +37494,6 @@
               }
             ]
           },
-          "height": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "path": {
-            "type": "string"
-          },
-          "pattern": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.TexturePlannedEffect"
@@ -38729,11 +37501,6 @@
             "type": "array"
           },
           "sizeBytes": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "width": {
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
             "type": "integer"
@@ -40147,40 +38914,6 @@
             },
             "type": "object"
           },
-          "UnityCli.TimelineAssetInfo": {
-            "additionalProperties": false,
-            "properties": {
-              "duration": {
-                "type": "number"
-              },
-              "frameRate": {
-                "type": "number"
-              },
-              "guid": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              },
-              "sizeBytes": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "trackCount": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "type": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.TimelineClipInfo": {
             "additionalProperties": false,
             "properties": {
@@ -40336,21 +39069,8 @@
           "identity": {
             "$ref": "#/$defs/UnityCli.TimelineObjectIdentity"
           },
-          "maxClipsPerTrack": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "maxDepth": {
-            "maximum": 9223372036854776000,
-            "minimum": -9223372036854776000,
-            "type": "integer"
-          },
           "pageInfo": {
             "$ref": "#/$defs/UnityCli.PageInfo"
-          },
-          "timeline": {
-            "$ref": "#/$defs/UnityCli.TimelineAssetInfo"
           },
           "tracks": {
             "items": {
@@ -40615,9 +39335,6 @@
         "properties": {
           "schema": {
             "x-unityCliAnyJson": true
-          },
-          "typeName": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -40679,26 +39396,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.UiElementRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "kind": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.UiPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -40734,15 +39431,6 @@
               "$ref": "#/$defs/UnityCli.UiPlannedEffect"
             },
             "type": "array"
-          },
-          "sortOrder": {
-            "type": "number"
-          },
-          "sourceAsset": {
-            "type": "string"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.UiElementRef"
           }
         },
         "type": "object"
@@ -41176,26 +39864,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.UiElementRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "kind": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.UiPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -41228,9 +39896,6 @@
               "$ref": "#/$defs/UnityCli.UiPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.UiElementRef"
           }
         },
         "type": "object"
@@ -41553,26 +40218,6 @@
               }
             },
             "type": "object"
-          },
-          "UnityCli.UiElementRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "kind": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -41582,9 +40227,6 @@
           },
           "document": {
             "$ref": "#/$defs/UnityCli.UiDocumentLiveInfo"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.UiElementRef"
           }
         },
         "type": "object"
@@ -42078,17 +40720,11 @@
           "dryRun": {
             "type": "boolean"
           },
-          "path": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.UiPlannedEffect"
             },
             "type": "array"
-          },
-          "uss": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -42424,11 +41060,6 @@
           "dryRun": {
             "type": "boolean"
           },
-          "height": {
-            "maximum": 2147483647,
-            "minimum": -2147483648,
-            "type": "integer"
-          },
           "outputPath": {
             "type": "string"
           },
@@ -42444,11 +41075,6 @@
           "sizeBytes": {
             "maximum": 9223372036854776000,
             "minimum": -9223372036854776000,
-            "type": "integer"
-          },
-          "width": {
-            "maximum": 2147483647,
-            "minimum": -2147483648,
             "type": "integer"
           }
         },
@@ -42914,16 +41540,6 @@
           "dryRun": {
             "type": "boolean"
           },
-          "enabled": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "featureIndex": {
             "oneOf": [
               {
@@ -42939,9 +41555,6 @@
           "featureName": {
             "type": "string"
           },
-          "featureType": {
-            "type": "string"
-          },
           "features": {
             "items": {
               "$ref": "#/$defs/UnityCli.UrpFeatureInfo"
@@ -42953,24 +41566,6 @@
               "$ref": "#/$defs/UnityCli.UrpPlannedEffect"
             },
             "type": "array"
-          },
-          "property": {
-            "type": "string"
-          },
-          "rendererIndex": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "value": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -43143,16 +41738,6 @@
           "dryRun": {
             "type": "boolean"
           },
-          "enabled": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "featureIndex": {
             "oneOf": [
               {
@@ -43168,9 +41753,6 @@
           "featureName": {
             "type": "string"
           },
-          "featureType": {
-            "type": "string"
-          },
           "features": {
             "items": {
               "$ref": "#/$defs/UnityCli.UrpFeatureInfo"
@@ -43182,24 +41764,6 @@
               "$ref": "#/$defs/UnityCli.UrpPlannedEffect"
             },
             "type": "array"
-          },
-          "property": {
-            "type": "string"
-          },
-          "rendererIndex": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "value": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -43349,16 +41913,6 @@
           "dryRun": {
             "type": "boolean"
           },
-          "enabled": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "featureIndex": {
             "oneOf": [
               {
@@ -43372,9 +41926,6 @@
             ]
           },
           "featureName": {
-            "type": "string"
-          },
-          "featureType": {
             "type": "string"
           },
           "features": {
@@ -43395,25 +41946,7 @@
             },
             "type": "array"
           },
-          "property": {
-            "type": "string"
-          },
           "renderer": {
-            "type": "string"
-          },
-          "rendererIndex": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "value": {
             "type": "string"
           }
         },
@@ -43575,16 +42108,6 @@
           "dryRun": {
             "type": "boolean"
           },
-          "enabled": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "featureIndex": {
             "oneOf": [
               {
@@ -43600,9 +42123,6 @@
           "featureName": {
             "type": "string"
           },
-          "featureType": {
-            "type": "string"
-          },
           "features": {
             "items": {
               "$ref": "#/$defs/UnityCli.UrpFeatureInfo"
@@ -43614,24 +42134,6 @@
               "$ref": "#/$defs/UnityCli.UrpPlannedEffect"
             },
             "type": "array"
-          },
-          "property": {
-            "type": "string"
-          },
-          "rendererIndex": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "value": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -43800,16 +42302,6 @@
           "dryRun": {
             "type": "boolean"
           },
-          "enabled": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "featureIndex": {
             "oneOf": [
               {
@@ -43825,9 +42317,6 @@
           "featureName": {
             "type": "string"
           },
-          "featureType": {
-            "type": "string"
-          },
           "features": {
             "items": {
               "$ref": "#/$defs/UnityCli.UrpFeatureInfo"
@@ -43839,24 +42328,6 @@
               "$ref": "#/$defs/UnityCli.UrpPlannedEffect"
             },
             "type": "array"
-          },
-          "property": {
-            "type": "string"
-          },
-          "rendererIndex": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "value": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -44035,9 +42506,6 @@
             },
             "type": "array"
           },
-          "property": {
-            "type": "string"
-          },
           "settings": {
             "additionalProperties": {
               "x-unityCliAnyJson": true
@@ -44097,23 +42565,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.UrpPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -44181,17 +42632,11 @@
         },
         "additionalProperties": false,
         "properties": {
-          "effectType": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.UrpPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -44353,9 +42798,6 @@
         },
         "additionalProperties": false,
         "properties": {
-          "isGlobal": {
-            "type": "boolean"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.UrpPlannedEffect"
@@ -44649,23 +43091,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.UrpPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -44733,23 +43158,11 @@
         },
         "additionalProperties": false,
         "properties": {
-          "effectType": {
-            "type": "string"
-          },
           "plannedEffects": {
             "items": {
               "$ref": "#/$defs/UnityCli.UrpPlannedEffect"
             },
             "type": "array"
-          },
-          "property": {
-            "type": "string"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
-          },
-          "value": {
-            "type": "string"
           }
         },
         "type": "object"
@@ -44800,23 +43213,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -44883,41 +43279,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "rate": {
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "resetSeedOnPlay": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seed": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -44967,23 +43328,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -45050,41 +43394,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "rate": {
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "resetSeedOnPlay": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seed": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -45134,23 +43443,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -45217,41 +43509,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "rate": {
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "resetSeedOnPlay": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seed": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -45305,23 +43562,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -45388,41 +43628,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "rate": {
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "resetSeedOnPlay": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seed": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -45488,23 +43693,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -45571,41 +43759,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "rate": {
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "resetSeedOnPlay": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seed": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -45665,23 +43818,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -45748,41 +43884,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "rate": {
-            "oneOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "resetSeedOnPlay": {
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seed": {
-            "oneOf": [
-              {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -45840,23 +43941,6 @@
             "properties": {
               "guid": {
                 "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
               },
               "name": {
                 "type": "string"
@@ -45929,9 +44013,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -46012,23 +44093,6 @@
             },
             "type": "object"
           },
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxEffectInfo": {
             "additionalProperties": false,
             "properties": {
@@ -46091,9 +44155,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -46159,23 +44220,6 @@
             },
             "type": "object"
           },
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxEffectInfo": {
             "additionalProperties": false,
             "properties": {
@@ -46196,9 +44240,6 @@
         "properties": {
           "effect": {
             "$ref": "#/$defs/UnityCli.VfxEffectInfo"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -46604,23 +44645,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.Vector3Data": {
             "additionalProperties": false,
             "properties": {
@@ -46809,9 +44833,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -46908,23 +44929,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.Vector3Data": {
             "additionalProperties": false,
             "properties": {
@@ -47113,9 +45117,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -47294,23 +45295,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -47358,9 +45342,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -47521,23 +45502,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.Vector3Data": {
             "additionalProperties": false,
             "properties": {
@@ -47755,9 +45719,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -47916,23 +45877,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxParticleEmissionInfo": {
             "additionalProperties": false,
             "properties": {
@@ -47997,9 +45941,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -48053,23 +45994,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.Vector3Data": {
             "additionalProperties": false,
             "properties": {
@@ -48248,9 +46172,6 @@
         "properties": {
           "particleSystem": {
             "$ref": "#/$defs/UnityCli.VfxParticleSystemInfo"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -48405,23 +46326,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.Vector3Data": {
             "additionalProperties": false,
             "properties": {
@@ -48639,9 +46543,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -48791,23 +46692,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.Vector3Data": {
             "additionalProperties": false,
             "properties": {
@@ -48897,9 +46781,6 @@
           },
           "shape": {
             "$ref": "#/$defs/UnityCli.VfxParticleShapeInfo"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -48966,23 +46847,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -49036,9 +46900,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -49105,23 +46966,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -49175,9 +47019,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -49244,23 +47085,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -49314,9 +47138,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -49386,23 +47207,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxPlannedEffect": {
             "additionalProperties": false,
             "properties": {
@@ -49456,9 +47260,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           }
         },
         "type": "object"
@@ -50226,23 +48027,6 @@
       },
       "outputSchema": {
         "$defs": {
-          "UnityCli.GameObjectRef": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "maximum": 9223372036854776000,
-                "minimum": -9223372036854776000,
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
           "UnityCli.VfxCurveData": {
             "additionalProperties": false,
             "properties": {
@@ -50408,9 +48192,6 @@
               "$ref": "#/$defs/UnityCli.VfxPlannedEffect"
             },
             "type": "array"
-          },
-          "target": {
-            "$ref": "#/$defs/UnityCli.GameObjectRef"
           },
           "trail": {
             "$ref": "#/$defs/UnityCli.VfxTrailRendererInfo"

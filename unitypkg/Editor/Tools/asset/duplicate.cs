@@ -19,7 +19,6 @@ namespace UnityCli
         public sealed class Result
         {
             public AssetDetail Asset { get; set; }
-            public string Source { get; set; }
             public List<AssetPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -61,7 +60,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Asset = AssetToolSupport.BuildAssetDetail(observedPath),
-                Source = source,
                 PlannedEffects = new List<AssetPlannedEffect> { new AssetPlannedEffect { Type = "asset.duplicate", Path = destination, Source = source } }
             });
         }

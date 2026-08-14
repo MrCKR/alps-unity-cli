@@ -64,7 +64,7 @@ test("internal project Tool fingerprint remains bridge-only", async () => {
   assert.match(toolRegistry, /\{ "internalDescriptorFingerprint", definition\.Fingerprint \}/);
   const publicDescriptor = publicCatalog.slice(publicCatalog.indexOf("export function publicToolDescriptor"), publicCatalog.indexOf("export function publicOutputSchema"));
   assert.doesNotMatch(publicDescriptor, /internalDescriptorFingerprint/);
-  assert.match(staticCapture, /return publicToolDescriptor\(metadata\)/);
+  assert.match(staticCapture, /\.\.\.publicToolDescriptor\(metadata\)[\s\S]*source: descriptor\.source/);
 });
 
 test("published custom Tool example matches the current async API", async () => {

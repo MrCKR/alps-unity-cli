@@ -195,11 +195,16 @@ export async function handleInstancesCommand(
   const includeAll = getBoolean(flags, "all");
   if (command === "list" || !command) {
     const instances = await readInstancesWithProjectProcessClaims(dataDir);
+    const aliasByInstanceId = new Map((await readAliasStore(dataDir)).aliases.map((binding) => [binding.instanceId, binding.alias]));
     // 默认只展示有 session 的活跃实例；offline 历史残留用 --all 展开，避免上下文污染。
     const visible = includeAll ? instances : instances.filter((instance) => instance.status !== "offline");
     const hiddenOfflineCount = instances.length - visible.length;
     return success(requestId, {
-      instances: visible.map(instanceListSummary),
+      instances: visible.map((instance) => {
+        const summary = instanceListSummary(instance);
+        const alias = aliasByInstanceId.get(instance.instanceId);
+        return alias ? { ...summary, alias } : summary;
+      }),
       ...(includeAll || hiddenOfflineCount === 0 ? {} : { hiddenOfflineCount }),
     });
   }
@@ -768,39 +773,11 @@ export async function reduceRegistryRecord(
 export function instanceListSummary(instance: UnityInstance): Record<string, unknown> {
   return {
     instanceId: instance.instanceId,
-    canonicalizationVersion: instance.canonicalizationVersion,
     canonicalProjectPath: instance.canonicalProjectPath,
     displayProjectPath: instance.displayProjectPath,
     projectName: instance.projectName,
     status: instance.status,
-    revision: instance.revision,
-    updatedAt: instance.updatedAt,
-    claimVerification: instance.claimVerification,
-    ...(instance.processClaimIds?.length ? { processClaimIds: instance.processClaimIds } : {}),
-    ...(instance.allSessions.length ? {
-      sessions: instance.allSessions.map((session) => ({
-        target: session.target,
-        sessionId: session.sessionId,
-        ...(session.editorSessionId ? { editorSessionId: session.editorSessionId } : {}),
-        ...(session.runtimeSessionId ? { runtimeSessionId: session.runtimeSessionId } : {}),
-        processId: session.processId,
-        processStartedAt: session.processStartedAt,
-        lastHeartbeatAt: session.lastHeartbeatAt,
-        state: session.state,
-        claimVerification: session.claimVerification,
-      })),
-    } : {}),
-    ...(instance.lastUnitySnapshot ? {
-      lastUnitySnapshot: {
-        schemaVersion: instance.lastUnitySnapshot.schemaVersion,
-        observedAt: instance.lastUnitySnapshot.observedAt,
-        fields: instance.lastUnitySnapshot.fields,
-      },
-    } : {}),
-    ...(instance.progress?.length ? { progress: instance.progress } : {}),
-    ...(instance.blockers?.length ? { blockers: instance.blockers } : {}),
     ...(instance.unityVersion ? { unityVersion: instance.unityVersion } : {}),
-    ...(instance.buildStamp ? { buildStamp: instance.buildStamp } : {}),
   };
 }
 

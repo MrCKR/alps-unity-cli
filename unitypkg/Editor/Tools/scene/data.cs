@@ -22,7 +22,6 @@ namespace UnityCli
         public sealed class Result
         {
             public SceneInfo Scene { get; set; }
-            public long MaxDepth { get; set; }
             public long Count { get; set; }
             public List<DataItem> Items { get; set; }
         }
@@ -71,7 +70,6 @@ namespace UnityCli
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scene = SceneToolSupport.BuildSceneInfo(scene),
-                MaxDepth = maxDepth,
                 Count = count,
                 Items = items
             });

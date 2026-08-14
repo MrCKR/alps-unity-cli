@@ -17,7 +17,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Target { get; set; }
             public bool Valid { get; set; }
             public List<string> Issues { get; set; }
             public bool HasRigidbody { get; set; }
@@ -59,7 +58,7 @@ namespace UnityCli
             }
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = go.name, Valid = issues.Count == 0, Issues = issues,
+                Valid = issues.Count == 0, Issues = issues,
                 HasRigidbody = rb != null, HasRigidbody2D = rb2d != null, ColliderCount = colliders.Length + colliders2d.Length
             });
         }

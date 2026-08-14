@@ -13,7 +13,7 @@ namespace UnityCli
     public class ProfilerExportTool : IUnityCliTool<ProfilerExportTool.Request, ProfilerExportTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Path { get; set; } public string Format { get; set; } public bool Overwrite { get; set; } public string CaptureTag { get; set; } }
-        public sealed class Result { public string ArtifactPath { get; set; } public string ProfilerPath { get; set; } public string Format { get; set; } public long DurationMs { get; set; } public long Frames { get; set; } public long StartFrame { get; set; } public long EndFrame { get; set; } public string CaptureTag { get; set; } public string MetadataSidecar { get; set; } public ProfilerState Profiler { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string ArtifactPath { get; set; } public string ProfilerPath { get; set; } public long DurationMs { get; set; } public long Frames { get; set; } public long StartFrame { get; set; } public long EndFrame { get; set; } public string MetadataSidecar { get; set; } public ProfilerState Profiler { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -52,8 +52,8 @@ namespace UnityCli
                 ProfilerToolSupport.WriteCaptureMetadataSidecar(outputPath, ctx.RequestId, captureTag, startFrame, endFrame, startedAt, finishedAt);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                ArtifactPath = outputPath, ProfilerPath = outputPath, Format = format, DurationMs = elapsedMs,
-                Frames = 1, StartFrame = startFrame, EndFrame = endFrame, CaptureTag = captureTag,
+                ArtifactPath = outputPath, ProfilerPath = outputPath, DurationMs = elapsedMs,
+                Frames = 1, StartFrame = startFrame, EndFrame = endFrame,
                 MetadataSidecar = string.IsNullOrEmpty(captureTag) ? null : outputPath + ".metadata.json",
                 Profiler = ProfilerToolSupport.BuildProfilerState(),
                 PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.export", Path = outputPath } }

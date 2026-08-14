@@ -27,7 +27,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Mode { get; set; }
             public Vector3Data Origin { get; set; }
             public long HitCount { get; set; }
             public List<ColliderRef> Hits { get; set; }
@@ -64,7 +63,7 @@ namespace UnityCli
                 }
                 var hits = new List<ColliderRef>();
                 foreach (var c in colliders2d) hits.Add(PhysicsToolSupport.BuildColliderRef(c.gameObject, c.GetType().Name));
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "2d", Origin = new Vector3Data(new Vector3(origin2d.x, origin2d.y, 0)), HitCount = colliders2d.Length, Hits = hits });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Origin = new Vector3Data(new Vector3(origin2d.x, origin2d.y, 0)), HitCount = colliders2d.Length, Hits = hits });
             }
             Collider[] colliders;
             if (string.Equals(request.Shape, "box", StringComparison.OrdinalIgnoreCase))
@@ -78,7 +77,7 @@ namespace UnityCli
             }
             var hits3d = new List<ColliderRef>();
             foreach (var c in colliders) hits3d.Add(PhysicsToolSupport.BuildColliderRef(c.gameObject, c.GetType().Name));
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "3d", Origin = new Vector3Data(origin), HitCount = colliders.Length, Hits = hits3d });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Origin = new Vector3Data(origin), HitCount = colliders.Length, Hits = hits3d });
         }
     }
 }

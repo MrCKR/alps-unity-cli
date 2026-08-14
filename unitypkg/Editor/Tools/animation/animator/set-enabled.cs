@@ -10,7 +10,7 @@ namespace UnityCli
     public class AnimatorSetEnabledTool : IUnityCliTool<AnimatorSetEnabledTool.Request, AnimatorSetEnabledTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public bool? Value { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public bool Enabled { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public bool Enabled { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "animator.set-enabled", Summary = "Enable or disable an Animator component on a target GameObject.", Description = "Resolve a target with an Animator and set animator.enabled. Defaults to true.", Group = "animation",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Disable animator", Input = new Request { Target = "Player", Value = false } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -26,7 +26,7 @@ namespace UnityCli
             var observedAnimator = observedTarget == null ? null : observedTarget.GetComponent<Animator>();
             var observedEnabled = observedAnimator != null && observedAnimator.enabled;
             if (observedAnimator == null || observedEnabled != enabled) throw AnimationToolSupport.StateMismatch("E_ANIMATOR_ENABLED_STATE_MISMATCH", "Animator enabled state");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Enabled = observedEnabled, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-enabled", Target = GameObjectToolSupport.HierarchyPath(go), Value = observedEnabled.ToString().ToLowerInvariant() } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Enabled = observedEnabled, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-enabled", Target = GameObjectToolSupport.HierarchyPath(go), Value = observedEnabled.ToString().ToLowerInvariant() } } });
         }
     }
 }

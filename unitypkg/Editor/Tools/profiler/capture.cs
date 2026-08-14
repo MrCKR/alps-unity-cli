@@ -31,13 +31,10 @@ namespace UnityCli
         {
             public string ArtifactPath { get; set; }
             public string ProfilerPath { get; set; }
-            public string Format { get; set; }
             public long DurationMs { get; set; }
             public long RequestedDurationMs { get; set; }
-            public long Frames { get; set; }
             public long StartFrame { get; set; }
             public long EndFrame { get; set; }
-            public string CaptureTag { get; set; }
             public string MetadataSidecar { get; set; }
             public ProfilerState Profiler { get; set; }
             public List<ProfilerPlannedEffect> PlannedEffects { get; set; }
@@ -164,13 +161,10 @@ namespace UnityCli
             {
                 ArtifactPath = outputPath,
                 ProfilerPath = outputPath,
-                Format = format,
                 DurationMs = (long)(finishedAt - startedAt).TotalMilliseconds,
                 RequestedDurationMs = (long)durationMs,
-                Frames = frames,
                 StartFrame = startFrame,
                 EndFrame = endFrame,
-                CaptureTag = captureTag,
                 MetadataSidecar = string.IsNullOrEmpty(captureTag) ? null : outputPath + ".metadata.json",
                 Profiler = ProfilerToolSupport.BuildProfilerState(),
                 PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.capture", Path = outputPath } }

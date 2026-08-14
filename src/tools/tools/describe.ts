@@ -8,8 +8,8 @@ export interface ToolsDescribeRequest { name: string }
 export interface ToolsDescribeResult {
   name: string; description: string; group: string; inputSchema: Record<string, AnyJson>; outputSchema: Record<string, AnyJson>;
   destructiveHint: boolean; sideEffects?: string[]; playModeSupport: string; supportsDryRun: boolean; permissions?: string[];
-  examples?: Array<{ description: string; argv: string[] }>; source?: string; target: string; availabilityScope: string; available: boolean;
-  unavailableReason?: string; requiresPackages?: string[]; extensionId?: string;
+  examples?: Array<{ description: string; argv: string[] }>; target: string; available: boolean;
+  unavailableReason?: string; requiresPackages?: string[];
 }
 
 export default defineTool<ToolsDescribeRequest, ToolsDescribeResult>({
@@ -36,7 +36,6 @@ export default defineTool<ToolsDescribeRequest, ToolsDescribeResult>({
       data.available = false;
       data.unavailableReason = `${availability.errorCode}: ${availability.message}`;
     }
-    if (availability.extensionId) data.extensionId = availability.extensionId;
     return data;
   }
 });

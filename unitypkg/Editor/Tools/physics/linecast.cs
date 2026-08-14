@@ -24,7 +24,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Mode { get; set; }
             public bool Hit { get; set; }
             public RaycastHitInfo HitInfo { get; set; }
         }
@@ -49,11 +48,11 @@ namespace UnityCli
             if (mode == "2d")
             {
                 var hit = Physics2D.Linecast(new Vector2(start.x, start.y), new Vector2(end.x, end.y), layerMask);
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "2d", Hit = hit.collider != null });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Hit = hit.collider != null });
             }
             RaycastHit hit3d;
             var found = Physics.Linecast(start, end, out hit3d, layerMask);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "3d", Hit = found, HitInfo = found ? PhysicsToolSupport.BuildRaycast3DHit(hit3d) : null });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Hit = found, HitInfo = found ? PhysicsToolSupport.BuildRaycast3DHit(hit3d) : null });
         }
     }
 }

@@ -27,9 +27,8 @@ namespace UnityCli
             var observedObject = VfxToolSupport.FindGameObjectByTarget(gameObjectId.ToString(System.Globalization.CultureInfo.InvariantCulture));
             effect = observedObject == null ? null : observedObject.GetComponent(effectType);
             if (effect == null) throw new UnityCliBridge.BridgeCommandException("E_VFX_OBSERVED_TARGET_MISSING", "vfx.control.set-rate target/component disappeared after commit.", "Retry after checking the target still exists.");
-            var rate = VfxActionToolSupport.SetAndReadRequired(effect, "playRate", (float)request.Rate.Value);
+            VfxActionToolSupport.SetAndReadRequired(effect, "playRate", (float)request.Rate.Value);
             var result = VfxActionToolSupport.BuildControlResult(effect, "vfx.control.set-rate", ctx.LogPath);
-            result.Rate = rate;
             return new System.Threading.Tasks.ValueTask<VfxControlActionResult>(result);
         }
     }

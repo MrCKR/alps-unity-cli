@@ -45,14 +45,11 @@ namespace UnityCli
 
     public sealed class EditorSearchResult
     {
-        public string Query { get; set; }
-        public long Offset { get; set; }
-        public long Limit { get; set; }
         public long ReturnedCount { get; set; }
         public bool HasMore { get; set; }
         public long? NextOffset { get; set; }
-        public List<EditorSearchProvider> Providers { get; set; }
         public List<EditorSearchItem> Results { get; set; }
+        public List<EditorSearchProvider> Providers { get; set; }
     }
 }
 #endif

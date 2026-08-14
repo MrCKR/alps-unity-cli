@@ -9,7 +9,7 @@ namespace UnityCli
     public sealed class VfxTrailSetTool : IUnityCliTool<VfxTrailSetTool.Request, VfxTrailSetTool.Result>
     {
         public sealed class Request : TrailRendererFields { [UnityCliRequired] public string Target { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public VfxTrailRendererInfo Trail { get; set; } public List<VfxPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public VfxTrailRendererInfo Trail { get; set; } public List<VfxPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -37,7 +37,7 @@ namespace UnityCli
             VfxToolSupport.VerifyTrailRendererFields(observed, request);
             UnityCliSceneMutation.MarkSceneObjectDirty(observed);
             VfxToolSupport.MarkSceneDirty(observed.gameObject);
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(observed.gameObject), Trail = VfxToolSupport.BuildTrailRendererInfo(observed), PlannedEffects = effects });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Trail = VfxToolSupport.BuildTrailRendererInfo(observed), PlannedEffects = effects });
         }
     }
 }

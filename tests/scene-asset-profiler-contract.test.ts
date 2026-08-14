@@ -141,7 +141,7 @@ test("build/animation/package sources keep current typed-result flows", async ()
   assert.match(buildSource, /Name = "build\.profile\.create"/);
   assert.match(buildSource, /class BuildSettingsGetTool : IUnityCliTool/);
   assert.match(buildSource, /Name = "build\.settings\.set"/);
-  assert.doesNotMatch(buildSource, /public string Action/);
+  assert.doesNotMatch(buildSource, /Path = request\.Path|Name = request\.Name/);
 
   assert.match(animationSource, /AnimationUtility\.GetCurveBindings\(clip\)/);
   assert.match(animationSource, /AnimationUtility\.GetAnimationEvents\(clip\)/);

@@ -22,7 +22,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Target { get; set; }
             public string FromScene { get; set; }
             public string ToScene { get; set; }
             public bool? Moved { get; set; }
@@ -83,7 +82,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Target = go.name,
                     ToScene = destScenePath,
                     Moved = false,
                     Reason = "already in destination scene"
@@ -93,7 +91,6 @@ namespace UnityCli
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Target = go.name,
                     FromScene = go.scene.path,
                     ToScene = destScenePath,
                     DryRun = true,
@@ -115,7 +112,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_SCENE_MOVE_STATE_MISMATCH", "GameObject did not move to the requested destination scene.", "Inspect the object scene and destination scene load state before retrying.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = observed.name,
                 FromScene = fromScene,
                 ToScene = observedScenePath,
                 Moved = true

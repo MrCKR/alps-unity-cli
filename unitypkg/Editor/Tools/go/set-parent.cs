@@ -21,9 +21,6 @@ namespace UnityCli
         public sealed class Result
         {
             public bool? DryRun { get; set; }
-            public GameObjectRef Target { get; set; }
-            public string Parent { get; set; }
-            public bool WorldPositionStays { get; set; }
             public List<GameObjectPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -67,8 +64,6 @@ namespace UnityCli
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     DryRun = true,
-                    Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
-                    Parent = parentName ?? "<root>",
                     PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.set-parent", Parent = parentName ?? "<root>" } }
                 });
             }
@@ -81,9 +76,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_GO_SET_PARENT_STATE_MISMATCH", "GameObject hierarchy did not match the requested parent after write.", "Inspect the hierarchy and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(observed),
-                Parent = parentName ?? "<root>",
-                WorldPositionStays = worldPositionStays,
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.set-parent" } }
             });
         }

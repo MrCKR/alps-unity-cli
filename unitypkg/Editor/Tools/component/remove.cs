@@ -23,11 +23,9 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public GameObjectRef Target { get; set; }
             public ComponentSummary Component { get; set; }
             public List<ComponentSummary> Components { get; set; }
             public long RemovedCount { get; set; }
-            public string ComponentIndex { get; set; }
             public List<GameObjectPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -54,7 +52,6 @@ namespace UnityCli
         {
             GameObjectToolSupport.EnsureEditorNotBusy("component.remove");
             var gameObject = ComponentAddTool.ResolveTarget(request.Target, "Component remove requires a target.");
-            var targetRef = GameObjectToolSupport.BuildGameObjectRef(gameObject);
 
             // components[] 批量删除模式
             if (request.Components != null && request.Components.Count > 0)
@@ -91,7 +88,7 @@ namespace UnityCli
                 {
                     effects.Add(new GameObjectPlannedEffect { Type = "component.remove", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = name });
                 }
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = targetRef, Components = removed, RemovedCount = removed.Count, PlannedEffects = effects });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Components = removed, RemovedCount = removed.Count, PlannedEffects = effects });
             }
 
             // 单组件删除模式
@@ -113,9 +110,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_REMOVE_STATE_MISMATCH", "Removed component remained on the target after independent readback.", "Inspect the target GameObject and retry after the Editor is idle.");
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = targetRef,
                 Component = singleRemoved,
-                ComponentIndex = request.ComponentIndex.HasValue ? request.ComponentIndex.Value.ToString(CultureInfo.InvariantCulture) : null,
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.remove", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = componentName } }
             });
         }

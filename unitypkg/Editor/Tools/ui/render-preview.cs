@@ -24,8 +24,6 @@ namespace UnityCli
         {
             public bool DryRun { get; set; }
             public string OutputPath { get; set; }
-            public int Width { get; set; }
-            public int Height { get; set; }
             public long SizeBytes { get; set; }
             public string Sha256 { get; set; }
             public List<UiPlannedEffect> PlannedEffects { get; set; }
@@ -78,7 +76,7 @@ namespace UnityCli
             var effects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.render-preview", Target = request.Target, Path = outputPath } };
             if (ctx.DryRun)
             {
-                return new Result { DryRun = true, OutputPath = outputPath, Width = width, Height = height, PlannedEffects = effects };
+                return new Result { DryRun = true, OutputPath = outputPath, PlannedEffects = effects };
             }
 
             ctx.CommitEffect();
@@ -109,8 +107,6 @@ namespace UnityCli
                 {
                     DryRun = false,
                     OutputPath = outputPath,
-                    Width = width,
-                    Height = height,
                     SizeBytes = artifact.SizeBytes,
                     Sha256 = artifact.Sha256,
                     PlannedEffects = effects

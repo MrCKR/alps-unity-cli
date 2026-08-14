@@ -34,7 +34,6 @@ namespace UnityCli
             VfxActionToolSupport.VerifyAssignedGraph(effect, graphPath);
             return new System.Threading.Tasks.ValueTask<VfxEffectActionResult>(new VfxEffectActionResult
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(effect.gameObject),
                 Action = "assigned",
                 Effect = VfxToolSupport.BuildEffectInfo(effect),
                 PlannedEffects = new List<VfxPlannedEffect> { new VfxPlannedEffect { Type = "vfx.effect.assign", Target = request.Target, Graph = request.Graph } }

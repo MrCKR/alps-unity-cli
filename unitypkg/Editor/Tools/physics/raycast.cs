@@ -26,7 +26,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public string Mode { get; set; }
             public RaycastQuery Query { get; set; }
             public bool Hit { get; set; }
             public long HitCount { get; set; }
@@ -59,14 +58,14 @@ namespace UnityCli
                     var hits = Physics2D.RaycastAll(origin, direction, distance, layerMask);
                     var hitList = new List<RaycastHitInfo>();
                     foreach (var h in hits) hitList.Add(PhysicsToolSupport.BuildRaycast2DHit(h));
-                    return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "2d", Query = PhysicsToolSupport.BuildRaycast2DQuery(origin, direction, distance, layerMask), HitCount = hits.Length, Hits = hitList });
+                    return new System.Threading.Tasks.ValueTask<Result>(new Result { Query = PhysicsToolSupport.BuildRaycast2DQuery(origin, direction, distance, layerMask), HitCount = hits.Length, Hits = hitList });
                 }
                 var hit = Physics2D.Raycast(origin, direction, distance, layerMask);
                 var list = new List<RaycastHitInfo>();
                 if (hit.collider != null) list.Add(PhysicsToolSupport.BuildRaycast2DHit(hit));
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Mode = "2d", Query = PhysicsToolSupport.BuildRaycast2DQuery(origin, direction, distance, layerMask),
+                    Query = PhysicsToolSupport.BuildRaycast2DQuery(origin, direction, distance, layerMask),
                     Hit = hit.collider != null, HitCount = hit.collider != null ? 1 : 0, Hits = list,
                     NextActions = hit.collider != null ? new List<string>() : new List<string> { "No Physics collider matched the ray); adjust origin, direction, distance or layer mask." }
                 });
@@ -79,7 +78,7 @@ namespace UnityCli
                 Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
                 var hitList = new List<RaycastHitInfo>();
                 foreach (var h in hits) hitList.Add(PhysicsToolSupport.BuildRaycast3DHit(h));
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { Mode = "3d", Query = PhysicsToolSupport.BuildRaycast3DQuery(origin3d, direction3d, distance, layerMask), HitCount = hits.Length, Hits = hitList });
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Query = PhysicsToolSupport.BuildRaycast3DQuery(origin3d, direction3d, distance, layerMask), HitCount = hits.Length, Hits = hitList });
             }
             RaycastHit hit3d;
             var didHit = Physics.Raycast(origin3d, direction3d, out hit3d, distance, layerMask);
@@ -87,7 +86,7 @@ namespace UnityCli
             if (didHit) list3d.Add(PhysicsToolSupport.BuildRaycast3DHit(hit3d));
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Mode = "3d", Query = PhysicsToolSupport.BuildRaycast3DQuery(origin3d, direction3d, distance, layerMask),
+                Query = PhysicsToolSupport.BuildRaycast3DQuery(origin3d, direction3d, distance, layerMask),
                 Hit = didHit, HitCount = didHit ? 1 : 0, Hits = list3d,
                 NextActions = didHit ? new List<string>() : new List<string> { "No Physics collider matched the ray); adjust origin, direction, distance or layer mask." }
             });

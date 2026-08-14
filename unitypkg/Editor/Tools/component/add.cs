@@ -20,7 +20,6 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public GameObjectRef Target { get; set; }
             public ComponentSummary Component { get; set; }
             public List<ChangedProperty> ChangedProperties { get; set; }
             public List<GameObjectPlannedEffect> PlannedEffects { get; set; }
@@ -67,7 +66,6 @@ namespace UnityCli
             var observedComponent = VerifyComponentReadback(gameObject.GetInstanceID(), component.GetInstanceID(), type, propertyChanges);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 Component = GameObjectToolSupport.BuildComponentSummary(observedComponent),
                 ChangedProperties = BuildChangedProperties(propertyChanges),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = component.GetType().Name } }

@@ -7,7 +7,7 @@ namespace UnityCli
     public sealed class UrpVolumeSetTool : IUnityCliTool<UrpVolumeSetTool.Request, UrpVolumeSetTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Target { get; set; } [UnityCliRequired] public string EffectType { get; set; } [UnityCliRequired] public string Property { get; set; } [UnityCliRequired] public string Value { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public string EffectType { get; set; } public string Property { get; set; } public string Value { get; set; } public List<UrpPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public List<UrpPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -26,7 +26,7 @@ namespace UnityCli
             var plan = UrpVolumeOperations.ValidateSet(request.Target, request.EffectType, request.Property, request.Value, "E_URP", UrpToolSupport.FindVolumeEffectType);
             ctx.CommitEffect();
             var set = UrpVolumeOperations.Set(plan, "E_URP");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(set.GameObject), EffectType = set.ObservedEffectType, Property = request.Property, Value = set.Value, PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.set", Target = GameObjectToolSupport.HierarchyPath(set.GameObject), EffectType = set.ObservedEffectType, Property = request.Property, Value = set.Value } }});
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.set", Target = GameObjectToolSupport.HierarchyPath(set.GameObject), EffectType = set.ObservedEffectType, Property = request.Property, Value = set.Value } }});
         }
     }
 }

@@ -10,7 +10,7 @@ namespace UnityCli
     public class AnimatorSetSpeedTool : IUnityCliTool<AnimatorSetSpeedTool.Request, AnimatorSetSpeedTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public float? Speed { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public double Speed { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public double Speed { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "animator.set-speed", Summary = "Set the playback speed of an Animator component.", Description = "Resolve a target with an Animator and set animator.speed. Defaults to 1.0.", Group = "animation",DestructiveHint = false, SideEffects = new[] { "scene-modify" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Set speed to 2x", Input = new Request { Target = "Player", Speed = 2f } } } };
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
@@ -26,7 +26,7 @@ namespace UnityCli
             var observedAnimator = observedTarget == null ? null : observedTarget.GetComponent<Animator>();
             var observedSpeed = observedAnimator == null ? 0f : observedAnimator.speed;
             if (observedAnimator == null || !Mathf.Approximately(observedSpeed, speed)) throw AnimationToolSupport.StateMismatch("E_ANIMATOR_SPEED_STATE_MISMATCH", "Animator speed");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) }, Speed = observedSpeed, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-speed", Target = GameObjectToolSupport.HierarchyPath(go), Value = observedSpeed.ToString(System.Globalization.CultureInfo.InvariantCulture) } } });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Speed = observedSpeed, PlannedEffects = new List<AnimationPlannedEffect> { new AnimationPlannedEffect { Type = "animator.set-speed", Target = GameObjectToolSupport.HierarchyPath(go), Value = observedSpeed.ToString(System.Globalization.CultureInfo.InvariantCulture) } } });
         }
     }
 }

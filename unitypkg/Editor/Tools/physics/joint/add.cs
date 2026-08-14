@@ -58,8 +58,6 @@ namespace UnityCli
                 return new ValueTask<PhysicsJointResult>(new PhysicsJointResult
                 {
                     DryRun = true,
-                    Target = PhysicsJointToolSupport.TargetRef(target),
-                    Type = type.Name,
                     Exists = existing != null,
                     PlannedEffects = PhysicsJointToolSupport.Effects("physics.joint.add", existing == null ? "add" : "configure", type.Name)
                 });
@@ -92,8 +90,6 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PHYSICS_JOINT_ADD_STATE_MISMATCH", "Requested Joint component state was not present after mutation.", "Inspect the target GameObject and retry.");
             return new ValueTask<PhysicsJointResult>(new PhysicsJointResult
             {
-                Target = PhysicsJointToolSupport.TargetRef(observedTarget),
-                Type = type.Name,
                 Exists = true,
                 PlannedEffects = PhysicsJointToolSupport.Effects("physics.joint.add", existing == null ? "add" : "configure", type.Name)
             });

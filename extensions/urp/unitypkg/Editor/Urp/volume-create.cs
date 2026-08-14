@@ -7,7 +7,7 @@ namespace UnityCli
     public sealed class UrpVolumeCreateTool : IUnityCliTool<UrpVolumeCreateTool.Request, UrpVolumeCreateTool.Result>
     {
         public sealed class Request { public string Name { get; set; } public bool? IsGlobal { get; set; } public double? Priority { get; set; } public double? Weight { get; set; } }
-        public sealed class Result { public GameObjectRef Target { get; set; } public bool IsGlobal { get; set; } public List<UrpPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public GameObjectRef Target { get; set; } public List<UrpPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -26,7 +26,7 @@ namespace UnityCli
             var plan = UrpVolumeOperations.ValidateCreate(request.Priority, request.Weight, "E_URP");
             ctx.CommitEffect();
             var created = UrpVolumeOperations.Create(request.Name, request.IsGlobal, plan, "URP", "E_URP");
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(created.GameObject), IsGlobal = created.IsGlobal, PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.create", Name = created.GameObject.name } }});
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = GameObjectToolSupport.BuildGameObjectRef(created.GameObject), PlannedEffects = new List<UrpPlannedEffect> { new UrpPlannedEffect { Type = "urp.volume.create", Name = created.GameObject.name } }});
         }
     }
 }

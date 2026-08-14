@@ -12,7 +12,7 @@ namespace UnityCli
     {
         public sealed class Request { public string Target { get; set; } public string State { get; set; } public float? Duration { get; set; } public int? Layer { get; set; } }
         public sealed class Readback { public int CurrentStateHash { get; set; } public int NextStateHash { get; set; } public bool InTransition { get; set; } public float NormalizedTime { get; set; } }
-        public sealed class Result { public GameObjectTargetRef Target { get; set; } public CrossfadeInfo Transition { get; set; } public bool Changed { get; set; } public string NoOpReason { get; set; } public Readback State { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public CrossfadeInfo Transition { get; set; } public bool Changed { get; set; } public string NoOpReason { get; set; } public Readback State { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -102,7 +102,6 @@ namespace UnityCli
         private static Result BuildResult(GameObject go, string state, float duration, int layer, bool changed, string noOpReason, Readback readback, List<AnimationPlannedEffect> effects)
         {
             return new Result {
-                Target = new GameObjectTargetRef { Id = go.GetInstanceID(), Name = go.name, Path = GameObjectToolSupport.HierarchyPath(go) },
                 Transition = new CrossfadeInfo { State = state, Duration = duration, Layer = layer }, Changed = changed,
                 NoOpReason = noOpReason, State = readback, PlannedEffects = effects
             };

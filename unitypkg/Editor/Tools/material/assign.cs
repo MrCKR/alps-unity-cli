@@ -25,10 +25,7 @@ namespace UnityCli
 
         public sealed class Result
         {
-            public MaterialAssignTarget Target { get; set; }
-            public MaterialRef Material { get; set; }
             public string ComponentType { get; set; }
-            public long Slot { get; set; }
             public List<MaterialPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -87,10 +84,7 @@ namespace UnityCli
                 if (observedMaterials == null || slot >= observedMaterials.Length || AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(observedMaterials[slot])) != materialGuid) throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_ASSIGN_STATE_MISMATCH", "Renderer material slot did not contain the requested material after assignment.", "Inspect the Renderer materials and retry after the Editor is idle.");
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Target = BuildTarget(observedTarget),
-                    Material = new MaterialRef { Path = materialPath, Guid = materialGuid },
                     ComponentType = "Renderer",
-                    Slot = slot,
                     PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.assign", Target = GameObjectToolSupport.HierarchyPath(gameObject), Path = materialPath } }
                 });
             }
@@ -117,10 +111,7 @@ namespace UnityCli
                 if (observedMaterial == null || AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(observedMaterial)) != materialGuid) throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_ASSIGN_STATE_MISMATCH", "UI Graphic material did not contain the requested material after assignment.", "Inspect the Graphic component and retry after the Editor is idle.");
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    Target = BuildTarget(observedTarget),
-                    Material = new MaterialRef { Path = materialPath, Guid = materialGuid },
                     ComponentType = "Graphic",
-                    Slot = 0,
                     PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.assign", Target = GameObjectToolSupport.HierarchyPath(gameObject), Path = materialPath } }
                 });
             }
@@ -128,10 +119,6 @@ namespace UnityCli
             throw new UnityCliBridge.BridgeCommandException("E_MATERIAL_TARGET_UNSUPPORTED", "Target has no Renderer or UI Graphic component: " + target, "Add a Renderer/UI Graphic component or choose another target.");
         }
 
-        private static MaterialAssignTarget BuildTarget(GameObject gameObject)
-        {
-            return new MaterialAssignTarget { Id = gameObject.GetInstanceID(), Name = gameObject.name, Path = GameObjectToolSupport.HierarchyPath(gameObject) };
-        }
     }
 }
 #endif
