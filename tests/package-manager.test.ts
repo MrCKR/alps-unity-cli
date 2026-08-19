@@ -36,7 +36,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", a
   const result = await ensurePackageBridge(project);
 
   assert.equal(result.dependencyName, "com.unity_cli");
-  assert.equal(result.packageVersion, "0.3.0");
+  assert.equal(result.packageVersion, "0.3.1");
   assert.equal(result.installMode, "copy");
   assert.equal(result.projectHash.length, 64);
   assert.equal(result.sourceHash.length, 64);
@@ -46,7 +46,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", a
   const bridgePath = result.bridgePath;
   const packageJson = JSON.parse(await readFile(join(bridgePath, "package.json"), "utf8")) as { name: string; version: string };
   assert.equal(packageJson.name, "com.unity_cli");
-  assert.equal(packageJson.version, "0.3.0");
+  assert.equal(packageJson.version, "0.3.1");
 
   // Editor files should be copied
   const bridgeSource = await readFile(join(bridgePath, "Editor", "UnityCliBridge.cs"), "utf8");
@@ -86,8 +86,8 @@ test("ensurePackageBridge refreshes orphaned legacy metadata when the package di
 
   const installed = await ensurePackageBridge(project);
   const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
-  assert.equal(installed.packageVersion, "0.3.0");
-  assert.equal(metadata.packageVersion, "0.3.0");
+  assert.equal(installed.packageVersion, "0.3.1");
+  assert.equal(metadata.packageVersion, "0.3.1");
   assert.equal(metadata.cliCompatibilityRange, ">=0.2.0 <0.3.0");
   assert.match(String(metadata.managedFilesSha256), /^[a-f0-9]{64}$/);
 });
@@ -155,12 +155,12 @@ test("ensurePackageBridge overwrites when version or hash changes", async () => 
 
   // Second install should detect the mismatch and re-copy
   const second = await ensurePackageBridge(project);
-  assert.equal(second.packageVersion, "0.3.0");
+  assert.equal(second.packageVersion, "0.3.1");
   assert.notEqual(second.installTime, first.installTime);
 
   // Verify the metadata was corrected
   const updatedMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as { packageVersion: string };
-  assert.equal(updatedMetadata.packageVersion, "0.3.0");
+  assert.equal(updatedMetadata.packageVersion, "0.3.1");
 });
 
 test("ensurePackageBridge retries transient Windows rename failures before publishing", async () => {
@@ -355,7 +355,7 @@ test("checkPackageBridge succeeds for valid copy-mode install", async () => {
   const checked = await checkPackageBridge(project);
 
   assert.equal(checked.dependencyName, "com.unity_cli");
-  assert.equal(checked.packageVersion, "0.3.0");
+  assert.equal(checked.packageVersion, "0.3.1");
   assert.equal(checked.installMode, "copy");
   assert.equal(checked.projectHash.length, 64);
   assert.equal(checked.sourceHash.length, 64);
