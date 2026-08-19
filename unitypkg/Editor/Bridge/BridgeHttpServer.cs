@@ -59,12 +59,12 @@ namespace UnityCli
             return typeof(UnityCliBridgeBuildInfo).GetField("BuildStamp", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null) as string ?? "unknown";
         }
 
-        /// <summary>health 只返回严格 transport identity，禁止把 HTTP 2xx 或端口复用当成目标存活。</summary>
+        /// <summary>health v3 同时返回严格transport identity与只读主线程pulse；两者不得互相替代。</summary>
         private static string BridgeHealthJson()
         {
             var data = new Dictionary<string, object>
             {
-                { "version", 2L },
+                { "version", 3L },
                 { "instanceId", InstanceId() },
                 { "canonicalProjectPath", ProjectIdentity().CanonicalProjectPath },
                 { "canonicalizationVersion", (long)UnityCliCanonicalProjectPath.CanonicalizationVersion },
@@ -72,10 +72,48 @@ namespace UnityCli
                 { "sessionId", EditorSessionId() },
                 { "editorSessionId", EditorSessionId() },
                 { "listenerId", ListenerId },
+                { "listenerGeneration", CurrentListenerGeneration() },
                 { "actualPort", (long)port },
-                { "buildStamp", BridgeBuildStamp() }
+                { "buildStamp", BridgeBuildStamp() },
+                { "mainThread", MainThreadHealthData() }
             };
             return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(string.Empty, data));
+        }
+
+        /// <summary>使用同一monotonic clock计算pulse age；后台线程不调用Unity API。</summary>
+        private static Dictionary<string, object> MainThreadHealthData()
+        {
+            long before;
+            long after;
+            long timestamp;
+            do
+            {
+                before = Interlocked.Read(ref mainThreadPulseSequence);
+                timestamp = Interlocked.Read(ref mainThreadPulseTimestamp);
+                after = Interlocked.Read(ref mainThreadPulseSequence);
+            }
+            while (before != after);
+
+            object ageMs = null;
+            if (timestamp > 0)
+            {
+                var elapsed = Math.Max(0L, System.Diagnostics.Stopwatch.GetTimestamp() - timestamp);
+                ageMs = (long)(elapsed * 1000d / System.Diagnostics.Stopwatch.Frequency);
+            }
+            var lifecycle = domainReloading ? "domain-reloading"
+                : cachedIsCompiling ? "compiling"
+                : cachedIsUpdating ? "importing"
+                : cachedIsBuilding ? "building"
+                : cachedIsPlayModeChanging ? "playmode-changing"
+                : "ready";
+            return new Dictionary<string, object>
+            {
+                { "observed", timestamp > 0 },
+                { "sequence", after },
+                { "ageMs", ageMs },
+                { "listenerGeneration", CurrentListenerGeneration() },
+                { "lifecycle", lifecycle }
+            };
         }
 
         private static string AssemblyMvid()
@@ -374,7 +412,7 @@ namespace UnityCli
             int queueDepth;
             try
             {
-                item = EnqueueOrAttach(request, rawBody, out created, out queueDepth);
+                item = EnqueueOrAttach(request, rawBody, ListenerId, CurrentListenerGeneration(), out created, out queueDepth);
             }
             catch (BridgeCommandException exception)
             {

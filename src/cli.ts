@@ -9,7 +9,7 @@ import { handleCommand } from "./cli-commands/command.js";
 import { handleExtensionsCommand } from "./cli-commands/extensions.js";
 import { handleInit } from "./cli-commands/package.js";
 import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
-import { createRequestId, failure, printResult, success } from "./output.js";
+import { createRequestId, failure, serializeResult, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
 import { handleToolsCommand } from "./tools/commands.js";
 import { handleDoctorCommand } from "./doctor.js";
@@ -246,7 +246,7 @@ function help(): Record<string, unknown> {
     options: [
       "--raw  Print the same JSON envelope as compact single-line JSON for pipes and scripts."
     ],
-    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Descriptor `examples[].argv` is a JSON token array. In PowerShell, wrap inline JSON in single quotes."
+    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Descriptor `examples[].input` is business JSON; optional `examples[].execution` carries dryRun and timeoutMs controls. In PowerShell, wrap inline JSON and pipe-separated tools search keywords in single quotes."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {
@@ -266,13 +266,46 @@ function safeRealpath(path: string): string {
   }
 }
 
+export const CLI_OUTPUT_FLUSH_GRACE_MS = 1_000;
+
+export interface CliExitRuntime {
+  write(text: string, complete: () => void): void;
+  schedule(complete: () => void, delayMs: number): unknown;
+  cancel(timer: unknown): void;
+  exit(code: number): void;
+}
+
+/** 输出完成后结束CLI；残留socket、timer或child handle不得延长公开调用生命周期。 */
+export function finishCliProcess(
+  result: CliResult,
+  raw: boolean,
+  runtime: CliExitRuntime = {
+    write: (text, complete) => { process.stdout.write(text, complete); },
+    schedule: (complete, delayMs) => setTimeout(complete, delayMs),
+    cancel: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+    exit: (code) => process.exit(code),
+  },
+): void {
+  const exitCode = result.ok ? 0 : 1;
+  let finished = false;
+  let timer: unknown;
+  const finish = (): void => {
+    if (finished) return;
+    finished = true;
+    if (timer !== undefined) runtime.cancel(timer);
+    runtime.exit(exitCode);
+  };
+  timer = runtime.schedule(finish, CLI_OUTPUT_FLUSH_GRACE_MS);
+  runtime.write(serializeResult(result, { raw }), finish);
+}
+
 if (isCliEntryPoint(import.meta.url, process.argv[1])) {
   const argv = process.argv.slice(2);
   const rawOutput = readRawOutputFlag(argv);
-  execute(stripOutputOnlyFlags(argv)).then((result) => {
-    printResult(result, { raw: rawOutput });
-    process.exitCode = result.ok ? 0 : 1;
-  });
+  void execute(stripOutputOnlyFlags(argv)).then(
+    (result) => finishCliProcess(result, rawOutput),
+    (error) => finishCliProcess(failure(createRequestId(), "COMMAND_FAILED", error instanceof Error ? error.message : String(error), ["Run unity_cli --help for available commands."]), rawOutput),
+  );
 }
 
 /** 读取只影响 stdout 序列化的全局 raw 开关，支持放在命令前后。 */

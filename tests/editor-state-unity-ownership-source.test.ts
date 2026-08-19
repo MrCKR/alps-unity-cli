@@ -48,9 +48,9 @@ test("private editor-state snapshot is explicitly registered but absent from pub
   assert.match(sampler, /"progress", SnapshotProgress\(\)/);
   assert.match(sampler, /"blockers", new List<object>\(\)/);
   assert.match(coordinator, /if \(IsEditorStateSnapshotCommand\(command\)\) return true;/);
-  assert.match(instanceRegistry, /"lastUnitySnapshot", SampleEditorStateSnapshot\(now\)/, "heartbeat registry publication must contain only the private sampler result");
-  assert.match(instanceRegistry, /"progress", SnapshotProgress\(\)/, "heartbeat progress must remain a session field");
-  assert.match(instanceRegistry, /"blockers", new List<object>\(\)/, "heartbeat blockers must remain a session field");
+  assert.match(instanceRegistry, /"lastUnitySnapshot", SampleEditorStateSnapshot\(now\)/, "Registry publication must contain only the private sampler result");
+  assert.match(instanceRegistry, /"progress", SnapshotProgress\(\)/, "publication progress must remain a session field");
+  assert.match(instanceRegistry, /"blockers", new List<object>\(\)/, "publication blockers must remain a session field");
   assert.match(http, /var allowedDuringCompileOrImport =[\s\S]*IsEditorStateSnapshotCommand\(request\.Command\)/);
   assert.match(http, /var allowedDuringPlayModeTransition =[\s\S]*IsEditorStateSnapshotCommand\(request\.Command\)/);
   assert.doesNotMatch(http, /x-unity-cli-invocation-origin|internalOrigin|invocationOrigin/);

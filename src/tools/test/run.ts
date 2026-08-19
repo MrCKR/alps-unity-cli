@@ -3,6 +3,7 @@ import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
+import { rejectUnavailableEditorState } from "../editor/state.js";
 import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 
 export interface TestRunRequest { platform?: "EditMode" | "PlayMode"; testNames?: string[]; groupNames?: string[]; categoryNames?: string[]; assemblyNames?: string[]; xml?: boolean; }
@@ -20,8 +21,8 @@ export default defineTool<TestRunRequest, TestRunResult>({
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
     const state = await waitForEditorTransitionEnd(context, childId(context.requestId, "_test_state"), deadline);
     if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot start tests.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
-    if (state.status === "offline") throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "test.run requires an open Unity Editor.", ["Open the selected Unity project and retry."]);
-    if (state.status === "conflict" || !state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "test.run could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
+    rejectUnavailableEditorState(state, "test.run");
+    if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "test.run could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
     const flags: BridgeFlags = { ...(context.flags ?? {}), instance: state.identity.instanceId };
     const execute = withTransitionBinding({ mode: "execute", mutation: true, absoluteDeadlineMs: deadline });
     const observe = withTransitionBinding({ mode: "read", mutation: false, absoluteDeadlineMs: deadline });

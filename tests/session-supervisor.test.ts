@@ -24,16 +24,16 @@ function observer(outcome: "observed-empty" | "observed-blocked" | "unproven" | 
   } } as unknown as EditorBlockerObserver;
 }
 
-function selection(status: UnityInstanceStatus, generation = 1, target: "editor" | "runtime" = "editor"): InstanceSelection {
+function selection(status: UnityInstanceStatus, generation = 1, target: "editor" | "runtime" = "editor", sessionId = SESSION_ID): InstanceSelection {
   const session = {
     target,
-    sessionId: SESSION_ID,
-    ...(target === "editor" ? { editorSessionId: SESSION_ID } : { runtimeSessionId: SESSION_ID, executablePath: process.execPath, buildId: "a".repeat(32) }),
+    sessionId,
+    ...(target === "editor" ? { editorSessionId: sessionId } : { runtimeSessionId: sessionId, executablePath: process.execPath, buildId: "a".repeat(32) }),
     processId: 101,
     processStartedAt: "2026-07-16T00:00:00.000Z",
-    lastHeartbeatAt: "2026-07-16T00:00:01.000Z",
-    claimVerification: "verified" as const,
-    state: status === "blocked" ? "blocked" as const : status === "ready" ? "ready" as const : "transitioning" as const,
+    publishedAt: "2026-07-16T00:00:01.000Z",
+    publicationSequence: generation,
+    lifecycle: status === "blocked" ? "blocked" as const : status === "ready" ? "ready" as const : "transitioning" as const,
     lastUnitySnapshot: {},
     listener: {
       listenerId: `listener-${generation.toString(16).padStart(32, "0")}`,
@@ -65,10 +65,10 @@ function selection(status: UnityInstanceStatus, generation = 1, target: "editor"
     sessions: [session],
     activeSession: session,
     allSessions: [session],
-    sessionId: SESSION_ID,
-    ...(target === "editor" ? { editorSessionId: SESSION_ID } : { runtimeSessionId: SESSION_ID }),
+    sessionId,
+    ...(target === "editor" ? { editorSessionId: sessionId } : { runtimeSessionId: sessionId }),
     processId: 101,
-    lastHeartbeatAt: session.lastHeartbeatAt,
+    publishedAt: session.publishedAt,
     lastUnitySnapshot: {},
     progress: session.progress,
     blockers: session.blockers,
@@ -226,26 +226,111 @@ test("query transport recovery rebinds generation without rebuilding request", a
   assert.equal(now, 10_100);
 });
 
-test("journal-backed mutation redelivery reuses exact bytes and recovers terminal result", async () => {
+test("same-session mutation redelivery reuses exact bytes, deadline, and durable effect", async () => {
   let now = 20_000;
-  const bodies: string[] = [];
+  let generation = 1;
+  let effects = 0;
+  const posts: Array<{ sessionId: string; generation: number; body: string; deadline: number; remainingMs: number }> = [];
   const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
     now: () => now,
     sleep: async (ms) => { now += ms; },
-    select: async () => selection("ready", 1),
-    post: async (_binding, request) => {
-      bodies.push(request.body);
-      if (bodies.length === 1) throw new Error("response lost after request upload");
+    select: async () => selection("ready", generation),
+    post: async (binding, request, remainingMs) => {
+      posts.push({ sessionId: binding.sessionId, generation: binding.listenerGeneration, body: request.body, deadline: request.absoluteDeadlineMs, remainingMs });
+      if (posts.length === 1) {
+        effects += 1;
+        generation = 2;
+        throw new Error("response lost after request upload");
+      }
       return {
         response: { ok: true, requestId: request.payload.requestId, data: { completed: true } },
-        attestation: attestation(1),
+        attestation: attestation(2),
       };
     },
   });
 
   const response = await supervisor.execute({ requestId: "req_mutation", command: "project-tool.run", input: {}, timeoutMs: 5_000, mutation: true });
   assert.equal(response.ok, true);
-  assert.deepEqual(bodies, [bodies[0], bodies[0]]);
+  assert.deepEqual(posts.map((post) => post.sessionId), [SESSION_ID, SESSION_ID]);
+  assert.deepEqual(posts.map((post) => post.generation), [1, 2]);
+  assert.equal(posts[0].body, posts[1].body);
+  assert.equal(posts[0].deadline, 25_000);
+  assert.equal(posts[1].deadline, posts[0].deadline);
+  assert.ok(posts[1].remainingMs < posts[0].remainingMs);
+  assert.equal(effects, 1);
+});
+
+test("cross-session mutation stops after one POST and returns bounded outcome unknown", async () => {
+  let now = 24_000;
+  let selections = 0;
+  let effects = 0;
+  const posts: Array<{ sessionId: string; generation: number; body: string; deadline: number }> = [];
+  const replacementSessionId = `session-${"c".repeat(64)}`;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => now,
+    sleep: async (ms) => { now += ms; },
+    select: async () => selection("ready", selections++ === 0 ? 1 : 2, "editor", selections === 1 ? SESSION_ID : replacementSessionId),
+    observer: observer("unproven"),
+    post: async (binding, request) => {
+      posts.push({ sessionId: binding.sessionId, generation: binding.listenerGeneration, body: request.body, deadline: request.absoluteDeadlineMs });
+      effects += 1;
+      throw new Error("response lost after request upload");
+    },
+  });
+
+  await assert.rejects(
+    supervisor.execute({ requestId: "req_cross_session_fence", command: "project-tool.run", input: {}, timeoutMs: 1_000, mutation: true }),
+    (error: unknown) => {
+      assert.ok(error instanceof SessionSupervisorError);
+      assert.equal(error.code, "E_EXECUTION_TIMEOUT");
+      assert.deepEqual(Object.keys(error.details ?? {}).sort(), ["dispatch", "instanceId", "outcome", "reason", "replay"]);
+      assert.equal(error.details?.outcome, "unknown");
+      assert.equal(error.details?.dispatch, "may-have-started");
+      assert.equal(error.details?.replay, "new-decision-required");
+      assert.match(String(error.details?.reason), /session changed/);
+      assert.deepEqual(error.nextActions, [
+        "Run unity_cli tools run editor.state to observe the selected Editor before making a new submission decision.",
+        "Use the affected capability's read-only Tool or artifact readback to determine whether the prior mutation took effect.",
+      ]);
+      assert.doesNotMatch(error.nextActions.join(" "), /dialog|retry|repeat|replay/i);
+      return true;
+    },
+  );
+  assert.deepEqual(posts.map((post) => post.sessionId), [SESSION_ID]);
+  assert.deepEqual(posts.map((post) => post.generation), [1]);
+  assert.equal(posts[0].deadline, 25_000);
+  assert.equal(effects, 1);
+  assert.ok(now < 25_000);
+});
+
+test("read transport recovery may rerun on a replacement Editor session", async () => {
+  let now = 26_000;
+  let currentSessionId = SESSION_ID;
+  let generation = 1;
+  const posts: Array<{ sessionId: string; generation: number; body: string; deadline: number }> = [];
+  const replacementSessionId = `session-${"d".repeat(64)}`;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => now,
+    sleep: async (ms) => { now += ms; },
+    select: async () => selection("ready", generation, "editor", currentSessionId),
+    post: async (binding, request) => {
+      posts.push({ sessionId: binding.sessionId, generation: binding.listenerGeneration, body: request.body, deadline: request.absoluteDeadlineMs });
+      if (posts.length === 1) {
+        currentSessionId = replacementSessionId;
+        generation = 2;
+        throw new Error("read response lost before session replacement");
+      }
+      return { response: { ok: true, requestId: request.payload.requestId, data: { items: ["fresh"] } }, attestation: { ...attestation(2), sessionId: replacementSessionId } };
+    },
+  });
+
+  const response = await supervisor.read({ requestId: "req_cross_session_read", command: "project-tool.run", input: {}, timeoutMs: 2_000 });
+  assert.equal(response.ok, true);
+  assert.deepEqual(posts.map((post) => post.sessionId), [SESSION_ID, replacementSessionId]);
+  assert.deepEqual(posts.map((post) => post.generation), [1, 2]);
+  assert.equal(posts[0].body, posts[1].body);
+  assert.equal(posts[0].deadline, posts[1].deadline);
+  assert.ok(now < 28_000);
 });
 
 test("mutation without recoverable terminal becomes execution timeout at the one deadline", async () => {

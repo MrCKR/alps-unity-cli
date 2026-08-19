@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { execute } from "../src/cli.js";
+import { CLI_OUTPUT_FLUSH_GRACE_MS, execute, finishCliProcess } from "../src/cli.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -18,7 +20,10 @@ test("help and version use the public success envelope", async () => {
   const help = await execute(["--help"], runtime);
   assert.ok(help.ok);
   assert.match(JSON.stringify(help.data), /tools/);
-  assert.doesNotMatch(JSON.stringify(help.data), /\b(?:jobs|batch)\b/);
+  assert.match(JSON.stringify(help.data), /examples\[\]\.input/);
+  assert.match(JSON.stringify(help.data), /instances list \[--all\]/);
+  assert.match(String((help.data as { note?: string }).note), /pipe-separated tools search keywords in single quotes/);
+  assert.doesNotMatch(JSON.stringify(help.data), /examples\[\]\.argv|\b(?:jobs|batch)\b/);
 
   const version = await execute(["--version"], runtime);
   assert.ok(version.ok);
@@ -104,6 +109,76 @@ test("unknown commands and options return a closed public error envelope", async
     const fingerprintMode = await execute(argv, runtime);
     assert.ok(!fingerprintMode.ok);
     assert.equal(fingerprintMode.error?.code, "E_UNKNOWN_OPTION");
+  }
+});
+
+test("CLI exit waits for envelope flush and uses one bounded fallback", () => {
+  const result = { ok: true as const, requestId: "req_exit_fixture", data: { value: 1 } };
+  let output = "";
+  let flush: (() => void) | undefined;
+  let fallback: (() => void) | undefined;
+  let cancelled = 0;
+  const exits: number[] = [];
+
+  finishCliProcess(result, true, {
+    write: (text, complete) => { output = text; flush = complete; },
+    schedule: (complete, delayMs) => {
+      assert.equal(delayMs, CLI_OUTPUT_FLUSH_GRACE_MS);
+      fallback = complete;
+      return "timer";
+    },
+    cancel: (timer) => { assert.equal(timer, "timer"); cancelled += 1; },
+    exit: (code) => { exits.push(code); },
+  });
+
+  assert.equal(output, "{\"ok\":true,\"requestId\":\"req_exit_fixture\",\"data\":{\"value\":1}}\n");
+  assert.deepEqual(exits, []);
+  flush?.();
+  assert.deepEqual(exits, [0]);
+  assert.equal(cancelled, 1);
+  fallback?.();
+  assert.deepEqual(exits, [0]);
+
+  let fallbackOnly: (() => void) | undefined;
+  const fallbackExits: number[] = [];
+  finishCliProcess({ ok: false, requestId: "req_timeout_fixture", error: { code: "E_EXECUTION_TIMEOUT", message: "timeout", nextActions: [], transient: false, retryAfterMs: 0 } }, true, {
+    write: () => undefined,
+    schedule: (complete) => { fallbackOnly = complete; return "fallback-timer"; },
+    cancel: () => undefined,
+    exit: (code) => { fallbackExits.push(code); },
+  });
+  fallbackOnly?.();
+  assert.deepEqual(fallbackExits, [1]);
+});
+
+test("compiled CLI exits after one envelope even when a preloaded handle remains active", (context) => {
+  const cliPath = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+  if (!existsSync(cliPath)) {
+    context.skip("compiled CLI is verified by build:test output");
+    return;
+  }
+  const preloadPath = join(tmpdir(), `unity-cli-lingering-handle-${process.pid}-${Date.now()}.cjs`);
+  writeFileSync(preloadPath, "setInterval(() => {}, 1000);\n", "utf8");
+  const startedAt = Date.now();
+  try {
+    const result = spawnSync(process.execPath, [cliPath, "--raw", "--help"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      timeout: 5_000,
+      env: {
+        ...process.env,
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ""}--require=${preloadPath}`,
+        UNITY_CLI_ALLOW_NON_WINDOWS: "1",
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.signal, null);
+    assert.ok(Date.now() - startedAt < 3_000);
+    const lines = result.stdout.trim().split(/\r?\n/);
+    assert.equal(lines.length, 1);
+    assert.equal((JSON.parse(lines[0]) as { ok: boolean }).ok, true);
+  } finally {
+    unlinkSync(preloadPath);
   }
 });
 

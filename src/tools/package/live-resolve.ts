@@ -6,6 +6,7 @@ import { withTransitionBinding, type BridgeResponse } from "../../bridge/types.j
 import { defaultDataDir } from "../../platform.js";
 import type { ToolContext } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
+import { rejectUnavailableEditorState } from "../editor/state.js";
 import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 
 export interface LiveResolvedPackage {
@@ -235,7 +236,7 @@ async function waitForTerminal<T>(context: ToolContext, binding: LivePackageBind
       if (root.terminal) return terminalResult<T>(context.requestId, root);
     } catch (error) {
       const structured = error instanceof StructuredToolError ? error : undefined;
-      if (structured && new Set(["E_EDITOR_BLOCKED", "E_UNITY_BLOCKED", "E_UNITY_TRANSITIONING", "E_UNITY_TRANSITION_TIMEOUT", "E_INSTANCE_NOT_RUNNING", "E_INSTANCE_CONFLICT", "E_EDITOR_SESSION_REPLACED", "E_EXECUTION_TIMEOUT"]).has(structured.code)) {
+      if (structured && new Set(["E_EDITOR_BLOCKED", "E_UNITY_BLOCKED", "E_UNITY_TRANSITIONING", "E_UNITY_TRANSITION_TIMEOUT", "E_UNITY_UNRESPONSIVE", "E_INSTANCE_NOT_RUNNING", "E_INSTANCE_UNVERIFIABLE", "E_INSTANCE_CONFLICT", "E_EDITOR_SESSION_REPLACED", "E_EXECUTION_TIMEOUT"]).has(structured.code)) {
         const blockers = blockersFromDetails(structured.details);
         throw new StructuredToolError(
           "E_EXECUTION_TIMEOUT",
@@ -286,8 +287,8 @@ export async function bindLivePackageProject(context: ToolContext, operation: st
   const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
   const state = await waitForEditorTransitionEnd(context, childRequestId(context.requestId, "package-state"), deadline);
   if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", `package.${operation} cannot start while the Editor is blocked.`, ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
-  if (state.status === "offline") throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", `package.${operation} requires an open Unity Editor.`, ["Open the selected Unity project and retry."]);
-  if (state.status === "conflict" || !state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", `package.${operation} could not bind one verified Editor session.`, ["Inspect editor.state and retry after the session is stable."]);
+  rejectUnavailableEditorState(state, `package.${operation}`);
+  if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", `package.${operation} could not bind one verified Editor session.`, ["Inspect editor.state and retry after the session is stable."]);
   context.projectPath = state.identity.canonicalProjectPath;
   return { instanceId: state.identity.instanceId, expectedEditorSessionId: state.session.editorSessionId };
 }
@@ -335,7 +336,7 @@ function bridgeError(response: Extract<BridgeResponse, { ok: false }>): Structur
 /** 调用终态前的 selector、transport 与 blocker 失败统一为 timeout。 */
 function isAcceptedObservationFailure(error: unknown): boolean {
   return error instanceof StructuredToolError && new Set([
-    "E_EDITOR_BLOCKED", "E_UNITY_BLOCKED", "E_UNITY_TRANSITIONING", "E_UNITY_TRANSITION_TIMEOUT", "E_INSTANCE_NOT_RUNNING", "E_INSTANCE_CONFLICT",
+    "E_EDITOR_BLOCKED", "E_UNITY_BLOCKED", "E_UNITY_TRANSITIONING", "E_UNITY_TRANSITION_TIMEOUT", "E_UNITY_UNRESPONSIVE", "E_INSTANCE_NOT_RUNNING", "E_INSTANCE_UNVERIFIABLE", "E_INSTANCE_CONFLICT",
     "E_EDITOR_SESSION_REPLACED", "E_EXECUTION_TIMEOUT", "BRIDGE_CONNECTION_FAILED", "E_BRIDGE_RESPONSE_INVALID", "E_BRIDGE_RESPONSE_MISMATCH"
   ]).has(error.code);
 }

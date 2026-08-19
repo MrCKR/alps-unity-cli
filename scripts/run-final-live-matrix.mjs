@@ -4,12 +4,7 @@ import { appendFile, lstat, mkdir, open, readFile, readdir, rename, rm, unlink, 
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { fileURLToPath } from "node:url";
-
-const FLAGS = new Set(["--dry-run", "--runtime", "--timeout-ms", "--instance", "--artifact-dir", "--raw"]);
-const VALUE_FLAGS = new Set(["--timeout-ms", "--instance", "--artifact-dir"]);
-const REMOVED_EXECUTION_FLAGS = new Set(["--job", "--wait", "--wait-timeout-ms"]);
-const REMOVED_CAPABILITY_ROUTING_FLAGS = new Set(["--project", "--unity"]);
+import { fileURLToPath, pathToFileURL } from "node:url";
 const FIXTURES = ["concurrency", "timeout_cancel", "stale_target", "domain_reload", "shell_quoting", "prefab_stage", "ui_cache"];
 // 会触发 PackageManager.Resolve 的文件 mutation；UPM Resolve 在 PlayMode 下无法完成。
 // editor.compile 的公开 PlayMode 拒绝码是契约登记的专属码（docs/error-codes.md），不是框架通用码。
@@ -20,7 +15,17 @@ export const PLAYMODE_RESOLVE_BLOCKED_TOOLS = new Set([
   "package.deploy", "package.embed", "package.install", "package.remove", "package.resolve", "package.restore",
   "package.scoped-registry.add", "package.scoped-registry.remove"
 ]);
-const REQUIRED_PROJECT_TOOL_NAMES = Object.freeze(["validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"]);
+// Dev Matrix 的 project/attribute Tool 是固定 fixture inventory；公开 descriptor 不暴露内部 source。
+const REQUIRED_PROJECT_TOOL_NAMES = Object.freeze([
+  "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status",
+  "UnityPipeline_test", "UnityPipeline_validation.official.any-output", "UnityPipeline_validation.official.dictionary",
+  "UnityPipeline_validation.official.jobject", "UnityPipeline_validation.official.result-getter-throw",
+  "UnityPipeline_validation.official.runtime", "UnityPipeline_validation.official.structured",
+  "UnityPipeline_validation.official.sync", "UnityPipeline_validation.official.task",
+  "UnityPipeline_validation.official.throw", "UnityPipeline_validation.official.timeout",
+  "UnityPipeline_validation.official.timeout-status"
+]);
+const REQUIRED_PROJECT_TOOL_NAME_SET = new Set(REQUIRED_PROJECT_TOOL_NAMES);
 const REMOVED_PUBLIC_TOOL_NAMES = Object.freeze(["build.status", "build.cancel"]);
 /** These Tools require values returned by a fresh read Tool observation, not descriptor placeholders. */
 export const EXTERNAL_STATE_DEPENDENT_TOOL_NAMES = Object.freeze(["editor.dialog.click"]);
@@ -77,6 +82,34 @@ const TRANSIENT_MAX_ATTEMPTS = 120;
 const plain = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const nameOf = (v) => typeof v === "string" ? v : v?.name ?? v?.key;
 const descriptorOf = (e) => e?.data?.descriptor ?? e?.data;
+
+/** 从实际 CLI entry 同级 build 产物读取内部结果 schema，不猜测或混用另一编译树。 */
+export async function loadInternalResultSchemas(cliEntry = resolve("dist", "cli.js")) {
+  const root = dirname(resolve(cliEntry));
+  const metadataPath = resolve(root, "tools", "metadata", "index.js");
+  const catalogPath = resolve(root, "tools", "catalog.js");
+  if (!await lstat(metadataPath).then(() => true).catch(() => false)
+      || !await lstat(catalogPath).then(() => true).catch(() => false)) {
+    throw new Error(`Compiled Tool metadata is missing beside CLI entry ${resolve(cliEntry)}.`);
+  }
+  const [metadata, catalog] = await Promise.all([
+    import(pathToFileURL(metadataPath).href),
+    import(pathToFileURL(catalogPath).href),
+  ]);
+  const tools = [...new Map([...metadata.builtinToolMetadata(), ...catalog.staticBridgeToolMetadata()].map((tool) => [tool.name, tool])).values()];
+  const schemas = new Map();
+  for (const tool of tools) {
+    if (!plain(tool.outputSchema)) throw new Error(`Internal Tool ${tool.name} is missing outputSchema.`);
+    schemas.set(tool.name, tool.outputSchema);
+  }
+  return schemas;
+}
+
+/** 从 runner CLI 配置解析实际编译入口；缺省仍绑定 package 的 dist/cli.js。 */
+function compiledCliEntry(options) {
+  return [options.cli, ...(options.cli_args ?? [])].find((value) => typeof value === "string" && /(?:^|[\\/])cli\.js$/i.test(value)) ?? resolve("dist", "cli.js");
+}
+
 export function parseOptions(argv) {
   const o = { resume: false, include_playmode: false, controls_only: false, timeoutMs: 120000, fixture: {}, cli_args: [], capabilities: [] };
   for (let i = 0; i < argv.length; i += 1) {
@@ -101,40 +134,42 @@ export function parseOptions(argv) {
   return o;
 }
 
-/** Parses public argv and separates allowed execution flags from JSON input. */
-export function parsePublicExampleArgv(example, kind, expectedName) {
-  const argv = Array.isArray(example) ? example : example?.argv;
-  if (!Array.isArray(argv) || argv.some((v) => typeof v !== "string")) throw new Error("Descriptor example must contain a string argv array.");
-  const start = argv.findIndex((v) => v === "tools"); const command = argv.slice(start < 0 ? 0 : start);
-  const expected = ["tools", "run", expectedName];
-  if (command.slice(0, 3).join("\0") !== expected.join("\0")) throw new Error(`Example must use public ${expected.join(" ")} argv.`);
-  let input = {}; const flags = [];
-  for (let i = 3; i < command.length; i += 1) {
-    const token = command[i];
-    if (token === "--input") { if (++i >= command.length) throw new Error("--input requires JSON."); input = JSON.parse(command[i]); }
-    else if (token.startsWith("--input=")) input = JSON.parse(token.slice(8));
-    else if (token === "--args" || token === "--dryRun" || token.startsWith("--args=") || token.startsWith("--dryRun=")) throw new Error("Non-contract args/dryRun wire fields are forbidden.");
-    else if (REMOVED_EXECUTION_FLAGS.has(token) || [...REMOVED_EXECUTION_FLAGS].some((flag) => token.startsWith(`${flag}=`))) throw new Error(`Removed execution flag is forbidden: ${token}.`);
-    else if (REMOVED_CAPABILITY_ROUTING_FLAGS.has(token) || [...REMOVED_CAPABILITY_ROUTING_FLAGS].some((flag) => token.startsWith(`${flag}=`))) throw new Error(`Removed capability routing flag is forbidden: ${token}.`);
-    else if (FLAGS.has(token)) { flags.push(token); if (VALUE_FLAGS.has(token)) { if (++i >= command.length) throw new Error(`${token} requires a value.`); flags.push(command[i]); } }
-    else if ([...FLAGS].some((f) => token.startsWith(`${f}=`))) flags.push(token);
-    else if (token.startsWith("--")) {
-      const key = token.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
-      if (!key) throw new Error("Business flag name cannot be empty.");
-      const next = command[i + 1];
-      if (next !== undefined && !next.startsWith("--")) { input[key] = exampleFlagValue(next); i += 1; }
-      else input[key] = true;
+/** 将公开 structured example 映射为真实 tools run input 与命令层控制项。 */
+export function parsePublicExample(example, kind, expectedName) {
+  const subject = `${kind} ${expectedName}`;
+  if (!plain(example) || !plain(example.input)) throw new Error(`${subject} example must contain an object input.`);
+  const unexpected = Object.keys(example).filter((key) => !["description", "input", "execution"].includes(key));
+  if (unexpected.length > 0) throw new Error(`${subject} example contains unsupported fields: ${unexpected.join(", ")}.`);
+  if (Object.hasOwn(example.input, "dryRun")) throw new Error(`${subject} input cannot contain the execution-only dryRun field.`);
+  const flags = [];
+  if (example.execution !== undefined) {
+    if (!plain(example.execution)) throw new Error(`${subject} execution must be an object.`);
+    const unexpectedExecution = Object.keys(example.execution).filter((key) => !["dryRun", "timeoutMs"].includes(key));
+    if (unexpectedExecution.length > 0) throw new Error(`${subject} execution contains unsupported fields: ${unexpectedExecution.join(", ")}.`);
+    if (example.execution.dryRun !== undefined && typeof example.execution.dryRun !== "boolean") throw new Error(`${subject} execution.dryRun must be boolean.`);
+    if (example.execution.dryRun === true) flags.push("--dry-run");
+    if (example.execution.timeoutMs !== undefined) {
+      if (!Number.isSafeInteger(example.execution.timeoutMs) || example.execution.timeoutMs <= 0) throw new Error(`${subject} execution.timeoutMs must be a positive integer.`);
+      flags.push("--timeout-ms", String(example.execution.timeoutMs));
     }
-    else throw new Error(`Unsupported positional example token: ${token}`);
   }
-  if (!plain(input) || Object.hasOwn(input, "dryRun")) throw new Error("Input must be an object without the non-contract dryRun field.");
-  return { input, flags };
+  return { input: example.input, flags };
 }
-function exampleFlagValue(value) {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) return Number(value);
-  return value;
+
+/** 检查 live describe 只返回当前精简公开字段。 */
+export function publicDescriptorIssue(descriptor) {
+  if (!plain(descriptor) || typeof descriptor.name !== "string" || typeof descriptor.description !== "string" || !plain(descriptor.inputSchema)) return "Describe returned an incomplete invocation descriptor.";
+  const forbidden = ["outputSchema", "group", "permissions", "summary", "source", "availabilityScope", "contractProfile", "completionContract", "handler"];
+  const leaked = forbidden.filter((field) => Object.hasOwn(descriptor, field));
+  if (leaked.length > 0) return `Describe leaked non-public fields: ${leaked.join(", ")}.`;
+  if (descriptor.available === true) return "Describe must omit default available:true.";
+  if (descriptor.available === false && typeof descriptor.unavailableReason !== "string") return "Unavailable descriptor must include unavailableReason.";
+  if (descriptor.examples !== undefined) {
+    if (!Array.isArray(descriptor.examples)) return "Descriptor examples must be an array.";
+    try { for (const example of descriptor.examples) parsePublicExample(example, "tool", descriptor.name); }
+    catch (error) { return error instanceof Error ? error.message : String(error); }
+  }
+  return null;
 }
 /** Recursively checks required fields and primitive/object/array schema types. */
 function businessPayload(e) { return e?.data; }
@@ -231,8 +266,8 @@ class Matrix {
     this.prior = new Map();
     this.expected = new Set();
     this.discovered = { tools: [] };
-    this.discoveredSources = { toolSources: new Map() };
     this.descriptors = new Map();
+    this.resultSchemas = new Map();
     this.directRecovery = new Map();
     this.firstTerminalFailure = null;
     const tokenMaterial = `${options.build_stamp ?? ""}\0${resolve(options.project)}\0${options.target ?? ""}\0${resolve(options.evidence_dir)}\0${process.pid}\0${Date.now()}`;
@@ -246,6 +281,7 @@ class Matrix {
       const document = JSON.parse(await readFile(this.directRecoveryPath, "utf8"));
       for (const [id, entry] of Object.entries(document?.cases ?? {})) if (plain(entry)) this.directRecovery.set(id, entry);
     } catch {}
+    this.resultSchemas = await loadInternalResultSchemas(compiledCliEntry(this.o));
     if (!this.o.resume) await writeFile(this.jsonl, "");
     else {
       try {
@@ -400,17 +436,16 @@ export async function loadRuntimeInventoryBaseline() {
   return { tools: [...new Set(completion.tools.map((value) => value.toolName))].sort() };
 }
 
-/** project-defined fixtures 可作为明确额外项；built-in/Extension inventory 必须与当前 contracts 精确一致。 */
+/** Dev project fixtures 是当前 matrix 的固定额外 inventory；产品 Tool 必须与 contracts 精确一致。 */
 export function runtimeInventoryIssues(discovered, baseline) {
   const issues = [];
   const actualTools = new Set(discovered.tools ?? []);
   const expectedTools = new Set(baseline.tools ?? []);
-  const sourceOf = (sources, name) => sources instanceof Map ? sources.get(name) : sources?.[name];
   const missingTools = [...expectedTools].filter((name) => !actualTools.has(name));
-  const unexpectedTools = [...actualTools].filter((name) => !expectedTools.has(name) && sourceOf(discovered.toolSources, name) !== "project");
+  const unexpectedTools = [...actualTools].filter((name) => !expectedTools.has(name) && !REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
   const missingFrozen = FROZEN_DIRECT_TOOL_NAMES.filter((name) => !actualTools.has(name));
   const removedPresent = REMOVED_PUBLIC_TOOL_NAMES.filter((name) => actualTools.has(name));
-  const missingProjectTools = REQUIRED_PROJECT_TOOL_NAMES.filter((name) => !actualTools.has(name) || sourceOf(discovered.toolSources, name) !== "project");
+  const missingProjectTools = REQUIRED_PROJECT_TOOL_NAMES.filter((name) => !actualTools.has(name));
   if (missingTools.length) issues.push(`Missing current public Tools: ${missingTools.join(", ")}.`);
   if (unexpectedTools.length) issues.push(`Unexpected non-project Tools: ${unexpectedTools.sort().join(", ")}.`);
   if (missingFrozen.length) issues.push(`Missing frozen direct Tools: ${missingFrozen.join(", ")}.`);
@@ -429,7 +464,6 @@ async function discover(m) {
     for (const tool of listed.envelope?.data?.tools ?? []) {
       const name = nameOf(tool); if (!name) continue;
       if (!m.discovered.tools.includes(name)) m.discovered.tools.push(name);
-      m.discoveredSources.toolSources.set(name, tool?.source);
     }
   }
   const ext = await m.call("extensions.list", ["extensions", "list"], (e) => assertSuccess(e, {}));
@@ -437,9 +471,9 @@ async function discover(m) {
   for (const issue of extensionAvailabilityIssues(ext.envelope?.data, doc.envelope?.data)) await m.blocked(`extension.${issue.id}.availability`, issue.reason);
 
   const baseline = await loadRuntimeInventoryBaseline();
-  const inventoryIssues = runtimeInventoryIssues({ ...m.discovered, ...m.discoveredSources }, baseline);
-  const productTools = m.discovered.tools.filter((name) => m.discoveredSources.toolSources.get(name) !== "project");
-  const projectTools = m.discovered.tools.filter((name) => m.discoveredSources.toolSources.get(name) === "project");
+  const inventoryIssues = runtimeInventoryIssues(m.discovered, baseline);
+  const productTools = m.discovered.tools.filter((name) => !REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
+  const projectTools = m.discovered.tools.filter((name) => REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
   await m.call("inventory.current-tree", ["tools", "run", "editor.state", "--input", "{}"], (e) => {
     const envelopeIssue = assertSuccess(e, {});
     return envelopeIssue ?? (inventoryIssues.length > 0 ? inventoryIssues.join(" ") : null);
@@ -454,7 +488,17 @@ async function discover(m) {
     }
   });
 }
-async function getDescriptor(m, kind, name) { const cached = m.descriptors.get(`${kind}:${name}`); if (cached) return cached; const r = await m.call(`${kind}.${name}.describe`, ["tools", "describe", name], (e) => assertSuccess(e, {})); const d = descriptorOf(r.envelope); if (d) m.descriptors.set(`${kind}:${name}`, d); return d; }
+async function getDescriptor(m, kind, name) {
+  const cached = m.descriptors.get(`${kind}:${name}`);
+  if (cached) return cached;
+  const r = await m.call(`${kind}.${name}.describe`, ["tools", "describe", name], (e) => assertSuccess(e, {}) ?? publicDescriptorIssue(descriptorOf(e)));
+  const descriptor = descriptorOf(r.envelope);
+  if (!descriptor) return descriptor;
+  const resultSchema = m.resultSchemas instanceof Map ? m.resultSchemas.get(name) : undefined;
+  const resolved = resultSchema ? { ...descriptor, resultSchema } : descriptor;
+  m.descriptors.set(`${kind}:${name}`, resolved);
+  return resolved;
+}
 function matrixExampleFlags(flags) {
   const result = [];
   const routed = new Set(["--project", "--instance"]);
@@ -494,7 +538,7 @@ const closeTrianglePoints = [
   { x: 0, y: 0, z: 1 }
 ];
 const completionProbe = (target, axis, before, after, tolerance = 0.0001) => ({
-  context: "scene.gameobject",
+  readTool: "scene.gameobject",
   input: { target, includeComponents: false },
   assertions: [{ path: `/gameObject/transform/position/${axis}`, operator: "approx", before, after, tolerance }]
 });
@@ -532,13 +576,24 @@ export const DIRECT_LIVE_CASES = Object.freeze({
       step("assign-controller", "controller.assign", { target: "${target}", controllerPath: "${assetPath}" }),
       step("play-idle", "animation.play", { target: "${target}", state: "Idle", layer: 0, normalizedTime: 0 })
     ],
-    before: [step("state", "animation.state", { target: "${target}", layer: 0 }, { capture: { beforeTargetId: "/data/target/id" } })],
+    before: [
+      readStep("target", "scene.gameobject", { target: "${target}", includeComponents: false }, { capture: { beforeTargetId: "/data/gameObject/id" } }),
+      step("state", "animation.state", { target: "${target}", layer: 0 }, { capture: { beforeCurrentStateHash: "/data/animator/currentState/fullPathHash" } })
+    ],
     invocation: step("invoke", "animator.crossfade", { target: "${target}", state: "Run", duration: 0, layer: 0 }, {
       expect: { equals: { "/data/changed": true, "/data/transition/state": "Run", "/data/transition/layer": 0 }, exists: ["/data/state/currentStateHash", "/data/state/nextStateHash"] },
-      capture: { invocationTargetId: "/data/target/id" }
+      capture: { invocationCurrentStateHash: "/data/state/currentStateHash" }
     }),
-    after: [step("state", "animation.state", { target: "${target}", layer: 0 }, { capture: { afterTargetId: "/data/target/id" } })],
-    invariants: [{ left: "beforeTargetId", operator: "equals", right: "invocationTargetId" }, { left: "invocationTargetId", operator: "equals", right: "afterTargetId" }],
+    after: [
+      readStep("target", "scene.gameobject", { target: "${target}", includeComponents: false }, { capture: { afterTargetId: "/data/gameObject/id" } }),
+      step("state", "animation.state", { target: "${target}", layer: 0 }, { capture: { afterCurrentStateHash: "/data/animator/currentState/fullPathHash" } })
+    ],
+    invariants: [
+      { left: "targetId", operator: "equals", right: "beforeTargetId" },
+      { left: "beforeTargetId", operator: "equals", right: "afterTargetId" },
+      { left: "beforeCurrentStateHash", operator: "notEquals", right: "invocationCurrentStateHash" },
+      { left: "invocationCurrentStateHash", operator: "equals", right: "afterCurrentStateHash" }
+    ],
     cleanup: [deleteTargetStep("delete-target")]
   },
   "code.exec": {
@@ -1013,9 +1068,9 @@ async function cleanupEditorPlay(m, caseId, name, phase, record) {
   if (name !== "editor.play" || phase !== "editor" || record.envelope?.ok !== true) return null;
   const descriptor = await getDescriptor(m, "tool", "editor.stop");
   let input = {};
-  try { input = parsePublicExampleArgv(descriptor?.examples?.[0], "tool", "editor.stop").input; } catch { }
+  try { input = parsePublicExample(descriptor?.examples?.[0], "tool", "editor.stop").input; } catch { }
   const stopArgv = argvFor("tool", "editor.stop", input);
-  const stopRecord = await m.call(`${caseId}.cleanup.stop`, stopArgv, (e, r) => r.exitCode === 0 ? assertSuccess(e, descriptor?.outputSchema ?? {}) : "editor.stop cleanup failed.", { cleanup: { sourceCase: caseId, session: "edit-mode" } });
+  const stopRecord = await m.call(`${caseId}.cleanup.stop`, stopArgv, (e, r) => r.exitCode === 0 ? assertSuccess(e, descriptor?.resultSchema ?? {}) : "editor.stop cleanup failed.", { cleanup: { sourceCase: caseId, session: "edit-mode" } });
   const readyRecord = await m.call(`${caseId}.cleanup.ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
     return r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Editor did not return to ready Edit Mode after cleanup.";
   }, { cleanup: { sourceCase: caseId, session: "edit-mode-ready" }, retryAssertion: true });
@@ -1607,7 +1662,7 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
   for (let attempt = 1; Date.now() < deadline; attempt += 1) {
     const statusTimeoutMs = Math.max(1000, Math.min(10000, deadline - Date.now()));
     const status = await m.call(`${caseId}.cleanup.graphics.bake-status.${attempt}`, argvFor("tool", "graphics.bake-status", {}, ["--timeout-ms", String(statusTimeoutMs)]), (e, r) => {
-      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, statusDescriptor?.outputSchema ?? {}) : `graphics.bake-status cleanup read exited ${r.exitCode}.`;
+      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, statusDescriptor?.resultSchema ?? {}) : `graphics.bake-status cleanup read exited ${r.exitCode}.`;
       return issue ?? (typeof e?.data?.baking === "boolean" ? null : "graphics.bake-status did not return a boolean baking state.");
     }, { cleanup: { sourceCase: caseId, capability: "graphics.bake-status", artifactState: true, attempt } }, project);
     stopAfterTerminalFailure(status);
@@ -1636,7 +1691,7 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
   if (!refreshDescriptor) return m.failed(`${caseId}.cleanup.asset.refresh.descriptor`, "asset.refresh descriptor is unavailable before bake cleanup mutation.", { cleanup: { sourceCase: caseId, artifactState: true } });
   for (const path of plan.deleteAssets) {
     const deleted = await m.call(`${caseId}.cleanup.asset.delete.${createHash("sha256").update(path).digest("hex").slice(0, 12)}`, argvFor("tool", "asset.delete", { path }, []), (e, r) => {
-      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, deleteDescriptor?.outputSchema ?? {}) : `asset.delete cleanup exited ${r.exitCode}.`;
+      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, deleteDescriptor?.resultSchema ?? {}) : `asset.delete cleanup exited ${r.exitCode}.`;
       return issue ?? (e?.data?.asset?.exists === false ? null : `asset.delete did not prove ${path} absent.`);
     }, { cleanup: { sourceCase: caseId, capability: "asset.delete", path, artifactState: true } }, project);
     stopAfterTerminalFailure(deleted);
@@ -1660,7 +1715,7 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
 
   for (const path of plan.refreshAssets) {
     const refreshed = await m.call(`${caseId}.cleanup.asset.refresh.${createHash("sha256").update(path).digest("hex").slice(0, 12)}`, argvFor("tool", "asset.refresh", { path, forceUpdate: true }), (e, r) => {
-      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, refreshDescriptor?.outputSchema ?? {}) : `asset.refresh cleanup exited ${r.exitCode}.`;
+      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, refreshDescriptor?.resultSchema ?? {}) : `asset.refresh cleanup exited ${r.exitCode}.`;
       return issue ?? (e?.data?.path === path && e?.data?.refreshed === true ? null : `asset.refresh did not prove ${path} reimported.`);
     }, { cleanup: { sourceCase: caseId, capability: "asset.refresh", path, artifactState: true } }, project);
     stopAfterTerminalFailure(refreshed);
@@ -1705,7 +1760,7 @@ async function cleanupOwnedPackageCase(m, caseId, name, record, flags, project) 
 
     const resolveDescriptor = await getDescriptor(m, "tool", "package.resolve");
     const resolved = await m.call(`${caseId}.cleanup.package.resolve`, argvFor("tool", "package.resolve", {}, []), (e, r) => {
-      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, resolveDescriptor?.outputSchema ?? {}) : `package.resolve cleanup exited ${r.exitCode}.`;
+      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, resolveDescriptor?.resultSchema ?? {}) : `package.resolve cleanup exited ${r.exitCode}.`;
       if (issue) return issue;
       const restored = e?.data?.packages?.find((entry) => entry?.name === target.packageId);
       return restored?.source === "registry" ? null : `package.resolve did not restore ${target.packageId} to registry source.`;
@@ -1719,7 +1774,7 @@ async function cleanupOwnedPackageCase(m, caseId, name, record, flags, project) 
 
     const infoDescriptor = await getDescriptor(m, "tool", "package.info");
     return m.call(`${caseId}.cleanup.package.info`, argvFor("tool", "package.info", { name: target.packageId, project }, []), (e, r) => {
-      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, infoDescriptor?.outputSchema ?? {}) : `package.info cleanup readback exited ${r.exitCode}.`;
+      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, infoDescriptor?.resultSchema ?? {}) : `package.info cleanup readback exited ${r.exitCode}.`;
       if (issue) return issue;
       return e?.data?.package?.name === target.packageId && e.data.package.source === "registry"
         ? null
@@ -1737,7 +1792,7 @@ async function cleanupOwnedPackageCase(m, caseId, name, record, flags, project) 
   if (!cleanup) return null;
   const descriptor = await getDescriptor(m, "tool", cleanup.name);
   return m.call(`${caseId}.cleanup.${cleanup.name}`, argvFor("tool", cleanup.name, cleanup.input, []), (e, r) => {
-    return r.exitCode === 0 ? assertPositiveSuccess(e, descriptor?.outputSchema ?? {}) : `${cleanup.name} cleanup exited ${r.exitCode}.`;
+    return r.exitCode === 0 ? assertPositiveSuccess(e, descriptor?.resultSchema ?? {}) : `${cleanup.name} cleanup exited ${r.exitCode}.`;
   }, { cleanup: { sourceCase: caseId, capability: cleanup.name, packageState: true } }, project);
 }
 
@@ -1756,9 +1811,9 @@ async function setCasePlayMode(m, caseId, playing) {
   const name = playing ? "editor.play" : "editor.stop";
   const descriptor = await getDescriptor(m, "tool", name);
   let example;
-  try { example = parsePublicExampleArgv(descriptor?.examples?.[0], "tool", name); }
+  try { example = parsePublicExample(descriptor?.examples?.[0], "tool", name); }
   catch (error) { await m.failed(`control.play-baseline.${caseId}.${name}`, `Transition example is invalid: ${error.message}`); return false; }
-  const transition = await m.call(`control.play-baseline.${caseId}.${name}`, argvFor("tool", name, example.input, example.flags), (e, r) => r.exitCode === 0 ? assertSuccess(e, descriptor.outputSchema) : `${name} baseline transition exited ${r.exitCode}.`, { baseline: { sourceCase: caseId, expectedPlaying: playing } });
+  const transition = await m.call(`control.play-baseline.${caseId}.${name}`, argvFor("tool", name, example.input, example.flags), (e, r) => r.exitCode === 0 ? assertSuccess(e, descriptor.resultSchema ?? {}) : `${name} baseline transition exited ${r.exitCode}.`, { baseline: { sourceCase: caseId, expectedPlaying: playing } });
   if (transition.assertion?.status !== "PASS") return false;
   const ready = await m.call(`control.play-baseline.${caseId}.${name}.ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
     return r.exitCode === 0 && isReadyEditorState(e, playing) ? null : `Editor did not reach ready ${playing ? "Play" : "Edit"} Mode.`;
@@ -2087,7 +2142,7 @@ async function runDirectLiveCase(m, name, descriptor, phase, project) {
     businessSucceeded = await runDirectCasePhase(m, sourceCase, "setup", recipe.setup, variables, project);
     if (businessSucceeded) businessSucceeded = await runDirectCasePhase(m, sourceCase, "before", recipe.before, variables, project);
     if (businessSucceeded) businessSucceeded = await runDirectCasePhase(m, sourceCase, "preflight", recipe.preflight, variables, project);
-    if (businessSucceeded) businessSucceeded = await runDirectCasePhase(m, sourceCase, "invocation", [recipe.invocation], variables, project, descriptor.outputSchema ?? {});
+    if (businessSucceeded) businessSucceeded = await runDirectCasePhase(m, sourceCase, "invocation", [recipe.invocation], variables, project, descriptor.resultSchema ?? {});
     if (businessSucceeded) businessSucceeded = await runDirectCasePhase(m, sourceCase, "after", recipe.after, variables, project);
     if (businessSucceeded) {
       invariantIssue = directInvariantIssue(recipe.invariants, variables);
@@ -2106,7 +2161,7 @@ async function runDirectLiveCase(m, name, descriptor, phase, project) {
     if (!businessSucceeded) return invariantIssue ?? "Direct case setup, invocation, or fresh readback failed.";
     if (!cleanupSucceeded) return "Direct case cleanup failed.";
     return null;
-  }, { directCase: { capability: name, runToken: m.runToken, recipeHash, requestSpecific: true, cleanupAttempted: true }, retryAssertion: true }, project);
+  }, { directCase: { capability: name, runToken: m.runToken, recipeHash, requestSpecific: true, cleanupAttempted: true }, retryAssertion: businessSucceeded && cleanupSucceeded }, project);
   return stopAfterTerminalFailure(record);
 }
 
@@ -2123,7 +2178,7 @@ async function invoke(m, kind, name, id, d, input, flags, positive, phase, proje
   const projectInput = routeCapabilityInput(dynamicInput, project, m.o.project);
   const routedInput = routeCapabilityFixtureInput(projectInput, name, m.o);
   const record = await m.call(caseId, argvFor(kind, name, routedInput, flags), (e, r) => {
-    if (positive) return r.exitCode === 0 ? assertPositiveSuccess(e, d.outputSchema) : `Positive invocation exited ${r.exitCode}.`;
+    if (positive) return r.exitCode === 0 ? assertPositiveSuccess(e, d.resultSchema ?? {}) : `Positive invocation exited ${r.exitCode}.`;
     if (r.exitCode === 0) return "Negative invocation must exit nonzero.";
     const issue = assertError(e, expectedErrorCode === "E_SCHEMA_INVALID");
     if (issue) return issue;
@@ -2171,7 +2226,7 @@ export async function coverExternalStateDependentTool(m, name, descriptor, phase
 
   const dialogsDescriptor = await getDescriptor(m, "tool", "editor.dialogs");
   const observed = await m.call(`tool.${name}.external-state.dialogs`, ["tools", "run", "editor.dialogs", "--input", "{}"], (e, r) => {
-    return r.exitCode === 0 ? assertPositiveSuccess(e, dialogsDescriptor?.outputSchema ?? {}) : `editor.dialogs observation exited ${r.exitCode}.`;
+    return r.exitCode === 0 ? assertPositiveSuccess(e, dialogsDescriptor?.resultSchema ?? {}) : `editor.dialogs observation exited ${r.exitCode}.`;
   }, { capability, phase, externalState: true });
   if (observed.assertion?.status !== "PASS") return;
 
@@ -2222,7 +2277,7 @@ export async function coverTestCancelDependentTool(m, descriptor, phase, project
     for (let attempt = 1; attempt <= 20; attempt += 1) {
       const observed = await m.call(`tool.test.cancel.external-state.plan.${attempt}`, ["tools", "run", "test.cancel", "--input", "{}", "--dry-run"], (envelope, result) => {
         if (result.exitCode === 0) {
-          const issue = assertPositiveSuccess(envelope, descriptor.outputSchema ?? {});
+          const issue = assertPositiveSuccess(envelope, descriptor.resultSchema ?? {});
           if (issue) return issue;
           const data = envelope.data;
           return data?.dryRun === true && data?.cancelled === false && typeof data?.rootRequestId === "string" && typeof data?.runId === "string"
@@ -2240,7 +2295,7 @@ export async function coverTestCancelDependentTool(m, descriptor, phase, project
 
     actual = await m.call(matrixCaseId("tool", "test.cancel", "default", phase), ["tools", "run", "test.cancel", "--input", "{}"], (envelope, result) => {
       if (result.exitCode !== 0) return `test.cancel actual exited ${result.exitCode}.`;
-      const issue = assertPositiveSuccess(envelope, descriptor.outputSchema ?? {});
+      const issue = assertPositiveSuccess(envelope, descriptor.resultSchema ?? {});
       if (issue) return issue;
       const data = envelope.data;
       return data?.cancelled === true && data?.dryRun === false && Array.isArray(data?.activeRunIds) && data.activeRunIds.length === 0
@@ -2271,7 +2326,7 @@ export async function coverTestCancelDependentTool(m, descriptor, phase, project
 
 async function cover(m, kind, name, phase = "editor") {
   const d = await getDescriptor(m, kind, name); if (!d) return m.blocked(`${kind}.${name}.descriptor`, "Describe returned no descriptor."); let first;
-  try { first = parsePublicExampleArgv(d.examples?.[0], kind, name); } catch (e) { if ((d.inputSchema?.required ?? []).length) return m.blocked(matrixCaseId(kind, name, "default", phase), `Cannot construct default input: ${e.message}`); first = { input: {}, flags: [] }; }
+  try { first = parsePublicExample(d.examples?.[0], kind, name); } catch (e) { if ((d.inputSchema?.required ?? []).length) return m.blocked(matrixCaseId(kind, name, "default", phase), `Cannot construct default input: ${e.message}`); first = { input: {}, flags: [] }; }
   if (d.available === false) {
     const expectedErrorCode = unavailableDescriptorErrorCode(d);
     await invoke(m, kind, name, "unavailable", d, first.input, matrixExampleFlags(first.flags), false, phase, capabilityProject(m, kind, d), expectedErrorCode);
@@ -2321,7 +2376,7 @@ async function cover(m, kind, name, phase = "editor") {
     await invoke(m, kind, name, "default", d, first.input, phaseFlags, defaultPositive, phase, project, defaultPositive ? null : unavailableCode);
     let optional;
     if (d.examples?.[1]) {
-      try { optional = parsePublicExampleArgv(d.examples[1], kind, name); }
+      try { optional = parsePublicExample(d.examples[1], kind, name); }
       catch (e) { return m.blocked(matrixCaseId(kind, name, "optional", phase), `Second public example is invalid: ${e.message}`); }
     } else if (plain(d.inputSchema?.properties) && Object.keys(d.inputSchema.properties).some((key) => !(d.inputSchema.required ?? []).includes(key))) {
       optional = { input: { ...first.input }, flags: [...first.flags] };
@@ -2370,7 +2425,7 @@ async function coverToolsWithPipelineFixtures(m, phase, excluded = new Set()) {
 async function playMode(m) {
   m.invalidateFailedPlayModeControls();
   const play = m.discovered.tools.find((n) => n === "editor.play"); const stop = m.discovered.tools.find((n) => n === "editor.stop"); if (!play || !stop) return blockTerminal(m, "playmode.transition", "Public editor.play/editor.stop capabilities are not discoverable.");
-  const pd = await getDescriptor(m, "tool", play), sd = await getDescriptor(m, "tool", stop); let p, s; try { p = parsePublicExampleArgv(pd.examples?.[0], "tool", play); s = parsePublicExampleArgv(sd.examples?.[0], "tool", stop); } catch (e) { return blockTerminal(m, "playmode.transition", `Transition example invalid: ${e.message}`); }
+  const pd = await getDescriptor(m, "tool", play), sd = await getDescriptor(m, "tool", stop); let p, s; try { p = parsePublicExample(pd.examples?.[0], "tool", play); s = parsePublicExample(sd.examples?.[0], "tool", stop); } catch (e) { return blockTerminal(m, "playmode.transition", `Transition example invalid: ${e.message}`); }
   await invoke(m, "tool", play, "transition", pd, p.input, p.flags, true, "transition");
   const playReady = await m.call("playmode.ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, true) ? null : "Editor state did not report ready Play Mode after editor.play.", { retryAssertion: true });
   stopAfterTerminalFailure(playReady);

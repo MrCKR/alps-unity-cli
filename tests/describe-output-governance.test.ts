@@ -91,7 +91,7 @@ test("offline describe descriptors do not expose internal reference-project word
   }
 });
 
-test("high-risk TS-local descriptors include examples and output schemas", () => {
+test("high-risk TS-local metadata retains examples and internal output schemas", () => {
   for (const name of P0_EXAMPLE_TOOLS) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
@@ -101,7 +101,7 @@ test("high-risk TS-local descriptors include examples and output schemas", () =>
   for (const name of P0_OUTPUT_SCHEMA_TOOLS) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
-    assert.ok(tool.outputSchema, `${name} must expose outputSchema`);
+    assert.ok(tool.outputSchema, `${name} must retain internal outputSchema`);
   }
 });
 
@@ -113,15 +113,17 @@ test("descriptions are call guidance, not duplicated summaries or embedded comma
   }
 });
 
-test("code.exec discovery requires a necessity decision without reducing arbitrary execution", () => {
+test("code.exec discovery keeps critical execution boundaries within its description budget", () => {
   const tool = findToolByName("code.exec");
   assert.ok(tool);
   assert.match(tool.summary, /cannot be force-stopped by timeout/i);
-  assert.match(tool.description, /does not reject infinite loops/);
-  assert.match(tool.description, /decide whether running it is necessary/);
-  assert.match(tool.description, /execute it unchanged/);
-  assert.match(tool.description, /cannot interrupt the C# already running/);
-  assert.match(tool.description, /outcome-unknown/);
+  assert.match(tool.description, /synchronously compile and execute trusted C# 8/i);
+  assert.match(tool.description, /no capability reduction/i);
+  assert.match(tool.description, /cannot interrupt Run/i);
+  assert.match(tool.description, /outcome-unknown/i);
+  assert.match(tool.description, /completionProbe is optional/i);
+  assert.match(tool.description, /Dry-run reports source hash/i);
+  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 1024, "code.exec description must remain within 1024 UTF-8 bytes");
 });
 
 test("large-output TS-local descriptors disclose output controls", () => {

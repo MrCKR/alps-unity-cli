@@ -57,8 +57,9 @@ namespace UnityCli
 
         private static void ProcessQueuedWork()
         {
-            // Cache Unity main-thread-only API values so HandleHttpCore can read them
-            // safely from a background thread pool thread.
+            // pulse只证明EditorApplication.update最近推进；具体请求仍由TryStart证明开始。
+            Volatile.Write(ref mainThreadPulseTimestamp, System.Diagnostics.Stopwatch.GetTimestamp());
+            Interlocked.Increment(ref mainThreadPulseSequence);
             cachedIsCompiling = EditorApplication.isCompiling;
             cachedIsUpdating = EditorApplication.isUpdating;
             cachedIsPlayingOrWillChangePlaymode = EditorApplication.isPlayingOrWillChangePlaymode;
@@ -69,10 +70,11 @@ namespace UnityCli
             UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
             UnityCliWaitScheduler.Tick();
 
-            if (started && EditorApplication.timeSinceStartup >= nextHeartbeatAt)
+            // 生命周期变化会即时登记；这里仅低频刷新，修复漏事件并更新诊断快照。
+            if (started && EditorApplication.timeSinceStartup >= nextRegistryRefreshAt)
             {
                 RegisterInstance("ready");
-                nextHeartbeatAt = EditorApplication.timeSinceStartup + 2.0;
+                nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
             }
             var startedThisTick = 0;
             while (startedThisTick < MaxWorkStartsPerTick)
@@ -144,7 +146,7 @@ namespace UnityCli
         }
 
         /// <summary>同 root request 的并发 redelivery 只附着一个 work item；不同 bytes 立即 fail closed。</summary>
-        private static BridgeWorkItem EnqueueOrAttach(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, out bool created, out int queueDepth)
+        private static BridgeWorkItem EnqueueOrAttach(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string admissionListenerId, long admissionGeneration, out bool created, out int queueDepth)
         {
             var digest = UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId);
             lock (QueueLock)
@@ -158,7 +160,7 @@ namespace UnityCli
                     queueDepth = WorkQueue.Count;
                     return existing;
                 }
-                var item = new BridgeWorkItem(request, rawRequestBytes, digest);
+                var item = new BridgeWorkItem(request, rawRequestBytes, digest, admissionListenerId, admissionGeneration);
                 ActiveRequestWork.Add(request.RequestId, item);
                 WorkQueue.Enqueue(item);
                 created = true;
@@ -193,17 +195,21 @@ namespace UnityCli
             private bool acceptanceCancelled;
             private readonly CancellationTokenSource cancellation;
 
-            public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest)
+            public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest, string admissionListenerId, long admissionGeneration)
             {
                 Request = request;
                 RawRequestBytes = rawRequestBytes;
                 RequestDigest = requestDigest;
+                AdmissionListenerId = admissionListenerId;
+                AdmissionGeneration = admissionGeneration;
                 cancellation = CreateExecutionLifetime(request);
             }
 
             public UnityCli.Protocol.BridgeRequest Request { get; private set; }
             public byte[] RawRequestBytes { get; private set; }
             public string RequestDigest { get; private set; }
+            public string AdmissionListenerId { get; private set; }
+            public long AdmissionGeneration { get; private set; }
             public CancellationToken Token { get { return cancellation.Token; } }
             public ManualResetEventSlim Started { get; private set; } = new ManualResetEventSlim(false);
             public ManualResetEventSlim Completed { get; private set; } = new ManualResetEventSlim(false);
@@ -222,6 +228,21 @@ namespace UnityCli
                 {
                     if (cancelled)
                     {
+                        return false;
+                    }
+                    // admission与主线程开始必须属于同一listener epoch；reload后的旧队列项不得执行。
+                    if (!string.Equals(AdmissionListenerId, ListenerId, StringComparison.Ordinal)
+                        || AdmissionGeneration != CurrentListenerGeneration())
+                    {
+                        cancelled = true;
+                        cancellation.Cancel();
+                        response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                            Request.RequestId,
+                            "E_UNITY_DOMAIN_RELOAD",
+                            "Unity listener generation changed before the queued request started.",
+                            nextActions: new[] { "Keep the same root requestId and immutable request bytes while the session supervisor rebinds." },
+                            transient: true,
+                            retryAfterMs: 1000));
                         return false;
                     }
                     started = true;

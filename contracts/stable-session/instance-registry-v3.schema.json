@@ -1,14 +1,19 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/contracts/stable-session/instance-registry-v2.schema.json",
-  "title": "Unity CLI instance registry v2",
+  "$id": "https://unity-cli.local/contracts/stable-session/instance-registry-v3.schema.json",
+  "title": "Unity CLI instance registry v3",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "revision", "canonicalizationVersion", "identity", "sessions", "updatedAt"],
+  "required": ["version", "revision", "canonicalizationVersion", "identity", "sessions", "publishedAt"],
   "properties": {
-    "version": { "const": 2 },
+    "version": { "const": 3 },
     "revision": { "type": "integer", "minimum": 0 },
     "canonicalizationVersion": { "const": 1 },
+    "identity": { "$ref": "#/$defs/identity" },
+    "sessions": { "type": "array", "items": { "$ref": "#/$defs/session" } },
+    "publishedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
     "identity": {
       "type": "object",
       "additionalProperties": false,
@@ -19,41 +24,57 @@
         "displayProjectPath": { "type": "string", "minLength": 3 }
       }
     },
-    "sessions": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/session" }
-    },
-    "updatedAt": { "type": "string", "format": "date-time" }
-  },
-  "$defs": {
     "session": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["editorSessionId", "processId", "processStartedAt", "lastHeartbeatAt", "claimVerification", "state", "lastUnitySnapshot", "listener", "progress", "blockers", "buildStamp"],
+      "required": ["target", "sessionId", "processId", "processStartedAt", "publishedAt", "publicationSequence", "lifecycle", "lastUnitySnapshot", "listener", "progress", "blockers", "buildStamp"],
       "properties": {
+        "target": { "enum": ["editor", "runtime"] },
+        "sessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
         "editorSessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
+        "runtimeSessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
         "processId": { "type": "integer", "minimum": 1 },
         "processStartedAt": { "type": "string", "format": "date-time" },
-        "lastHeartbeatAt": { "type": "string", "format": "date-time" },
-        "claimVerification": { "enum": ["verified", "unverifiable"] },
-        "state": { "enum": ["ready", "transitioning", "blocked"] },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "publicationSequence": { "type": "integer", "minimum": 1 },
+        "lifecycle": { "enum": ["ready", "transitioning", "blocked", "domain-reloading", "compiling", "importing", "building", "playmode-changing"] },
         "lastUnitySnapshot": { "$ref": "#/$defs/snapshot" },
         "listener": { "$ref": "#/$defs/listener" },
         "progress": { "type": "array", "items": { "$ref": "#/$defs/progress" } },
-        "blockers": { "type": "array", "items": { "$ref": "#/$defs/blocker" } },
+        "blockers": { "type": "array", "items": { "type": "object" } },
         "unityVersion": { "type": "string" },
-        "buildStamp": { "type": "string" },
-        "toolCatalogFingerprint": { "type": "string" }
-      }
+        "buildStamp": { "type": "string", "minLength": 1 },
+        "toolCatalogFingerprint": { "type": "string" },
+        "executablePath": { "type": "string", "minLength": 1 },
+        "buildId": { "type": "string", "pattern": "^[0-9a-fA-F]{32}$" }
+      },
+      "oneOf": [
+        {
+          "properties": { "target": { "const": "editor" } },
+          "required": ["editorSessionId"],
+          "not": { "required": ["runtimeSessionId"] }
+        },
+        {
+          "properties": { "target": { "const": "runtime" } },
+          "required": ["runtimeSessionId", "executablePath", "buildId"],
+          "not": { "required": ["editorSessionId"] }
+        }
+      ]
     },
     "snapshot": {
+      "oneOf": [
+        { "$ref": "#/$defs/editorSnapshot" },
+        { "$ref": "#/$defs/runtimeSnapshot" }
+      ]
+    },
+    "editorSnapshot": {
       "type": "object",
       "additionalProperties": false,
       "required": ["schemaVersion", "observedAt", "sourceEditorSessionId", "sourceListenerGeneration", "fields"],
       "properties": {
         "schemaVersion": { "const": 1 },
         "observedAt": { "type": "string", "format": "date-time" },
-        "sourceEditorSessionId": { "type": "string" },
+        "sourceEditorSessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
         "sourceListenerGeneration": { "type": "integer", "minimum": 1 },
         "fields": {
           "type": "object",
@@ -68,6 +89,23 @@
             "activeScene": { "$ref": "#/$defs/knownField" },
             "runtime": { "$ref": "#/$defs/knownField" }
           }
+        }
+      }
+    },
+    "runtimeSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "observedAt", "sourceRuntimeSessionId", "sourceListenerGeneration", "fields"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "sourceRuntimeSessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
+        "sourceListenerGeneration": { "type": "integer", "minimum": 1 },
+        "fields": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 16,
+          "additionalProperties": { "$ref": "#/$defs/knownField" }
         }
       }
     },
@@ -104,28 +142,10 @@
     },
     "progress": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "title", "canWait", "source"],
+      "additionalProperties": true,
+      "required": ["kind"],
       "properties": {
-        "kind": { "type": "string" },
-        "title": { "type": "string" },
-        "value": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-        "canWait": { "type": "boolean" },
-        "source": { "enum": ["unity", "registry"] }
-      }
-    },
-    "blocker": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "title", "message", "requiresUserAction", "canAutoResolve", "source", "confidence"],
-      "properties": {
-        "kind": { "type": "string" },
-        "title": { "type": "string" },
-        "message": { "type": "string" },
-        "requiresUserAction": { "type": "boolean" },
-        "canAutoResolve": { "const": false },
-        "source": { "enum": ["unity", "windows-ui", "registry"] },
-        "confidence": { "enum": ["exact", "inferred", "unknown"] }
+        "kind": { "type": "string", "minLength": 1 }
       }
     }
   }

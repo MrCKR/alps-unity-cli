@@ -5,25 +5,42 @@ import { join } from "node:path";
 import test from "node:test";
 import type { BridgeRequest } from "../src/bridge/index.js";
 import { handleDoctorCommand } from "../src/doctor.js";
+import { readInstances } from "../src/instances.js";
 import {
   createUnityProject,
   makeRegistry,
   makeRegistrySession,
   registryIdentity,
+  startStrictHealthServer,
   writeRegistry,
-} from "./helpers/instance-registry-v2.js";
+} from "./helpers/instance-registry-v3.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
-/** 创建含严格 v2 instance claim 的 doctor 夹具。 */
+/** 创建含严格 v3 instance claim 的 doctor 夹具。 */
 async function doctorFixture() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-doctor-data-"));
   const projectPath = await mkdtemp(join(tmpdir(), "unity-cli-doctor-project-"));
   await createUnityProject(projectPath);
-  const session = await makeRegistrySession("http://127.0.0.1:54321");
   const identity = registryIdentity(projectPath);
+  const sessionId = `session-${"1".repeat(64)}`;
+  const listenerId = `listener-${"2".repeat(32)}`;
+  const health = await startStrictHealthServer((_request, port) => ({
+    version: 3,
+    target: "editor",
+    instanceId: identity.instanceId,
+    canonicalProjectPath: identity.canonicalProjectPath,
+    canonicalizationVersion: 1,
+    sessionId,
+    listenerId,
+    listenerGeneration: 1,
+    actualPort: port,
+    buildStamp: "test-build",
+    mainThread: { observed: true, sequence: 10, ageMs: 0, listenerGeneration: 1, lifecycle: "ready" },
+  }));
+  const session = await makeRegistrySession(health.endpoint, { sessionId, editorSessionId: sessionId });
   await writeRegistry(dataDir, makeRegistry(identity, [session]));
-  return { dataDir, projectPath, identity, session };
+  return { dataDir, projectPath, identity, session, health };
 }
 
 test("doctor reports an empty registry through a public success envelope", async () => {
@@ -36,8 +53,35 @@ test("doctor reports an empty registry through a public success envelope", async
   assert.equal(Object.hasOwn(data, "command"), false);
 });
 
-test("doctor uses strict instance selection and live diagnose.preflight", async () => {
+test("doctor warns about invalid registry records and continues with valid instances", async (t) => {
   const fixture = await doctorFixture();
+  t.after(() => fixture.health.close());
+  const invalidProject = await mkdtemp(join(tmpdir(), "unity-cli-doctor-invalid-project-"));
+  await createUnityProject(invalidProject);
+  const invalidIdentity = registryIdentity(invalidProject);
+  const invalidPath = join(fixture.dataDir, "instances", `${invalidIdentity.instanceId}.json`);
+  await writeFile(invalidPath, "{\"version\":2}\n", "utf8");
+
+  const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, {
+    dataDir: fixture.dataDir,
+    selectInstance: async () => ({ instance: (await readInstances(fixture.dataDir))[0]!, matchedBy: "instanceId" }),
+    bridgeExecute: async (payload: BridgeRequest) => payload.command === "project-tool.list"
+      ? { ok: true as const, requestId: payload.requestId, data: { tools: [] } }
+      : { ok: true as const, requestId: payload.requestId, data: { result: { checks: [], customTools: { fingerprint: { toolCount: 0, blockedCount: 0 } } } } },
+  } as never, "req_doctor_invalid_registry");
+
+  assert.ok(result.ok, JSON.stringify(result));
+  const data = result.data as { summary: string; checks: Array<{ name: string; status: string; details?: Record<string, unknown> }> };
+  const registry = data.checks.find((check) => check.name === "instance_registry");
+  assert.equal(registry?.status, "warn");
+  assert.deepEqual(registry?.details, { instanceCount: 1, invalidRecordCount: 1 });
+  assert.equal(data.checks.find((check) => check.name === "ready_instances")?.status, "pass");
+  assert.doesNotMatch(JSON.stringify(result), new RegExp(invalidPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+});
+
+test("doctor uses strict instance selection and live diagnose.preflight", async (t) => {
+  const fixture = await doctorFixture();
+  t.after(() => fixture.health.close());
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
@@ -63,6 +107,7 @@ test("doctor uses strict instance selection and live diagnose.preflight", async 
   };
   const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, {
     dataDir: fixture.dataDir,
+    selectInstance: async () => ({ instance: (await readInstances(fixture.dataDir))[0]!, matchedBy: "instanceId" }),
     bridgeExecute,
   } as never, "req_doctor_live");
 
@@ -75,10 +120,12 @@ test("doctor uses strict instance selection and live diagnose.preflight", async 
   assert.doesNotMatch(JSON.stringify(result), /endpoint|listenerId|listenerGeneration|actualPort|logPath|warnCount|fingerprintMode/);
 });
 
-test("doctor recursively scrubs sensitive Bridge error details", async () => {
+test("doctor recursively scrubs sensitive Bridge error details", async (t) => {
   const fixture = await doctorFixture();
+  t.after(() => fixture.health.close());
   const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, {
     dataDir: fixture.dataDir,
+    selectInstance: async () => ({ instance: (await readInstances(fixture.dataDir))[0]!, matchedBy: "instanceId" }),
     bridgeExecute: async (payload: BridgeRequest) => ({
       ok: false as const,
       requestId: payload.requestId,

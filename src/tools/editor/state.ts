@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { executeBridgePayload } from "../../bridge/index.js";
 import { withObservationSelection } from "../../bridge/types.js";
 import {
@@ -40,7 +38,7 @@ export type EditorStateBlocker = EditorBlocker;
 export interface EditorStateResult {
   identity: { instanceId: string; canonicalProjectPath: string; displayProjectPath: string };
   session: { known: boolean; editorSessionId: string | null };
-  status: "ready" | "transitioning" | "blocked" | "offline" | "conflict";
+  status: "ready" | "transitioning" | "blocked" | "unresponsive" | "unverifiable" | "offline" | "conflict";
   state: { compile: ObservedField; import: ObservedField; build: ObservedField; playMode: ObservedField; prefabStage: ObservedField; activeScene: ObservedField; runtime: ObservedField };
   progress: EditorStateProgress[];
   blockers: EditorStateBlocker[];
@@ -49,15 +47,23 @@ export interface EditorStateResult {
 
 const STATE_FIELDS = ["compile", "import", "build", "playMode", "prefabStage", "activeScene", "runtime"] as const;
 const FRESH_SNAPSHOT_MS = 10_000;
-// Windows 冷启动需在同一上限内完成 Bridge、PID/start 和 canonical project 三重证明。
-const OBSERVATION_BUDGET_MS = 10_000;
+// Windows冷启动需在同一上限内完成Bridge、PID/start和canonical project三重证明。
+const OBSERVATION_BUDGET_MS = 4_000;
+// Bridge子调用只能消费前半段预算；modal时必须给独立process/UI observer留下原deadline内的证明窗口。
+const BLOCKER_OBSERVATION_RESERVE_MS = 2_000;
 const SENSITIVE_KEYS = new Set(["endpoint", "endpointurl", "bridgeendpoint", "bridgeendpointurl", "bridgeurl", "port", "actualport", "preferredport", "listenerid", "listenergeneration", "generation", "commandline"]);
 type EditorStateReadContext = Pick<ToolContext, "requestId" | "flags" | "dataDir" | "bridgeExecute"> & Partial<Pick<ToolContext, "absoluteDeadlineMs">>;
+interface EditorStateReadDependencies {
+  selectObservation?: typeof selectObservationInstanceForFlags;
+  verifySession?: typeof verifyRegistrySessionProcess;
+  inspectClaims?: typeof inspectProjectProcessClaims;
+  observer?: Pick<EditorBlockerObserver, "observe">;
+}
 
 export default defineTool<EditorStateRequest, EditorStateResult>({
   name: "editor.state",
   summary: "Read the selected Unity Editor session state, progress, and external blockers without waiting.",
-  description: "Read one selected Unity project identity and its active Editor session immediately. The input must be an empty object. This read-only Tool never waits for readiness, refreshes Unity, writes a request journal, or dismisses desktop dialogs. It uses one bounded internal editor snapshot when available, then only a verified versioned registry snapshot and Windows read-only modal observations.",
+  description: "Read selected Unity project identity and active Editor session. Input must be empty. This read-only Tool never waits, refreshes Unity, writes a journal, or dismisses dialogs. It combines bounded main-thread snapshot, Registry v3, verified process identity, and Windows modal observation to classify transition, blocker, unresponsive, unverifiable, offline, and verified conflict. Ready proves only current session state; after a started mutation timeout, read affected business state before a new request.",
   group: "editor",
   destructiveHint: false,
   sideEffects: [],
@@ -69,14 +75,16 @@ export default defineTool<EditorStateRequest, EditorStateResult>({
 });
 
 /** 聚合路径完全只读，总预算固定；任一 snapshot 只可单独作为状态字段来源。 */
-export async function readEditorState(context: EditorStateReadContext): Promise<EditorStateResult> {
+export async function readEditorState(context: EditorStateReadContext, dependencies: EditorStateReadDependencies = {}): Promise<EditorStateResult> {
   const startedAt = Date.now();
+  const selectObservation = dependencies.selectObservation ?? selectObservationInstanceForFlags;
+  const observer = dependencies.observer ?? new EditorBlockerObserver();
   const observationDeadlineMs = Math.min(startedAt + OBSERVATION_BUDGET_MS, context.absoluteDeadlineMs ?? Number.POSITIVE_INFINITY);
   if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "Unity CLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <instanceId|projectPath|alias> or run from a Unity project directory."]);
   let selection: InstanceSelection;
   let instance: UnityInstance;
   try {
-    selection = await selectObservationInstanceForFlags(context.flags ?? {}, context.dataDir, remaining(observationDeadlineMs));
+    selection = await selectObservation(context.flags ?? {}, context.dataDir, remaining(observationDeadlineMs));
     instance = selection.instance;
   } catch (error) {
     if (error instanceof InstanceRegistryError || error instanceof ProjectIdentityError) {
@@ -84,52 +92,81 @@ export async function readEditorState(context: EditorStateReadContext): Promise<
     }
     throw error;
   }
+  // conflict已由多个verified claim证明；raw unverifiable仍允许observer重新证明唯一PID/start后发现exact modal。
   if (instance.status === "conflict") return makeResult(instance, undefined, "conflict", undefined, [], [], false);
   const session = instance.activeSession;
   if (!session) {
-    // Bridge 注册前仍以同一 canonical resolver 观察唯一 Unity process；不创建或修复 registry。
-    const observed = await new EditorBlockerObserver().observe(identityOf(instance), observationDeadlineMs);
-    if (observed.outcome === "observed-blocked") {
-      return makeResult(instance, undefined, "blocked", undefined, [], sanitizeEditorBlockers(observed.blockers), false);
-    }
+    const observed = await observer.observe(identityOf(instance), observationDeadlineMs);
+    if (observed.outcome === "observed-blocked") return makeResult(instance, undefined, "blocked", undefined, [], sanitizeEditorBlockers(observed.blockers), false);
     if (observed.outcome === "conflict") return makeResult(instance, undefined, "conflict", undefined, [], [], false);
-    return makeResult(instance, undefined, "offline", undefined, [], [], false);
+    if (observed.outcome === "offline") return makeResult(instance, undefined, "offline", undefined, [], [], false);
+    if (observed.outcome === "observed-empty") return makeResult(instance, undefined, "transitioning", undefined, [], [], false);
+    return makeResult(instance, undefined, "unverifiable", undefined, [], [], false);
   }
 
   const fallbackBudgetMs = remaining(observationDeadlineMs);
-  if (fallbackBudgetMs <= 0) return makeResult(instance, undefined, "conflict", undefined, [], [], false);
-  // 正常 Bridge 成功路径不得访问 Windows UI；只有未获证实后才进入一次有界 fallback observer。
-  const verificationPromise = verifyRegistrySessionProcess(identityOf(instance), session, fallbackBudgetMs);
-  const processClaimsPromise = inspectProjectProcessClaims(identityOf(instance), fallbackBudgetMs);
-  const bridge = await probeBridge(context, observationDeadlineMs, session, selection);
+  if (fallbackBudgetMs <= 0) return makeResult(instance, session, "unresponsive", undefined, [], [], false);
+  // 正常Bridge成功路径不访问Windows UI；失败后才证明process和modal。
+  // bridgeExecute是隔离测试transport，生产CLI不提供；测试必须复用已通过selector的同一Registry session identity。
+  const verificationPromise = dependencies.verifySession
+    ? dependencies.verifySession(identityOf(instance), session, fallbackBudgetMs)
+    : context.bridgeExecute
+      ? Promise.resolve("verified" as const)
+      : verifyRegistrySessionProcess(identityOf(instance), session, fallbackBudgetMs);
+  const processClaimsPromise = dependencies.inspectClaims
+    ? dependencies.inspectClaims(identityOf(instance), fallbackBudgetMs)
+    : context.bridgeExecute
+      ? Promise.resolve({ verification: "verified" as const, processIds: [session.processId], processClaims: [{ processId: session.processId, processStartedAt: session.processStartedAt }] })
+      : inspectProjectProcessClaims(identityOf(instance), fallbackBudgetMs);
+  const bridgeDeadlineMs = Math.max(Date.now(), observationDeadlineMs - BLOCKER_OBSERVATION_RESERVE_MS);
+  const bridge = await probeBridge(context, bridgeDeadlineMs, session, selection);
   if (bridge && isLiveSnapshot(bridge.snapshot)) {
     const processClaims = await processClaimsPromise;
     const inspected = applyProjectProcessClaimInspection(instance, processClaims);
-    if (inspected.status === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], sanitizeEditorBlockers(inspected.blockers), false);
+    if (inspected.status === "conflict" || inspected.status === "unverifiable") return makeResult(inspected, undefined, inspected.status, undefined, [], sanitizeEditorBlockers(inspected.blockers), false);
     const progress = sanitizeProgress(bridge.progress);
     const blockers = sanitizeEditorBlockers(bridge.blockers);
     return makeResult(inspected, session, observedStatus(bridge.snapshot, progress, blockers), bridge.snapshot, progress, blockers, true);
   }
 
-  // bridge 断：优先检查跨域重载标记，标记未超时判 transitioning（重载中），避免进程验证误报 conflict。
-  if (!bridge) {
-    const reloadingDeadline = readReloadingDeadline(instance);
-    if (reloadingDeadline !== undefined && Date.now() < reloadingDeadline) {
-      return makeResult(instance, session, "transitioning", undefined, [], [], false);
-    }
-  }
-
-  // Windows UI 读取必须晚于唯一 PID、project path 与 start identity 的完整证明。
   const [verification, processClaims] = await Promise.all([verificationPromise, processClaimsPromise]);
   const inspected = applyProjectProcessClaimInspection(instance, processClaims);
   if (inspected.status === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], sanitizeEditorBlockers(inspected.blockers), false);
-  const observed = await observeVerifiedRegistrySession(identityOf(instance), session, observationDeadlineMs, verification, processClaims);
+  if (inspected.status === "unverifiable") {
+    // 第一次process scan不完整时只允许独立observer重新证明blocker/conflict/offline；不得恢复ready或信任registry session。
+    const independent = await observer.observe(identityOf(instance), observationDeadlineMs);
+    if (independent.outcome === "observed-blocked") return makeResult(inspected, undefined, "blocked", undefined, [], sanitizeEditorBlockers(independent.blockers), false);
+    if (independent.outcome === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], [], false);
+    if (independent.outcome === "offline") return makeResult(inspected, undefined, "offline", undefined, [], [], false);
+    return makeResult(inspected, undefined, "unverifiable", undefined, [], [], false);
+  }
+  const observed = await observeVerifiedRegistrySession(identityOf(instance), session, observationDeadlineMs, verification, processClaims, observer);
   if (observed.outcome === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], [], false);
   if (observed.outcome === "offline") return makeResult(inspected, undefined, "offline", undefined, [], [], false);
+  if (observed.outcome === "unproven") return makeResult(inspected, undefined, "unverifiable", undefined, [], [], false);
   const snapshot = parseSnapshot(session.lastUnitySnapshot, session);
   const progress = sanitizeProgress(session.progress);
   const blockers = [...sanitizeEditorBlockers(session.blockers), ...observed.blockers];
-  return makeResult(inspected, session, fallbackStatus(session, progress, blockers), snapshot, progress, blockers, false);
+  const status = observed.outcome === "unsupported"
+    ? "unresponsive"
+    : fallbackStatus(session, progress, blockers);
+  return makeResult(inspected, session, status, snapshot, progress, blockers, false);
+}
+
+/** 将身份与可响应性终态映射为稳定公开错误；blocked/transitioning 仍由具体业务决定。 */
+export function rejectUnavailableEditorState(state: EditorStateResult, operation: string): void {
+  if (state.status === "conflict") {
+    throw new StructuredToolError("E_INSTANCE_CONFLICT", `Multiple verified Unity Editor processes claim the project selected for ${operation}.`, ["Close duplicate Unity Editor processes and retry after editor.state reports one verified session."], { status: state.status });
+  }
+  if (state.status === "unverifiable") {
+    throw new StructuredToolError("E_INSTANCE_UNVERIFIABLE", `${operation} cannot prove one Unity process identity safely.`, ["Inspect instances list and editor.state; do not retry a prior mutation whose outcome is unknown."], { status: state.status });
+  }
+  if (state.status === "unresponsive") {
+    throw new StructuredToolError("E_UNITY_UNRESPONSIVE", `${operation} cannot proceed because the verified Unity Editor main thread is not responsive.`, ["Inspect editor.state and editor.dialogs before deciding whether to submit a new request."], { status: state.status }, true, 250);
+  }
+  if (state.status === "offline") {
+    throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", `${operation} requires an open Unity Editor.`, ["Open the selected Unity project and retry."], { status: state.status });
+  }
 }
 
 /**
@@ -145,11 +182,12 @@ export async function observeVerifiedRegistrySession(
   observer: Pick<EditorBlockerObserver, "observe"> = new EditorBlockerObserver({ inspect: async () => processClaims }),
 ): Promise<EditorBlockerObservation> {
   if (verification === "dead") return { outcome: "offline", blockers: [] };
-  if (verification !== "verified" || processClaims.verification !== "verified") return { outcome: "conflict", blockers: [], reason: "process-claims-unverifiable" };
+  if (verification !== "verified" || processClaims.verification !== "verified") return { outcome: "unproven", blockers: [], reason: "process-claims-unverifiable" };
   if (processClaims.processIds.length === 0) return { outcome: "offline", blockers: [] };
-  if (processClaims.processIds.length !== 1 || processClaims.processIds[0] !== session.processId) return { outcome: "conflict", blockers: [], reason: "multiple-or-mismatched-process-claims" };
+  if (processClaims.processIds.length !== 1) return { outcome: "conflict", blockers: [], reason: "multiple-process-claims" };
+  if (processClaims.processIds[0] !== session.processId) return { outcome: "unproven", blockers: [], reason: "session-process-mismatch" };
   const claim = processClaims.processClaims?.find((item) => item.processId === session.processId);
-  if (!claim || Date.parse(claim.processStartedAt) !== Date.parse(session.processStartedAt)) return { outcome: "conflict", blockers: [], reason: "session-process-mismatch" };
+  if (!claim || Date.parse(claim.processStartedAt) !== Date.parse(session.processStartedAt)) return { outcome: "unproven", blockers: [], reason: "session-process-mismatch" };
   return observer.observe(identity, deadlineMs, session);
 }
 
@@ -216,18 +254,6 @@ function identityOf(instance: UnityInstance): RegistryIdentity {
   return { instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath };
 }
 
-// 读跨域重载标记（Library/UnityCli/reloading.json）；存在且未超时表示域重载进行中，否则视为无标记。
-function readReloadingDeadline(instance: UnityInstance): number | undefined {
-  try {
-    const path = join(instance.canonicalProjectPath, "Library", "UnityCli", "reloading.json");
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-    if (typeof parsed.deadlineUtc === "string") {
-      const deadline = Date.parse(parsed.deadlineUtc);
-      if (Number.isFinite(deadline)) return deadline;
-    }
-  } catch { /* 文件不存在或不可读，视为无标记 */ }
-  return undefined;
-}
 function remaining(observationDeadlineMs: number): number { return Math.max(0, observationDeadlineMs - Date.now()); }
 function isLiveSnapshot(snapshot: Snapshot): boolean {
   const observedAtMs = Date.parse(snapshot.observedAt);
@@ -239,9 +265,10 @@ function observedStatus(snapshot: Snapshot | undefined, progress: EditorStatePro
   return "ready";
 }
 function fallbackStatus(session: RegistrySession, progress: EditorStateProgress[], blockers: EditorStateBlocker[]): EditorStateResult["status"] {
-  if (session.state === "blocked" || blockers.length > 0) return "blocked";
-  // A registry snapshot is historical and cannot independently prove readiness.
-  return "transitioning";
+  if (session.lifecycle === "blocked" || blockers.length > 0) return "blocked";
+  if (session.lifecycle !== "ready" || progress.length > 0) return "transitioning";
+  // Registry publication是历史快照；Bridge/main-thread未响应时不能独立证明ready。
+  return "unresponsive";
 }
 function snapshotTransitioning(snapshot: Snapshot): boolean {
   for (const field of ["compile", "import", "build"] as const) if (snapshot.fields[field].known && snapshot.fields[field].value === true) return true;

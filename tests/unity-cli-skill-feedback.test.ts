@@ -246,21 +246,21 @@ test("feedback recorder keeps exactly one main file and three bounded archives",
   }
 });
 
-test("Skill feedback contract is opt-in, friction-only, local, and caller-controlled", async () => {
+test("Skill feedback contract is opt-in, local, and preserves the cross-session mutation fence", async () => {
   const skill = await readFile(skillPath, "utf8");
   const operationProtocol = await readFile(operationProtocolPath, "utf8");
   const customTools = await readFile(resolve("skills", "unity_cli", "references", "custom-tools.md"), "utf8");
   const script = await readFile(scriptPath);
   assert.equal((skill.match(/^FeedbackMode:\s*(?:off|on)$/gm) ?? []).length, 1);
   assert.match(skill, /^FeedbackMode: off$/m);
-  assert.match(skill, /tools search <k1\|k2\|\.\.\.>/);
-  assert.match(skill, /是否立即重试、重复调用或继续 mutation 完全由调用方决定/);
-  assert.match(skill, /transient:true.*nextActions.*只是建议，不构成权限或重放门/);
-  assert.match(operationProtocol, /Skill 不替调用方设置限制/);
-  assert.match(operationProtocol, /同一次调用可能续接完全相同的请求以取得 terminal/);
-  assert.match(operationProtocol, /不限制调用方主动提交后续调用/);
+  assert.match(skill, /tools search '<k1\|k2\|\.\.\.>'/);
+  assert.match(skill, /先用只读Tool或业务readback观察并形成新的业务决策/);
+  assert.match(skill, /首次mutation POST后Editor session改变时也不会向新session重投/);
+  assert.match(skill, /transient:true.*nextActions.*仍是建议，不构成额外授权门/);
+  assert.match(operationProtocol, /只有形成新的业务决策后才提交新请求/);
+  assert.match(operationProtocol, /editorSessionId.*未改变/);
+  assert.match(operationProtocol, /禁止向新session再次POST/);
   assert.match(customTools, /OutcomeUnknownPolicy = "caller-decides-after-timeout"/);
-  assert.doesNotMatch(`${skill}\n${operationProtocol}\n${customTools}`, /(?:不得|禁止).{0,16}(?:重试|重放)|no-replay/i);
   assert.match(skill, /正常无摩擦调用不记录/);
   assert.match(skill, /marker 为 `off` 时不得运行脚本/);
   assert.match(skill, /脚本失败不改变 Unity 任务结论/);

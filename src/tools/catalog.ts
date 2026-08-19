@@ -10,7 +10,9 @@ import type { CliResult } from "../types.js";
 import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "./.generated-completion-registry.js";
 import {
   builtinToolMetadata,
+  findToolByName,
   toolContractProfile,
+  type ToolExample,
   type ToolMetadata
 } from "./metadata/index.js";
 
@@ -19,6 +21,23 @@ export type ToolCatalogResult = { ok: true; tools: ToolMetadata[] } | (CliResult
 
 const OFFICIAL_ATTRIBUTE_PREFIX = "UnityPipeline_";
 const OFFICIAL_ATTRIBUTE_GROUP = "UnityPipeline";
+const CATALOG_INDEPENDENT_OPERABILITY_TOOLS = new Set(["editor.state", "editor.dialogs", "editor.dialog.click"]);
+
+/** 统一状态观察与弹窗恢复必须在Live catalog被transition或modal阻断时仍进入原dispatcher。 */
+export function resolveCatalogIndependentOperabilityTool(name: string): ToolMetadata | undefined {
+  if (!CATALOG_INDEPENDENT_OPERABILITY_TOOLS.has(name)) return undefined;
+  const tool = findToolByName(name);
+  return tool?.handler === "offline" ? tool : undefined;
+}
+
+/** 只允许exact operability调用及其describe学习入口使用本地descriptor。 */
+export function resolveCatalogIndependentInvocationTool(name: string, describedName?: string): ToolMetadata | undefined {
+  const operabilityTool = resolveCatalogIndependentOperabilityTool(name);
+  if (operabilityTool) return operabilityTool;
+  if (name !== "tools.describe" || !describedName || !resolveCatalogIndependentOperabilityTool(describedName)) return undefined;
+  const describeTool = findToolByName("tools.describe");
+  return describeTool?.handler === "offline" ? describeTool : undefined;
+}
 
 /** package snapshot 中的 C# built-in/Extension descriptor，仅供生成、契约和离线审计使用。 */
 export function staticBridgeToolMetadata(): ToolMetadata[] {
@@ -53,13 +72,15 @@ export async function loadToolCatalog(
   return mergeLiveToolCatalog(requestId, builtinToolMetadata(), editor.ok ? editor.tools : [], runtimeCatalog.ok ? runtimeCatalog.tools : []);
 }
 
-/** 按名称从同一实例完整目录解析 Tool；本地 Tool 也不能绕过实例连接。 */
+/** 按名称解析Tool；只有exact operability能力能在transition/modal下使用frozen本地descriptor。 */
 export async function resolveCatalogTool(
   name: string,
   flags: Record<string, string | boolean>,
   runtime: ToolCatalogRuntime,
   requestId: string
 ): Promise<{ ok: true; tool?: ToolMetadata } | (CliResult & { ok: false })> {
+  const operabilityTool = resolveCatalogIndependentOperabilityTool(name);
+  if (operabilityTool) return { ok: true, tool: operabilityTool };
   const catalog = await loadToolCatalog(flags, runtime, requestId);
   return catalog.ok ? { ok: true, tool: catalog.tools.find((tool) => tool.name === name) } : catalog;
 }
@@ -144,25 +165,59 @@ export function uniqueByName(tools: ToolMetadata[]): ToolMetadata[] {
   return [...result.values()];
 }
 
-/** 输出完整公开 descriptor；内部 routing、fingerprint 与展示级状态不会越过此边界。 */
+/** 输出调用所需的精简 descriptor；完整结果 schema 只保留在内部 metadata。 */
 export function publicToolDescriptor(tool: ToolMetadata): Record<string, unknown> {
   if (!tool.outputSchema) throw new Error(`Tool ${tool.name} is missing outputSchema.`);
   const available = tool.available ?? true;
+  if (!available && !tool.unavailableReason) throw new Error(`Unavailable Tool ${tool.name} is missing unavailableReason.`);
   return {
     name: tool.name,
     description: tool.description,
-    group: tool.group,
     inputSchema: tool.inputSchema,
-    outputSchema: tool.outputSchema,
     destructiveHint: tool.destructiveHint,
     ...(tool.sideEffects?.length ? { sideEffects: tool.sideEffects } : {}),
     playModeSupport: tool.playModeSupport ?? "supported",
     supportsDryRun: tool.supportsDryRun ?? false,
-    ...(tool.permissions?.length ? { permissions: tool.permissions } : {}),
-    ...(tool.examples?.length ? { examples: tool.examples.map(({ description, argv }) => ({ description, argv })) } : {}),
+    ...(tool.examples?.length ? { examples: tool.examples.map((example) => publicToolExample(tool.name, example)) } : {}),
     target: tool.target ?? "editor",
-    available,
-    ...(!available && tool.unavailableReason ? { unavailableReason: tool.unavailableReason } : {}),
+    ...(!available ? { available: false, unavailableReason: tool.unavailableReason } : {}),
     ...(tool.requiresPackages?.length ? { requiresPackages: tool.requiresPackages } : {})
   };
+}
+
+/** 将内部 argv authoring 形态投影为无 CLI 语法重复的业务示例。 */
+function publicToolExample(toolName: string, example: ToolExample): Record<string, unknown> {
+  const execution = publicExampleExecution(toolName, example);
+  return {
+    description: example.description,
+    input: publicExampleInput(toolName, example),
+    ...(execution ? { execution } : {})
+  };
+}
+
+/** 优先使用 typed input；旧 authoring 仅有 argv 时解析同一个 --input JSON。 */
+function publicExampleInput(toolName: string, example: ToolExample): unknown {
+  if (example.input !== undefined) return example.input;
+  const inputIndex = example.argv.indexOf("--input");
+  if (inputIndex < 0) return {};
+  try {
+    const input = JSON.parse(example.argv[inputIndex + 1] ?? "");
+    if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("input must be an object");
+    return input;
+  } catch (error) {
+    throw new Error(`Tool ${toolName} has an invalid example input: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** 从 authoring metadata 或 argv 提取 dry-run/timeout 控制，不混入业务 input。 */
+function publicExampleExecution(toolName: string, example: ToolExample): Record<string, unknown> | undefined {
+  const dryRun = example.execution?.dryRun === true || example.argv.includes("--dry-run");
+  const timeoutIndex = example.argv.indexOf("--timeout-ms");
+  const attachedTimeout = example.argv.find((token) => token.startsWith("--timeout-ms="))?.slice("--timeout-ms=".length);
+  const timeoutRaw = example.execution?.timeoutMs ?? (timeoutIndex >= 0 ? Number(example.argv[timeoutIndex + 1]) : attachedTimeout === undefined ? undefined : Number(attachedTimeout));
+  if (timeoutRaw !== undefined && (!Number.isFinite(timeoutRaw) || timeoutRaw <= 0)) {
+    throw new Error(`Tool ${toolName} has an invalid example timeoutMs.`);
+  }
+  if (!dryRun && timeoutRaw === undefined) return undefined;
+  return { ...(dryRun ? { dryRun: true } : {}), ...(timeoutRaw !== undefined ? { timeoutMs: timeoutRaw } : {}) };
 }

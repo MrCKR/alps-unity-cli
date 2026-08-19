@@ -3,6 +3,7 @@ import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
+import { rejectUnavailableEditorState } from "../editor/state.js";
 import { StructuredToolError } from "../errors.js";
 
 export interface AssetRefreshRequest {
@@ -38,8 +39,8 @@ export default defineTool<AssetRefreshRequest, AssetRefreshResult | AssetRefresh
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
     const state = await waitForEditorTransitionEnd(context, childId(context.requestId, "_asset_refresh_state"), deadline);
     if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot refresh assets.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
-    if (state.status === "offline") throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "asset.refresh requires an open Unity Editor.", ["Open the selected Unity project and retry."]);
-    if (state.status === "conflict" || !state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "asset.refresh could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
+    rejectUnavailableEditorState(state, "asset.refresh");
+    if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "asset.refresh could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
     if (state.status !== "ready") throw new StructuredToolError("E_UNITY_TRANSITIONING", "asset.refresh requires a stable Editor generation.", ["Wait for editor.state to become ready, then retry."], undefined, true, 250);
     if (state.state.playMode.value !== "edit") throw new StructuredToolError("E_TOOL_PLAYMODE_UNAVAILABLE", "asset.refresh is editor-only and cannot run in Play Mode.", ["Exit Play Mode before running asset.refresh."], { toolName: "asset.refresh", playModeSupport: "editor-only" });
     const flags: BridgeFlags = { ...(context.flags ?? {}), instance: state.identity.instanceId };

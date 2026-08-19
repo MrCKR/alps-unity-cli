@@ -6,19 +6,21 @@
 
 `--instance <full-id|canonical-project-path|alias>`是通用显式实例选择器；`command --project-path <path>`是同一canonical identity选择语法。显式空值必须失败；业务`input.instance`不是selector。未传selector时只从当前Unity项目CWD解析；无法确定实例即稳定失败，`--project`和Tool input都不能选实例。
 
-`target alias` 只维护 canonical project identity alias。`source` 只供说明和审计，不影响显示、describe、owner 路由或执行。连接实例的 Tool 目录是权威目录；离线静态 catalog 不能替代它。
+`target alias` 只维护 canonical project identity alias。`source` 只供说明和审计，不影响显示、describe、owner 路由或执行。连接实例的 Tool 目录是权威目录；离线静态 catalog 不能替代它。PowerShell中执行多token搜索时使用`tools search '<k1|k2|...>'`；单引号必须包住完整关键词，避免`|`被解释为shell管道。
+
+`instances list`逐个验证当前Registry v3正式文件。旧格式、损坏或不可读文件不参与路由，也不阻断其他合法实例；存在时结果包含`invalidRecordCount`，应使用`doctor`读取计数告警。不得读取、兼容解析、转换、移动或删除内部文件。显式选择对应坏instanceId仍严格失败。
 
 ## Descriptor
 
 Tool descriptor 常用字段：
 
-- `inputSchema` / `outputSchema`：当前输入输出契约；不要从名称猜字段。
-- `available` / `unavailableReason`：当前实例上的可执行状态。
+- `inputSchema`：当前输入契约；不要从名称猜字段。结果 schema 由内部 contract 校验，不在公开 describe 展开。
+- `available:false` / `unavailableReason`：仅当前实例不可执行时出现；缺失表示当前可用。
 - `destructiveHint`、`sideEffects`、`supportsDryRun`：效果和可选预览，不是确认门。
 - `playModeSupport`：`supported`、`session-affecting`、`editor-only`、`runtime-only` 或 `unknown`。
-- `target` / `availabilityScope`：Editor、Runtime 或两者及可用范围。
-- `requiresPackages`：所需 Unity Package 或 Extension。
-- `examples[].argv`：JSON token array；可按当前 schema 调整，不要把它当字符串命令。
+- `target`：Editor、Runtime 或两者。
+- `requiresPackages`：非空 Unity Package 或 Extension 依赖。
+- `examples[].input` / `examples[].execution`：结构化业务输入和按需 dry-run/timeout 控制。
 
 读取型Tool descriptor必须声明纯只读边界、schema、target、availability和PlayMode语义，不得触发import、compile、domain reload、PlayMode变化或文件写入。`command`只按同一`inputSchema`构造typed input，不改变descriptor语义。
 
@@ -42,9 +44,11 @@ Tool descriptor 常用字段：
 
 ## Timeout 与调用方决策
 
-`E_EXECUTION_TIMEOUT`、transport 丢失、进程中断或没有可信 terminal envelope 时，只能确定本次调用没有返回可信终态，不能据此判断 mutation 是否发生。调用方可以读取对象、场景、Package、build/test 状态或 artifact manifest，也可以直接决定是否重试、重复调用或继续其他 mutation；Skill 不替调用方设置限制。
+`E_EXECUTION_TIMEOUT`、transport丢失、进程中断或没有可信terminal envelope时，只能确定本次调用没有返回可信终态，不能据此判断mutation是否发生。先读取对象、场景、Package、build/test状态或artifact manifest；只有形成新的业务决策后才提交新请求，不把outcome unknown自动重放。
 
-compile、import、domain reload 和 listener restart 由 session supervisor 在同一 absolute deadline 内处理；同一次调用可能续接完全相同的请求以取得 terminal。该调用返回后 CLI 不会自行启动新的用户调用，也不限制调用方主动提交后续调用。
+调用公开CLI的命令host必须等待进程退出，等待预算至少为传给CLI的`--timeout-ms`加5000毫秒，不得后台分离。CLI在自身deadline到达时输出一个timeout envelope，并在stdout写完或最多1秒后退出。host或CLI停止等待都不证明Unity中已开始的effect停止。
+
+compile、import、domain reload和listener generation交接由session supervisor在同一absolute deadline内处理。同一次调用仅在`editorSessionId`未改变时，才能用完全相同的request bytes续接durable terminal；首次mutation POST后若session改变，CLI禁止向新session再次POST并返回`E_EXECUTION_TIMEOUT`。
 
 ## 大输出
 
@@ -57,7 +61,7 @@ compile、import、domain reload 和 listener restart 由 session supervisor 在
 
 ## 弹窗与长操作
 
-原错误包含 `details.blockers` 时，先 `tools run editor.dialogs`。点击前使用当前返回的 dialogId 和规范化 button label；只能选择当前可见且 enabled 的按钮。点击后必须证明弹窗消失或状态改变。
+`editor.state`公开状态固定为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。它与`editor.dialogs`、`editor.dialog.click`使用exact本地descriptor进入统一dispatcher，不依赖可能被阻断的Live catalog；其他Tool不使用静态fallback。`conflict`只表示至少两个verified live claim；身份读取失败使用`unverifiable`，transport存在但主线程不推进使用`unresponsive`。原错误包含`details.blockers`时，先`tools run editor.dialogs`。点击前使用当前返回的dialogId和规范化button label；只能选择当前可见且enabled的按钮。点击后必须证明弹窗消失或状态改变。
 
 `build.run`、`test.run`、`editor.refresh`、`code.exec` 和需要刷新 Editor 的 Package Tool 在一次调用内等待最终业务结果。超时只表示该次调用没有可信终态，后续动作由调用方决定。`code.exec`的同步C#一旦在Unity主线程开始，timeout不能中止它；死循环、阻塞等待或长期Unity API调用可继续占用Editor。调用方应先判断这类代码是否确有必要；决定执行后应把timeout视为outcome unknown并在重试前观察业务状态。
 

@@ -123,6 +123,51 @@ test("docs contain required current command references", () => {
   );
 });
 
+test("public search guidance uses the current pipe-token syntax", () => {
+  const oldSearchPlaceholder = "tools search <" + "keyword>";
+  const violations: string[] = [];
+  for (const file of allDocFiles()) {
+    const content = readDocFile(file);
+    if (content.includes(oldSearchPlaceholder)) violations.push(`${file}: uses the old single-keyword placeholder`);
+  }
+  assert.deepEqual(violations, []);
+
+  for (const file of ["README.md", "docs/tool-discovery.md", "docs/error-codes.md", "docs/tool-execution.md", "skills/unity_cli/SKILL.md"]) {
+    assert.match(readDocFile(file), /tools search '?<k1\|k2\|\.\.\.>'?/, `${file} must publish the current search syntax`);
+  }
+  for (const file of ["README.md", "docs/tool-discovery.md", "docs/tool-execution.md", "skills/unity_cli/SKILL.md", "skills/unity_cli/references/operation-protocol.md"]) {
+    const content = readDocFile(file);
+    assert.match(content, /(?:PowerShell|powershell).{0,120}(?:single quote|单引号|引号)/is, `${file} must explain PowerShell quoting`);
+    assert.match(content, /tools search '[^']*\|[^']*'/, `${file} must show one quoted pipe-token search`);
+  }
+});
+
+test("public Tool guidance keeps the command host budget outside the CLI deadline", () => {
+  for (const file of ["README.md", "docs/tool-execution.md", "skills/unity_cli/SKILL.md", "skills/unity_cli/references/operation-protocol.md"]) {
+    const content = readDocFile(file);
+    assert.match(content, /--timeout-ms.{0,80}(?:5000|5秒)/s, `${file} must reserve command-host time beyond the CLI timeout`);
+    assert.match(content, /(?:等待|wait).{0,24}(?:CLI|unity_cli|进程|process).{0,12}(?:退出|exit)/is, `${file} must require observing CLI process exit`);
+    assert.match(content, /(?:不(?:会|能)|不能|does not).{0,30}(?:停止|中止|强停|stop).{0,30}(?:Unity|effect|C#)/is, `${file} must not claim CLI timeout cancels Unity work`);
+  }
+});
+
+test("public instance guidance explains default filtering and explicit full expansion", () => {
+  const readme = readDocFile("README.md");
+  const targetDocs = readDocFile("docs/target-and-instance.md");
+  const skill = readDocFile("skills/unity_cli/SKILL.md");
+  for (const [file, content] of [["README.md", readme], ["docs/target-and-instance.md", targetDocs], ["skills/unity_cli/SKILL.md", skill]] as const) {
+    assert.match(content, /instances list --all/, `${file} must publish explicit full expansion`);
+    assert.match(content, /(?:默认|default).{0,24}offline/i, `${file} must explain the default offline filter`);
+  }
+  assert.match(targetDocs, /hiddenOfflineCount/);
+  assert.match(targetDocs, /不(?:会)?恢复内部 session、快照、进程 claim 或诊断字段/);
+  for (const [file, content] of [["README.md", readme], ["docs/target-and-instance.md", targetDocs], ["skills/unity_cli/SKILL.md", skill]] as const) {
+    assert.match(content, /invalidRecordCount/, `${file} must expose isolated invalid record count`);
+    assert.match(content, /(?:旧格式|损坏|不可读).{0,60}(?:不(?:会)?阻断|继续返回|逐文件|隔离)/s, `${file} must explain per-record isolation`);
+    assert.match(content, /(?:不(?:会|得)|不能).{0,30}(?:兼容|转换|移动|删除|读取)/s, `${file} must reject compatibility or automatic cleanup`);
+  }
+});
+
 test("skill does not use stale CLI parameter/field/error names", () => {
   const skillPath = join(projectRoot, "skills", "unity_cli", "SKILL.md");
   const skill = readFileSync(skillPath, "utf8");

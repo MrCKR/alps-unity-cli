@@ -9,6 +9,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -32,6 +33,7 @@ namespace UnityCli
         private static string editorSessionId;
         private static string lastRegistrationSignature;
         private static long listenerGeneration;
+        private static long publicationSequence;
 
         /// <summary>当前 listener generation 只用于 transport attestation 与 registry 内部一致性校验。</summary>
         private static long CurrentListenerGeneration()
@@ -226,7 +228,7 @@ namespace UnityCli
             WithCurrentUserMutex("Local\\UnityCli.Registry." + InstanceId(), RegistryMutexTimeoutMs, action);
         }
 
-        /// <summary>durable 写入临时文件后原子替换，任何时刻旧或新 revision 至少有一个完整可读。</summary>
+        /// <summary>固定temp完整写入并flush后原子替换；并发reader只会看到完整旧版或新版。</summary>
         private static void WriteRegistryTextAtomically(string path, string content)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -240,8 +242,20 @@ namespace UnityCli
                     writer.Flush();
                     stream.Flush(true);
                 }
-                if (File.Exists(path)) File.Replace(temporaryPath, path, null);
-                else File.Move(temporaryPath, path);
+                for (var attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        if (File.Exists(path)) File.Replace(temporaryPath, path, null);
+                        else File.Move(temporaryPath, path);
+                        break;
+                    }
+                    catch (IOException)
+                    {
+                        if (attempt >= 4) throw;
+                        Thread.Sleep(10 * (attempt + 1));
+                    }
+                }
             }
             finally
             {
@@ -261,19 +275,26 @@ namespace UnityCli
                 {
                     var registry = ReadCurrentRegistry();
                     var sessions = ReadSessions(registry);
-                    sessions = sessions.Where(IsRetainedForeignClaim).ToList();
+                    var previous = sessions.FirstOrDefault(IsCurrentSession);
                     EnsureListenerGeneration(registry);
-                    sessions.Add(CurrentSessionData(NormalizeSessionState(requestedState)));
+                    var nextSequence = Interlocked.Increment(ref publicationSequence);
+                    if (IsStalePublication(previous, listenerGeneration, nextSequence))
+                    {
+                        WriteLog("instance_publication_skipped_stale session=" + EditorSessionId() + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture) + " sequence=" + nextSequence.ToString(CultureInfo.InvariantCulture));
+                        return;
+                    }
+                    sessions = sessions.Where(IsRetainedForeignClaim).ToList();
+                    sessions.Add(CurrentSessionData(NormalizeSessionLifecycle(requestedState), nextSequence));
                     var revision = ReadLong(registry, "revision") + 1L;
                     var data = RegistryData(revision, sessions);
                     WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(data) + "\n");
                 });
-                // 心跳注册每 2 秒发生一次；日志只在状态实质变化时记录，避免心跳撑爆日志。
-                var registrationSignature = NormalizeSessionState(requestedState) + "|" + ListenerId + "|" + listenerGeneration.ToString(CultureInfo.InvariantCulture);
+                // Registry是低频publication，不是heartbeat；日志只记录生命周期或listener变化。
+                var registrationSignature = NormalizeSessionLifecycle(requestedState) + "|" + ListenerId + "|" + listenerGeneration.ToString(CultureInfo.InvariantCulture);
                 if (!string.Equals(registrationSignature, lastRegistrationSignature, StringComparison.Ordinal))
                 {
                     lastRegistrationSignature = registrationSignature;
-                    WriteLog("instance_registered id=" + InstanceId() + " session=" + EditorSessionId() + " state=" + NormalizeSessionState(requestedState) + " listenerId=" + ListenerId + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture));
+                    WriteLog("instance_registered id=" + InstanceId() + " session=" + EditorSessionId() + " lifecycle=" + NormalizeSessionLifecycle(requestedState) + " listenerId=" + ListenerId + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture));
                 }
                 return true;
             }
@@ -292,7 +313,7 @@ namespace UnityCli
                 WithRegistryMutex(() =>
                 {
                     var registry = ReadCurrentRegistry();
-                    var sessions = ReadSessions(registry).Where(session => !IsCurrentSession(session)).Where(IsProcessClaimAliveOrUnverifiable).ToList();
+                    var sessions = ReadSessions(registry).Where(session => !IsCurrentListenerSession(session)).Where(IsProcessClaimAliveOrUnverifiable).ToList();
                     var data = RegistryData(ReadLong(registry, "revision") + 1L, sessions);
                     WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(data) + "\n");
                 });
@@ -304,13 +325,13 @@ namespace UnityCli
             }
         }
 
-        /// <summary>读取 v2 record；旧/异 identity 内容绝不迁移或覆盖。</summary>
+        /// <summary>只消费当前v3；旧机制状态不迁移，下一次publication直接建立当前snapshot。</summary>
         private static Dictionary<string, object> ReadCurrentRegistry()
         {
             if (!File.Exists(InstancePath())) return new Dictionary<string, object>();
             var parsed = UnityCliSerializer.Parse(File.ReadAllText(InstancePath(), Encoding.UTF8)) as Dictionary<string, object>;
             if (parsed == null) throw new InvalidDataException("Instance registry is not a JSON object.");
-            if (ReadLong(parsed, "version") != 2L) throw new InvalidDataException("Obsolete or unsupported instance registry version.");
+            if (ReadLong(parsed, "version") != 3L) return new Dictionary<string, object>();
             var identity = ReadDictionary(parsed, "identity");
             if (identity == null
                 || !string.Equals(ReadString(identity, "instanceId"), InstanceId(), StringComparison.Ordinal)
@@ -354,7 +375,7 @@ namespace UnityCli
         {
             return new Dictionary<string, object>
             {
-                { "version", 2L },
+                { "version", 3L },
                 { "revision", revision },
                 { "canonicalizationVersion", (long)UnityCliCanonicalProjectPath.CanonicalizationVersion },
                 { "identity", new Dictionary<string, object>
@@ -365,11 +386,11 @@ namespace UnityCli
                     }
                 },
                 { "sessions", sessions.Cast<object>().ToList() },
-                { "updatedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) }
+                { "publishedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) }
             };
         }
 
-        private static Dictionary<string, object> CurrentSessionData(string state)
+        private static Dictionary<string, object> CurrentSessionData(string lifecycle, long sequence)
         {
             var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             var session = new Dictionary<string, object>
@@ -379,9 +400,9 @@ namespace UnityCli
                 { "editorSessionId", EditorSessionId() },
                 { "processId", (long)Process.GetCurrentProcess().Id },
                 { "processStartedAt", ProcessStartedAt() },
-                { "lastHeartbeatAt", now },
-                { "claimVerification", "verified" },
-                { "state", state },
+                { "publishedAt", now },
+                { "publicationSequence", sequence },
+                { "lifecycle", lifecycle },
                 { "lastUnitySnapshot", SampleEditorStateSnapshot(now) },
                 { "listener", ListenerData(now) },
                 { "progress", SnapshotProgress() },
@@ -413,16 +434,29 @@ namespace UnityCli
             };
         }
 
-        private static string NormalizeSessionState(string requested)
+        private static string NormalizeSessionLifecycle(string requested)
         {
             if (string.Equals(requested, "blocked", StringComparison.Ordinal)) return "blocked";
-            if (string.Equals(requested, "transitioning", StringComparison.Ordinal)
-                || domainReloading || EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer
-                || IsPlayModeChanging()) return "transitioning";
+            if (domainReloading) return "domain-reloading";
+            if (EditorApplication.isCompiling) return "compiling";
+            if (EditorApplication.isUpdating) return "importing";
+            if (BuildPipeline.isBuildingPlayer) return "building";
+            if (IsPlayModeChanging()) return "playmode-changing";
+            if (string.Equals(requested, "transitioning", StringComparison.Ordinal)) return "transitioning";
             return "ready";
         }
 
-        /// <summary>当前 claim 由新 heartbeat 替换；其他 claim 只有 OS 证明进程生命周期失效才移除。</summary>
+        /// <summary>mutex内按listener generation和publication sequence拒绝旧domain反向覆盖。</summary>
+        private static bool IsStalePublication(Dictionary<string, object> previous, long generation, long sequence)
+        {
+            if (previous == null) return false;
+            var listener = ReadDictionary(previous, "listener");
+            var previousGeneration = ReadLong(listener, "generation");
+            var previousSequence = ReadLong(previous, "publicationSequence");
+            return previousGeneration > generation || (previousGeneration == generation && previousSequence >= sequence);
+        }
+
+        /// <summary>当前claim由新publication替换；其他claim只有OS证明进程生命周期失效才移除。</summary>
         private static bool IsRetainedForeignClaim(Dictionary<string, object> session)
         {
             return !IsCurrentSession(session) && IsProcessClaimAliveOrUnverifiable(session);
@@ -433,6 +467,14 @@ namespace UnityCli
             return session != null
                 && string.Equals(ReadString(session, "target"), "editor", StringComparison.Ordinal)
                 && string.Equals(ReadString(session, "sessionId"), EditorSessionId(), StringComparison.Ordinal);
+        }
+
+        private static bool IsCurrentListenerSession(Dictionary<string, object> session)
+        {
+            var listener = ReadDictionary(session, "listener");
+            return IsCurrentSession(session)
+                && string.Equals(ReadString(listener, "listenerId"), ListenerId, StringComparison.Ordinal)
+                && ReadLong(listener, "generation") == listenerGeneration;
         }
 
         private static bool IsProcessClaimAliveOrUnverifiable(Dictionary<string, object> session)

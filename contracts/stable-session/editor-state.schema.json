@@ -25,7 +25,7 @@
         "editorSessionId": { "type": ["string", "null"] }
       }
     },
-    "status": { "enum": ["ready", "transitioning", "blocked", "offline", "conflict"] },
+    "status": { "enum": ["ready", "transitioning", "blocked", "unresponsive", "unverifiable", "offline", "conflict"] },
     "state": {
       "type": "object",
       "additionalProperties": false,

@@ -22,13 +22,15 @@ namespace UnityCli
         private const int RequestBodyLimitBytes = 1024 * 1024;
         private const int MaxQueueItems = 128;
         private const int MaxRequestsPerFrame = 16;
-        private const int HeartbeatSeconds = 2;
+        private const int RegistryRefreshSeconds = 30;
         private static UnityCliRuntimeBridge current;
         private readonly ConcurrentQueue<PendingRequest> pending = new ConcurrentQueue<PendingRequest>();
         private readonly object requestCacheSync = new object();
         private readonly Dictionary<string, PendingRequest> requestCache = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
         private readonly CancellationTokenSource stopping = new CancellationTokenSource();
         private long requestOrder;
+        private long mainThreadPulseSequence;
+        private long mainThreadPulseTimestamp;
         private HttpListener listener;
         private Task listenerTask;
         private UnityCliRuntimeRegistry registry;
@@ -38,7 +40,7 @@ namespace UnityCli
         private string buildId;
         private string buildStamp;
         private int port;
-        private float nextHeartbeatAt;
+        private float nextRegistryRefreshAt;
         private bool previousRunInBackground;
         private bool runInBackgroundCaptured;
 
@@ -78,7 +80,7 @@ namespace UnityCli
                 UnityCliRuntimeTools.Initialize(sessionId, buildId, config.InstanceId);
                 registry.PublishReady();
                 listenerTask = Task.Run(ListenLoop);
-                nextHeartbeatAt = Time.realtimeSinceStartup + HeartbeatSeconds;
+                nextRegistryRefreshAt = Time.realtimeSinceStartup + RegistryRefreshSeconds;
             }
             catch (Exception exception)
             {
@@ -89,14 +91,18 @@ namespace UnityCli
 
         private void Update()
         {
+            // Runtime health只读取该内存pulse；具体请求仍由ExecutionState取得主线程ownership。
+            Interlocked.Exchange(ref mainThreadPulseTimestamp, System.Diagnostics.Stopwatch.GetTimestamp());
+            Interlocked.Increment(ref mainThreadPulseSequence);
             PendingRequest request;
             UnityCliRuntimeTools.TickFrame(Time.frameCount);
             var processed = 0;
             while (processed < MaxRequestsPerFrame && pending.TryDequeue(out request)) { ExecuteOnMainThread(request); processed++; }
-            if (registry != null && Time.realtimeSinceStartup >= nextHeartbeatAt)
+            // Player 生命周期稳定时只低频刷新登记；启动和退出仍即时发布或移除。
+            if (registry != null && Time.realtimeSinceStartup >= nextRegistryRefreshAt)
             {
-                nextHeartbeatAt = Time.realtimeSinceStartup + HeartbeatSeconds;
-                try { registry.PublishReady(); } catch (Exception exception) { Debug.LogWarning("UnityCli runtime heartbeat failed: " + exception.GetType().Name); }
+                nextRegistryRefreshAt = Time.realtimeSinceStartup + RegistryRefreshSeconds;
+                try { registry.PublishReady(); } catch (Exception exception) { Debug.LogWarning("UnityCli runtime registry refresh failed: " + exception.GetType().Name); }
             }
         }
 
@@ -253,12 +259,34 @@ namespace UnityCli
 
         private Dictionary<string, object> HealthData()
         {
+            long before;
+            long after;
+            long timestamp;
+            do
+            {
+                before = Interlocked.Read(ref mainThreadPulseSequence);
+                timestamp = Interlocked.Read(ref mainThreadPulseTimestamp);
+                after = Interlocked.Read(ref mainThreadPulseSequence);
+            }
+            while (before != after);
+            object ageMs = null;
+            if (timestamp > 0)
+            {
+                var elapsed = Math.Max(0L, System.Diagnostics.Stopwatch.GetTimestamp() - timestamp);
+                ageMs = (long)(elapsed * 1000d / System.Diagnostics.Stopwatch.Frequency);
+            }
             return new Dictionary<string, object>
             {
-                { "version", 2L }, { "target", "runtime" }, { "instanceId", identity.InstanceId },
+                { "version", 3L }, { "target", "runtime" }, { "instanceId", identity.InstanceId },
                 { "canonicalProjectPath", identity.CanonicalProjectPath }, { "canonicalizationVersion", 1L },
                 { "sessionId", sessionId }, { "runtimeSessionId", sessionId }, { "listenerId", listenerId },
-                { "listenerGeneration", 1L }, { "actualPort", (long)port }, { "buildStamp", buildStamp }, { "buildId", buildId }
+                { "listenerGeneration", 1L }, { "actualPort", (long)port }, { "buildStamp", buildStamp }, { "buildId", buildId },
+                { "mainThread", new Dictionary<string, object>
+                    {
+                        { "observed", timestamp > 0 }, { "sequence", after }, { "ageMs", ageMs },
+                        { "listenerGeneration", 1L }, { "lifecycle", "ready" }
+                    }
+                }
             };
         }
 

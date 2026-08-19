@@ -4,6 +4,7 @@ import type { BridgeRequest } from "../src/bridge/index.js";
 import { execute } from "../src/cli.js";
 import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import { settleToolExecutionAtDeadline } from "../src/tools/dispatcher.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -20,9 +21,8 @@ test("tools group, search, and describe use one connected instance catalog", asy
   assert.ok(describe.ok);
   assert.equal((describe.data as { name: string }).name, "scene.hierarchy");
   assert.ok((describe.data as { inputSchema?: unknown }).inputSchema);
-  assert.ok((describe.data as { outputSchema?: unknown }).outputSchema);
-  assert.equal((describe.data as { contractProfile?: string }).contractProfile, undefined);
-  assert.equal((describe.data as { summary?: string }).summary, undefined);
+  for (const field of ["outputSchema", "group", "permissions", "available", "contractProfile", "summary"])
+    assert.equal(Object.hasOwn(describe.data as object, field), false, field);
 });
 
 test("tools search splits keywords by | with OR matching and routing-only fields", async () => {
@@ -40,12 +40,34 @@ test("tools search splits keywords by | with OR matching and routing-only fields
   assert.ok(names.some((name) => name.startsWith("screenshot.") || name === "camera.screenshot"));
 });
 
-test("tools search filters empty tokens and rejects a keyword of only separators", async () => {
-  const spaced = await execute(["tools", "search", "hierarchy||console"], connected as never);
-  assert.ok(spaced.ok, JSON.stringify(spaced));
-  assert.deepEqual((spaced.data as { tokens: string[] }).tokens, ["hierarchy", "console"]);
+test("tools search trims and filters tokens, matches every routing field case-insensitively, and handles single/empty/no-match", async () => {
+  const runtime = {
+    ...disconnected,
+    projectTools: [
+      makeLiveTool({ name: "fixture.name-hit", summary: "First route.", description: "Name field fixture.", group: "alpha" }),
+      makeLiveTool({ name: "fixture.summary", summary: "Summary-Hit route.", description: "Summary field fixture.", group: "beta" }),
+      makeLiveTool({ name: "fixture.description", summary: "Third route.", description: "Contains Description-Hit marker.", group: "gamma" }),
+      makeLiveTool({ name: "fixture.group", summary: "Fourth route.", description: "Group field fixture.", group: "group-hit" }),
+    ],
+    runtimeTools: [],
+  };
 
-  const empty = await execute(["tools", "search", "|"], connected as never);
+  const multi = await execute(["tools", "search", "  NAME-HIT || summary-hit | DESCRIPTION-HIT | group-hit | "], runtime as never);
+  assert.ok(multi.ok, JSON.stringify(multi));
+  assert.deepEqual((multi.data as { tokens: string[] }).tokens, ["name-hit", "summary-hit", "description-hit", "group-hit"]);
+  const names = new Set((multi.data as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name));
+  for (const name of ["fixture.name-hit", "fixture.summary", "fixture.description", "fixture.group"]) assert.ok(names.has(name), name);
+
+  const single = await execute(["tools", "search", "  SuMmArY-Hit  "], runtime as never);
+  assert.ok(single.ok, JSON.stringify(single));
+  assert.deepEqual((single.data as { tokens: string[]; tools: Array<{ name: string }> }).tokens, ["summary-hit"]);
+  assert.deepEqual((single.data as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name), ["fixture.summary"]);
+
+  const noMatch = await execute(["tools", "search", "definitely-absent-search-token"], runtime as never);
+  assert.ok(noMatch.ok, JSON.stringify(noMatch));
+  assert.deepEqual(noMatch.data, { keyword: "definitely-absent-search-token", tokens: ["definitely-absent-search-token"], count: 0, tools: [] });
+
+  const empty = await execute(["tools", "search", "||  |"], runtime as never);
   assert.ok(!empty.ok);
   assert.equal(empty.error?.code, "TOOLS_SEARCH_KEYWORD_REQUIRED");
 });
@@ -76,7 +98,7 @@ test("target both keeps default editor availability when runtime is not ready", 
   } as never);
 
   assert.ok(result.ok, JSON.stringify(result));
-  assert.equal((result.data as { available: boolean }).available, true);
+  assert.equal(Object.hasOwn(result.data as object, "available"), false);
   assert.equal(Object.hasOwn(result.data as object, "unavailableReason"), false);
 });
 
@@ -172,6 +194,42 @@ test("TS-local Tool returns one validated direct business terminal", async () =>
   assert.equal(Object.hasOwn(result.data as object, "execution"), false);
 });
 
+test("shared Tool deadline settles a non-returning mutation without claiming cancellation", async () => {
+  const startedAt = Date.now();
+  const result = await settleToolExecutionAtDeadline(
+    "fixture.never",
+    "req_deadline_fixture",
+    true,
+    startedAt + 25,
+    () => new Promise(() => undefined),
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.requestId, "req_deadline_fixture");
+  assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
+  assert.deepEqual(result.error.details, { outcome: "unknown" });
+  assert.equal(result.error.transient, false);
+  assert.equal(result.error.retryAfterMs, 0);
+  assert.match(result.error.message, /may still be running or partially applied/);
+  assert.equal(result.error.nextActions.length, 1);
+  assert.match(result.error.nextActions[0], /Inspect editor\.state and the affected business state/);
+  assert.doesNotMatch(result.error.nextActions[0], /retry|repeat|replay/i);
+  assert.ok(Date.now() - startedAt < 1_000);
+});
+
+test("shared Tool deadline preserves a terminal returned before the deadline", async () => {
+  const terminal = { ok: true as const, requestId: "req_terminal_fixture", data: { value: 1 } };
+  const result = await settleToolExecutionAtDeadline(
+    "fixture.fast",
+    terminal.requestId,
+    false,
+    Date.now() + 1_000,
+    async () => terminal,
+  );
+  assert.deepEqual(result, terminal);
+});
+
 test("Tool input must be a strict JSON object before dispatch", async () => {
   for (const input of ["[]", "true", "null", "{bad-json"]) {
     let calls = 0;
@@ -217,11 +275,19 @@ test("live built-in Tool routes once through project-tool.run", async () => {
   assert.equal((result.data as { matchCount: number }).matchCount, 0);
 });
 
-test("unknown tools and subcommands return stable errors", async () => {
+test("unknown tools and subcommands return stable errors with current search guidance", async () => {
   for (const name of ["missing.tool", "docs.list", "docs.topic"]) {
     const missing = await execute(["tools", "run", name, "--input", "{}"], connected as never);
     assert.ok(!missing.ok);
     assert.equal(missing.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+    assert.ok(missing.error?.nextActions.includes("Run unity_cli tools search <k1|k2|...> to find related tools."));
+  }
+
+  for (const argv of [["tools", "run"], ["tools", "describe", "missing.tool"]]) {
+    const missing = await execute(argv, connected as never);
+    assert.ok(!missing.ok);
+    assert.equal(missing.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+    assert.ok(missing.error?.nextActions.some((action) => action.includes("tools search <k1|k2|...>")));
   }
 
   const subcommand = await execute(["tools", "unknown"], disconnected);

@@ -7,11 +7,12 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using UnityEngine;
 
 namespace UnityCli
 {
-    /// <summary>Development Player 的 v2 registry claim；只写当前runtime session，保留可验证的其他claim。</summary>
+    /// <summary>Development Player 的v3 registry publication；只写当前runtime session并保留可验证外部claim。</summary>
     internal sealed class UnityCliRuntimeRegistry : IDisposable
     {
         private const int MutexTimeoutMs = 5000;
@@ -31,6 +32,7 @@ namespace UnityCli
         private readonly string buildId;
         private readonly string executablePath;
         private readonly DateTime startedAt;
+        private long publicationSequence;
         private bool disposed;
 
         internal UnityCliRuntimeRegistry(UnityCliRuntimeIdentity identity, string sessionId, string listenerId, int preferredPort, int actualPort, string buildStamp, string buildId)
@@ -47,15 +49,19 @@ namespace UnityCli
             if (string.IsNullOrWhiteSpace(this.executablePath)) throw new InvalidOperationException("Runtime Player executable path is unavailable.");
         }
 
-        /// <summary>写入ready heartbeat；文件固定为instanceId对应的单一registry record。</summary>
+        /// <summary>发布低频ready snapshot；实时main-thread pulse只保留在内存health中。</summary>
         internal void PublishReady()
         {
             ThrowIfDisposed();
             WithRegistryMutex(delegate
             {
                 var record = ReadRecord();
-                var sessions = ReadSessions(record).Where(IsRetainedForeignClaim).ToList();
-                sessions.Add(CurrentClaim());
+                var sessions = ReadSessions(record);
+                var previous = sessions.FirstOrDefault(IsCurrent);
+                var nextSequence = Interlocked.Increment(ref publicationSequence);
+                if (IsStalePublication(previous, nextSequence)) return;
+                sessions = sessions.Where(IsRetainedForeignClaim).ToList();
+                sessions.Add(CurrentClaim(nextSequence));
                 WriteRecord(ReadLong(record, "revision") + 1L, sessions);
             });
         }
@@ -78,7 +84,7 @@ namespace UnityCli
 
         public void Dispose() { if (disposed) return; RemoveCurrentClaim(); disposed = true; }
 
-        private Dictionary<string, object> CurrentClaim()
+        private Dictionary<string, object> CurrentClaim(long sequence)
         {
             var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             return new Dictionary<string, object>
@@ -88,9 +94,9 @@ namespace UnityCli
                 { "runtimeSessionId", sessionId },
                 { "processId", (long)Process.GetCurrentProcess().Id },
                 { "processStartedAt", ProcessStartedAt(Process.GetCurrentProcess()) },
-                { "lastHeartbeatAt", now },
-                { "claimVerification", "verified" },
-                { "state", "ready" },
+                { "publishedAt", now },
+                { "publicationSequence", sequence },
+                { "lifecycle", "ready" },
                 { "lastUnitySnapshot", new Dictionary<string, object>
                     {
                         { "schemaVersion", 1L }, { "observedAt", now }, { "sourceRuntimeSessionId", sessionId }, { "sourceListenerGeneration", 1L },
@@ -135,7 +141,8 @@ namespace UnityCli
             if (!File.Exists(path)) return new Dictionary<string, object>();
             var record = UnityCliRuntimeJson.Object(UnityCliRuntimeJson.Parse(File.ReadAllText(path, Encoding.UTF8)), "Instance registry is not a JSON object.");
             var identityRecord = ReadObject(record, "identity");
-            if (ReadLong(record, "version") != 2L || identityRecord == null
+            if (ReadLong(record, "version") != 3L) return new Dictionary<string, object>();
+            if (identityRecord == null
                 || !EqualsString(identityRecord, "instanceId", identity.InstanceId)
                 || !EqualsString(identityRecord, "canonicalProjectPath", identity.CanonicalProjectPath))
                 throw new InvalidDataException("Instance registry identity does not match runtime sidecar.");
@@ -146,13 +153,13 @@ namespace UnityCli
         {
             var content = new Dictionary<string, object>
             {
-                { "version", 2L }, { "revision", revision }, { "canonicalizationVersion", 1L },
+                { "version", 3L }, { "revision", revision }, { "canonicalizationVersion", 1L },
                 { "identity", new Dictionary<string, object>
                     {
                         { "instanceId", identity.InstanceId }, { "canonicalProjectPath", identity.CanonicalProjectPath }, { "displayProjectPath", identity.DisplayProjectPath }
                     }
                 },
-                { "sessions", sessions.Cast<object>().ToList() }, { "updatedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) }
+                { "sessions", sessions.Cast<object>().ToList() }, { "publishedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) }
             };
             WriteAtomically(InstancePath(), UnityCliRuntimeJson.Serialize(content) + "\n");
         }
@@ -170,6 +177,15 @@ namespace UnityCli
         }
 
         private bool IsRetainedForeignClaim(Dictionary<string, object> claim) { return !IsCurrent(claim) && IsClaimAliveOrUnverifiable(claim); }
+
+        /// <summary>同runtime session仅接受更大的publication sequence，防止延迟writer覆盖新snapshot。</summary>
+        private static bool IsStalePublication(Dictionary<string, object> previous, long sequence)
+        {
+            if (previous == null) return false;
+            var listener = ReadObject(previous, "listener");
+            var generation = ReadLong(listener, "generation");
+            return generation > 1L || (generation == 1L && ReadLong(previous, "publicationSequence") >= sequence);
+        }
 
         private static bool IsClaimAliveOrUnverifiable(Dictionary<string, object> claim)
         {
@@ -196,12 +212,16 @@ namespace UnityCli
         private static void WriteAtomically(string path, string content)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            var temporary = path + ".runtime.tmp";
+            var temporary = path + ".tmp";
             try
             {
                 using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false))) { writer.Write(content); writer.Flush(); stream.Flush(true); }
-                if (File.Exists(path)) File.Replace(temporary, path, null); else File.Move(temporary, path);
+                for (var attempt = 0; ; attempt++)
+                {
+                    try { if (File.Exists(path)) File.Replace(temporary, path, null); else File.Move(temporary, path); break; }
+                    catch (IOException) { if (attempt >= 4) throw; Thread.Sleep(10 * (attempt + 1)); }
+                }
             }
             finally { if (File.Exists(temporary)) File.Delete(temporary); }
         }

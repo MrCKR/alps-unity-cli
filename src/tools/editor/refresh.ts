@@ -3,6 +3,7 @@ import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { waitForEditorTransitionEnd } from "./readiness.js";
+import { rejectUnavailableEditorState } from "./state.js";
 import { blockersFromDetails, StructuredToolError } from "../errors.js";
 
 export interface EditorRefreshRequest { compile?: boolean; }
@@ -54,10 +55,8 @@ export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefr
     if (state.status === "blocked") {
       throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot refresh assets.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
     }
-    if (state.status === "offline") {
-      throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "editor.refresh requires an open Unity Editor.", ["Open the selected Unity project and retry."]);
-    }
-    if (state.status === "conflict" || !state.session.known || !state.session.editorSessionId) {
+    rejectUnavailableEditorState(state, "editor.refresh");
+    if (!state.session.known || !state.session.editorSessionId) {
       throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "editor.refresh could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
     }
     if (state.status !== "ready") {

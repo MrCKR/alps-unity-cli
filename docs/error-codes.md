@@ -24,7 +24,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 `error` 只允许上述协议字段；`details` 仅承载业务诊断，不公开内部日志、审计、endpoint、port、listener/process identity、native window handle 或 Windows command line。blocker 使用固定公开 DTO。
 
-普通 Tool 在业务 effect 前确认阻断时返回 `E_UNITY_BLOCKED`，同一响应的 `details.blockers` 包含已清洗 blocker。session recovery 可在同一次调用内续接完全相同的请求；调用返回后 CLI 不会自行启动新调用，也不提供请求级重放门。超时或断连后统一返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；是否观察状态、重试、重复调用或继续 mutation 由调用方决定。
+普通Tool在业务effect前确认阻断时返回`E_UNITY_BLOCKED`，同一响应的`details.blockers`包含已清洗blocker。同一次调用只在`editorSessionId`未改变时续接完全相同的请求；首次mutation POST后若session改变，禁止向新session再次POST。超时或断连统一返回`E_EXECUTION_TIMEOUT`与outcome unknown；调用方先观察业务状态，再作新的提交决策。
 
 ## 错误分类
 
@@ -45,8 +45,10 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_INSTANCE_REQUIRED` | 没有显式 selector，CWD 也不在 Unity 项目中 | 传完整 `--instance <id|projectPath|alias>` 或从项目目录调用 |
 | `E_INSTANCE_NOT_FOUND` | selector 无法解析到 canonical project identity | 运行 `instances list` 或核对项目路径/alias |
 | `E_INSTANCE_NOT_RUNNING` | 项目 identity 已确定，但没有可验证的运行中 Editor | 打开该项目并等待 Bridge 注册 |
-| `E_INSTANCE_CONFLICT` | 同一项目被多个 Unity Editor process/session 声明，或 process claim 无法唯一证明 | 关闭重复 Editor，只保留目标 session |
-| `E_INSTANCE_IDENTITY_MISMATCH` | registry、health 或请求中的 canonical identity 不一致 | 停止调用并检查项目移动、registry claim 或 Bridge 安装 |
+| `E_INSTANCE_CONFLICT` | 至少两个已验证live process claim声明同一项目 | 关闭重复Editor，只保留目标session |
+| `E_INSTANCE_UNVERIFIABLE` | PID/start、project claim、Registry读取或权限证据不完整 | 重新观察identity；不得把未知mutation自动重投 |
+| `E_INSTANCE_IDENTITY_MISMATCH` | Registry、Health或请求中的canonical identity不一致 | 停止调用并检查项目移动、Registry claim或Bridge安装 |
+| `E_UNITY_UNRESPONSIVE` | transport identity存在，但近期Unity主线程pulse或Bridge响应不可证明 | 读取`editor.state`与`editor.dialogs`后处理transition/modal |
 | `E_INSTANCE_PROJECT_MISMATCH` | 显式项目约束与 selector 指向不同 identity | 统一 `--project` 和 `--instance` |
 | `E_INSTANCE_PATH_UNAVAILABLE` | 无法取得可证明的物理 canonical path | 修复不可访问路径、broken link 或 reparse 配置 |
 | `E_INSTANCE_REMOTE_PATH_UNSUPPORTED` | 项目位于不支持的远程路径 | 使用本机可验证项目路径 |
@@ -63,7 +65,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search` |
+| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search <k1|k2|...>` |
 | `E_TOOL_REGISTRY_UNHEALTHY` | 当前实例 Tool catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
 | `E_SCHEMA_INVALID` | 输入不符合 schema | 查看对应 `tools describe` 的 inputSchema |
 
@@ -167,7 +169,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 |--------|------|
 | `E_UNITY_BLOCKED` | effect 前已证明 Unity/UI blocker；原错误的 `details.blockers` 含结构化弹窗摘要 |
 | `E_UNITY_TRANSITION_TIMEOUT` | 可恢复 lifecycle transition 未在 absolute deadline 内稳定 |
-| `E_EXECUTION_TIMEOUT` | Tool 未在调用 deadline 内返回终态，或连接在终态前断开；调用返回后 CLI 不自行启动新调用，是否观察、重试、重复调用或继续 mutation 由调用方决定 |
+| `E_EXECUTION_TIMEOUT` | Tool未在deadline内返回终态、连接提前断开，或首次mutation POST后Editor session改变；outcome unknown，CLI不向新session自动重投 |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
@@ -180,14 +182,14 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 1. 读取 `error.code` 确定错误类别
 2. 将 `transient`、`retryAfterMs` 和 `nextActions` 作为恢复建议，不把它们当成权限门
-3. `E_EXECUTION_TIMEOUT` 只说明没有可信终态；是否观察状态、重试或继续 mutation 由调用方决定
-4. 可恢复 compile/import/reload/listener transition 已由 supervisor 内部处理
+3. `E_EXECUTION_TIMEOUT`只说明没有可信终态；先观察业务状态，再形成全新提交决策
+4. 同session的compile/import/reload/listener transition由supervisor处理；cross-session mutation禁止自动重投
 
 ### nextActions 规则
 
 - Instance 错误的 `nextActions` 必须指向 `instances list`、显式 `--instance`、项目路径或关闭重复 Editor
 - Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
-- Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search` 或 `tools describe`
+- Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search <k1|k2|...>` 或 `tools describe`
 - 弹窗 blocker 的 `nextActions` 必须指向先 `tools run editor.dialogs`，再 `tools run editor.dialog.click`；不得要求人工处理、预定义按钮列表、launch-only 入口或额外确认
 - 诊断错误的 `nextActions` 必须指向 `doctor` 或 `tools run diagnose.preflight`
 

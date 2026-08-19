@@ -3,7 +3,7 @@ import type { AnyJson } from "../../schema/any-json.js";
 export interface ToolExample {
   description: string;
   argv: string[];
-  /** 内部 authoring 输入；公开投影只返回 description 与 argv。 */
+  /** 内部 authoring 输入；公开投影返回 description、input 与按需 execution。 */
   input?: AnyJson;
   execution?: { dryRun?: boolean; timeoutMs?: number };
   output?: string;

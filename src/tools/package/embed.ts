@@ -3,6 +3,7 @@ import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
+import { rejectUnavailableEditorState } from "../editor/state.js";
 import { StructuredToolError } from "../errors.js";
 
 export interface PackageEmbedRequest { package: string; }
@@ -30,8 +31,8 @@ export default defineTool<PackageEmbedRequest, PackageEmbedResult>({
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 120_000);
     const state = await waitForEditorTransitionEnd(context, childId(context.requestId, "_package_embed_state"), deadline);
     if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot embed packages.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
-    if (state.status === "offline") throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "package.embed requires an open Unity Editor.", ["Open the selected Unity project and retry."]);
-    if (state.status === "conflict" || !state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "package.embed could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
+    rejectUnavailableEditorState(state, "package.embed");
+    if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "package.embed could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
     if (state.status !== "ready") throw new StructuredToolError("E_UNITY_TRANSITIONING", "package.embed requires a stable Editor generation.", ["Wait for editor.state to become ready, then retry."], undefined, true, 250);
     if (state.state.playMode.value !== "edit") throw new StructuredToolError("E_TOOL_PLAYMODE_UNAVAILABLE", "package.embed is editor-only and cannot run in Play Mode.", ["Exit Play Mode before running package.embed."], { toolName: "package.embed", playModeSupport: "editor-only" });
     const flags: BridgeFlags = { ...(context.flags ?? {}), instance: state.identity.instanceId };

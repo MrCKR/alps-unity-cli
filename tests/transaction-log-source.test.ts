@@ -37,6 +37,23 @@ test("transaction log appends embedded JSONL transactions within two bounded seg
   assert.match(source, /else File\.Delete\(path\)/);
 });
 
+test("Bridge log keeps two absolute-size-bounded UTF-8 segments", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliLog.cs", import.meta.url), "utf8");
+
+  assert.match(source, /BridgeLogMaxBytes = 10L \* 1024 \* 1024/);
+  assert.match(source, /BridgeLogMaxEntryBytes = 64 \* 1024/);
+  assert.match(source, /RollBridgeLogIfNeeded\(string path, int incomingBytes\)/);
+  assert.match(source, /TrimBridgeLogSegment\(oldPath\)/);
+  assert.match(source, /TrimBridgeLogSegment\(path\)/);
+  assert.match(source, /new FileInfo\(path\)\.Length \+ incomingBytes <= BridgeLogMaxBytes/);
+  assert.match(source, /File\.Copy\(path, oldPath, true\)/);
+  assert.match(source, /BoundedBridgeLogLine\(line, lineBudget\)/);
+  assert.match(source, /incomingBytes = Encoding\.UTF8\.GetByteCount\(entry\)/);
+  assert.match(source, /File\.AppendAllText\(path, entry, new UTF8Encoding\(false\)\)/);
+  assert.match(source, /Encoding\.UTF8\.GetByteCount\(text\.Substring\(middle\)\) <= BridgeLogMaxBytes/);
+  assert.match(source, /File\.WriteAllText\(path, text\.Substring\(low\), new UTF8Encoding\(false\)\)/);
+});
+
 test("transaction logging is wired into bridge completion and startup", async () => {
   const [queue, bridge] = await Promise.all([
     readFile(new URL("../unitypkg/Editor/Bridge/BridgeWorkQueue.cs", import.meta.url), "utf8"),

@@ -17,7 +17,7 @@ import { builtinToolMetadata, builtinToolGroups, EXTENSION_GROUPS } from "../src
 import { builtinExtensionMetadata } from "../src/extensions/metadata/index.js";
 import { builtinExtensionToolContributions, findBuiltinExtensionToolContribution, requiredPackagesForContribution } from "../src/extensions/tool-manifest.js";
 import { probuilderDeleteFacesTool, probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
-import { makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v2.js";
+import { makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v3.js";
 import type { ToolMetadata } from "../src/tools/metadata/index.js";
 
 test("URP and HDRP Volume capabilities use one action-free source per tool", async () => {
@@ -156,7 +156,7 @@ test("tools describe requires a healthy physical extension installation", async 
   const result = await handleToolsCommand("describe", ["probuilder.ping"], selected.flags, selected.runtime, requestId);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
-  assert.equal(data.available, true);
+  assert.equal(Object.hasOwn(data, "available"), false);
   assert.equal(data.unavailableReason, undefined);
 });
 
@@ -187,7 +187,7 @@ test("non-extension live-discovered descriptors are unaffected by package checks
   const result = await handleToolsCommand("describe", ["scene.hierarchy"], selected.flags, selected.runtime, requestId);
   assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
-  assert.equal(data.available, true);
+  assert.equal(Object.hasOwn(data, "available"), false);
   assert.equal(data.unavailableReason, undefined);
 });
 

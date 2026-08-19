@@ -6,23 +6,23 @@ import type { AnyJson } from "../../schema/any-json.js";
 
 export interface ToolsDescribeRequest { name: string }
 export interface ToolsDescribeResult {
-  name: string; description: string; group: string; inputSchema: Record<string, AnyJson>; outputSchema: Record<string, AnyJson>;
-  destructiveHint: boolean; sideEffects?: string[]; playModeSupport: string; supportsDryRun: boolean; permissions?: string[];
-  examples?: Array<{ description: string; argv: string[] }>; target: string; available: boolean;
-  unavailableReason?: string; requiresPackages?: string[];
+  name: string; description: string; inputSchema: Record<string, AnyJson>;
+  destructiveHint: boolean; sideEffects?: string[]; playModeSupport: string; supportsDryRun: boolean;
+  examples?: Array<{ description: string; input: Record<string, AnyJson>; execution?: { dryRun?: boolean; timeoutMs?: number } }>;
+  target: string; available?: false; unavailableReason?: string; requiresPackages?: string[];
 }
 
 export default defineTool<ToolsDescribeRequest, ToolsDescribeResult>({
   name: "tools.describe",
-  summary: "Show one tool's schemas, examples, side effects, target, and availability.",
-  description: "Describe one Tool from the connected Unity instance catalog, including schemas, examples, effects, target, and current availability while keeping internal routing private.",
+  summary: "Show one tool's input schema, examples, side effects, target, and availability.",
+  description: "Return one compact invocation descriptor from the connected Unity instance catalog: input schema, structured examples, effects, target, and current unavailability when applicable. Internal routing and result schemas stay private.",
   group: "tools",
   handler: "offline",
   supportStatus: "cli-only",
   destructiveHint: false,
   sideEffects: [],
   playModeSupport: "supported",
-  examples: [{ description: "Describe a tool's full schema", argv: ["tools", "run", "tools.describe", "--input", "{\"name\":\"asset.search\"}"] }],
+  examples: [{ description: "Describe a tool's invocation contract", argv: ["tools", "run", "tools.describe", "--input", "{\"name\":\"asset.search\"}"] }],
   async execute(request, context) {
     if (!request.name) throw new StructuredToolError("TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unity_cli tools describe <tool>.", ["Run unity_cli tools group to see tool groups."]);
     const flags = context.flags ?? {};

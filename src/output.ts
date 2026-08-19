@@ -22,6 +22,8 @@ export const ERROR_CODES = {
   E_UNITY_DOMAIN_RELOAD: "E_UNITY_DOMAIN_RELOAD",
   E_UNITY_PLAY_MODE: "E_UNITY_PLAY_MODE",
   E_UNITY_BLOCKED: "E_UNITY_BLOCKED",
+  E_UNITY_UNRESPONSIVE: "E_UNITY_UNRESPONSIVE",
+  E_UNITY_TRANSITION_TIMEOUT: "E_UNITY_TRANSITION_TIMEOUT",
 
   // ─── Timeout ───
   E_EXECUTION_TIMEOUT: "E_EXECUTION_TIMEOUT",
@@ -29,6 +31,7 @@ export const ERROR_CODES = {
   // ─── Instance ───
   E_INSTANCE_NOT_FOUND: "E_INSTANCE_NOT_FOUND",
   E_INSTANCE_CONFLICT: "E_INSTANCE_CONFLICT",
+  E_INSTANCE_UNVERIFIABLE: "E_INSTANCE_UNVERIFIABLE",
   E_INSTANCE_AMBIGUOUS: "E_INSTANCE_AMBIGUOUS",
   E_TARGET_AMBIGUOUS: "E_TARGET_AMBIGUOUS",
   E_TARGET_ALIAS_CONFLICT: "E_TARGET_ALIAS_CONFLICT",
@@ -110,6 +113,8 @@ export const TRANSIENT_ERROR_CODES: ReadonlySet<string> = new Set([
   ERROR_CODES.E_UNITY_IMPORTING,
   ERROR_CODES.E_UNITY_DOMAIN_RELOAD,
   ERROR_CODES.E_UNITY_PLAY_MODE,
+  ERROR_CODES.E_UNITY_UNRESPONSIVE,
+  ERROR_CODES.E_INSTANCE_UNVERIFIABLE,
   ERROR_CODES.E_RUNTIME_NOT_READY,
   ERROR_CODES.UNITY_BUSY,
 ]);
@@ -121,6 +126,8 @@ export const DEFAULT_RETRY_AFTER_MS: Record<string, number> = {
   [ERROR_CODES.E_UNITY_DOMAIN_RELOAD]: 10000,
   [ERROR_CODES.E_UNITY_PLAY_MODE]: 3000,
   [ERROR_CODES.E_UNITY_BUSY]: 5000,
+  [ERROR_CODES.E_UNITY_UNRESPONSIVE]: 500,
+  [ERROR_CODES.E_INSTANCE_UNVERIFIABLE]: 1000,
   [ERROR_CODES.E_RUNTIME_NOT_READY]: 3000,
   [ERROR_CODES.UNITY_BUSY]: 15000,
 };
@@ -211,13 +218,18 @@ function normalizeErrorDetailKey(key: string): string {
 }
 
 export function printJson(result: CliResult): void {
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.stdout.write(serializeResult(result));
+}
+
+/** 唯一CLI wire序列化；入口必须完整flush这段文本后再退出。 */
+export function serializeResult(result: CliResult, options: { raw?: boolean } = {}): string {
+  const spacing = options.raw ? undefined : 2;
+  return `${JSON.stringify(result, null, spacing)}\n`;
 }
 
 /** 按 CLI 输出模式序列化 envelope；raw 模式用于管道消费。 */
 export function printResult(result: CliResult, options: { raw?: boolean } = {}): void {
-  const spacing = options.raw ? undefined : 2;
-  process.stdout.write(`${JSON.stringify(result, null, spacing)}\n`);
+  process.stdout.write(serializeResult(result, options));
 }
 
 /** Validate and clamp a user-provided timeout against defaults and maxima. */

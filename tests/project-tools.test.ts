@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { execute } from "../src/cli.js";
 import { discoverProjectTools, projectDescriptorToToolMetadata } from "../src/project-tool-discovery.js";
 import { publicToolDescriptor, staticBridgeToolMetadata } from "../src/tools/catalog.js";
+import { builtinToolMetadata } from "../src/tools/metadata/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -81,7 +82,7 @@ function officialDescriptor(overrides: Record<string, unknown> = {}): Record<str
   });
 }
 
-test("static public descriptors receive completion only from the generated internal registry", () => {
+test("static internal descriptors receive completion only from the generated registry", () => {
   const tools = staticBridgeToolMetadata();
   assert.ok(tools.length > 300);
   assert.ok(tools.every((tool) => tool.completionContract));
@@ -129,16 +130,67 @@ test("project Tool parser rejects wrong argv target and invalid example input", 
   })), undefined);
 });
 
-test("public custom Tool descriptor hides internal execution and fingerprint metadata", () => {
+test("public custom Tool descriptor exposes only the compact invocation contract", () => {
   const parsed = projectDescriptorToToolMetadata(descriptor());
   assert.ok(parsed);
   const published = publicToolDescriptor(parsed);
-  assert.equal(published.internalDescriptorFingerprint, undefined);
-  assert.equal(published.completionContract, undefined);
-  assert.equal(published.handler, undefined);
-  assert.equal(published.contractProfile, undefined);
-  assert.deepEqual(published.outputSchema, parsed.outputSchema);
-  assert.deepEqual(published.examples, [{ description: "Echo hello.", argv: ["tools", "run", "sample.echo", "--input", "{\"value\":\"hello\"}"] }]);
+  assert.deepEqual(Object.keys(published).sort(), [
+    "description", "destructiveHint", "examples", "inputSchema", "name", "playModeSupport", "supportsDryRun", "target",
+  ]);
+  for (const field of ["outputSchema", "group", "permissions", "available", "internalDescriptorFingerprint", "completionContract", "handler", "contractProfile"])
+    assert.equal(Object.hasOwn(published, field), false, field);
+  assert.deepEqual(published.examples, [{ description: "Echo hello.", input: { value: "hello" } }]);
+  assert.deepEqual(parsed.outputSchema, descriptor().outputSchema);
+});
+
+test("public descriptor derives execution controls and emits availability only when false", () => {
+  const parsed = projectDescriptorToToolMetadata(descriptor({
+    supportsDryRun: true,
+    available: false,
+    unavailableReason: "E_SAMPLE_UNAVAILABLE: Sample is not ready.",
+    examples: [{
+      description: "Preview echo.",
+      argv: ["tools", "run", "sample.echo", "--input", "{\"value\":\"hello\"}", "--dry-run", "--timeout-ms", "2500"],
+    }],
+  }));
+  assert.ok(parsed);
+  const published = publicToolDescriptor(parsed);
+  assert.equal(published.available, false);
+  assert.equal(published.unavailableReason, "E_SAMPLE_UNAVAILABLE: Sample is not ready.");
+  assert.deepEqual(published.examples, [{
+    description: "Preview echo.",
+    input: { value: "hello" },
+    execution: { dryRun: true, timeoutMs: 2500 },
+  }]);
+});
+
+test("all current public descriptors use the compact field closure while internal output schemas remain complete", () => {
+  const tools = [...new Map([...builtinToolMetadata(), ...staticBridgeToolMetadata()].map((tool) => [tool.name, tool])).values()];
+  const allowed = new Set([
+    "name", "description", "inputSchema", "destructiveHint", "sideEffects", "playModeSupport", "supportsDryRun",
+    "examples", "target", "available", "unavailableReason", "requiresPackages",
+  ]);
+  let compactBytes = 0;
+  let expandedBytes = 0;
+  for (const tool of tools) {
+    assert.ok(tool.outputSchema, `${tool.name} internal outputSchema`);
+    const published = publicToolDescriptor(tool);
+    for (const field of Object.keys(published)) assert.equal(allowed.has(field), true, `${tool.name}.${field}`);
+    for (const field of ["outputSchema", "group", "permissions"]) assert.equal(Object.hasOwn(published, field), false, `${tool.name}.${field}`);
+    if ((tool.available ?? true) === true) assert.equal(Object.hasOwn(published, "available"), false, `${tool.name}.available`);
+    for (const example of (published.examples ?? []) as Array<Record<string, unknown>>) {
+      assert.deepEqual(Object.keys(example).sort().filter((field) => !["description", "execution", "input"].includes(field)), [], `${tool.name}.examples`);
+    }
+    compactBytes += Buffer.byteLength(JSON.stringify(published), "utf8");
+    expandedBytes += Buffer.byteLength(JSON.stringify({
+      name: tool.name, description: tool.description, group: tool.group, inputSchema: tool.inputSchema, outputSchema: tool.outputSchema,
+      destructiveHint: tool.destructiveHint, sideEffects: tool.sideEffects, playModeSupport: tool.playModeSupport ?? "supported",
+      supportsDryRun: tool.supportsDryRun ?? false, permissions: tool.permissions,
+      examples: tool.examples?.map(({ description, argv }) => ({ description, argv })), target: tool.target ?? "editor", available: tool.available ?? true,
+      requiresPackages: tool.requiresPackages,
+    }), "utf8");
+  }
+  assert.ok(compactBytes < expandedBytes * 0.45, `compact=${compactBytes}, expanded=${expandedBytes}`);
 });
 
 test("official attribute descriptors retain their conservative contract profile", () => {

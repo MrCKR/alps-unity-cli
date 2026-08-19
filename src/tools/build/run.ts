@@ -2,6 +2,7 @@ import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
+import { rejectUnavailableEditorState } from "../editor/state.js";
 import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 
 const BUILD_TARGETS = ["StandaloneWindows64", "StandaloneWindows", "StandaloneOSX", "StandaloneLinux64", "WebGL", "iOS", "Android"] as const;
@@ -12,11 +13,13 @@ export interface BuildRunTargetResult { target: BuildTarget; result: "Succeeded"
 export interface BuildRunResult { targets: BuildRunTargetResult[]; }
 export interface BuildRunDryRunResult { dryRun: true; plannedEffects: Array<{ type: "build-player"; target: BuildTarget; outputPath: string }>; }
 
+const windowsBuildExample = { target: "StandaloneWindows64", output: "Builds/App.exe" };
+
 export default defineTool<BuildRunRequest, BuildRunResult | BuildRunDryRunResult>({
   name: "build.run", summary: "Build player targets in the open Unity Editor and return verified artifacts.",
   description: "Builds requested player targets serially in the selected live Unity Editor. Each target returns its BuildReport terminal summary and a fresh output artifact readback; this synchronous Editor operation cannot be cancelled after it starts.",
   group: "build", target: "editor", destructiveHint: true, supportsDryRun: true, timeoutMs: 600_000, sideEffects: ["build-output-write", "asset-import", "compile"], playModeSupport: "editor-only", handler: "hybrid", supportStatus: "live-bridge",
-  examples: [{ description: "Build a Windows player in the open Editor.", argv: ["tools", "run", "build.run", "--input", "{\"target\":\"StandaloneWindows64\",\"output\":\"Builds/App.exe\""] }],
+  examples: [{ description: "Build a Windows player in the open Editor.", argv: ["tools", "run", "build.run", "--input", JSON.stringify(windowsBuildExample)], input: windowsBuildExample }],
   async execute(request, context) {
     const targets = normalizeTargets(request);
     const outputs = targets.map((target) => outputForTarget(request.output, target, targets.length > 1));
@@ -27,8 +30,8 @@ export default defineTool<BuildRunRequest, BuildRunResult | BuildRunDryRunResult
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
     const state = await waitForEditorTransitionEnd(context, `${context.requestId}_build_state`, deadline);
     if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot start a player build.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
-    if (state.status === "offline") throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "build.run requires an open Unity Editor.", ["Open the selected Unity project and retry."]);
-    if (state.status === "conflict" || !state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "build.run could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
+    rejectUnavailableEditorState(state, "build.run");
+    if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "build.run could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
     if (state.status !== "ready") throw new StructuredToolError("E_UNITY_TRANSITIONING", "build.run requires a stable Editor generation.", ["Wait for editor.state to become ready, then retry."], undefined, true, 250);
     if (state.state.playMode.value !== "edit") throw new StructuredToolError("E_TOOL_PLAYMODE_UNAVAILABLE", "build.run is editor-only and cannot run in Play Mode.", ["Exit Play Mode before running build.run."], { toolName: "build.run", playModeSupport: "editor-only" }, false, 0);
     let canonicalTerminalReceived = false;
@@ -86,4 +89,4 @@ function buildTimeout(error: unknown): StructuredToolError {
     ...(blockers ? { blockers } : {}),
   }, false, 0);
 }
-function isPreEffectBuildError(code: string): boolean { return new Set(["E_SCHEMA_INVALID", "E_EDITOR_SESSION_REPLACED", "E_BUILD_SCENES_EMPTY", "E_TOOL_PLAYMODE_UNAVAILABLE", "E_UNITY_BLOCKED", "E_UNITY_TRANSITIONING", "E_INSTANCE_NOT_RUNNING", "E_INSTANCE_CONFLICT"]).has(code); }
+function isPreEffectBuildError(code: string): boolean { return new Set(["E_SCHEMA_INVALID", "E_EDITOR_SESSION_REPLACED", "E_BUILD_SCENES_EMPTY", "E_TOOL_PLAYMODE_UNAVAILABLE", "E_UNITY_BLOCKED", "E_UNITY_TRANSITIONING", "E_UNITY_UNRESPONSIVE", "E_INSTANCE_NOT_RUNNING", "E_INSTANCE_UNVERIFIABLE", "E_INSTANCE_CONFLICT"]).has(code); }

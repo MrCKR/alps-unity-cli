@@ -18,7 +18,7 @@ import type { ProjectToolRuntime } from "../project-tool-discovery.js";
 import { validateSchema } from "../schema/validator.js";
 import type { CliResult } from "../types.js";
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../extension-availability.js";
-import { resolveCatalogTool } from "./catalog.js";
+import { resolveCatalogIndependentInvocationTool, resolveCatalogTool } from "./catalog.js";
 import { generatedToolCompletionContract, type GeneratedToolCompletionContract } from "./.generated-completion-registry.js";
 import { findDefineTool, type ToolContext } from "./define.js";
 import { StructuredToolError } from "./errors.js";
@@ -45,7 +45,7 @@ export async function dispatchTool(
   resolvedTool?: ToolMetadata
 ): Promise<CliResult> {
   const dispatchStartedAtMs = Date.now();
-  if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unity_cli tools group to see tool groups."]);
+  if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <k1|k2|...> to find related tools."]);
   const executionFlagError = validateExecutionTimeoutFlags(flags, requestId);
   if (executionFlagError) return executionFlagError;
 
@@ -70,6 +70,15 @@ export async function dispatchTool(
     && typeof parsed.input.project === "string" && dispatchFlags.project === undefined
     ? { ...dispatchFlags, project: parsed.input.project }
     : dispatchFlags;
+  // exact 弹窗恢复及其 describe 学习入口不依赖被同一 modal 阻断的 Live catalog。
+  const catalogIndependentTool = resolveCatalogIndependentInvocationTool(
+    name,
+    typeof seed.name === "string" ? seed.name : undefined,
+  );
+  if (catalogIndependentTool) {
+    const input = requestFromInput(catalogIndependentTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
+    return dispatchResolvedTool(catalogIndependentTool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+  }
   const coreSpec = bridgeCommandRegistry.specs().find((spec) => (spec.toolName === name || spec.bridgeCommand === name) && !EXTENSION_GROUPS.has(spec.group) && spec.internal !== true);
   // Runtime descriptor 的唯一 owner 在 TS catalog；执行直接进入共享 runtime wrapper，目标缺失时返回 runtime selector 错误。
   if (localMetadata?.handler === "bridge-runtime") {
@@ -226,7 +235,7 @@ async function executeDefinition(
   };
 
   try {
-    return await run();
+    return await settleToolExecutionAtDeadline(tool.name, requestId, completion.mutation, absoluteDeadlineMs, run);
   } catch (error) {
     if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
     if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
@@ -234,6 +243,45 @@ async function executeDefinition(
       `Run unity_cli tools describe ${tool.name} for input requirements and examples.`
     ]);
   }
+}
+
+/** Tool自己的wait未按时settle时由框架结束CLI等待；已开始的Unity effect不因此停止。 */
+export async function settleToolExecutionAtDeadline(
+  toolName: string,
+  requestId: string,
+  mutation: boolean,
+  absoluteDeadlineMs: number,
+  run: () => Promise<CliResult>,
+): Promise<CliResult> {
+  const remainingMs = absoluteDeadlineMs - Date.now();
+  if (remainingMs <= 0) return toolDeadlineFailure(toolName, requestId, mutation);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      run(),
+      new Promise<CliResult>((resolveTimeout) => {
+        timer = setTimeout(() => resolveTimeout(toolDeadlineFailure(toolName, requestId, mutation)), remainingMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** mutation超时只能读取业务状态，不能建议直接重试或声称底层执行已取消。 */
+function toolDeadlineFailure(toolName: string, requestId: string, mutation: boolean): CliResult {
+  return failure(
+    requestId,
+    "E_EXECUTION_TIMEOUT",
+    mutation
+      ? `Tool ${toolName} did not return a terminal result before the immutable deadline; its effect may still be running or partially applied.`
+      : `Tool ${toolName} did not return a read result before the immutable deadline.`,
+    mutation
+      ? ["Inspect editor.state and the affected business state before deciding whether to submit a new request."]
+      : ["Inspect editor.state and submit a new read only after Unity is responsive."],
+    mutation ? { outcome: "unknown" } : undefined,
+    { transient: false, retryAfterMs: 0 },
+  );
 }
 
 /** TS Tool 的 terminal proof 与 C# driver 使用同一 execution-class 约束。 */

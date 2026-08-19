@@ -9,7 +9,7 @@ export interface EditorDialogClickResult { clicked: true; dialogId: string; titl
 export default defineTool<EditorDialogClickRequest, EditorDialogClickResult>({
   name: "editor.dialog.click",
   summary: "Click one enabled button on a currently observed Unity desktop dialog.",
-  description: "Re-observes the selected canonical Unity project, then clicks the exact enabled button label returned by editor.dialogs. The tool proves that the original dialog disappeared or is no longer modal after BM_CLICK.",
+  description: "Re-observes the selected canonical Unity project, invokes the exact enabled button label returned by editor.dialogs, and proves that the original dialog disappeared or is no longer modal.",
   group: "editor",
   target: "editor",
   destructiveHint: false,
@@ -26,11 +26,13 @@ export default defineTool<EditorDialogClickRequest, EditorDialogClickResult>({
     let instance;
     try { instance = (await selectObservationInstanceForFlags(context.flags ?? {}, context.dataDir, Math.max(0, deadlineMs - Date.now()))).instance; }
     catch (error) { if (error instanceof InstanceRegistryError) throw new StructuredToolError(error.code, error.message, error.nextActions, error.details); throw error; }
-    if (instance.status === "conflict") throw new StructuredToolError("E_INSTANCE_CONFLICT", "Multiple Unity Editor sessions claim the selected project identity.", ["Close duplicate Unity Editor processes before clicking a dialog."]);
+    if (instance.status === "conflict") throw new StructuredToolError("E_INSTANCE_CONFLICT", "Multiple verified Unity Editor sessions claim the selected project identity.", ["Close duplicate Unity Editor processes before clicking a dialog."]);
+    if (instance.status === "unverifiable") throw new StructuredToolError("E_INSTANCE_UNVERIFIABLE", "Unity Editor process ownership could not be verified safely.", ["Run unity_cli instances list or tools run editor.state to observe the identity again."]);
     const observed = await observeEditorDialogs({ instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath }, Math.max(0, deadlineMs - Date.now()));
     const recovery = ["Run tools run editor.dialogs, then run tools run editor.dialog.click with a current dialogId and exact enabled button label."];
+    if (observed.outcome === "unproven" && observed.reason === "process-claims-unverifiable") throw new StructuredToolError("E_INSTANCE_UNVERIFIABLE", "Unity Editor process ownership could not be verified safely.", ["Run unity_cli instances list or tools run editor.state to observe the identity again."]);
     if (observed.outcome === "unproven" || observed.outcome === "unsupported") throw new StructuredToolError("E_DIALOG_OBSERVATION_FAILED", "Windows dialog observation could not be proven for the selected Unity project.", recovery);
-    if (observed.outcome === "conflict") throw new StructuredToolError("E_INSTANCE_CONFLICT", "Multiple Unity Editor processes claim the selected project identity.", recovery);
+    if (observed.outcome === "conflict") throw new StructuredToolError("E_INSTANCE_CONFLICT", "Multiple verified Unity Editor processes claim the selected project identity.", recovery);
     if (observed.outcome === "offline") throw new StructuredToolError("E_INSTANCE_NOT_RUNNING", "The selected Unity project has no attributable Unity process.", recovery);
     if (observed.outcome !== "observed") throw new StructuredToolError("E_DIALOG_OBSERVATION_FAILED", "Windows dialog observation could not be proven for the selected Unity project.", recovery);
     if (observed.dialogs.length === 0) throw new StructuredToolError("E_DIALOG_NOT_FOUND", "No modal dialog is currently visible for the selected Unity project.", recovery);

@@ -81,6 +81,15 @@ test("command help结构化声明native优先、attribute显式名与零映射",
   });
 });
 
+test("command help复用精简Tool descriptor且不公开结果schema", async () => {
+  const result = await execute(["command", "UnityPipeline_eval", "--help"], runtimeFor([attributeEvalTool()], []) as never);
+  assert.ok(result.ok, JSON.stringify(result));
+  const tool = (result.data as { tool: Record<string, unknown> }).tool;
+  assert.ok(tool.inputSchema);
+  for (const field of ["outputSchema", "group", "permissions", "available", "contractProfile", "summary"])
+    assert.equal(Object.hasOwn(tool, field), false, field);
+});
+
 test("command省略name时投影同一live Tool catalog", async () => {
   const result = await execute(["command"], runtimeFor([attributeEvalTool()], []) as never);
   assert.ok(result.ok, JSON.stringify(result));

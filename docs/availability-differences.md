@@ -14,11 +14,13 @@ catalog只包含必须由已打开Unity Editor或development Player提供的项�
 
 | 状态 | Discovery 与执行 |
 |------|------------------|
-| `ready` | 返回当前实例完整 Tool catalog；可执行状态由 descriptor 表达 |
-| `transitioning` | supervisor 在同一 deadline 内尝试绑定恢复后的 generation；无法稳定时返回结构化 transition/timeout error |
-| `blocked` | discovery 或执行返回 blocker error；`editor.state` / `editor.dialogs` 提供只读观察 |
-| `offline` | 不返回 capability catalog；返回 `E_INSTANCE_NOT_RUNNING` |
-| `conflict` | 不猜测 session；返回 `E_INSTANCE_CONFLICT` |
+| `ready` | 返回当前实例完整Tool catalog；session/listener与近期主线程pulse均已证明 |
+| `transitioning` | supervisor在同一deadline内等待lifecycle与listener generation交接 |
+| `blocked` | 返回blocker error；`editor.state` / `editor.dialogs`提供独立只读恢复路径 |
+| `unresponsive` | transport存在但主线程不可响应；返回`E_UNITY_UNRESPONSIVE` |
+| `unverifiable` | ownership证据不完整；返回`E_INSTANCE_UNVERIFIABLE`，不得误报duplicate |
+| `offline` | 不返回capability catalog；返回`E_INSTANCE_NOT_RUNNING` |
+| `conflict` | 至少两个verified live claim；返回`E_INSTANCE_CONFLICT` |
 
 没有 selector 且 CWD 不在 Unity 项目中时返回 `E_INSTANCE_REQUIRED`。静态 snapshot 不作为公开 fallback。
 
@@ -78,7 +80,7 @@ Unity API版本门禁不从major版本猜测。Tool仍在当前实例catalog中�
 
 ## Domain Reload
 
-Domain reload 期间，registry 将实例归约为 `transitioning`，listener generation 可以变化。session supervisor 在同一 direct call 与 absolute deadline 内重新验证 generation；终态前断连或 deadline 耗尽返回 `E_EXECUTION_TIMEOUT`。该错误只表示本次调用没有可信终态；调用方可观察状态、重试、重复调用或继续 mutation，并自行决定后续动作。`nextActions` 仅为建议。
+Domain reload期间，Registry v3 lifecycle将实例归约为`transitioning`，listener generation随后交接；Health v3中该generation的首个Unity主线程pulse才允许归约为`ready`。系统不读取固定三分钟或其他deadline marker。session supervisor只在同一`editorSessionId`内续接完全相同的请求；首次mutation POST后若session改变，不向新session重投，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。调用方先读取业务状态，再决定是否提交全新请求。
 
 ## AI Agent 处理方式
 

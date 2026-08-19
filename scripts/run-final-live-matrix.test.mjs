@@ -32,6 +32,7 @@ import {
   FROZEN_DIRECT_TOOL_NAMES,
   hasReusableDirectCase,
   isReadyEditorState,
+  loadInternalResultSchemas,
   loadRuntimeInventoryBaseline,
   markOwnedProjectSnapshotClean,
   markOwnedProjectSnapshotReconciled,
@@ -39,8 +40,9 @@ import {
   ownedSceneBakeCleanupPlan,
   packageResolveReconciliationIssue,
   parseOptions,
-  parsePublicExampleArgv,
+  parsePublicExample,
   prepareOwnedProjectSnapshot,
+  publicDescriptorIssue,
   publicMatrixArgv,
   readDirectCapture,
   resolveCaseTemplate,
@@ -250,31 +252,46 @@ test("parseOptions rejects missing direct-call prerequisites", () => {
   assert.throws(() => parseOptions(["--cli", "node", "--project", "P", "--evidence-dir", "E", "--timeout-ms", "0"]), /must be positive/);
 });
 
-test("parsePublicExampleArgv uses public input and rejects removed execution flags", () => {
+test("parsePublicExample maps structured input and execution without argv", () => {
   assert.deepEqual(
-    parsePublicExampleArgv({ argv: ["unity_cli", "tools", "run", "sample.echo", "--input", '{"message":"hello"}'] }, "tool", "sample.echo"),
+    parsePublicExample({ description: "Echo.", input: { message: "hello" } }, "tool", "sample.echo"),
     { input: { message: "hello" }, flags: [] }
   );
   assert.deepEqual(
-    parsePublicExampleArgv({ argv: ["tools", "run", "sample.info", "--include-disabled", "false"] }, "tool", "sample.info"),
-    { input: { includeDisabled: false }, flags: [] }
+    parsePublicExample({ description: "Preview.", input: {}, execution: { dryRun: true, timeoutMs: 2500 } }, "tool", "sample.info"),
+    { input: {}, flags: ["--dry-run", "--timeout-ms", "2500"] }
   );
-  for (const flag of ["--job", "--wait", "--wait-timeout-ms=1000"]) {
-    assert.throws(
-      () => parsePublicExampleArgv({ argv: ["tools", "run", "sample.echo", "--input", "{}", flag] }, "tool", "sample.echo"),
-      /Removed execution flag is forbidden/
-    );
-  }
-  for (const flag of ["--project", "--unity=Unity.exe"]) {
-    assert.throws(
-      () => parsePublicExampleArgv({ argv: ["tools", "run", "sample.echo", "--input", "{}", flag, ...(flag === "--project" ? ["D:/Project"] : [])] }, "tool", "sample.echo"),
-      /Removed capability routing flag is forbidden/
-    );
-  }
   assert.throws(
-    () => parsePublicExampleArgv({ argv: ["tools", "run", "sample.echo", "--args", "{}"] }, "tool", "sample.echo"),
-    /Non-contract args\/dryRun wire fields are forbidden/
+    () => parsePublicExample({ input: {}, argv: ["tools", "run", "sample.echo"] }, "tool", "sample.echo"),
+    /unsupported fields: argv/
   );
+  assert.throws(
+    () => parsePublicExample({ input: { dryRun: true } }, "tool", "sample.echo"),
+    /execution-only dryRun/
+  );
+  assert.throws(
+    () => parsePublicExample({ input: {}, execution: { timeoutMs: 0 } }, "tool", "sample.echo"),
+    /positive integer/
+  );
+});
+
+test("public descriptor audit rejects removed fields and default availability", () => {
+  const descriptor = {
+    name: "sample.echo", description: "Echo one value.", inputSchema: { type: "object" },
+    destructiveHint: false, playModeSupport: "supported", supportsDryRun: false, target: "editor",
+    examples: [{ description: "Echo.", input: { value: "hello" } }],
+  };
+  assert.equal(publicDescriptorIssue(descriptor), null);
+  assert.match(publicDescriptorIssue({ ...descriptor, outputSchema: {} }), /outputSchema/);
+  assert.match(publicDescriptorIssue({ ...descriptor, available: true }), /omit default available:true/);
+  assert.match(publicDescriptorIssue({ ...descriptor, available: false }), /unavailableReason/);
+});
+
+test("Live harness loads every package result schema from current compiled metadata", async () => {
+  const schemas = await loadInternalResultSchemas(resolve("dist", "cli.js"));
+  assert.ok(schemas.size >= 400);
+  assert.equal(schemas.get("code.exec")?.oneOf instanceof Array, true);
+  assert.equal(schemas.get("scene.gameobject")?.type, "object");
 });
 
 test("external-state-dependent Tools do not use descriptor placeholders as positive matrix inputs", async () => {
@@ -298,7 +315,7 @@ test("test.cancel coverage freezes and cancels one coordinator-owned run identit
 });
 
 test("matrix dialog coverage never runs an unknown modal and uses the fresh owned dialog", async () => {
-  const descriptor = { outputSchema: {} };
+  const descriptor = { resultSchema: {} };
   const ownedDialog = (dialogId = "fresh-owned-dialog") => ({
     dialogId,
     title: MATRIX_OWNED_DIALOG.title,
@@ -315,7 +332,7 @@ test("matrix dialog coverage never runs an unknown modal and uses the fresh owne
       call: async (id, argv, assertion) => {
         calls.push({ id, argv });
         const envelope = id.endsWith(".describe")
-          ? { ok: true, requestId: "describe", data: { descriptor: { outputSchema: {} } } }
+          ? { ok: true, requestId: "describe", data: { name: "editor.dialogs", description: "Read dialogs.", inputSchema: { type: "object" }, destructiveHint: false, playModeSupport: "supported", supportsDryRun: false, target: "editor" } }
           : { ok: true, requestId: "fresh-observation", data: { observedAt: "2026-01-01T00:00:00.000Z", dialogs } };
         const result = { exitCode: 0 };
         const issue = assertion(envelope, result);
@@ -543,18 +560,26 @@ test("extension doctor validation consumes the current checks envelope", () => {
 
 test("runtime inventory is exact for product capabilities and requires Dev fixtures", async () => {
   const baseline = await loadRuntimeInventoryBaseline();
-  assert.equal(baseline.tools.length, 417);
+  assert.equal(baseline.tools.length, 418);
   assert.equal(baseline.tools.includes("docs.list") || baseline.tools.includes("docs.topic"), false);
-  const projectTools = ["validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"];
-  const discovered = {
-    tools: [...baseline.tools, ...projectTools],
-    toolSources: new Map([...baseline.tools.map((name) => [name, "built-in"]), ...projectTools.map((name) => [name, "project"])])
-  };
+  const projectTools = [
+    "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status",
+    "UnityPipeline_test", "UnityPipeline_validation.official.any-output", "UnityPipeline_validation.official.dictionary",
+    "UnityPipeline_validation.official.jobject", "UnityPipeline_validation.official.result-getter-throw",
+    "UnityPipeline_validation.official.runtime", "UnityPipeline_validation.official.structured",
+    "UnityPipeline_validation.official.sync", "UnityPipeline_validation.official.task",
+    "UnityPipeline_validation.official.throw", "UnityPipeline_validation.official.timeout",
+    "UnityPipeline_validation.official.timeout-status"
+  ];
+  const discovered = { tools: [...baseline.tools, ...projectTools] };
   assert.deepEqual(runtimeInventoryIssues(discovered, baseline), []);
-  discovered.tools = discovered.tools.filter((name) => name !== "probuilder.create-shape");
-  assert.match(runtimeInventoryIssues(discovered, baseline).join(" "), /Missing current public Tools: probuilder\.create-shape/);
-  discovered.tools.push("probuilder.create-shape", "build.status");
-  discovered.toolSources.set("build.status", "built-in");
+  discovered.tools.push("project.unexpected");
+  assert.match(runtimeInventoryIssues(discovered, baseline).join(" "), /Unexpected non-project Tools: project\.unexpected/);
+  discovered.tools = discovered.tools.filter((name) => name !== "project.unexpected" && name !== "validation.echo" && name !== "probuilder.create-shape");
+  const missingIssues = runtimeInventoryIssues(discovered, baseline).join(" ");
+  assert.match(missingIssues, /Missing current public Tools: probuilder\.create-shape/);
+  assert.match(missingIssues, /Missing required project fixture Tools: validation\.echo/);
+  discovered.tools.push("validation.echo", "probuilder.create-shape", "build.status");
   assert.match(runtimeInventoryIssues(discovered, baseline).join(" "), /Removed public Tools are discoverable: build\.status/);
 });
 
@@ -580,6 +605,13 @@ test("frozen direct cases are a complete request-specific closed set", async () 
     assert.ok(Array.isArray(recipe.cleanup) && recipe.cleanup.length > 0, `${name} must declare cleanup`);
     const serialized = JSON.stringify(recipe);
     assert.doesNotMatch(serialized, /probuilder_reset|data\.result|waitReady|--channel|--wait(?:-timeout-ms)?|--project|--unity/);
+    const steps = [...(recipe.setup ?? []), ...(recipe.before ?? []), ...(recipe.preflight ?? []), recipe.invocation, ...(recipe.after ?? []), ...(recipe.cleanup ?? [])];
+    for (const candidate of steps) {
+      const probe = candidate?.input?.completionProbe;
+      if (!probe) continue;
+      assert.equal(typeof probe.readTool, "string", `${name} completionProbe must name readTool`);
+      assert.equal(Object.hasOwn(probe, "context"), false, `${name} completionProbe must not use removed context`);
+    }
     for (const setup of [...(recipe.setup ?? []), ...(recipe.before ?? []), ...(recipe.after ?? []), ...(recipe.cleanup ?? [])]) {
       assert.notEqual(setup.name, "code.exec", `${name} must not use code.exec outside its own invocation`);
     }
@@ -591,7 +623,7 @@ test("frozen direct cases are a complete request-specific closed set", async () 
   assert.match(source, /recoverInterruptedDirectCase/);
   assert.match(source, /direct-recovery\.json/);
   // direct Tool 不可重放；仅最终只读 ready 汇总允许收敛重试。
-  assert.match(source, /cleanupAttempted: true \}, retryAssertion: true \}, project\)/);
+  assert.match(source, /cleanupAttempted: true \}, retryAssertion: businessSucceeded && cleanupSucceeded \}, project\)/);
   assert.match(source, /const retryReadiness = meta\.retryAssertion === true[\s\S]*base\[0\] === "tools"[\s\S]*base\[1\] === "run"[\s\S]*base\[2\] === "editor\.state"/);
   assert.match(source, /if \(!issue \|\| !retryReadiness \|\| attempt === TRANSIENT_MAX_ATTEMPTS\) break/);
   assert.doesNotMatch(source, /envelope\?\.error\?\.transient !== true/);
@@ -764,6 +796,12 @@ test("undo redo and animator recipes avoid reload-prone or externally driven tar
   assert.equal(redo.setup[2].input.completionProbe.input.target, "${target}");
   assert.deepEqual(undo.cleanup.map((item) => item.name), ["go.delete"]);
   assert.deepEqual(redo.cleanup.map((item) => item.name), ["go.delete"]);
+  assert.deepEqual(animator.before.map((item) => item.name), ["scene.gameobject", "animation.state"]);
+  assert.equal(animator.before[0].capture.beforeTargetId, "/data/gameObject/id");
+  assert.equal(animator.before[1].capture.beforeCurrentStateHash, "/data/animator/currentState/fullPathHash");
+  assert.equal(animator.invocation.capture.invocationCurrentStateHash, "/data/state/currentStateHash");
+  assert.deepEqual(animator.after.map((item) => item.name), ["scene.gameobject", "animation.state"]);
+  assert.equal(animator.after[1].capture.afterCurrentStateHash, "/data/animator/currentState/fullPathHash");
   assert.deepEqual(animator.cleanup.map((item) => item.name), ["go.delete"]);
   assert.ok(!animator.cleanup.some((item) => item.name === "asset.delete"));
 });

@@ -86,8 +86,11 @@ unity_cli --version
 ### 1. 发现目标实例
 
 ```powershell
-# 列出运行中的 Unity 实例
+# 默认只列非 offline 实例；hiddenOfflineCount 表示被隐藏数量
+# invalidRecordCount 出现时表示旧/坏记录已隔离，合法v3实例仍会返回
 unity_cli instances list
+# 需要审计历史/offline 合法记录时显式展开
+unity_cli instances list --all
 
 # 已知实例时，在后续每条 Bridge 命令上显式传入
 unity_cli tools group --instance <instanceId>
@@ -106,8 +109,8 @@ unity_cli tools group
 
 # 第二步：按组查看工具摘要
 unity_cli tools group list camera
-# 或搜索关键词（支持 | 分隔多关键词，OR 匹配）
-unity_cli tools search screenshot
+# 或搜索关键词（使用 | 分隔多关键词，OR 匹配；PowerShell必须单引号包住整段）
+unity_cli tools search 'screenshot|camera'
 
 # 第三步：查看工具完整描述（执行前必做）
 unity_cli tools describe camera.screenshot
@@ -229,30 +232,38 @@ npm link
 
 ## Live Editor 执行
 
-需要 Unity 执行的 Tool 只连接已打开的 Unity Editor，并在同一次 direct 调用中返回最终业务结果。`build.run`、`test.run`、`editor.refresh`、`code.exec` 以及需要 Editor 刷新的 Package Tool 都会等待终态；它们不创建可查询的后台任务。`code.exec`保留完整同步C#执行能力：它不会拒绝死循环、阻塞等待或长期占用Unity主线程的代码。提交这类代码前应先判断是否确有必要；一旦开始执行，timeout只能停止CLI等待，不能中止代码，结果可能未知且Unity可能需要结束进程才能恢复。完整边界见`tools describe code.exec`和`docs/safety-boundaries.md`。
+需要 Unity 执行的 Tool 只连接已打开的 Unity Editor，并在同一次 direct 调用中返回最终业务结果。`build.run`、`test.run`、`editor.refresh`、`code.exec` 以及需要 Editor 刷新的 Package Tool 都会等待终态；它们不创建可查询的后台任务。调用CLI的外层进程必须等待CLI退出，host等待预算至少设为传给CLI的`--timeout-ms`加5000毫秒，不能把CLI放到后台后提前返回。CLI在自身deadline到达时返回一个JSON timeout envelope，并在stdout写完或最多再等待1秒后退出。
+
+`code.exec`保留完整同步C#执行能力：它不会拒绝死循环、阻塞等待或长期占用Unity主线程的代码。提交这类代码前应先判断是否确有必要；一旦开始执行，timeout只能停止CLI等待，不能中止代码，结果可能未知且Unity可能需要结束进程才能恢复。CLI进程退出也不证明Unity中的C#已停止。完整边界见`tools describe code.exec`和`docs/safety-boundaries.md`。
 
 ## 能力发现与执行
 
-公开能力不维护静态命令清单。Tool 的当前 schema、可用性、示例与结果契约以 CLI discovery 为准：
+公开能力不维护静态命令清单。Tool 的当前输入 schema、可用性、示例与调用边界以 CLI discovery 为准；结果 schema 留在内部 contract 中校验实际业务 data：
 
 ```powershell
 unity_cli tools group
 unity_cli tools group list <group>
-unity_cli tools search <keyword>
+unity_cli tools search <k1|k2|...>
 unity_cli tools describe <tool-name>
 unity_cli tools run <tool-name> --input '<json>' [--instance <id|projectPath|alias>]
 ```
 
-Tool discovery 必须绑定已连接实例；未连接时返回稳定 instance error，不返回静态或空目录。连接后完整显示 package 内置、Extension、项目注册、Editor 与 Runtime 能力，不按 `source` 或当前模式过滤。`source` 只作描述/审计。`examples[].argv` 是可执行参数 token 数组，表示合法默认行为和调用形状；调用方明确要求的业务值优先于schema default和example值。业务参数全部放入 `--input`、`--input-file` 或 `--stdin`，命令控制项不混入业务 JSON。
+Tool discovery 必须绑定已连接实例；未连接时返回稳定 instance error，不返回静态或空目录。连接后完整显示 package 内置、Extension、项目注册、Editor 与 Runtime 能力，不按 `source` 或当前模式过滤。`source` 只作内部描述/审计。`examples[].input` 是结构化业务 JSON，按需 `examples[].execution` 承载 dryRun/timeoutMs；调用方明确要求的业务值优先于schema default和example值。业务参数全部放入 `--input`、`--input-file` 或 `--stdin`，命令控制项不混入业务 JSON。
 
-Bridge-backed Tool 在 Unity 主线程执行。CLI 的 session supervisor 在一个不可变 deadline 内透明处理 compile、import、domain reload 和 listener restart，并在同一次 direct 调用中返回已证明的业务终态或结构化失败。观察当前进度和 blocker 使用 `unity_cli tools run editor.state`；该读取型 Tool 立即返回，不等待状态变化。
+Bridge-backed Tool在Unity主线程执行。CLI使用Registry/Health v3与只读内存pulse，在一个不可变deadline内处理compile、import、domain reload和listener generation交接。mutation只允许在同一`editorSessionId`内用完全相同的请求续接；首次POST后session改变时禁止向新session重投，并返回outcome unknown的`E_EXECUTION_TIMEOUT`。`unity_cli tools run editor.state --input '{}'`、`editor.dialogs`与`editor.dialog.click`使用exact frozen本地descriptor进入同一dispatcher，因此统一状态观察和弹窗恢复不依赖被阻断的Live catalog；其他Tool仍严格依赖Live catalog。
 
 ### 实例与目标
 
 ```powershell
+# 默认隐藏 offline，使用 --all 展开完整集合
 unity_cli instances list
+unity_cli instances list --all
 unity_cli instances prune
+```
 
+实例文件逐个按Registry v3校验。旧格式、损坏或不可读记录不会阻断其他合法实例，也不会被兼容解析或自动删除；存在时list/prune返回`invalidRecordCount`，`doctor`报告warn。显式选择对应坏记录仍严格失败。
+
+```powershell
 # target 只管理 canonical project identity 的别名
 unity_cli target alias set <projectPath|instanceId> <alias>
 unity_cli target alias unset <alias>
@@ -295,7 +306,7 @@ unity_cli init --check --project C:\path\MyProject
 
 `init` 以 copy 模式把 `com.unity_cli` 安装到 `Packages/com.unity_cli/`。已打开的 Unity Editor 自动注册 canonical project identity 和 Live listener；CLI 通过 `instances list` 与 `--instance` 选择唯一会话，公开接口不接受 endpoint 或 port。
 
-Bridge command、handler、journal、fingerprint、listener generation 和 completion contract 都是内部实现，不构成第二套用户入口。mutation 在首个真实 effect 前持久化 effect barrier；effect 后只有 fresh business readback 或 artifact proof 能完成。同一次调用可在 compile、reload 或 listener restart 后续接完全相同的请求以取得 terminal；调用返回后 CLI 不会自行启动新的用户调用。无法证明终态时返回 `E_EXECUTION_TIMEOUT`，是否观察状态、重试、重复调用或继续 mutation 由调用方决定。
+Bridge command、handler、journal、fingerprint、listener generation和completion contract都是内部实现，不构成第二套用户入口。mutation在首个真实effect前持久化effect barrier；effect后只有fresh business readback或artifact proof能完成。同一次调用只在`editorSessionId`不变时续接完全相同的请求；首次POST后session改变则禁止重投。无法证明终态时返回`E_EXECUTION_TIMEOUT`，调用方先观察业务状态，再作全新提交决策。
 
 当前能力、Extension 依赖和 Editor/PlayMode 可用性只通过 `tools` discovery 获取，不在 README 冻结能力名清单。
 
@@ -318,7 +329,7 @@ unity_cli tools run my.editor-tool --input '{"message":"hello"}' --instance <id|
 
 ### 安全机制
 
-- **Descriptor**：每个工具必须有完整的 inputSchema/outputSchema
+- **Descriptor**：公开 describe 提供完整 inputSchema 与调用/风险信息；内部 metadata 保留 outputSchema 并校验业务结果
 - **Envelope**：所有输入输出必须通过统一 envelope 格式
 - **内部完整性校验**：handler 与 descriptor 不一致时默认阻止执行
 - **target-scoped availability**：工具可用性依赖目标实例和 Play Mode 状态

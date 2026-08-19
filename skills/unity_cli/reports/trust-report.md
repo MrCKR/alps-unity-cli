@@ -23,7 +23,7 @@ The recorder accepts bounded summary fields, rejects common credential, endpoint
 
 ## Caller Authority
 
-The Skill does not add confirmation, intent review, retry restrictions, or a predefined operation range. `E_EXECUTION_TIMEOUT`, `transient`, and `nextActions` communicate facts or suggestions; retry and mutation decisions remain with the caller. Same-call session recovery may continue an exact request, while no new caller invocation is started after the call returns.
+The Skill does not add confirmation, intent review, or a predefined operation range. `E_EXECUTION_TIMEOUT`, `transient`, and `nextActions` communicate facts or suggestions; the caller retains authority after observing business state. Same-call recovery may continue exact bytes only while `editorSessionId` is unchanged; after the first mutation POST, a new Editor session forbids automatic redelivery.
 
 ## Rollback Boundary
 

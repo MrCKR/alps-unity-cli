@@ -12,7 +12,7 @@
     "deadline": "one absolute deadline frozen before lifecycle waiting",
     "digestVersion": 1,
     "digest": "SHA256(UTF8('unity-cli-request-v1') + NUL + UTF8(instanceId) + NUL + exactRequestBodyBytes)",
-    "redelivery": "a disconnected or timed-out direct call has no request-level recovery or replay guarantee; the caller decides whether to submit a new call"
+    "redelivery": "within one direct call, exact bytes may be redelivered only while editorSessionId is unchanged; after the first mutation POST a new Editor session forbids another POST"
   },
   "toolExecution": {
     "success": "terminal business success proven by the tool's unique completion contract",
@@ -37,14 +37,20 @@
       "journal": false
     }
   },
+  "operability": {
+    "registry": "v3 atomic lifecycle publication for discovery and generation handoff",
+    "health": "v3 strict transport identity plus read-only in-memory main-thread pulse",
+    "publicStates": ["ready", "transitioning", "blocked", "unresponsive", "unverifiable", "offline", "conflict"],
+    "domainReload": "registry lifecycle, new listener generation, then the first main-thread pulse for that generation; no fixed-duration marker"
+  },
   "transitionPolicy": {
-    "transparent": ["domain reload", "script compile", "asset import/update", "listener restart", "endpoint fallback", "supported PlayMode transition", "waitable Unity progress"],
-    "failClosed": ["external modal blocker", "identity conflict", "process exit before terminal", "request ID digest conflict", "schema failure", "security failure"]
+    "transparent": ["same-session domain reload", "script compile", "asset import/update", "listener restart", "endpoint fallback", "supported PlayMode transition", "waitable Unity progress"],
+    "failClosed": ["Editor session replacement after mutation POST", "external modal blocker", "identity conflict", "unverifiable identity", "unresponsive main thread", "process exit before terminal", "request ID digest conflict", "schema failure", "security failure"]
   },
   "directCall": {
     "terminal": "each direct call returns a proven terminal business result or terminal structured failure",
-    "timeout": "timeout or disconnect returns E_EXECUTION_TIMEOUT; the caller decides whether and how to retry",
-    "replay": "the system provides no request-level replay interception or outcome recovery",
+    "timeout": "timeout, disconnect, or cross-session mutation fence returns E_EXECUTION_TIMEOUT with unknown outcome; observe business state before a new submission decision",
+    "replay": "same-session recovery may attach or redeliver exact bytes; cross-session mutation redelivery is forbidden",
     "audit": "audit is a session-level append log"
   },
   "compile": {
@@ -66,6 +72,8 @@
     "E_INSTANCE_REMOTE_PATH_UNSUPPORTED",
     "E_INSTANCE_PATH_CASE_SENSITIVE_UNSUPPORTED",
     "E_INSTANCE_CONFLICT",
+    "E_INSTANCE_UNVERIFIABLE",
+    "E_UNITY_UNRESPONSIVE",
     "E_UNITY_BLOCKED",
     "E_UNITY_TRANSITION_TIMEOUT",
     "E_EXECUTION_TIMEOUT",

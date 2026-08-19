@@ -1,6 +1,6 @@
 import { failure, success } from "../output.js";
 import type { CliResult } from "../types.js";
-import { loadToolCatalog, publicToolDescriptor } from "../tools/catalog.js";
+import { loadToolCatalog, publicToolDescriptor, resolveCatalogIndependentOperabilityTool } from "../tools/catalog.js";
 import { dispatchTool, type ToolsRuntime } from "../tools/dispatcher.js";
 import type { ToolMetadata } from "../tools/metadata/index.js";
 
@@ -70,7 +70,11 @@ export async function handleCommand(
     });
   }
 
-  const catalog = await loadToolCatalog(flags, runtime, `${requestId}_command_catalog`);
+  // exact可操作性观察/恢复命令复用frozen本地descriptor，避免在handler前依赖被阻断的Live catalog。
+  const operabilityTool = commandName ? resolveCatalogIndependentOperabilityTool(commandName) : undefined;
+  const catalog = operabilityTool
+    ? { ok: true as const, tools: [operabilityTool] }
+    : await loadToolCatalog(flags, runtime, `${requestId}_command_catalog`);
   if (!catalog.ok) return catalog;
 
   if (!commandName) {

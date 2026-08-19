@@ -5,7 +5,7 @@ import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { contractToolNames, listCsFiles, readCsSources } from "./helpers/csharp-test-helpers.js";
 
-const ONE_CAPABILITY_DOMAINS = ["scene", "asset", "build", "animation", "package", "graphics", "physics", "profiler"];
+const ONE_CAPABILITY_DOMAINS = ["scene", "asset", "build", "animation", "graphics", "physics", "profiler"];
 
 async function oneCapabilityToolNames(domain: string): Promise<string[]> {
   const files = await listCsFiles(new URL(`../unitypkg/Editor/Tools/${domain}/`, import.meta.url));

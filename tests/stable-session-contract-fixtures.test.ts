@@ -11,8 +11,8 @@ function readFixture(name: string): Record<string, unknown> {
 }
 
 test("稳定会话 schema fixture 固定 identity、session、listener 与 absolute deadline", () => {
-  const registry = JSON.stringify(readFixture("instance-registry-v2.schema.json"));
-  const health = JSON.stringify(readFixture("health-v2.schema.json"));
+  const registry = JSON.stringify(readFixture("instance-registry-v3.schema.json"));
+  const health = JSON.stringify(readFixture("health-v3.schema.json"));
   const request = JSON.stringify(readFixture("bridge-request-v2.schema.json"));
 
   for (const field of ["canonicalizationVersion", "canonicalProjectPath", "editorSessionId", "listenerId", "actualPort"]) {
@@ -32,7 +32,7 @@ test("request digest fixture binds the exact direct-call bytes", () => {
 
 test("editor.state 公开 schema 不泄漏 transport generation", () => {
   const state = JSON.stringify(readFixture("editor-state.schema.json"));
-  for (const field of ["ready", "transitioning", "blocked", "offline", "conflict", "freshness"]) {
+  for (const field of ["ready", "transitioning", "blocked", "unresponsive", "unverifiable", "offline", "conflict", "freshness"]) {
     assert.match(state, new RegExp(field));
   }
   assert.doesNotMatch(state, /endpoint|listenerId|actualPort|preferredPort|journalPhase/);
@@ -53,7 +53,7 @@ test("direct-call semantics 固定 immutable request、单 generation read 与 o
     deferredDelivery?: unknown;
   };
   assert.match(semantics.request.digest, /exactRequestBodyBytes/);
-  assert.match(semantics.request.redelivery, /no request-level recovery/);
+  assert.match(semantics.request.redelivery, /editorSessionId is unchanged/);
   assert.equal(semantics.contextRead.ordinary.journal, false);
   assert.match(semantics.contextRead.ordinary.completion, /one validated listener generation/);
   assert.equal(semantics.contextRead["editor.state"].budgetMs, 4000);
@@ -61,7 +61,7 @@ test("direct-call semantics 固定 immutable request、单 generation read 与 o
   assert.equal(semantics.contextRead["editor.state"].journal, false);
   assert.match(semantics.directCall.terminal, /terminal business result/);
   assert.match(semantics.directCall.timeout, /E_EXECUTION_TIMEOUT/);
-  assert.match(semantics.directCall.replay, /no request-level replay/);
+  assert.match(semantics.directCall.replay, /cross-session mutation redelivery is forbidden/);
   assert.match(semantics.directCall.audit, /session-level append log/);
   assert.equal(semantics.deferredDelivery, undefined);
   assert.doesNotMatch(JSON.stringify(semantics), /\bjobs\b|--job|\bbatch\b/);

@@ -42,13 +42,17 @@ unity_cli tools run camera.screenshot --input '{}'
 
 ## Descriptor 示例
 
-`tools describe <name>` 的每个示例把业务 `input` 与命令层 `execution` 分开。`input` 必须只包含 `inputSchema` 定义的 Request 字段；dry-run 与 timeout 会在示例 `argv` 中显示为 `--dry-run` 和 `--timeout-ms <n>`，不能放入 JSON input。`examples[].argv` 是参数 token 数组，不是可直接粘贴的 shell 字符串；PowerShell 内联 JSON 必须用单引号包裹，复杂输入应改用 `--input-file`。`tools describe <name>` 同样提供 `tools run <name> --input <json>` 示例。
+`tools describe <name>` 的每个示例把业务 `input` 与命令层 `execution` 分开。`input` 只包含 `inputSchema` 定义的 Request 字段；dry-run 与 timeout 分别表示为 `execution.dryRun` 和 `execution.timeoutMs`，不能混入业务 JSON。实际调用仍使用固定入口 `tools run <name> --input <json>`，并把 execution 控制映射为 `--dry-run`、`--timeout-ms <n>`；PowerShell内联JSON与`tools search`的pipe-separated关键词都使用单引号，例如`tools search 'camera|screenshot'`，复杂输入优先使用 `--input-file`。
+
+## 调用进程预算
+
+外层命令host必须等待`unity_cli`进程退出，不能在CLI仍运行时把调用报告为完成。host等待预算至少为传给CLI的`--timeout-ms`加5000毫秒；未显式传timeout时，先从`tools describe`的example execution或Tool边界选择CLI timeout，再给host增加同样余量。CLI在自身absolute deadline到达时返回一个`E_EXECUTION_TIMEOUT` envelope；stdout完成后立即退出，stdout未完成时最多再等待1秒。这个退出只结束CLI等待，不会强停Unity中已经开始的effect。
 
 ## Bridge 执行约束
 
-Bridge-backed Tool 由 Unity Editor 主线程执行。session supervisor 在调用的单一 absolute deadline 内透明吸收 compile、import、domain reload 和 listener restart，并在恢复后的 validated generation 上继续同一逻辑请求。调用方不需要轮询 listener 或手动重试 transport。
+Bridge-backed Tool由Unity Editor主线程执行。session supervisor在单一absolute deadline内处理compile、import、domain reload和listener generation交接。读取可在新generation重新执行完整读取；mutation只有在`editorSessionId`未改变时才可用完全相同的request bytes续接durable terminal。
 
-直接 Tool 只返回已证明的 terminal business success 或 terminal structured failure。同一次调用可在 session recovery 中续接完全相同的请求；调用返回后 CLI 不会自行启动新调用，也不提供请求级重放门。超时或终态前断连统一返回 `E_EXECUTION_TIMEOUT`，只表示没有可信终态；调用方可自行决定是否观察业务状态、提交新调用、重复调用或继续 mutation。要即时观察进度、freshness 和 blocker，可使用 `tools run editor.state --input '{}'`；它不会等待 ready 或触发 Unity 副作用。
+首次mutation POST后若Editor session改变，CLI禁止向新session再次POST，并返回`E_EXECUTION_TIMEOUT`、`outcome:unknown`。其他超时或终态前断连同样表示没有可信终态；调用方应先用业务读取或`editor.state`收集证据，再决定是否提交全新请求。`editor.state`使用frozen本地descriptor绕过被阻断的Live catalog，再读取Registry/Health v3、内存主线程pulse、Bridge和Windows modal证据；两个dialog recovery Tool保持同一例外，其他Tool不建立静态fallback。
 
 ### `editor.compile`
 
@@ -117,14 +121,16 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 
 | 错误码 | 原因 | 恢复方式 |
 |--------|------|---------|
-| `E_TOOL_NOT_FOUND_FOR_TARGET` | 工具在目标不可用 | 检查 requiresPackages 和 available |
+| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 运行 `tools search <k1|k2|...>` 发现相关 Tool，再用 `tools describe` 检查 requiresPackages 和 available |
 | `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play`，transient 可重试 |
 | `E_SCHEMA_INVALID` | 输入缺少 inputSchema.required 字段 | 查看 `tools describe` 的 inputSchema |
 | `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 去除可选 `--dry-run` 后直接调用 |
-| `E_INSTANCE_CONFLICT` | 同一 canonical project 存在多个 Unity Editor process/session claim | 关闭重复 Editor，只保留目标 session |
-| `E_INSTANCE_NOT_RUNNING` | 选定项目没有可验证的运行中 Editor | 检查 `instances list` 并打开该项目 |
-| `E_UNITY_BLOCKED` | effect 前已确认 Unity/UI blocker | 读取同一响应的 `details.blockers` 并处理对应窗口 |
-| `E_EXECUTION_TIMEOUT` | 调用在终态前超时或断连 | 没有可信终态；是否观察、重试、重复调用或继续 mutation 由调用方决定 |
+| `E_INSTANCE_CONFLICT` | 至少两个verified live process claim属于同一canonical project | 关闭重复Editor，只保留目标session |
+| `E_INSTANCE_UNVERIFIABLE` | PID/start、project claim或状态文件证据无法证明 | 重新观察；不得把未知mutation自动重投 |
+| `E_INSTANCE_NOT_RUNNING` | 选定项目已证明没有运行中Editor | 检查`instances list`并打开该项目 |
+| `E_UNITY_UNRESPONSIVE` | transport存在，但近期Unity主线程pulse或Bridge响应不可证明 | 读取`editor.state`和`editor.dialogs` |
+| `E_UNITY_BLOCKED` | effect前已确认Unity/UI blocker | 读取同一响应的`details.blockers`并处理对应窗口 |
+| `E_EXECUTION_TIMEOUT` | 调用在终态前超时、断连或触发cross-session mutation fence | 没有可信终态；先观察业务状态，再作全新提交决策 |
 | `E_UNITY_TRANSITION_TIMEOUT` | lifecycle transition 未在 absolute deadline 内稳定 | 检查 `editor.state` 的 progress/blockers |
 
 弹窗 blocker 在原错误的 `details.blockers` 中结构化返回。其 DTO 包含 `type`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 和 `confidence`。使用只读 `tools run editor.dialogs` 获取当前 dialogId、`observedAt`、modal 状态和按钮；无弹窗时返回空数组，Windows 读取失败返回 `E_DIALOG_OBSERVATION_FAILED`。再以 `tools run editor.dialog.click` 精确传入 dialogId 与规范化 button label。该 Tool 会重新验证选中 Unity 的 PID/processStartedAt、dialogId 和唯一 enabled button，并证明原 dialog 已消失或不再 modal；不匹配分别返回 stale、not-found 或 ambiguous 错误，无法证明点击结果返回 `E_DIALOG_CLICK_UNPROVEN`。任意当前可见 modal 的任意 enabled button 都可点击，不设预定义按钮列表、确认或人工处理门。

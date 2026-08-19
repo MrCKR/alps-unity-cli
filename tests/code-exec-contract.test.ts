@@ -25,12 +25,13 @@ test("code.exec publishes direct examples with and without a completion probe", 
 test("code.exec clearly preserves necessary hazardous code and discloses the non-preemptible main-thread boundary", () => {
   assert.match(codeExec.summary, /cannot be force-stopped by timeout/i);
   assert.match(codeExec.description, /does not reject infinite loops, long sleeps, blocking waits, lock contention/);
-  assert.match(codeExec.description, /decide whether running it is necessary/);
-  assert.match(codeExec.description, /Tool will still execute it unchanged/);
-  assert.match(codeExec.description, /cannot interrupt the C# already running/);
-  assert.match(codeExec.description, /require terminating the Editor process/);
-  assert.match(codeExec.description, /outcome-unknown result, not proof that execution stopped/);
-  assert.match(codeExec.description, /Dry-run only reports the source hash/);
+  assert.match(codeExec.description, /Prefer a bounded alternative when possible/);
+  assert.match(codeExec.description, /necessary code executes unchanged/);
+  assert.match(codeExec.description, /cannot interrupt Run/);
+  assert.match(codeExec.description, /require terminating the Editor/);
+  assert.match(codeExec.description, /outcome-unknown, not proof execution stopped/);
+  assert.match(codeExec.description, /wait for this CLI process to exit and allow at least 5000ms beyond --timeout-ms/);
+  assert.match(codeExec.description, /Dry-run reports source hash/);
   assert.doesNotMatch(codeExec.description, /reject(?:s|ed)? (?:dangerous|hazardous) code/i);
 });
 

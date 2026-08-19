@@ -64,14 +64,15 @@ namespace UnityCli
         private static readonly BridgeStartupStateMachine StartupState = new BridgeStartupStateMachine();
         private static bool projectToolsDiscovered;
         private static volatile bool domainReloading;
+        private const double RegistryRefreshSeconds = 30.0;
         private static int port;
-        private static double nextHeartbeatAt;
+        private static double nextRegistryRefreshAt;
         private static readonly CancellationTokenSource BridgeLifetime = new CancellationTokenSource();
         private static CancellationTokenSource runtimeSession = new CancellationTokenSource();
 
-        // Cached EditorApplication state — updated on the main thread by ProcessQueuedWork,
-        // read by HandleHttpCore on background thread pool threads.
-        // volatile ensures the background thread sees the latest write.
+        // 主线程只更新内存快照；HTTP后台线程读取时不得调用Unity API或写入Registry。
+        private static long mainThreadPulseSequence;
+        private static long mainThreadPulseTimestamp;
         private static volatile bool cachedIsCompiling;
         private static volatile bool cachedIsUpdating;
         private static volatile bool cachedIsPlayingOrWillChangePlaymode;
@@ -192,6 +193,7 @@ namespace UnityCli
                 started = true;
                 Task.Run(ListenLoop);
                 if (!RegisterInstance("ready")) throw new InvalidOperationException("Initial instance registry publication failed.");
+                nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
                 WriteRuntimeLoadDiagnostics("listener_started");
                 WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
@@ -206,7 +208,6 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
-            WriteReloadingMarker();
             ReleaseActiveDirectMutationLease();
             UnityCliCompilationEventBroker.BeforeReload();
             UnityCliCompileCoordinator.BeforeReload();
@@ -235,7 +236,6 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
-            DeleteReloadingMarker();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
             UnityCliCompileCoordinator.Initialize();
@@ -254,37 +254,6 @@ namespace UnityCli
             // After domain reload, static fields are reset. Re-initialize the Runtime Executor
             // and restore session state if we are already in Play Mode.
             ReinitializeRuntimeExecutorAfterDomainReload();
-        }
-
-        // 跨域重载标记：beforeAssemblyReload 写、afterAssemblyReload 删，供 CLI 在 bridge 断时识别“重载中”。
-        private const string ReloadingMarkerFileName = "reloading.json";
-        private const double ReloadingMarkerWindowMinutes = 3;
-
-        private static string ReloadingMarkerPath()
-        {
-            return Path.Combine(ProjectRoot(), "Library", "UnityCli", ReloadingMarkerFileName);
-        }
-
-        private static void WriteReloadingMarker()
-        {
-            try
-            {
-                var path = ReloadingMarkerPath();
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                var deadlineUtc = DateTime.UtcNow.AddMinutes(ReloadingMarkerWindowMinutes);
-                File.WriteAllText(path, "{\"deadlineUtc\":\"" + deadlineUtc.ToString("o") + "\"}", new UTF8Encoding(false));
-            }
-            catch { /* 标记写失败不影响重载流程 */ }
-        }
-
-        private static void DeleteReloadingMarker()
-        {
-            try
-            {
-                var path = ReloadingMarkerPath();
-                if (File.Exists(path)) File.Delete(path);
-            }
-            catch { /* 标记删除失败不影响重载流程 */ }
         }
 
         private static void UnregisterAndStop()
@@ -308,7 +277,7 @@ namespace UnityCli
             StopListener();
         }
 
-        /// <summary>统一记录 PlayMode 过渡；稳定 Play 下 isPlayingOrWillChangePlaymode 仍为 true，不能直接用它判断 changing。</summary>
+        /// <summary>记录 PlayMode 过渡并立即发布实例状态；稳定状态下只保留低频保险刷新。</summary>
         private static void OnBridgePlayModeStateChanged(PlayModeStateChange state)
         {
             playModeChanging = state == PlayModeStateChange.ExitingEditMode || state == PlayModeStateChange.ExitingPlayMode;
@@ -320,6 +289,11 @@ namespace UnityCli
             }
             if (state == PlayModeStateChange.EnteredPlayMode || state == PlayModeStateChange.EnteredEditMode)
                 UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
+            if (started)
+            {
+                RegisterInstance(playModeChanging ? "transitioning" : "ready");
+                nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
+            }
         }
 
         internal static bool IsPlayModeChanging() { return playModeChanging; }

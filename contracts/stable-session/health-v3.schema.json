@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/contracts/stable-session/health-v3.schema.json",
+  "title": "Unity CLI Bridge health identity v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "target", "instanceId", "canonicalProjectPath", "canonicalizationVersion", "sessionId", "listenerId", "listenerGeneration", "actualPort", "buildStamp", "mainThread"],
+  "properties": {
+    "version": { "const": 3 },
+    "target": { "enum": ["editor", "runtime"] },
+    "instanceId": { "type": "string", "pattern": "^unity-[0-9a-f]{64}$" },
+    "canonicalProjectPath": { "type": "string", "minLength": 3 },
+    "canonicalizationVersion": { "const": 1 },
+    "sessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
+    "editorSessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
+    "runtimeSessionId": { "type": "string", "pattern": "^session-[0-9a-f]{64}$" },
+    "listenerId": { "type": "string", "pattern": "^listener-[0-9a-f]{32}$" },
+    "listenerGeneration": { "type": "integer", "minimum": 1 },
+    "actualPort": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+    "buildStamp": { "type": "string", "minLength": 1 },
+    "buildId": { "type": "string", "pattern": "^[0-9a-fA-F]{32}$" },
+    "mainThread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "sequence", "ageMs", "listenerGeneration", "lifecycle"],
+      "properties": {
+        "observed": { "type": "boolean" },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "ageMs": { "type": ["integer", "null"], "minimum": 0 },
+        "listenerGeneration": { "type": "integer", "minimum": 1 },
+        "lifecycle": { "enum": ["ready", "transitioning", "blocked", "domain-reloading", "compiling", "importing", "building", "playmode-changing"] }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": { "target": { "const": "editor" } },
+      "required": ["editorSessionId"],
+      "not": { "anyOf": [{ "required": ["runtimeSessionId"] }, { "required": ["buildId"] }] }
+    },
+    {
+      "properties": { "target": { "const": "runtime" } },
+      "required": ["runtimeSessionId", "buildId"],
+      "not": { "required": ["editorSessionId"] }
+    }
+  ]
+}

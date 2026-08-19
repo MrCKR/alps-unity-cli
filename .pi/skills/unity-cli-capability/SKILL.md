@@ -26,7 +26,7 @@ compatibility: 适用于 alps-unity-cli 仓库；需要 read 和项目现有验�
 Tool必须满足：
 
 - 任何可能修改 Unity 状态、项目文件、资源、Package、场景、GameObject、Component、PlayMode 状态或产生 artifact 的能力，都必须设计为 Tool。
-- descriptor 必须暴露 AI 调用所需的 `name`、`summary`、`description`、`group`、`inputSchema`、`outputSchema`、`destructiveHint`、`supportsDryRun`、`target`、`availabilityScope`、`playModeSupport`；内部路由和完成策略字段不得混入公开 descriptor。
+- 完整内部 descriptor 必须具有 `name`、`summary`、`description`、`group`、`inputSchema`、`outputSchema`、风险、target、availabilityScope 与 PlayMode metadata，供 registry、fingerprint、结果校验和静态 contract 使用。公开 `tools describe` 只投影调用所需字段，不得返回 `outputSchema`、`group`、`permissions` 或内部路由/完成字段。
 - 输出必须机器可读并返回稳定业务字段，不得只返回自然语言说明。
 - 错误必须结构化，包含稳定的 `error.code`、`message`、`transient`、`retryAfterMs`、`nextActions`。
 
@@ -54,6 +54,16 @@ Tool必须满足：
 - 不可用时返回什么稳定错误码。
 - AI 能否根据 `nextActions` 明确恢复。
 
+### Editor可操作性协议
+
+- Registry v3只负责identity发现、lifecycle publication与listener generation交接；不得作为实时消息队列或主线程活性证明。
+- Health v3必须同时返回严格transport identity与只读内存main-thread pulse；transport可达不能替代pulse，pulse不能证明具体业务effect。
+- 公开`editor.state.status`固定归约为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。`conflict`只允许用于至少两个verified live project claim；观察失败或权限不足必须是`unverifiable`。
+- `blocked`由独立Windows modal观察证明；`editor.state`、`editor.dialogs`与`editor.dialog.click`使用exact frozen本地descriptor进入同一dispatcher，不得依赖Unity主线程或live catalog观察/恢复。其他Tool与catalog listing不得建立静态fallback。
+- Domain Reload只使用Registry lifecycle、新listener generation与该generation首个main-thread pulse交接；禁止固定时长reload marker或双轨判定。
+- 同一次mutation只允许在`editorSessionId`不变时续接完全相同的request bytes；首次POST后session改变必须禁止第二次POST，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。
+- discovery、health、PID/start、modal观察、rebind和execution共用原absolute deadline，不得在内部恢复时重置预算。
+
 ## Descriptor 质量
 
 功能能运行不等于接口合格。Descriptor 必须让陌生 AI 不读源码也能一次性判断、构造并安全调用。
@@ -64,10 +74,10 @@ Tool必须满足：
 - `summary` 能让 AI 在发现阶段选对 group 和能力。
 - `description` 准确说明边界、默认行为、关键副作用和相邻能力差异。
 - `inputSchema` 字段具体、必填项准确、字段名稳定。
-- `outputSchema` 描述主要成功业务字段。
-- examples 可直接指导典型输入构造。
-- 风险字段准确：`destructiveHint`、`supportsDryRun`、`sideEffects`、`permissions`。
-- 可用性字段准确：`target`、`availabilityScope`、`playModeSupport`、`requiresPackages`；`handler`、support status 和 completion contract 只允许内部使用。
+- 内部 `outputSchema` 准确描述主要成功业务字段并参与 terminal 结果校验；公开 description 简述主要结果，不展开结果字段树。
+- examples 可直接指导典型输入构造；公开形态只含 `description`、结构化 `input` 与按需 `execution`。
+- 风险 metadata 准确：`destructiveHint`、`supportsDryRun`、`sideEffects`、`permissions`；其中 permissions 只用于内部策略，不进入公开 describe。
+- 可用性 metadata 准确：`target`、`availabilityScope`、`playModeSupport`、`requiresPackages`；公开 describe 只返回 target、playModeSupport、非空 requiresPackages，并仅在不可用时返回 `available:false` 与原因。`handler`、support status 和 completion contract 只允许内部使用。
 - 错误路径提供明确 `nextActions`，不能让 AI 猜。
 
 ### Summary 路由字段
@@ -109,11 +119,11 @@ Tool summary 必须：
 
 字段职责：
 
-- `summary`：发现阶段路由。
-- `description`：调用阶段判断，包括边界、默认行为、相邻工具差异、副作用、PlayMode、安全确认、输出控制和跨字段约束。
-- `inputSchema` / `outputSchema`：字段级输入输出契约。
-- `examples`：可直接照抄的典型调用。
-- 风险与状态字段：机器可读的风险、支持状态、目标、可用范围和依赖。
+- `summary` 与 `group`：只在 group list/search 发现阶段路由，不重复进入 describe。
+- `description`：调用阶段判断，包括边界、默认行为、相邻工具差异、副作用、PlayMode、安全确认、主要结果、输出控制和跨字段约束。
+- `inputSchema`：字段级输入契约；完整 `outputSchema` 留在内部 terminal 校验与 contract，不进入公开 describe。
+- `examples`：返回 `description`、结构化 `input` 和按需 `execution`，不重复固定 CLI argv。
+- 风险与状态字段：公开返回 destructiveHint、非空 sideEffects、supportsDryRun、playModeSupport、target、非空依赖，以及仅不可用时的 available:false/unavailableReason。
 
 Describe 必须按需覆盖：
 
@@ -180,6 +190,7 @@ Describe 不得包含：
 - 机制状态（互斥锁、进行中标记、会话标记）只对 Unity 本次启动有效，必须携带本次启动标识，重启作废。
 - 临时文件数量与大小不得随调用次数和时间无限增长：状态文件一类一个固定路径、终态即删；产物（artifacts）保留最新 100 个；日志按大小滚动并保留最近 2 个。禁止一请求一文件。
 - 临时文件位置：用户级 `%LOCALAPPDATA%\UnityCli\.temp\`；项目内 `Library\UnityCli\`。新增能力不得在其他位置写临时文件。
+- 并发快照publication必须由单写者mutex串行，mutex内重读正式文件并按session/generation/publication sequence做语义CAS；写固定同目录`.tmp`，flush到磁盘后用原子replace/move发布。reader无锁且只读正式路径，在原absolute deadline内做有界重读；不得读取temp/backup或扫描“最新文件”。
 
 ## 输出与错误
 
@@ -206,7 +217,7 @@ Describe 不得包含：
 
 `error` 对象是闭集，不得重复 `requestId` 或附加日志、审计、endpoint、port、listener identity、native window handle、Windows command line。blocker 只能使用公开 DTO；弹窗 blocker 使用 `type="dialog"`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 与 `confidence`。
 
-超时或终态前断连统一使用 `E_EXECUTION_TIMEOUT`。调用方负责观察业务状态并判断是否提交新的调用；系统不提供请求级恢复或重放拦截。跨 reload 的同次调用续接可以保留。审计只记录 session 级 append 日志。
+超时或终态前断连统一使用`E_EXECUTION_TIMEOUT`。同一`editorSessionId`内可用完全相同的请求attach/recover durable terminal；首次mutation POST后session改变时必须禁止向新session重投。调用方先观察业务状态，再判断是否提交全新调用。审计只记录session级append日志。
 
 禁止：
 

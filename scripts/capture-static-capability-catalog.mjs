@@ -5,7 +5,6 @@ import { createRequestId } from "../dist/src/output.js";
 import { defaultDataDir } from "../dist/src/platform.js";
 import { projectDescriptorToToolMetadata } from "../dist/src/project-tool-discovery.js";
 import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "../dist/src/tools/.generated-completion-registry.js";
-import { publicToolDescriptor } from "../dist/src/tools/catalog.js";
 import { collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
 import { extractConditionalToolDescriptor } from "./lib/conditional-csharp-descriptor.mjs";
 
@@ -30,7 +29,7 @@ const completionContracts = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((con
 const tools = arrayField(toolsResult.data, "tools")
   .filter((item) => item.source === "built-in" || item.source === "extension")
   .map(withGeneratedCompletionContract)
-  .map(toPublicToolDescriptor)
+  .map(toStaticToolDescriptor)
   .map(stripDynamicToolFields);
 const expectedTools = collectPublicToolInventory(process.cwd())
   .filter((tool) => tool.descriptorOwner === "built-in" || tool.descriptorOwner.startsWith("extension:"));
@@ -40,7 +39,7 @@ for (const inventoryEntry of expectedTools) {
     const completionContract = completionContracts.get(inventoryEntry.name);
     if (!completionContract) throw new Error(`Missing generated completion contract for ${inventoryEntry.name}.`);
     const descriptor = { ...extractConditionalToolDescriptor(process.cwd(), inventoryEntry), completionContract, available: true };
-    tools.push(stripDynamicToolFields(toPublicToolDescriptor(descriptor)));
+    tools.push(stripDynamicToolFields(toStaticToolDescriptor(descriptor)));
   }
 }
 tools.sort(byName);
@@ -86,15 +85,13 @@ function withGeneratedCompletionContract(descriptor) {
   return { ...descriptor, completionContract };
 }
 
-/** Bridge authoring descriptor 必须先经过与 tools describe 相同的公开投影；source/availabilityScope/summary/contractProfile 只在此处从完整 metadata 恢复，不进入 tools describe 输出。 */
-function toPublicToolDescriptor(descriptor) {
+/** static catalog 保存完整内部契约，不能复用面向 AI 的精简 describe 投影。 */
+function toStaticToolDescriptor(descriptor) {
   const metadata = projectDescriptorToToolMetadata(descriptor);
   if (!metadata) throw new Error(`Malformed Live Tool descriptor: ${String(descriptor.name ?? "unknown")}`);
   return {
-    ...publicToolDescriptor(metadata),
-    summary: metadata.summary,
-    availabilityScope: metadata.availabilityScope,
-    contractProfile: metadata.contractProfile,
+    ...metadata,
+    examples: metadata.examples?.map(({ description, argv }) => ({ description, argv })),
     source: descriptor.source,
   };
 }
@@ -109,12 +106,12 @@ function stripDynamicToolFields(tool) {
   return omitEmptyOptionalArrays(stable, new Set(["permissions", "requiresPackages", "sideEffects"]));
 }
 
-/** snapshot 使用公开 schema allowlist，未知内部字段默认不落盘。 */
+/** snapshot 使用内部稳定字段 allowlist，运行时路由和完成字段默认不落盘。 */
 function pickFields(descriptor, allowedFields) {
   return Object.fromEntries(allowedFields.filter((key) => Object.hasOwn(descriptor, key)).map((key) => [key, descriptor[key]]));
 }
 
-/** 公开 descriptor 不写可选空数组，减少离线 discovery 体积。 */
+/** static snapshot 不写可选空数组，避免无意义的 package 体积。 */
 function omitEmptyOptionalArrays(descriptor, optionalFields) {
   return Object.fromEntries(Object.entries(descriptor).filter(([key, value]) => !(optionalFields.has(key) && Array.isArray(value) && value.length === 0)));
 }

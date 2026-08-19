@@ -7,7 +7,7 @@ import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { dispatchTool } from "../src/tools/dispatcher.js";
 import { contractToolNames, discoverLiveTools, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
-import { createUnityProject } from "./helpers/instance-registry-v2.js";
+import { createUnityProject } from "./helpers/instance-registry-v3.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 
 const UI_COMMANDS = [

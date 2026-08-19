@@ -9,7 +9,7 @@ import { findDefineTool, type ToolContext } from "../src/tools/define.js";
 import { StructuredToolError } from "../src/tools/errors.js";
 import "../src/tools/.generated-registry.js";
 import "../src/tools/.generated-schemas.js";
-import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v2.js";
+import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v3.js";
 
 const tool = findDefineTool("test.run");
 const cancelTool = findDefineTool("test.cancel");

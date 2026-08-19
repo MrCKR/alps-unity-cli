@@ -10,7 +10,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        /// <summary>采集同一时刻的 Unity 只读状态，供私有命令与 registry heartbeat 复用。</summary>
+        /// <summary>采集同一时刻的Unity只读状态，供私有命令与Registry publication复用。</summary>
         private static Dictionary<string, object> SampleEditorStateSnapshot(string observedAt = null)
         {
             var scene = SceneManager.GetActiveScene();

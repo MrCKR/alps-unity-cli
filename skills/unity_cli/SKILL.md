@@ -22,10 +22,11 @@ FeedbackMode: off
 ## 执行骨架
 
 ```powershell
+# 默认隐藏 offline；仅审计完整历史集合时使用 instances list --all
 unity_cli instances list
 unity_cli tools group --instance <id|projectPath|alias>
 unity_cli tools group list <group> --instance <id|projectPath|alias>
-unity_cli tools search <k1|k2|...> --instance <id|projectPath|alias>
+unity_cli tools search '<k1|k2|...>' --instance <id|projectPath|alias>
 unity_cli tools describe <tool> --instance <id|projectPath|alias>
 unity_cli tools run <tool> --input '<json>' --instance <id|projectPath|alias>
 
@@ -34,18 +35,21 @@ unity_cli command --project-path <projectPath>
 unity_cli command <name> --field <value> --instance <id|projectPath|alias>
 ```
 
-显式`--instance`优先；`command --project-path <path>`绑定同一canonical项目实例；未传时只能从当前Unity项目CWD解析。没有连接实例时discovery返回稳定instance error，不返回静态或空目录。执行不了解的Tool前必须`tools describe`，输入和行为以当前descriptor为准。schema default与`examples[].argv`描述合法默认行为和调用形状；任务明确要求的业务值优先，不能把default/example当作连通性或probe调用。`tools group list`/`tools search`返回的Tool `name`就是exact调用名；group只用于筛选，不能拼到name前。
+显式`--instance`优先；`command --project-path <path>`绑定同一canonical项目实例；未传时只能从当前Unity项目CWD解析。没有连接实例时discovery返回稳定instance error，不返回静态或空目录。`instances list`逐文件隔离旧格式、损坏或不可读记录，合法Registry v3实例继续返回；`invalidRecordCount`出现时先运行`doctor`，不得读取、转换、移动或删除内部记录。显式选择对应坏instanceId仍会严格失败。
+
+执行不了解的Tool前必须`tools describe`，输入和行为以当前descriptor为准。PowerShell中必须用单引号包住`tools search '<k1|k2|...>'`的整个关键词，否则`|`会被shell解释为管道。schema default 与 `examples[].input` 描述合法默认业务值，按需 `examples[].execution` 描述 dry-run/timeout 控制；任务明确要求的业务值优先，不能把default/example当作连通性或probe调用。`tools group list`/`tools search`返回的Tool `name`就是exact调用名；group只用于筛选，不能拼到name前。
 
 `command`不建立第二套目录：native Tool使用完整精确名；Unity官方`[CliCommand]`完全兼容，项目或其他Package的`[CliCommand("test")]`在`tools`中固定名为`UnityPipeline_test`、group为`UnityPipeline`，可由`command test`或完整前缀名选择。`com.unity.pipeline` package自身命令已由native能力吸收并按provider identity抑制，不应期待其attribute原名存在。native精确重名优先；不得把不存在的名称映射到相似Tool。业务参数支持`--field value`、`--field=value`、boolean裸开关和按schema声明顺序的positional。
 
 ## 使用说明
 
-- 调用即授权。`destructiveHint`、`sideEffects`、`supportsDryRun` 只描述效果；仅在确需预览时使用 `--dry-run`。Skill 不增加确认、意图复核、重放门或预定义操作范围。
+- 调用即授权。`destructiveHint`、`sideEffects`、`supportsDryRun`只描述效果；仅在确需预览时使用`--dry-run`。Skill不增加确认、意图复核或预定义操作范围；产品的cross-session mutation fence仍必须遵守。
 - 建议通过 `instances`、`doctor`、`tools run editor.state` 观察状态，不读取内部 Bridge 注册文件、端口或 URL，也不直接 ping transport。
-- `E_EXECUTION_TIMEOUT`、连接丢失或缺少可信 terminal envelope 只表示没有可信终态。可以先用只读 Tool 或业务 readback 观察；是否立即重试、重复调用或继续 mutation 完全由调用方决定。`transient:true` 与 `nextActions` 也只是建议，不构成权限或重放门。
+- `E_EXECUTION_TIMEOUT`、连接丢失或缺少可信terminal envelope只表示没有可信终态。先用只读Tool或业务readback观察并形成新的业务决策；CLI不自动重放，首次mutation POST后Editor session改变时也不会向新session重投。`transient:true`与`nextActions`仍是建议，不构成额外授权门。
+- 运行公开CLI时必须等待该进程退出，不得后台分离。命令host的等待预算至少为传给CLI的`--timeout-ms`加5000毫秒；CLI到自身deadline后会输出timeout envelope并在stdout完成或最多1秒后退出。host提前超时不等于CLI或Unity effect已经停止。
 - `available:false`、`unavailableReason` 和 `playModeSupport` 说明当前可执行性；`source` 不参与路由。
 - blocker 在 `error.details.blockers` 时，可先读 `editor.dialogs`，再按返回的 dialogId 与 enabled button 调用 `editor.dialog.click`。
-- 大输出、envelope、artifact、分页和 session 说明见 `references/operation-protocol.md`。
+- 大输出、envelope、artifact、分页、host等待预算和 session 说明见 `references/operation-protocol.md`。
 - 内置能力不足时，一次性操作可使用 `code.exec`；反复需要再读 `references/custom-tools.md`。`code.exec`不限制提交的同步C#，也不会拒绝死循环、长时间sleep、阻塞等待、锁等待或长期占用Unity API的代码。提交这类代码前必须先判断它对当前结果是否确有必要，并考虑有界写法或现有Tool能否达到同一结果；确有必要时可以原样执行。代码一旦在Unity主线程开始，`--timeout-ms`只能停止CLI等待，不能中止代码；Unity可能无响应、mutation owner不能收尾、业务状态部分改变或未知，恢复可能需要结束Editor进程。timeout不证明代码已停止，重试前必须观察业务状态。`--dry-run`只预览source hash，不编译、不执行，也不证明代码会结束。
 
 ## 问题反馈

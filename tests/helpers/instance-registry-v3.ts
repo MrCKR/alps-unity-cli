@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import { join } from "node:path";
 import {
   probeProcessObservations,
-  type InstanceRegistryV2,
+  type InstanceRegistryV3,
   type RegistryIdentity,
   type RegistrySession,
 } from "../../src/instances.js";
@@ -66,9 +66,9 @@ export async function makeRegistrySession(
     ...(target === "editor" ? { editorSessionId: sessionId } : { runtimeSessionId: sessionId }),
     processId: overrides.processId ?? process.pid,
     processStartedAt: overrides.processStartedAt ?? await currentProcessStartedAt(),
-    lastHeartbeatAt: overrides.lastHeartbeatAt ?? now,
-    claimVerification: overrides.claimVerification ?? "verified",
-    state: overrides.state ?? "ready",
+    publishedAt: overrides.publishedAt ?? now,
+    publicationSequence: overrides.publicationSequence ?? 1,
+    lifecycle: overrides.lifecycle ?? "ready",
     lastUnitySnapshot: overrides.lastUnitySnapshot ?? (target === "editor" ? {
       schemaVersion: 1,
       observedAt: now,
@@ -109,25 +109,25 @@ export async function makeRegistrySession(
   };
 }
 
-export function makeRegistry(identity: RegistryIdentity, sessions: RegistrySession[], revision = 1): InstanceRegistryV2 {
+export function makeRegistry(identity: RegistryIdentity, sessions: RegistrySession[], revision = 1): InstanceRegistryV3 {
   return {
-    version: 2,
+    version: 3,
     revision,
     canonicalizationVersion: 1,
     identity,
     sessions,
-    updatedAt: new Date().toISOString(),
+    publishedAt: new Date().toISOString(),
   };
 }
 
 /** 测试模拟 C# writer，产品 TS 不得复用此函数。 */
-export async function writeRegistry(dataDir: string, record: InstanceRegistryV2): Promise<void> {
+export async function writeRegistry(dataDir: string, record: InstanceRegistryV3): Promise<void> {
   const directory = join(dataDir, "instances");
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, `${record.identity.instanceId}.json`), `${JSON.stringify(record, null, 2)}\n`, "utf8");
 }
 
-/** 启动严格 v2 health fixture；response identity 由调用方按 registry session 提供。 */
+/** 启动严格v3 health fixture；response identity与main-thread pulse由调用方按session提供。 */
 export async function startStrictHealthServer(
   health: (request: IncomingMessage, port: number) => Record<string, unknown>,
 ): Promise<StrictHealthServer> {

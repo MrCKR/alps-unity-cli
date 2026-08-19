@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 
 namespace UnityCli
 {
@@ -10,6 +11,7 @@ namespace UnityCli
     {
         // Bridge 日志位于项目临时根 Library/UnityCli/，超上限滚动一次，只保留当前与上一段，大小有界。
         private const long BridgeLogMaxBytes = 10L * 1024 * 1024;
+        private const int BridgeLogMaxEntryBytes = 64 * 1024;
 
         private static string LogPath()
         {
@@ -27,16 +29,54 @@ namespace UnityCli
             return Path.Combine(ProjectRoot(), "Library", "UnityCli");
         }
 
-        // 写入前超上限则把当前日志滚动为 .old（覆盖上一段），保持总量常数有界。
-        private static void RollBridgeLogIfNeeded(string path)
+        // current与old始终各不超过10MiB；incoming-aware滚动避免单条追加越过上限。
+        private static void RollBridgeLogIfNeeded(string path, int incomingBytes)
         {
             try
             {
-                if (!File.Exists(path) || new FileInfo(path).Length < BridgeLogMaxBytes) return;
-                File.Copy(path, path + ".old", true);
-                File.WriteAllText(path, string.Empty);
+                var oldPath = path + ".old";
+                TrimBridgeLogSegment(oldPath);
+                TrimBridgeLogSegment(path);
+                if (!File.Exists(path) || new FileInfo(path).Length + incomingBytes <= BridgeLogMaxBytes) return;
+                File.Copy(path, oldPath, true);
+                TrimBridgeLogSegment(oldPath);
+                File.WriteAllText(path, string.Empty, new UTF8Encoding(false));
             }
             catch { }
+        }
+
+        // 对升级前或异常单条形成的oversize段保留最新UTF-8后缀，恢复固定绝对上界。
+        private static void TrimBridgeLogSegment(string path)
+        {
+            if (!File.Exists(path) || new FileInfo(path).Length <= BridgeLogMaxBytes) return;
+            var text = File.ReadAllText(path, Encoding.UTF8);
+            var low = 0;
+            var high = text.Length;
+            while (low < high)
+            {
+                var middle = low + (high - low) / 2;
+                if (Encoding.UTF8.GetByteCount(text.Substring(middle)) <= BridgeLogMaxBytes) high = middle;
+                else low = middle + 1;
+            }
+            if (low < text.Length && char.IsLowSurrogate(text[low])) low++;
+            File.WriteAllText(path, text.Substring(low), new UTF8Encoding(false));
+        }
+
+        // 单条日志使用固定UTF-8预算，禁止异常文本或输入派生消息制造无界段。
+        private static string BoundedBridgeLogLine(string value, int maxBytes)
+        {
+            value = value ?? string.Empty;
+            if (Encoding.UTF8.GetByteCount(value) <= maxBytes) return value;
+            var low = 0;
+            var high = Math.Min(value.Length, maxBytes);
+            while (low < high)
+            {
+                var middle = low + (high - low + 1) / 2;
+                if (Encoding.UTF8.GetByteCount(value.Substring(0, middle)) <= maxBytes) low = middle;
+                else high = middle - 1;
+            }
+            if (low > 0 && char.IsHighSurrogate(value[low - 1])) low--;
+            return value.Substring(0, low);
         }
 
         private static void WriteRuntimeLoadDiagnostics(string phase)
@@ -72,8 +112,13 @@ namespace UnityCli
             {
                 var path = LogPath();
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
-                RollBridgeLogIfNeeded(path);
-                File.AppendAllText(path, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " " + line + Environment.NewLine);
+                var prefix = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " ";
+                var suffix = Environment.NewLine;
+                var lineBudget = BridgeLogMaxEntryBytes - Encoding.UTF8.GetByteCount(prefix + suffix);
+                var entry = prefix + BoundedBridgeLogLine(line, lineBudget) + suffix;
+                var incomingBytes = Encoding.UTF8.GetByteCount(entry);
+                RollBridgeLogIfNeeded(path, incomingBytes);
+                File.AppendAllText(path, entry, new UTF8Encoding(false));
             }
             catch { }
         }

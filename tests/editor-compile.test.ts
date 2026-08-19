@@ -9,7 +9,7 @@ import "../src/tools/.generated-schemas.js";
 import { defineToolMetadata, findDefineTool, type ToolContext } from "../src/tools/define.js";
 import { compileChildRequestId } from "../src/tools/editor/compile.js";
 import { StructuredToolError } from "../src/tools/errors.js";
-import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v2.js";
+import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v3.js";
 
 const tool = findDefineTool("editor.compile");
 if (!tool) throw new Error("editor.compile definition is unavailable");

@@ -222,6 +222,7 @@ export class SessionSupervisor {
       if (observed?.outcome === "conflict") throw blockerObservationConflict(target.instanceId, observed);
       throw error;
     }
+    const dispatchSessionId = binding.sessionId;
     let dispatchAttempted = false;
     for (;;) {
       const remainingMs = remainingBudget(absoluteDeadlineMs, this.dependencies.now());
@@ -231,6 +232,9 @@ export class SessionSupervisor {
         throw deadlineError(mode, target.instanceId, startedAtMs, absoluteDeadlineMs);
       }
 
+      if (mode === "execute" && template.mutation !== false && dispatchAttempted && binding.sessionId !== dispatchSessionId) {
+        throw await this.executionTimeoutWithObservation(target.instanceId, binding, absoluteDeadlineMs, "The selected Unity process session changed after the first mutation POST; automatic redelivery is forbidden.");
+      }
       try {
         dispatchAttempted = true;
         const reply = await this.dependencies.post(binding, request, remainingMs);
@@ -315,8 +319,9 @@ export class SessionSupervisor {
   private async runObservation(template: BridgeRequestTemplate, startedAtMs: number, absoluteDeadlineMs: number): Promise<BridgeResponse> {
     const selection = template.observationSelection ?? await this.selectObservation(absoluteDeadlineMs, startedAtMs);
     const instance = selection.instance;
-    if (instance.status === "offline" || instance.status === "conflict" || !instance.activeSession) {
-      throw new SessionSupervisorError(instance.status === "conflict" ? "E_INSTANCE_CONFLICT" : "E_INSTANCE_NOT_RUNNING", "No unique live Unity session is available for a Bridge observation.", [], publicSessionDetails(instance));
+    if (instance.status === "offline" || instance.status === "conflict" || instance.status === "unverifiable" || !instance.activeSession) {
+      const code = instance.status === "conflict" ? "E_INSTANCE_CONFLICT" : instance.status === "unverifiable" ? "E_INSTANCE_UNVERIFIABLE" : "E_INSTANCE_NOT_RUNNING";
+      throw new SessionSupervisorError(code, "No uniquely verified live Unity session is available for a Bridge observation.", [], publicSessionDetails(instance));
     }
     const request = freezeRequest(template, instance.instanceId, absoluteDeadlineMs);
     const binding = bindingFrom(instance);
@@ -414,10 +419,11 @@ export class SessionSupervisor {
       }
       const instance = selection.instance;
       if (instance.status === "blocked") throw blocked(instance);
+      if (instance.status === "unverifiable") throw unverifiable(instance);
       if (instance.status === "ready" || (allowTransitionBinding && instance.status === "transitioning" && instance.activeSession)) return bindingFrom(instance);
-      if (observeOnly) throw observedTransition(instance);
+      if (observeOnly) throw instance.status === "unresponsive" ? unresponsive(instance) : observedTransition(instance);
       if (remainingBudget(absoluteDeadlineMs, this.dependencies.now()) <= 0) {
-        throw transitionTimeout(instance, absoluteDeadlineMs);
+        throw instance.status === "unresponsive" ? unresponsive(instance) : transitionTimeout(instance, absoluteDeadlineMs);
       }
       await this.dependencies.sleep(Math.min(REGISTRY_POLL_INTERVAL_MS, remainingBudget(absoluteDeadlineMs, this.dependencies.now())));
       selection = undefined;
@@ -429,12 +435,13 @@ export class SessionSupervisor {
     for (;;) {
       const selection = await this.selectWithinDeadline({ instance: target.instanceId }, target.target, absoluteDeadlineMs, () => selectionTransitionTimeout(target.instanceId, absoluteDeadlineMs), allowTransitionBinding);
       if (selection.instance.status === "blocked") throw blocked(selection.instance);
+      if (selection.instance.status === "unverifiable") throw unverifiable(selection.instance);
       if (selection.instance.status === "ready" || (allowTransitionBinding && selection.instance.status === "transitioning" && selection.instance.activeSession)) {
         const candidate = bindingFrom(selection.instance);
         if (bindingKey(candidate) !== bindingKey(previous)) return candidate;
       }
       if (remainingBudget(absoluteDeadlineMs, this.dependencies.now()) <= 0) {
-        throw transitionTimeout(selection.instance, absoluteDeadlineMs);
+        throw selection.instance.status === "unresponsive" ? unresponsive(selection.instance) : transitionTimeout(selection.instance, absoluteDeadlineMs);
       }
       await this.dependencies.sleep(Math.min(REGISTRY_POLL_INTERVAL_MS, remainingBudget(absoluteDeadlineMs, this.dependencies.now())));
       clearInstanceHealthCache();
@@ -585,7 +592,7 @@ function publicSessionDetails(instance: UnityInstance): Record<string, unknown> 
     status: instance.status,
     progress: instance.progress,
     blockers: sanitizeEditorBlockers(instance.blockers),
-    lastHeartbeatAt: instance.lastHeartbeatAt ?? null,
+    publishedAt: instance.publishedAt ?? null,
   };
 }
 
@@ -599,6 +606,19 @@ function blocked(instance: UnityInstance): SessionSupervisorError {
 function observedTransition(instance: UnityInstance): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_TRANSITIONING", "Unity Editor is currently transitioning.", [
     "Use the editor.state snapshot to inspect current progress.",
+  ], publicSessionDetails(instance), true, REGISTRY_POLL_INTERVAL_MS);
+}
+
+function unverifiable(instance: UnityInstance): SessionSupervisorError {
+  return new SessionSupervisorError("E_INSTANCE_UNVERIFIABLE", "Unity process ownership could not be verified safely.", [
+    "Run unity_cli instances list or tools run editor.state to observe the identity again.",
+    "Do not retry a prior mutation whose outcome is unknown.",
+  ], publicSessionDetails(instance), true, REGISTRY_POLL_INTERVAL_MS);
+}
+
+function unresponsive(instance: UnityInstance): SessionSupervisorError {
+  return new SessionSupervisorError("E_UNITY_UNRESPONSIVE", "Unity transport is present but the selected main thread did not become responsive before the request deadline.", [
+    "Run unity_cli tools run editor.state to check for a transition or external modal blocker.",
   ], publicSessionDetails(instance), true, REGISTRY_POLL_INTERVAL_MS);
 }
 
@@ -629,7 +649,7 @@ function executionTimeout(instanceId: string, reason: string, observation?: Edit
   const title = blockers[0]?.title;
   return new SessionSupervisorError("E_EXECUTION_TIMEOUT", title
     ? `The request did not return a terminal result before its deadline; modal dialog '${title}' was observed.`
-    : "The request did not return a terminal result before its deadline.", blockerNextActions(), { instanceId, reason, ...(blockers.length > 0 ? { blockers } : {}) });
+    : "The request did not return a terminal result before its deadline.", outcomeUnknownNextActions(), { instanceId, reason, outcome: "unknown", dispatch: "may-have-started", replay: "new-decision-required", ...(blockers.length > 0 ? { blockers } : {}) });
 }
 
 function blockedObservation(instanceId: string, observation: EditorBlockerObservation, existing?: unknown): SessionSupervisorError {
@@ -646,8 +666,16 @@ function blockerNextActions(): string[] {
   ];
 }
 
+/** effect可能已发生时只建议状态观察，不暗示自动重投或用dialog操作替代业务readback。 */
+function outcomeUnknownNextActions(): string[] {
+  return [
+    "Run unity_cli tools run editor.state to observe the selected Editor before making a new submission decision.",
+    "Use the affected capability's read-only Tool or artifact readback to determine whether the prior mutation took effect.",
+  ];
+}
+
 function blockerObservationConflict(instanceId: string, observation: EditorBlockerObservation): SessionSupervisorError {
-  return new SessionSupervisorError("E_INSTANCE_CONFLICT", "Multiple or unverifiable Unity processes claim the selected canonical project identity.", [
+  return new SessionSupervisorError("E_INSTANCE_CONFLICT", "Multiple verified Unity processes claim the selected canonical project identity.", [
     "Close duplicate Unity Editor processes and retry only after a single process owns this project.",
   ], { instanceId, reason: observation.reason ?? "process-claim-conflict" });
 }

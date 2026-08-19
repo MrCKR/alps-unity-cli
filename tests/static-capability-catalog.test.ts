@@ -8,12 +8,13 @@ import { staticCapabilityCatalog } from "../src/static-capability-catalog.js";
 
 const OFFLINE_INSTANCE = `unity-${"f".repeat(64)}`;
 
-test("static catalog capture uses compiled public descriptor projections", async () => {
+test("static catalog capture uses a complete internal descriptor snapshot", async () => {
   const source = await readFile(join(process.cwd(), "scripts", "capture-static-capability-catalog.mjs"), "utf8");
   assert.match(source, /dist\/src\/bridge\/index\.js/);
-  assert.match(source, /map\(withGeneratedCompletionContract\)[\s\S]*map\(toPublicToolDescriptor\)[\s\S]*map\(stripDynamicToolFields\)/);
+  assert.match(source, /map\(withGeneratedCompletionContract\)[\s\S]*map\(toStaticToolDescriptor\)[\s\S]*map\(stripDynamicToolFields\)/);
   assert.match(source, /Missing generated completion contract for \$\{descriptor\.name\}/);
-  assert.match(source, /publicToolDescriptor\(metadata\)/);
+  assert.match(source, /function toStaticToolDescriptor[\s\S]*\.\.\.metadata/);
+  assert.doesNotMatch(source, /publicToolDescriptor/);
   assert.match(source, /"supportsDryRun", "contractProfile", "permissions"/);
   assert.doesNotMatch(source, /contextsResult|publicContextDescriptor|stripDynamicContextFields/);
   assert.doesNotMatch(source, /\.\.\/dist\/bridge\/index\.js/);
@@ -40,7 +41,7 @@ test("packaged static catalog exactly covers C# built-in and Extension Tool inve
     const outputFields = schemaPropertyNames(tool.outputSchema);
     const forbiddenOutputFields = ["command", "execution", "logs", "logPath", "audit", "handlerFingerprint", "descriptorFingerprint", "endpoint", "port", "listenerId", "listenerGeneration", "sourceListenerGeneration", "hwnd", "commandLine"];
     for (const field of forbiddenOutputFields) assert.equal(outputFields.has(field), false, `${String(tool.name)} outputSchema must not expose ${field}`);
-    for (const example of (tool.examples ?? []) as Array<Record<string, unknown>>) assert.deepEqual(Object.keys(example).sort(), ["argv", "description"], `${String(tool.name)} examples must be public argv only`);
+    for (const example of (tool.examples ?? []) as Array<Record<string, unknown>>) assert.deepEqual(Object.keys(example).sort(), ["argv", "description"], `${String(tool.name)} static examples must remain argv-only`);
     for (const field of ["permissions", "requiresPackages", "sideEffects"]) if (Object.hasOwn(tool, field)) assert.ok((tool[field] as unknown[]).length > 0, `${String(tool.name)} must omit empty ${field}`);
   }
   assert.doesNotMatch(JSON.stringify(catalog), /bridgeEndpoint|listenerId|actualPort|sourceListenerGeneration/);

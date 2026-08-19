@@ -4,12 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import "../src/tools/.generated-registry.js";
-import { dispatchTool } from "../src/tools/dispatcher.js";
-import { observeVerifiedRegistrySession, readEditorState } from "../src/tools/editor/state.js";
+import editorStateTool, { observeVerifiedRegistrySession, readEditorState, rejectUnavailableEditorState } from "../src/tools/editor/state.js";
 import { defineToolMetadata } from "../src/tools/define.js";
 import { EditorBlockerObserver } from "../src/editor-blocker-observer.js";
-import type { ProjectProcessClaimInspection, SessionProcessVerification } from "../src/instances.js";
-import { registryIdentity, createUnityProject, makeRegistry, makeRegistrySession, writeRegistry } from "./helpers/instance-registry-v2.js";
+import { reduceObservationRegistryRecord, type ProjectProcessClaimInspection, type SessionProcessVerification } from "../src/instances.js";
+import { registryIdentity, createUnityProject, makeRegistry, makeRegistrySession, writeRegistry } from "./helpers/instance-registry-v3.js";
 
 const sourcePath = "src/tools/editor/state.ts";
 
@@ -17,18 +16,23 @@ test("editor.state is the sole hybrid observation owner with bounded fallback", 
   const source = await readFile(sourcePath, "utf8");
   assert.match(source, /selectObservationInstanceForFlags/);
   assert.match(source, /verifyRegistrySessionProcess/);
-  assert.match(source, /OBSERVATION_BUDGET_MS = 10_000/);
+  assert.match(source, /OBSERVATION_BUDGET_MS = 4_000/);
+  assert.match(source, /BLOCKER_OBSERVATION_RESERVE_MS = 2_000/);
   assert.match(source, /observationDeadlineMs = Math\.min\(startedAt \+ OBSERVATION_BUDGET_MS, context\.absoluteDeadlineMs/);
+  assert.match(source, /bridgeDeadlineMs = Math\.max\(Date\.now\(\), observationDeadlineMs - BLOCKER_OBSERVATION_RESERVE_MS\)/);
   assert.match(source, /if \(instance\.status === "conflict"\) return makeResult\(instance, undefined, "conflict"/);
-  assert.match(source, /selectObservationInstanceForFlags\(context\.flags \?\? \{\}, context\.dataDir, remaining\(observationDeadlineMs\)\)/);
-  assert.match(source, /probeBridge\(context, observationDeadlineMs, session, selection\)/);
+  assert.doesNotMatch(source, /instance\.status === "unverifiable"\) return makeResult/);
+  assert.match(source, /const selectObservation = dependencies\.selectObservation \?\? selectObservationInstanceForFlags/);
+  assert.match(source, /selectObservation\(context\.flags \?\? \{\}, context\.dataDir, remaining\(observationDeadlineMs\)\)/);
+  assert.match(source, /probeBridge\(context, bridgeDeadlineMs, session, selection\)/);
   assert.match(source, /withObservationSelection/);
   assert.match(source, /isLiveSnapshot/);
   assert.doesNotMatch(source, /observationBudgetMs|BRIDGE_PROBE_BUDGET_MS/);
   assert.match(source, /\{ instance: selection\.instance\.instanceId \}/);
   assert.doesNotMatch(source, /Promise\.race/);
   assert.match(source, /parseSnapshot\(data\.snapshot \?\? data, session\)/);
-  assert.match(source, /verificationPromise = verifyRegistrySessionProcess[\s\S]*processClaimsPromise = inspectProjectProcessClaims[\s\S]*probeBridge/);
+  assert.match(source, /verificationPromise = dependencies\.verifySession[\s\S]*context\.bridgeExecute[\s\S]*verifyRegistrySessionProcess/);
+  assert.match(source, /processClaimsPromise = dependencies\.inspectClaims[\s\S]*context\.bridgeExecute[\s\S]*inspectProjectProcessClaims[\s\S]*probeBridge/);
   assert.match(source, /if \(bridge && isLiveSnapshot\(bridge\.snapshot\)\)[\s\S]*processClaims = await processClaimsPromise/);
   assert.match(source, /Promise\.all\(\[verificationPromise, processClaimsPromise\]\)[\s\S]*observeVerifiedRegistrySession/);
   assert.doesNotMatch(source, /probeWindowsEditorState/);
@@ -38,7 +42,36 @@ test("editor.state is the sole hybrid observation owner with bounded fallback", 
   assert.match(source, /verification !== "verified"/);
   assert.match(source, /ProjectIdentityError/);
   assert.match(source, /Math\.max\(0, observationDeadlineMs - Date\.now\(\)\)/);
-  assert.doesNotMatch(source, /local-request-journal|BM_CLICK/);
+  assert.doesNotMatch(source, /local-request-journal|BM_CLICK|reloading\.json|deadlineUtc/);
+});
+
+test("editor.state distinguishes current idle observation from proof of a prior mutation effect", () => {
+  assert.match(editorStateTool.description, /Ready proves only current session state/i);
+  assert.match(editorStateTool.description, /started mutation timeout/i);
+  assert.match(editorStateTool.description, /affected business state before a new request/i);
+  assert.doesNotMatch(editorStateTool.description, /safe to treat .*not-happened|directly resubmit/i);
+});
+
+test("editor state terminal availability statuses map to distinct stable errors", () => {
+  const base = {
+    identity: { instanceId: `unity-${"a".repeat(64)}`, canonicalProjectPath: "c:\\repo", displayProjectPath: "C:\\repo" },
+    session: { known: false, editorSessionId: null },
+    state: {}, progress: [], blockers: [], observation: { freshness: "unknown" },
+  };
+  const cases = [
+    ["conflict", "E_INSTANCE_CONFLICT"],
+    ["unverifiable", "E_INSTANCE_UNVERIFIABLE"],
+    ["unresponsive", "E_UNITY_UNRESPONSIVE"],
+    ["offline", "E_INSTANCE_NOT_RUNNING"],
+  ] as const;
+  for (const [status, code] of cases) {
+    assert.throws(
+      () => rejectUnavailableEditorState({ ...base, status } as never, "fixture.operation"),
+      (error: unknown) => error instanceof Error && (error as { code?: string }).code === code,
+    );
+  }
+  assert.doesNotThrow(() => rejectUnavailableEditorState({ ...base, status: "ready" } as never, "fixture.operation"));
+  assert.doesNotThrow(() => rejectUnavailableEditorState({ ...base, status: "transitioning" } as never, "fixture.operation"));
 });
 
 test("editor.state accepts only a complete matching v1 snapshot and strips transport internals", async () => {
@@ -92,10 +125,10 @@ function snapshot(session: Awaited<ReturnType<typeof makeRegistrySession>>, obse
 test("editor.state fallback performs zero UI probes for unverified, duplicate, or reused process claims", async () => {
   const fixture = await stateFixture();
   const correctClaim = { processId: fixture.session.processId, processStartedAt: fixture.session.processStartedAt };
-  const cases: Array<{ name: string; verification: SessionProcessVerification; claims: ProjectProcessClaimInspection; outcome: "conflict" }> = [
-    { name: "unverifiable", verification: "unverifiable", claims: { verification: "verified", processIds: [fixture.session.processId], processClaims: [correctClaim] }, outcome: "conflict" },
+  const cases: Array<{ name: string; verification: SessionProcessVerification; claims: ProjectProcessClaimInspection; outcome: "conflict" | "unproven" }> = [
+    { name: "unverifiable", verification: "unverifiable", claims: { verification: "verified", processIds: [fixture.session.processId], processClaims: [correctClaim] }, outcome: "unproven" },
     { name: "duplicate", verification: "verified", claims: { verification: "verified", processIds: [fixture.session.processId, fixture.session.processId + 1], processClaims: [correctClaim, { processId: fixture.session.processId + 1, processStartedAt: fixture.session.processStartedAt }] }, outcome: "conflict" },
-    { name: "reused", verification: "verified", claims: { verification: "verified", processIds: [fixture.session.processId], processClaims: [{ processId: fixture.session.processId, processStartedAt: "2026-01-01T00:00:00.000Z" }] }, outcome: "conflict" },
+    { name: "reused", verification: "verified", claims: { verification: "verified", processIds: [fixture.session.processId], processClaims: [{ processId: fixture.session.processId, processStartedAt: "2026-01-01T00:00:00.000Z" }] }, outcome: "unproven" },
   ];
   try {
     for (const entry of cases) {
@@ -122,7 +155,96 @@ test("editor.state fallback performs zero UI probes for unverified, duplicate, o
   }
 });
 
-test("readEditorState and dispatchTool use one live bounded bridge observation and sanitize sensitive progress", async () => {
+test("readEditorState lets a verified exact modal override a raw unverifiable observation", async () => {
+  const fixture = await stateFixture();
+  const rawUnverifiable = reduceObservationRegistryRecord(makeRegistry(fixture.identity, [fixture.session]), new Map([[fixture.session.processId, {
+    processId: fixture.session.processId,
+    state: "unverifiable" as const,
+  }]]));
+  assert.equal(rawUnverifiable.status, "unverifiable");
+  assert.equal(rawUnverifiable.activeSession, undefined);
+  const context = {
+    requestId: "state-raw-unverifiable",
+    flags: { instance: fixture.project },
+    dataDir: fixture.dataDir,
+    bridgeExecute: async () => { throw new Error("must not post"); },
+  };
+  let observerCalls = 0;
+  try {
+    const blocked = await readEditorState(context, {
+      selectObservation: async () => ({ instance: rawUnverifiable, matchedBy: "instanceId" as const }),
+      observer: { observe: async () => {
+        observerCalls += 1;
+        return { outcome: "observed-blocked" as const, blockers: [{
+          type: "dialog" as const,
+          dialogId: "dialog_exact",
+          title: "Exact Modal",
+          message: "Exact Modal",
+          buttons: ["Close"],
+          requiresUserAction: true as const,
+          source: "windows-ui" as const,
+          confidence: "exact" as const,
+        }] };
+      } },
+    });
+    assert.equal(blocked.status, "blocked");
+    assert.deepEqual(blocked.blockers.map((blocker) => blocker.title), ["Exact Modal"]);
+    assert.equal(observerCalls, 1);
+
+    const stillUnverifiable = await readEditorState({ ...context, requestId: "state-still-unverifiable" }, {
+      selectObservation: async () => ({ instance: rawUnverifiable, matchedBy: "instanceId" as const }),
+      observer: { observe: async () => ({ outcome: "unproven" as const, blockers: [], reason: "process-claims-unverifiable" }) },
+    });
+    assert.equal(stillUnverifiable.status, "unverifiable");
+
+    let conflictObserverCalls = 0;
+    const conflict = await readEditorState({ ...context, requestId: "state-conflict-priority" }, {
+      selectObservation: async () => ({ instance: { ...rawUnverifiable, status: "conflict" as const }, matchedBy: "instanceId" as const }),
+      observer: { observe: async () => { conflictObserverCalls += 1; return { outcome: "observed-empty" as const, blockers: [] }; } },
+    });
+    assert.equal(conflict.status, "conflict");
+    assert.equal(conflictObserverCalls, 0);
+
+    const active = reduceObservationRegistryRecord(makeRegistry(fixture.identity, [fixture.session]), new Map([[fixture.session.processId, {
+      processId: fixture.session.processId,
+      state: "alive" as const,
+      processStartedAt: fixture.session.processStartedAt,
+      executablePath: process.execPath,
+    }]]));
+    assert.ok(active.activeSession);
+    const unverifiedClaims: ProjectProcessClaimInspection = { verification: "unverifiable", processIds: [] };
+    const fallbackBlocked = await readEditorState({ ...context, requestId: "state-active-fallback-blocked" }, {
+      selectObservation: async () => ({ instance: active, matchedBy: "instanceId" as const }),
+      verifySession: async () => "verified",
+      inspectClaims: async () => unverifiedClaims,
+      observer: { observe: async () => ({ outcome: "observed-blocked" as const, blockers: [{
+        type: "dialog" as const,
+        dialogId: "dialog_fallback",
+        title: "Fallback Modal",
+        message: "Fallback Modal",
+        buttons: ["Close"],
+        requiresUserAction: true as const,
+        source: "windows-ui" as const,
+        confidence: "exact" as const,
+      }] }) },
+    });
+    assert.equal(fallbackBlocked.status, "blocked");
+    assert.deepEqual(fallbackBlocked.blockers.map((blocker) => blocker.title), ["Fallback Modal"]);
+
+    const fallbackEmpty = await readEditorState({ ...context, requestId: "state-active-fallback-empty" }, {
+      selectObservation: async () => ({ instance: active, matchedBy: "instanceId" as const }),
+      verifySession: async () => "verified",
+      inspectClaims: async () => unverifiedClaims,
+      observer: { observe: async () => ({ outcome: "observed-empty" as const, blockers: [] }) },
+    });
+    assert.equal(fallbackEmpty.status, "unverifiable");
+    assert.equal(fallbackEmpty.session.known, false);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("readEditorState uses one live bounded bridge observation and sanitizes sensitive progress", async () => {
   const fixture = await stateFixture();
   const startedAt = Date.now();
   const observationDeadlines: number[] = [];
@@ -139,24 +261,35 @@ test("readEditorState and dispatchTool use one live bounded bridge observation a
   };
   };
   try {
-    const direct = await readEditorState({ requestId: "state-direct", flags: { instance: fixture.project }, dataDir: fixture.dataDir, bridgeExecute });
+    const processClaims: ProjectProcessClaimInspection = {
+      verification: "verified",
+      processIds: [fixture.session.processId],
+      processClaims: [{ processId: fixture.session.processId, processStartedAt: fixture.session.processStartedAt }],
+    };
+    const instance = reduceObservationRegistryRecord(makeRegistry(fixture.identity, [fixture.session]), new Map([[fixture.session.processId, {
+      processId: fixture.session.processId,
+      state: "alive" as const,
+      processStartedAt: fixture.session.processStartedAt,
+      executablePath: process.execPath,
+    }]]));
+    const direct = await readEditorState({ requestId: "state-direct", flags: { instance: fixture.project }, dataDir: fixture.dataDir, bridgeExecute }, {
+      selectObservation: async () => ({ instance, matchedBy: "projectPath" }),
+      verifySession: async () => "verified",
+      inspectClaims: async () => processClaims,
+    });
     assert.equal(direct.observation.freshness, "live");
     assert.equal(direct.status, "blocked");
-    assert.ok(Date.now() - startedAt <= 10_100);
+    assert.ok(Date.now() - startedAt <= 4_100);
+    assert.equal(observationDeadlines.length, 1);
+    assert.ok(observationDeadlines[0] >= startedAt);
+    assert.ok(observationDeadlines[0] <= startedAt + 2_050);
     assert.doesNotMatch(JSON.stringify(direct), /secret|bridgeEndpoint/i);
-
-    const dispatchedStartedAt = Date.now();
-    const dispatched = await dispatchTool("editor.state", undefined, { instance: fixture.project }, { dataDir: fixture.dataDir, bridgeExecute }, "state-dispatch");
-    assert.ok(dispatched.ok);
-    assert.equal((dispatched.data as { observation: { freshness: string } }).observation.freshness, "live");
-    assert.ok(observationDeadlines[1] >= dispatchedStartedAt);
-    assert.ok(observationDeadlines[1] <= Date.now() + 10_000);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
 });
 
-test("readEditorState rejects future snapshots and reports conflict or offline from the registry without POST", async () => {
+test("readEditorState rejects future snapshots and reports duplicate-session uncertainty or offline without POST", async () => {
   const future = await stateFixture();
   const realNow = Date.now;
   const fixedNow = 1_000_000;
@@ -177,7 +310,7 @@ test("readEditorState rejects future snapshots and reports conflict or offline f
   const conflict = await stateFixture(2);
   try {
     const result = await readEditorState({ requestId: "state-conflict", flags: { instance: conflict.project }, dataDir: conflict.dataDir, bridgeExecute: async () => { throw new Error("must not post"); } });
-    assert.equal(result.status, "conflict");
+    assert.equal(result.status, "offline");
     assert.equal(result.observation.freshness, "unknown");
   } finally {
     await rm(conflict.root, { recursive: true, force: true });
@@ -197,7 +330,7 @@ test("readEditorState rejects future snapshots and reports conflict or offline f
   }
 });
 
-test("editor.state reports transitioning when a live reloading marker covers a broken bridge", async () => {
+test("editor.state ignores an obsolete live reloading marker", async () => {
   const fixture = await stateFixture();
   try {
     const markerDir = join(fixture.project, "Library", "UnityCli");
@@ -210,21 +343,21 @@ test("editor.state reports transitioning when a live reloading marker covers a b
       dataDir: fixture.dataDir,
       bridgeExecute: async () => { throw new Error("bridge broken during reload"); },
     });
-    assert.equal(result.status, "transitioning");
+    assert.notEqual(result.status, "transitioning");
     assert.equal(result.observation.freshness, "unknown");
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
 });
 
-test("editor.state falls through to process verification when the reloading marker is expired or absent", async () => {
+test("editor.state ignores an obsolete expired reloading marker", async () => {
   const expired = await stateFixture();
   try {
     const markerDir = join(expired.project, "Library", "UnityCli");
     await mkdir(markerDir, { recursive: true });
     await writeFile(join(markerDir, "reloading.json"), JSON.stringify({ deadlineUtc: new Date(Date.now() - 1_000).toISOString() }));
 
-    // 标记已超时：单 session 的进程验证路径不得因标记而被跳过，结果不应是 transitioning。
+    // reloading.json 已无产品owner；无论时间戳为何值都不得改变七态归约。
     const result = await readEditorState({
       requestId: "state-reloading-expired",
       flags: { instance: expired.project },

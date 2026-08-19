@@ -110,7 +110,7 @@ namespace UnityCli
         public string CompletionDriverId { get; set; }
     }
 
-    /// <summary>调用示例的内部 typed input，公开投影只保留 argv。</summary>
+    /// <summary>调用示例的内部 typed input；公开投影返回 input 与按需 execution。</summary>
     public sealed class ToolExample
     {
         public string Description { get; set; }

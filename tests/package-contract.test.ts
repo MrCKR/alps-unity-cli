@@ -10,7 +10,7 @@ import "../src/tools/.generated-registry.js";
 import "../src/tools/.generated-schemas.js";
 import { dispatchTool } from "../src/tools/dispatcher.js";
 import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
-import { createUnityProject } from "./helpers/instance-registry-v2.js";
+import { createUnityProject } from "./helpers/instance-registry-v3.js";
 
 const LOCAL_PACKAGE_COMMANDS = ["package.bridge-remove", "package.deploy", "package.embed", "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get", "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.list", "package.scoped-registry.remove", "package.search", "package.status"];
 

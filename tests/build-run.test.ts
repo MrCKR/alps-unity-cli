@@ -9,7 +9,7 @@ import "../src/tools/.generated-schemas.js";
 import { findDefineTool, type ToolContext } from "../src/tools/define.js";
 import { dispatchTool } from "../src/tools/dispatcher.js";
 import { StructuredToolError } from "../src/tools/errors.js";
-import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v2.js";
+import { createUnityProject, makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v3.js";
 
 const tool = findDefineTool("build.run");
 if (!tool) throw new Error("build.run definition is unavailable");

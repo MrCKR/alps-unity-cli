@@ -66,7 +66,7 @@ test("runtime listener and registry freeze one loopback session identity", async
   assert.match(registry, /"runtimeSessionId", sessionId/);
   assert.match(registry, /"sourceRuntimeSessionId", sessionId/);
   assert.match(registry, /"progress", new List<object>\(\)/);
-  assert.match(registry, /path \+ "\.runtime\.tmp"/);
+  assert.match(registry, /path \+ "\.tmp"/);
   assert.match(registry, /RemoveCurrentClaim\(\)/);
 });
 
@@ -185,7 +185,7 @@ test("runtime security, cache, artifacts, and shutdown remain bounded", async ()
   assert.match(bridge, /UnityCliRuntimeTools\.Shutdown\(\)/);
   assert.match(bridge, /HasOnlyKeys\(value, "version", "canonicalizationVersion"/);
   assert.match(bridge, /http:\/\/127\.0\.0\.1:/);
-  assert.match(registry, /runtime\.tmp/);
+  assert.match(registry, /path \+ "\.tmp"/);
   assert.match(registry, /finally \{ if \(File\.Exists\(temporary\)\) File\.Delete\(temporary\); \}/);
   assert.match(tools, /"runtime-element\.png"/);
   assert.match(tools, /path \+ "\.tmp"/);

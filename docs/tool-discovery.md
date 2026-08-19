@@ -22,7 +22,7 @@ tools group
     -> tools run <tool> --input '<json>'
 ```
 
-不确定分组时使用 `unity_cli tools search <k1|k2|...>`，多个关键词用 `|` 分隔按 OR 匹配。
+不确定分组时使用 `unity_cli tools search '<k1|k2|...>'`，多个关键词用 `|` 分隔按 OR 匹配。在PowerShell中必须用单引号包住整段关键词，否则`|`会被解释为shell管道。
 
 ### `tools group`
 
@@ -49,8 +49,8 @@ unity_cli tools group list probuilder --instance my-project
 按名称、summary、description 和 group 搜索当前实例完整目录：
 
 ```powershell
-unity_cli tools search screenshot
-unity_cli tools search project-summary --instance my-project
+unity_cli tools search 'screenshot|camera'
+unity_cli tools search 'project-summary|scene' --instance my-project
 ```
 
 ### `tools describe`
@@ -61,21 +61,20 @@ unity_cli tools search project-summary --instance my-project
 unity_cli tools describe camera.screenshot
 ```
 
-常用字段：
+公开字段：
 
 | 字段 | 说明 |
 |------|------|
-| `name` / `group` | 唯一名称与分组 |
-| `summary` / `description` | 路由摘要与完整职责 |
-| `inputSchema` / `outputSchema` | 输入输出 JSON Schema |
-| `destructiveHint` / `sideEffects` | 效果说明，不构成执行门 |
+| `name` / `description` | 精确名称、调用边界、默认行为与主要结果 |
+| `inputSchema` | 完整输入 JSON Schema；结果 schema 由内部 contract 校验，不进入 describe |
+| `destructiveHint` / `sideEffects` | 效果说明，不构成执行门；空 sideEffects 省略 |
 | `supportsDryRun` | 是否支持可选 `--dry-run` |
-| `target` / `availabilityScope` | Editor、Runtime 或两者，以及状态范围 |
-| `playModeSupport` | `supported`、`runtime-only`、`session-affecting`、`editor-only` 或 `unknown` |
-| `available` / `unavailableReason` | 当前实例状态下是否可执行及原因 |
-| `requiresPackages` | Unity Package 依赖 |
-| `examples` | 可执行 argv 示例 |
-| `source` | 说明/审计来源；不影响显示、describe、执行或公开路由 |
+| `target` / `playModeSupport` | Editor、Runtime 路由与 PlayMode 语义 |
+| `available:false` / `unavailableReason` | 仅当前不可执行时返回；字段缺失表示当前可用 |
+| `requiresPackages` | 非空 Unity Package 依赖 |
+| `examples` | `description`、结构化业务 `input` 与按需 `execution` |
+
+`group`、`summary` 和 `source` 已在发现层使用，不在单 Tool describe 重复；`outputSchema`、`permissions`、fingerprint、completion 和 handler 只保留在内部 metadata。
 
 ## 完整目录语义
 
@@ -87,7 +86,7 @@ unity_cli tools describe camera.screenshot
 
 1. 用 `instances list` 确认 canonical project identity，或切换到目标 Unity 项目 CWD。
 2. 用 `tools group` 读取当前实例目录。
-3. 用 `tools group list`、`tools search` 缩小范围。
+3. 用 `tools group list`、`tools search '<k1|k2|...>'` 缩小范围。
 4. 用 `tools describe` 获取 schema、状态约束、副作用和示例。
 5. 用 `tools run` 调用同一名称。
 6. 安装 Package、安装 Extension、domain reload 或切换 PlayMode 后重新 discovery。
@@ -97,7 +96,9 @@ unity_cli tools describe camera.screenshot
 - `E_INSTANCE_REQUIRED`：未传 selector，CWD 也不在 Unity 项目中。
 - `E_INSTANCE_NOT_FOUND`：显式 selector 无法解析。
 - `E_INSTANCE_NOT_RUNNING`：目标 identity 已确定，但 Unity Editor 未连接。
-- `E_INSTANCE_CONFLICT`：同一项目存在多个或不可唯一证明的 Editor claim。
+- `E_INSTANCE_CONFLICT`：同一项目存在至少两个已验证live Editor claim。
+- `E_INSTANCE_UNVERIFIABLE`：PID/start或project ownership证据不完整，不能安全选定session。
+- `E_UNITY_UNRESPONSIVE`：transport identity存在，但近期Unity主线程pulse无法证明。
 - `E_TOOL_REGISTRY_UNHEALTHY`：实例 catalog 有 malformed、重复或 ownership 冲突；修复 registry 后重新发现。
-- `E_TOOL_NOT_FOUND_FOR_TARGET`：名称不属于当前实例目录；重新 discovery。
+- `E_TOOL_NOT_FOUND_FOR_TARGET`：名称不属于当前实例目录；运行 `tools search <k1|k2|...>` 重新发现相关能力。
 - `E_RUNTIME_NOT_READY`：Runtime Tool 已显示，但执行需要稳定 PlayMode。

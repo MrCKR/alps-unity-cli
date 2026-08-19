@@ -9,7 +9,7 @@
 import { getString } from "./args.js";
 import { access, stat } from "node:fs/promises";
 import { discoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { instanceSelectionFailure, obsoleteLocalStatePaths, readInstances, selectInstanceForFlags, type UnityInstance } from "./instances.js";
+import { instanceSelectionFailure, obsoleteLocalStatePaths, readInstances, readInstancesWithRegistryDiagnostics, selectInstanceForFlags, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { EDITOR_STATE_OBSERVATION_BUDGET_MS } from "./bridge/session-supervisor.js";
 import { builtinToolMetadata } from "./tools/metadata/index.js";
@@ -22,6 +22,7 @@ import type { CliResult } from "./types.js";
 
 export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime {
   dataDir: string;
+  selectInstance?: typeof selectInstanceForFlags;
 }
 
 export interface DoctorCheck {
@@ -42,7 +43,7 @@ export async function handleDoctorCommand(
   const instanceCheck = await checkInstanceRegistry(runtime.dataDir);
   checks.push(instanceCheck);
 
-  // Check 2: Reduced v2 instance states
+  // Check 2: Reduced v3 instance states
   let readyInstances: UnityInstance[] = [];
   if (instanceCheck.status !== "fail") {
     const instances = await readInstances(runtime.dataDir);
@@ -55,7 +56,7 @@ export async function handleDoctorCommand(
   // Check 3: Bridge connectivity follows the same strict --instance/CWD selector as business calls.
   let bridgeReachable = false;
   try {
-    const selection = await selectInstanceForFlags(flags, runtime.dataDir);
+    const selection = await (runtime.selectInstance ?? selectInstanceForFlags)(flags, runtime.dataDir);
     const bridgeCheck = await checkBridgeConnectivity(selection.instance.instanceId, requestId, runtime);
     checks.push(bridgeCheck);
     bridgeReachable = bridgeCheck.status === "pass";
@@ -112,7 +113,15 @@ export async function handleDoctorCommand(
 
 async function checkInstanceRegistry(dataDir: string): Promise<DoctorCheck> {
   try {
-    const instances = await readInstances(dataDir);
+    const { instances, invalidRecordCount } = await readInstancesWithRegistryDiagnostics(dataDir);
+    if (invalidRecordCount > 0) {
+      return {
+        name: "instance_registry",
+        status: "warn",
+        message: `Instance registry contains ${instances.length} valid instance(s) and ignored ${invalidRecordCount} invalid or unreadable record(s).`,
+        details: { instanceCount: instances.length, invalidRecordCount },
+      };
+    }
     if (instances.length === 0) {
       return {
         name: "instance_registry",
@@ -131,13 +140,14 @@ async function checkInstanceRegistry(dataDir: string): Promise<DoctorCheck> {
     return {
       name: "instance_registry",
       status: "fail",
-      message: `Failed to read instance registry: ${error instanceof Error ? error.message : String(error)}`
+      message: `Failed to read instance registry directory: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }
 
 function checkReadyInstances(instances: UnityInstance[], ready: UnityInstance[]): DoctorCheck {
   const conflicts = instances.filter((instance) => instance.status === "conflict");
+  const unverifiable = instances.filter((instance) => instance.status === "unverifiable");
   const blocked = instances.filter((instance) => instance.status === "blocked");
   if (conflicts.length > 0) {
     return {
@@ -145,6 +155,14 @@ function checkReadyInstances(instances: UnityInstance[], ready: UnityInstance[])
       status: "fail",
       message: `${conflicts.length} project identity conflict(s) block live dispatch.`,
       details: { readyCount: ready.length, conflictCount: conflicts.length, blockedCount: blocked.length }
+    };
+  }
+  if (unverifiable.length > 0) {
+    return {
+      name: "ready_instances",
+      status: "fail",
+      message: `${unverifiable.length} project identity observation(s) could not be verified safely.`,
+      details: { readyCount: ready.length, conflictCount: 0, unverifiableCount: unverifiable.length, blockedCount: blocked.length }
     };
   }
   if (ready.length === 0) {
@@ -155,6 +173,7 @@ function checkReadyInstances(instances: UnityInstance[], ready: UnityInstance[])
       details: {
         readyCount: 0,
         transitioningCount: instances.filter((instance) => instance.status === "transitioning").length,
+        unresponsiveCount: instances.filter((instance) => instance.status === "unresponsive").length,
         blockedCount: blocked.length,
         offlineCount: instances.filter((instance) => instance.status === "offline").length,
       }
@@ -170,7 +189,7 @@ function checkReadyInstances(instances: UnityInstance[], ready: UnityInstance[])
         instanceId: instance.instanceId,
         canonicalProjectPath: instance.canonicalProjectPath,
         editorSessionId: instance.editorSessionId,
-        lastHeartbeatAt: instance.lastHeartbeatAt,
+        publishedAt: instance.publishedAt,
       }))
     }
   };
@@ -356,7 +375,7 @@ async function checkConfigIntegrity(readyInstances: UnityInstance[]): Promise<Do
     if (!/^unity-[0-9a-f]{64}$/.test(instance.instanceId)) issues.push(`Instance ${instance.instanceId}: invalid deterministic instanceId.`);
     if (!instance.canonicalProjectPath) issues.push(`Instance ${instance.instanceId}: missing canonicalProjectPath.`);
     if (!instance.editorSessionId) issues.push(`Instance ${instance.instanceId}: missing editorSessionId.`);
-    if (!instance.lastHeartbeatAt) issues.push(`Instance ${instance.instanceId}: missing lastHeartbeatAt.`);
+    if (!instance.publishedAt) issues.push(`Instance ${instance.instanceId}: missing publishedAt.`);
   }
 
   if (issues.length > 0) {
@@ -372,7 +391,7 @@ async function checkConfigIntegrity(readyInstances: UnityInstance[]): Promise<Do
     name: "config_integrity",
     status: "pass",
     message: readyInstances.length > 0
-      ? `${readyInstances.length} instance(s) passed v2 identity checks.`
+      ? `${readyInstances.length} instance(s) passed v3 identity checks.`
       : "No ready instances to check.",
     details: { checkedInstances: readyInstances.length }
   };

@@ -16,8 +16,12 @@ const observedDialog: ObservedEditorDialog = {
   processId: 1, processStartedAt: "2026-07-19T00:00:00.000Z", buttonTargets: [{ label: "Save", hwnd: "0x2", enabled: true }],
 };
 
-test("dialog click tool reserves its default budget for observation and click proof", () => {
+test("dialog click tool reserves its default budget and describes mechanism-independent proof", () => {
   assert.equal(clickDialogTool.timeoutMs, 30_000);
+  assert.match(clickDialogTool.description, /exact enabled button label/);
+  assert.match(clickDialogTool.description, /dialog disappeared/);
+  assert.match(clickDialogTool.description, /modal/);
+  assert.doesNotMatch(clickDialogTool.description, /BM_CLICK|InvokePattern|UI Automation/);
 });
 
 test("dialog click allocates the remaining deadline instead of a fixed three-second timeout", async () => {
@@ -35,6 +39,7 @@ test("dialog click output parser recognizes terminal states and isolates unprove
   assert.deepEqual(parseClickDialogOutput("clicked\n"), { outcome: "clicked" });
   assert.deepEqual(parseClickDialogOutput("stale\n"), { outcome: "stale" });
   assert.deepEqual(parseClickDialogOutput("button-not-found\n"), { outcome: "button-not-found" });
+  assert.deepEqual(parseClickDialogOutput("unproven\n"), { outcome: "unproven" });
   assert.deepEqual(parseClickDialogOutput("native exception 0x123\n"), { outcome: "unproven", reason: "parse" });
 });
 
@@ -47,6 +52,14 @@ test("dialog click runner failure reasons remain stable and do not expose script
   assert.doesNotMatch(script, /ToString\('o'\)/);
   assert.match(script, /\$dialogPid -ne \$targetProcessId/);
   assert.match(script, /\$buttonPid -ne \$targetProcessId/);
+  assert.match(script, /GetWindowRect/);
+  assert.match(script, /GetCursorPos/);
+  assert.match(script, /SetForegroundWindow/);
+  assert.match(script, /SetCursorPos/);
+  assert.match(script, /SendInput/);
+  assert.match(script, /dwFlags=0x0002/);
+  assert.match(script, /dwFlags=0x0004/);
+  assert.doesNotMatch(script, /BM_CLICK|0x00F5|SendMessageW|UIAutomationClient|InvokePattern/);
   const timedOut = await clickObservedDialog(observedDialog, observedDialog.buttonTargets[0]!, Date.now() + 12_000, async () => ({ stdout: "", reason: "timeout" }));
   const exited = await clickObservedDialog(observedDialog, observedDialog.buttonTargets[0]!, Date.now() + 12_000, async () => ({ stdout: "", reason: "exit" }));
   assert.deepEqual(timedOut, { outcome: "unproven", reason: "timeout" });
