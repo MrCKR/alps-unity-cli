@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/contracts/stable-session/admission-response-v1.schema.json",
+  "title": "Unity CLI internal task admission response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "requestId", "data"],
+  "properties": {
+    "ok": { "const": true },
+    "requestId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "granted", "grantExpiresInMs", "retryAfterMs"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "granted": { "type": "boolean" },
+        "grantExpiresInMs": { "type": "integer", "minimum": 0, "maximum": 2000 },
+        "retryAfterMs": { "const": 100 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "granted": { "const": true } }, "required": ["granted"] },
+          "then": { "properties": { "grantExpiresInMs": { "type": "integer", "minimum": 1, "maximum": 2000 } } },
+          "else": { "properties": { "grantExpiresInMs": { "const": 0 } } }
+        }
+      ]
+    }
+  }
+}

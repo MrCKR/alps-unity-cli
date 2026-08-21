@@ -47,7 +47,7 @@ export default defineTool<TestRunRequest, TestRunResult>({
     }
   }
 });
-async function call(requestId: string, command: string, input: Record<string, unknown>, flags: BridgeFlags, context: any, invocation: any) { const result = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, bridgeExecute: context.bridgeExecute }, undefined, invocation); if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live test bridge failed." }); return result; }
+async function call(requestId: string, command: string, input: Record<string, unknown>, flags: BridgeFlags, context: any, invocation: any) { const result = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, undefined, invocation); if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live test bridge failed." }); return result; }
 function terminal(root: Record<string, unknown>, requestId: string): TestRunResult {
   const envelope = record(root.rootEnvelope);
   if (envelope.requestId !== requestId || typeof envelope.ok !== "boolean") throw invalid();

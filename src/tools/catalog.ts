@@ -61,10 +61,16 @@ export async function loadToolCatalog(
   runtime: ToolCatalogRuntime,
   requestId: string,
 ): Promise<ToolCatalogResult> {
-  const editor = await discoverProjectTools(flags, runtime, `${requestId}_editor_catalog`, { requireBridge: true });
+  const editorAdmission = runtime.rootAdmissions?.editor ?? (runtime.rootAdmission?.target === "editor" ? runtime.rootAdmission : undefined);
+  const runtimeAdmission = runtime.rootAdmissions?.runtime ?? (runtime.rootAdmission?.target === "runtime" ? runtime.rootAdmission : undefined);
+  const editorRuntime = { ...runtime, rootAdmission: editorAdmission };
+  const runtimeTargetRuntime = { ...runtime, rootAdmission: runtimeAdmission };
+  const editorRequestId = editorRuntime.rootAdmission?.requestId ?? `${requestId}_editor_catalog`;
+  const runtimeRequestId = runtimeTargetRuntime.rootAdmission?.requestId ?? `${requestId}_runtime_catalog`;
+  const editor = await discoverProjectTools(flags, editorRuntime, editorRequestId, { requireBridge: true });
   if (editor.ok === false && editor.error?.code !== "E_INSTANCE_NOT_RUNNING") return editor;
 
-  const runtimeCatalog = await discoverRuntimeTools(flags, runtime, `${requestId}_runtime_catalog`, { requireBridge: true });
+  const runtimeCatalog = await discoverRuntimeTools(flags, runtimeTargetRuntime, runtimeRequestId, { requireBridge: true });
   if (runtimeCatalog.ok === false && runtimeCatalog.error?.code !== "E_RUNTIME_NOT_RUNNING") return runtimeCatalog;
   if (editor.ok === false && runtimeCatalog.ok === false) return editor;
 

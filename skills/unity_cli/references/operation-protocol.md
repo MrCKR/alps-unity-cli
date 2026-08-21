@@ -42,13 +42,17 @@ Tool descriptor 常用字段：
 
 `nextActions`、`transient` 和 `retryAfterMs` 都是恢复建议，不构成权限、确认或重放门。`E_SCHEMA_INVALID` 可回到 `describe` 修正输入；`E_RUNTIME_NOT_READY`、Editor/PlayMode availability 错误可结合 descriptor 和当前状态处理。
 
-## Timeout 与调用方决策
+## Timeout、任务池与调用方决策
 
-`E_EXECUTION_TIMEOUT`、transport丢失、进程中断或没有可信terminal envelope时，只能确定本次调用没有返回可信终态，不能据此判断mutation是否发生。先读取对象、场景、Package、build/test状态或artifact manifest；只有形成新的业务决策后才提交新请求，不把outcome unknown自动重放。
+每个live Editor或Development Player session拥有独立任务池，默认达到5个active root时关闭准入，降到4仍关闭，降到3才重开。CLI在业务请求前自动等待；AI不手工轮询、不读取active count，也不管理内部token。统一catalog在Editor和Runtime同时在线时，会分别经过两个session的准入后才返回完整结果。
 
-调用公开CLI的命令host必须等待进程退出，等待预算至少为传给CLI的`--timeout-ms`加5000毫秒，不得后台分离。CLI在自身deadline到达时输出一个timeout envelope，并在stdout写完或最多1秒后退出。host或CLI停止等待都不证明Unity中已开始的effect停止。
+`--timeout-ms T`先提供一份最多`T`的准入预算。准入deadline的`E_UNITY_BUSY`明确证明业务Bridge请求未发送、effect未开始，可以稍后提交新root。获得grant后再创建一份完整`T`的execution预算；token重取、status、rebind、reload和terminal recovery都只能消费该预算，不能刷新第三份预算。
 
-compile、import、domain reload和listener generation交接由session supervisor在同一absolute deadline内处理。同一次调用仅在`editorSessionId`未改变时，才能用完全相同的request bytes续接durable terminal；首次mutation POST后若session改变，CLI禁止向新session再次POST并返回`E_EXECUTION_TIMEOUT`。
+`E_EXECUTION_TIMEOUT`、放行后的transport丢失、进程中断或没有可信terminal envelope时，只能确定本次调用没有返回可信终态，不能据此判断mutation是否发生。先读取对象、场景、Package、build/test状态或artifact manifest；只有形成新的业务决策后才提交新请求，不把outcome unknown自动重放。
+
+调用公开CLI的命令host必须等待进程退出；传入`--timeout-ms T`时至少等待`2 * T + 5000`毫秒，不得后台分离。CLI在stdout写完或最多1秒后退出。CLI timeout不会强停Unity中已开始的effect，host提前退出也不能作为停止证明。
+
+compile、import、domain reload和listener generation交接由session supervisor在同一execution absolute deadline内处理。同一次调用仅在`editorSessionId`未改变时，才能用完全相同的request bytes续接durable terminal；首次mutation POST后若session改变，CLI禁止向新session再次POST并返回`E_EXECUTION_TIMEOUT`。
 
 ## 大输出
 

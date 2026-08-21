@@ -112,6 +112,7 @@ export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefr
 async function bridge(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: any, invocation: any): Promise<BridgeData> {
   const result = await executeBridgePayload(requestId, command, input, flags, {
     dataDir: context.dataDir,
+    rootAdmission: context.rootAdmission,
     bridgeExecute: context.bridgeExecute,
   }, undefined, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live refresh bridge failed." });

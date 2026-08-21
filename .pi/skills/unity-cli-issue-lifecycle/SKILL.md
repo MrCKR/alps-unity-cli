@@ -47,7 +47,7 @@ compatibility: 适用于 alps-unity-cli；需要 read、edit/write、pwsh、真�
 
 ## 边界
 
-- 本 Skill 管理缺陷记录与状态转换，不替代 `unity-cli-plan`、`unity-cli-capability`、`unity-cli-validation` 或 `unity-cli-wait`；任务命中时仍需同时加载。
-- 用户明确不要任务包时，不创建 `.plan`；问题记录本身仍必须维护。
+- 本 Skill 管理缺陷记录与状态转换，不替代 `unity-cli-capability`、`unity-cli-validation` 或 `unity-cli-wait`；任务命中时仍需同时加载。
+- 问题记录独立于普通任务跟踪；命中本 Skill 时必须维护同一份状态记录。
 - 不提交、不发布、不升级版本，除非用户另行要求。
 - 不把 `.issues/` 当执行日志仓库；只记录影响工程判断的证据和 terminal 结果。

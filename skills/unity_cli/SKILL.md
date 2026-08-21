@@ -45,8 +45,10 @@ unity_cli command <name> --field <value> --instance <id|projectPath|alias>
 
 - 调用即授权。`destructiveHint`、`sideEffects`、`supportsDryRun`只描述效果；仅在确需预览时使用`--dry-run`。Skill不增加确认、意图复核或预定义操作范围；产品的cross-session mutation fence仍必须遵守。
 - 建议通过 `instances`、`doctor`、`tools run editor.state` 观察状态，不读取内部 Bridge 注册文件、端口或 URL，也不直接 ping transport。
-- `E_EXECUTION_TIMEOUT`、连接丢失或缺少可信terminal envelope只表示没有可信终态。先用只读Tool或业务readback观察并形成新的业务决策；CLI不自动重放，首次mutation POST后Editor session改变时也不会向新session重投。`transient:true`与`nextActions`仍是建议，不构成额外授权门。
-- 运行公开CLI时必须等待该进程退出，不得后台分离。命令host的等待预算至少为传给CLI的`--timeout-ms`加5000毫秒；CLI到自身deadline后会输出timeout envelope并在stdout完成或最多1秒后退出。host提前超时不等于CLI或Unity effect已经停止。
+- CLI会在发送Unity业务请求前自行等待target session任务池放行；不得手工每100毫秒循环调用，也不得读取或操作内部准入identity。`--timeout-ms T`分别提供最多`T`的准入等待与放行后最多`T`的业务执行。
+- 准入deadline返回的`E_UNITY_BUSY`会明确证明`no business request was sent`，effect未开始，可以稍后提交新root。已进入池后的mutation lease busy不得解释为effect未开始。
+- `E_EXECUTION_TIMEOUT`、放行后连接丢失或缺少可信terminal envelope只表示没有可信终态。先用只读Tool或业务readback观察并形成新的业务决策；CLI不自动重放，首次mutation POST后Editor session改变时也不会向新session重投。`transient:true`与`nextActions`仍是建议，不构成额外授权门。
+- 运行公开CLI时必须等待该进程退出，不得后台分离。传入`--timeout-ms T`时，命令host至少等待`2 * T + 5000`毫秒；CLI在stdout完成或最多1秒后退出。host提前超时不等于CLI、准入grant或Unity effect已经停止。
 - `available:false`、`unavailableReason` 和 `playModeSupport` 说明当前可执行性；`source` 不参与路由。
 - blocker 在 `error.details.blockers` 时，可先读 `editor.dialogs`，再按返回的 dialogId 与 enabled button 调用 `editor.dialog.click`。
 - 大输出、envelope、artifact、分页、host等待预算和 session 说明见 `references/operation-protocol.md`。

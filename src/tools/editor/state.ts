@@ -52,7 +52,7 @@ const OBSERVATION_BUDGET_MS = 4_000;
 // Bridge子调用只能消费前半段预算；modal时必须给独立process/UI observer留下原deadline内的证明窗口。
 const BLOCKER_OBSERVATION_RESERVE_MS = 2_000;
 const SENSITIVE_KEYS = new Set(["endpoint", "endpointurl", "bridgeendpoint", "bridgeendpointurl", "bridgeurl", "port", "actualport", "preferredport", "listenerid", "listenergeneration", "generation", "commandline"]);
-type EditorStateReadContext = Pick<ToolContext, "requestId" | "flags" | "dataDir" | "bridgeExecute"> & Partial<Pick<ToolContext, "absoluteDeadlineMs">>;
+type EditorStateReadContext = Pick<ToolContext, "requestId" | "flags" | "dataDir" | "rootAdmission" | "bridgeExecute"> & Partial<Pick<ToolContext, "absoluteDeadlineMs">>;
 interface EditorStateReadDependencies {
   selectObservation?: typeof selectObservationInstanceForFlags;
   verifySession?: typeof verifyRegistrySessionProcess;
@@ -195,7 +195,7 @@ export async function observeVerifiedRegistrySession(
 async function probeBridge(context: EditorStateReadContext, observationDeadlineMs: number, session: RegistrySession, selection: InstanceSelection): Promise<{ snapshot: Snapshot; progress: unknown; blockers: unknown } | undefined> {
   if (remaining(observationDeadlineMs) <= 0) return undefined;
   // selector 只在外层执行一次；私有 Symbol 调用字段保留真实 instanceId，不会进入 Bridge body。
-  const result = await executeBridgePayload(context.requestId, "internal.editor.state.snapshot", {}, { instance: selection.instance.instanceId }, { bridgeExecute: context.bridgeExecute, dataDir: context.dataDir }, undefined, withObservationSelection({ mode: "observeNow", mutation: false, observationAbsoluteDeadlineMs: observationDeadlineMs }, selection));
+  const result = await executeBridgePayload(context.requestId, "internal.editor.state.snapshot", {}, { instance: selection.instance.instanceId }, { bridgeExecute: context.bridgeExecute, dataDir: context.dataDir, rootAdmission: context.rootAdmission }, undefined, withObservationSelection({ mode: "observeNow", mutation: false, observationAbsoluteDeadlineMs: observationDeadlineMs }, selection));
   if (!result.ok || !result.data || typeof result.data !== "object" || Array.isArray(result.data)) return undefined;
   const data = result.data as Record<string, unknown>;
   const snapshot = parseSnapshot(data.snapshot ?? data, session);

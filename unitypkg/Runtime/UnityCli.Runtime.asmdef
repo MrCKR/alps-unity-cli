@@ -1,7 +1,7 @@
 {
   "name": "UnityCli.Runtime",
   "rootNamespace": "UnityCli",
-  "references": [],
+  "references": ["UnityCli.Shared"],
   "includePlatforms": ["WindowsStandalone32", "WindowsStandalone64"],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

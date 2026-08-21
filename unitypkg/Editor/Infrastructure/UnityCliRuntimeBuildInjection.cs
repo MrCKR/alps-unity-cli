@@ -32,15 +32,17 @@ namespace UnityCli
             if (!identity.Success) throw new BuildFailedException(identity.ErrorCode + ": " + identity.ErrorMessage);
             var buildId = ReadBuildId(report);
             if (string.IsNullOrEmpty(buildId)) throw new BuildFailedException("UnityCli runtime sidecar requires a stable build GUID.");
+            var settings = UnityCliProjectSettings.Current;
             var document = new Dictionary<string, object>
             {
-                { "version", 1L },
+                { "version", 2L },
                 { "canonicalizationVersion", (long)UnityCliCanonicalProjectPath.CanonicalizationVersion },
                 { "instanceId", identity.InstanceId },
                 { "canonicalProjectPath", identity.CanonicalProjectPath },
                 { "displayProjectPath", identity.DisplayProjectPath },
                 { "buildId", buildId }, { "buildGuid", buildId },
                 { "buildStamp", UnityCliBridgeBuildInfo.BuildStamp },
+                { "taskPoolMaxActive", (long)settings.TaskPoolMaxActive }, { "taskPoolReopenAt", (long)settings.TaskPoolReopenAt },
                 { "unityVersion", Application.unityVersion }, { "developmentBuild", true },
                 { "generatedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) }
             };

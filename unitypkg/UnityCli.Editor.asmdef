@@ -3,7 +3,8 @@
     "rootNamespace": "UnityCli",
     "references": [
         "Unity.ugui",
-        "UnityEditor.TestRunner"
+        "UnityEditor.TestRunner",
+        "UnityCli.Shared"
     ],
     "includePlatforms": [
         "Editor"

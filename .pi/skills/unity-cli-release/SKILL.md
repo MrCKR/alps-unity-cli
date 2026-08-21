@@ -37,7 +37,7 @@ compatibility: 适用于 alps-unity-cli；需要 pwsh、npm、git 与已登录 n
 
 ## 发布前置门禁（全部满足才发布）
 
-1. `npm test` 全量通过；允许的唯一失败必须是在 `.issues/completed/` 已登记的 pre-existing 项。
+1. 发布所含增删改及其直接影响面的自动化测试全部通过，并记录测试命令与变更覆盖关系；不得默认运行无关的全仓测试。允许的唯一失败必须是在 `.issues/completed/` 已登记的 pre-existing 项。
 2. `node .pi/skills/unity-cli-issue-lifecycle/scripts/validate-issues.mjs` 输出 `failures: []`。
 3. 涉及工具/契约变更时，`contracts/static-capability-catalog.json` 已 re-capture，outputSchema 与源码一致。
 4. 涉及 skill 版本时，`skills/unity_cli/manifest.json` 与 `package.json` 一致。
@@ -46,7 +46,7 @@ compatibility: 适用于 alps-unity-cli；需要 pwsh、npm、git 与已登录 n
 ## 发布流程（严格顺序）
 
 1. **升版本**：所有同步点改为目标 `A.B.C`。
-2. **门禁**：`npm test` 全量跑。
+2. **门禁**：运行发布所含增删改及其直接影响面的完整定向测试。
 3. **提交**：`git add` 版本文件，`git commit -m "chore(release): A.B.C"`。
 4. **tag**：`git tag vA.B.C`。
 5. **publish**：`npm publish --access public`（prepack 自动 build）。

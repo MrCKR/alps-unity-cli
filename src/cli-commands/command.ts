@@ -1,7 +1,7 @@
 import { failure, success } from "../output.js";
 import type { CliResult } from "../types.js";
 import { loadToolCatalog, publicToolDescriptor, resolveCatalogIndependentOperabilityTool } from "../tools/catalog.js";
-import { dispatchTool, type ToolsRuntime } from "../tools/dispatcher.js";
+import { dispatchCatalogProjection, dispatchTool, type ToolsRuntime } from "../tools/dispatcher.js";
 import type { ToolMetadata } from "../tools/metadata/index.js";
 
 const ATTRIBUTE_PREFIX = "UnityPipeline_";
@@ -70,40 +70,39 @@ export async function handleCommand(
     });
   }
 
-  // exact可操作性观察/恢复命令复用frozen本地descriptor，避免在handler前依赖被阻断的Live catalog。
-  const operabilityTool = commandName ? resolveCatalogIndependentOperabilityTool(commandName) : undefined;
-  const catalog = operabilityTool
-    ? { ok: true as const, tools: [operabilityTool] }
-    : await loadToolCatalog(flags, runtime, `${requestId}_command_catalog`);
-  if (!catalog.ok) return catalog;
-
   if (!commandName) {
-    return success(requestId, {
-      usage: "unity_cli command [command-options] [name] [business-args]",
-      commands: commandDescriptors(catalog.tools),
+    return dispatchCatalogProjection("command.list", {}, flags, runtime, requestId, async (rootRuntime) => {
+      const catalog = await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
+      if (!catalog.ok) return catalog;
+      return success(requestId, {
+        usage: "unity_cli command [command-options] [name] [business-args]",
+        commands: commandDescriptors(catalog.tools),
+      });
     });
-  }
-
-  const tool = resolveCommandTool(catalog.tools, commandName);
-  if (!tool) {
-    return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Command not found: ${commandName}.`, [
-      "Run unity_cli command to list commands registered by the selected Unity instance.",
-      "Run unity_cli tools search <k1|k2|...> to find related Tools.",
-    ], { commandName });
   }
 
   if (flags.help === true || flags.help === "true") {
-    const descriptor = commandDescriptor(tool, commandName);
-    return success(requestId, {
-      usage: `unity_cli command ${commandName} [business-args]`,
-      command: {
-        name: descriptor.name,
-        summary: descriptor.summary,
-        parameters: descriptor.parameters,
-      },
-      tool: publicToolDescriptor(tool),
+    return dispatchCatalogProjection("command.describe", { commandName }, flags, runtime, requestId, async (rootRuntime) => {
+      const operabilityTool = resolveCatalogIndependentOperabilityTool(commandName);
+      const catalog = operabilityTool ? { ok: true as const, tools: [operabilityTool] } : await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
+      if (!catalog.ok) return catalog;
+      const tool = resolveCommandTool(catalog.tools, commandName);
+      if (!tool) return commandNotFound(requestId, commandName);
+      const descriptor = commandDescriptor(tool, commandName);
+      return success(requestId, {
+        usage: `unity_cli command ${commandName} [business-args]`,
+        command: { name: descriptor.name, summary: descriptor.summary, parameters: descriptor.parameters },
+        tool: publicToolDescriptor(tool),
+      });
     });
   }
+
+  // 实际执行前的schema catalog只服务同一root参数解析，不成为公开结果。
+  const operabilityTool = resolveCatalogIndependentOperabilityTool(commandName);
+  const catalog = operabilityTool ? { ok: true as const, tools: [operabilityTool] } : await loadToolCatalog(flags, runtime, `${requestId}_command_catalog`);
+  if (!catalog.ok) return catalog;
+  const tool = resolveCommandTool(catalog.tools, commandName);
+  if (!tool) return commandNotFound(requestId, commandName);
 
   const input = parseCommandInput(tool, businessTokens, requestId);
   if (!input.ok) return input.result;
@@ -481,6 +480,13 @@ function resolveCommandTool(tools: ToolMetadata[], name: string): ToolMetadata |
   if (exact) return exact;
   const attributeName = `${ATTRIBUTE_PREFIX}${name}`;
   return tools.find((tool) => isOfficialAttributeTool(tool) && tool.name === attributeName);
+}
+
+function commandNotFound(requestId: string, commandName: string): CliResult {
+  return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Command not found: ${commandName}.`, [
+    "Run unity_cli command to list commands registered by the selected Unity instance.",
+    "Run unity_cli tools search <k1|k2|...> to find related Tools.",
+  ], { commandName });
 }
 
 /** 省略name时返回同一live catalog的command投影，不建立第二份目录。 */

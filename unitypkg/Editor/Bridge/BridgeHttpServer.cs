@@ -272,6 +272,42 @@ namespace UnityCli
                 return;
             }
 
+            if (context.Request.HttpMethod == "POST" && (context.Request.Url.AbsolutePath == "/bridge/admission/acquire" || context.Request.Url.AbsolutePath == "/bridge/admission/revoke"))
+            {
+                var expectedInstanceId = context.Request.Headers["x-unity-cli-expected-instance-id"];
+                var expectedSessionId = context.Request.Headers["x-unity-cli-expected-session-id"];
+                var expectedTarget = context.Request.Headers["x-unity-cli-expected-target"];
+                var expectedListenerId = context.Request.Headers["x-unity-cli-expected-listener-id"];
+                var expectedGeneration = context.Request.Headers["x-unity-cli-expected-listener-generation"];
+                if (!string.Equals(expectedInstanceId, InstanceId(), StringComparison.Ordinal)
+                    || !string.Equals(expectedSessionId, EditorSessionId(), StringComparison.Ordinal)
+                    || !string.Equals(expectedTarget, "editor", StringComparison.Ordinal)
+                    || !string.Equals(expectedListenerId, ListenerId, StringComparison.Ordinal)
+                    || !string.Equals(expectedGeneration, CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+                {
+                    WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                        string.Empty, "E_INSTANCE_IDENTITY_MISMATCH", "Admission identity does not match the selected Editor listener generation.",
+                        nextActions: new[] { "Resolve the selected Unity target again before waiting for admission." })), 409);
+                    return;
+                }
+                try
+                {
+                    var body = ReadBodyBytes(context.Request);
+                    string result;
+                    if (context.Request.Url.AbsolutePath == "/bridge/admission/acquire")
+                    {
+                        string token;
+                        result = ExecuteAdmissionAcquire(body, out token);
+                        if (!string.IsNullOrEmpty(token)) context.Response.Headers["x-unity-cli-admission-token"] = token;
+                    }
+                    else result = ExecuteAdmissionRevoke(body, context.Request);
+                    WriteJson(context, result, 200);
+                }
+                catch (BridgeCommandException exception) { WriteJson(context, SerializeBridgeExceptionEnvelope(string.Empty, exception), 200); }
+                catch (Exception exception) { WriteJson(context, SerializeErrorEnvelope("E_BRIDGE_INTERNAL_ERROR", "Admission request failed: " + exception.GetType().Name + ".", "Inspect the selected Unity session before retrying."), 200); }
+                return;
+            }
+
             if (context.Request.HttpMethod != "POST" || context.Request.Url.AbsolutePath != "/bridge/execute")
             {
                 WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
@@ -350,6 +386,13 @@ namespace UnityCli
                     new[] { "Resolve the target again through --instance or the current Unity project CWD." })), 409);
                 return;
             }
+            try
+            {
+                var recoveredDirect = AdmissionRecoveredDirectTerminal(request, rawBody);
+                if (recoveredDirect != null) { WriteJson(context, recoveredDirect, 200); return; }
+            }
+            catch (BridgeCommandException exception) { WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, exception), 200); return; }
+
             int initialRemainingMs;
             if (!request.TryDeadlineRemainingMs(out initialRemainingMs))
             {
@@ -358,6 +401,13 @@ namespace UnityCli
                     "E_EXECUTION_TIMEOUT",
                     "The immutable request deadline elapsed before the request reached the Unity queue.",
                     nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." })), 200);
+                return;
+            }
+            AdmissionOwnerIdentity admissionOwner;
+            try { admissionOwner = AuthorizeAdmission(context.Request, request, rawBody); }
+            catch (BridgeCommandException exception)
+            {
+                WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, exception), 200);
                 return;
             }
             WriteLog("bridge_request_body_read requestId=" + request.RequestId + " command=" + request.Command + " bytes=" + rawBody.Length.ToString(CultureInfo.InvariantCulture));
@@ -412,7 +462,7 @@ namespace UnityCli
             int queueDepth;
             try
             {
-                item = EnqueueOrAttach(request, rawBody, ListenerId, CurrentListenerGeneration(), out created, out queueDepth);
+                item = EnqueueOrAttach(request, rawBody, ListenerId, CurrentListenerGeneration(), admissionOwner, out created, out queueDepth);
             }
             catch (BridgeCommandException exception)
             {

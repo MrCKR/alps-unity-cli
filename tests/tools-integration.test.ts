@@ -9,7 +9,8 @@ import { settleToolExecutionAtDeadline } from "../src/tools/dispatcher.js";
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 const disconnected = { dataDir: "Z:/definitely-missing-unity-cli-data" } as const;
-const connected = { ...disconnected, projectTools: staticBridgeToolMetadata(), runtimeTools: [] } as const;
+const injectedBridge = async (payload: BridgeRequest) => ({ ok: true as const, requestId: payload.requestId, data: {} });
+const connected = { ...disconnected, projectTools: staticBridgeToolMetadata(), runtimeTools: [], bridgeExecute: injectedBridge } as const;
 
 test("tools group, search, and describe use one connected instance catalog", async () => {
   const group = await execute(["tools", "group"], connected as never);
@@ -42,7 +43,7 @@ test("tools search splits keywords by | with OR matching and routing-only fields
 
 test("tools search trims and filters tokens, matches every routing field case-insensitively, and handles single/empty/no-match", async () => {
   const runtime = {
-    ...disconnected,
+    ...connected,
     projectTools: [
       makeLiveTool({ name: "fixture.name-hit", summary: "First route.", description: "Name field fixture.", group: "alpha" }),
       makeLiveTool({ name: "fixture.summary", summary: "Summary-Hit route.", description: "Summary field fixture.", group: "beta" }),
@@ -92,7 +93,7 @@ test("target both keeps default editor availability when runtime is not ready", 
   });
   const runtime = { ...editor, available: false, unavailableReason: "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool." };
   const result = await execute(["tools", "describe", "sample.both"], {
-    ...disconnected,
+    ...connected,
     projectTools: [editor],
     runtimeTools: [runtime],
   } as never);
@@ -157,7 +158,7 @@ test("重复official attribute原名使整个live catalog fail closed", async ()
     liveDescriptorFingerprint: "b".repeat(64),
   });
   const result = await execute(["command"], {
-    ...disconnected,
+    ...connected,
     projectTools: [first, second],
   } as never);
 

@@ -103,7 +103,11 @@ test("public Tool discovery rejects an offline explicit instance without static 
 });
 
 test("all detailed discovery paths expose the complete connected instance catalog", async () => {
-  const runtime = { projectTools: staticBridgeToolMetadata(), runtimeTools: [] };
+  const runtime = {
+    projectTools: staticBridgeToolMetadata(),
+    runtimeTools: [],
+    bridgeExecute: async (payload: { requestId: string }) => ({ ok: true as const, requestId: payload.requestId, data: {} }),
+  };
   const described = await handleToolsCommand("describe", ["build.profile.create"], {}, runtime, "req_complete_describe");
   assert.equal(described.ok, true);
 

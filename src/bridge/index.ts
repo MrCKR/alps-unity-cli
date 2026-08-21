@@ -8,6 +8,8 @@ import { observationSelectionFrom, transitionBindingAllowed, type BridgeCommandS
 import { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "./session-supervisor.js";
 
 export { BridgeCommandRegistry, bridgeCommandRegistry } from "./registry.js";
+export { rootAdmissionFingerprint } from "./admission.js";
+export type { RootAdmissionLease, RootAdmissionRequest } from "./admission.js";
 export { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "./session-supervisor.js";
 export type { BridgeCommandSpec, BridgeDescriptorBinding, BridgeInvocationOptions, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 
@@ -69,6 +71,7 @@ export async function executeBridgePayload(
       observationAbsoluteDeadlineMs: invocation.observationAbsoluteDeadlineMs,
       dryRun: getBoolean(flags, "dry-run") || getBoolean(flags, "preflight"),
       mutation: invocation.mutation ?? true,
+      rootAdmission: runtime.rootAdmission,
       observationSelection: observationSelectionFrom(invocation),
       allowTransitionBinding: transitionBindingAllowed(invocation),
     };

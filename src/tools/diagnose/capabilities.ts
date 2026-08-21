@@ -33,6 +33,8 @@ export default defineTool<DiagnoseCapabilitiesRequest, DiagnoseCapabilitiesResul
     const flags = { ...ctx.flags };
     const runtime: BridgeRuntime & ProjectToolRuntime = {
       dataDir: ctx.dataDir,
+      rootAdmission: ctx.rootAdmission,
+      rootAdmissions: ctx.rootAdmissions,
       bridgeExecute: ctx.bridgeExecute,
       projectTools: ctx.projectTools
     };

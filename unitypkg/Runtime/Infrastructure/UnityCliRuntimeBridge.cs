@@ -35,6 +35,7 @@ namespace UnityCli
         private Task listenerTask;
         private UnityCliRuntimeRegistry registry;
         private UnityCliRuntimeIdentity identity;
+        private UnityCliAdmissionPool admissionPool;
         private string sessionId;
         private string listenerId;
         private string buildId;
@@ -74,6 +75,7 @@ namespace UnityCli
                 var process = Process.GetCurrentProcess();
                 sessionId = "session-" + Sha256(config.InstanceId + "\0" + config.BuildId + "\0" + process.Id.ToString(CultureInfo.InvariantCulture) + "\0" + ProcessStartedAt(process));
                 listenerId = "listener-" + Guid.NewGuid().ToString("N");
+                admissionPool = new UnityCliAdmissionPool(config.InstanceId, sessionId, config.TaskPoolMaxActive, config.TaskPoolReopenAt);
                 int preferredPort;
                 listener = StartListener(config.InstanceId, out preferredPort, out port);
                 registry = new UnityCliRuntimeRegistry(identity, sessionId, listenerId, preferredPort, port, buildStamp, buildId);
@@ -119,6 +121,7 @@ namespace UnityCli
                 foreach (var entry in requestCache.Values)
                     if (!entry.Completion.Task.IsCompleted) entry.Completion.TrySetResult(Error(ReadString(entry.Request, "requestId") ?? string.Empty, "E_RUNTIME_SESSION_STALE", "The development Player session ended before the request completed.", new[] { "Launch a new development Player and submit a new request." }));
                 requestCache.Clear();
+                if (admissionPool != null) { admissionPool.Reset(); admissionPool = null; }
             }
             try { if (listener != null) { listener.Stop(); listener.Close(); listener = null; } } catch { }
             try { UnityCliRuntimeTools.Shutdown(); } catch { }
@@ -155,6 +158,19 @@ namespace UnityCli
                     if (!ValidateAttestationHeaders(context.Request, false, out healthAttestationError)) { Write(context, Error(string.Empty, "E_INSTANCE_IDENTITY_MISMATCH", healthAttestationError, new[] { "Resolve the runtime target again through --instance." })); return; }
                     Write(context, Success(string.Empty, HealthData())); return;
                 }
+                if (string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal)
+                    && (string.Equals(context.Request.Url.AbsolutePath, "/bridge/admission/acquire", StringComparison.Ordinal)
+                        || string.Equals(context.Request.Url.AbsolutePath, "/bridge/admission/revoke", StringComparison.Ordinal)))
+                {
+                    string admissionAttestationError;
+                    if (!ValidateAttestationHeaders(context.Request, true, out admissionAttestationError))
+                    {
+                        Write(context, Error(string.Empty, "E_INSTANCE_IDENTITY_MISMATCH", admissionAttestationError, new[] { "Resolve the runtime target again through --instance." }));
+                        return;
+                    }
+                    HandleAdmission(context, context.Request.Url.AbsolutePath);
+                    return;
+                }
                 if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal) || !string.Equals(context.Request.Url.AbsolutePath, "/bridge/execute", StringComparison.Ordinal))
                 {
                     Write(context, Error(requestId, "E_BRIDGE_ROUTE_NOT_FOUND", "Runtime bridge route was not found.", new[] { "Use GET /health or POST /bridge/execute." })); return;
@@ -187,13 +203,16 @@ namespace UnityCli
                     else
                     {
                         var deadline = ValidateRequest(envelope);
-                        if (!ReserveRequestCacheSlot())
+                        UnityCliAdmissionPool.ConsumedIdentity admissionOwner;
+                        var admissionError = AuthorizeRuntimeAdmission(context.Request, envelope, out admissionOwner);
+                        if (admissionError != null) immediate = admissionError;
+                        else if (!ReserveRequestCacheSlot())
                             immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime request cache is full of active work.", new[] { "Wait for active Player requests to complete and retry." }, true, 100);
                         else if (pending.Count >= MaxQueueItems)
                             immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime bridge queue is full.", new[] { "Wait for the Player to process pending requests and retry." }, true, 100);
                         else
                         {
-                            work = new PendingRequest { Request = envelope, Completion = new TaskCompletionSource<string>(), AbsoluteDeadlineMs = deadline, RequestDigest = digest, Order = ++requestOrder };
+                            work = new PendingRequest { Request = envelope, Completion = new TaskCompletionSource<string>(), AbsoluteDeadlineMs = deadline, RequestDigest = digest, Order = ++requestOrder, AdmissionOwner = admissionOwner };
                             requestCache.Add(requestId, work);
                             enqueue = true;
                         }
@@ -211,13 +230,109 @@ namespace UnityCli
                     }
                     var timeout = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request did not reach the effect barrier before its immutable deadline.", new[] { "Inspect runtime.state before submitting a new request." }, true, 100);
                     // deadline与main thread只允许一个owner；effect已开始时必须等待同一terminal，不能伪报timeout。
-                    if (Interlocked.CompareExchange(ref work.ExecutionState, 2, 0) == 0) work.Completion.TrySetResult(timeout);
+                    if (Interlocked.CompareExchange(ref work.ExecutionState, 2, 0) == 0)
+                    {
+                        work.Completion.TrySetResult(timeout);
+                        if (work.AdmissionOwner != null) CompleteRuntimeAdmissionRoot(work.AdmissionOwner);
+                    }
                     else work.Completion.Task.Wait();
                 }
                 Write(context, work.Completion.Task.Result);
             }
             catch (FormatException exception) { Write(context, Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Send protocolVersion 2 with a complete Runtime bridge request." })); }
             catch (Exception exception) { Write(context, Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime bridge could not process the request.", new[] { "Inspect Player logs and retry after the runtime is ready." })); Debug.LogWarning("UnityCli runtime request failed: " + exception.GetType().Name); }
+        }
+
+        /// <summary>admission route只操作有界内存，不进入Player主线程队列。</summary>
+        private void HandleAdmission(HttpListenerContext context, string route)
+        {
+            var requestId = string.Empty;
+            try
+            {
+                var value = UnityCliRuntimeJson.Object(UnityCliRuntimeJson.Parse(ReadBody(context.Request)), "Admission body must be a JSON object.");
+                requestId = RequiredString(value, "requestId", 200);
+                if (string.Equals(route, "/bridge/admission/acquire", StringComparison.Ordinal))
+                {
+                    if (!HasOnlyKeys(value, "protocolVersion", "requestId", "instanceId", "target", "command", "rootFingerprint")
+                        || ReadLong(value, "protocolVersion") != 1L || RequiredString(value, "instanceId", 128) != identity.InstanceId
+                        || RequiredString(value, "target", 16) != "runtime") throw new FormatException("Runtime admission acquire identity is invalid.");
+                    RequiredString(value, "command", 256);
+                    var acquireFingerprint = RequiredString(value, "rootFingerprint", 64);
+                    var result = admissionPool.Acquire(requestId, acquireFingerprint, listenerId, 1L);
+                    if (result.Outcome == UnityCliAdmissionPool.AcquireOutcome.Invalid) throw new FormatException("Runtime admission acquire fields are invalid.");
+                    if (result.Outcome == UnityCliAdmissionPool.AcquireOutcome.IdentityMismatch)
+                    {
+                        Write(context, Error(requestId, "E_REQUEST_ID_REUSED", "Admission requestId is already bound to different business input.", new[] { "Generate a new requestId for different Runtime Tool input." }));
+                        return;
+                    }
+                    if (result.Outcome == UnityCliAdmissionPool.AcquireOutcome.AlreadyConsumed)
+                    {
+                        Write(context, Error(requestId, "E_ADMISSION_ALREADY_CONSUMED", "Admission root is already consumed and must use exact attach or terminal recovery.", new[] { "Inspect the exact Runtime root before retrying." }));
+                        return;
+                    }
+                    var granted = result.Outcome == UnityCliAdmissionPool.AcquireOutcome.Granted;
+                    if (granted)
+                    {
+                        context.Response.Headers["x-unity-cli-admission-token"] = result.Token;
+                        Debug.Log("UnityCli " + (result.NewlyGranted ? "admission_granted" : "admission_attached") + " requestId=" + requestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                    }
+                    Write(context, Success(requestId, new Dictionary<string, object>
+                    {
+                        { "protocolVersion", 1L }, { "granted", granted },
+                        { "grantExpiresInMs", (long)(granted ? result.GrantExpiresInMs : 0) },
+                        { "retryAfterMs", (long)result.RetryAfterMs }
+                    }));
+                    return;
+                }
+
+                if (!HasOnlyKeys(value, "protocolVersion", "requestId", "instanceId", "target", "rootFingerprint")
+                    || ReadLong(value, "protocolVersion") != 1L || RequiredString(value, "instanceId", 128) != identity.InstanceId
+                    || RequiredString(value, "target", 16) != "runtime") throw new FormatException("Runtime admission release identity is invalid.");
+                var fingerprint = RequiredString(value, "rootFingerprint", 64);
+                if (!string.Equals(context.Request.Headers["x-unity-cli-admission-root-id"], requestId, StringComparison.Ordinal)
+                    || !string.Equals(context.Request.Headers["x-unity-cli-admission-fingerprint"], fingerprint, StringComparison.Ordinal))
+                    throw new FormatException("Runtime admission release headers do not match the body identity.");
+                var token = context.Request.Headers["x-unity-cli-admission-token"];
+                if (string.IsNullOrEmpty(token) || token.Length > 256) throw new FormatException("Runtime admission token header is missing or invalid.");
+                if (!string.Equals(route, "/bridge/admission/revoke", StringComparison.Ordinal)) throw new FormatException("Runtime admission release route is invalid.");
+                var revoked = admissionPool.Revoke(requestId, fingerprint, token);
+                if (revoked) Debug.Log("UnityCli admission_revoked requestId=" + requestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                if (!revoked) { Write(context, Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Admission revoke identity does not match an unconsumed Runtime root.", new[] { "Inspect the selected Runtime session before retrying." })); return; }
+                Write(context, Success(requestId, new Dictionary<string, object> { { "revoked", true } }));
+            }
+            catch (FormatException exception) { Write(context, Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Use the internal admission protocol schema." })); }
+            catch (Exception exception) { Write(context, Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime admission failed: " + exception.GetType().Name + ".", new[] { "Inspect the Player session before retrying." })); }
+        }
+
+        /// <summary>新业务request必须消费同session grant；同字节requestCache replay不再次授权。</summary>
+        private string AuthorizeRuntimeAdmission(HttpListenerRequest httpRequest, Dictionary<string, object> request, out UnityCliAdmissionPool.ConsumedIdentity admissionOwner)
+        {
+            admissionOwner = null;
+            var rootId = httpRequest.Headers["x-unity-cli-admission-root-id"];
+            var fingerprint = httpRequest.Headers["x-unity-cli-admission-fingerprint"];
+            var token = httpRequest.Headers["x-unity-cli-admission-token"];
+            var deadlineText = httpRequest.Headers["x-unity-cli-admission-deadline-utc"];
+            var any = !string.IsNullOrEmpty(rootId) || !string.IsNullOrEmpty(fingerprint) || !string.IsNullOrEmpty(token) || !string.IsNullOrEmpty(deadlineText);
+            var requestId = ReadString(request, "requestId") ?? string.Empty;
+            var command = ReadString(request, "command");
+            if (!any)
+            {
+                if (string.Equals(command, "runtime-tool.list", StringComparison.Ordinal)) { rootId = null; return null; }
+                return Error(requestId, "E_ADMISSION_REQUIRED", "A valid Unity task-pool admission is required before this Runtime business request can enter the queue.", new[] { "Use the current unity_cli to submit the Runtime Tool." });
+            }
+            if (string.IsNullOrEmpty(rootId) || string.IsNullOrEmpty(fingerprint) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(deadlineText))
+                return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission headers are incomplete.", new[] { "Resolve the Runtime target again before retrying." });
+            if (!string.Equals(rootId, requestId, StringComparison.Ordinal))
+                return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission root requestId does not match the Bridge request body.", new[] { "Submit the request through the current unity_cli." });
+            DateTimeOffset deadline;
+            if (!DateTimeOffset.TryParse(deadlineText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline))
+                return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission deadline is invalid.", new[] { "Submit the request through the current unity_cli." });
+            var outcome = admissionPool.Authorize(rootId, fingerprint, token, listenerId, 1L, deadline.ToUnixTimeMilliseconds());
+            if (outcome != UnityCliAdmissionPool.AuthorizeOutcome.Authorized)
+                return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission token is missing, expired, or bound to another root.", new[] { "Wait for a fresh Runtime admission before submitting business work." });
+            if (!admissionPool.TryGetConsumedIdentity(rootId, out admissionOwner))
+                return Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime admission owner identity could not be frozen after consumption.", new[] { "Inspect the Runtime session before submitting another root." });
+            return null;
         }
 
         /// <summary>所有Unity API只在Update主线程处理；descriptor由TS catalog唯一持有，Player只返回空执行器列表。</summary>
@@ -255,6 +370,14 @@ namespace UnityCli
             catch (UnityCliRuntimeToolException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, exception.Code, exception.Message, new[] { "Run tools describe for the selected Runtime Tool and inspect the current Player session." })); }
             catch (FormatException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Use the Runtime bridge request schema." })); }
             catch (Exception exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime command failed before a terminal result was proven.", new[] { "Inspect Player logs and retry after the runtime is ready." })); Debug.LogWarning("UnityCli runtime main-thread command failed: " + exception.GetType().Name); }
+            finally { if (pendingRequest.AdmissionOwner != null) CompleteRuntimeAdmissionRoot(pendingRequest.AdmissionOwner); }
+        }
+
+        private void CompleteRuntimeAdmissionRoot(UnityCliAdmissionPool.ConsumedIdentity identity)
+        {
+            if (admissionPool != null && identity != null
+                && admissionPool.CompleteTrusted(identity.RequestId, identity.RootFingerprint, identity.Token, identity.SessionId, identity.OwnerKind))
+                Debug.Log("UnityCli admission_terminal requestId=" + identity.RequestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
         }
 
         private Dictionary<string, object> HealthData()
@@ -360,8 +483,8 @@ namespace UnityCli
                 var path = Path.Combine(Application.dataPath, "UnityCli", "runtime-config.json");
                 if (!File.Exists(path)) { reason = "runtime sidecar is missing"; return false; }
                 var value = UnityCliRuntimeJson.Object(UnityCliRuntimeJson.Parse(File.ReadAllText(path, Encoding.UTF8)), "Runtime sidecar must be a JSON object.");
-                if (!HasOnlyKeys(value, "version", "canonicalizationVersion", "instanceId", "canonicalProjectPath", "displayProjectPath", "buildId", "buildGuid", "buildStamp", "unityVersion", "developmentBuild", "generatedAt")) { reason = "runtime sidecar contains an unknown field"; return false; }
-                if (ReadLong(value, "version") != 1L || ReadLong(value, "canonicalizationVersion") != 1L || !ReadBool(value, "developmentBuild")) { reason = "runtime sidecar version or development marker is invalid"; return false; }
+                if (!HasOnlyKeys(value, "version", "canonicalizationVersion", "instanceId", "canonicalProjectPath", "displayProjectPath", "buildId", "buildGuid", "buildStamp", "taskPoolMaxActive", "taskPoolReopenAt", "unityVersion", "developmentBuild", "generatedAt")) { reason = "runtime sidecar contains an unknown field"; return false; }
+                if (ReadLong(value, "version") != 2L || ReadLong(value, "canonicalizationVersion") != 1L || !ReadBool(value, "developmentBuild")) { reason = "runtime sidecar version or development marker is invalid"; return false; }
                 var canonical = RequiredString(value, "canonicalProjectPath", 4096);
                 var instance = RequiredString(value, "instanceId", 128);
                 RequiredString(value, "unityVersion", 128);
@@ -379,7 +502,10 @@ namespace UnityCli
                 if (!string.Equals(RequiredString(value, "unityVersion", 128), Application.unityVersion, StringComparison.Ordinal)) { reason = "runtime sidecar Unity version does not match the Player"; return false; }
                 DateTimeOffset generatedAt;
                 if (!DateTimeOffset.TryParse(RequiredString(value, "generatedAt", 128), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out generatedAt)) { reason = "runtime sidecar generatedAt is invalid"; return false; }
-                config = new RuntimeConfig { InstanceId = instance, CanonicalProjectPath = canonical, DisplayProjectPath = displayPath, BuildId = buildId, BuildStamp = RequiredString(value, "buildStamp", 256) };
+                var maxActive = checked((int)ReadLong(value, "taskPoolMaxActive"));
+                var reopenAt = checked((int)ReadLong(value, "taskPoolReopenAt"));
+                if (maxActive < 2 || reopenAt < 1 || reopenAt >= maxActive) { reason = "runtime sidecar task-pool configuration is invalid"; return false; }
+                config = new RuntimeConfig { InstanceId = instance, CanonicalProjectPath = canonical, DisplayProjectPath = displayPath, BuildId = buildId, BuildStamp = RequiredString(value, "buildStamp", 256), TaskPoolMaxActive = maxActive, TaskPoolReopenAt = reopenAt };
                 return true;
             }
             catch (Exception exception) { reason = exception.Message; return false; }
@@ -448,7 +574,7 @@ namespace UnityCli
         private static string ProcessStartedAt(Process process) { return process.StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture); }
         private static string RuntimeBuildGuid() { var property = typeof(Application).GetProperty("buildGUID", BindingFlags.Static | BindingFlags.Public); return property == null ? string.Empty : property.GetValue(null, null) as string ?? string.Empty; }
 
-        private sealed class PendingRequest { internal Dictionary<string, object> Request; internal TaskCompletionSource<string> Completion; internal long AbsoluteDeadlineMs; internal string RequestDigest; internal long Order; internal int ExecutionState; }
-        private sealed class RuntimeConfig { internal string InstanceId; internal string CanonicalProjectPath; internal string DisplayProjectPath; internal string BuildId; internal string BuildStamp; }
+        private sealed class PendingRequest { internal Dictionary<string, object> Request; internal TaskCompletionSource<string> Completion; internal long AbsoluteDeadlineMs; internal string RequestDigest; internal UnityCliAdmissionPool.ConsumedIdentity AdmissionOwner; internal long Order; internal int ExecutionState; }
+        private sealed class RuntimeConfig { internal string InstanceId; internal string CanonicalProjectPath; internal string DisplayProjectPath; internal string BuildId; internal string BuildStamp; internal int TaskPoolMaxActive; internal int TaskPoolReopenAt; }
     }
 }

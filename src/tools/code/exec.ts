@@ -56,6 +56,7 @@ async function runCodeExec(request: CodeExecRequest, context: ToolContext): Prom
     instance: instanceFlag(context),
   }, {
     dataDir: context.dataDir ?? context.projectPath,
+    rootAdmission: context.rootAdmission,
     bridgeExecute: context.bridgeExecute,
   }, context.requestId) as unknown as Promise<CodeExecResult | CodeExecDryRunResult>;
 }

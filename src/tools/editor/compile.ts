@@ -147,7 +147,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
 });
 
 async function bridge(requestId: string, command: string, input: RecordValue, context: ToolContext, invocation: ReturnType<typeof withTransitionBinding>): Promise<{ data?: unknown }> {
-  const result = await executeBridgePayload(requestId, command, input, context.flags ?? {}, { dataDir: context.dataDir, bridgeExecute: context.bridgeExecute }, undefined, invocation);
+  const result = await executeBridgePayload(requestId, command, input, context.flags ?? {}, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, undefined, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Bridge command failed." });
   return { data: result.data };
 }

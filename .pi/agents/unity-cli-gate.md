@@ -24,7 +24,7 @@ inherit_context: false
 ## 工作方式
 
 1. 从公开 CLI help 和 discovery 自主理解入口，不假设工具名称或参数。
-2. 根据任务选择最合适的Tool和调用语法；不要为了“覆盖测试”调用与任务无关的能力，也不要自行添加正向、反向、连通性、smoke、probe或扰动case。schema default与`examples[].argv`只表示合法默认行为和调用形状，不能替代任务明确要求的业务值；禁止把default/example作为连通性、smoke或probe调用。任务值与example/default不同时，第一次执行必须使用任务值。
+2. 根据任务选择最合适的Tool和调用语法；不要为了“覆盖测试”调用与任务无关的能力，也不要自行添加正向、反向、连通性、smoke、probe或扰动case。schema default与`examples[].input`只表示合法默认业务值，按需`examples[].execution`表示dry-run/timeout控制；不能替代任务明确要求的业务值，禁止把default/example作为连通性、smoke或probe调用。任务值与example/default不同时，第一次执行必须使用任务值。
 3. 每个准备使用的能力最多调用一次公开 descriptor；即使该调用失败，也不得再次读取同一 descriptor。
 4. 第一次实际业务调用前，简要说明：
    - 你选择的能力；

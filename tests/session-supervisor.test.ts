@@ -653,6 +653,81 @@ test("durable transition status uses the health-independent selector", async () 
   assert.equal(transitionSelections, 1);
 });
 
+test("root admission polls serially with jitter and grants a fresh full execution budget", async () => {
+  let now = 1_000;
+  let acquireCalls = 0;
+  let activeAcquire = 0;
+  let maxConcurrentAcquire = 0;
+  const sleeps: number[] = [];
+  const randomValues = [0, 0.5];
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => now,
+    random: () => randomValues.shift() ?? 0.5,
+    sleep: async (ms) => { sleeps.push(ms); now += ms; },
+    select: async () => selection("ready", 1),
+    acquire: async () => {
+      activeAcquire += 1;
+      maxConcurrentAcquire = Math.max(maxConcurrentAcquire, activeAcquire);
+      acquireCalls += 1;
+      activeAcquire -= 1;
+      return {
+        granted: acquireCalls === 3,
+        ...(acquireCalls === 3 ? { token: "a".repeat(64), grantExpiresInMs: 2_000 } : { grantExpiresInMs: 0 }),
+        retryAfterMs: 100,
+        attestation: attestation(1),
+      };
+    },
+  });
+  const admission = await supervisor.acquireRootAdmission({
+    requestId: "req_admission_jitter",
+    command: "scene.hierarchy",
+    input: {},
+    dryRun: false,
+    target: "editor",
+    completionContractIdentity: "atomic-read-v1",
+    timeoutMs: 1_000,
+    admissionAbsoluteDeadlineMs: 2_000,
+  });
+  assert.deepEqual(sleeps, [80, 100]);
+  assert.equal(acquireCalls, 3);
+  assert.equal(maxConcurrentAcquire, 1);
+  assert.equal(now, 1_180);
+  assert.equal(admission.executionAbsoluteDeadlineMs, 2_180);
+  assert.equal(admission.consumed, false);
+});
+
+test("root admission deadline returns effect-before busy without a business POST", async () => {
+  let now = 5_000;
+  let businessPosts = 0;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => now,
+    random: () => 0,
+    sleep: async (ms) => { now += ms; },
+    select: async () => selection("ready", 1),
+    acquire: async () => ({ granted: false, grantExpiresInMs: 0, retryAfterMs: 100, attestation: attestation(1) }),
+    post: async () => { businessPosts += 1; throw new Error("business POST must not occur"); },
+  });
+  await assert.rejects(() => supervisor.acquireRootAdmission({
+    requestId: "req_admission_busy",
+    command: "scene.hierarchy",
+    input: {},
+    dryRun: false,
+    target: "editor",
+    completionContractIdentity: "atomic-read-v1",
+    timeoutMs: 250,
+    admissionAbsoluteDeadlineMs: 5_250,
+  }), (error: unknown) => {
+    assert.ok(error instanceof SessionSupervisorError);
+    assert.equal(error.code, "E_UNITY_BUSY");
+    assert.equal(error.transient, true);
+    assert.equal(error.retryAfterMs, 100);
+    assert.equal(error.details?.businessRequestSent, false);
+    return true;
+  });
+  assert.equal(businessPosts, 0);
+  assert.equal(now, 5_250);
+});
+
 test("durable roots and root-bound controls retain one immutable deadline and permit only the private allowlist", async () => {
   let now = 10_000;
   const commands = ["internal.editor.refresh.start", "internal.editor.refresh.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.prove", "internal.package.files.fail", "internal.navmesh.bake.start", "internal.navmesh.bake.status", "internal.navmesh.bake.plan", "internal.navmesh.bake.snapshot", "internal.navmesh.bake.cancel"];

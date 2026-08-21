@@ -66,13 +66,18 @@ alias 绑定完整 `instanceId`、canonical project path 和 canonicalization ve
 
 ## Session Supervisor
 
-普通 `tools run` 不直接绑定某个 endpoint。session supervisor 在同一个 absolute deadline 内：
+普通 `tools run` 不直接绑定某个 endpoint。session supervisor 先在准入deadline内选择唯一project identity和已验证session，并等待该target session的任务池放行；放行后创建一份新的execution absolute deadline：
 
-- 选择唯一 project identity 和已验证 session；
-- 对一次 transport 尝试绑定 listener generation；
-- 在 compile、import、domain reload 或 listener restart 后重新验证 generation；
+- 每个Editor或Development Player session独立维护默认5/3高低水位，不跨进程共享计数；
+- 对一次transport尝试绑定listener generation；
+- 在compile、import、domain reload或listener restart后重新验证generation，但不刷新execution deadline；
 - 同一次mutation调用只在`editorSessionId`未改变时，使用完全相同的root request ID与request bytes续接durable canonical terminal；
 - 首次mutation POST后若`editorSessionId`改变，禁止向新session再次POST，返回`E_EXECUTION_TIMEOUT`与outcome unknown；
-- 对超时或终态前断连返回`E_EXECUTION_TIMEOUT`，调用方必须先观察业务状态，再作新的提交决策。
+- 准入deadline到达返回effect-before `E_UNITY_BUSY`并证明业务请求未发送；
+- 放行后的超时或终态前断连返回`E_EXECUTION_TIMEOUT`，调用方必须先观察业务状态，再作新的提交决策。
 
 普通读取型Tool的成功结果来自同一validated generation的完整读取。`editor.state`是唯一即时观察例外：它使用frozen本地descriptor进入同一dispatcher，不依赖可能被transition/modal阻断的Live catalog；随后在固定预算内合并Registry v3、Health v3内存主线程pulse、Bridge、PID/start、project claim和Windows modal证据，返回七态与freshness。`editor.dialogs`与`editor.dialog.click`同样保持catalog-independent recovery。其他Tool与catalog listing仍严格依赖Live实例。Domain Reload只由Registry lifecycle、新listener generation和该generation首个主线程pulse证明，不读取固定时长marker文件。
+
+## Development Player Sidecar
+
+Development Player只接受构建时注入的严格`runtime-config.json` version 2。sidecar包含canonical project/build identity和`taskPoolMaxActive`、`taskPoolReopenAt`；字段缺失、多余、非法，旧version，非development build或identity校验失败时，Runtime Bridge fail closed且不发布runtime session。Player每次重启创建新的runtime session和任务池generation，旧session的未消费grant与consumed identity不得进入新进程。

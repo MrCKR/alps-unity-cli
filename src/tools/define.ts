@@ -56,6 +56,10 @@ export interface ToolContext {
   flags?: Record<string, string | boolean>;
   /** 测试或宿主注入的实例 Tool descriptor。 */
   projectTools?: ToolMetadata[];
+  /** 同一公开根调用共享的私有准入lease；所有Bridge子请求必须显式复用。 */
+  rootAdmission?: BridgeRuntime["rootAdmission"];
+  /** 统一catalog公开根分别复用Editor/Runtime准入lease。 */
+  rootAdmissions?: BridgeRuntime["rootAdmissions"];
   /** 可选 live Bridge 执行器，仅供 defineTool 的隔离测试 transport。 */
   bridgeExecute?: BridgeRuntime["bridgeExecute"];
   /** 测试或宿主注入的文档抓取器,用于 docs online fallback,避免工具内部直接绑定全局网络。 */

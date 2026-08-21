@@ -1,36 +1,57 @@
 {
-  "version": 1,
+  "version": 2,
   "identity": {
     "canonicalizationVersion": 1,
     "instanceId": "unity-<sha256(canonical UTF-8 project path)>",
     "selectors": ["--instance <instanceId|canonicalProjectPath|alias>", "nearest Unity project root from CWD"],
     "forbiddenSelectors": ["PID", "port", "endpoint", "projectHash prefix", "--target", "active target", "single ready instance"]
   },
+  "publicRoot": {
+    "requestId": "one UUID per direct public call",
+    "targetPool": "one independent pool per live Editor or Development Player session",
+    "unifiedCatalog": "one slot in every online target session whose catalog contributes to the public result",
+    "internalChildren": "catalog resolution, readiness, start, status, terminal, rebind and completion readback reuse the same root and never acquire another slot"
+  },
+  "admission": {
+    "timeout": "admissionDeadline = dispatchStartedAt + normalized --timeout-ms T",
+    "consumes": ["input parsing", "live target binding", "identity and lifecycle checks", "internal acquire polling"],
+    "polling": "one acquire at a time; each denied response sleeps an independent integer in [80,120] milliseconds",
+    "capacity": { "defaultMaxActive": 5, "defaultReopenAt": 3, "hysteresis": "5 closes; 4 remains closed; 3 reopens" },
+    "grantTtlMs": 2000,
+    "timeoutError": {
+      "code": "E_UNITY_BUSY",
+      "effectStarted": false,
+      "businessRequestSent": false,
+      "transient": true,
+      "retryAfterMs": 100
+    }
+  },
   "request": {
-    "rootRequestId": "one UUID per direct public call",
-    "serialization": "one immutable UTF-8 body without BOM",
-    "deadline": "one absolute deadline frozen before lifecycle waiting",
+    "serialization": "one immutable UTF-8 body without BOM, frozen only after admission",
+    "executionDeadline": "executionDeadline = finalGrantObservedAt + the full normalized --timeout-ms T; it is created once",
     "digestVersion": 1,
     "digest": "SHA256(UTF8('unity-cli-request-v1') + NUL + UTF8(instanceId) + NUL + exactRequestBodyBytes)",
-    "redelivery": "within one direct call, exact bytes may be redelivered only while editorSessionId is unchanged; after the first mutation POST a new Editor session forbids another POST"
+    "admissionTokenInBody": false,
+    "redelivery": "within one direct call, exact bytes may be redelivered only while editorSessionId is unchanged; after the first mutation POST a new Editor session forbids another POST",
+    "deadlineRefreshForbidden": ["token reacquire", "status polling", "listener rebind", "terminal recovery", "completion proof"]
   },
   "toolExecution": {
     "success": "terminal business success proven by the tool's unique completion contract",
     "failure": "terminal structured failure with stable code, details and nextActions",
     "forbiddenSuccessSignals": ["accepted", "requested", "queued", "started", "operation handle", "listener recovery", "transport success"],
     "successEnvelopeFields": ["ok", "requestId", "data"],
-    "forbiddenSuccessFields": ["bridgeEndpoint", "port", "listenerId", "journalPhase", "transitionTimeline", "internalOperationId"]
+    "forbiddenSuccessFields": ["bridgeEndpoint", "port", "listenerId", "journalPhase", "transitionTimeline", "internalOperationId", "admissionToken", "activeTaskCount"]
   },
   "contextRead": {
     "ordinary": {
       "mode": "read",
       "completion": "one complete snapshot from one validated listener generation",
-      "transitionPolicy": "wait within the original absolute deadline, then rerun the complete read",
+      "transitionPolicy": "wait within the execution deadline, then rerun the complete read",
       "journal": false
     },
     "editor.state": {
       "mode": "observeNow",
-      "completion": "one immediate read-only registry, Bridge and Windows observation",
+      "completion": "one immediate read-only registry, Bridge and Windows observation after root admission",
       "budgetMs": 4000,
       "bridgeProbeBudgetMs": 3500,
       "transitionPolicy": "never wait for state change",
@@ -49,9 +70,16 @@
   },
   "directCall": {
     "terminal": "each direct call returns a proven terminal business result or terminal structured failure",
-    "timeout": "timeout, disconnect, or cross-session mutation fence returns E_EXECUTION_TIMEOUT with unknown outcome; observe business state before a new submission decision",
-    "replay": "same-session recovery may attach or redeliver exact bytes; cross-session mutation redelivery is forbidden",
-    "audit": "audit is a session-level append log"
+    "admissionBusy": "E_UNITY_BUSY before business POST proves no effect started and permits a later new root",
+    "timeout": "after grant or POST, timeout, disconnect or cross-session mutation fence returns E_EXECUTION_TIMEOUT with unknown outcome; observe business state before a new submission decision",
+    "replay": "same-session exact terminal recovery may return an existing terminal without a new slot; cross-session mutation redelivery is forbidden",
+    "slotRelease": "unconsumed grants expire or are revoked; consumed roots are released only by the Unity terminal owner or exact cleanup",
+    "audit": "business audit is a session-level append log; admission probes never enter it"
+  },
+  "host": {
+    "minimumWaitMs": "2 * T + 5000",
+    "reason": "admission may consume T and execution receives a fresh T",
+    "earlyExit": "host timeout does not prove the CLI, grant or Unity effect stopped"
   },
   "compile": {
     "publicOwner": "src/tools/editor/compile.ts",
@@ -63,27 +91,12 @@
     "errors": ["E_UNITY_COMPILE_FAILED", "E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "E_COMPILE_CYCLE_UNATTRIBUTED", "E_EXECUTION_TIMEOUT", "E_UNITY_TRANSITION_TIMEOUT"]
   },
   "errors": [
-    "E_INSTANCE_REQUIRED",
-    "E_INSTANCE_NOT_FOUND",
-    "E_INSTANCE_NOT_RUNNING",
-    "E_INSTANCE_PROJECT_MISMATCH",
-    "E_INSTANCE_IDENTITY_MISMATCH",
-    "E_INSTANCE_PATH_UNAVAILABLE",
-    "E_INSTANCE_REMOTE_PATH_UNSUPPORTED",
-    "E_INSTANCE_PATH_CASE_SENSITIVE_UNSUPPORTED",
-    "E_INSTANCE_CONFLICT",
-    "E_INSTANCE_UNVERIFIABLE",
-    "E_UNITY_UNRESPONSIVE",
-    "E_UNITY_BLOCKED",
-    "E_UNITY_TRANSITION_TIMEOUT",
-    "E_EXECUTION_TIMEOUT",
-    "E_QUEUE_START_TIMEOUT",
-    "E_EDITOR_SESSION_REPLACED",
-    "E_TOOL_COMPLETION_PROOF_INVALID",
-    "E_REQUEST_ID_REUSED",
-    "E_UNITY_COMPILE_FAILED",
-    "E_UNITY_COMPILE_REQUIRES_EDIT_MODE",
-    "E_COMPILE_CYCLE_UNATTRIBUTED",
-    "E_OBSOLETE_LOCAL_STATE"
+    "E_INSTANCE_REQUIRED", "E_INSTANCE_NOT_FOUND", "E_INSTANCE_NOT_RUNNING", "E_INSTANCE_PROJECT_MISMATCH",
+    "E_INSTANCE_IDENTITY_MISMATCH", "E_INSTANCE_PATH_UNAVAILABLE", "E_INSTANCE_REMOTE_PATH_UNSUPPORTED",
+    "E_INSTANCE_PATH_CASE_SENSITIVE_UNSUPPORTED", "E_INSTANCE_CONFLICT", "E_INSTANCE_UNVERIFIABLE",
+    "E_UNITY_UNRESPONSIVE", "E_UNITY_BLOCKED", "E_UNITY_BUSY", "E_UNITY_TRANSITION_TIMEOUT",
+    "E_EXECUTION_TIMEOUT", "E_QUEUE_START_TIMEOUT", "E_EDITOR_SESSION_REPLACED", "E_TOOL_COMPLETION_PROOF_INVALID",
+    "E_REQUEST_ID_REUSED", "E_UNITY_COMPILE_FAILED", "E_UNITY_COMPILE_REQUIRES_EDIT_MODE",
+    "E_COMPILE_CYCLE_UNATTRIBUTED", "E_OBSOLETE_LOCAL_STATE"
   ]
 }

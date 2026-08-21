@@ -146,7 +146,7 @@ namespace UnityCli
         }
 
         /// <summary>同 root request 的并发 redelivery 只附着一个 work item；不同 bytes 立即 fail closed。</summary>
-        private static BridgeWorkItem EnqueueOrAttach(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string admissionListenerId, long admissionGeneration, out bool created, out int queueDepth)
+        private static BridgeWorkItem EnqueueOrAttach(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string admissionListenerId, long admissionGeneration, AdmissionOwnerIdentity admissionOwner, out bool created, out int queueDepth)
         {
             var digest = UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId);
             lock (QueueLock)
@@ -156,17 +156,28 @@ namespace UnityCli
                 {
                     if (!string.Equals(existing.RequestDigest, digest, StringComparison.Ordinal))
                         throw new BridgeCommandException("E_REQUEST_ID_REUSED", "requestId is already bound to different request bytes.", "Generate a new requestId before retrying this command.");
+                    if (!SameAdmissionOwner(existing.AdmissionOwner, admissionOwner))
+                        throw new BridgeCommandException("E_ADMISSION_IDENTITY_MISMATCH", "requestId is already attached to another admission root.");
                     created = false;
                     queueDepth = WorkQueue.Count;
                     return existing;
                 }
-                var item = new BridgeWorkItem(request, rawRequestBytes, digest, admissionListenerId, admissionGeneration);
+                var item = new BridgeWorkItem(request, rawRequestBytes, digest, admissionListenerId, admissionGeneration, admissionOwner);
                 ActiveRequestWork.Add(request.RequestId, item);
                 WorkQueue.Enqueue(item);
                 created = true;
                 queueDepth = WorkQueue.Count;
                 return item;
             }
+        }
+
+        private static bool SameAdmissionOwner(AdmissionOwnerIdentity left, AdmissionOwnerIdentity right)
+        {
+            if (left == null || right == null) return left == null && right == null;
+            return string.Equals(left.RequestId, right.RequestId, StringComparison.Ordinal)
+                && string.Equals(left.RootFingerprint, right.RootFingerprint, StringComparison.Ordinal)
+                && string.Equals(left.Token, right.Token, StringComparison.Ordinal)
+                && string.Equals(left.SessionId, right.SessionId, StringComparison.Ordinal);
         }
 
         /// <summary>完成信号与 active-request map 在同一锁内更新，attach 不会观察到半完成 item。</summary>
@@ -176,6 +187,10 @@ namespace UnityCli
                 item.Request.RequestId,
                 "E_BRIDGE_COMMAND_FAILED",
                 "Bridge request completed without a response.")));
+            var rootAdmission = item.AdmissionOwner != null && string.Equals(item.AdmissionOwner.RequestId, item.Request.RequestId, StringComparison.Ordinal);
+            var coordinatorAccepted = rootAdmission && item.HasStarted && AdmissionCoordinatorOwns(item.AdmissionOwner, item.Request.Command, item.Response);
+            var workItemTerminal = rootAdmission && item.HasStarted && !coordinatorAccepted && AdmissionResponseHasTrustedTerminal(item.Response);
+            if (rootAdmission && (!item.HasStarted || workItemTerminal)) CompleteAdmissionRoot(item.AdmissionOwner);
             lock (QueueLock)
             {
                 RunningWork.Remove(item);
@@ -195,13 +210,14 @@ namespace UnityCli
             private bool acceptanceCancelled;
             private readonly CancellationTokenSource cancellation;
 
-            public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest, string admissionListenerId, long admissionGeneration)
+            public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest, string admissionListenerId, long admissionGeneration, AdmissionOwnerIdentity admissionOwner)
             {
                 Request = request;
                 RawRequestBytes = rawRequestBytes;
                 RequestDigest = requestDigest;
                 AdmissionListenerId = admissionListenerId;
                 AdmissionGeneration = admissionGeneration;
+                AdmissionOwner = admissionOwner;
                 cancellation = CreateExecutionLifetime(request);
             }
 
@@ -210,6 +226,8 @@ namespace UnityCli
             public string RequestDigest { get; private set; }
             public string AdmissionListenerId { get; private set; }
             public long AdmissionGeneration { get; private set; }
+            public AdmissionOwnerIdentity AdmissionOwner { get; private set; }
+            public bool HasStarted { get { lock (StateLock) return started; } }
             public CancellationToken Token { get { return cancellation.Token; } }
             public ManualResetEventSlim Started { get; private set; } = new ManualResetEventSlim(false);
             public ManualResetEventSlim Completed { get; private set; } = new ManualResetEventSlim(false);

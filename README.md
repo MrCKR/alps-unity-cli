@@ -232,7 +232,7 @@ npm link
 
 ## Live Editor 执行
 
-需要 Unity 执行的 Tool 只连接已打开的 Unity Editor，并在同一次 direct 调用中返回最终业务结果。`build.run`、`test.run`、`editor.refresh`、`code.exec` 以及需要 Editor 刷新的 Package Tool 都会等待终态；它们不创建可查询的后台任务。调用CLI的外层进程必须等待CLI退出，host等待预算至少设为传给CLI的`--timeout-ms`加5000毫秒，不能把CLI放到后台后提前返回。CLI在自身deadline到达时返回一个JSON timeout envelope，并在stdout写完或最多再等待1秒后退出。
+需要 Unity 执行的 Tool 只连接已打开的 Unity Editor，并在同一次 direct 调用中返回最终业务结果。`build.run`、`test.run`、`editor.refresh`、`code.exec` 以及需要 Editor 刷新的 Package Tool 都会等待终态；它们不创建可查询的后台任务。每个live Editor/Development Player session使用默认5/3任务池，CLI在业务请求前自动等待放行。`--timeout-ms T`分别提供最多`T`的准入等待与放行后最多`T`的执行预算；调用CLI的外层进程必须等待CLI退出，host预算至少为`2 * T + 5000`毫秒。准入`E_UNITY_BUSY`证明业务请求未发送；放行后的`E_EXECUTION_TIMEOUT`仍是outcome unknown。CLI在stdout写完或最多再等待1秒后退出。
 
 `code.exec`保留完整同步C#执行能力：它不会拒绝死循环、阻塞等待或长期占用Unity主线程的代码。提交这类代码前应先判断是否确有必要；一旦开始执行，timeout只能停止CLI等待，不能中止代码，结果可能未知且Unity可能需要结束进程才能恢复。CLI进程退出也不证明Unity中的C#已停止。完整边界见`tools describe code.exec`和`docs/safety-boundaries.md`。
 

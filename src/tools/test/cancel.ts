@@ -37,7 +37,7 @@ export default defineTool<TestCancelRequest, TestCancelResult>({
   ],
   async execute(_request, context) {
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 60_000);
-    const state = await readEditorState({ requestId: childId(context.requestId, "_cancel_state"), flags: context.flags, dataDir: context.dataDir, bridgeExecute: context.bridgeExecute, absoluteDeadlineMs: deadline } as never);
+    const state = await readEditorState({ requestId: childId(context.requestId, "_cancel_state"), flags: context.flags, dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute, absoluteDeadlineMs: deadline } as never);
     if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot cancel tests through the main thread.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
     rejectUnavailableEditorState(state, "test.cancel");
     if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "test.cancel could not bind one verified Editor session.", ["Inspect editor.state before retrying."]);
@@ -71,7 +71,7 @@ export default defineTool<TestCancelRequest, TestCancelResult>({
 });
 
 async function call(requestId: string, command: string, input: Record<string, unknown>, flags: BridgeFlags, context: any, invocation: any) {
-  const response = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, bridgeExecute: context.bridgeExecute }, undefined, invocation);
+  const response = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, undefined, invocation);
   if (!response.ok) throw StructuredToolError.from(response.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live test cancellation bridge failed." });
   return response;
 }

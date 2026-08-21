@@ -142,6 +142,8 @@ namespace UnityCli
             private string pendingTerminalCleanupRequestDigest;
             private string pendingPreEffectCleanupRequestId;
             private string pendingPreEffectCleanupRequestDigest;
+            private AdmissionOwnerIdentity pendingPreEffectAdmissionOwner;
+            private AdmissionOwnerIdentity pendingTerminalAdmissionOwner;
             protected bool LastLoadWasCorrupt { get; private set; }
             protected bool LastLoadWasUnreadable { get; private set; }
             protected bool LastLoadWasMissing { get; private set; }
@@ -392,10 +394,13 @@ namespace UnityCli
                 }
                 pendingPreEffectCleanupRequestId = requestId;
                 pendingPreEffectCleanupRequestDigest = requestDigest;
+                try { pendingPreEffectAdmissionOwner = CaptureAdmissionOwner(requestId); }
+                catch (Exception exception) { WriteLog(Scope + " pre-effect admission owner freeze failed: " + exception.Message); return; }
                 var marker = new Dictionary<string, object>
                 {
                     { "requestId", requestId }, { "requestDigest", requestDigest }, { "editorSessionId", EditorSessionId() }
                 };
+                AddAdmissionOwnerFields(marker, pendingPreEffectAdmissionOwner);
                 try { UnityCliActiveOperation.Save(PreEffectCleanupScope, marker); }
                 catch (Exception exception) { WriteLog(Scope + " pre-effect cleanup marker write failed: " + exception.Message); }
                 RetryPreEffectCleanup();
@@ -418,12 +423,15 @@ namespace UnityCli
                     }
                 }
                 if (cleanup == null && !string.IsNullOrEmpty(pendingPreEffectCleanupRequestId))
+                {
                     cleanup = new Dictionary<string, object>
                     {
                         { "requestId", pendingPreEffectCleanupRequestId },
                         { "requestDigest", pendingPreEffectCleanupRequestDigest },
                         { "editorSessionId", EditorSessionId() }
                     };
+                    AddAdmissionOwnerFields(cleanup, pendingPreEffectAdmissionOwner);
+                }
                 if (cleanup == null) return markerReadFailed;
                 if (markerReadFailed || !UnityCliActiveOperation.Exists(PreEffectCleanupScope))
                 {
@@ -439,6 +447,8 @@ namespace UnityCli
                     return true;
                 }
                 if (string.IsNullOrEmpty(requestId) || string.IsNullOrEmpty(requestDigest)) return true;
+                var admissionOwner = ReadAdmissionOwnerFields(cleanup, requestId);
+                if (admissionOwner == null) return true;
 
                 Dictionary<string, object> active = null;
                 if (UnityCliActiveOperation.Exists(Scope))
@@ -453,6 +463,7 @@ namespace UnityCli
                     if (!markerMatchesActive)
                     {
                         if (!LeaseDefinitelyNotOwned(requestId, requestDigest)) return true;
+                        if (!CompleteAdmissionRoot(admissionOwner)) return true;
                         try { UnityCliActiveOperation.Clear(PreEffectCleanupScope); } catch { return true; }
                         ClearPendingPreEffectCleanup(requestId, requestDigest);
                         return true;
@@ -470,6 +481,7 @@ namespace UnityCli
                 try { UnityCliSessionMutationLease.Release(requestId, requestDigest); }
                 catch (Exception exception) { WriteLog(Scope + " pre-effect lease release failed: " + exception.Message); return true; }
                 if (!LeaseDefinitelyNotOwned(requestId, requestDigest)) return true;
+                if (!CompleteAdmissionRoot(admissionOwner)) return true;
                 try { UnityCliActiveOperation.Clear(PreEffectCleanupScope); }
                 catch (Exception exception) { WriteLog(Scope + " pre-effect cleanup marker clear failed: " + exception.Message); return true; }
                 ClearPendingPreEffectCleanup(requestId, requestDigest);
@@ -482,6 +494,7 @@ namespace UnityCli
                     || !string.Equals(pendingPreEffectCleanupRequestDigest, requestDigest, StringComparison.Ordinal)) return;
                 pendingPreEffectCleanupRequestId = null;
                 pendingPreEffectCleanupRequestDigest = null;
+                pendingPreEffectAdmissionOwner = null;
             }
 
             /// <summary>固定marker使active root已删后的lease release失败仍可由后续Tick重试。</summary>
@@ -494,10 +507,13 @@ namespace UnityCli
                 }
                 pendingTerminalCleanupRequestId = requestId;
                 pendingTerminalCleanupRequestDigest = requestDigest;
+                try { pendingTerminalAdmissionOwner = CaptureAdmissionOwner(requestId); }
+                catch (Exception exception) { WriteLog(Scope + " terminal admission owner freeze failed: " + exception.Message); return; }
                 var marker = new Dictionary<string, object>
                 {
                     { "requestId", requestId }, { "requestDigest", requestDigest }, { "editorSessionId", EditorSessionId() }
                 };
+                AddAdmissionOwnerFields(marker, pendingTerminalAdmissionOwner);
                 try { UnityCliActiveOperation.Save(TerminalCleanupScope, marker); }
                 catch (Exception exception) { WriteLog(Scope + " terminal cleanup marker write failed: " + exception.Message); }
                 RetryTerminalCleanup();
@@ -517,12 +533,15 @@ namespace UnityCli
                     }
                 }
                 if (cleanup == null && !string.IsNullOrEmpty(pendingTerminalCleanupRequestId))
+                {
                     cleanup = new Dictionary<string, object>
                     {
                         { "requestId", pendingTerminalCleanupRequestId },
                         { "requestDigest", pendingTerminalCleanupRequestDigest },
                         { "editorSessionId", EditorSessionId() }
                     };
+                    AddAdmissionOwnerFields(cleanup, pendingTerminalAdmissionOwner);
+                }
                 if (cleanup == null) return false;
                 if (!UnityCliActiveOperation.Exists(TerminalCleanupScope))
                 {
@@ -544,6 +563,8 @@ namespace UnityCli
                     ClearPendingTerminalCleanup(requestId, requestDigest);
                     return true;
                 }
+                var admissionOwner = ReadAdmissionOwnerFields(cleanup, requestId);
+                if (admissionOwner == null) return true;
 
                 Dictionary<string, object> active = null;
                 if (UnityCliActiveOperation.Exists(Scope))
@@ -599,6 +620,7 @@ namespace UnityCli
                 try { UnityCliSessionMutationLease.Release(requestId, requestDigest); }
                 catch (Exception exception) { WriteLog(Scope + " terminal lease release failed: " + exception.Message); return true; }
                 if (!LeaseDefinitelyNotOwned(requestId, requestDigest)) return true;
+                if (!CompleteAdmissionRoot(admissionOwner)) return true;
                 try { UnityCliActiveOperation.Clear(TerminalCleanupScope); }
                 catch (Exception exception) { WriteLog(Scope + " terminal cleanup marker clear failed: " + exception.Message); return true; }
                 ClearPendingTerminalCleanup(requestId, requestDigest);
@@ -619,6 +641,7 @@ namespace UnityCli
                     || !string.Equals(pendingTerminalCleanupRequestDigest, requestDigest, StringComparison.Ordinal)) return;
                 pendingTerminalCleanupRequestId = null;
                 pendingTerminalCleanupRequestDigest = null;
+                pendingTerminalAdmissionOwner = null;
             }
 
             /// <summary>只在fresh active root成功读取并durable保存时返回true；调用方不得回退到旧内存root。</summary>

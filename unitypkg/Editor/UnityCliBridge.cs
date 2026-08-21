@@ -87,6 +87,7 @@ namespace UnityCli
             if (AssetDatabase.IsAssetImportWorkerProcess()) return;
             WriteRuntimeLoadDiagnostics("static_constructor");
             UnityCliTransactionLog.RotateForNewSession();
+            InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
             UnityCliCompileCoordinator.Initialize();
@@ -98,6 +99,7 @@ namespace UnityCli
             UnityCliTestRunCoordinator.Initialize();
             UnityCliNavMeshBakeCoordinator.Initialize();
             UnityCliOcclusionBakeCoordinator.Initialize();
+            ReconcileRestoredAdmissionRoots();
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
@@ -208,6 +210,7 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
+            SaveAdmissionPoolBeforeReload();
             ReleaseActiveDirectMutationLease();
             UnityCliCompilationEventBroker.BeforeReload();
             UnityCliCompileCoordinator.BeforeReload();
@@ -236,6 +239,7 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
+            InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
             UnityCliCompileCoordinator.Initialize();
@@ -247,6 +251,7 @@ namespace UnityCli
             UnityCliTestRunCoordinator.Initialize();
             UnityCliNavMeshBakeCoordinator.Initialize();
             UnityCliOcclusionBakeCoordinator.Initialize();
+            ReconcileRestoredAdmissionRoots();
             StartupState.Reset();
             WriteLog("bridge_after_assembly_reload scheduling bootstrap");
             ScheduleBridgeStartup();
@@ -258,6 +263,7 @@ namespace UnityCli
 
         private static void UnregisterAndStop()
         {
+            ShutdownAdmissionPool();
             ReleaseActiveDirectMutationLease();
             StartupState.Reset();
             UnityCliCompilationEventBroker.Shutdown();

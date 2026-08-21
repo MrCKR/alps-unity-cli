@@ -11,6 +11,7 @@ import {
   type RegistrySession,
   type UnityInstance,
 } from "../instances.js";
+import { rootAdmissionFingerprint, type RootAdmissionLease, type RootAdmissionRequest } from "./admission.js";
 import type { BridgeFlags, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 
 export const EDITOR_STATE_OBSERVATION_BUDGET_MS = 10_000;
@@ -18,6 +19,9 @@ const BLOCKER_DIAGNOSTIC_BUDGET_MS = 10_000;
 export const EDITOR_STATE_BRIDGE_PROBE_BUDGET_MS = 3_500;
 const DEFAULT_EXECUTION_TIMEOUT_MS = 60_000;
 const REGISTRY_POLL_INTERVAL_MS = 100;
+const ADMISSION_POLL_MIN_MS = 80;
+const ADMISSION_POLL_MAX_MS = 120;
+const ADMISSION_COMPLETE_BUDGET_MS = 1_000;
 const COMPLETION_CONTRACT_VERSION = 1;
 const REQUEST_DIGEST_VERSION = 1;
 const INJECTED_INSTANCE_ID = `unity-${"0".repeat(64)}`;
@@ -54,6 +58,7 @@ const ROOT_TRANSITION_COMMANDS = new Set([
   "internal.occlusion.bake.snapshot",
   "internal.occlusion.bake.cancel",
 ]);
+const ADMISSION_OBSERVATION_TOOLS = new Set(["editor.state", "editor.dialogs", "editor.dialog.click"]);
 const TRANSITION_CODES = new Set([
   "E_UNITY_DOMAIN_RELOAD",
   "E_UNITY_COMPILING",
@@ -75,6 +80,8 @@ export interface BridgeRequestTemplate {
   observationAbsoluteDeadlineMs?: number;
   dryRun?: boolean;
   mutation?: boolean;
+  /** 同一公开根调用共享的准入lease；存在时所有业务子请求复用同一root。 */
+  rootAdmission?: RootAdmissionLease;
   /** 已由 editor.state 完成的私有选择；不得重跑 selector。 */
   observationSelection?: InstanceSelection;
   /** 私有 continuation capability；只允许 compile start/status 绑定 transition session。 */
@@ -113,6 +120,19 @@ interface TransportReply {
   attestation: TransportAttestation;
 }
 
+interface AdmissionAcquireReply {
+  granted: boolean;
+  token?: string;
+  grantExpiresInMs: number;
+  retryAfterMs: number;
+  attestation: TransportAttestation;
+}
+
+interface AdmissionRevokeReply {
+  revoked: boolean;
+  attestation: TransportAttestation;
+}
+
 interface SupervisorTarget {
   readonly target: InstanceTarget;
   readonly instanceId: string;
@@ -122,11 +142,14 @@ interface SupervisorTarget {
 
 export interface SessionSupervisorDependencies {
   now(): number;
+  random(): number;
   sleep(ms: number): Promise<void>;
   select(flags: BridgeFlags, dataDir: string, target: InstanceTarget): Promise<InstanceSelection>;
   selectObservation(flags: BridgeFlags, dataDir: string, remainingMs: number, target: InstanceTarget): Promise<InstanceSelection>;
   selectTransition(flags: BridgeFlags, dataDir: string, remainingMs: number, target: InstanceTarget): Promise<InstanceSelection>;
-  post(binding: ValidatedBinding, request: FrozenBridgeRequest, remainingMs: number): Promise<TransportReply>;
+  post(binding: ValidatedBinding, request: FrozenBridgeRequest, remainingMs: number, admission?: RootAdmissionLease): Promise<TransportReply>;
+  acquire(binding: ValidatedBinding, request: RootAdmissionRequest, rootFingerprint: string, remainingMs: number): Promise<AdmissionAcquireReply>;
+  revoke(binding: ValidatedBinding, admission: RootAdmissionLease, remainingMs: number): Promise<AdmissionRevokeReply>;
   observer: EditorBlockerObserver;
 }
 
@@ -160,6 +183,7 @@ export class SessionSupervisor {
     const injectedSelect = dependencies.select;
     this.dependencies = {
       now: dependencies.now ?? Date.now,
+      random: dependencies.random ?? Math.random,
       sleep: dependencies.sleep ?? sleep,
       select: injectedSelect ?? ((flags, dataDir, target) => selectInstanceForFlags(flags, dataDir, process.cwd(), target)),
       selectObservation: dependencies.selectObservation ?? ((flags, dataDir, remainingMs, target) => selectObservationInstanceForFlags(flags, dataDir, remainingMs, process.cwd(), target)),
@@ -168,6 +192,8 @@ export class SessionSupervisor {
         ? async (flags, dataDir, _remainingMs, target) => injectedSelect(flags, dataDir, target)
         : (flags, dataDir, remainingMs, target) => selectTransitionInstanceForFlags(flags, dataDir, remainingMs, process.cwd(), target)),
       post: dependencies.post ?? postFrozenBridgeRequest,
+      acquire: dependencies.acquire ?? postAdmissionAcquire,
+      revoke: dependencies.revoke ?? postAdmissionRevoke,
       observer: dependencies.observer ?? new EditorBlockerObserver(),
     };
   }
@@ -185,6 +211,94 @@ export class SessionSupervisor {
   /** editor.state 专用即时入口；固定预算内只观察一次，不等待状态改变。 */
   public observeNow(template: BridgeRequestTemplate): Promise<BridgeResponse> {
     return this.run("observeNow", { ...template, mutation: false });
+  }
+
+  /** 在准入deadline内原子取得一个root grant；业务执行deadline只在grant返回后创建一次。 */
+  public async acquireRootAdmission(request: RootAdmissionRequest): Promise<RootAdmissionLease> {
+    const startedAtMs = this.dependencies.now();
+    if (this.runtime.bridgeExecute) {
+      const fingerprint = rootAdmissionFingerprint(request, INJECTED_INSTANCE_ID);
+      return {
+        requestId: request.requestId,
+        command: request.command,
+        rootFingerprint: fingerprint,
+        completionContractIdentity: request.completionContractIdentity,
+        target: request.target,
+        instanceId: INJECTED_INSTANCE_ID,
+        canonicalProjectPath: process.cwd(),
+        sessionId: "injected-session",
+        token: "injected-admission",
+        consumed: false,
+        grantExpiresAtMs: this.dependencies.now() + 2_000,
+        executionAbsoluteDeadlineMs: this.dependencies.now() + request.timeoutMs,
+        injected: true,
+      };
+    }
+
+    let target: SupervisorTarget;
+    let binding: ValidatedBinding;
+    if (request.target === "editor" && ADMISSION_OBSERVATION_TOOLS.has(request.command)) {
+      const selection = await this.dependencies.selectObservation(this.flags, this.runtime.dataDir ?? defaultDataDir(), remainingBudget(request.admissionAbsoluteDeadlineMs, this.dependencies.now()), "editor");
+      target = { target: "editor", instanceId: selection.instance.instanceId, initialSelection: selection, injected: false };
+      binding = bindingFrom(selection.instance);
+    } else {
+      target = await this.resolveTarget(request.target, request.admissionAbsoluteDeadlineMs, startedAtMs, request.admissionAbsoluteDeadlineMs, false);
+      binding = await this.bind(target, request.admissionAbsoluteDeadlineMs, false, target.initialSelection);
+    }
+    const fingerprint = rootAdmissionFingerprint(request, binding.instanceId);
+    for (;;) {
+      const remainingMs = remainingBudget(request.admissionAbsoluteDeadlineMs, this.dependencies.now());
+      if (remainingMs <= 0) throw admissionBusy(target.instanceId, request.timeoutMs);
+      try {
+        const reply = await this.dependencies.acquire(binding, request, fingerprint, remainingMs);
+        if (!attestationMatches(binding, reply.attestation)) {
+          binding = await this.bindReplacement(target, request.admissionAbsoluteDeadlineMs, binding);
+          continue;
+        }
+        if (reply.granted && reply.token) {
+          return {
+            requestId: request.requestId,
+            command: request.command,
+            rootFingerprint: fingerprint,
+            completionContractIdentity: request.completionContractIdentity,
+            target: binding.target,
+            instanceId: binding.instanceId,
+            canonicalProjectPath: binding.canonicalProjectPath,
+            sessionId: binding.sessionId,
+            token: reply.token,
+            consumed: false,
+            grantExpiresAtMs: this.dependencies.now() + reply.grantExpiresInMs,
+            executionAbsoluteDeadlineMs: this.dependencies.now() + request.timeoutMs,
+            injected: false,
+          };
+        }
+        const delayMs = admissionPollDelay(this.dependencies.random());
+        await this.dependencies.sleep(Math.min(delayMs, remainingMs));
+      } catch (error) {
+        if (error instanceof SessionSupervisorError) throw error;
+        const remainingAfterFailureMs = remainingBudget(request.admissionAbsoluteDeadlineMs, this.dependencies.now());
+        if (remainingAfterFailureMs <= 0) throw admissionBusy(target.instanceId, request.timeoutMs);
+        await this.dependencies.sleep(Math.min(admissionPollDelay(this.dependencies.random()), remainingAfterFailureMs));
+        clearInstanceHealthCache();
+        binding = await this.bind(target, request.admissionAbsoluteDeadlineMs, false, undefined);
+      }
+    }
+  }
+
+  /** CLI只撤销尚未消费的本地root；Consumed只能由Unity声明的terminal owner释放。 */
+  public async completeRootAdmission(admission: RootAdmissionLease): Promise<void> {
+    if (admission.injected || this.runtime.bridgeExecute || admission.consumed) return;
+    const deadlineMs = this.dependencies.now() + ADMISSION_COMPLETE_BUDGET_MS;
+    try {
+      const selection = await this.dependencies.selectObservation({ instance: admission.instanceId }, this.runtime.dataDir ?? defaultDataDir(), remainingBudget(deadlineMs, this.dependencies.now()), admission.target);
+      if (!selection.instance.activeSession) return;
+      const binding = bindingFrom(selection.instance);
+      if (binding.sessionId !== admission.sessionId) return;
+      const reply = await this.dependencies.revoke(binding, admission, remainingBudget(deadlineMs, this.dependencies.now()));
+      if (!attestationMatches(binding, reply.attestation)) return;
+    } catch {
+      // cleanup失败不能覆盖已返回给调用方的可信业务terminal。
+    }
   }
 
   /** 首次调用时冻结 identity、deadline 与逐字节 request body；恢复过程不得重建。 */
@@ -222,8 +336,10 @@ export class SessionSupervisor {
       if (observed?.outcome === "conflict") throw blockerObservationConflict(target.instanceId, observed);
       throw error;
     }
+    assertAdmissionBinding(template.rootAdmission, binding);
     const dispatchSessionId = binding.sessionId;
     let dispatchAttempted = false;
+    let postAttempts = 0;
     for (;;) {
       const remainingMs = remainingBudget(absoluteDeadlineMs, this.dependencies.now());
       if (remainingMs <= 0) {
@@ -237,12 +353,19 @@ export class SessionSupervisor {
       }
       try {
         dispatchAttempted = true;
-        const reply = await this.dependencies.post(binding, request, remainingMs);
+        postAttempts += 1;
+        const requestAdmission = template.rootAdmission?.requestId === template.requestId ? template.rootAdmission : undefined;
+        const reply = await this.dependencies.post(binding, request, remainingMs, requestAdmission);
         if (!attestationMatches(binding, reply.attestation)) {
           binding = await this.bindReplacement(target, absoluteDeadlineMs, binding, template.allowTransitionBinding === true);
           continue;
         }
         assertResponseRequestId(request.payload.requestId, reply.response);
+        if (postAttempts === 1 && requestAdmission && admissionWasRejected(reply.response)) {
+          const reacquired = await this.reacquireAdmission(binding, requestAdmission, absoluteDeadlineMs);
+          if (reacquired) continue;
+        }
+        if (requestAdmission) requestAdmission.consumed = true;
         // Bridge 已给出 canonical terminal response 时优先返回。
         if (!shouldRecoverTransition(reply.response)) return reply.response;
         await this.waitBeforeRecovery(reply.response, absoluteDeadlineMs);
@@ -277,6 +400,26 @@ export class SessionSupervisor {
         }
       }
     }
+  }
+
+  /** 首个POST被admission层明确拒绝时可在原执行deadline内换取新token；不得刷新deadline。 */
+  private async reacquireAdmission(binding: ValidatedBinding, admission: RootAdmissionLease, absoluteDeadlineMs: number): Promise<boolean> {
+    const remainingMs = remainingBudget(absoluteDeadlineMs, this.dependencies.now());
+    if (remainingMs <= 0) return false;
+    const request: RootAdmissionRequest = {
+      requestId: admission.requestId,
+      command: admission.command,
+      input: {},
+      dryRun: false,
+      target: admission.target,
+      completionContractIdentity: admission.completionContractIdentity,
+      timeoutMs: remainingMs,
+      admissionAbsoluteDeadlineMs: absoluteDeadlineMs,
+    };
+    const reply = await this.dependencies.acquire(binding, request, admission.rootFingerprint, remainingMs);
+    if (!attestationMatches(binding, reply.attestation) || !reply.granted || !reply.token) return false;
+    admission.token = reply.token;
+    return true;
   }
 
   /** 业务 deadline 之后只执行一次独立的只读诊断；绝不重放或延长业务请求。 */
@@ -330,9 +473,12 @@ export class SessionSupervisor {
     const probeTimeoutMs = Math.min(remainingMs, EDITOR_STATE_BRIDGE_PROBE_BUDGET_MS);
     if (this.runtime.bridgeExecute) return this.dispatchInjected(request, probeTimeoutMs);
     try {
-      const reply = await this.dependencies.post(binding, request, probeTimeoutMs);
+      assertAdmissionBinding(template.rootAdmission, binding);
+      const requestAdmission = template.rootAdmission?.requestId === template.requestId ? template.rootAdmission : undefined;
+      const reply = await this.dependencies.post(binding, request, probeTimeoutMs, requestAdmission);
       if (!attestationMatches(binding, reply.attestation)) throw identityMismatch(instance.instanceId);
       assertResponseRequestId(request.payload.requestId, reply.response);
+      if (requestAdmission && !admissionWasRejected(reply.response)) requestAdmission.consumed = true;
       return reply.response;
     } catch (error) {
       if (error instanceof SessionSupervisorError) throw error;
@@ -497,38 +643,108 @@ export function bridgeHttpTimeoutMs(payload: BridgeRequest, now = Date.now()): n
 }
 
 /** 真实 transport 只接收 supervisor 私有 binding，并返回不进入业务 envelope 的 identity attestation。 */
-async function postFrozenBridgeRequest(binding: ValidatedBinding, request: FrozenBridgeRequest, remainingMs: number): Promise<TransportReply> {
+async function postFrozenBridgeRequest(binding: ValidatedBinding, request: FrozenBridgeRequest, remainingMs: number, admission?: RootAdmissionLease): Promise<TransportReply> {
+  const response = await postJson(binding, "/bridge/execute", request.body, remainingMs, admission);
+  const envelope = await response.json() as BridgeResponse;
+  if (!response.ok && envelope.ok !== false) throw new Error(`Bridge returned HTTP ${response.status}.`);
+  return { response: envelope, attestation: responseAttestation(response) };
+}
+
+/** acquire只操作listener后台线程的有界内存；未放行不是公开错误。 */
+async function postAdmissionAcquire(binding: ValidatedBinding, request: RootAdmissionRequest, rootFingerprint: string, remainingMs: number): Promise<AdmissionAcquireReply> {
+  const response = await postJson(binding, "/bridge/admission/acquire", JSON.stringify({
+    protocolVersion: 1,
+    requestId: request.requestId,
+    instanceId: binding.instanceId,
+    target: binding.target,
+    command: request.command,
+    rootFingerprint,
+  }), remainingMs);
+  const envelope = await response.json() as { ok?: boolean; requestId?: string; data?: { protocolVersion?: number; granted?: boolean; grantExpiresInMs?: number; retryAfterMs?: number } };
+  if (!response.ok || envelope.ok !== true || envelope.requestId !== request.requestId || !exactKeys(envelope, "ok", "requestId", "data")
+      || !envelope.data || !exactKeys(envelope.data, "protocolVersion", "granted", "grantExpiresInMs", "retryAfterMs")
+      || envelope.data.protocolVersion !== 1 || typeof envelope.data.granted !== "boolean"
+      || !Number.isSafeInteger(envelope.data.grantExpiresInMs) || (envelope.data.grantExpiresInMs as number) < 0 || (envelope.data.grantExpiresInMs as number) > 2000
+      || !Number.isSafeInteger(envelope.data.retryAfterMs) || (envelope.data.retryAfterMs as number) < 0) {
+    throw new Error(`Admission acquire returned HTTP ${response.status} or an invalid envelope.`);
+  }
+  const token = response.headers.get("x-unity-cli-admission-token") ?? undefined;
+  const grantExpiresInMs = envelope.data.grantExpiresInMs as number;
+  if ((envelope.data.granted && (typeof token !== "string" || token.length < 32 || token.length > 256 || grantExpiresInMs < 1))
+      || (!envelope.data.granted && (token !== undefined || grantExpiresInMs !== 0))) {
+    throw new Error("Admission acquire returned an invalid token header.");
+  }
+  return {
+    granted: envelope.data.granted,
+    ...(typeof token === "string" ? { token } : {}),
+    grantExpiresInMs,
+    retryAfterMs: Number.isFinite(envelope.data.retryAfterMs) ? Math.max(0, envelope.data.retryAfterMs as number) : REGISTRY_POLL_INTERVAL_MS,
+    attestation: responseAttestation(response),
+  };
+}
+
+async function postAdmissionRevoke(binding: ValidatedBinding, admission: RootAdmissionLease, remainingMs: number): Promise<AdmissionRevokeReply> {
+  const response = await postJson(binding, "/bridge/admission/revoke", JSON.stringify({
+    protocolVersion: 1,
+    requestId: admission.requestId,
+    instanceId: admission.instanceId,
+    target: admission.target,
+    rootFingerprint: admission.rootFingerprint,
+  }), remainingMs, admission, true);
+  const envelope = await response.json() as { ok?: boolean; requestId?: string; data?: { revoked?: boolean } };
+  if (!response.ok || envelope.ok !== true || envelope.requestId !== admission.requestId || !exactKeys(envelope, "ok", "requestId", "data")
+      || !envelope.data || !exactKeys(envelope.data, "revoked") || typeof envelope.data.revoked !== "boolean") {
+    throw new Error(`Admission revoke returned HTTP ${response.status} or an invalid envelope.`);
+  }
+  return { revoked: envelope.data.revoked, attestation: responseAttestation(response) };
+}
+
+async function postJson(binding: ValidatedBinding, route: string, body: string, remainingMs: number, admission?: RootAdmissionLease, includeConsumedToken = false): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.max(1, remainingMs));
   try {
-    const response = await fetch(new URL("/bridge/execute", binding.endpoint), {
+    return await fetch(new URL(route, binding.endpoint), {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-unity-cli-expected-instance-id": binding.instanceId,
-        "x-unity-cli-expected-session-id": binding.sessionId,
-        "x-unity-cli-expected-target": binding.target,
-        "x-unity-cli-expected-listener-id": binding.listenerId,
-        "x-unity-cli-expected-listener-generation": String(binding.listenerGeneration),
-      },
-      body: request.body,
+      headers: transportHeaders(binding, admission, includeConsumedToken),
+      body,
       signal: controller.signal,
     });
-    const envelope = await response.json() as BridgeResponse;
-    if (!response.ok && envelope.ok !== false) throw new Error(`Bridge returned HTTP ${response.status}.`);
-    return {
-      response: envelope,
-      attestation: {
-        target: (response.headers.get("x-unity-cli-target") ?? "") as InstanceTarget,
-        instanceId: response.headers.get("x-unity-cli-instance-id") ?? "",
-        sessionId: response.headers.get("x-unity-cli-session-id") ?? "",
-        listenerId: response.headers.get("x-unity-cli-listener-id") ?? "",
-        listenerGeneration: Number(response.headers.get("x-unity-cli-listener-generation")),
-      },
-    };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function transportHeaders(binding: ValidatedBinding, admission?: RootAdmissionLease, includeConsumedToken = false): Record<string, string> {
+  return {
+    "content-type": "application/json",
+    "x-unity-cli-expected-instance-id": binding.instanceId,
+    "x-unity-cli-expected-session-id": binding.sessionId,
+    "x-unity-cli-expected-target": binding.target,
+    "x-unity-cli-expected-listener-id": binding.listenerId,
+    "x-unity-cli-expected-listener-generation": String(binding.listenerGeneration),
+    ...(admission ? {
+      "x-unity-cli-admission-root-id": admission.requestId,
+      "x-unity-cli-admission-fingerprint": admission.rootFingerprint,
+      ...((!admission.consumed || includeConsumedToken) ? { "x-unity-cli-admission-token": admission.token } : {}),
+      "x-unity-cli-admission-deadline-utc": new Date(admission.executionAbsoluteDeadlineMs).toISOString(),
+    } : {}),
+  };
+}
+
+function exactKeys(value: object, ...expected: string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const required = [...expected].sort();
+  return actual.length === required.length && actual.every((key, index) => key === required[index]);
+}
+
+function responseAttestation(response: Response): TransportAttestation {
+  return {
+    target: (response.headers.get("x-unity-cli-target") ?? "") as InstanceTarget,
+    instanceId: response.headers.get("x-unity-cli-instance-id") ?? "",
+    sessionId: response.headers.get("x-unity-cli-session-id") ?? "",
+    listenerId: response.headers.get("x-unity-cli-listener-id") ?? "",
+    listenerGeneration: Number(response.headers.get("x-unity-cli-listener-generation")),
+  };
 }
 
 function bindingFrom(instance: UnityInstance): ValidatedBinding {
@@ -562,6 +778,26 @@ function attestationMatches(binding: ValidatedBinding, attestation: TransportAtt
     && attestation.sessionId === binding.sessionId
     && attestation.listenerId === binding.listenerId
     && attestation.listenerGeneration === binding.listenerGeneration;
+}
+
+function assertAdmissionBinding(admission: RootAdmissionLease | undefined, binding: ValidatedBinding): void {
+  if (!admission) return;
+  if (admission.instanceId !== binding.instanceId || admission.target !== binding.target || admission.sessionId !== binding.sessionId) {
+    throw new SessionSupervisorError("E_EXECUTION_TIMEOUT", "The admitted Unity root no longer matches the selected target session.", [
+      "Inspect the selected Unity session and affected business state before submitting a new request.",
+    ], { instanceId: admission.instanceId, outcome: "unknown" });
+  }
+}
+
+function admissionPollDelay(randomValue: number): number {
+  const bounded = Number.isFinite(randomValue) ? Math.min(0.999999999, Math.max(0, randomValue)) : 0.5;
+  return ADMISSION_POLL_MIN_MS + Math.floor(bounded * (ADMISSION_POLL_MAX_MS - ADMISSION_POLL_MIN_MS + 1));
+}
+
+function admissionBusy(instanceId: string, timeoutMs: number): SessionSupervisorError {
+  return new SessionSupervisorError("E_UNITY_BUSY", "The Unity task pool did not reopen before the admission deadline; no business request was sent.", [
+    "Wait for active Unity CLI tasks to finish, then submit a new request.",
+  ], { instanceId, phase: "admission", businessRequestSent: false, waitedMs: timeoutMs }, true, REGISTRY_POLL_INTERVAL_MS);
 }
 
 /** runtime-tool namespace 始终绑定独立 development Player；其余命令绑定 Editor。 */
@@ -691,6 +927,10 @@ function connectionFailure(instanceId: string, error: unknown): SessionSuperviso
     "Run unity_cli instances list and inspect the selected Unity session.",
     "Run unity_cli tools run editor.state for transition or blocker details.",
   ], { instanceId }, true, REGISTRY_POLL_INTERVAL_MS);
+}
+
+function admissionWasRejected(response: BridgeResponse): boolean {
+  return response.ok === false && (response.error.code === "E_ADMISSION_REQUIRED" || response.error.code === "E_ADMISSION_IDENTITY_MISMATCH");
 }
 
 function shouldRecoverTransition(response: BridgeResponse): boolean {

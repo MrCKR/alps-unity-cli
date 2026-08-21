@@ -53,7 +53,7 @@ export default defineTool<PackageEmbedRequest, PackageEmbedResult>({
 });
 
 async function bridge(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: any, invocation: any): Promise<{ data?: unknown }> {
-  const result = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, bridgeExecute: context.bridgeExecute }, undefined, invocation);
+  const result = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, undefined, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live package embed bridge failed." });
   return { data: result.data };
 }

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/contracts/stable-session/runtime-config-v2.schema.json",
+  "title": "Unity CLI Development Player sidecar v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "canonicalizationVersion", "instanceId", "canonicalProjectPath", "displayProjectPath",
+    "buildId", "buildGuid", "buildStamp", "taskPoolMaxActive", "taskPoolReopenAt",
+    "unityVersion", "developmentBuild", "generatedAt"
+  ],
+  "properties": {
+    "version": { "const": 2 },
+    "canonicalizationVersion": { "const": 1 },
+    "instanceId": { "type": "string", "pattern": "^unity-[0-9a-f]{64}$" },
+    "canonicalProjectPath": { "type": "string", "minLength": 3, "maxLength": 4096 },
+    "displayProjectPath": { "type": "string", "minLength": 3, "maxLength": 4096 },
+    "buildId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "buildGuid": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "buildStamp": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "taskPoolMaxActive": { "type": "integer", "minimum": 2 },
+    "taskPoolReopenAt": { "type": "integer", "minimum": 1 },
+    "unityVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "developmentBuild": { "const": true },
+    "generatedAt": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "visibility": "internal-transport-only",
+  "routes": {
+    "acquire": "POST /bridge/admission/acquire",
+    "revokeUnconsumed": "POST /bridge/admission/revoke",
+    "execute": "POST /bridge/execute"
+  },
+  "attestationHeaders": [
+    "x-unity-cli-expected-instance-id",
+    "x-unity-cli-expected-session-id",
+    "x-unity-cli-expected-target",
+    "x-unity-cli-expected-listener-id",
+    "x-unity-cli-expected-listener-generation"
+  ],
+  "grantResponseHeader": {
+    "name": "x-unity-cli-admission-token",
+    "encoding": "64 lowercase hex characters from 32 CSPRNG bytes",
+    "presentOnlyWhenGranted": true
+  },
+  "executeAndRevokeHeaders": [
+    "x-unity-cli-admission-root-id",
+    "x-unity-cli-admission-fingerprint",
+    "x-unity-cli-admission-token",
+    "x-unity-cli-admission-deadline-utc"
+  ],
+  "rules": {
+    "tokenInJsonBody": false,
+    "tokenInPublicEnvelope": false,
+    "tokenInTransactionLog": false,
+    "firstBusinessPostConsumesToken": true,
+    "consumedRootOwner": "Unity terminal owner or exact cleanup",
+    "cliMayRevokeOnlyUnconsumedGrant": true,
+    "sameRequestExactTerminalRecoveryDoesNotAcquireSlot": true
+  }
+}

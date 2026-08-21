@@ -97,7 +97,7 @@ namespace UnityCli
                 object durableTerminal;
                 if (UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, request.RequestId, requestDigest, out durableTerminal))
                 {
-                    CleanupPublishedDirectMutation(request.RequestId, requestDigest);
+                    CleanupPublishedDirectMutation(request.RequestId, requestDigest, AdmissionTerminalIsOutcomeUnknown(durableTerminal));
                     return UnityCliSerializer.Serialize(durableTerminal);
                 }
             }
@@ -289,19 +289,30 @@ namespace UnityCli
                 ? pending
                 : (object)ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Direct mutation effect was interrupted before a terminal was frozen; outcome is unknown.");
             var result = PersistDirectMutationTerminal(requestId, requestDigest, UnityCliSerializer.Serialize(envelope));
-            CleanupPublishedDirectMutation(requestId, requestDigest);
+            CleanupPublishedDirectMutation(requestId, requestDigest, AdmissionTerminalIsOutcomeUnknown(envelope));
             return result;
         }
 
-        private static void CleanupPublishedDirectMutation(string requestId, string requestDigest)
+        private static void CleanupPublishedDirectMutation(string requestId, string requestDigest, bool completeAdmission)
         {
             try
             {
                 object terminal;
                 if (!UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out terminal)) return;
-                UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest);
+                UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, completeAdmission);
             }
             catch { }
+        }
+
+        private static bool AdmissionTerminalIsOutcomeUnknown(object envelope)
+        {
+            var value = envelope as IDictionary<string, object>;
+            object ok;
+            if (value == null || !value.TryGetValue("ok", out ok) || !(ok is bool) || (bool)ok) return false;
+            object rawError;
+            var error = value.TryGetValue("error", out rawError) ? rawError as IDictionary<string, object> : null;
+            object code;
+            return error != null && error.TryGetValue("code", out code) && string.Equals(code as string, "E_EXECUTION_TIMEOUT", StringComparison.Ordinal);
         }
 
         private static void FinalizeDirectMutationExecution(string requestId, string requestDigest)

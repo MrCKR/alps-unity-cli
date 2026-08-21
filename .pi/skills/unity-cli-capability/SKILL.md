@@ -62,7 +62,7 @@ Tool必须满足：
 - `blocked`由独立Windows modal观察证明；`editor.state`、`editor.dialogs`与`editor.dialog.click`使用exact frozen本地descriptor进入同一dispatcher，不得依赖Unity主线程或live catalog观察/恢复。其他Tool与catalog listing不得建立静态fallback。
 - Domain Reload只使用Registry lifecycle、新listener generation与该generation首个main-thread pulse交接；禁止固定时长reload marker或双轨判定。
 - 同一次mutation只允许在`editorSessionId`不变时续接完全相同的request bytes；首次POST后session改变必须禁止第二次POST，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。
-- discovery、health、PID/start、modal观察、rebind和execution共用原absolute deadline，不得在内部恢复时重置预算。
+- 公开live root使用两份有界预算：参数解析、target选择、health/PID/start/modal观察与准入轮询共用admission absolute deadline；grant后只创建一次完整execution absolute deadline，业务POST、compile/import/reload、rebind、status和terminal recovery共用它。token重取或内部恢复不得创建第三份预算。
 
 ## Descriptor 质量
 

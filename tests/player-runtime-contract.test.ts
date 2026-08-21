@@ -24,7 +24,7 @@ test("development Player runtime assembly stays Windows-only and Editor-independ
   const asmdef = JSON.parse(source.asmdef) as { name: string; includePlatforms: string[]; references: string[] };
   assert.equal(asmdef.name, "UnityCli.Runtime");
   assert.deepEqual(asmdef.includePlatforms, ["WindowsStandalone32", "WindowsStandalone64"]);
-  assert.deepEqual(asmdef.references, []);
+  assert.deepEqual(asmdef.references, ["UnityCli.Shared"]);
   for (const text of [source.bridge, source.json, source.registry]) {
     assert.doesNotMatch(text, /using UnityEditor|Newtonsoft\.|System\.Web\./);
   }
@@ -163,9 +163,8 @@ test("runtime JSON rejects duplicate keys, trailing tokens, BOM-body use and non
 });
 
 test("runtime security, cache, artifacts, and shutdown remain bounded", async () => {
-  const { bridge, registry } = await sources();
+  const { bridge, registry, injection } = await sources();
   const tools = await readFile("unitypkg/Runtime/Tools/UnityCliRuntimeTools.cs", "utf8");
-  const fixture = await readFile("Dev/PlayerRuntimeValidationProject/Assets/Editor/PlayerRuntimeFixtureBuild.cs", "utf8");
   assert.match(bridge, /MaxQueueItems = 128/);
   assert.match(bridge, /Completion\.Task\.IsCompleted/);
   assert.match(bridge, /Interlocked\.CompareExchange\(ref work\.ExecutionState, 2, 0\)/);
@@ -190,8 +189,7 @@ test("runtime security, cache, artifacts, and shutdown remain bounded", async ()
   assert.match(tools, /"runtime-element\.png"/);
   assert.match(tools, /path \+ "\.tmp"/);
   assert.match(tools, /finally \{ if \(File\.Exists\(temporary\)\) File\.Delete\(temporary\); \}/);
-  assert.match(fixture, /BuildNonDevelopment/);
-  assert.match(fixture, /BuildOptions\.None/);
+  assert.match(injection, /!IsWindowsStandalone\(report\.summary\.platform\) \|\| !IsDevelopmentBuild\(report\)[\s\S]*DeleteExactSidecar\(sidecar\);[\s\S]*return;/);
 });
 
 test("Runtime observation implementation is bounded, session-scoped, and version-gated", async () => {

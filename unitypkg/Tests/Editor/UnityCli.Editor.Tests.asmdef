@@ -1,0 +1,15 @@
+{
+  "name": "UnityCli.Editor.Tests",
+  "rootNamespace": "UnityCli.Tests",
+  "references": ["UnityCli.Shared"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true,
+  "optionalUnityReferences": ["TestAssemblies"]
+}

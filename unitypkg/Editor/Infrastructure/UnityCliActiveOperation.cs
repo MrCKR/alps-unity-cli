@@ -53,7 +53,7 @@ namespace UnityCli
         }
 
         /// <summary>terminal已durable后先写exact cleanup marker，再清active root并重试释放lease。</summary>
-        internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest)
+        internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest, bool completeAdmission = true)
         {
             ValidateTerminalIdentity(scope, requestId, requestDigest);
             var cleanupScope = scope + "-terminal-cleanup";
@@ -66,11 +66,25 @@ namespace UnityCli
             }
             if (existing == null)
             {
-                Save(cleanupScope, new Dictionary<string, object>
+                var marker = new Dictionary<string, object>
                 {
                     { "requestId", requestId }, { "requestDigest", requestDigest },
-                    { "editorSessionId", UnityCliBridge.EditorSessionId() }
-                });
+                    { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "completeAdmission", completeAdmission }
+                };
+                UnityCliBridge.AddAdmissionOwnerFields(marker, requestId, completeAdmission ? UnityCliAdmissionPool.AdmissionOwnerKind.Coordinator : UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem);
+                Save(cleanupScope, marker);
+            }
+            else if (completeAdmission)
+            {
+                object current;
+                if (!existing.TryGetValue("completeAdmission", out current) || !(current is bool)) return;
+                if (!(bool)current)
+                {
+                    var owner = UnityCliBridge.ReadAdmissionOwnerFields(existing, requestId);
+                    UnityCliBridge.AddAdmissionOwnerFields(existing, owner, UnityCliAdmissionPool.AdmissionOwnerKind.Coordinator);
+                    existing["completeAdmission"] = true;
+                    Save(cleanupScope, existing);
+                }
             }
             RetryExactTerminalCleanup(scope);
         }
@@ -84,6 +98,10 @@ namespace UnityCli
             var requestId = Text(marker, "requestId");
             var requestDigest = Text(marker, "requestDigest");
             var editorSessionId = Text(marker, "editorSessionId");
+            object completeAdmissionValue;
+            if (!marker.TryGetValue("completeAdmission", out completeAdmissionValue) || !(completeAdmissionValue is bool)) return true;
+            var completeAdmission = (bool)completeAdmissionValue;
+            var admissionOwner = UnityCliBridge.ReadAdmissionOwnerFields(marker, requestId);
             ValidateTerminalIdentity(scope, requestId, requestDigest);
             if (!string.Equals(editorSessionId, UnityCliBridge.EditorSessionId(), StringComparison.Ordinal))
             {
@@ -109,6 +127,7 @@ namespace UnityCli
             UnityCliBridge.UnityCliSessionMutationLease.Release(requestId, requestDigest);
             bool isOwned;
             if (!UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned) || isOwned) return true;
+            if (completeAdmission && !UnityCliBridge.CompleteAdmissionRoot(admissionOwner)) return true;
             Clear(cleanupScope);
             return false;
         }

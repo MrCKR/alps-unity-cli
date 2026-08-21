@@ -37,4 +37,4 @@ compatibility: 适用于 alps-unity-cli 的 TypeScript CLI 与 Unity C# Bridge�
 
 这些 API 表达 Tool 内部跨帧或 callback 执行方式。
 
-调用方只等待同一次 direct 调用的最终结果；不得让具体 Tool 重新发明 scheduler、轮询或 callback 清理机制。超时或终态前断连返回 `E_EXECUTION_TIMEOUT`，调用方负责判断是否提交新的调用；系统不提供请求级恢复或重放拦截。跨 reload 的同次调用续接可以保留。
+调用方只等待同一次 direct 调用的最终结果；不得让具体 Tool 重新发明 scheduler、准入轮询或 callback 清理机制。CLI框架在admission deadline内自行执行80–120ms抖动轮询，grant后只创建一次execution deadline。准入超时返回effect-before `E_UNITY_BUSY`；放行后的超时或终态前断连返回`E_EXECUTION_TIMEOUT`，调用方观察业务状态后判断是否提交新调用。跨reload的同次调用只在原execution deadline和既有exact identity内续接。

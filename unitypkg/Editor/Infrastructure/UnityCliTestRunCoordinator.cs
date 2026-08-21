@@ -270,7 +270,8 @@ namespace UnityCli
                     return CancelAcceptedData(root, runId);
                 }
                 var dispatch = new CancelDispatchIdentity { RootRequestId = root.RequestId, RootRequestDigest = root.RequestDigest, EditorSessionId = root.EditorSessionId, AbsoluteDeadlineUtc = root.AbsoluteDeadlineUtc, RunId = runId, CancelRequestId = request.RequestId, CancelRequestDigest = cancelDigest };
-                Update(root, value => { value.TestOperation["cancelRequested"] = true; value.TestOperation["cancelRequestId"] = dispatch.CancelRequestId; value.TestOperation["cancelRequestDigest"] = dispatch.CancelRequestDigest; value.TestOperation["cancelRootRequestDigest"] = dispatch.RootRequestDigest; value.TestOperation["cancelRunId"] = dispatch.RunId; value.TestOperation["cancelPhaseBefore"] = Text(value.TestOperation, "phase"); value.TestOperation["cancelEffectState"] = "dispatching"; });
+                var cancelAdmissionOwner = CaptureAdmissionOwner(request.RequestId);
+                Update(root, value => { AddAdmissionOwnerFields(value.TestOperation, cancelAdmissionOwner); value.TestOperation["cancelRequested"] = true; value.TestOperation["cancelRequestId"] = dispatch.CancelRequestId; value.TestOperation["cancelRequestDigest"] = dispatch.CancelRequestDigest; value.TestOperation["cancelRootRequestDigest"] = dispatch.RootRequestDigest; value.TestOperation["cancelRunId"] = dispatch.RunId; value.TestOperation["cancelPhaseBefore"] = Text(value.TestOperation, "phase"); value.TestOperation["cancelEffectState"] = "dispatching"; });
                 bool isOwned;
                 try
                 {
@@ -420,6 +421,7 @@ namespace UnityCli
                     throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation terminal identity is incomplete; outcome is unknown.");
                 var cancelEnvelope = ProtocolEnvelopeFactory.Success(cancelTerminalRequestId, data);
                 UnityCliActiveOperation.StoreTerminalFirst(CancelTerminalScope, cancelTerminalRequestId, cancelDigest, root.RequestDigest, cancelEnvelope);
+                CompleteAdmissionRoot(ReadAdmissionOwnerFields(root.TestOperation, cancelTerminalRequestId));
                 cancelTerminalData = data;
                 Finish(root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_TEST_RUN_CANCELLED", "The exact tracked Unity test run was cancelled.", data, new[] { "Inspect the test.cancel proof before starting another test run." }));
             }

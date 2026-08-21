@@ -275,7 +275,7 @@ async function execute(context: ToolContext, binding: LivePackageBinding, reques
     request.command,
     request.args,
     { ...(context.flags ?? {}), instance: binding.instanceId },
-    { dataDir: context.dataDir, bridgeExecute: context.bridgeExecute },
+    { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute },
     undefined,
     withTransitionBinding({ mode: "execute", mutation, absoluteDeadlineMs: deadline }),
   );

@@ -5,13 +5,16 @@ import {
   bridgeCommandRegistry,
   executeBridgeCommand,
   executeBridgePayload,
+  SessionSupervisor,
+  SessionSupervisorError,
   type BridgeRuntime,
   type BridgeCommandSpec,
-  type BridgeDescriptorBinding
+  type BridgeDescriptorBinding,
+  type RootAdmissionLease
 } from "../bridge/index.js";
 import { failure, success } from "../output.js";
 import { PackageManagerError } from "../package-manager.js";
-import { instanceSelectionFailure, selectInstanceForFlags, selectObservationInstanceForFlags, type InstanceSelection } from "../instances.js";
+import { instanceSelectionFailure, selectInstanceForFlags, selectObservationInstanceForFlags, type InstanceSelection, type InstanceTarget } from "../instances.js";
 import { EditorBlockerObserver, sanitizeEditorBlockers } from "../editor-blocker-observer.js";
 import { defaultDataDir } from "../platform.js";
 import type { ProjectToolRuntime } from "../project-tool-discovery.js";
@@ -30,6 +33,12 @@ export type ToolsRuntime = ProjectToolRuntime & Partial<BridgeRuntime> & {
 };
 
 type ParsedInput = { ok: true; input: Record<string, unknown> } | { ok: false; error: CliResult };
+const MULTI_TARGET_CATALOG_TOOLS = new Set(["tools.group", "tools.group-list", "tools.search", "tools.describe", "diagnose.capabilities"]);
+type TargetAdmissionContext = {
+  admissions: Partial<Record<InstanceTarget, RootAdmissionLease>>;
+  supervisors: Partial<Record<InstanceTarget, SessionSupervisor>>;
+  executionAbsoluteDeadlineMs: number;
+};
 
 /**
  * Tool 分发顺序固定为输入解析、catalog 解析、schema 校验、目标选择、执行与 envelope。
@@ -103,6 +112,77 @@ export async function dispatchTool(
   return dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
 }
 
+/** 公开统一catalog对每个在线target session分别占一个slot，禁止跨池旁路输出。 */
+export async function dispatchCatalogProjection(
+  command: string,
+  input: Record<string, unknown>,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string,
+  execute: (rootRuntime: ToolsRuntime) => Promise<CliResult>,
+): Promise<CliResult> {
+  const startedAtMs = Date.now();
+  const timeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? 30_000);
+  const acquired = await acquireCatalogAdmissions(command, input, flags, runtime, requestId, timeoutMs, startedAtMs + timeoutMs, "catalog-projection-v1");
+  if ("result" in acquired) return acquired.result;
+  const primary = acquired.admissions.editor ?? acquired.admissions.runtime!;
+  const result = await execute({ ...runtime, rootAdmission: primary, rootAdmissions: acquired.admissions });
+  await releaseUnconsumedCatalogAdmissions(acquired);
+  return result;
+}
+
+async function acquireCatalogAdmissions(
+  command: string,
+  input: Record<string, unknown>,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string,
+  timeoutMs: number,
+  admissionAbsoluteDeadlineMs: number,
+  completionContractIdentity: string,
+): Promise<TargetAdmissionContext | { result: CliResult }> {
+  const context: TargetAdmissionContext = { admissions: {}, supervisors: {}, executionAbsoluteDeadlineMs: 0 };
+  let lastOffline: CliResult | undefined;
+  for (const target of ["editor", "runtime"] as InstanceTarget[]) {
+    const supervisor = new SessionSupervisor(flags, runtime);
+    try {
+      const admission = await supervisor.acquireRootAdmission({ requestId, command, input, dryRun: false, target, completionContractIdentity, timeoutMs, admissionAbsoluteDeadlineMs });
+      context.admissions[target] = admission;
+      context.supervisors[target] = supervisor;
+    } catch (error) {
+      const projected = catalogAdmissionFailure(requestId, error);
+      if (projected.error.code === "E_INSTANCE_NOT_RUNNING" || projected.error.code === "E_RUNTIME_NOT_RUNNING") { lastOffline = projected; continue; }
+      await releaseUnconsumedCatalogAdmissions(context);
+      return { result: projected };
+    }
+  }
+  const leases = Object.values(context.admissions).filter((value): value is RootAdmissionLease => !!value);
+  if (leases.length === 0) return { result: lastOffline ?? failure(requestId, "E_INSTANCE_NOT_RUNNING", "No live Unity target is available for catalog projection.", ["Open the target Unity project or development Player."]) };
+  const now = Date.now();
+  if (leases.some((lease) => lease.grantExpiresAtMs <= now)) {
+    await releaseUnconsumedCatalogAdmissions(context);
+    return { result: failure(requestId, "E_UNITY_BUSY", "The Unity task-pool grants for the live catalog did not overlap before the admission deadline; no catalog request was sent.", ["Wait for active Unity CLI tasks to finish, then submit a new request."], { phase: "admission", businessRequestSent: false }, { transient: true, retryAfterMs: 100 }) };
+  }
+  context.executionAbsoluteDeadlineMs = now + timeoutMs;
+  for (const lease of leases) lease.executionAbsoluteDeadlineMs = context.executionAbsoluteDeadlineMs;
+  return context;
+}
+
+async function releaseUnconsumedCatalogAdmissions(context: TargetAdmissionContext): Promise<void> {
+  for (const target of ["editor", "runtime"] as InstanceTarget[]) {
+    const admission = context.admissions[target];
+    const supervisor = context.supervisors[target];
+    if (admission && supervisor) await supervisor.completeRootAdmission(admission);
+  }
+}
+
+function catalogAdmissionFailure(requestId: string, error: unknown): CliResult & { ok: false } {
+  const selectionFailure = instanceSelectionFailure(requestId, error);
+  if (selectionFailure) return selectionFailure as CliResult & { ok: false };
+  if (error instanceof SessionSupervisorError) return failure(requestId, error.code, error.message, error.nextActions, error.details, { transient: error.transient, retryAfterMs: error.retryAfterMs }) as CliResult & { ok: false };
+  return failure(requestId, "BRIDGE_CONNECTION_FAILED", error instanceof Error ? error.message : String(error), ["Inspect the selected Unity session."], undefined, { transient: true, retryAfterMs: 100 }) as CliResult & { ok: false };
+}
+
 async function dispatchResolvedTool(
   tool: ToolMetadata,
   input: Record<string, unknown>,
@@ -136,7 +216,7 @@ async function dispatchResolvedTool(
   });
   return definition && executionTool.handler !== "bridge-runtime"
     ? executeDefinition(executionTool, completion, definition, input, flags, runtime, requestId, dispatchStartedAtMs)
-    : executeLiveTool(executionTool, input, flags, runtime, requestId);
+    : executeLiveTool(executionTool, completion, input, flags, runtime, requestId, dispatchStartedAtMs);
 }
 
 /** 已有 core bridge spec 使用统一参数构造，不进入 live custom wrapper。 */
@@ -169,15 +249,16 @@ async function executeDefinition(
 ): Promise<CliResult> {
   let projectPath = typeof input.project === "string" ? input.project : process.cwd();
   const execution = executionFromFlags(flags);
-  const absoluteDeadlineMs = dispatchStartedAtMs + Math.max(1, execution.timeoutMs ?? tool.timeoutMs ?? 30_000);
-  // package 本地 Tool 也是当前实例的一等能力；生产调用必须先绑定实例，测试注入仍复用显式 fake catalog。
+  const timeoutMs = Math.max(1, execution.timeoutMs ?? tool.timeoutMs ?? 30_000);
+  const admissionAbsoluteDeadlineMs = dispatchStartedAtMs + timeoutMs;
+  let selected: InstanceSelection | undefined;
+
+  // package本地Tool也是live target的一等root；先固定实例，再由同一实例原子发放准入。
   try {
     if (!runtime.bridgeExecute && runtime.projectTools === undefined) {
-      // project 是所选实例的一致性约束，不是 selector；其余 typed input 永不进入控制 flags。
       const selectionFlags = typeof input.project === "string" && flags.project === undefined
         ? { ...flags, project: input.project }
         : flags;
-      let selected: InstanceSelection;
       try {
         selected = await selectInstanceForFlags(selectionFlags, runtime.dataDir ?? defaultDataDir());
       } catch (error) {
@@ -192,57 +273,68 @@ async function executeDefinition(
     if (selectionFailure) return selectionFailure;
     throw error;
   }
+
+  const admissionContext = await acquireToolAdmission(tool, completion, input, flags, runtime, requestId, timeoutMs, admissionAbsoluteDeadlineMs, selected);
+  if ("result" in admissionContext) return admissionContext.result;
+  const { admission, admissions, supervisors, executionAbsoluteDeadlineMs } = admissionContext;
+  const absoluteDeadlineMs = executionAbsoluteDeadlineMs;
+  const rootRuntime: ToolsRuntime = { ...runtime, rootAdmission: admission, rootAdmissions: admissions };
+
   const run = async (): Promise<CliResult> => {
     try {
       const data = await definition.execute(input, {
-      requestId,
-      projectPath,
-      absoluteDeadlineMs,
-      execution,
-      dataDir: runtime.dataDir,
-      artifactDir: getString(flags, "artifact-dir") ?? runtime.dataDir ?? projectPath,
-      logPath: typeof input.logPath === "string" ? input.logPath : undefined,
-      flags,
-      projectTools: runtime.projectTools,
-      bridgeExecute: runtime.bridgeExecute,
-      fetch: runtime.fetch,
-      // 普通 TS 工具不保留请求级档案；兼容现有 mutation 工具的 effect hook。
-      commitEffect: async () => undefined
-    });
-    if (!tool.outputSchema) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} has no output schema for terminal proof.`, [
-      `Regenerate the Tool schema and completion registry for ${tool.name}.`
-    ]);
-    let normalizedData: unknown;
-    try {
-      normalizedData = JSON.parse(JSON.stringify(data));
+        requestId,
+        projectPath,
+        absoluteDeadlineMs,
+        execution,
+        dataDir: rootRuntime.dataDir,
+        artifactDir: getString(flags, "artifact-dir") ?? rootRuntime.dataDir ?? projectPath,
+        logPath: typeof input.logPath === "string" ? input.logPath : undefined,
+        flags,
+        projectTools: rootRuntime.projectTools,
+        rootAdmission: admission,
+        rootAdmissions: admissions,
+        bridgeExecute: rootRuntime.bridgeExecute,
+        fetch: rootRuntime.fetch,
+        commitEffect: async () => undefined,
+      });
+      if (!tool.outputSchema) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} has no output schema for terminal proof.`, [
+        `Regenerate the Tool schema and completion registry for ${tool.name}.`
+      ]);
+      let normalizedData: unknown;
+      try {
+        normalizedData = JSON.parse(JSON.stringify(data));
+      } catch (error) {
+        throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} result is not JSON serializable.`, [
+          "Return only values allowed by the public output schema."
+        ], { toolName: tool.name, reason: error instanceof Error ? error.message : String(error) });
+      }
+      const outputErrors = validateSchema(tool.outputSchema, normalizedData);
+      if (outputErrors.length > 0) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} result failed output schema validation at ${outputErrors[0].path}.`, [
+        "Fix the Tool result or completion driver before retrying."
+      ], { toolName: tool.name, errors: outputErrors });
+      validateLocalCompletionProof(tool.name, completion, normalizedData, input);
+      return success(requestId, normalizedData);
     } catch (error) {
-      throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} result is not JSON serializable.`, [
-        "Return only values allowed by the public output schema."
-      ], { toolName: tool.name, reason: error instanceof Error ? error.message : String(error) });
-    }
-    const outputErrors = validateSchema(tool.outputSchema, normalizedData);
-    if (outputErrors.length > 0) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} result failed output schema validation at ${outputErrors[0].path}.`, [
-      "Fix the Tool result or completion driver before retrying."
-    ], { toolName: tool.name, errors: outputErrors });
-    validateLocalCompletionProof(tool.name, completion, normalizedData, input);
-    return success(requestId, normalizedData);
-  } catch (error) {
-    if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
-    if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details,
-      error.transient === undefined ? undefined : { transient: error.transient, retryAfterMs: error.retryAfterMs });
+      if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
+      if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details,
+        error.transient === undefined ? undefined : { transient: error.transient, retryAfterMs: error.retryAfterMs });
       return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [`Run unity_cli tools describe ${tool.name} for input requirements and examples.`]);
     }
   };
 
+  let result: CliResult;
   try {
-    return await settleToolExecutionAtDeadline(tool.name, requestId, completion.mutation, absoluteDeadlineMs, run);
+    result = await settleToolExecutionAtDeadline(tool.name, requestId, completion.mutation, absoluteDeadlineMs, run);
   } catch (error) {
-    if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
-    if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
-    return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
+    if (error instanceof PackageManagerError) result = failure(requestId, error.code, error.message, error.nextActions);
+    else if (error instanceof StructuredToolError) result = failure(requestId, error.code, error.message, error.nextActions, error.details);
+    else result = failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
       `Run unity_cli tools describe ${tool.name} for input requirements and examples.`
     ]);
   }
+  if (rootResultHasTrustedTerminal(result)) await releaseUnconsumedCatalogAdmissions({ admissions, supervisors, executionAbsoluteDeadlineMs });
+  return result;
 }
 
 /** Tool自己的wait未按时settle时由框架结束CLI等待；已开始的Unity effect不因此停止。 */
@@ -618,26 +710,108 @@ function findFailedCompletionStatus(value: unknown): string | undefined {
   return undefined;
 }
 
-async function executeLiveTool(
+type ToolAdmissionContext = ({ admission: RootAdmissionLease; supervisor: SessionSupervisor } & TargetAdmissionContext) | { result: CliResult };
+
+async function acquireToolAdmission(
   tool: ToolMetadata,
+  completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
   input: Record<string, unknown>,
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
-  requestId: string
+  requestId: string,
+  timeoutMs: number,
+  admissionAbsoluteDeadlineMs: number,
+  selected?: InstanceSelection,
+): Promise<ToolAdmissionContext> {
+  if (MULTI_TARGET_CATALOG_TOOLS.has(tool.name)) {
+    const acquired = await acquireCatalogAdmissions(tool.name, input, flags, runtime, requestId, timeoutMs, admissionAbsoluteDeadlineMs, JSON.stringify(completion));
+    if ("result" in acquired) return acquired;
+    const admission = acquired.admissions.editor ?? acquired.admissions.runtime!;
+    const supervisor = acquired.supervisors[admission.target]!;
+    return { admission, supervisor, ...acquired };
+  }
+  const target = selected?.instance.activeSession?.target ?? selected?.instance.target ?? toolTarget(tool, flags);
+  const admissionFlags = selected ? { ...flags, instance: selected.instance.instanceId } : flags;
+  const supervisor = new SessionSupervisor(admissionFlags, runtime);
+  try {
+    const admission = await supervisor.acquireRootAdmission({
+      requestId,
+      command: tool.name,
+      input,
+      dryRun: getBoolean(flags, "dry-run") || getBoolean(flags, "preflight"),
+      target,
+      completionContractIdentity: JSON.stringify(completion),
+      timeoutMs,
+      admissionAbsoluteDeadlineMs,
+    });
+    return {
+      admission,
+      supervisor,
+      admissions: { [admission.target]: admission },
+      supervisors: { [admission.target]: supervisor },
+      executionAbsoluteDeadlineMs: admission.executionAbsoluteDeadlineMs,
+    };
+  } catch (error) {
+    const selectionFailure = instanceSelectionFailure(requestId, error);
+    if (selectionFailure) return { result: selectionFailure };
+    if (error instanceof SessionSupervisorError) {
+      return { result: failure(requestId, error.code, error.message, error.nextActions, error.details, {
+        transient: error.transient,
+        retryAfterMs: error.retryAfterMs,
+      }) };
+    }
+    return { result: failure(requestId, "BRIDGE_CONNECTION_FAILED", error instanceof Error ? error.message : String(error), [
+      "Run unity_cli instances list and inspect the selected Unity session.",
+    ], undefined, { transient: true, retryAfterMs: 100 }) };
+  }
+}
+
+function toolTarget(tool: ToolMetadata, flags: Record<string, string | boolean>): InstanceTarget {
+  return tool.target === "runtime" || (tool.target === "both" && getBoolean(flags, "runtime")) ? "runtime" : "editor";
+}
+
+const UNKNOWN_ROOT_OUTCOME_CODES = new Set([
+  "E_EXECUTION_TIMEOUT",
+  "BRIDGE_CONNECTION_FAILED",
+  "E_BRIDGE_RESPONSE_INVALID",
+  "E_BRIDGE_RESPONSE_MISMATCH",
+  "COMMAND_FAILED",
+]);
+
+function rootResultHasTrustedTerminal(result: CliResult): boolean {
+  return result.ok || !UNKNOWN_ROOT_OUTCOME_CODES.has(result.error.code);
+}
+
+async function executeLiveTool(
+  tool: ToolMetadata,
+  completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
+  input: Record<string, unknown>,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string,
+  dispatchStartedAtMs: number,
 ): Promise<CliResult> {
-  const runtimeTarget = tool.target === "runtime" || (tool.target === "both" && getBoolean(flags, "runtime"));
+  const timeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? tool.timeoutMs ?? 30_000);
+  const admissionContext = await acquireToolAdmission(tool, completion, input, flags, runtime, requestId, timeoutMs, dispatchStartedAtMs + timeoutMs);
+  if ("result" in admissionContext) return admissionContext.result;
+  const { admission, supervisor } = admissionContext;
+  const runtimeTarget = admission.target === "runtime";
   const wrapper = runtimeTarget ? "runtime-tool.run" : "project-tool.run";
   const descriptorBinding: BridgeDescriptorBinding = {
     ...(tool.liveDescriptorFingerprint ? { liveDescriptorFingerprint: tool.liveDescriptorFingerprint } : {})
   };
+  const rootRuntime: ToolsRuntime = { ...runtime, rootAdmission: admission };
 
-  // live descriptor 已完成 schema 校验，wrapper 必须直接承载该 typed input，不能从 execution flags 重建业务字段。
+  // live descriptor已完成schema校验，wrapper直接承载typed input并复用同一root admission。
   const mutation = toolIsMutation(tool);
-  return enrichTargetFailureWithDialogBlocker(await executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, runtime, descriptorBinding, {
+  const result = await enrichTargetFailureWithDialogBlocker(await executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, rootRuntime, descriptorBinding, {
     mode: "execute",
     mutation,
-    defaultTimeoutMs: tool.timeoutMs,
-  }), flags, runtime);
+    defaultTimeoutMs: timeoutMs,
+    absoluteDeadlineMs: admission.executionAbsoluteDeadlineMs,
+  }), flags, rootRuntime);
+  if (rootResultHasTrustedTerminal(result)) await supervisor.completeRootAdmission(admission);
+  return result;
 }
 
 /** Bridge wrappers may discard supervisor details; append one independent read-only modal diagnosis to target failures. */

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const agentPath = ".pi/agents/unity-cli-gate.md";
 const validationPath = ".pi/skills/unity-cli-validation/SKILL.md";
+const issueLifecyclePath = ".pi/skills/unity-cli-issue-lifecycle/SKILL.md";
+const releasePath = ".pi/skills/unity-cli-release/SKILL.md";
 const agentsPath = "AGENTS.md";
 const publicSkillPath = "skills/unity_cli/SKILL.md";
 const readmePath = "README.md";
@@ -22,6 +24,23 @@ test("fresh gate keeps task values above defaults and forbids probe calls", asyn
   }
   assert.match(agent, /任务要求的每个literal如何映射到schema业务字段/);
   assert.match(validation, /不得用预先并行提交的后续业务调用绕过停止边界/);
+});
+
+test("repository governance separates implementation from affected-scope validation", async () => {
+  const [agents, validation, issueLifecycle, release] = await Promise.all([
+    readFile(agentsPath, "utf8"),
+    readFile(validationPath, "utf8"),
+    readFile(issueLifecyclePath, "utf8"),
+    readFile(releasePath, "utf8"),
+  ]);
+  for (const source of [agents, validation, issueLifecycle]) assert.doesNotMatch(source, /unity-cli-plan/);
+  await assert.rejects(access(".pi/skills/unity-cli-plan/SKILL.md"));
+  assert.match(agents, /skills\/unity_cli\/SKILL\.md[^\n]*安装后/);
+  assert.match(agents, /实现未收敛前不得运行正式自动化测试[^\n]*unity-cli-gate/);
+  assert.match(validation, /未完成前不得运行正式自动化测试[^\n]*陌生 AI 门禁/);
+  for (const source of [agents, validation]) assert.match(source, /只覆盖本次增删改/);
+  assert.doesNotMatch(release, /npm test[^\n]*全量/);
+  assert.match(release, /增删改及其直接影响面/);
 });
 
 test("public guidance says examples do not override caller intent", async () => {

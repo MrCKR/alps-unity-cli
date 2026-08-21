@@ -1,5 +1,11 @@
+import type { RootAdmissionLease } from "./admission.js";
+
 export interface BridgeRuntime {
   dataDir?: string;
+  /** 单target公开根调用共享的私有准入lease；不得进入业务input或公开输出。 */
+  rootAdmission?: RootAdmissionLease;
+  /** 统一catalog公开根对每个在线target session分别持有一个slot。 */
+  rootAdmissions?: Partial<Record<"editor" | "runtime", RootAdmissionLease>>;
   /** 仅用于隔离测试；真实 CLI transport 始终由 SessionSupervisor 绑定 registry listener。 */
   bridgeExecute?: (payload: BridgeRequest) => Promise<BridgeResponse>;
 }

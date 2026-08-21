@@ -168,8 +168,9 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 |
 |--------|------|
 | `E_UNITY_BLOCKED` | effect 前已证明 Unity/UI blocker；原错误的 `details.blockers` 含结构化弹窗摘要 |
-| `E_UNITY_TRANSITION_TIMEOUT` | 可恢复 lifecycle transition 未在 absolute deadline 内稳定 |
-| `E_EXECUTION_TIMEOUT` | Tool未在deadline内返回终态、连接提前断开，或首次mutation POST后Editor session改变；outcome unknown，CLI不向新session自动重投 |
+| `E_UNITY_BUSY` | 两种可区分语义：任务池准入deadline到达时message明确`no business request was sent`，effect未开始且可稍后提交新root；已进入池后mutation lease竞争则业务请求已经发送，等待当前mutation terminal后再决策 |
+| `E_UNITY_TRANSITION_TIMEOUT` | 可恢复 lifecycle transition 未在当前阶段的 absolute deadline 内稳定 |
+| `E_EXECUTION_TIMEOUT` | 已放行调用未在execution deadline内返回终态、连接提前断开，或首次mutation POST后Editor session改变；outcome unknown，CLI不向新session自动重投 |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
@@ -182,8 +183,9 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 1. 读取 `error.code` 确定错误类别
 2. 将 `transient`、`retryAfterMs` 和 `nextActions` 作为恢复建议，不把它们当成权限门
-3. `E_EXECUTION_TIMEOUT`只说明没有可信终态；先观察业务状态，再形成全新提交决策
-4. 同session的compile/import/reload/listener transition由supervisor处理；cross-session mutation禁止自动重投
+3. 任务池准入`E_UNITY_BUSY`且message证明`no business request was sent`时，可以稍后提交新root；mutation lease busy不得声称effect未开始
+4. `E_EXECUTION_TIMEOUT`只说明没有可信终态；先观察业务状态，再形成全新提交决策
+5. 同session的compile/import/reload/listener transition由supervisor在放行后的同一execution deadline内处理；cross-session mutation禁止自动重投
 
 ### nextActions 规则
 

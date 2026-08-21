@@ -46,11 +46,19 @@ unity_cli tools run camera.screenshot --input '{}'
 
 ## 调用进程预算
 
-外层命令host必须等待`unity_cli`进程退出，不能在CLI仍运行时把调用报告为完成。host等待预算至少为传给CLI的`--timeout-ms`加5000毫秒；未显式传timeout时，先从`tools describe`的example execution或Tool边界选择CLI timeout，再给host增加同样余量。CLI在自身absolute deadline到达时返回一个`E_EXECUTION_TIMEOUT` envelope；stdout完成后立即退出，stdout未完成时最多再等待1秒。这个退出只结束CLI等待，不会强停Unity中已经开始的effect。
+外层命令host必须等待`unity_cli`进程退出，不能在CLI仍运行时把调用报告为完成。`--timeout-ms T`分别提供最多`T`的Unity任务池准入等待，以及放行后最多`T`的业务执行；因此host等待预算至少为`2 * T + 5000`毫秒。未显式传timeout时，先从`tools describe`的example execution或Tool边界选择`T`。CLI在任一内部deadline到达后输出一个完整JSON envelope；stdout完成后立即退出，stdout未完成时最多再等待1秒。CLI timeout只结束调用方等待，不会强停Unity中已经开始的effect；host提前退出同样不能作为effect停止证明。
+
+## Unity 任务池准入
+
+每个运行中的Editor或Development Player session拥有独立任务池，默认最多5个active root；达到5后关闭准入，降到4仍保持关闭，只有降到3才重新开放。CLI在发送业务请求前自动等待和轮询，调用方不得手工按100毫秒循环，也不需要管理内部准入identity。
+
+准入等待超过`T`时返回`E_UNITY_BUSY`、`transient:true`和`retryAfterMs:100`。该错误明确证明本次业务Bridge请求未发送、effect未开始，可以稍后提交一个新root。放行后的timeout、断连或终态不明仍返回`E_EXECUTION_TIMEOUT`，表示outcome unknown，必须先观察业务状态。
+
+统一catalog在Editor和Runtime同时在线时，会在每个参与公开结果的target session分别准入；任一在线target未获准时不返回跨池的部分catalog。
 
 ## Bridge 执行约束
 
-Bridge-backed Tool由Unity Editor主线程执行。session supervisor在单一absolute deadline内处理compile、import、domain reload和listener generation交接。读取可在新generation重新执行完整读取；mutation只有在`editorSessionId`未改变时才可用完全相同的request bytes续接durable terminal。
+Bridge-backed Tool由Unity Editor主线程执行。准入放行后，session supervisor只创建一次execution absolute deadline，并在该deadline内处理compile、import、domain reload和listener generation交接；token重取、status、rebind和terminal recovery不得刷新预算。读取可在新generation重新执行完整读取；mutation只有在`editorSessionId`未改变时才可用完全相同的request bytes续接durable terminal。
 
 首次mutation POST后若Editor session改变，CLI禁止向新session再次POST，并返回`E_EXECUTION_TIMEOUT`、`outcome:unknown`。其他超时或终态前断连同样表示没有可信终态；调用方应先用业务读取或`editor.state`收集证据，再决定是否提交全新请求。`editor.state`使用frozen本地descriptor绕过被阻断的Live catalog，再读取Registry/Health v3、内存主线程pulse、Bridge和Windows modal证据；两个dialog recovery Tool保持同一例外，其他Tool不建立静态fallback。
 
