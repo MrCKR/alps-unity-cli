@@ -225,6 +225,14 @@ test("normal selector retries only an unverifiable read-only process claim", asy
   assert.match(source, /if \(first\.verification !== "unverifiable"\) return first;[\s\S]*setTimeout\(resolveDelay, 50\)[\s\S]*inspectProjectProcessClaims\(identity, PROJECT_PROCESS_CLAIM_TIMEOUT_MS\)/);
 });
 
+test("formal Editor identity does not require a projectPath process argument", async () => {
+  const source = await readFile("src/instances.ts", "utf8");
+  assert.match(source, /if \(index < 0\) return "verified";/);
+  assert.match(source, /const contradictoryClaim = target === "editor"[\s\S]*claims\.processIds\.length > 0/);
+  assert.doesNotMatch(source, /index < 0 \|\| !argv\?\.\[index \+ 1\]/);
+  assert.doesNotMatch(source, /const exactClaim = target === "runtime"/);
+});
+
 test("exact instance selector survives one transient missing-file window and trusts strict health over an old timestamp", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-exact-selector-race-"));
   const projectPath = await project("unity-cli-exact-selector-project-");
@@ -458,8 +466,23 @@ test("only distinct verified process claims reduce to conflict", async () => {
   const duplicateSession = await reduceRegistryRecord(makeRegistry(identity, [first, second]), observations);
   assert.equal(duplicateSession.status, "unverifiable");
 
+  const registryClaim = reduceObservationRegistryRecord(makeRegistry(identity, [first]));
+  const noCommandLineClaim = applyProjectProcessClaimInspection(
+    registryClaim,
+    { verification: "verified", processIds: [] },
+  );
+  assert.equal(noCommandLineClaim.status, registryClaim.status);
+  assert.equal(noCommandLineClaim.activeSession?.sessionId, registryClaim.activeSession?.sessionId);
+
+  const unavailableSupplement = applyProjectProcessClaimInspection(
+    registryClaim,
+    { verification: "unverifiable", processIds: [] },
+  );
+  assert.equal(unavailableSupplement.status, registryClaim.status);
+  assert.equal(unavailableSupplement.activeSession?.sessionId, registryClaim.activeSession?.sessionId);
+
   const processConflict = applyProjectProcessClaimInspection(
-    reduceObservationRegistryRecord(makeRegistry(identity, [first])),
+    registryClaim,
     { verification: "verified", processIds: [first.processId, first.processId + 1] },
   );
   assert.equal(processConflict.status, "conflict");

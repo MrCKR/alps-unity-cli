@@ -382,7 +382,7 @@ export async function selectInstanceForFlags(
   const observations = await probeProcessObservations(record.sessions.map((session) => session.processId));
   const instance = await reduceRegistryRecord(record, observations, Date.now(), target);
   assertRegistryIdentity(instance, selection.identity);
-  // Editor 额外证明 -projectPath claim；Player 的项目归因由 build sidecar、进程路径与 health attestation 联合证明。
+  // Editor 命令行 claim 只补充发现可正向归因的重复进程；正式启动不要求携带 -projectPath。
   const inspected = target === "editor"
     ? applyProjectProcessClaimInspection(instance, await inspectProjectProcessClaimsWithConvergence(selection.identity))
     : instance;
@@ -422,7 +422,7 @@ export async function selectObservationInstanceForFlags(
 
 /**
  * durable root 在 domain reload 中读取 journal 时不能依赖瞬时 /health ready。
- * 该 selector 仍要求唯一 PID、process start、Unity.exe 与 canonical -projectPath 全部独立成立。
+ * 该 selector 要求唯一 Registry claim 的 PID、process start 与 Unity.exe 成立；可正向归因的命令行 claim 不能与其冲突。
  */
 export async function selectTransitionInstanceForFlags(
   flags: Record<string, string | boolean>,
@@ -449,11 +449,12 @@ export async function selectTransitionInstanceForFlags(
     verifyRegistrySessionProcess(identity, session, processBudgetMs),
     target === "editor" ? inspectProjectProcessClaims(identity, processBudgetMs) : Promise.resolve(undefined),
   ]);
-  const exactClaim = target === "runtime" || (claims?.verification === "verified"
-    && claims.processIds.length === 1
-    && claims.processIds[0] === session.processId);
+  const contradictoryClaim = target === "editor"
+    && claims?.verification === "verified"
+    && claims.processIds.length > 0
+    && (claims.processIds.length !== 1 || claims.processIds[0] !== session.processId);
   if (verification === "dead") throw targetNotRunning(instance, target);
-  if (verification !== "verified" || !exactClaim) {
+  if (verification !== "verified" || contradictoryClaim) {
     throw targetUnverifiable({ ...instance, processClaimIds: claims?.processIds ?? [] }, target);
   }
   return { instance: { ...instance, ...(claims ? { processClaimIds: claims.processIds } : {}) }, matchedBy: selection.matchedBy };
@@ -599,8 +600,8 @@ export function reduceObservationRegistryRecord(record: InstanceRegistryV3, obse
 }
 
 /**
- * fallback 前重新证明 registry claim 对应目标 Unity.exe。
- * CommandLineToArgvW 解析 -projectPath，任一无法读取或不匹配均 fail closed。
+ * fallback 前重新证明 registry claim 对应原 PID/start 的 Unity.exe。
+ * 命令行存在 -projectPath 时必须匹配 canonical identity；正式 Hub/普通启动可以不携带该参数。
  */
 export async function verifyRegistrySessionProcess(identity: RegistryIdentity, session: RegistrySession, timeoutMs = 900): Promise<SessionProcessVerification> {
   if (process.platform !== "win32" || timeoutMs < 1) return "unverifiable";
@@ -630,7 +631,8 @@ export async function verifyRegistrySessionProcess(identity: RegistryIdentity, s
     if (basename(raw.executablePath).toLowerCase() !== "unity.exe") return "unverifiable";
     const argv = raw.argv.every((value) => typeof value === "string") ? raw.argv as string[] : undefined;
     const index = argv?.findIndex((value) => value.toLowerCase() === "-projectpath") ?? -1;
-    if (index < 0 || !argv?.[index + 1]) return "unverifiable";
+    if (index < 0) return "verified";
+    if (!argv?.[index + 1]) return "unverifiable";
     const remainingMs = Math.max(0, timeoutMs - (Date.now() - startedAt));
     if (remainingMs <= 0) return "unverifiable";
     return (await resolveProjectIdentityAsync(argv[index + 1], { timeoutMs: remainingMs })).instanceId === identity.instanceId ? "verified" : "unverifiable";
@@ -703,7 +705,7 @@ export async function readInstancesWithRegistryDiagnostics(
   };
 }
 
-/** CanonicalPath v1 进程 claim 观察；Windows 无法完成枚举时返回 unverifiable 供调用方 fail closed。 */
+/** CanonicalPath v1 补充进程观察；只返回可由显式 -projectPath 正向归因的 claim。 */
 export async function inspectProjectProcessClaims(identity: RegistryIdentity | ProjectIdentity, timeoutMs = PROJECT_PROCESS_CLAIM_TIMEOUT_MS): Promise<ProjectProcessClaimInspection> {
   if (process.platform !== "win32") return { verification: "unsupported", processIds: [] };
   try {
@@ -720,9 +722,10 @@ export async function inspectProjectProcessClaims(identity: RegistryIdentity | P
 export function applyProjectProcessClaimInspection(instance: UnityInstance, inspection: ProjectProcessClaimInspection): UnityInstance {
   if (inspection.verification === "unsupported") return instance;
   const registeredEditorProcessIds = instance.allSessions.filter((session) => session.target === "editor").map((session) => session.processId);
-  // Editor进程扫描不能降级Runtime-only或纯offline记录；没有Editor claim时不存在可交叉验证的ownership。
-  if (registeredEditorProcessIds.length === 0) return instance;
-  if (inspection.verification !== "verified") return unverifiableInstance(instance, inspection.processIds);
+  // 命令行扫描只提供额外正向证据；不能因正式启动缺少 -projectPath 否定 Registry/health 结论。
+  if (registeredEditorProcessIds.length === 0
+    || inspection.verification !== "verified"
+    || inspection.processIds.length === 0) return instance;
   if (inspection.processIds.length > 1) {
     const blocker = {
       kind: "duplicate-project-process",
@@ -770,7 +773,7 @@ function unverifiableInstance(instance: UnityInstance, processClaimIds: number[]
   };
 }
 
-/** instances 控制面补充 OS process claims，使未注册 Bridge 的启动中重复进程也可见。 */
+/** instances 控制面补充可正向归因的 OS process claims，使启动中的重复进程可见。 */
 async function readInstancesWithProjectProcessClaims(dataDir: string): Promise<InstanceRegistryReadResult> {
   const { instances, invalidRecordCount } = await readInstancesWithRegistryDiagnostics(dataDir);
   return {

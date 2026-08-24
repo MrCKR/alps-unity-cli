@@ -13,7 +13,7 @@ export interface UnityProjectProcess {
   projectPath: string;
 }
 
-/** 解析唯一可归因的 interactive Unity.exe 命令行观察。 */
+/** 解析带显式 -projectPath、可正向归因的 interactive Unity.exe 命令行观察。 */
 export function parseUnityProjectProcessDiscoveryOutput(stdout: string): UnityProjectProcess[] {
   const text = stdout.trim();
   if (!text) return [];
@@ -34,7 +34,7 @@ export function parseUnityProjectProcessDiscoveryOutput(stdout: string): UnityPr
   });
 }
 
-/** 枚举 interactive Unity.exe argv，并以 CanonicalPath v1 精确归因到目标项目。 */
+/** 枚举可提供显式项目参数的 Unity.exe，并以 CanonicalPath v1 精确归因；不覆盖 Registry 正式会话证明。 */
 export async function findUnityProjectProcesses(instanceId: string, canonicalProjectPath: string, timeoutMs = 3_000): Promise<UnityProjectProcess[]> {
   if (process.platform !== "win32" || timeoutMs < 1) return [];
   const startedAt = Date.now();
