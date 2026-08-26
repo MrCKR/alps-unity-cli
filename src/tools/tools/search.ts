@@ -29,8 +29,8 @@ export default defineTool<ToolsSearchRequest, ToolsSearchResult>({
     if (tokens.length === 0) {
       throw new StructuredToolError(
         "TOOLS_SEARCH_KEYWORD_REQUIRED",
-        "Pass one or more `|`-separated keywords: unity_cli tools search <k1|k2|...>.",
-        ["Run unity_cli tools group to see tool groups."],
+        "Pass one or more `|`-separated keywords: unitycli tools search <k1|k2|...>.",
+        ["Run unitycli tools group to see tool groups."],
       );
     }
     const flags = context.flags ?? {};

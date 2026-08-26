@@ -266,11 +266,11 @@ function buildNextActions(
   );
 
   actions.push(
-    `After Unity resolves packages, run 'unity_cli extensions install ${manifest.id} --project <path>'.`
+    `After Unity resolves packages, run 'unitycli extensions install ${manifest.id} --project <path>'.`
   );
 
   actions.push(
-    `Run 'unity_cli extensions doctor --project <path>' to diagnose all extension availability.`
+    `Run 'unitycli extensions doctor --project <path>' to diagnose all extension availability.`
   );
 
   return actions;

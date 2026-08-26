@@ -7,7 +7,7 @@ const validationPath = ".pi/skills/unity-cli-validation/SKILL.md";
 const issueLifecyclePath = ".pi/skills/unity-cli-issue-lifecycle/SKILL.md";
 const releasePath = ".pi/skills/unity-cli-release/SKILL.md";
 const agentsPath = "AGENTS.md";
-const publicSkillPath = "skills/unity_cli/SKILL.md";
+const publicSkillPath = "skills/unitycli/SKILL.md";
 const readmePath = "README.md";
 
 test("fresh gate keeps task values above defaults and forbids probe calls", async () => {
@@ -35,7 +35,7 @@ test("repository governance separates implementation from affected-scope validat
   ]);
   for (const source of [agents, validation, issueLifecycle]) assert.doesNotMatch(source, /unity-cli-plan/);
   await assert.rejects(access(".pi/skills/unity-cli-plan/SKILL.md"));
-  assert.match(agents, /skills\/unity_cli\/SKILL\.md[^\n]*安装后/);
+  assert.match(agents, /skills\/unitycli\/SKILL\.md[^\n]*安装后/);
   assert.match(agents, /实现未收敛前不得运行正式自动化测试[^\n]*unity-cli-gate/);
   assert.match(validation, /未完成前不得运行正式自动化测试[^\n]*陌生 AI 门禁/);
   for (const source of [agents, validation]) assert.match(source, /只覆盖本次增删改/);

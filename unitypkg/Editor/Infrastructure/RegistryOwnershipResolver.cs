@@ -22,9 +22,9 @@ namespace UnityCli
         {
             if (candidateAssemblies == null) throw new ArgumentNullException("candidateAssemblies");
             var claims = new Dictionary<string, string>(StringComparer.Ordinal);
-            var packageRoot = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Packages", "com.unity_cli");
+            var packageRoot = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Packages", "com.alpsckr.unitycli");
             var extensionRoot = Path.Combine(packageRoot, "Extensions");
-            var installedIds = ReadInstalledExtensionIds(Path.Combine(packageRoot, "unity_cli.extensions.manifest.json"));
+            var installedIds = ReadInstalledExtensionIds(Path.Combine(packageRoot, "unitycli.extensions.manifest.json"));
             if (!Directory.Exists(extensionRoot))
             {
                 if (installedIds.Count > 0) throw new InvalidOperationException("Extension registry has installed entries but no Extensions directory.");

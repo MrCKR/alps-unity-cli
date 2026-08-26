@@ -60,7 +60,7 @@ async function checkExtensionPhysicalAvailability(
   if (!projectPath) {
     return unavailable(extensionId, undefined, undefined, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN", `${subject} requires a project path to verify extension physical installation.`, [
       "Select the running Unity project with --instance <id|canonical-project-path|alias>.",
-      `Run unity_cli extensions doctor --project <path> to inspect ${extensionId}.`
+      `Run unitycli extensions doctor --project <path> to inspect ${extensionId}.`
     ]);
   }
 
@@ -68,7 +68,7 @@ async function checkExtensionPhysicalAvailability(
   const physicalState = physicalStates.get(extensionId);
   if (!physicalState) {
     return unavailable(extensionId, undefined, undefined, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN", `${subject} has no physical state record for extension \"${extensionId}\".`, [
-      `Run unity_cli extensions doctor --project ${projectPath}.`
+      `Run unitycli extensions doctor --project ${projectPath}.`
     ]);
   }
   const installedPackages = await readInstalledUnityPackages(projectPath);

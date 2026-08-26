@@ -95,10 +95,10 @@ namespace MyProject.UnityCLI
 AI 使用当前实例的统一公开目录自发现和执行：
 
 ```powershell
-unity_cli tools group --instance <id|projectPath|alias>
-unity_cli tools group list <group> --instance <id|projectPath|alias>
-unity_cli tools describe <custom-tool> --instance <id|projectPath|alias>
-unity_cli tools run <custom-tool> --input '<json>' --instance <id|projectPath|alias>
+unitycli tools group --instance <id|projectPath|alias>
+unitycli tools group list <group> --instance <id|projectPath|alias>
+unitycli tools describe <custom-tool> --instance <id|projectPath|alias>
+unitycli tools run <custom-tool> --input '<json>' --instance <id|projectPath|alias>
 ```
 
 `<group>` 必须来自当前实例 `tools group` 的真实输出；不要假设项目 Tool 位于 `custom` 组。`source` 只作描述/审计，不改变发现或执行路径。

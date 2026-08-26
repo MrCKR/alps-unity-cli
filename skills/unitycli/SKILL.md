@@ -1,13 +1,13 @@
 ---
-name: unity_cli
-description: 所有涉及 Unity 或 Unity Editor 或 UnityPipeline 的任务都优先使用本 Skill，以便发现唯一可用的 `unity_cli` 控制入口。适用于 Scene、GameObject、Prefab、Asset、Package、Build、Test、GameView、SceneView、日志、截图、Bridge、instance、Editor/PlayMode 状态和项目自定义能力；纯源码或文本工作可直接处理，但需要观察、操作或验证已打开 Editor 时必须使用 CLI。
+name: unitycli
+description: 所有涉及 Unity 或 Unity Editor 或 UnityPipeline 的任务都优先使用本 Skill，以便发现唯一可用的 `unitycli` 控制入口。适用于 Scene、GameObject、Prefab、Asset、Package、Build、Test、GameView、SceneView、日志、截图、Bridge、instance、Editor/PlayMode 状态和项目自定义能力；纯源码或文本工作可直接处理，但需要观察、操作或验证已打开 Editor 时必须使用 CLI。
 ---
 
-# unity_cli
+# UnityCLI
 
 FeedbackMode: off
 
-`unity_cli` 是 AI 操作已打开 Unity Editor 的能力目录。不要记忆或猜能力：先发现，再读 descriptor，最后调用。
+`unitycli` 是 AI 操作已打开 Unity Editor 的能力目录。不要记忆或猜能力：先发现，再读 descriptor，最后调用。
 
 ## 路由
 
@@ -23,16 +23,16 @@ FeedbackMode: off
 
 ```powershell
 # 默认隐藏 offline；仅审计完整历史集合时使用 instances list --all
-unity_cli instances list
-unity_cli tools group --instance <id|projectPath|alias>
-unity_cli tools group list <group> --instance <id|projectPath|alias>
-unity_cli tools search '<k1|k2|...>' --instance <id|projectPath|alias>
-unity_cli tools describe <tool> --instance <id|projectPath|alias>
-unity_cli tools run <tool> --input '<json>' --instance <id|projectPath|alias>
+unitycli instances list
+unitycli tools group --instance <id|projectPath|alias>
+unitycli tools group list <group> --instance <id|projectPath|alias>
+unitycli tools search '<k1|k2|...>' --instance <id|projectPath|alias>
+unitycli tools describe <tool> --instance <id|projectPath|alias>
+unitycli tools run <tool> --input '<json>' --instance <id|projectPath|alias>
 
 # 同一catalog的schema参数调用；省略name时列出command投影
-unity_cli command --project-path <projectPath>
-unity_cli command <name> --field <value> --instance <id|projectPath|alias>
+unitycli command --project-path <projectPath>
+unitycli command <name> --field <value> --instance <id|projectPath|alias>
 ```
 
 显式`--instance`优先；`command --project-path <path>`绑定同一canonical项目实例；未传时只能从当前Unity项目CWD解析。没有连接实例时discovery返回稳定instance error，不返回静态或空目录。`instances list`逐文件隔离旧格式、损坏或不可读记录，合法Registry v3实例继续返回；`invalidRecordCount`出现时先运行`doctor`，不得读取、转换、移动或删除内部记录。显式选择对应坏instanceId仍会严格失败。

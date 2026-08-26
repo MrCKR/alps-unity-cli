@@ -36,7 +36,7 @@ namespace UnityCli
             {
                 BridgeCommandDefinition definition;
                 if (request == null || !commands.TryGetValue(request.Command, out definition))
-                    throw new BridgeCommandException("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + (request == null ? string.Empty : request.Command), "Upgrade the Unity CLI Bridge package or use a registered CLI command.");
+                    throw new BridgeCommandException("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + (request == null ? string.Empty : request.Command), "Upgrade the UnityCLI Bridge package or use a registered CLI command.");
                 cancellationToken.ThrowIfCancellationRequested();
                 object input;
                 if (definition.InputType == typeof(UnityCli.Protocol.BridgeRequest))

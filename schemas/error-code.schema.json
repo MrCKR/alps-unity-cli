@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/schemas/error-code.schema.json",
-  "title": "Unity CLI Error Code",
+  "$id": "https://unitycli.local/schemas/error-code.schema.json",
+  "title": "UnityCLI Error Code",
   "description": "Structured error object used in the response envelope. Every failure includes stable retry and recovery fields; blocker observations use a sanitized public DTO.",
   "x-unityCliTaxonomy": ["E_DIALOG_OBSERVATION_FAILED", "E_DIALOG_NOT_FOUND", "E_DIALOG_STALE", "E_DIALOG_BUTTON_NOT_FOUND", "E_DIALOG_BUTTON_AMBIGUOUS", "E_DIALOG_CLICK_UNPROVEN"],
   "type": "object",

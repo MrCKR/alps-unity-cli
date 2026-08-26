@@ -90,4 +90,4 @@ Project tools are checked internally before execution. A descriptor mismatch ret
 - Tool descriptor field coverage: [tool-discovery](./tool-discovery.md) §Descriptor field coverage
 - Tool metadata schema: [../schemas/tool-metadata.schema.json](../schemas/tool-metadata.schema.json)
 - Security policy source: `src/security-policy.ts` and `src/security.ts`
-- AI skill (compact version): [/skills/unity_cli/SKILL.md](../skills/unity_cli/SKILL.md)
+- AI skill (compact version): [/skills/unitycli/SKILL.md](../skills/unitycli/SKILL.md)

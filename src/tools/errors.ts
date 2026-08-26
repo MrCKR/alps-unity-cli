@@ -53,8 +53,8 @@ export function blockerTimeoutMessage(operation: string, blockers: EditorBlocker
 /** 超时恢复操作：先引导读 editor.state 等待过渡完成，再处理 modal dialog；两者同时给出，不因 dialog 丢弃等待引导。 */
 export function blockerNextActions(): string[] {
   return [
-    "Run unity_cli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.",
-    "Run unity_cli tools run editor.dialogs to inspect the current modal dialog.",
-    "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
+    "Run unitycli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.",
+    "Run unitycli tools run editor.dialogs to inspect the current modal dialog.",
+    "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label.",
   ];
 }

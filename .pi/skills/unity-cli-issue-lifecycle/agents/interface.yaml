@@ -1,7 +1,7 @@
 interface:
-  display_name: "Unity CLI Issue Lifecycle"
-  short_description: "Track, validate, sync, and close Unity CLI defects"
-  default_prompt: "Use $unity-cli-issue-lifecycle to register this Unity CLI defect, validate the fix in the target Package, sync the canonical product source, and archive it only after all gates pass."
+  display_name: "UnityCLI Issue Lifecycle"
+  short_description: "Track, validate, sync, and close UnityCLI defects"
+  default_prompt: "Use $unity-cli-issue-lifecycle to register this UnityCLI defect, validate the fix in the target Package, sync the canonical product source, and archive it only after all gates pass."
 compatibility:
   canonical_format: "agent-skills"
   adapter_targets:
@@ -13,7 +13,7 @@ compatibility:
     paths:
       - ".issues/**"
       - "unitypkg/**"
-      - "**/Packages/com.unity_cli/**"
+      - "**/Packages/com.alpsckr.unitycli/**"
   execution:
     context: "inline"
     shell: "powershell"

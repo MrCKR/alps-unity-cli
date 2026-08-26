@@ -53,7 +53,7 @@ export async function handleCommand(
   const { commandName, businessTokens, flags } = invocation.value;
   if (!commandName && (flags.help === true || flags.help === "true")) {
     return success(requestId, {
-      usage: "unity_cli command [--project-path <path>] [name] [--field <value>|<positional>...]",
+      usage: "unitycli command [--project-path <path>] [name] [--field <value>|<positional>...]",
       inputForms: ["--field value", "--field=value", "--boolean-field", "<positional>"],
       nameResolution: {
         nativeExactFirst: true,
@@ -62,9 +62,9 @@ export async function handleCommand(
         similarNameMapping: false,
       },
       catalogDiscovery: {
-        commandListing: "unity_cli command --project-path <path>",
-        toolSearch: "unity_cli tools search <k1|k2|...> --instance <id|projectPath|alias>",
-        toolDescribe: "unity_cli tools describe <tool> --instance <id|projectPath|alias>",
+        commandListing: "unitycli command --project-path <path>",
+        toolSearch: "unitycli tools search <k1|k2|...> --instance <id|projectPath|alias>",
+        toolDescribe: "unitycli tools describe <tool> --instance <id|projectPath|alias>",
       },
       note: "Omit name without --help to list the selected instance live catalog command projection.",
     });
@@ -75,7 +75,7 @@ export async function handleCommand(
       const catalog = await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
       if (!catalog.ok) return catalog;
       return success(requestId, {
-        usage: "unity_cli command [command-options] [name] [business-args]",
+        usage: "unitycli command [command-options] [name] [business-args]",
         commands: commandDescriptors(catalog.tools),
       });
     });
@@ -90,7 +90,7 @@ export async function handleCommand(
       if (!tool) return commandNotFound(requestId, commandName);
       const descriptor = commandDescriptor(tool, commandName);
       return success(requestId, {
-        usage: `unity_cli command ${commandName} [business-args]`,
+        usage: `unitycli command ${commandName} [business-args]`,
         command: { name: descriptor.name, summary: descriptor.summary, parameters: descriptor.parameters },
         tool: publicToolDescriptor(tool),
       });
@@ -188,7 +188,7 @@ function parseControl(
   if (!option || !options.has(option.name)) {
     const rendered = option ? `--${option.name}` : tokens[index];
     return { ok: false, result: failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for ${route}: ${rendered}.`, [
-      "Run unity_cli command --help to inspect command-level options.",
+      "Run unitycli command --help to inspect command-level options.",
     ], { option: rendered, command: route }) };
   }
 
@@ -271,7 +271,7 @@ function parseCommandInput(tool: ToolMetadata, tokens: string[], requestId: stri
     if (option) {
       if (!Object.hasOwn(properties, option.name)) {
         return { ok: false, result: failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for command ${tool.name}: --${option.name}.`, [
-          `Run unity_cli command ${tool.name} --help to inspect its input schema.`,
+          `Run unitycli command ${tool.name} --help to inspect its input schema.`,
         ], { option: `--${option.name}`, toolName: tool.name }) };
       }
       if (Object.hasOwn(input, option.name)) return duplicateInput(requestId, tool.name, option.name);
@@ -310,7 +310,7 @@ function parseCommandInput(tool: ToolMetadata, tokens: string[], requestId: stri
     const propertyName = order[positionalIndex];
     if (!propertyName) {
       return { ok: false, result: failure(requestId, "E_SCHEMA_INVALID", `Command ${tool.name} received more positional arguments than its schema declares.`, [
-        `Run unity_cli command ${tool.name} --help and remove the extra positional value.`,
+        `Run unitycli command ${tool.name} --help and remove the extra positional value.`,
       ], { path: "$", expected: order, actual: token }) };
     }
     const coerced = coerceInputValue(token, properties[propertyName], rootSchema, requestId, tool.name, propertyName);
@@ -368,7 +368,7 @@ function coerceInputValue(
     return { ok: true, value: coerceSchemaValue(raw, propertySchema, rootSchema) };
   } catch (error) {
     return { ok: false, result: failure(requestId, "E_SCHEMA_INVALID", `Command input ${propertyName} is invalid: ${error instanceof Error ? error.message : String(error)}.`, [
-      `Run unity_cli command ${toolName} --help to inspect the field schema.`,
+      `Run unitycli command ${toolName} --help to inspect the field schema.`,
     ], { path: `$.${propertyName}`, expected: propertySchema, actual: raw }) };
   }
 }
@@ -484,8 +484,8 @@ function resolveCommandTool(tools: ToolMetadata[], name: string): ToolMetadata |
 
 function commandNotFound(requestId: string, commandName: string): CliResult {
   return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Command not found: ${commandName}.`, [
-    "Run unity_cli command to list commands registered by the selected Unity instance.",
-    "Run unity_cli tools search <k1|k2|...> to find related Tools.",
+    "Run unitycli command to list commands registered by the selected Unity instance.",
+    "Run unitycli tools search <k1|k2|...> to find related Tools.",
   ], { commandName });
 }
 
@@ -554,7 +554,7 @@ function controlValueRequired(requestId: string, name: string, actual?: string):
 /** 业务字段缺值。 */
 function optionValueRequired(requestId: string, toolName: string, name: string, actual?: string): Parsed<never> {
   return { ok: false, result: failure(requestId, "E_OPTION_VALUE_REQUIRED", `Command field --${name} requires a value.`, [
-    `Run unity_cli command ${toolName} --help to inspect the field schema.`,
+    `Run unitycli command ${toolName} --help to inspect the field schema.`,
   ], { option: `--${name}`, expected: "value", ...(actual ? { actual } : {}) }) };
 }
 

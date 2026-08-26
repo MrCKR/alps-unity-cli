@@ -46,7 +46,7 @@ test("immutable Bridge request contract remains admission-free", async () => {
 });
 
 test("public docs and installed Skill explain behavior without exposing transport controls", async () => {
-  const paths = ["README.md", "docs/tool-execution.md", "docs/error-codes.md", "skills/unity_cli/SKILL.md", "skills/unity_cli/references/operation-protocol.md"];
+  const paths = ["README.md", "docs/tool-execution.md", "docs/error-codes.md", "skills/unitycli/SKILL.md", "skills/unitycli/references/operation-protocol.md"];
   const texts = await Promise.all(paths.map((path) => readFile(path, "utf8")));
   assert.match(texts[0]!, /2 \* T \+ 5000/);
   assert.match(texts[1]!, /准入等待/);

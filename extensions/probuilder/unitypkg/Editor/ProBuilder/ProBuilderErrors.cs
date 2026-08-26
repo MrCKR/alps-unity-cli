@@ -24,7 +24,7 @@ namespace UnityCli.ProBuilder
                 "E_EXTENSION_DEPENDENCY_MISSING",
                 "ProBuilder package com.unity.probuilder must be installed at the exact supported version " + ProBuilderReflection.SupportedPackageVersion + ".",
                 details,
-                new[] { "install_com_unity_probuilder_5_2_4_via_package_manager", "run_unity_cli_extensions_doctor_to_verify_setup" });
+                new[] { "install_com_unity_probuilder_5_2_4_via_package_manager", "run_unitycli_extensions_doctor_to_verify_setup" });
         }
 
         public static UnityCliBridge.BridgeCommandException TargetNotFound(string target)

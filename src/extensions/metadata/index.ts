@@ -1,5 +1,5 @@
 /**
- * Static built-in extension metadata for the Unity CLI.
+ * Static built-in extension metadata for the UnityCLI.
  *
  * 此处只提供 Extension package 的离线 metadata（标题、描述和 providesTools 名单）。
  * Extension Tool 的完整 descriptor/schema 由成功编译的 Live Editor 捕获到 static catalog，
@@ -24,8 +24,8 @@ const BUILTIN_EXTENSIONS: ExtensionMetadata[] = BUILTIN_EXTENSION_MANIFESTS.map(
   installMode: "auto",
   installCommand: `extensions install ${manifest.id}`,
   nextActions: [
-    `Run unity_cli extensions install ${manifest.id} to install this extension.`,
-    "Run unity_cli init to auto-detect and install extensions for your Unity project."
+    `Run unitycli extensions install ${manifest.id} to install this extension.`,
+    "Run unitycli init to auto-detect and install extensions for your Unity project."
   ]
 }));
 

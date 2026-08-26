@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/schemas/extension-descriptor.schema.json",
-  "title": "Unity CLI Extension Descriptor",
-  "description": "Describes an optional capability pack (extension) for the Unity CLI. Extensions depend on optional Unity packages and provide additional tools.",
+  "$id": "https://unitycli.local/schemas/extension-descriptor.schema.json",
+  "title": "UnityCLI Extension Descriptor",
+  "description": "Describes an optional capability pack (extension) for the UnityCLI. Extensions depend on optional Unity packages and provide additional tools.",
   "type": "object",
   "required": ["id", "title", "description", "kind", "source", "status", "installMode"],
   "properties": {
@@ -59,7 +59,7 @@
     "copyRoot": {
       "type": "string",
       "enum": ["extension-directory", "unitypkg"],
-      "description": "Unity-side copy root. New extensions use extension-directory under Packages/com.unity_cli/Extensions/<id>; unitypkg is legacy."
+      "description": "Unity-side copy root. New extensions use extension-directory under Packages/com.alpsckr.unitycli/Extensions/<id>; unitypkg is legacy."
     },
     "unityInstall": {
       "type": "object",

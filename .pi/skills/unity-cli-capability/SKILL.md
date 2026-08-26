@@ -1,12 +1,12 @@
 ---
 name: unity-cli-capability
-description: unity_cli 的统一 Tool、Bridge、descriptor、schema、安全、Editor/PlayMode 与结构化输出硬规范。新增、修改或删除任何 Unity 能力、公开 metadata、summary/describe、错误 envelope、自定义 Tool 或 destructive 语义时必须先完整读取并遵守；Extension 能力也必须同时使用本 Skill。
+description: unitycli 的统一 Tool、Bridge、descriptor、schema、安全、Editor/PlayMode 与结构化输出硬规范。新增、修改或删除任何 Unity 能力、公开 metadata、summary/describe、错误 envelope、自定义 Tool 或 destructive 语义时必须先完整读取并遵守；Extension 能力也必须同时使用本 Skill。
 compatibility: 适用于 alps-unity-cli 仓库；需要 read 和项目现有验证工具。
 ---
 
-# Unity CLI Capability
+# UnityCLI Capability
 
-本 Skill 约束 `unity_cli` 的公开能力设计和实现。开始新增、修改或删除前先确认根 `AGENTS.md` 已加载；涉及 Extension、框架 wait 或完成验证时，还必须分别读取对应项目 Skill。
+本 Skill 约束 `unitycli` 的公开能力设计和实现。开始新增、修改或删除前先确认根 `AGENTS.md` 已加载；涉及 Extension、框架 wait 或完成验证时，还必须分别读取对应项目 Skill。
 
 ## 统一Tool契约
 
@@ -152,7 +152,7 @@ Describe 不得包含：
 
 - 合法示例：`Assets/UnityCLI/`、`Assets/Editor/UnityCLI/`、`Assets/SomeModule/UnityCLI/`。
 - 项目内可以存在多个 `UnityCLI` 目录，但目录名大小写必须完全一致。
-- 此约定不适用于内置 Bridge `Packages/com.unity_cli/` 和 Extension `Packages/com.unity_cli/Extensions/`。
+- 此约定不适用于内置 Bridge `Packages/com.alpsckr.unitycli/` 和 Extension `Packages/com.alpsckr.unitycli/Extensions/`。
 
 ## 安全与破坏性操作
 

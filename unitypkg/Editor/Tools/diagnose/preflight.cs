@@ -235,11 +235,11 @@ namespace UnityCli
                 if (!scanComplete) compileErrorsTruncated = true;
                 var nextActions = new List<string>();
                 if (!scanComplete) nextActions.Add("Compile diagnostics could not be scanned completely; inspect Unity Console before treating preflight as healthy.");
-                if (hasCompileErrors) nextActions.Add("Review the listed compile errors (often from a broken extension under Packages/com.unity_cli/Extensions). Fix or remove the offending extension, then let Unity recompile.");
+                if (hasCompileErrors) nextActions.Add("Review the listed compile errors (often from a broken extension under Packages/com.alpsckr.unitycli/Extensions). Fix or remove the offending extension, then let Unity recompile.");
                 if (compiling) nextActions.Add("Wait for Unity to finish compiling, then re-run doctor.");
-                if (hasCompileErrors && File.Exists(Path.Combine(ProjectRoot(), "Packages", "com.unity_cli", "Extensions", "extension.json")))
+                if (hasCompileErrors && File.Exists(Path.Combine(ProjectRoot(), "Packages", "com.alpsckr.unitycli", "Extensions", "extension.json")))
                 {
-                    nextActions.Add("If an extension no longer compiles, remove it via unity_cli extensions remove <id> --project <path>.");
+                    nextActions.Add("If an extension no longer compiles, remove it via unitycli extensions remove <id> --project <path>.");
                 }
                 return new CompileStatusCheck
                 {

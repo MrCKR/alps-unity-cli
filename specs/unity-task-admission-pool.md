@@ -1,6 +1,6 @@
 # Unity Task Admission Pool Specification
 
-本文件定义 `unity_cli` 面向 Editor 与 Runtime 的公开根调用准入池最终语义，是产品实现、契约更新和定向验证的 source of truth。它不属于当前安装产物；产品实现完成前，不得把本文语义写入当前用户文档或安装后的 `skills/unity_cli`。
+本文件定义 `unitycli` 面向 Editor 与 Runtime 的公开根调用准入池最终语义，是产品实现、契约更新和定向验证的 source of truth。它不属于当前安装产物；产品实现完成前，不得把本文语义写入当前用户文档或安装后的 `skills/unitycli`。
 
 ## 1. 目标与非目标
 
@@ -179,7 +179,7 @@ admissionDeadline = dispatchStartedAt + T
   "retryAfterMs": 100,
   "message": "The Unity task pool did not reopen before the admission deadline; no business request was sent.",
   "nextActions": [
-    "Wait for active Unity CLI tasks to finish, then submit a new request."
+    "Wait for active UnityCLI tasks to finish, then submit a new request."
   ]
 }
 ```
@@ -332,14 +332,14 @@ CLI在完整准入预算内持续内部轮询；单次 `granted:false` 不直接
 4. Editor ProjectSettings字段与Runtime build sidecar当前格式同步。
 5. 稳定错误目录补充两种 `E_UNITY_BUSY` 的可区分语义。
 6. `docs/tool-execution.md`、`docs/error-codes.md` 和相关 target/session文档更新当前行为。
-7. 安装后的 `skills/unity_cli/SKILL.md` 与 `references/operation-protocol.md` 更新内部等待、双预算host等待和busy/timeout恢复规则。
+7. 安装后的 `skills/unitycli/SKILL.md` 与 `references/operation-protocol.md` 更新内部等待、双预算host等待和busy/timeout恢复规则。
 8. generated contract、schema、README示例和测试只使用最终当前语义，不保留单预算双轨或旧 route fallback。
 
 在产品实现、契约和验证未完成前，第6、7项不得提前修改为已支持任务池。
 
 ## 14. 公开 Skill 必须表达的最终规则
 
-安装后的 `unity_cli` Skill只需要指导AI正确调用，不暴露token协议。实现完成后至少表达：
+安装后的 `unitycli` Skill只需要指导AI正确调用，不暴露token协议。实现完成后至少表达：
 
 - CLI会在发送业务请求前自动等待Unity准入，AI不得自行每100ms轮询。
 - `--timeout-ms T` 分别提供最多T的准入等待和放行后最多T的执行预算。

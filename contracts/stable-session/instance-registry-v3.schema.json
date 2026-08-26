@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/contracts/stable-session/instance-registry-v3.schema.json",
-  "title": "Unity CLI instance registry v3",
+  "$id": "https://unitycli.local/contracts/stable-session/instance-registry-v3.schema.json",
+  "title": "UnityCLI instance registry v3",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "revision", "canonicalizationVersion", "identity", "sessions", "publishedAt"],

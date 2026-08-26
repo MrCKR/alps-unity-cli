@@ -6,24 +6,24 @@ ProBuilder 扩展包提供 36 个细粒度 Tool，用于在已打开的 Unity Ed
 
 - Unity 项目安装精确版本 `com.unity.probuilder@5.2.4`
 - Unity Editor 已打开目标项目并完成编译
-- 已运行 `unity_cli extensions install probuilder --project <project>`，或由 `init` 在检测到精确依赖后复制 extension bundle
-- `unity_cli extensions doctor --project <project>` 显示 ProBuilder extension 已安装、可用且健康
+- 已运行 `unitycli extensions install probuilder --project <project>`，或由 `init` 在检测到精确依赖后复制 extension bundle
+- `unitycli extensions doctor --project <project>` 显示 ProBuilder extension 已安装、可用且健康
 
 ## 发现与执行
 
 ```bash
 # 列出 ProBuilder Tool
-unity_cli tools group list probuilder --instance <instanceId|projectPath|alias>
+unitycli tools group list probuilder --instance <instanceId|projectPath|alias>
 
 # 获取完整输入 schema、边界、错误与示例
-unity_cli tools describe probuilder.create-shape --instance <instanceId|projectPath|alias>
-unity_cli tools describe probuilder.extrude-faces --instance <instanceId|projectPath|alias>
+unitycli tools describe probuilder.create-shape --instance <instanceId|projectPath|alias>
+unitycli tools describe probuilder.extrude-faces --instance <instanceId|projectPath|alias>
 
 # 证明 Package 与 extension 可用
-unity_cli tools run probuilder.ping --instance <instanceId|projectPath|alias>
+unitycli tools run probuilder.ping --instance <instanceId|projectPath|alias>
 
 # 按 descriptor 创建形状
-unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":"MyCube"}' --instance <instanceId|projectPath|alias>
+unitycli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":"MyCube"}' --instance <instanceId|projectPath|alias>
 ```
 
 不要根据本页猜测 face、edge 或 vertex index。先读取当前对象和 Live descriptor，再提交 mutation。
@@ -110,16 +110,16 @@ unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":
 
 ```bash
 # 安装精确 Package 后复制 extension bundle
-unity_cli extensions install probuilder --project <project>
+unitycli extensions install probuilder --project <project>
 
 # 检查 Package version、安装投影与 Live availability
-unity_cli extensions doctor --project <project>
+unitycli extensions doctor --project <project>
 
 # 查看 extension 状态
-unity_cli extensions list --project <project>
+unitycli extensions list --project <project>
 
 # 删除 Unity 侧 extension 投影
-unity_cli extensions remove probuilder --project <project>
+unitycli extensions remove probuilder --project <project>
 ```
 
 依赖缺失或版本不是 `5.2.4` 时，extension 状态为 unavailable，`nextActions` 会要求安装 `com.unity.probuilder@5.2.4` 后重新安装 extension。CLI 不会自动选择其他版本。

@@ -288,7 +288,7 @@ test("resolveAvailability next actions suggest manual package install and extens
   assert.ok(result.nextActions.some((a) => a.includes("manifest.json")));
   assert.ok(result.nextActions.some((a) => a.includes("explicit package versions")));
   assert.equal(result.nextActions.some((a) => a.includes('"latest"')), true, "nextActions should warn against writing latest");
-  assert.ok(result.nextActions.some((a) => a.includes("unity_cli extensions install probuilder")));
+  assert.ok(result.nextActions.some((a) => a.includes("unitycli extensions install probuilder")));
 });
 
 test("resolveAllAvailability resolves all extensions", () => {
@@ -729,8 +729,8 @@ test("each extension compiles in its own Editor assembly", async () => {
 test("extension install manifest rejects incomplete managed file entries", async () => {
   const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-ext-test-"));
   try {
-    await mkdir(join(projectDir, "Packages", "com.unity_cli"), { recursive: true });
-    await writeFile(join(projectDir, "Packages", "com.unity_cli", "unity_cli.extensions.manifest.json"), JSON.stringify({
+    await mkdir(join(projectDir, "Packages", "com.alpsckr.unitycli"), { recursive: true });
+    await writeFile(join(projectDir, "Packages", "com.alpsckr.unitycli", "unitycli.extensions.manifest.json"), JSON.stringify({
       version: 1,
       extensions: [{ extensionId: "probuilder", version: "1.0.0", installedAt: new Date().toISOString(), sourceHash: "0".repeat(64), files: [{ path: "Editor/test.cs" }], requiresUnityPackages: ["com.unity.probuilder"], copyRoot: "extension-directory", layout: "directory", installMode: "copy-if-package-present" }]
     }));
@@ -743,9 +743,9 @@ test("extension install manifest rejects incomplete managed file entries", async
 test("extension install manifest rejects duplicate extension ids", async () => {
   const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-ext-test-"));
   try {
-    await mkdir(join(projectDir, "Packages", "com.unity_cli"), { recursive: true });
+    await mkdir(join(projectDir, "Packages", "com.alpsckr.unitycli"), { recursive: true });
     const entry = { extensionId: "probuilder", version: "1.0.0", installedAt: new Date().toISOString(), sourceHash: "0".repeat(64), files: [], requiresUnityPackages: ["com.unity.probuilder"], copyRoot: "extension-directory", layout: "directory", installMode: "copy-if-package-present" };
-    await writeFile(join(projectDir, "Packages", "com.unity_cli", "unity_cli.extensions.manifest.json"), JSON.stringify({ version: 1, extensions: [entry, entry] }));
+    await writeFile(join(projectDir, "Packages", "com.alpsckr.unitycli", "unitycli.extensions.manifest.json"), JSON.stringify({ version: 1, extensions: [entry, entry] }));
     await assert.rejects(() => readExtensionInstallManifest(projectDir), { code: "E_EXTENSION_INSTALL_MANIFEST_INVALID" });
   } finally {
     await rm(projectDir, { recursive: true, force: true });

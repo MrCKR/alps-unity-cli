@@ -1,14 +1,14 @@
 # 工具发现（Tool Discovery）
 
-`unity_cli` 的 Tool 目录属于一个已连接 Unity 实例。没有连接实例时，discovery 返回稳定 instance error，不返回静态或空目录。
+`unitycli` 的 Tool 目录属于一个已连接 Unity 实例。没有连接实例时，discovery 返回稳定 instance error，不返回静态或空目录。
 
 ## 实例绑定
 
 每次调用可选传入 `--instance <full-instance-id|project-path|alias>`；显式 selector 优先于 CWD。未传时，CLI 只从当前 Unity 项目 CWD 解析目标，不保存 active target，也不猜测唯一存活实例。
 
 ```powershell
-unity_cli instances list
-unity_cli tools group --instance <id|projectPath|alias>
+unitycli instances list
+unitycli tools group --instance <id|projectPath|alias>
 ```
 
 本文示例省略 `--instance` 时，默认命令运行在目标 Unity 项目 CWD。
@@ -22,15 +22,15 @@ tools group
     -> tools run <tool> --input '<json>'
 ```
 
-不确定分组时使用 `unity_cli tools search '<k1|k2|...>'`，多个关键词用 `|` 分隔按 OR 匹配。在PowerShell中必须用单引号包住整段关键词，否则`|`会被解释为shell管道。
+不确定分组时使用 `unitycli tools search '<k1|k2|...>'`，多个关键词用 `|` 分隔按 OR 匹配。在PowerShell中必须用单引号包住整段关键词，否则`|`会被解释为shell管道。
 
 ### `tools group`
 
 列出当前实例完整 Tool 目录中的分组与计数：
 
 ```powershell
-unity_cli tools group
-unity_cli tools group --instance my-project
+unitycli tools group
+unitycli tools group --instance my-project
 ```
 
 ### `tools group list`
@@ -38,8 +38,8 @@ unity_cli tools group --instance my-project
 列出一个真实分组中的全部 Tool 摘要：
 
 ```powershell
-unity_cli tools group list camera
-unity_cli tools group list probuilder --instance my-project
+unitycli tools group list camera
+unitycli tools group list probuilder --instance my-project
 ```
 
 分组名称必须来自当前实例的`tools group`输出，不要假设项目能力都位于`custom`分组。`tools group list`返回`nameSemantics.exact=true`与`groupPrefix=false`：每个`tools[].name`已经是完整精确调用名，group只用于筛选，绝不能拼到name前。
@@ -49,8 +49,8 @@ unity_cli tools group list probuilder --instance my-project
 按名称、summary、description 和 group 搜索当前实例完整目录：
 
 ```powershell
-unity_cli tools search 'screenshot|camera'
-unity_cli tools search 'project-summary|scene' --instance my-project
+unitycli tools search 'screenshot|camera'
+unitycli tools search 'project-summary|scene' --instance my-project
 ```
 
 ### `tools describe`
@@ -58,7 +58,7 @@ unity_cli tools search 'project-summary|scene' --instance my-project
 执行前读取单个 Tool 的完整 descriptor：
 
 ```powershell
-unity_cli tools describe camera.screenshot
+unitycli tools describe camera.screenshot
 ```
 
 公开字段：

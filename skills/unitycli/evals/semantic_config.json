@@ -1,6 +1,6 @@
 {
   "optimizer_hints": {
-    "capability": "Discover and operate Unity through unity_cli while keeping pure file work direct",
+    "capability": "Discover and operate Unity through unitycli while keeping pure file work direct",
     "inputs": ["Unity tasks", "opened Unity Editor", "Unity source and project files", "Unity explanations"],
     "trigger_actions": ["any task involving Unity or Unity Editor"],
     "exclusions": ["tasks that do not involve Unity"],

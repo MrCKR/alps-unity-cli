@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/schemas/extension-manifest.schema.json",
-  "title": "Unity CLI Extension Manifest",
+  "$id": "https://unitycli.local/schemas/extension-manifest.schema.json",
+  "title": "UnityCLI Extension Manifest",
   "description": "Describes a CLI extension package: identity, Unity package prerequisites, contribution IDs, C# entries, and Unity-side install projection. Detailed AI-facing tool metadata lives in extension tool metadata files.",
   "type": "object",
   "required": ["id", "name", "description", "version", "unityPackages", "contributions"],
@@ -100,7 +100,7 @@
         "layout": {
           "type": "string",
           "const": "directory",
-          "description": "Install this extension as a subdirectory under Packages/com.unity_cli/Extensions/<id>."
+          "description": "Install this extension as a subdirectory under Packages/com.alpsckr.unitycli/Extensions/<id>."
         },
         "include": {
           "type": "array",

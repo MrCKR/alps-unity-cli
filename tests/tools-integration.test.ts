@@ -281,7 +281,7 @@ test("unknown tools and subcommands return stable errors with current search gui
     const missing = await execute(["tools", "run", name, "--input", "{}"], connected as never);
     assert.ok(!missing.ok);
     assert.equal(missing.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
-    assert.ok(missing.error?.nextActions.includes("Run unity_cli tools search <k1|k2|...> to find related tools."));
+    assert.ok(missing.error?.nextActions.includes("Run unitycli tools search <k1|k2|...> to find related tools."));
   }
 
   for (const argv of [["tools", "run"], ["tools", "describe", "missing.tool"]]) {

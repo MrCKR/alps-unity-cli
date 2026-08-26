@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/schemas/tool-metadata.schema.json",
-  "title": "Unity CLI Public Tool Descriptor",
+  "$id": "https://unitycli.local/schemas/tool-metadata.schema.json",
+  "title": "UnityCLI Public Tool Descriptor",
   "description": "Public direct Tool descriptor used for discovery and first-call routing.",
   "type": "object",
   "additionalProperties": false,

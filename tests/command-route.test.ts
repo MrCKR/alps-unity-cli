@@ -75,9 +75,9 @@ test("command help结构化声明native优先、attribute显式名与零映射",
     similarNameMapping: false,
   });
   assert.deepEqual((result.data as { catalogDiscovery: unknown }).catalogDiscovery, {
-    commandListing: "unity_cli command --project-path <path>",
-    toolSearch: "unity_cli tools search <k1|k2|...> --instance <id|projectPath|alias>",
-    toolDescribe: "unity_cli tools describe <tool> --instance <id|projectPath|alias>",
+    commandListing: "unitycli command --project-path <path>",
+    toolSearch: "unitycli tools search <k1|k2|...> --instance <id|projectPath|alias>",
+    toolDescribe: "unitycli tools describe <tool> --instance <id|projectPath|alias>",
   });
 });
 

@@ -32,7 +32,7 @@ namespace UnityCli
             throw new UnityCliBridge.BridgeCommandException(
                 "E_VFX_PACKAGE_MISSING",
                 "Visual Effect Graph package is not installed in this Unity project.",
-                "Install com.unity.visualeffectgraph manually via Unity Package Manager or Packages/manifest.json, then run unity_cli extensions install vfx-graph --project <path>.");
+                "Install com.unity.visualeffectgraph manually via Unity Package Manager or Packages/manifest.json, then run unitycli extensions install vfx-graph --project <path>.");
         }
 
         public static Type RequireVfxAssetType()
@@ -71,7 +71,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_VFX_GRAPH_PATH_REQUIRED",
                     "Pass an Assets/*.vfx path.",
-                    "Use unity_cli tools run vfx.graph.info --input '{\"path\":\"Assets/VFX/Effect.vfx\"}'.");
+                    "Use unitycli tools run vfx.graph.info --input '{\"path\":\"Assets/VFX/Effect.vfx\"}'.");
             }
 
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".vfx", StringComparison.OrdinalIgnoreCase))

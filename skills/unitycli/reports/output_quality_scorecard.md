@@ -1,4 +1,4 @@
-# unity_cli Output Quality Scorecard
+# UnityCLI Output Quality Scorecard
 
 Release: 0.1.10
 Status: governed baseline

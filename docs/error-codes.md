@@ -14,7 +14,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
     "details": { "instanceId": "unity-...", "status": "conflict" },
     "nextActions": [
       "Close every duplicate Editor process except the intended session.",
-      "Run unity_cli instances list to verify one session remains."
+      "Run unitycli instances list to verify one session remains."
     ],
     "transient": false,
     "retryAfterMs": 0
@@ -32,7 +32,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `UNKNOWN_COMMAND` | 顶层命令不在冻结的公开命令集合中 | 运行 `unity_cli --help` |
+| `UNKNOWN_COMMAND` | 顶层命令不在冻结的公开命令集合中 | 运行 `unitycli --help` |
 | `E_UNKNOWN_OPTION` | option 未在 CLI arity 表中声明，或不属于当前命令 | 删除该 option 并查看 help |
 | `E_OPTION_VALUE_REQUIRED` | 带值 option 缺少值；命令 token 不会被当作值消费 | 传 `--option <value>` 或 `--option=<value>` |
 | `E_OPTION_VALUE_INVALID` | boolean option 的 attached value 不是 `true` 或 `false` | 使用 `--option`、`--option=true` 或 `--option=false` |

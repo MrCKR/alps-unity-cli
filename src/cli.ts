@@ -75,7 +75,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     if (parsed.issue) {
       const option = `--${parsed.issue.option}`;
       if (parsed.issue.code === "E_UNKNOWN_OPTION") {
-        return failure(requestId, parsed.issue.code, `Unknown option: ${option}.`, ["Run unity_cli --help for the supported options."], { option });
+        return failure(requestId, parsed.issue.code, `Unknown option: ${option}.`, ["Run unitycli --help for the supported options."], { option });
       }
       if (parsed.issue.code === "E_OPTION_VALUE_REQUIRED") {
         return failure(requestId, parsed.issue.code, `Option ${option} requires a value.`, [`Pass ${option}=<value> or ${option} <value>.`], { option, expected: "value", ...(parsed.issue.actual ? { actual: parsed.issue.actual } : {}) });
@@ -120,7 +120,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       const unknownOption = Object.keys(parsed.flags).find((name) => !allowedOptions.has(name));
       if (unknownOption) {
         return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for ${[group, command].filter(Boolean).join(" ")}: --${unknownOption}.`, [
-          "Run unity_cli --help for the supported options.",
+          "Run unitycli --help for the supported options.",
         ], { option: `--${unknownOption}`, command: [group, command].filter(Boolean).join(" ") });
       }
     }
@@ -142,14 +142,14 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     // Bridge registry 是内部能力路由，公开 Unity 能力统一从 tools run 进入。
     return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, [
       "Top-level commands are: tools, command, extensions, init, target, instances, doctor.",
-      "Run unity_cli tools group or unity_cli command to discover Unity tools.",
-      "Run unity_cli instances list, then pass --instance <id|projectPath|alias> or use a Unity project CWD.",
-      "Run unity_cli --help."
+      "Run unitycli tools group or unitycli command to discover Unity tools.",
+      "Run unitycli instances list, then pass --instance <id|projectPath|alias> or use a Unity project CWD.",
+      "Run unitycli --help."
     ]);
   } catch (error) {
     return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
-      "Run unity_cli --help for available commands.",
-      "Run unity_cli doctor to diagnose the environment."
+      "Run unitycli --help for available commands.",
+      "Run unitycli doctor to diagnose the environment."
     ]);
   }
 }
@@ -188,8 +188,8 @@ async function handleTopLevelTarget(
     return handleTargetCommand("alias", args, flags, runtime.dataDir, requestId);
   }
   return failure(requestId, "UNKNOWN_TARGET_COMMAND", "Expected target alias list|set|unset.", [
-    "Run unity_cli target alias list.",
-    "Run unity_cli target alias set <projectPath|instanceId> <alias>."
+    "Run unitycli target alias list.",
+    "Run unitycli target alias set <projectPath|instanceId> <alias>."
   ]);
 }
 
@@ -220,7 +220,7 @@ async function packageVersion(): Promise<string> {
 
 function help(): Record<string, unknown> {
   return {
-    usage: "unity_cli [options] <command> [options]",
+    usage: "unitycli [options] <command> [options]",
     commands: [
       "tools group [--instance <id|projectPath|alias>]",
       "tools group list <group> [--instance <id|projectPath|alias>]",
@@ -304,7 +304,7 @@ if (isCliEntryPoint(import.meta.url, process.argv[1])) {
   const rawOutput = readRawOutputFlag(argv);
   void execute(stripOutputOnlyFlags(argv)).then(
     (result) => finishCliProcess(result, rawOutput),
-    (error) => finishCliProcess(failure(createRequestId(), "COMMAND_FAILED", error instanceof Error ? error.message : String(error), ["Run unity_cli --help for available commands."]), rawOutput),
+    (error) => finishCliProcess(failure(createRequestId(), "COMMAND_FAILED", error instanceof Error ? error.message : String(error), ["Run unitycli --help for available commands."]), rawOutput),
   );
 }
 

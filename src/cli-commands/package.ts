@@ -18,7 +18,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
   const allowedFlags = new Set(["project", "agent", "pkg-only", "skill-only", "check", "timeout-ms", "raw"]);
   const unknownFlag = Object.keys(flags).find((flag) => !allowedFlags.has(flag));
   if (unknownFlag) {
-    return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for init: --${unknownFlag}.`, ["Run unity_cli --help for the supported init options."]);
+    return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for init: --${unknownFlag}.`, ["Run unitycli --help for the supported init options."]);
   }
 
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
@@ -59,7 +59,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
       const result: Record<string, unknown> = { action: "init_check", projectPath: canonicalProjectPath };
       if (!skillOnly) {
         try {
-          result.package = { status: "installed", bridge: await checkPackageBridge(canonicalProjectPath), nextActions: ["Unity package com.unity_cli is installed via copy mode in Packages/com.unity_cli/."] };
+          result.package = { status: "installed", bridge: await checkPackageBridge(canonicalProjectPath), nextActions: ["Unity package com.alpsckr.unitycli is installed via copy mode in Packages/com.alpsckr.unitycli/."] };
         } catch (error) {
           if (!(error instanceof PackageManagerError)) throw error;
           result.package = { status: "not_installed", code: error.code, message: error.message };

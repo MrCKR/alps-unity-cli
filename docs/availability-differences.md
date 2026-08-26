@@ -8,7 +8,7 @@
 
 ## 外部控制面排除
 
-catalog只包含必须由已打开Unity Editor或development Player提供的项目内自动化。auth、Unity Hub、Editor安装或打开、Cloud、License和proxy配置由系统或官方控制面工具负责；`unity_cli`不会把这些操作包装成Tool、相似名称映射或额外顶层命令。
+catalog只包含必须由已打开Unity Editor或development Player提供的项目内自动化。auth、Unity Hub、Editor安装或打开、Cloud、License和proxy配置由系统或官方控制面工具负责；`unitycli`不会把这些操作包装成Tool、相似名称映射或额外顶层命令。
 
 ## 实例状态
 
@@ -45,10 +45,10 @@ catalog只包含必须由已打开Unity Editor或development Player提供的项�
 项目通过 `IUnityCliTool<TReq,TRes>` 注册的能力，与 package 内置和 Extension 能力使用相同入口：
 
 ```powershell
-unity_cli tools group
-unity_cli tools group list <group>
-unity_cli tools describe <tool>
-unity_cli tools run <tool> --input '<json>'
+unitycli tools group
+unitycli tools group list <group>
+unitycli tools describe <tool>
+unitycli tools run <tool> --input '<json>'
 ```
 
 不同实例可以注册不同名称和分组；不需要额外来源参数，也不存在来源专用能力入口。official attribute Tool固定使用`UnityPipeline_<原名>`和`UnityPipeline`group，可由`command <原名>`选择。
@@ -64,8 +64,8 @@ Editor 与 Runtime 能力在两种模式中都保持可发现。`available`、`u
 
 进入 PlayMode 的标准步骤：
 
-1. `unity_cli tools run editor.play --input '{}'`
-2. `unity_cli tools run editor.state --input '{}'`
+1. `unitycli tools run editor.play --input '{}'`
+2. `unitycli tools run editor.state --input '{}'`
 3. 重新 `tools describe <runtime-tool>` 或直接按 `nextActions` 调用
 
 Editor-only Tool 在 PlayMode 中同样保持可见，但执行继续返回准确错误。

@@ -204,7 +204,7 @@ namespace UnityCli
             }
             if (matches.Count == 0)
             {
-                throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "Target not found: " + target, "Run unity_cli tools run scene.hierarchy or pass a hierarchy path / instance id.");
+                throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "Target not found: " + target, "Run unitycli tools run scene.hierarchy or pass a hierarchy path / instance id.");
             }
             return matches[0];
         }

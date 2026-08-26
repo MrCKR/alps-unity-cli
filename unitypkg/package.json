@@ -1,8 +1,8 @@
 {
-  "name": "com.unity_cli",
+  "name": "com.alpsckr.unitycli",
   "version": "0.3.3",
-  "displayName": "Unity CLI",
-  "description": "Editor package used by Unity CLI commands.",
+  "displayName": "UnityCLI",
+  "description": "Editor package used by UnityCLI commands.",
   "unity": "2022.3",
   "dependencies": {
     "com.unity.ugui": "1.0.0",

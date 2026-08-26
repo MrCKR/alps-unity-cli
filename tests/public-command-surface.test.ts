@@ -11,7 +11,7 @@ test("public help exposes only the frozen top-level command surface", async () =
   assert.match(data.note, /Tool names returned by group list\/search are exact; groups are filters and are never prepended/);
   assert.equal(data.commands.some(command => command.startsWith("command ")), true);
   assert.equal(data.commands.some(command => command.startsWith("context ") || command.startsWith("cmd ")), false);
-  assert.match((result.data as { usage: string }).usage, /^unity_cli \[options\] <command> \[options\]$/);
+  assert.match((result.data as { usage: string }).usage, /^unitycli \[options\] <command> \[options\]$/);
   assert.doesNotMatch(JSON.stringify(data), /\bjobs\b|\bbatch\b|--job\b|--wait\b|wait-timeout-ms|--unity\b|--format\b/);
 });
 

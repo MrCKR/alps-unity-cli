@@ -57,8 +57,8 @@ export interface ExtensionStatusCheck {
   nextActions: string[];
 }
 
-const packageName = "com.unity_cli";
-const manifestFileName = "unity_cli.extensions.manifest.json";
+const packageName = "com.alpsckr.unitycli";
+const manifestFileName = "unitycli.extensions.manifest.json";
 const manifestLockTimeoutMs = 15_000;
 const processStartIdentity = new Date(Date.now() - Math.floor(process.uptime() * 1_000)).toISOString();
 
@@ -145,7 +145,7 @@ export async function installExtensionBundle(projectPath: string, manifest: Exte
       `Extension "${manifest.id}" requires missing Unity package(s): ${missing}`,
       [
         `Install the Unity package first: ${missing}`,
-        `Then run unity_cli extensions install ${manifest.id} --project <path>.`,
+        `Then run unitycli extensions install ${manifest.id} --project <path>.`,
         "The CLI does not install optional Unity packages automatically."
       ]
     );
@@ -174,7 +174,7 @@ export async function installExtensionBundleUnchecked(
 ): Promise<ExtensionInstallResult> {
   const sourceRoot = sourceRootForTest?.(manifest.id) ?? extensionSourceRoot(manifest.id);
   if (!existsSync(sourceRoot)) {
-    throw new ExtensionInstallerError("E_EXTENSION_BUNDLE_MISSING", `Extension source directory not found: ${sourceRoot}`, ["Reinstall or rebuild the unity_cli package."]);
+    throw new ExtensionInstallerError("E_EXTENSION_BUNDLE_MISSING", `Extension source directory not found: ${sourceRoot}`, ["Reinstall or rebuild the @alpsckr/unitycli package."]);
   }
 
   return withExtensionManifestLock(projectPath, async () => {
@@ -224,7 +224,7 @@ export async function installExtensionBundleUnchecked(
       }
       const freshManifest = await readExtensionInstallManifest(projectPath);
       if (!freshManifest.extensions.some((item) => item.extensionId === manifest.id && item.sourceHash === sourceHash)) {
-        throw new ExtensionInstallerError("E_EXTENSION_INSTALL_MANIFEST_INVALID", "Extension install manifest readback did not contain the installed projection.", ["Inspect Packages/com.unity_cli/unity_cli.extensions.manifest.json before retrying."]);
+        throw new ExtensionInstallerError("E_EXTENSION_INSTALL_MANIFEST_INVALID", "Extension install manifest readback did not contain the installed projection.", ["Inspect Packages/com.alpsckr.unitycli/unitycli.extensions.manifest.json before retrying."]);
       }
 
       return {
@@ -252,7 +252,7 @@ export async function removeExtensionBundle(projectPath: string, extensionId: Ex
     const installManifest = await readExtensionInstallManifest(projectPath);
     const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
     if (!entry) {
-      throw new ExtensionInstallerError("EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unity_cli extensions list --project <path> to inspect extension state."]);
+      throw new ExtensionInstallerError("EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unitycli extensions list --project <path> to inspect extension state."]);
     }
 
     const targetRoot = extensionInstallRoot(projectPath, extensionId);
@@ -590,15 +590,15 @@ function nextActionsForStatus(manifest: ExtensionManifest, availability: Extensi
     return [
       `Install ${availability.missingPackageIds.join(", ")} manually via the Unity Package Manager or Packages/manifest.json.`,
       "Run tools run package.resolve after changing Packages/manifest.json.",
-      `Then run unity_cli extensions install ${manifest.id} --project <path>.`,
+      `Then run unitycli extensions install ${manifest.id} --project <path>.`,
       "The CLI does not install optional Unity packages automatically."
     ];
   }
   if (status === "available_not_installed") {
-    return [`Run unity_cli extensions install ${manifest.id} --project <path> to install the optional Unity-side extension directory.`];
+    return [`Run unitycli extensions install ${manifest.id} --project <path> to install the optional Unity-side extension directory.`];
   }
   if (status === "outdated") {
-    return [`Run unity_cli extensions install ${manifest.id} --project <path> to refresh managed extension files.`];
+    return [`Run unitycli extensions install ${manifest.id} --project <path> to refresh managed extension files.`];
   }
   if (status === "unknown_files") {
     return [`Inspect Packages/${packageName}/Extensions/${manifest.id}; extension remove only deletes files listed in ${manifestFileName}.`];

@@ -1,8 +1,8 @@
-# unity_cli
+# UnityCLI
 
-CLI-first Unity 自动化工具，不是 MCP server。通过 `unity_cli` 二进制命令行直接驱动 Unity Editor，无需额外协议层。
+CLI-first Unity 自动化工具，不是 MCP server。通过 `unitycli` 二进制命令行直接驱动 Unity Editor，无需额外协议层。
 
-npm 包名：`@alpsckr/unity_cli`
+npm 包名：`@alpsckr/unitycli`
 运行环境：Windows + Node.js 20+  
 当前方向：冻结决策 - 独立 CLI 实现、Windows-only、npm-first 安装；公开 Tool 与 CLI 控制面调用即授权。
 
@@ -48,18 +48,18 @@ Unity项目内容与Editor能力域必须进入唯一Tool catalog，例如scene�
 AI 的标准流程是：
 
 ```text
-unity_cli tools group/search
-unity_cli tools describe <tool>
-unity_cli tools run <tool> --input <json>
-unity_cli command
-unity_cli command <name> --field <value>
+unitycli tools group/search
+unitycli tools describe <tool>
+unitycli tools run <tool> --input <json>
+unitycli command
+unitycli command <name> --field <value>
 
-unity_cli target alias list/set/unset
-unity_cli instances list/prune
-unity_cli doctor
+unitycli target alias list/set/unset
+unitycli instances list/prune
+unitycli doctor
 
-unity_cli extensions list/install/remove/doctor
-unity_cli init
+unitycli extensions list/install/remove/doctor
+unitycli init
 ```
 
 具体有哪些工具、工具参数是什么、风险边界是什么，应由AI通过本CLI内置的`tools group/search/describe`自发现。省略name的`command`只返回同一live catalog的command投影，不是第二份能力目录。
@@ -68,17 +68,17 @@ unity_cli init
 
 ```powershell
 # 安装
-npm install -g @alpsckr/unity_cli
+npm install -g @alpsckr/unitycli
 
 # 初始化项目（安装 Bridge 包；若项目已有 .pi/.claude/.agents，则自动安装 Skill）
-unity_cli init --project C:\path\MyProject
+unitycli init --project C:\path\MyProject
 
-# Bridge AutoStart默认开启；项目级开关位于Unity的Project Settings > Unity CLI
+# Bridge AutoStart默认开启；项目级开关位于Unity的Project Settings > UnityCLI
 # 修改后从下一次Domain Reload或Editor启动生效
 
 # 查看帮助
-unity_cli --help
-unity_cli --version
+unitycli --help
+unitycli --version
 ```
 
 ## 核心使用流程
@@ -88,15 +88,15 @@ unity_cli --version
 ```powershell
 # 默认只列非 offline 实例；hiddenOfflineCount 表示被隐藏数量
 # invalidRecordCount 出现时表示旧/坏记录已隔离，合法v3实例仍会返回
-unity_cli instances list
+unitycli instances list
 # 需要审计历史/offline 合法记录时显式展开
-unity_cli instances list --all
+unitycli instances list --all
 
 # 已知实例时，在后续每条 Bridge 命令上显式传入
-unity_cli tools group --instance <instanceId>
+unitycli tools group --instance <instanceId>
 # 可先创建稳定别名，再继续显式传入
-unity_cli target alias set <instanceId> my-project
-unity_cli tools group --instance my-project
+unitycli target alias set <instanceId> my-project
+unitycli tools group --instance my-project
 ```
 
 ### 2. 发现工具能力（group-first 路径）
@@ -105,18 +105,18 @@ unity_cli tools group --instance my-project
 
 ```powershell
 # 第一步：查看工具分组
-unity_cli tools group
+unitycli tools group
 
 # 第二步：按组查看工具摘要
-unity_cli tools group list camera
+unitycli tools group list camera
 # 或搜索关键词（使用 | 分隔多关键词，OR 匹配；PowerShell必须单引号包住整段）
-unity_cli tools search 'screenshot|camera'
+unitycli tools search 'screenshot|camera'
 
 # 第三步：查看工具完整描述（执行前必做）
-unity_cli tools describe camera.screenshot
+unitycli tools describe camera.screenshot
 
 # 第四步：执行工具
-unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":"Artifacts/shot.png"}'
+unitycli tools run camera.screenshot --input '{"target":"Main Camera","output":"Artifacts/shot.png"}'
 ```
 
 ### 3. 获取只读项目信息
@@ -125,12 +125,12 @@ unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":
 
 ```powershell
 # Unity API 文档
-unity_cli tools run docs.get UnityEngine.Camera
-unity_cli tools run docs.search "Render Pipeline"
+unitycli tools run docs.get UnityEngine.Camera
+unitycli tools run docs.search "Render Pipeline"
 
 # 类型反射
-unity_cli tools run reflect.type UnityEngine.Camera
-unity_cli tools run reflect.member UnityEngine.Camera.fieldOfView
+unitycli tools run reflect.type UnityEngine.Camera
+unitycli tools run reflect.member UnityEngine.Camera.fieldOfView
 ```
 
 > **注意**：项目与 Editor 状态同样通过 `tools group/search/describe/run` 发现和读取；读取型 Tool 明确声明无副作用。
@@ -141,11 +141,11 @@ Unity 项目可通过异步 C# `IUnityCliTool<TReq,TRes>` 注册能力；完成�
 
 ```powershell
 # 从当前实例目录发现真实 group
-unity_cli tools group --instance <id|projectPath|alias>
+unitycli tools group --instance <id|projectPath|alias>
 
 # 描述并执行项目 Tool
-unity_cli tools describe my.custom-tool --instance <id|projectPath|alias>
-unity_cli tools run my.custom-tool --input '{"key":"value"}' --instance <id|projectPath|alias>
+unitycli tools describe my.custom-tool --instance <id|projectPath|alias>
+unitycli tools run my.custom-tool --input '{"key":"value"}' --instance <id|projectPath|alias>
 ```
 
 > **注意**：不要假设项目能力位于 `custom` 分组。可通过 `extensions list` 查看已安装扩展，`extensions install <id>` / `extensions remove <id>` 管理扩展，`extensions doctor` 诊断扩展状态。
@@ -156,14 +156,14 @@ unity_cli tools run my.custom-tool --input '{"key":"value"}' --instance <id|proj
 
 ```powershell
 # 列出当前实例可调用名称
-unity_cli command --project-path C:\path\MyProject
+unitycli command --project-path C:\path\MyProject
 
 # native Tool使用完整Tool名
-unity_cli command editor.compile --refresh true --includeWarnings true
+unitycli command editor.compile --refresh true --includeWarnings true
 
 # [CliCommand("test")]在tools中名为UnityPipeline_test，command可用attribute原名
-unity_cli command test --mode EditMode
-unity_cli command UnityPipeline_test --mode EditMode
+unitycli command test --mode EditMode
+unitycli command UnityPipeline_test --mode EditMode
 ```
 
 命令名和业务字段exact匹配，不做snake_case、camelCase、相似名称或语义映射。native完整精确名优先；重名attribute仍通过`UnityPipeline_`完整名调用。
@@ -174,10 +174,10 @@ unity_cli command UnityPipeline_test --mode EditMode
 
 ```powershell
 # 运行完整诊断
-unity_cli doctor
+unitycli doctor
 
 # 诊断预检（通过 Bridge）
-unity_cli tools run diagnose.preflight
+unitycli tools run diagnose.preflight
 ```
 
 ## 安全边界
@@ -193,7 +193,7 @@ unity_cli tools run diagnose.preflight
 
 ```powershell
 # 全局安装
-npm install -g @alpsckr/unity_cli
+npm install -g @alpsckr/unitycli
 
 # 本地开发
 npm install
@@ -241,42 +241,42 @@ npm link
 公开能力不维护静态命令清单。Tool 的当前输入 schema、可用性、示例与调用边界以 CLI discovery 为准；结果 schema 留在内部 contract 中校验实际业务 data：
 
 ```powershell
-unity_cli tools group
-unity_cli tools group list <group>
-unity_cli tools search <k1|k2|...>
-unity_cli tools describe <tool-name>
-unity_cli tools run <tool-name> --input '<json>' [--instance <id|projectPath|alias>]
+unitycli tools group
+unitycli tools group list <group>
+unitycli tools search <k1|k2|...>
+unitycli tools describe <tool-name>
+unitycli tools run <tool-name> --input '<json>' [--instance <id|projectPath|alias>]
 ```
 
 Tool discovery 必须绑定已连接实例；未连接时返回稳定 instance error，不返回静态或空目录。连接后完整显示 package 内置、Extension、项目注册、Editor 与 Runtime 能力，不按 `source` 或当前模式过滤。`source` 只作内部描述/审计。`examples[].input` 是结构化业务 JSON，按需 `examples[].execution` 承载 dryRun/timeoutMs；调用方明确要求的业务值优先于schema default和example值。业务参数全部放入 `--input`、`--input-file` 或 `--stdin`，命令控制项不混入业务 JSON。
 
-Bridge-backed Tool在Unity主线程执行。CLI使用Registry/Health v3与只读内存pulse，在一个不可变deadline内处理compile、import、domain reload和listener generation交接。mutation只允许在同一`editorSessionId`内用完全相同的请求续接；首次POST后session改变时禁止向新session重投，并返回outcome unknown的`E_EXECUTION_TIMEOUT`。`unity_cli tools run editor.state --input '{}'`、`editor.dialogs`与`editor.dialog.click`使用exact frozen本地descriptor进入同一dispatcher，因此统一状态观察和弹窗恢复不依赖被阻断的Live catalog；其他Tool仍严格依赖Live catalog。
+Bridge-backed Tool在Unity主线程执行。CLI使用Registry/Health v3与只读内存pulse，在一个不可变deadline内处理compile、import、domain reload和listener generation交接。mutation只允许在同一`editorSessionId`内用完全相同的请求续接；首次POST后session改变时禁止向新session重投，并返回outcome unknown的`E_EXECUTION_TIMEOUT`。`unitycli tools run editor.state --input '{}'`、`editor.dialogs`与`editor.dialog.click`使用exact frozen本地descriptor进入同一dispatcher，因此统一状态观察和弹窗恢复不依赖被阻断的Live catalog；其他Tool仍严格依赖Live catalog。
 
 ### 实例与目标
 
 ```powershell
 # 默认隐藏 offline，使用 --all 展开完整集合
-unity_cli instances list
-unity_cli instances list --all
-unity_cli instances prune
+unitycli instances list
+unitycli instances list --all
+unitycli instances prune
 ```
 
 实例文件逐个按Registry v3校验。旧格式、损坏或不可读记录不会阻断其他合法实例，也不会被兼容解析或自动删除；存在时list/prune返回`invalidRecordCount`，`doctor`报告warn。显式选择对应坏记录仍严格失败。
 
 ```powershell
 # target 只管理 canonical project identity 的别名
-unity_cli target alias set <projectPath|instanceId> <alias>
-unity_cli target alias unset <alias>
-unity_cli target alias list
+unitycli target alias set <projectPath|instanceId> <alias>
+unitycli target alias unset <alias>
+unitycli target alias list
 ```
 
 实例与目标属于 CLI 控制面，只使用顶层 `instances` / `target`；不要通过 `tools run` 包装这些控制面状态。
 
-`doctor`、`instances`、`target alias` 和 `extensions` 属于 CLI 控制面。扩展源码以 `extensions/<id>/` 组织，安装后投影到 `Packages/com.unity_cli/Extensions/<id>/`；Extension 贡献的 Tool 仍通过统一 discovery 入口发现。
+`doctor`、`instances`、`target alias` 和 `extensions` 属于 CLI 控制面。扩展源码以 `extensions/<id>/` 组织，安装后投影到 `Packages/com.alpsckr.unitycli/Extensions/<id>/`；Extension 贡献的 Tool 仍通过统一 discovery 入口发现。
 
 ## 初始化（init）
 
-`init` 安装捆绑的 `com.unity_cli` Bridge 包到目标 Unity 项目；如果项目根目录已经存在 `.pi`、`.claude` 或 `.agents`，会自动安装对应 AI Agent Skill。也可以用 `--agent` 显式指定目标。Skill 以 `SKILL.md`、`references/**`、`scripts/**` 完整 runtime bundle 安装，`--check` 校验全部 managed 文件；更新会保留已安装 `SKILL.md` 中合法的 `FeedbackMode: off|on`。
+`init` 安装捆绑的 `com.alpsckr.unitycli` Bridge 包到目标 Unity 项目；如果项目根目录已经存在 `.pi`、`.claude` 或 `.agents`，会自动安装对应 AI Agent Skill。也可以用 `--agent` 显式指定目标。Skill 以 `SKILL.md`、`references/**`、`scripts/**` 完整 runtime bundle 安装，`--check` 校验全部 managed 文件；更新会保留已安装 `SKILL.md` 中合法的 `FeedbackMode: off|on`。
 
 | 标志 | 含义 |
 |------|------|
@@ -288,23 +288,23 @@ unity_cli target alias list
 
 ```powershell
 # 默认安装 Bridge；若项目已有 .pi/.claude/.agents，则自动安装 Skill
-unity_cli init --project C:\path\MyProject
+unitycli init --project C:\path\MyProject
 
 # 仅 Bridge 包
-unity_cli init --project C:\path\MyProject --pkg-only
+unitycli init --project C:\path\MyProject --pkg-only
 
 # 显式安装 Skill 到 pi
-unity_cli init --project C:\path\MyProject --skill-only --agent pi
+unitycli init --project C:\path\MyProject --skill-only --agent pi
 
 # 检查安装状态；未传 --agent 时同样会检查已存在的 Agent 目录
-unity_cli init --check --project C:\path\MyProject
+unitycli init --check --project C:\path\MyProject
 ```
 
 `FeedbackMode` 默认 `off`。改为 `on` 后，使用该 Skill 的 Agent 只在实际遇到失败、歧义、缺失、误导或成功绕过的坑点时，调用 bundle 内 recorder 写入 `%LOCALAPPDATA%\UnityCli\feedback\` 的有界 JSONL；正常调用不记录，也不联网。
 
 ## Unity Editor Bridge
 
-`init` 以 copy 模式把 `com.unity_cli` 安装到 `Packages/com.unity_cli/`。已打开的 Unity Editor 自动注册 canonical project identity 和 Live listener；CLI 通过 `instances list` 与 `--instance` 选择唯一会话，公开接口不接受 endpoint 或 port。
+`init` 以 copy 模式把 `com.alpsckr.unitycli` 安装到 `Packages/com.alpsckr.unitycli/`。已打开的 Unity Editor 自动注册 canonical project identity 和 Live listener；CLI 通过 `instances list` 与 `--instance` 选择唯一会话，公开接口不接受 endpoint 或 port。
 
 Bridge command、handler、journal、fingerprint、listener generation和completion contract都是内部实现，不构成第二套用户入口。mutation在首个真实effect前持久化effect barrier；effect后只有fresh business readback或artifact proof能完成。同一次调用只在`editorSessionId`不变时续接完全相同的请求；首次POST后session改变则禁止重投。无法证明终态时返回`E_EXECUTION_TIMEOUT`，调用方先观察业务状态，再作全新提交决策。
 
@@ -312,13 +312,13 @@ Bridge command、handler、journal、fingerprint、listener generation和complet
 
 ## 项目自定义工具（Custom Tools）
 
-Unity 项目 C# 代码可通过异步 `IUnityCliTool<TReq,TRes>` 注册自定义能力。schema 由 DTO 派生；Tool 必须声明完整 direct completion contract，并在全部可预见校验后、首个 mutation 前调用一次 `ctx.CommitEffect()`。当前接口与完整示例见 [Custom Tools](skills/unity_cli/references/custom-tools.md)。
+Unity 项目 C# 代码可通过异步 `IUnityCliTool<TReq,TRes>` 注册自定义能力。schema 由 DTO 派生；Tool 必须声明完整 direct completion contract，并在全部可预见校验后、首个 mutation 前调用一次 `ctx.CommitEffect()`。当前接口与完整示例见 [Custom Tools](skills/unitycli/references/custom-tools.md)。
 
 ```powershell
-unity_cli tools group --instance <id|projectPath|alias>
-unity_cli tools group list <real-group> --instance <id|projectPath|alias>
-unity_cli tools describe my.editor-tool --instance <id|projectPath|alias>
-unity_cli tools run my.editor-tool --input '{"message":"hello"}' --instance <id|projectPath|alias>
+unitycli tools group --instance <id|projectPath|alias>
+unitycli tools group list <real-group> --instance <id|projectPath|alias>
+unitycli tools describe my.editor-tool --instance <id|projectPath|alias>
+unitycli tools run my.editor-tool --input '{"message":"hello"}' --instance <id|projectPath|alias>
 ```
 
 ### 统一 Tool 与 target
@@ -340,10 +340,10 @@ unity_cli tools run my.editor-tool --input '{"message":"hello"}' --instance <id|
 ProBuilder 工具需要项目先安装精确版本 `com.unity.probuilder@5.2.4`，再安装 CLI 扩展目录；其他版本不执行基于 5.2.4 源码闭合的 mutation proof：
 
 ```powershell
-unity_cli extensions install probuilder --project <project>
-unity_cli tools group list probuilder --instance <id|projectPath|alias>
-unity_cli tools describe probuilder.create-shape --instance <id|projectPath|alias>
-unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":"MyCube"}' --instance <id|projectPath|alias>
+unitycli extensions install probuilder --project <project>
+unitycli tools group list probuilder --instance <id|projectPath|alias>
+unitycli tools describe probuilder.create-shape --instance <id|projectPath|alias>
+unitycli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":"MyCube"}' --instance <id|projectPath|alias>
 ```
 
 ## 风险与副作用
@@ -371,8 +371,8 @@ unity_cli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":
 - [错误码](docs/error-codes.md) — 结构化错误与 nextActions
 - [可用性差异](docs/availability-differences.md) — 不同实例的工具有效性
 - [扩展包](docs/extensions.md) — 可选扩展安装、卸载与诊断
-- [自定义 Tool](skills/unity_cli/references/custom-tools.md) — 项目侧 Tool 注册开发
-- [AI Agent Skill](skills/unity_cli/SKILL.md) — Agent 最小入口卡片
+- [自定义 Tool](skills/unitycli/references/custom-tools.md) — 项目侧 Tool 注册开发
+- [AI Agent Skill](skills/unitycli/SKILL.md) — Agent 最小入口卡片
 
 ## 本地开发
 
@@ -381,7 +381,7 @@ npm install
 npm run build
 npm test
 npm link
-unity_cli --help
+unitycli --help
 ```
 
 ## 许可证

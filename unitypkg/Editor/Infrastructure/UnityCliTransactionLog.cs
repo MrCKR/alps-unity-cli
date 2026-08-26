@@ -39,7 +39,7 @@ namespace UnityCli
                 var lineBytes = encoding.GetByteCount(line);
                 if (lineBytes > MaxLogFileBytes)
                 {
-                    Debug.LogWarning("Unity CLI transaction log entry exceeded the bounded segment size and was omitted.");
+                    Debug.LogWarning("UnityCLI transaction log entry exceeded the bounded segment size and was omitted.");
                     return;
                 }
                 lock (Sync)
@@ -54,7 +54,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                Debug.LogWarning("Unity CLI transaction log write failed: " + exception.Message);
+                Debug.LogWarning("UnityCLI transaction log write failed: " + exception.Message);
             }
         }
 
@@ -79,7 +79,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                Debug.LogWarning("Unity CLI transaction log rotation failed: " + exception.Message);
+                Debug.LogWarning("UnityCLI transaction log rotation failed: " + exception.Message);
             }
         }
 

@@ -30,16 +30,16 @@ Unity Cinemachine 智能相机系统的 CLI 工具集。支持 Cinemachine CM2 �
 
 ```bash
 # 列出 Cinemachine 工具
-unity_cli tools group list cinemachine --project <project-path>
+unitycli tools group list cinemachine --project <project-path>
 
 # 调用前读取完整 schema、preset 集合和 examples
-unity_cli tools describe cinemachine.create --project <project-path>
+unitycli tools describe cinemachine.create --project <project-path>
 
 # 检测 Cinemachine 可用性
-unity_cli tools run cinemachine.ping --project <project-path> --input '{}'
+unitycli tools run cinemachine.ping --project <project-path> --input '{}'
 
 # 创建跟随相机；非法 preset 返回 E_CINEMACHINE_PRESET_INVALID，且不会创建对象
-unity_cli tools run cinemachine.create --project <project-path> --input '{"preset":"follow","name":"PlayerCam","follow":"Player"}'
+unitycli tools run cinemachine.create --project <project-path> --input '{"preset":"follow","name":"PlayerCam","follow":"Player"}'
 ```
 
 ## 依赖缺失时的行为

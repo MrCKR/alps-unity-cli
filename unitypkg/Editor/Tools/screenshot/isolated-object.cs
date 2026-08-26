@@ -53,7 +53,7 @@ namespace UnityCli
             var height = Math.Max(1, request.Height ?? 512);
             var format = outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
 
-            var tempGo = new GameObject("__unity_cli_isolated_cam__");
+            var tempGo = new GameObject("__unitycli_isolated_cam__");
             var cam = tempGo.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1f);

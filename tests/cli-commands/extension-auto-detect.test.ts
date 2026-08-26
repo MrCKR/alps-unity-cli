@@ -33,9 +33,9 @@ async function makeProjectDir(installedPackages: Record<string, string> = {}, en
   );
 
   if (enabledExtensions.length > 0) {
-    await mkdir(join(dir, "Packages", "com.unity_cli"), { recursive: true });
+    await mkdir(join(dir, "Packages", "com.alpsckr.unitycli"), { recursive: true });
     await writeFile(
-      join(dir, "Packages", "com.unity_cli", "extensions.json"),
+      join(dir, "Packages", "com.alpsckr.unitycli", "extensions.json"),
       JSON.stringify({ extensions: enabledExtensions })
     );
   }

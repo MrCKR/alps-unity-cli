@@ -752,7 +752,7 @@ function bindingFrom(instance: UnityInstance): ValidatedBinding {
   if (!session) {
     throw new SessionSupervisorError("E_INSTANCE_NOT_RUNNING", "The selected Unity project has no validated Bridge listener.", [
       "Open this exact Unity project in Unity Editor.",
-      "Run unity_cli instances list to inspect its current state.",
+      "Run unitycli instances list to inspect its current state.",
     ], publicSessionDetails(instance));
   }
   return {
@@ -796,7 +796,7 @@ function admissionPollDelay(randomValue: number): number {
 
 function admissionBusy(instanceId: string, timeoutMs: number): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_BUSY", "The Unity task pool did not reopen before the admission deadline; no business request was sent.", [
-    "Wait for active Unity CLI tasks to finish, then submit a new request.",
+    "Wait for active UnityCLI tasks to finish, then submit a new request.",
   ], { instanceId, phase: "admission", businessRequestSent: false, waitedMs: timeoutMs }, true, REGISTRY_POLL_INTERVAL_MS);
 }
 
@@ -834,7 +834,7 @@ function publicSessionDetails(instance: UnityInstance): Record<string, unknown> 
 
 function blocked(instance: UnityInstance): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_BLOCKED", "Unity Editor is blocked by an external modal window or non-recoverable session condition.", [
-    "Run unity_cli tools run editor.state for the current blocker snapshot.",
+    "Run unitycli tools run editor.state for the current blocker snapshot.",
     "Resolve the reported blocker in the selected Unity Editor process, then retry.",
   ], publicSessionDetails(instance));
 }
@@ -847,26 +847,26 @@ function observedTransition(instance: UnityInstance): SessionSupervisorError {
 
 function unverifiable(instance: UnityInstance): SessionSupervisorError {
   return new SessionSupervisorError("E_INSTANCE_UNVERIFIABLE", "Unity process ownership could not be verified safely.", [
-    "Run unity_cli instances list or tools run editor.state to observe the identity again.",
+    "Run unitycli instances list or tools run editor.state to observe the identity again.",
     "Do not retry a prior mutation whose outcome is unknown.",
   ], publicSessionDetails(instance), true, REGISTRY_POLL_INTERVAL_MS);
 }
 
 function unresponsive(instance: UnityInstance): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_UNRESPONSIVE", "Unity transport is present but the selected main thread did not become responsive before the request deadline.", [
-    "Run unity_cli tools run editor.state to check for a transition or external modal blocker.",
+    "Run unitycli tools run editor.state to check for a transition or external modal blocker.",
   ], publicSessionDetails(instance), true, REGISTRY_POLL_INTERVAL_MS);
 }
 
 function selectionTransitionTimeout(instanceId: string, absoluteDeadlineMs: number): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_TRANSITION_TIMEOUT", "Unity instance selection did not complete before the request deadline.", [
-    "Run unity_cli tools run editor.state to inspect current progress or blockers.",
+    "Run unitycli tools run editor.state to inspect current progress or blockers.",
   ], { instanceId, absoluteDeadlineUtc: new Date(absoluteDeadlineMs).toISOString() });
 }
 
 function transitionTimeout(instance: UnityInstance, absoluteDeadlineMs: number): SessionSupervisorError {
   return new SessionSupervisorError("E_UNITY_TRANSITION_TIMEOUT", "Unity Editor did not reach a validated ready generation before the request deadline.", [
-    "Run unity_cli tools run editor.state to inspect current progress or blockers.",
+    "Run unitycli tools run editor.state to inspect current progress or blockers.",
     "Retry with a larger --timeout-ms only when the transition is expected to take longer.",
   ], { ...publicSessionDetails(instance), absoluteDeadlineUtc: new Date(absoluteDeadlineMs).toISOString() });
 }
@@ -896,16 +896,16 @@ function blockedObservation(instanceId: string, observation: EditorBlockerObserv
 
 function blockerNextActions(): string[] {
   return [
-    "Run unity_cli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.",
-    "Run unity_cli tools run editor.dialogs to inspect the current modal dialog.",
-    "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
+    "Run unitycli tools run editor.state to check whether the Editor is still transitioning and wait until it reports ready.",
+    "Run unitycli tools run editor.dialogs to inspect the current modal dialog.",
+    "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label.",
   ];
 }
 
 /** effect可能已发生时只建议状态观察，不暗示自动重投或用dialog操作替代业务readback。 */
 function outcomeUnknownNextActions(): string[] {
   return [
-    "Run unity_cli tools run editor.state to observe the selected Editor before making a new submission decision.",
+    "Run unitycli tools run editor.state to observe the selected Editor before making a new submission decision.",
     "Use the affected capability's read-only Tool or artifact readback to determine whether the prior mutation took effect.",
   ];
 }
@@ -918,14 +918,14 @@ function blockerObservationConflict(instanceId: string, observation: EditorBlock
 
 function identityMismatch(instanceId: string): SessionSupervisorError {
   return new SessionSupervisorError("E_INSTANCE_IDENTITY_MISMATCH", "Bridge response identity does not match the validated listener generation.", [
-    "Run unity_cli instances list and retry after the selected session is stable.",
+    "Run unitycli instances list and retry after the selected session is stable.",
   ], { instanceId });
 }
 
 function connectionFailure(instanceId: string, error: unknown): SessionSupervisorError {
   return new SessionSupervisorError("BRIDGE_CONNECTION_FAILED", errorMessage(error), [
-    "Run unity_cli instances list and inspect the selected Unity session.",
-    "Run unity_cli tools run editor.state for transition or blocker details.",
+    "Run unitycli instances list and inspect the selected Unity session.",
+    "Run unitycli tools run editor.state for transition or blocker details.",
   ], { instanceId }, true, REGISTRY_POLL_INTERVAL_MS);
 }
 

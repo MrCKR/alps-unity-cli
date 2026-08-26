@@ -246,8 +246,8 @@ export async function handleInstancesCommand(
   }
 
   return failure(requestId, "UNKNOWN_INSTANCES_COMMAND", "Expected instances list or instances prune.", [
-    "Run unity_cli instances list to inspect project identities and Editor sessions.",
-    "Run unity_cli instances prune to request writer-owned cleanup.",
+    "Run unitycli instances list to inspect project identities and Editor sessions.",
+    "Run unitycli instances prune to request writer-owned cleanup.",
   ]);
 }
 
@@ -261,7 +261,7 @@ export async function handleTargetCommand(
 ): Promise<CliResult> {
   if (command !== "alias") {
     return failure(requestId, "UNKNOWN_TARGET_COMMAND", "Only target alias list|set|unset is supported.", [
-      "Run unity_cli target alias list.",
+      "Run unitycli target alias list.",
       "Pass --instance <instanceId|projectPath|alias> or run from a Unity project directory.",
     ]);
   }
@@ -310,7 +310,7 @@ async function handleTargetAliasCommand(
       const existing = store.aliases.find((binding) => binding.alias === alias);
       if (existing && existing.instanceId !== identity.instanceId && !getBoolean(flags, "force")) {
         return failure(requestId, "E_TARGET_ALIAS_CONFLICT", `Target alias already points to another project identity: ${alias}.`, [
-          "Run unity_cli target alias unset <alias> before assigning it.",
+          "Run unitycli target alias unset <alias> before assigning it.",
           "Pass --force to replace the binding deliberately.",
         ], { alias, existingInstanceId: existing.instanceId, requestedInstanceId: identity.instanceId });
       }
@@ -332,7 +332,7 @@ async function handleTargetAliasCommand(
     const alias = positional[0] ?? stringFlag(flags, "alias");
     const existing = alias ? store.aliases.find((binding) => binding.alias === alias) : undefined;
     if (!alias || !existing) {
-      return failure(requestId, "E_INSTANCE_NOT_FOUND", `Target alias not found: ${alias ?? ""}.`, ["Run unity_cli target alias list."]);
+      return failure(requestId, "E_INSTANCE_NOT_FOUND", `Target alias not found: ${alias ?? ""}.`, ["Run unitycli target alias list."]);
     }
     await writeAliasStore(dataDir, { version: 2, revision: store.revision + 1, aliases: store.aliases.filter((binding) => binding.alias !== alias) });
     return success(requestId, { alias, instanceId: existing.instanceId });
@@ -520,7 +520,7 @@ function missingSelectedInstance(identity: ProjectIdentity, explicit: string | u
   const code = explicit && INSTANCE_ID_PATTERN.test(explicit) ? "E_INSTANCE_NOT_FOUND" : target === "runtime" ? "E_RUNTIME_NOT_RUNNING" : "E_INSTANCE_NOT_RUNNING";
   return new InstanceRegistryError(code, `No ${target} registry record exists for the selected project identity.`, [
     target === "runtime" ? "Launch a development Player built from this exact Unity project." : "Open this exact Unity project in Unity Editor.",
-    "Run unity_cli instances list to inspect known project identities.",
+    "Run unitycli instances list to inspect known project identities.",
   ], { instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath, target });
 }
 
@@ -535,14 +535,14 @@ function targetNotRunning(instance: UnityInstance, target: InstanceTarget): Inst
 function targetConflict(instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
   return new InstanceRegistryError("E_INSTANCE_CONFLICT", `Multiple verified ${target} processes claim the selected canonical project identity.`, [
     `Close every duplicate ${target} process except the intended session.`,
-    "Run unity_cli instances list to inspect all verified claimants.",
+    "Run unitycli instances list to inspect all verified claimants.",
   ], { instance: instanceListSummary(instance), target });
 }
 
 /** identity观察不完整时fail closed，但不得建议关闭并不存在的duplicate。 */
 function targetUnverifiable(instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
   return new InstanceRegistryError("E_INSTANCE_UNVERIFIABLE", `The selected ${target} process identity could not be verified safely.`, [
-    "Run unity_cli instances list or tools run editor.state to observe the current identity again.",
+    "Run unitycli instances list or tools run editor.state to observe the current identity again.",
     "Do not retry a prior mutation whose outcome is unknown.",
   ], { instance: instanceListSummary(instance), target },);
 }
@@ -918,7 +918,7 @@ async function readRegistryRecord(dataDir: string, instanceId: string, deadlineM
     throw new InstanceRegistryError(
       "E_INSTANCE_IDENTITY_MISMATCH",
       "The selected instance registry record does not satisfy the v3 canonical identity contract.",
-      ["Update or restart the selected Unity project with the matching unity_cli package before selecting it again."],
+      ["Update or restart the selected Unity project with the matching UnityCLI package before selecting it again."],
       { instanceId },
     );
   }
@@ -1168,11 +1168,11 @@ async function resolveSelectorIdentity(selector: string, dataDir: string, observ
   if (INSTANCE_ID_PATTERN.test(selector)) {
     // instanceId 已决定固定文件名；直接读取才能对 Windows replace 窗口做有界重试。
     const record = await readRegistryRecord(dataDir, selector, observationDeadlineMs);
-    if (!record) throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project identity not found: ${selector}.`, ["Pass an existing project path or run unity_cli instances list."]);
+    if (!record) throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project identity not found: ${selector}.`, ["Pass an existing project path or run unitycli instances list."]);
     return projectIdentityFromRegistry(record.identity);
   }
   if (!looksLikePath(selector)) {
-    throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project alias not found: ${selector}.`, ["Run unity_cli target alias list or pass a project path."]);
+    throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project alias not found: ${selector}.`, ["Run unitycli target alias list or pass a project path."]);
   }
   return observationBudgetMs === undefined
     ? resolveProjectIdentity(selector)

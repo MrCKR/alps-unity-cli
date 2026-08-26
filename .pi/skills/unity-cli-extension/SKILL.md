@@ -1,10 +1,10 @@
 ---
 name: unity-cli-extension
-description: unity_cli Extension 的目录结构、manifest、Unity package 依赖、Bridge descriptor、安装投影、availability 与同步更新硬规范。新增、修改、删除任何 extensions/<id> 内容或扩展贡献的 Tool 时必须先完整读取；同时必须加载 unity-cli-capability。
+description: unitycli Extension 的目录结构、manifest、Unity package 依赖、Bridge descriptor、安装投影、availability 与同步更新硬规范。新增、修改、删除任何 extensions/<id> 内容或扩展贡献的 Tool 时必须先完整读取；同时必须加载 unity-cli-capability。
 compatibility: 适用于 alps-unity-cli 仓库的 extensions 目录和 Unity 安装投影。
 ---
 
-# Unity CLI Extension
+# UnityCLI Extension
 
 修改任何Extension前，先完整读取`../unity-cli-capability/SKILL.md`。Extension贡献的Tool仍受所有能力、PlayMode、descriptor、安全与输出规则约束。
 
@@ -23,10 +23,10 @@ extensions/<id>/
 Unity 项目中的安装形态必须是：
 
 ```text
-Packages/com.unity_cli/Extensions/<id>/
+Packages/com.alpsckr.unitycli/Extensions/<id>/
 ```
 
-不得创建 `Packages/com.unity_cli.<id>` 一类独立 Unity package。
+不得创建 `Packages/com.alpsckr.unitycli.<id>` 一类独立 Unity package。
 
 ## Manifest 与依赖
 

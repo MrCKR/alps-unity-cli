@@ -41,8 +41,8 @@ async function runPackageBridgeRemove(request: PackageBridgeRemoveRequest, conte
 
 export default defineTool<PackageBridgeRemoveRequest, PackageBridgeRemoveResult>({
   name: "package.bridge-remove",
-  summary: "Remove the copied com.unity_cli Bridge package installed by init.",
-  description: "Remove the copied com.unity_cli Bridge package installed by init. Destructive: deletes Packages/com.unity_cli and unity_cli.install.json. Supports --dry-run to preview deleted files without changing the project. Use this only when intentionally uninstalling the Unity CLI Bridge from a project.",
+  summary: "Remove the copied com.alpsckr.unitycli Bridge package installed by init.",
+  description: "Remove the copied com.alpsckr.unitycli Bridge package installed by init. Destructive: deletes Packages/com.alpsckr.unitycli and unitycli.install.json. Supports --dry-run to preview deleted files without changing the project. Use this only when intentionally uninstalling the UnityCLI Bridge from a project.",
   group: "package",
   destructiveHint: true,
   supportsDryRun: true,

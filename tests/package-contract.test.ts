@@ -72,7 +72,7 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   assert.equal(bridgeRemove.handler, "offline");
   assert.equal(bridgeRemove.riskLevel, "high");
   assert.equal(bridgeRemove.playModeSupport, "session-affecting");
-  assert.match(bridgeRemove.description, /Packages\/com\.unity_cli/);
+  assert.match(bridgeRemove.description, /Packages\/com\.alpsckr\.unitycli/);
 
   const deploy = findToolByName("package.deploy")!;
   assert.equal(deploy.destructiveHint, true);

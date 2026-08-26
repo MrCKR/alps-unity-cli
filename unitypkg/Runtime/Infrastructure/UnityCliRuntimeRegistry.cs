@@ -201,10 +201,10 @@ namespace UnityCli
 
         private static string DataDirectory()
         {
-            var configured = Environment.GetEnvironmentVariable("UNITY_CLI_DATA_DIR");
+            var configured = Environment.GetEnvironmentVariable("UNITYCLI_DATA_DIR");
             if (!string.IsNullOrWhiteSpace(configured)) return configured;
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (string.IsNullOrEmpty(local)) throw new InvalidOperationException("LOCALAPPDATA is required for Unity CLI runtime registry state.");
+            if (string.IsNullOrEmpty(local)) throw new InvalidOperationException("LOCALAPPDATA is required for UnityCLI runtime registry state.");
             return Path.Combine(local, "UnityCli");
         }
         private string InstancePath() { return Path.Combine(DataDirectory(), "instances", identity.InstanceId + ".json"); }

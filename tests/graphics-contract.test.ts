@@ -124,5 +124,5 @@ test("graphics C# keeps current pipeline/quality/bake implementation details", a
   assert.match(source, /BuildGraphicsSummary\(\)[\s\S]*BuildQualitySettings\(\)/, "pipeline info should return graphics and quality summaries through shared helpers");
   assert.match(source, /new LightingSettings\(\)/, "bake settings writes should create LightingSettings when the scene lacks one");
   assert.match(source, /builtin:Default-Skybox[\s\S]*AssetDatabase\.GetBuiltinExtraResource<Material>\("Default-Skybox\.mat"\)/, "skybox material restore should support Unity built-in default skybox");
-  assert.doesNotMatch(source, /unity_cli graphics /, "graphics error guidance must use tools run graphics.* shape");
+  assert.doesNotMatch(source, /unitycli graphics /, "graphics error guidance must use tools run graphics.* shape");
 });

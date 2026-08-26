@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { AgentSkillInstallerRegistry } from "../src/cli-commands/skill-installer.js";
 
-const skillRoot = resolve("skills", "unity_cli");
+const skillRoot = resolve("skills", "unitycli");
 
 /** 递归列出相对文件路径，统一使用正斜杠。 */
 async function listFiles(root: string, directory = ""): Promise<string[]> {
@@ -22,7 +22,9 @@ async function listFiles(root: string, directory = ""): Promise<string[]> {
 test("governed manifest declares ownership, runtime projection, contracts, and missing evidence", async () => {
   const manifest = JSON.parse(await readFile(join(skillRoot, "manifest.json"), "utf8")) as Record<string, any>;
   const packageJson = JSON.parse(await readFile(resolve("package.json"), "utf8")) as { version: string };
-  assert.equal(manifest.name, "unity_cli");
+  const skill = await readFile(join(skillRoot, "SKILL.md"), "utf8");
+  assert.match(skill, /^---\r?\nname: unitycli\r?$/m);
+  assert.equal(manifest.name, "unitycli");
   assert.equal(manifest.version, packageJson.version);
   assert.ok(manifest.owner);
   assert.equal(manifest.review_cadence, "per-release");
@@ -39,6 +41,8 @@ test("governed manifest declares ownership, runtime projection, contracts, and m
 
 test("agent interface is broad-triggered, PowerShell-local, and network-denied", async () => {
   const text = await readFile(join(skillRoot, "agents", "interface.yaml"), "utf8");
+  assert.match(text, /display_name: "UnityCLI"/);
+  assert.match(text, /Use \$unitycli for every Unity task/);
   assert.match(text, /mode: "automatic"/);
   assert.match(text, /shell: "powershell"/);
   assert.match(text, /source_tier: "local"/);
@@ -72,7 +76,7 @@ test("product installer projects only the five runtime files", async () => {
   try {
     const registry = new AgentSkillInstallerRegistry();
     await registry.installForAgents("pi", sourcePath, project);
-    const target = join(project, ".pi", "skills", "unity_cli");
+    const target = join(project, ".pi", "skills", "unitycli");
     assert.deepEqual(await listFiles(target), [
       "SKILL.md",
       "references/custom-tools.md",

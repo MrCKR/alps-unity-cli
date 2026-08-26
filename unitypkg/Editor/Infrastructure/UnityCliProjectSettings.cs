@@ -58,9 +58,9 @@ namespace UnityCli
         [SettingsProvider]
         private static SettingsProvider CreateSettingsProvider()
         {
-            return new SettingsProvider("Project/Unity CLI", SettingsScope.Project)
+            return new SettingsProvider("Project/UnityCLI", SettingsScope.Project)
             {
-                label = "Unity CLI",
+                label = "UnityCLI",
                 guiHandler = DrawSettings,
                 keywords = new[] { "Unity", "CLI", "Bridge", "Auto Start", "Task Pool", "Admission" }
             };

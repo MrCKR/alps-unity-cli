@@ -24,11 +24,11 @@ export default defineTool<ToolsDescribeRequest, ToolsDescribeResult>({
   playModeSupport: "supported",
   examples: [{ description: "Describe a tool's invocation contract", argv: ["tools", "run", "tools.describe", "--input", "{\"name\":\"asset.search\"}"] }],
   async execute(request, context) {
-    if (!request.name) throw new StructuredToolError("TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unity_cli tools describe <tool>.", ["Run unity_cli tools group to see tool groups."]);
+    if (!request.name) throw new StructuredToolError("TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unitycli tools describe <tool>.", ["Run unitycli tools group to see tool groups."]);
     const flags = context.flags ?? {};
     const resolved = await resolveCatalogTool(request.name, flags, context, `${context.requestId}_describe_execution`);
     if (resolved.ok === false) throw StructuredToolError.from(resolved.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
-    if (!resolved.tool) throw new StructuredToolError("E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${request.name}.`, ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <k1|k2|...> to find related tools."]);
+    if (!resolved.tool) throw new StructuredToolError("E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${request.name}.`, ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
     const currentTool = resolved.tool;
     const data = publicToolDescriptor(currentTool) as unknown as ToolsDescribeResult;
     const availability = await checkToolExtensionAvailability(currentTool, await extensionAvailabilityFlags(flags, context));

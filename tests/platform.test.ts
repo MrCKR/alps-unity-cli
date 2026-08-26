@@ -8,8 +8,8 @@ test("isWindows returns true for win32", () => {
   assert.equal(isWindows("darwin"), false);
 });
 
-test("defaultDataDir uses UNITY_CLI_DATA_DIR when set", () => {
-  assert.equal(defaultDataDir({ UNITY_CLI_DATA_DIR: "/custom/dir" }, "linux"), "/custom/dir");
+test("defaultDataDir uses UNITYCLI_DATA_DIR when set", () => {
+  assert.equal(defaultDataDir({ UNITYCLI_DATA_DIR: "/custom/dir" }, "linux"), "/custom/dir");
 });
 
 test("defaultDataDir uses LOCALAPPDATA on Windows", () => {
@@ -18,7 +18,7 @@ test("defaultDataDir uses LOCALAPPDATA on Windows", () => {
   assert.ok(result.includes("Local"));
 });
 
-test("defaultDataDir falls back to cwd .unity_cli on non-Windows", () => {
+test("defaultDataDir falls back to cwd .unitycli on non-Windows", () => {
   const result = defaultDataDir({}, "linux");
-  assert.ok(result.endsWith(".unity_cli"));
+  assert.ok(result.endsWith(".unitycli"));
 });

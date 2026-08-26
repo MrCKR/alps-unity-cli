@@ -1,5 +1,5 @@
 /**
- * Extension system types for the Unity CLI.
+ * Extension system types for the UnityCLI.
  *
  * Defines the manifest schema, registry types, and descriptor loader types
  * for the extension package system.
@@ -56,7 +56,7 @@ export interface ExtensionContributions {
   csharpEntries?: ExtensionCSharpEntry[];
 }
 
-/** 投影到 Packages/com.unity_cli/Extensions/<id> 的 Unity 侧文件布局。 */
+/** 投影到 Packages/com.alpsckr.unitycli/Extensions/<id> 的 Unity 侧文件布局。 */
 export interface ExtensionUnityInstallLayout {
   /** 布局标识；"directory" 表示以独立子目录安装。 */
   layout?: "directory";

@@ -34,8 +34,8 @@ export async function handleToolsCommand(
     return dispatchTool("tools.describe", undefined, flags, runtime, requestId, { name });
   }
   return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools group, tools group list <group>, tools describe <tool>, tools run <tool>, or tools search <k1|k2|...>.", [
-    "Run unity_cli tools group to see tool categories.",
-    "Run unity_cli tools describe <tool> for full metadata."
+    "Run unitycli tools group to see tool categories.",
+    "Run unitycli tools describe <tool> for full metadata."
   ]);
 }
 
@@ -53,6 +53,6 @@ function rejectUnknownToolFlags(
   const unknown = Object.keys(flags).find((flag) => !allowed.includes(flag));
   if (!unknown) return undefined;
   return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for tools ${command ?? ""}: --${unknown}.`, [
-    command === "run" ? "Put business fields inside --input <json>." : "Run unity_cli --help for the supported options."
+    command === "run" ? "Put business fields inside --input <json>." : "Run unitycli --help for the supported options."
   ], { option: `--${unknown}`, command: `tools ${command ?? ""}`.trim(), positional });
 }

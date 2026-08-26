@@ -8,7 +8,7 @@ IssueId: ISSUE-<三位序号>
 CreatedAt: <UTC ISO-8601>
 UpdatedAt: <UTC ISO-8601>
 ObservedProject: <绝对路径>
-TargetPackagePath: <绝对路径>/Packages/com.unity_cli
+TargetPackagePath: <绝对路径>/Packages/com.alpsckr.unitycli
 
 ## Problem
 

@@ -79,7 +79,7 @@ namespace UnityCli
             }
 
             ctx.CommitEffect();
-            Undo.RecordObject(asset, "unity_cli tools run scriptable-object.modify");
+            Undo.RecordObject(asset, "unitycli tools run scriptable-object.modify");
             UnityCliBridge.SetObjectMemberValue(asset, write);
             EditorUtility.SetDirty(asset);
             AssetDatabase.SaveAssets();
@@ -122,7 +122,7 @@ namespace UnityCli
                 return new Result { DryRun = true, Changed = false, ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, asset), PatchResults = validationResults };
 
             ctx.CommitEffect();
-            Undo.RecordObject(asset, "unity_cli tools run scriptable-object.modify patches");
+            Undo.RecordObject(asset, "unitycli tools run scriptable-object.modify patches");
             var serialized = new SerializedObject(asset);
             serialized.Update();
             var appliedResults = new List<object>();

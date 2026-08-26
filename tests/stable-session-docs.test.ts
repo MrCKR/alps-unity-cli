@@ -14,8 +14,8 @@ const publicDocs = [
   "docs/extensions.md",
   "docs/risk-and-side-effects.md",
   "docs/safety-boundaries.md",
-  "skills/unity_cli/SKILL.md",
-  "skills/unity_cli/references/custom-tools.md",
+  "skills/unitycli/SKILL.md",
+  "skills/unitycli/references/custom-tools.md",
 ];
 
 test("stable session public docs contain only current identity and terminal semantics", async () => {

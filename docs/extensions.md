@@ -14,29 +14,29 @@
 
 ```powershell
 # 默认安装 Bridge；若项目已有 .pi/.claude/.agents，则自动安装 Skill
-unity_cli init --project C:\path\MyProject
+unitycli init --project C:\path\MyProject
 
 # 仅安装 Bridge 包
-unity_cli init --project C:\path\MyProject --pkg-only
+unitycli init --project C:\path\MyProject --pkg-only
 
 # 检查安装状态
-unity_cli init --check --project C:\path\MyProject
+unitycli init --check --project C:\path\MyProject
 ```
 
 安装内容：
-- `Packages/com.unity_cli/` — Bridge 包（copy 模式）
-- `Packages/unity_cli.install.json` — 安装元数据（项目 hash、版本、支持范围）
-- `.pi/skills/unity_cli/`、`.claude/skills/unity_cli/` 或 `.agents/skills/unity_cli/` — 仅当对应 Agent 目录已存在，或显式传入 `--agent` 时安装完整 runtime bundle（`SKILL.md`、`references/**`、`scripts/**`）
+- `Packages/com.alpsckr.unitycli/` — Bridge 包（copy 模式）
+- `Packages/unitycli.install.json` — 安装元数据（项目 hash、版本、支持范围）
+- `.pi/skills/unitycli/`、`.claude/skills/unitycli/` 或 `.agents/skills/unitycli/` — 仅当对应 Agent 目录已存在，或显式传入 `--agent` 时安装完整 runtime bundle（`SKILL.md`、`references/**`、`scripts/**`）
 
 ### 项目能力发现
 
 Bridge 包安装并连接 Unity Editor 后，项目可以通过 `IUnityCliTool<TReq,TRes>` 注册能力。它们自动进入该实例的完整目录，与 package 内置和 Extension 能力使用相同入口：
 
 ```powershell
-unity_cli tools group
-unity_cli tools group list <group>
-unity_cli tools describe my.custom-tool
-unity_cli tools run my.custom-tool --input '{}'
+unitycli tools group
+unitycli tools group list <group>
+unitycli tools describe my.custom-tool
+unitycli tools run my.custom-tool --input '{}'
 ```
 
 分组名称来自实际 discovery 输出，不假设项目能力位于 `custom` 分组。
@@ -45,10 +45,10 @@ unity_cli tools run my.custom-tool --input '{}'
 
 ```powershell
 # 检查 CLI 控制面、Bridge 连接和项目工具完整性
-unity_cli doctor
+unitycli doctor
 
 # 诊断预检（Unity Bridge 工具）
-unity_cli tools run diagnose.preflight
+unitycli tools run diagnose.preflight
 ```
 
 ## 扩展包命令
@@ -56,10 +56,10 @@ unity_cli tools run diagnose.preflight
 `extensions` 命令组负责扩展包状态、复制和诊断：
 
 ```powershell
-unity_cli extensions list --project <path>          # 列出扩展状态
-unity_cli extensions install <name> --project <path> # 安装已满足依赖的 Unity 侧扩展目录
-unity_cli extensions remove <name> --project <path>  # 只移除 manifest 管理的 bundle 文件
-unity_cli extensions doctor --project <path>         # 扩展诊断
+unitycli extensions list --project <path>          # 列出扩展状态
+unitycli extensions install <name> --project <path> # 安装已满足依赖的 Unity 侧扩展目录
+unitycli extensions remove <name> --project <path>  # 只移除 manifest 管理的 bundle 文件
+unitycli extensions doctor --project <path>         # 扩展诊断
 ```
 
 ### init 自动检测
@@ -84,7 +84,7 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 |------|------|
 | Manifest | 扩展元数据（名称、版本、依赖） |
 | Descriptor | Tool descriptor 与派生 JSON Schema |
-| C# Bridge 实现 | `unitypkg/Editor` 下的 `IUnityCliTool<TReq,TRes>` 实现，安装后位于 `Packages/com.unity_cli/Extensions/<id>/Editor` |
+| C# Bridge 实现 | `unitypkg/Editor` 下的 `IUnityCliTool<TReq,TRes>` 实现，安装后位于 `Packages/com.alpsckr.unitycli/Extensions/<id>/Editor` |
 | 测试 | 单元测试和集成测试 |
 | 文档片段 | 扩展使用说明 |
 
@@ -127,6 +127,6 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 ## 取证与依赖
 
 - 扩展基础设施：`extensions list/install/remove/doctor`、`init --auto-detect`、缺依赖 descriptor 的 `available:false` / `unavailableReason` 与执行错误的 `nextActions`。
-- ProBuilder：源码位于 `extensions/probuilder/`，安装后位于 `Packages/com.unity_cli/Extensions/probuilder/`，通过 project-tool bridge 路由提供扩展工具；所有 operation replay 固定于 `com.unity.probuilder@5.2.4`，版本不匹配时在 effect 前拒绝。
-- Cinemachine/VFX/URP/HDRP：源码位于对应 `extensions/<id>/` 目录，安装后位于 `Packages/com.unity_cli/Extensions/<id>/`，通过 metadata、bridge domain 和 C# command handler 提供 live Bridge 工具。
+- ProBuilder：源码位于 `extensions/probuilder/`，安装后位于 `Packages/com.alpsckr.unitycli/Extensions/probuilder/`，通过 project-tool bridge 路由提供扩展工具；所有 operation replay 固定于 `com.unity.probuilder@5.2.4`，版本不匹配时在 effect 前拒绝。
+- Cinemachine/VFX/URP/HDRP：源码位于对应 `extensions/<id>/` 目录，安装后位于 `Packages/com.alpsckr.unitycli/Extensions/<id>/`，通过 metadata、bridge domain 和 C# command handler 提供 live Bridge 工具。
 - 验证入口：`npm test`、`npm run contracts:validate`、extension availability tests。

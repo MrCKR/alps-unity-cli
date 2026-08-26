@@ -121,7 +121,7 @@ namespace UnityCli
                 // 失败前从未写入公开 registry；下一次请求可在 Unity reload 后重新发现。
                 throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool registry discovery failed: " + exception.Message,
                     new Dictionary<string, object> { { "registry", "tools" } },
-                    new[] { "Fix the extension manifest or capability implementation, then retry discovery.", "Run unity_cli extensions doctor --project <path> to inspect extension installation state." }, true, 1000);
+                    new[] { "Fix the extension manifest or capability implementation, then retry discovery.", "Run unitycli extensions doctor --project <path> to inspect extension installation state." }, true, 1000);
             }
             finally
             {
@@ -361,7 +361,7 @@ namespace UnityCli
             var name = args.Name;
             if (string.IsNullOrEmpty(name) || !ProjectTools.ContainsKey(name))
             {
-                throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
+                throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unitycli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 
             var definition = ProjectTools[name];

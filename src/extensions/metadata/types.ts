@@ -1,5 +1,5 @@
 /**
- * Extension metadata type for the Unity CLI.
+ * Extension metadata type for the UnityCLI.
  *
  * An Extension is an optional capability pack that provides additional
  * Tools. Extensions depend on optional Unity packages

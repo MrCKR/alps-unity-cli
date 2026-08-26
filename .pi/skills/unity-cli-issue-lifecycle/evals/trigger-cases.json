@@ -2,11 +2,11 @@
   "recommended_threshold": 0.42,
   "should_trigger": [
     {
-      "text": "Client-Jump 的 Packages/com.unity_cli 连接失败，先在这个真实 Unity 项目热修验证，再同步 unitypkg 产品源码并登记问题。",
+      "text": "Client-Jump 的 Packages/com.alpsckr.unitycli 连接失败，先在这个真实 Unity 项目热修验证，再同步 unitypkg 产品源码并登记问题。",
       "family": "target-package-hotfix"
     },
     {
-      "text": "Register this Unity CLI defect as in-progress, validate the installed Package fix in the target Editor, then sync the canonical product source.",
+      "text": "Register this UnityCLI defect as in-progress, validate the installed Package fix in the target Editor, then sync the canonical product source.",
       "family": "issue-lifecycle"
     },
     {
@@ -14,7 +14,7 @@
       "family": "dev-defect"
     },
     {
-      "text": "真实项目里的 com.unity_cli reload 后没有 listener，我准备改 Package 做实验并把最终修复回写仓库。",
+      "text": "真实项目里的 com.alpsckr.unitycli reload 后没有 listener，我准备改 Package 做实验并把最终修复回写仓库。",
       "family": "live-reload-defect"
     },
     {
@@ -24,7 +24,7 @@
   ],
   "should_not_trigger": [
     {
-      "text": "解释一下 unity_cli 的 Tool catalog 是什么，不要修改代码。",
+      "text": "解释一下 unitycli 的 Tool catalog 是什么，不要修改代码。",
       "family": "pure-question"
     },
     {

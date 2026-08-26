@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/schemas/request-envelope.schema.json",
-  "title": "Unity CLI Bridge Request v2",
+  "$id": "https://unitycli.local/schemas/request-envelope.schema.json",
+  "title": "UnityCLI Bridge Request v2",
   "description": "Exact immutable request envelope sent by the CLI session supervisor to one verified Live Editor instance.",
   "type": "object",
   "additionalProperties": false,

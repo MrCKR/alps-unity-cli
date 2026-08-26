@@ -203,12 +203,12 @@ export interface UnityCliPackageRemoval {
   plannedEffects: Array<Record<string, unknown>>;
 }
 
-const bridgePackageName = "com.unity_cli";
+const bridgePackageName = "com.alpsckr.unitycli";
 const cliCompatibilityRange = ">=0.2.0 <0.3.0";
-const installMetadataFileName = "unity_cli.install.json";
-const fileManifestFileName = "unity_cli.files.json";
-const deploymentMetadataFileName = "unity_cli.package-deployments.json";
-const deploymentBackupDirName = ".unity_cli_deploy_backups";
+const installMetadataFileName = "unitycli.install.json";
+const fileManifestFileName = "unitycli.files.json";
+const deploymentMetadataFileName = "unitycli.package-deployments.json";
+const deploymentBackupDirName = ".unitycli_deploy_backups";
 const packageBridgeProcessStartIdentity = new Date(Date.now() - Math.floor(process.uptime() * 1_000)).toISOString();
 const execFileAsync = promisify(execFile);
 const activeFileMutationCandidates = new Set<string>();
@@ -707,7 +707,7 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
       || observedMetadata.installTime !== installTime
       || observedMetadata.cliCompatibilityRange !== cliCompatibilityRange
       || !await managedPackageFilesMatch(sourcePath, targetPath, fileManifestPath))
-      throw new PackageManagerError("INIT_CHECK_FAILED", "Bridge package installation could not be proven from fresh filesystem readback.", ["Inspect Packages/com.unity_cli and run init again."]);
+      throw new PackageManagerError("INIT_CHECK_FAILED", "Bridge package installation could not be proven from fresh filesystem readback.", ["Inspect Packages/com.alpsckr.unitycli and run init again."]);
     commitProven = true;
     // 独占publish lease覆盖整个事务，因此这里只会清理由当前或已退出owner留下的sibling。
     await cleanupPublishedPackageSiblings(targetPath);
@@ -741,7 +741,7 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
       catch
       {
         throw new PackageManagerError("INIT_ROLLBACK_FAILED", "Bridge package publish failed and the previous package state could not be restored.", [
-          "Inspect Packages/com.unity_cli and its sibling .previous directory before submitting a new init request."
+          "Inspect Packages/com.alpsckr.unitycli and its sibling .previous directory before submitting a new init request."
         ]);
       }
     }
@@ -871,7 +871,7 @@ async function verifyCurrentPackageBridge(projectPath: string, code: string, nex
 }
 
 export async function checkPackageBridge(projectPath: string): Promise<UnityCliPackageInstall> {
-  const verified = await verifyCurrentPackageBridge(projectPath, "INIT_CHECK_FAILED", ["Run unity_cli init --project <path> to restore the bundled package projection."]);
+  const verified = await verifyCurrentPackageBridge(projectPath, "INIT_CHECK_FAILED", ["Run unitycli init --project <path> to restore the bundled package projection."]);
   const { paths, targetPath, installMetadataPath, fileManifestPath, packageManifest, installMetadata, projectHash, sourceHash } = verified;
   return {
     manifestPath: paths.manifestPath,
@@ -888,14 +888,14 @@ export async function checkPackageBridge(projectPath: string): Promise<UnityCliP
   };
 }
 
-/** 卸载 init 复制的 Bridge 包；只删除托管的 com.unity_cli copy-mode 安装。 */
+/** 卸载 init 复制的 Bridge 包；只删除托管的 com.alpsckr.unitycli copy-mode 安装。 */
 export async function removePackageBridge(projectPath: string, options: RemovePackageBridgeOptions = {}): Promise<UnityCliPackageRemoval> {
   const resolvedProject = packagePaths(projectPath).projectPath;
   return withProjectFileMutationLease(resolvedProject, "package-bridge-publish", () => removePackageBridgeLocked(resolvedProject, options));
 }
 
 async function removePackageBridgeLocked(projectPath: string, options: RemovePackageBridgeOptions = {}): Promise<UnityCliPackageRemoval> {
-  const verificationActions = ["Run unity_cli init --project <path> to restore a fully verified bundled package before removal."];
+  const verificationActions = ["Run unitycli init --project <path> to restore a fully verified bundled package before removal."];
   const verified = await verifyCurrentPackageBridge(projectPath, "BRIDGE_PACKAGE_REMOVE_UNVERIFIED", verificationActions);
   const { paths, targetPath, installMetadataPath, fileManifestPath, packageManifest, installMetadata, managedFiles } = verified;
   const plannedEffects: Array<Record<string, unknown>> = [
@@ -1120,7 +1120,7 @@ async function restoreDeployedPackageLocked(projectPath: string, packageName: st
   if (!record) {
     throw new PackageManagerError("PACKAGE_DEPLOYMENT_NOT_FOUND", `No package deployment metadata found for ${packageName}.`, [
       "Run package.deploy first, or pass the packageName that was deployed.",
-      "Check Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json in the target project."
+      "Check Packages/.unitycli_deploy_backups/unitycli.package-deployments.json in the target project."
     ]);
   }
   assertDeploymentRecordSafe(paths.projectPath, packageName, record);
@@ -1256,7 +1256,7 @@ export function validateRegistryUrl(url: string | undefined): string {
   } catch {
     throw new PackageManagerError("REGISTRY_URL_INVALID", `Registry URL is invalid: ${url}`, [
       "Use an http(s) registry URL, for example https://package.openupm.com.",
-      "Run unity_cli tools describe package.search or package.registry.set for accepted registry inputs."
+      "Run unitycli tools describe package.search or package.registry.set for accepted registry inputs."
     ]);
   }
 }
@@ -1412,7 +1412,7 @@ async function readInstallMetadata(path: string): Promise<UnityCliInstallMetadat
   try {
     const metadata = JSON.parse(stripJsonBom(await readFile(path, "utf8"))) as Partial<UnityCliInstallMetadata>;
     if (typeof metadata.packageName !== "string" || typeof metadata.packageVersion !== "string" || !isSha256(metadata.sourceHash) || !isSha256(metadata.managedFilesSha256) || typeof metadata.projectHash !== "string" || metadata.installMode !== "copy" || typeof metadata.installTime !== "string" || typeof metadata.cliCompatibilityRange !== "string") {
-      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid: ${path}`, ["Run unity_cli init --project <path> to refresh install metadata."]);
+      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid: ${path}`, ["Run unitycli init --project <path> to refresh install metadata."]);
     }
     return metadata as UnityCliInstallMetadata;
   } catch (error) {
@@ -1421,10 +1421,10 @@ async function readInstallMetadata(path: string): Promise<UnityCliInstallMetadat
     }
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "ENOENT") {
-      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata not found: ${path}`, ["Run unity_cli init --project <path> to create install metadata."]);
+      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata not found: ${path}`, ["Run unitycli init --project <path> to create install metadata."]);
     }
     if (error instanceof SyntaxError) {
-      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid JSON: ${path}`, ["Run unity_cli init --project <path> to refresh install metadata."]);
+      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid JSON: ${path}`, ["Run unitycli init --project <path> to refresh install metadata."]);
     }
     throw error;
   }
@@ -1801,21 +1801,21 @@ function assertDeploymentRecordSafe(projectPath: string, packageName: string, re
     || (record.backupPackageVersion !== undefined && typeof record.backupPackageVersion !== "string")
     || (record.backupPath !== undefined) !== (typeof record.backupPackageVersion === "string" && record.backupPackageVersion.length > 0)) {
     throw new PackageManagerError("PACKAGE_DEPLOYMENT_METADATA_INVALID", `Package deployment metadata is invalid for ${packageName}.`, [
-      "Inspect or remove Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json before retrying."
+      "Inspect or remove Packages/.unitycli_deploy_backups/unitycli.package-deployments.json before retrying."
     ]);
   }
 
   const expectedTargetPath = join(resolve(projectPath), "Packages", packageName);
   if (!isSameResolvedPath(record.targetPath, expectedTargetPath)) {
     throw new PackageManagerError("PACKAGE_DEPLOYMENT_METADATA_UNSAFE", `Package deployment metadata target path is not the current project's Packages/${packageName}: ${record.targetPath}`, [
-      "Inspect or remove Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json before retrying.",
+      "Inspect or remove Packages/.unitycli_deploy_backups/unitycli.package-deployments.json before retrying.",
       "Run package.deploy again from the current project if the project was moved."
     ]);
   }
 
   if (record.backupPath !== undefined && !isCanonicalDeploymentBackupPath(projectPath, packageName, record.backupPath)) {
     throw new PackageManagerError("PACKAGE_DEPLOYMENT_METADATA_UNSAFE", `Package deployment metadata backup path is not the canonical direct backup for ${packageName}: ${record.backupPath}`, [
-      "Inspect or remove Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json before retrying.",
+      "Inspect or remove Packages/.unitycli_deploy_backups/unitycli.package-deployments.json before retrying.",
       "Do not edit package.deploy metadata by hand unless every path stays inside the current project."
     ]);
   }

@@ -1,7 +1,7 @@
 {
   "name": "com.acme.tool",
   "version": "1.0.0",
-  "displayName": "Unity CLI Matrix Package",
+  "displayName": "UnityCLI Matrix Package",
   "description": "Local package fixture used by the final public CLI validation matrix.",
   "unity": "2022.3"
 }

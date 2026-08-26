@@ -28,7 +28,7 @@ function skillText(content: string, mode: "off" | "on" = "off"): string {
 
 async function makeSkillSource(content: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "skill-source-"));
-  const skillDir = join(dir, "skills", "unity_cli");
+  const skillDir = join(dir, "skills", "unitycli");
   await mkdir(join(skillDir, "references"), { recursive: true });
   await mkdir(join(skillDir, "scripts"), { recursive: true });
   await writeFile(join(skillDir, "SKILL.md"), skillText(content), "utf8");
@@ -117,29 +117,29 @@ test("AGENT_KINDS contains pi, claude, .agents", () => {
 
 // ─── resolveTargetPath ───────────────────────────────────────────────────────
 
-test("resolveTargetPath maps pi to .pi/skills/unity_cli/SKILL.md", () => {
+test("resolveTargetPath maps pi to .pi/skills/unitycli/SKILL.md", () => {
   const reg = registry();
   const installer = reg.get("pi")!;
-  assert.equal(installer.resolveTargetPath("/project"), join("/project", ".pi", "skills", "unity_cli", "SKILL.md"));
+  assert.equal(installer.resolveTargetPath("/project"), join("/project", ".pi", "skills", "unitycli", "SKILL.md"));
 });
 
-test("resolveTargetPath maps claude to .claude/skills/unity_cli/SKILL.md", () => {
+test("resolveTargetPath maps claude to .claude/skills/unitycli/SKILL.md", () => {
   const reg = registry();
   const installer = reg.get("claude")!;
-  assert.equal(installer.resolveTargetPath("/project"), join("/project", ".claude", "skills", "unity_cli", "SKILL.md"));
+  assert.equal(installer.resolveTargetPath("/project"), join("/project", ".claude", "skills", "unitycli", "SKILL.md"));
 });
 
-test("resolveTargetPath maps .agents to .agents/skills/unity_cli/SKILL.md", () => {
+test("resolveTargetPath maps .agents to .agents/skills/unitycli/SKILL.md", () => {
   const reg = registry();
   const installer = reg.get(".agents")!;
-  assert.equal(installer.resolveTargetPath("/project"), join("/project", ".agents", "skills", "unity_cli", "SKILL.md"));
+  assert.equal(installer.resolveTargetPath("/project"), join("/project", ".agents", "skills", "unitycli", "SKILL.md"));
 });
 
 // ─── Install: single agent ───────────────────────────────────────────────────
 
-test("install for pi creates .pi/skills/unity_cli/SKILL.md", async () => {
+test("install for pi creates .pi/skills/unitycli/SKILL.md", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nHello world");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nHello world");
   const project = await makeProject();
 
   const results = await reg.installForAgents("pi", sourcePath, project);
@@ -147,9 +147,9 @@ test("install for pi creates .pi/skills/unity_cli/SKILL.md", async () => {
   assert.equal(results[0].agent, "pi");
   assert.equal(results[0].status, "installed");
 
-  const targetPath = join(project, ".pi", "skills", "unity_cli", "SKILL.md");
+  const targetPath = join(project, ".pi", "skills", "unitycli", "SKILL.md");
   const content = await readFile(targetPath, "utf8");
-  assert.equal(content, skillText("# Unity CLI Skill\nHello world"));
+  assert.equal(content, skillText("# UnityCLI Skill\nHello world"));
   assert.equal(await readFile(join(dirname(targetPath), "references", "guide.md"), "utf8"), "# Runtime guide\n");
   assert.equal(await readFile(join(dirname(targetPath), "scripts", "record.ps1"), "utf8"), "# Runtime script\n");
 
@@ -157,9 +157,9 @@ test("install for pi creates .pi/skills/unity_cli/SKILL.md", async () => {
   await rm(project, { recursive: true });
 });
 
-test("install for claude creates .claude/skills/unity_cli/SKILL.md", async () => {
+test("install for claude creates .claude/skills/unitycli/SKILL.md", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nClaude test");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nClaude test");
   const project = await makeProject();
 
   const results = await reg.installForAgents("claude", sourcePath, project);
@@ -167,17 +167,17 @@ test("install for claude creates .claude/skills/unity_cli/SKILL.md", async () =>
   assert.equal(results[0].agent, "claude");
   assert.equal(results[0].status, "installed");
 
-  const targetPath = join(project, ".claude", "skills", "unity_cli", "SKILL.md");
+  const targetPath = join(project, ".claude", "skills", "unitycli", "SKILL.md");
   const content = await readFile(targetPath, "utf8");
-  assert.equal(content, skillText("# Unity CLI Skill\nClaude test"));
+  assert.equal(content, skillText("# UnityCLI Skill\nClaude test"));
 
   await rm(dirname(sourcePath), { recursive: true });
   await rm(project, { recursive: true });
 });
 
-test("install for .agents creates .agents/skills/unity_cli/SKILL.md", async () => {
+test("install for .agents creates .agents/skills/unitycli/SKILL.md", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nAgent test");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nAgent test");
   const project = await makeProject();
 
   const results = await reg.installForAgents(".agents", sourcePath, project);
@@ -185,9 +185,9 @@ test("install for .agents creates .agents/skills/unity_cli/SKILL.md", async () =
   assert.equal(results[0].agent, ".agents");
   assert.equal(results[0].status, "installed");
 
-  const targetPath = join(project, ".agents", "skills", "unity_cli", "SKILL.md");
+  const targetPath = join(project, ".agents", "skills", "unitycli", "SKILL.md");
   const content = await readFile(targetPath, "utf8");
-  assert.equal(content, skillText("# Unity CLI Skill\nAgent test"));
+  assert.equal(content, skillText("# UnityCLI Skill\nAgent test"));
 
   await rm(dirname(sourcePath), { recursive: true });
   await rm(project, { recursive: true });
@@ -197,7 +197,7 @@ test("install for .agents creates .agents/skills/unity_cli/SKILL.md", async () =
 
 test("install for pi,claude installs two agent skills", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nMulti-agent test");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nMulti-agent test");
   const project = await makeProject();
 
   const results = await reg.installForAgents("pi,claude", sourcePath, project);
@@ -208,10 +208,10 @@ test("install for pi,claude installs two agent skills", async () => {
   assert.equal(results[1].status, "installed");
 
   // Verify both files exist
-  const piContent = await readFile(join(project, ".pi", "skills", "unity_cli", "SKILL.md"), "utf8");
-  const claudeContent = await readFile(join(project, ".claude", "skills", "unity_cli", "SKILL.md"), "utf8");
-  assert.equal(piContent, skillText("# Unity CLI Skill\nMulti-agent test"));
-  assert.equal(claudeContent, skillText("# Unity CLI Skill\nMulti-agent test"));
+  const piContent = await readFile(join(project, ".pi", "skills", "unitycli", "SKILL.md"), "utf8");
+  const claudeContent = await readFile(join(project, ".claude", "skills", "unitycli", "SKILL.md"), "utf8");
+  assert.equal(piContent, skillText("# UnityCLI Skill\nMulti-agent test"));
+  assert.equal(claudeContent, skillText("# UnityCLI Skill\nMulti-agent test"));
 
   await rm(dirname(sourcePath), { recursive: true });
   await rm(project, { recursive: true });
@@ -221,7 +221,7 @@ test("install for pi,claude installs two agent skills", async () => {
 
 test("install skips when target hash matches source", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nSame content");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nSame content");
   const project = await makeProject();
 
   // First install
@@ -242,7 +242,7 @@ test("install skips when target hash matches source", async () => {
 test("install overwrites when source hash differs and reports change", async () => {
   const reg = registry();
   const sourceDir = await mkdtemp(join(tmpdir(), "skill-source-"));
-  const skillDir = join(sourceDir, "skills", "unity_cli");
+  const skillDir = join(sourceDir, "skills", "unitycli");
   await mkdir(skillDir, { recursive: true });
   const sourcePath = join(skillDir, "SKILL.md");
   const project = await makeProject();
@@ -261,7 +261,7 @@ test("install overwrites when source hash differs and reports change", async () 
   assert.ok(second[0].newHash !== firstHash);
 
   // Verify the file was actually overwritten
-  const content = await readFile(join(project, ".pi", "skills", "unity_cli", "SKILL.md"), "utf8");
+  const content = await readFile(join(project, ".pi", "skills", "unitycli", "SKILL.md"), "utf8");
   assert.equal(content, skillText("# Version 2\nUpdated content"));
 
   await rm(sourceDir, { recursive: true });
@@ -272,7 +272,7 @@ test("install overwrites when source hash differs and reports change", async () 
 
 test("install creates target directory when it does not exist", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nDir test");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nDir test");
   const project = await makeProject();
 
   // Project has no .pi directory at all
@@ -280,8 +280,8 @@ test("install creates target directory when it does not exist", async () => {
   assert.equal(results[0].status, "installed");
 
   // Verify nested directory was created
-  const content = await readFile(join(project, ".pi", "skills", "unity_cli", "SKILL.md"), "utf8");
-  assert.equal(content, skillText("# Unity CLI Skill\nDir test"));
+  const content = await readFile(join(project, ".pi", "skills", "unitycli", "SKILL.md"), "utf8");
+  assert.equal(content, skillText("# UnityCLI Skill\nDir test"));
 
   await rm(dirname(sourcePath), { recursive: true });
   await rm(project, { recursive: true });
@@ -291,7 +291,7 @@ test("install creates target directory when it does not exist", async () => {
 
 test("check reports missing when skill is not installed", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nCheck test");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nCheck test");
   const project = await makeProject();
 
   const results = await reg.checkForAgents("pi", sourcePath, project);
@@ -306,7 +306,7 @@ test("check reports missing when skill is not installed", async () => {
 
 test("check reports installed when skill matches source", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nCheck installed");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nCheck installed");
   const project = await makeProject();
 
   // Install first
@@ -323,7 +323,7 @@ test("check reports installed when skill matches source", async () => {
 test("check reports outdated when skill differs from source", async () => {
   const reg = registry();
   const sourceDir = await mkdtemp(join(tmpdir(), "skill-source-"));
-  const skillDir = join(sourceDir, "skills", "unity_cli");
+  const skillDir = join(sourceDir, "skills", "unitycli");
   await mkdir(skillDir, { recursive: true });
   const sourcePath = join(skillDir, "SKILL.md");
   const project = await makeProject();
@@ -346,7 +346,7 @@ test("check reports outdated when skill differs from source", async () => {
 
 test("check for multiple agents reports per-agent status", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nMulti check");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nMulti check");
   const project = await makeProject();
 
   // Install only pi
@@ -365,9 +365,9 @@ test("check for multiple agents reports per-agent status", async () => {
 
 test("check covers changed, missing, and extra runtime bundle files", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nBundle check");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nBundle check");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   await reg.installForAgents("pi", sourcePath, project);
 
   await writeFile(join(targetRoot, "references", "guide.md"), "changed\n", "utf8");
@@ -389,10 +389,10 @@ test("check covers changed, missing, and extra runtime bundle files", async () =
 
 test("bundle update removes source-deleted managed files", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nBundle cleanup");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nBundle cleanup");
   const sourceRoot = dirname(sourcePath);
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   await reg.installForAgents("pi", sourcePath, project);
 
   await rm(join(sourceRoot, "references", "guide.md"));
@@ -408,9 +408,9 @@ test("bundle update removes source-deleted managed files", async () => {
 
 test("FeedbackMode is ignored by bundle check and preserved across updates", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nFeedback mode");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nFeedback mode");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   const targetSkill = join(targetRoot, "SKILL.md");
   await reg.installForAgents("pi", sourcePath, project);
 
@@ -428,10 +428,10 @@ test("FeedbackMode is ignored by bundle check and preserved across updates", asy
 
 test("invalid or duplicate FeedbackMode declarations fail closed", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nInvalid feedback");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nInvalid feedback");
   const project = await makeProject();
   await reg.installForAgents("pi", sourcePath, project);
-  const targetSkill = join(project, ".pi", "skills", "unity_cli", "SKILL.md");
+  const targetSkill = join(project, ".pi", "skills", "unitycli", "SKILL.md");
 
   await writeFile(targetSkill, (await readFile(targetSkill, "utf8")).replace("FeedbackMode: off", "FeedbackMode: maybe"), "utf8");
   await assert.rejects(() => reg.checkForAgents("pi", sourcePath, project), (error: unknown) => {
@@ -440,7 +440,7 @@ test("invalid or duplicate FeedbackMode declarations fail closed", async () => {
     return true;
   });
 
-  await writeFile(targetSkill, `${skillText("# Unity CLI Skill\nDuplicate")}FeedbackMode: on\n`, "utf8");
+  await writeFile(targetSkill, `${skillText("# UnityCLI Skill\nDuplicate")}FeedbackMode: on\n`, "utf8");
   await assert.rejects(() => reg.installForAgents("pi", sourcePath, project), (error: unknown) => {
     assert.ok(error instanceof SkillInstallerError);
     assert.equal(error.code, "E_SKILL_FEEDBACK_MODE_INVALID");
@@ -453,9 +453,9 @@ test("invalid or duplicate FeedbackMode declarations fail closed", async () => {
 
 test("publish failure restores the prior complete bundle and clears fixed workspace", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nRestore prior");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nRestore prior");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   await reg.installForAgents("pi", sourcePath, project);
   const previousSkill = await readFile(join(targetRoot, "SKILL.md"), "utf8");
   await writeFile(join(dirname(sourcePath), "references", "guide.md"), "# New source\n", "utf8");
@@ -483,9 +483,9 @@ test("publish failure restores the prior complete bundle and clears fixed worksp
 
 test("readback failure restores the prior complete bundle", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nReadback rollback");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nReadback rollback");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   await reg.installForAgents("pi", sourcePath, project);
   const oldSkill = await readFile(join(targetRoot, "SKILL.md"), "utf8");
   await writeFile(join(dirname(sourcePath), "references", "guide.md"), "# Updated source\n", "utf8");
@@ -510,9 +510,9 @@ test("readback failure restores the prior complete bundle", async () => {
 
 test("rollback failure retains previous and the next install recovers it", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nRetained rollback");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nRetained rollback");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   const previousRoot = join(project, "Library", "UnityCli", "skill-install", "pi", "previous");
   await reg.installForAgents("pi", sourcePath, project);
   await writeFile(join(dirname(sourcePath), "references", "guide.md"), "# Updated source\n", "utf8");
@@ -543,9 +543,9 @@ test("rollback failure retains previous and the next install recovers it", async
 
 test("restart keeps a committed target when previous cleanup was interrupted", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nCommitted target");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nCommitted target");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   const previousRoot = join(project, "Library", "UnityCli", "skill-install", "pi", "previous");
   await reg.installForAgents("pi", sourcePath, project);
   await writeFile(join(dirname(sourcePath), "references", "guide.md"), "# Committed update\n", "utf8");
@@ -573,7 +573,7 @@ test("restart keeps a committed target when previous cleanup was interrupted", a
 
 test("concurrent installs serialize the publish section", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nConcurrent publish");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nConcurrent publish");
   const project = await makeProject();
   await reg.installForAgents("pi", sourcePath, project);
   await writeFile(join(dirname(sourcePath), "references", "guide.md"), "# Concurrent update\n", "utf8");
@@ -604,9 +604,9 @@ test("concurrent installs serialize the publish section", async () => {
 
 test("update keeps the published bundle readable and serializes checks", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nReadable update");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nReadable update");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   await reg.installForAgents("pi", sourcePath, project);
   await writeFile(join(dirname(sourcePath), "references", "guide.md"), "# Updated guide\n", "utf8");
 
@@ -643,9 +643,9 @@ test("update keeps the published bundle readable and serializes checks", async (
 
 test("restart recovery restores previous and clears staging before install", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nRestart recovery");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nRestart recovery");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   const workspace = join(project, "Library", "UnityCli", "skill-install", "pi");
   await reg.installForAgents("pi", sourcePath, project);
   await mkdir(workspace, { recursive: true });
@@ -664,9 +664,9 @@ test("restart recovery restores previous and clears staging before install", asy
 
 test("restart discards an uncommitted partial staging while preserving target", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nPartial staging recovery");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nPartial staging recovery");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   const stagingRoot = join(project, "Library", "UnityCli", "skill-install", "pi", "staging");
   await reg.installForAgents("pi", sourcePath, project);
   const priorSkill = await readFile(join(targetRoot, "SKILL.md"), "utf8");
@@ -683,7 +683,7 @@ test("restart discards an uncommitted partial staging while preserving target", 
 
 test("bundle roots and SKILL.md reject reparse links and invalid UTF-8", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nStrict bytes");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nStrict bytes");
   const sourceRoot = dirname(sourcePath);
   const project = await makeProject();
   const external = await mkdtemp(join(tmpdir(), "skill-external-"));
@@ -713,14 +713,14 @@ test("bundle roots and SKILL.md reject reparse links and invalid UTF-8", async (
 
 test("expired deadline performs no install effect", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nExpired deadline");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nExpired deadline");
   const project = await makeProject();
   await assert.rejects(() => reg.installForAgents("pi", sourcePath, project, Date.now() - 1), (error: unknown) => {
     assert.ok(error instanceof SkillInstallerError);
     assert.equal(error.code, "E_EXECUTION_TIMEOUT");
     return true;
   });
-  await assert.rejects(access(join(project, ".pi", "skills", "unity_cli")));
+  await assert.rejects(access(join(project, ".pi", "skills", "unitycli")));
   await assert.rejects(access(join(project, "Library", "UnityCli", "skill-install")));
 
   await rm(dirname(dirname(sourcePath)), { recursive: true });
@@ -729,7 +729,7 @@ test("expired deadline performs no install effect", async () => {
 
 test("check honors a supplied expired deadline", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nExpired check");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nExpired check");
   const project = await makeProject();
   await reg.installForAgents("pi", sourcePath, project);
 
@@ -748,9 +748,9 @@ test("check honors a supplied expired deadline", async () => {
 
 test("deadline expiry before target publication preserves the prior bundle", async () => {
   const reg = registry();
-  const sourcePath = await makeSkillSource("# Unity CLI Skill\nDeadline rollback");
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nDeadline rollback");
   const project = await makeProject();
-  const targetRoot = join(project, ".pi", "skills", "unity_cli");
+  const targetRoot = join(project, ".pi", "skills", "unitycli");
   const workspace = join(project, "Library", "UnityCli", "skill-install", "pi");
   await reg.installForAgents("pi", sourcePath, project);
   const priorSkill = await readFile(join(targetRoot, "SKILL.md"), "utf8");
@@ -801,7 +801,7 @@ test("init canonicalizes junction aliases before acquiring the cross-process loc
   assert.equal(results[0].ok, true);
   assert.equal(results[1].ok, true);
   assert.equal(maximumActive, 1);
-  const installedReference = await readFile(join(project, ".pi", "skills", "unity_cli", "references", "custom-tools.md"), "utf8");
+  const installedReference = await readFile(join(project, ".pi", "skills", "unitycli", "references", "custom-tools.md"), "utf8");
   assert.ok(installedReference.length > 0);
 
   await rm(alias, { recursive: true });
@@ -817,7 +817,7 @@ test("init check through a junction alias serializes with canonical install", as
   const alias = join(aliasParent, "UnityProjectAlias");
   await symlink(project, alias, "junction");
   await handleInit({ project, agent: "pi", "skill-only": true, "timeout-ms": "30000" }, {} as Runtime, "req_check_alias_seed");
-  const targetReference = join(project, ".pi", "skills", "unity_cli", "references", "custom-tools.md");
+  const targetReference = join(project, ".pi", "skills", "unitycli", "references", "custom-tools.md");
   await writeFile(targetReference, "# Drifted\n", "utf8");
 
   let enterPublish!: () => void;
@@ -880,10 +880,10 @@ test("installForAgents throws for unknown agent kind", async () => {
 
 // ─── findSkillSourcePath ─────────────────────────────────────────────────────
 
-test("findSkillSourcePath resolves skills/unity_cli/SKILL.md from package root", async () => {
+test("findSkillSourcePath resolves skills/unitycli/SKILL.md from package root", async () => {
   // findSkillSourcePath should find the actual skill file from the package
   const sourcePath = await findSkillSourcePath();
-  assert.ok(sourcePath.endsWith("skills/unity_cli/SKILL.md") || sourcePath.includes("skills"));
+  assert.ok(sourcePath.replaceAll("\\", "/").endsWith("/skills/unitycli/SKILL.md"));
 
   // Verify the file is readable
   const content = await readFile(sourcePath, "utf8");

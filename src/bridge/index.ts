@@ -106,8 +106,8 @@ export async function executeBridgePayload(
       });
     }
     return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), [
-      "Run unity_cli instances list and inspect the selected Unity session.",
-      "Run unity_cli tools run editor.state for transition or blocker details."
+      "Run unitycli instances list and inspect the selected Unity session.",
+      "Run unitycli tools run editor.state for transition or blocker details."
     ], undefined, { transient: true, retryAfterMs: 100 });
   }
 }

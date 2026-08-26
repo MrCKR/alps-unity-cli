@@ -67,7 +67,7 @@ namespace UnityCli
             var tempCreated = false;
             if (cam == null)
             {
-                var tempGo = new GameObject("__unity_cli_orbit_cam__");
+                var tempGo = new GameObject("__unitycli_orbit_cam__");
                 cam = tempGo.AddComponent<Camera>();
                 tempCreated = true;
             }

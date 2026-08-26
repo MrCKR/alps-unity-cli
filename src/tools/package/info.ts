@@ -32,7 +32,7 @@ export default defineTool<PackageInfoRequest, PackageInfoResult>({
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Inspect one package", argv: ["tools", "run", "package.info", "--input", "{\"name\":\"com.unity_cli\",\"project\":\"./Dev/UnityProject\"}"] }
+    { description: "Inspect one package", argv: ["tools", "run", "package.info", "--input", "{\"name\":\"com.alpsckr.unitycli\",\"project\":\"./Dev/UnityProject\"}"] }
   ],
   /** 读取单个 package 条目；未找到时返回稳定 PACKAGE_NOT_FOUND。 */
   async execute(request, context) {

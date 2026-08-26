@@ -44,9 +44,9 @@ const AGENT_ROOT_DIR: Record<AgentKind, string> = {
 
 /** Maps an agent kind to its skill directory relative to the Unity project root. */
 const AGENT_SKILL_DIR: Record<AgentKind, string> = {
-  pi: ".pi/skills/unity_cli",
-  claude: ".claude/skills/unity_cli",
-  ".agents": ".agents/skills/unity_cli",
+  pi: ".pi/skills/unitycli",
+  claude: ".claude/skills/unitycli",
+  ".agents": ".agents/skills/unitycli",
 };
 
 /** 探测项目中已存在的 Agent 目录,用于 init 默认安装 Skill。 */
@@ -69,8 +69,8 @@ export async function detectAgentKinds(projectRoot: string): Promise<AgentKind[]
 
 /**
  * Resolve the source SKILL.md path by walking up from the current CLI module
- * location to find the package root (directory containing package.json with
- * name "unity_cli"), then locating skills/unity_cli/SKILL.md underneath.
+ * location to find the package root that contains
+ * skills/unitycli/SKILL.md.
  */
 export function resolveSkillSourcePath(metaUrl?: string): string {
   const startDir = metaUrl
@@ -83,8 +83,8 @@ export function resolveSkillSourcePath(metaUrl?: string): string {
     const pkgPath = join(current, "package.json");
     try {
       // Synchronous existence check via require is not available in ESM;
-      // we do a best-effort heuristic: check if skills/unity_cli/SKILL.md exists.
-      const skillPath = join(current, "skills", "unity_cli", "SKILL.md");
+      // we do a best-effort heuristic: check if skills/unitycli/SKILL.md exists.
+      const skillPath = join(current, "skills", "unitycli", "SKILL.md");
       // We validate the actual content in resolveSkillSource (async)
       // For now, return the candidate path
       return skillPath;
@@ -97,18 +97,18 @@ export function resolveSkillSourcePath(metaUrl?: string): string {
   }
 
   // Fallback: use import.meta.url resolution
-  return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "skills", "unity_cli", "SKILL.md");
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "skills", "unitycli", "SKILL.md");
 }
 
 /**
  * Async version: resolves the SKILL.md source path, validating that the
- * package root contains a valid unity_cli package.json.
+ * package root contains the published UnityCLI Skill bundle.
  */
 export async function findSkillSourcePath(startDir?: string): Promise<string> {
   let current = startDir ?? dirname(fileURLToPath(import.meta.url));
 
   for (let i = 0; i < 20; i++) {
-    const skillPath = join(current, "skills", "unity_cli", "SKILL.md");
+    const skillPath = join(current, "skills", "unitycli", "SKILL.md");
     try {
       // Try to read the skill file — if it exists, that's our source
       await readFile(skillPath, "utf8");
@@ -123,8 +123,8 @@ export async function findSkillSourcePath(startDir?: string): Promise<string> {
 
   throw new SkillInstallerError(
     "SKILL_SOURCE_NOT_FOUND",
-    "Could not locate skills/unity_cli/SKILL.md relative to the CLI package root.",
-    ["Ensure the unity_cli package is installed with the skills/ directory intact."]
+    "Could not locate skills/unitycli/SKILL.md relative to the CLI package root.",
+    ["Ensure the @alpsckr/unitycli package is installed with the skills/ directory intact."]
   );
 }
 
@@ -179,7 +179,7 @@ function readFeedbackMode(content: Buffer, allowMissing: boolean): FeedbackMode 
   if (declarations.length !== 1 || !validFeedbackMode.test(declarations[0])) {
     throw new SkillInstallerError(
       "E_SKILL_FEEDBACK_MODE_INVALID",
-      "The unity_cli Skill must contain exactly one `FeedbackMode: off|on` declaration.",
+      "The UnityCLI Skill must contain exactly one `FeedbackMode: off|on` declaration.",
       ["Keep one FeedbackMode declaration in SKILL.md and set it to off or on."]
     );
   }
@@ -333,7 +333,7 @@ function skillInstallIoError(error: unknown, operation: string): SkillInstallerE
   const code = (error as NodeJS.ErrnoException).code;
   return new SkillInstallerError(
     "E_SKILL_INSTALL_IO",
-    `The unity_cli Skill bundle could not ${operation}${code ? ` (${code})` : ""}.`,
+    `The UnityCLI Skill bundle could not ${operation}${code ? ` (${code})` : ""}.`,
     ["Close processes holding the installed Skill files, inspect the target bundle, then retry init."]
   );
 }
@@ -416,7 +416,7 @@ async function withWindowsInstallMutex<T>(targetRoot: string, deadlineMs: number
       } else if (line === "TIMEOUT") {
         fail(new SkillInstallerError(
           "E_EXECUTION_TIMEOUT",
-          "The immutable init deadline elapsed while waiting for another unity_cli Skill install.",
+          "The immutable init deadline elapsed while waiting for another UnityCLI Skill install.",
           ["Inspect the installed Skill bundle before submitting init again."]
         ));
       }
@@ -471,7 +471,7 @@ async function materializeBundle(bundle: SkillBundle, feedbackMode: FeedbackMode
   }
   const materialized = await loadBundle(root, false);
   if (materialized.hash !== bundle.hash || materialized.feedbackMode !== feedbackMode) {
-    throw new SkillInstallerError("E_SKILL_INSTALL_PROJECTION_INVALID", "The materialized unity_cli Skill bundle failed filesystem readback.");
+    throw new SkillInstallerError("E_SKILL_INSTALL_PROJECTION_INVALID", "The materialized UnityCLI Skill bundle failed filesystem readback.");
   }
 }
 
@@ -513,14 +513,14 @@ async function restorePreviousBundle(targetRoot: string, workspace: InstallWorks
     await publishStagedFiles(previous, workspace.stagingRoot, targetRoot, recoveryDeadlineMs);
     const restored = await retrySharingViolation(recoveryDeadlineMs, () => loadBundle(targetRoot, false));
     if (restored.hash !== previous.hash || restored.feedbackMode !== previous.feedbackMode) {
-      throw new SkillInstallerError("E_SKILL_INSTALL_PROJECTION_INVALID", "The restored unity_cli Skill bundle failed filesystem readback.");
+      throw new SkillInstallerError("E_SKILL_INSTALL_PROJECTION_INVALID", "The restored UnityCLI Skill bundle failed filesystem readback.");
     }
     await retrySharingViolation(recoveryDeadlineMs, () => rm(workspace.previousRoot, { recursive: true, force: true }));
   } catch (rollbackError) {
     const detail = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
     throw new SkillInstallerError(
       "E_SKILL_INSTALL_ROLLBACK_FAILED",
-      `The prior unity_cli Skill bundle could not be restored after publish failed: ${detail}`,
+      `The prior UnityCLI Skill bundle could not be restored after publish failed: ${detail}`,
       ["Do not delete the fixed Library/UnityCli/skill-install previous directory; inspect both bundle projections before retrying."]
     );
   }
@@ -594,7 +594,7 @@ async function publishBundle(
     await afterSkillPublishForTest?.();
     const published = await retrySharingViolation(deadlineMs, () => loadBundle(targetRoot, false));
     if (published.hash !== source.hash || published.feedbackMode !== feedbackMode) {
-      throw new SkillInstallerError("E_SKILL_INSTALL_PROJECTION_INVALID", "The installed unity_cli Skill bundle failed filesystem readback.");
+      throw new SkillInstallerError("E_SKILL_INSTALL_PROJECTION_INVALID", "The installed UnityCLI Skill bundle failed filesystem readback.");
     }
     if (existing) {
       const cleanupDeadlineMs = Math.max(deadlineMs, Date.now() + 5_000);

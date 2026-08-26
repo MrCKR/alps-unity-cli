@@ -504,7 +504,7 @@ namespace UnityCli
         private static string Bounded(string value, int maximum) { value = value ?? string.Empty; return value.Length <= maximum ? value : value.Substring(0, maximum); }
         private static string RuntimeArtifactDirectory()
         {
-            var configured = Environment.GetEnvironmentVariable("UNITY_CLI_DATA_DIR");
+            var configured = Environment.GetEnvironmentVariable("UNITYCLI_DATA_DIR");
             var data = !string.IsNullOrWhiteSpace(configured) ? configured : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnityCli");
             return Path.Combine(data, ".temp", "artifacts", "runtime-" + instanceId.Substring("unity-".Length));
         }

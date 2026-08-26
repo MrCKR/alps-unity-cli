@@ -1,4 +1,4 @@
-# unity_cli Skill Trust Report
+# UnityCLI Skill Trust Report
 
 Status: governed local package
 Owner: alps-unity-cli maintainers
@@ -14,7 +14,7 @@ This trust report covers the source Skill package, the installed runtime project
 | Capability | Decision | Scope | Evidence |
 |---|---|---|---|
 | Network | deny | Runtime Skill and recorder | `security/network_policy.json`; static network API scan has zero matches |
-| File read | allow | Installed Skill files and public `unity_cli` output | Runtime contract |
+| File read | allow | Installed Skill files and public `unitycli` output | Runtime contract |
 | File write | approved by owner | `%LOCALAPPDATA%\UnityCli\feedback\feedback.jsonl` plus three archives | D008; recorder tests |
 | Subprocess | approved by owner | Bundled `record-feedback.ps1` through Windows PowerShell | D008; runtime Skill |
 | Remote inline execution | forbid | All adapters | `agents/interface.yaml` |

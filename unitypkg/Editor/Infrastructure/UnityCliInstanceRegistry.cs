@@ -83,10 +83,10 @@ namespace UnityCli
 
         private static string DataDir()
         {
-            var configured = Environment.GetEnvironmentVariable("UNITY_CLI_DATA_DIR");
+            var configured = Environment.GetEnvironmentVariable("UNITYCLI_DATA_DIR");
             if (!string.IsNullOrEmpty(configured)) return configured;
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (string.IsNullOrEmpty(localAppData)) throw new InvalidOperationException("LOCALAPPDATA is required for Unity CLI registry state.");
+            if (string.IsNullOrEmpty(localAppData)) throw new InvalidOperationException("LOCALAPPDATA is required for UnityCLI registry state.");
             return Path.Combine(localAppData, "UnityCli");
         }
 

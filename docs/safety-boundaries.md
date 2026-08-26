@@ -96,7 +96,7 @@ tools run <tool>             -> 公开调用即授权并执行
 
 ## 项目 Tool 完整性
 
-项目自定义 Tool 在 `tools run` 前经过内部完整性校验。正常 descriptor 和成功 envelope 不公开校验材料；不匹配时返回结构化错误及恢复步骤。`unity_cli doctor` 可用于诊断项目 Tool 状态。
+项目自定义 Tool 在 `tools run` 前经过内部完整性校验。正常 descriptor 和成功 envelope 不公开校验材料；不匹配时返回结构化错误及恢复步骤。`unitycli doctor` 可用于诊断项目 Tool 状态。
 
 ## 正确性边界
 

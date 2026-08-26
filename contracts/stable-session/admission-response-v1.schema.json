@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/contracts/stable-session/admission-response-v1.schema.json",
-  "title": "Unity CLI internal task admission response v1",
+  "$id": "https://unitycli.local/contracts/stable-session/admission-response-v1.schema.json",
+  "title": "UnityCLI internal task admission response v1",
   "type": "object",
   "additionalProperties": false,
   "required": ["ok", "requestId", "data"],

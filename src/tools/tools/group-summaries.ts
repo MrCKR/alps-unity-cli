@@ -14,7 +14,7 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   diagnose: "CLI, target, and Bridge capability diagnostics.",
   docs: "Offline documentation lookup and search.",
   editor: "Unity Editor refresh, diagnostics, and session controls.",
-  extension: "Inspect installed Unity CLI extensions and their contributed tools.",
+  extension: "Inspect installed UnityCLI extensions and their contributed tools.",
   go: "Create, find, inspect, parent, and transform scene GameObjects.",
   graphics: "Rendering, lighting, skybox, quality, stats, baking, and volume settings.",
   hdrp: "High Definition Render Pipeline settings and volume effect overrides.",
@@ -44,7 +44,7 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   ui: "UI Toolkit documents, panels, styles, and visual element creation and inspection.",
   urp: "Universal Render Pipeline settings, renderer features, and volume effects.",
   vfx: "Visual Effect Graph control, effects, particles, and templates.",
-  UnityPipeline: "Official com.unity.pipeline commands projected from Unity CLI attributes.",
+  UnityPipeline: "Official com.unity.pipeline commands projected from UnityCLI attributes.",
 };
 
 /** 返回组的 route summary；未登记组回退到组名兜底，避免空泛 capability 文案。 */

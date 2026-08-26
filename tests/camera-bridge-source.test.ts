@@ -595,7 +595,7 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /BridgePackageName\(\)/);
   assert.match(source, /BridgePackageResolvedPath\(\)/);
   assert.match(source, /PackageInfo\.FindForAssetPath\(BridgePackageAssetPath\(\)\)/);
-  assert.match(source, /Packages\/com\.unity_cli\/Editor\/UnityCliBridge\.cs/);
+  assert.match(source, /Packages\/com\.alpsckr\.unitycli\/Editor\/UnityCliBridge\.cs/);
   assert.match(source, /private static void StopStaleBridgeListeners\(\)/);
   assert.match(source, /stale_bridge_listener_stopped/);
   assert.match(source, /diagnosticsFingerprint/);

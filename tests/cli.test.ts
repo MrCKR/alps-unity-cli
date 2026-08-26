@@ -34,7 +34,7 @@ test("help and version use the public success envelope", async () => {
 test("command help is self-contained before instance discovery", async () => {
   const result = await execute(["command", "--help"], runtime);
   assert.ok(result.ok, JSON.stringify(result));
-  assert.match(String((result.data as { usage?: string }).usage), /^unity_cli command/);
+  assert.match(String((result.data as { usage?: string }).usage), /^unitycli command/);
 });
 
 test("global boolean options do not consume top-level commands", async () => {

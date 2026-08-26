@@ -32,14 +32,14 @@ export const EXTERNAL_STATE_DEPENDENT_TOOL_NAMES = Object.freeze(["editor.dialog
 const TEST_CANCEL_FIXTURE_NAME = "UnityCliValidation.MatrixEditModeSmokeTests.WaitForExplicitCancellation";
 const TEST_CANCEL_PENDING_CODES = new Set(["E_TEST_RUN_NOT_ACTIVE", "E_TEST_CANCEL_IDENTITY_UNPROVEN"]);
 export const MATRIX_OWNED_DIALOG = Object.freeze({
-  title: "Unity CLI Matrix Dialog Fixture",
+  title: "UnityCLI Matrix Dialog Fixture",
   messageMarker: "[unity-cli-matrix-owned-dialog-fixture]",
   button: "Cancel"
 });
 const EVIDENCE_APPEND_MAX_ATTEMPTS = 120;
 const EVIDENCE_APPEND_RETRY_MS = 250;
-const OWNED_PROJECT_TREE_ROOTS = Object.freeze(["Assets", "ProjectSettings", "Packages/com.unity_cli"]);
-const OWNED_PROJECT_FILES = Object.freeze(["Packages/manifest.json", "Packages/packages-lock.json", "Packages/unity_cli.install.json"]);
+const OWNED_PROJECT_TREE_ROOTS = Object.freeze(["Assets", "ProjectSettings", "Packages/com.alpsckr.unitycli"]);
+const OWNED_PROJECT_FILES = Object.freeze(["Packages/manifest.json", "Packages/packages-lock.json", "Packages/unitycli.install.json"]);
 const PROJECT_SNAPSHOT_TRANSITIONS = Object.freeze({
   prepared: new Set(["semantic-reset-complete", "restoring", "cleanup-failed"]),
   "semantic-reset-complete": new Set(["restoring", "cleanup-failed"]),
@@ -1320,7 +1320,7 @@ async function verifyOwnedProjectSnapshotBackups(snapshot) {
   }
 }
 
-/** 第一条 Unity CLI 前持久化授权 Dev project 的精确 file/path/absence 基线。 */
+/** 第一条 UnityCLI 前持久化授权 Dev project 的精确 file/path/absence 基线。 */
 export async function prepareOwnedProjectSnapshot(project, evidenceDir, buildStamp, options = {}) {
   const snapshot = ownedProjectSnapshotLocation(project, evidenceDir);
   await assertNoSymbolicAncestor(snapshot.snapshotRoot, snapshot.evidenceRoot, "Owned project snapshot");

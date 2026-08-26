@@ -60,7 +60,7 @@ test("package.remove requires absent dependency readback and terminal PackageInf
 test("package.deploy and restore require filesystem proof plus terminal resolve", async () => {
   validate("package.deploy", {
     status: "deployed",
-    targetPath: "Packages/com.unity_cli",
+    targetPath: "Packages/com.alpsckr.unitycli",
     sourceHash: hash,
     copiedFileCount: 2,
     files: { proven: true, sourceHash: hash },
@@ -68,14 +68,14 @@ test("package.deploy and restore require filesystem proof plus terminal resolve"
   });
   validate("package.restore", {
     status: "restored",
-    targetPath: "Packages/com.unity_cli",
+    targetPath: "Packages/com.alpsckr.unitycli",
     copiedFileCount: 0,
     files: { proven: true, restoredFromBackup: false, removedDeployedPackage: true },
     resolve,
   });
   await invalid("package.deploy", {
     status: "deployed",
-    targetPath: "Packages/com.unity_cli",
+    targetPath: "Packages/com.alpsckr.unitycli",
     sourceHash: hash,
     copiedFileCount: 2,
     files: { proven: true, sourceHash: hash },

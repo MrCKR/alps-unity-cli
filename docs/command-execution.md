@@ -7,8 +7,8 @@
 省略name时读取选定实例的完整live catalog，并返回command-name投影：
 
 ```powershell
-unity_cli command --project-path C:\path\MyProject
-unity_cli command --instance <id|projectPath|alias>
+unitycli command --project-path C:\path\MyProject
+unitycli command --instance <id|projectPath|alias>
 ```
 
 名称选择是exact且确定的：
@@ -38,13 +38,13 @@ command name确定后，CLI按该Tool当前`inputSchema.properties`逐字匹配�
 
 ```powershell
 # named value
-unity_cli command UnityPipeline_test --mode EditMode --category Editor
+unitycli command UnityPipeline_test --mode EditMode --category Editor
 
 # attached value与boolean裸开关
-unity_cli command UnityPipeline_project_reload_data --path Assets/GameData.json --force --timeout_ms=30000
+unitycli command UnityPipeline_project_reload_data --path Assets/GameData.json --force --timeout_ms=30000
 
 # positional按live schema的声明顺序绑定
-unity_cli command eval "return 2 + 2;"
+unitycli command eval "return 2 + 2;"
 ```
 
 支持：
@@ -61,9 +61,9 @@ object、array和任意JSON值必须是有效JSON。字段大小写和下划线�
 ## Command级控制项
 
 ```powershell
-unity_cli command --project-path C:\path\MyProject <name> ...
-unity_cli command --timeout 120 <name> ...
-unity_cli command <name> ... --timeout-ms 120000 --dry-run
+unitycli command --project-path C:\path\MyProject <name> ...
+unitycli command --timeout 120 <name> ...
+unitycli command <name> ... --timeout-ms 120000 --dry-run
 ```
 
 - `--project-path <path>`绑定现有canonical项目实例，不直连endpoint，也不写入active target。
@@ -76,8 +76,8 @@ unity_cli command <name> ... --timeout-ms 120000 --dry-run
 以下两种调用在typed input相同的前提下选择同一实际Tool并返回同一业务结果：
 
 ```powershell
-unity_cli tools run UnityPipeline_test --input '{"mode":"EditMode"}'
-unity_cli command test --mode EditMode
+unitycli tools run UnityPipeline_test --input '{"mode":"EditMode"}'
+unitycli command test --mode EditMode
 ```
 
 两种语法共享instance选择、availability、schema终检、risk metadata、dry-run、timeout、descriptor fingerprint、completion contract、Bridge执行和错误码。command语法兼容不承诺补齐当前catalog中不存在的官方命令，也不改变本项目JSON输出格式。
@@ -86,4 +86,4 @@ unity_cli command test --mode EditMode
 
 本package首次在项目中检测到`com.unity.pipeline`时，会把Pipeline Editor `AutoStart`持久设为false、停止其当前server并清理由该server启用的autotick。只有全部结果验证成功后才写入项目级一次性接管标记；此后reload、Editor重启、package更新以及用户手动重新开启Pipeline都不会再次覆盖或停服。
 
-本Bridge使用`Project Settings > Unity CLI > Bridge Auto Start`项目级开关，默认开启。该值只在下一次Domain Reload或Editor启动时读取：关闭不会现场中断已接受请求，生效后不启动listener也不写instance registry。该设置不控制development Player runtime server。
+本Bridge使用`Project Settings > UnityCLI > Bridge Auto Start`项目级开关，默认开启。该值只在下一次Domain Reload或Editor启动时读取：关闭不会现场中断已接受请求，生效后不启动listener也不写instance registry。该设置不控制development Player runtime server。

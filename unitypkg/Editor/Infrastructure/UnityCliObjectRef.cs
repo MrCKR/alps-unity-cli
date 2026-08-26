@@ -76,7 +76,7 @@ namespace UnityCli
                     {
                         throw new BridgeCommandException("E_OBJECTREF_ASSET_NOT_FOUND",
                             "Asset not found at path: " + assetPath,
-                            "Run unity_cli tools run asset.search --input '{\"query\":\"<name>\"}' to discover the asset path.");
+                            "Run unitycli tools run asset.search --input '{\"query\":\"<name>\"}' to discover the asset path.");
                     }
                     return asset;
                 }

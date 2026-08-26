@@ -51,7 +51,7 @@ namespace UnityCli
             }
             var gameObject = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "GameObject look-at requires a target.");
             var lookAtName = request.LookAt ?? request.Destination;
-            var lookAt = GameObjectToolSupport.ResolveUniqueTarget(lookAtName, "GameObject look-at requires a lookAt target. Use unity_cli tools run go.look-at --input '{\"target\":\"CameraRig\",\"lookAt\":\"Player\"}'.");
+            var lookAt = GameObjectToolSupport.ResolveUniqueTarget(lookAtName, "GameObject look-at requires a lookAt target. Use unitycli tools run go.look-at --input '{\"target\":\"CameraRig\",\"lookAt\":\"Player\"}'.");
             var gameObjectId = gameObject.GetInstanceID();
             var direction = lookAt.transform.position - gameObject.transform.position;
             if (direction.sqrMagnitude <= Mathf.Epsilon)

@@ -1,5 +1,5 @@
 {
-  "name": "unity_cli",
+  "name": "unitycli",
   "version": "0.3.3",
   "owner": "alps-unity-cli maintainers",
   "updated_at": "2026-08-13",
@@ -58,7 +58,7 @@
       "examples/feedback-event.input.json",
       "examples/feedback-record.output.json"
     ],
-    "runtime_observation": "Current unity_cli JSON envelopes and connected-instance descriptors"
+    "runtime_observation": "Current unitycli JSON envelopes and connected-instance descriptors"
   },
   "output_contract": {
     "normal_task_response": "No additional fixed format is imposed.",
@@ -88,7 +88,7 @@
     "network": "deny",
     "runtime_read": [
       "Installed Skill runtime files",
-      "Public unity_cli JSON output"
+      "Public unitycli JSON output"
     ],
     "subprocess": [
       "powershell.exe for scripts/record-feedback.ps1 when FeedbackMode is on and friction occurred"

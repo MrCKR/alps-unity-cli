@@ -109,7 +109,7 @@ namespace UnityCli
             ctx.CommitEffect();
             Directory.CreateDirectory(outputFullDir);
             ScreenshotToolSupport.CreateScreenshotDirectory(contactSheetPath);
-            var tempGo = new GameObject("__unity_cli_surround_cam__");
+            var tempGo = new GameObject("__unitycli_surround_cam__");
             var cam = tempGo.AddComponent<Camera>();
             cam.fieldOfView = Mathf.Clamp(request.Fov ?? 60f, 10f, 120f);
             cam.nearClipPlane = 0.1f;

@@ -318,15 +318,15 @@ namespace UnityCli
             if (!any)
             {
                 if (string.Equals(command, "runtime-tool.list", StringComparison.Ordinal)) { rootId = null; return null; }
-                return Error(requestId, "E_ADMISSION_REQUIRED", "A valid Unity task-pool admission is required before this Runtime business request can enter the queue.", new[] { "Use the current unity_cli to submit the Runtime Tool." });
+                return Error(requestId, "E_ADMISSION_REQUIRED", "A valid Unity task-pool admission is required before this Runtime business request can enter the queue.", new[] { "Use the current unitycli to submit the Runtime Tool." });
             }
             if (string.IsNullOrEmpty(rootId) || string.IsNullOrEmpty(fingerprint) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(deadlineText))
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission headers are incomplete.", new[] { "Resolve the Runtime target again before retrying." });
             if (!string.Equals(rootId, requestId, StringComparison.Ordinal))
-                return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission root requestId does not match the Bridge request body.", new[] { "Submit the request through the current unity_cli." });
+                return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission root requestId does not match the Bridge request body.", new[] { "Submit the request through the current unitycli." });
             DateTimeOffset deadline;
             if (!DateTimeOffset.TryParse(deadlineText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline))
-                return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission deadline is invalid.", new[] { "Submit the request through the current unity_cli." });
+                return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission deadline is invalid.", new[] { "Submit the request through the current unitycli." });
             var outcome = admissionPool.Authorize(rootId, fingerprint, token, listenerId, 1L, deadline.ToUnixTimeMilliseconds());
             if (outcome != UnityCliAdmissionPool.AuthorizeOutcome.Authorized)
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission token is missing, expired, or bound to another root.", new[] { "Wait for a fresh Runtime admission before submitting business work." });

@@ -97,7 +97,7 @@ namespace UnityCli.Cinemachine
                 new[]
                 {
                     "Install com.unity.cinemachine via Unity Package Manager or Packages/manifest.json.",
-                    "Run unity_cli extensions install cinemachine --project <path> after the package is available."
+                    "Run unitycli extensions install cinemachine --project <path> after the package is available."
                 });
         }
 

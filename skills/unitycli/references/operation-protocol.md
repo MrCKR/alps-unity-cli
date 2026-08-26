@@ -1,4 +1,4 @@
-# unity_cli 操作协议
+# UnityCLI 操作协议
 
 只在日常入口不足以判断实例、descriptor、输出、分页、availability、弹窗或长操作语义时读取本文件。
 
@@ -74,10 +74,10 @@ compile、import、domain reload和listener generation交接由session superviso
 Extension 控制面使用：
 
 ```powershell
-unity_cli extensions list --project <path>
-unity_cli extensions install <id> --project <path>
-unity_cli extensions remove <id> --project <path>
-unity_cli extensions doctor --project <path>
+unitycli extensions list --project <path>
+unitycli extensions install <id> --project <path>
+unitycli extensions remove <id> --project <path>
+unitycli extensions doctor --project <path>
 ```
 
 Skill/runtime bundle 安装使用 `init`；`init --check` 只读校验。Unity project 文件投影完成后，如任务要求 Editor 效果，仍需在已连接实例中完成 import/compile 和业务 readback。

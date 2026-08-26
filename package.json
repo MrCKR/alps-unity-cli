@@ -1,10 +1,10 @@
 {
-  "name": "@alpsckr/unity_cli",
+  "name": "@alpsckr/unitycli",
   "version": "0.3.3",
-  "description": "Windows-first CLI for Unity CLI automation.",
+  "description": "Windows-first CLI for UnityCLI automation.",
   "type": "module",
   "bin": {
-    "unity_cli": "dist/cli.js"
+    "unitycli": "dist/cli.js"
   },
   "files": [
     "dist",

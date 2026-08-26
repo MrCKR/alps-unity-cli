@@ -2,11 +2,11 @@
  * 扩展包命令：extensions list/install/remove/doctor。
  *
  * list 查询扩展可用性、安装状态和 Unity Package 映射；install 将扩展目录安装到
- * Packages/com.unity_cli/Extensions/<id>；remove 只移除扩展目录中由 manifest 管理的文件；
+ * Packages/com.alpsckr.unitycli/Extensions/<id>；remove 只移除扩展目录中由 manifest 管理的文件；
  * doctor 诊断依赖、物理文件和状态文件是否一致。
  *
- * 每个项目的启用状态保存在 <project>/Packages/com.unity_cli/extensions.json；
- * 物理文件清单保存在 <project>/Packages/com.unity_cli/unity_cli.extensions.manifest.json。
+ * 每个项目的启用状态保存在 <project>/Packages/com.alpsckr.unitycli/extensions.json；
+ * 物理文件清单保存在 <project>/Packages/com.alpsckr.unitycli/unitycli.extensions.manifest.json。
  * 核心 CLI 不在编译期依赖任何可选 Unity Package。
  */
 
@@ -42,7 +42,7 @@ import type { ExtensionId } from "../extensions/types.js";
 
 /** Location of the per-project extension install state file. */
 function extensionsStatePath(projectPath: string): string {
-  return join(resolve(projectPath), "Packages", "com.unity_cli", "extensions.json");
+  return join(resolve(projectPath), "Packages", "com.alpsckr.unitycli", "extensions.json");
 }
 
 /** 读取启用状态；只有不存在的状态文件可视为空，损坏内容必须 fail closed。 */
@@ -98,7 +98,7 @@ export async function handleExtensionsCommand(
     if (command === "install") return await handleExtensionsInstall(args[0] ?? getString(flags, "name"), flags, runtime, requestId);
     if (command === "remove") return await handleExtensionsRemove(args[0] ?? getString(flags, "name"), flags, runtime, requestId);
     if (command === "doctor") return await handleExtensionsDoctor(flags, requestId);
-    return failure(requestId, "UNKNOWN_EXTENSIONS_COMMAND", `Expected extensions list, install, remove or doctor (got "${command ?? ""}").`, ["Run unity_cli extensions list to see available extensions."]);
+    return failure(requestId, "UNKNOWN_EXTENSIONS_COMMAND", `Expected extensions list, install, remove or doctor (got "${command ?? ""}").`, ["Run unitycli extensions list to see available extensions."]);
   } catch (error) {
     if (error instanceof ExtensionStateError || error instanceof ExtensionInstallerError || error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
     if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);
@@ -152,7 +152,7 @@ async function handleExtensionsList(
       })),
       missingPackageIds: availability.missingPackageIds,
       providedTools,
-      installCommand: `unity_cli extensions install ${desc.manifest.id} --project <path>`,
+      installCommand: `unitycli extensions install ${desc.manifest.id} --project <path>`,
       nextActions: physical?.nextActions ?? availability.nextActions,
       toolCount: desc.tools.length
     };
@@ -177,15 +177,15 @@ async function handleExtensionsInstall(
   requestId: string
 ): Promise<CliResult> {
   if (!extensionId) {
-    return failure(requestId, "EXTENSION_NAME_REQUIRED", "Pass an extension id: unity_cli extensions install <name>.", [
-      "Run unity_cli extensions list to see available extension ids."
+    return failure(requestId, "EXTENSION_NAME_REQUIRED", "Pass an extension id: unitycli extensions install <name>.", [
+      "Run unitycli extensions list to see available extension ids."
     ]);
   }
 
   const registry = new ExtensionRegistry();
   if (!registry.hasExtension(extensionId)) {
     return failure(requestId, "UNKNOWN_EXTENSION", `Unknown extension: ${extensionId}`, [
-      "Run unity_cli extensions list to see available extension ids.",
+      "Run unitycli extensions list to see available extension ids.",
       `Available extensions: ${registry.extensionIds().join(", ")}`
     ]);
   }
@@ -193,8 +193,8 @@ async function handleExtensionsInstall(
   const projectPath = resolveProject(flags);
   if (!projectPath) {
     return failure(requestId, "PROJECT_PATH_REQUIRED", "A project path is required to install an extension. Pass --project <path>.", [
-      "Run unity_cli extensions install <name> --project <path>.",
-      "Run unity_cli extensions list --project <path> to see current state."
+      "Run unitycli extensions install <name> --project <path>.",
+      "Run unitycli extensions list --project <path> to see current state."
     ]);
   }
 
@@ -216,7 +216,7 @@ async function handleExtensionsInstall(
       return failure(requestId, "E_EXTENSION_DEPENDENCY_MISSING", `Extension "${extensionId}" requires Unity package(s) that are not installed: ${availability.missingPackageIds.join(", ")}.`, [
         "Install the required Unity package in Packages/manifest.json or Unity Package Manager.",
         "Run tools run package.resolve after changing packages.",
-        `Then run unity_cli extensions install ${extensionId} --project <path>.`
+        `Then run unitycli extensions install ${extensionId} --project <path>.`
       ]);
     }
     // read-modify-write 必须在互斥锁内完成，否则并发 install 会互相覆盖启用状态。
@@ -248,7 +248,7 @@ async function handleExtensionsInstall(
       status: alreadyInstalled ? "already_installed" : installResult.status, availability: availability.status, projectPath,
       targetRoot: installResult.targetRoot, fileCount: installResult.fileCount, sourceHash: installResult.sourceHash,
       unityPackages: manifest.unityPackages.map((pkg) => ({ packageId: pkg.packageId, displayName: pkg.displayName, installed: availability.packages.find((p) => p.packageId === pkg.packageId)?.installed ?? false })),
-      nextActions: [`Extension "${extensionId}" Unity-side directory is installed under Packages/com.unity_cli/Extensions/${extensionId}.`, "Wait for Unity to recompile, then run tools group list/describe/run for provided tools."]
+      nextActions: [`Extension "${extensionId}" Unity-side directory is installed under Packages/com.alpsckr.unitycli/Extensions/${extensionId}.`, "Wait for Unity to recompile, then run tools group list/describe/run for provided tools."]
     });
   } catch (error) {
     if (error instanceof ExtensionStateError || error instanceof ExtensionInstallerError || error instanceof PackageManagerError || error instanceof StructuredToolError) throw error;
@@ -265,15 +265,15 @@ async function handleExtensionsRemove(
   requestId: string
 ): Promise<CliResult> {
   if (!extensionId) {
-    return failure(requestId, "EXTENSION_NAME_REQUIRED", "Pass an extension id: unity_cli extensions remove <name>.", [
-      "Run unity_cli extensions list to see installed extension ids."
+    return failure(requestId, "EXTENSION_NAME_REQUIRED", "Pass an extension id: unitycli extensions remove <name>.", [
+      "Run unitycli extensions list to see installed extension ids."
     ]);
   }
 
   const projectPath = resolveProject(flags);
   if (!projectPath) {
     return failure(requestId, "PROJECT_PATH_REQUIRED", "A project path is required to remove an extension. Pass --project <path>.", [
-      "Run unity_cli extensions remove <name> --project <path>."
+      "Run unitycli extensions remove <name> --project <path>."
     ]);
   }
 
@@ -298,7 +298,7 @@ async function handleExtensionsRemove(
         throw error;
       }
       const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
-      if (!entry) return { failureResult: failure(requestId, "EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unity_cli extensions list --project <path> to inspect extension state."]) };
+      if (!entry) return { failureResult: failure(requestId, "EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unitycli extensions list --project <path> to inspect extension state."]) };
       if (Date.now() >= absoluteDeadlineMs) {
         return { failureResult: localOutcomeUnknown(requestId, "extensions remove", "The deadline elapsed before the filesystem mutation started.") };
       }
@@ -331,8 +331,8 @@ async function handleExtensionsDoctor(
 
   if (!projectPath) {
     return failure(requestId, "PROJECT_PATH_REQUIRED", "A project path is required to diagnose extensions. Pass --project <path>.", [
-      "Run unity_cli extensions doctor --project <path>.",
-      "Run unity_cli extensions list to see available extensions."
+      "Run unitycli extensions doctor --project <path>.",
+      "Run unitycli extensions list to see available extensions."
     ]);
   }
 

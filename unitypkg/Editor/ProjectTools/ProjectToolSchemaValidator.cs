@@ -71,7 +71,7 @@ namespace UnityCli
                 },
                 new[]
                 {
-                    "Run unity_cli tools describe <tool> or unity_cli tools describe <tool> to inspect inputSchema.",
+                    "Run unitycli tools describe <tool> or unitycli tools describe <tool> to inspect inputSchema.",
                     "Retry with JSON matching the reported path, expected type, and required fields."
                 },
                 false);

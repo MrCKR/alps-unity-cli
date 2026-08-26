@@ -40,7 +40,7 @@ test("legacy project Context registries and authoring docs are absent", async ()
     "unitypkg/Editor/Contexts",
     "src/contexts",
     "src/bridge/domains/context.ts",
-    "skills/unity_cli/references/custom-contexts.md",
+    "skills/unitycli/references/custom-contexts.md",
   ]) await assert.rejects(access(path), { code: "ENOENT" });
 });
 
@@ -69,7 +69,7 @@ test("internal project Tool fingerprint remains bridge-only", async () => {
 });
 
 test("published custom Tool example matches the current async API", async () => {
-  const toolDocs = await readFile("skills/unity_cli/references/custom-tools.md", "utf8");
+  const toolDocs = await readFile("skills/unitycli/references/custom-tools.md", "utf8");
   assert.match(toolDocs, /ValueTask<Result> ExecuteAsync\(/);
   assert.match(toolDocs, /Completion = new ToolCompletionDescriptor/);
   assert.doesNotMatch(toolDocs, /public Result Execute\(/);

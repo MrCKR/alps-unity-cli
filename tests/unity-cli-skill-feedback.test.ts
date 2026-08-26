@@ -7,9 +7,9 @@ import { promisify } from "node:util";
 import test from "node:test";
 
 const execFileAsync = promisify(execFile);
-const scriptPath = resolve("skills", "unity_cli", "scripts", "record-feedback.ps1");
-const skillPath = resolve("skills", "unity_cli", "SKILL.md");
-const operationProtocolPath = resolve("skills", "unity_cli", "references", "operation-protocol.md");
+const scriptPath = resolve("skills", "unitycli", "scripts", "record-feedback.ps1");
+const skillPath = resolve("skills", "unitycli", "SKILL.md");
+const operationProtocolPath = resolve("skills", "unitycli", "references", "operation-protocol.md");
 
 interface FeedbackRecord {
   schemaVersion: number;
@@ -249,7 +249,7 @@ test("feedback recorder keeps exactly one main file and three bounded archives",
 test("Skill feedback contract is opt-in, local, and preserves the cross-session mutation fence", async () => {
   const skill = await readFile(skillPath, "utf8");
   const operationProtocol = await readFile(operationProtocolPath, "utf8");
-  const customTools = await readFile(resolve("skills", "unity_cli", "references", "custom-tools.md"), "utf8");
+  const customTools = await readFile(resolve("skills", "unitycli", "references", "custom-tools.md"), "utf8");
   const script = await readFile(scriptPath);
   assert.equal((skill.match(/^FeedbackMode:\s*(?:off|on)$/gm) ?? []).length, 1);
   assert.match(skill, /^FeedbackMode: off$/m);

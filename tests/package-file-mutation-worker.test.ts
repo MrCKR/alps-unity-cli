@@ -72,7 +72,7 @@ test("Package deploy Worker consumes the frozen backup path for an existing targ
 
     assert.equal(result.backupPath, plan.backupPath);
     assert.equal(await readFile(join(plan.backupPath, "old.txt"), "utf8"), "old\n");
-    const backupEntries = await readdir(join(fixture.project, "Packages", ".unity_cli_deploy_backups"), { withFileTypes: true });
+    const backupEntries = await readdir(join(fixture.project, "Packages", ".unitycli_deploy_backups"), { withFileTypes: true });
     assert.equal(backupEntries.filter((entry) => entry.isDirectory() && entry.name.startsWith(`${packageName}-`)).length, 1);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });

@@ -63,12 +63,12 @@ async function createOwnedProject(root) {
   await Promise.all([
     mkdir(join(root, "Assets", "Scenes"), { recursive: true }),
     mkdir(join(root, "ProjectSettings"), { recursive: true }),
-    mkdir(join(root, "Packages", "com.unity_cli", "Editor"), { recursive: true })
+    mkdir(join(root, "Packages", "com.alpsckr.unitycli", "Editor"), { recursive: true })
   ]);
   await Promise.all([
     writeFile(join(root, "Assets", "Scenes", "Main.unity"), "baseline-scene\n"),
     writeFile(join(root, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 2022.3.61f1\n"),
-    writeFile(join(root, "Packages", "com.unity_cli", "Editor", "Bridge.cs"), "baseline-package\n"),
+    writeFile(join(root, "Packages", "com.alpsckr.unitycli", "Editor", "Bridge.cs"), "baseline-package\n"),
     writeFile(join(root, "Packages", "manifest.json"), "{\"dependencies\":{}}\n"),
     writeFile(join(root, "Packages", "packages-lock.json"), "{\"dependencies\":{}}\n")
   ]);
@@ -1059,14 +1059,14 @@ test("owned project snapshot restores exact bytes and absence closure", async ()
     await mkdir(join(project, "Assets", "Generated"), { recursive: true });
     await writeFile(join(project, "Assets", "Generated", "owned.txt"), "created\n");
     await writeFile(join(project, "Packages", "manifest.json"), "{\"changed\":true}\n");
-    await writeFile(join(project, "Packages", "unity_cli.install.json"), "{\"unexpected\":true}\n");
+    await writeFile(join(project, "Packages", "unitycli.install.json"), "{\"unexpected\":true}\n");
 
     snapshot = await restoreOwnedProjectSnapshot(snapshot);
     assert.equal(snapshot.document.status, "restored");
     assert.equal(snapshot.document.packageStateChanged, true);
     assert.deepEqual(await readFile(join(project, "Assets", "Scenes", "Main.unity")), baselineScene);
     await assert.rejects(() => readFile(join(project, "Assets", "Generated", "owned.txt")), (error) => error?.code === "ENOENT");
-    await assert.rejects(() => readFile(join(project, "Packages", "unity_cli.install.json")), (error) => error?.code === "ENOENT");
+    await assert.rejects(() => readFile(join(project, "Packages", "unitycli.install.json")), (error) => error?.code === "ENOENT");
     assert.equal((await verifyOwnedProjectSnapshotClosure(snapshot)).ok, true);
 
     snapshot = await markOwnedProjectSnapshotReconciled(snapshot, { packageResolve: "PASS", editorRefresh: "PASS" });

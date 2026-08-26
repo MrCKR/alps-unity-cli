@@ -54,7 +54,7 @@ export async function dispatchTool(
   resolvedTool?: ToolMetadata
 ): Promise<CliResult> {
   const dispatchStartedAtMs = Date.now();
-  if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <k1|k2|...> to find related tools."]);
+  if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
   const executionFlagError = validateExecutionTimeoutFlags(flags, requestId);
   if (executionFlagError) return executionFlagError;
 
@@ -106,7 +106,7 @@ export async function dispatchTool(
   const resolved = await resolveCatalogTool(name, catalogFlags, runtime, requestId);
   if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime);
   const tool = resolved.tool;
-  if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unity_cli tools group to see tool groups.", "Run unity_cli tools search <k1|k2|...> to find related tools."]);
+  if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
 
   const input = requestFromInput(tool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
   return dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
@@ -161,7 +161,7 @@ async function acquireCatalogAdmissions(
   const now = Date.now();
   if (leases.some((lease) => lease.grantExpiresAtMs <= now)) {
     await releaseUnconsumedCatalogAdmissions(context);
-    return { result: failure(requestId, "E_UNITY_BUSY", "The Unity task-pool grants for the live catalog did not overlap before the admission deadline; no catalog request was sent.", ["Wait for active Unity CLI tasks to finish, then submit a new request."], { phase: "admission", businessRequestSent: false }, { transient: true, retryAfterMs: 100 }) };
+    return { result: failure(requestId, "E_UNITY_BUSY", "The Unity task-pool grants for the live catalog did not overlap before the admission deadline; no catalog request was sent.", ["Wait for active UnityCLI tasks to finish, then submit a new request."], { phase: "admission", businessRequestSent: false }, { transient: true, retryAfterMs: 100 }) };
   }
   context.executionAbsoluteDeadlineMs = now + timeoutMs;
   for (const lease of leases) lease.executionAbsoluteDeadlineMs = context.executionAbsoluteDeadlineMs;
@@ -199,7 +199,7 @@ async function dispatchResolvedTool(
   ], { toolName: executionTool.name });
   const descriptorMutation = toolIsMutation(executionTool);
   if (completion.mutation !== descriptorMutation) return failure(requestId, "E_TOOL_COMPLETION_CONTRACT_MISMATCH", `Tool ${executionTool.name} completion contract disagrees with its descriptor mutation signals.`, [
-    `Run unity_cli tools describe ${executionTool.name} and fix the descriptor or completion contract before execution.`
+    `Run unitycli tools describe ${executionTool.name} and fix the descriptor or completion contract before execution.`
   ], { toolName: executionTool.name, contractMutation: completion.mutation, descriptorMutation });
   const availabilityFlags = await extensionAvailabilityFlags(flags, runtime);
   const availability = await checkToolExtensionAvailability(executionTool, availabilityFlags);
@@ -208,7 +208,7 @@ async function dispatchResolvedTool(
     "Remove --dry-run and invoke the Tool only when its declared side effects are acceptable.",
   ], { toolName: executionTool.name });
   const schemaErrors = validateSchema(executionTool.inputSchema, input);
-  if (schemaErrors.length > 0) return failure(requestId, "E_SCHEMA_INVALID", `Input schema validation failed at ${schemaErrors[0].path}.`, [`Run unity_cli tools describe ${executionTool.name} to inspect inputSchema.`], {
+  if (schemaErrors.length > 0) return failure(requestId, "E_SCHEMA_INVALID", `Input schema validation failed at ${schemaErrors[0].path}.`, [`Run unitycli tools describe ${executionTool.name} to inspect inputSchema.`], {
     path: schemaErrors[0].path,
     expected: schemaErrors[0].expected,
     actual: schemaErrors[0].actual,
@@ -319,7 +319,7 @@ async function executeDefinition(
       if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
       if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details,
         error.transient === undefined ? undefined : { transient: error.transient, retryAfterMs: error.retryAfterMs });
-      return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [`Run unity_cli tools describe ${tool.name} for input requirements and examples.`]);
+      return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [`Run unitycli tools describe ${tool.name} for input requirements and examples.`]);
     }
   };
 
@@ -330,7 +330,7 @@ async function executeDefinition(
     if (error instanceof PackageManagerError) result = failure(requestId, error.code, error.message, error.nextActions);
     else if (error instanceof StructuredToolError) result = failure(requestId, error.code, error.message, error.nextActions, error.details);
     else result = failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
-      `Run unity_cli tools describe ${tool.name} for input requirements and examples.`
+      `Run unitycli tools describe ${tool.name} for input requirements and examples.`
     ]);
   }
   if (rootResultHasTrustedTerminal(result)) await releaseUnconsumedCatalogAdmissions({ admissions, supervisors, executionAbsoluteDeadlineMs });
@@ -761,7 +761,7 @@ async function acquireToolAdmission(
       }) };
     }
     return { result: failure(requestId, "BRIDGE_CONNECTION_FAILED", error instanceof Error ? error.message : String(error), [
-      "Run unity_cli instances list and inspect the selected Unity session.",
+      "Run unitycli instances list and inspect the selected Unity session.",
     ], undefined, { transient: true, retryAfterMs: 100 }) };
   }
 }
@@ -827,8 +827,8 @@ export async function enrichTargetFailureWithDialogBlocker(result: CliResult, fl
     const details = result.error.details && typeof result.error.details === "object" && !Array.isArray(result.error.details) ? result.error.details : {};
     const title = blockers[0].title;
     return { ...result, error: { ...result.error, message: `${result.error.message} Modal dialog '${title}' was observed.`, details: { ...details, blockers }, nextActions: [
-      "Run unity_cli tools run editor.dialogs to inspect the current modal dialog.",
-      "Run unity_cli tools run editor.dialog.click with a current dialogId and exact button label.",
+      "Run unitycli tools run editor.dialogs to inspect the current modal dialog.",
+      "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label.",
     ] } };
   } catch {
     // An unproven probe must not be represented as an empty blocker list or replace the original failure.

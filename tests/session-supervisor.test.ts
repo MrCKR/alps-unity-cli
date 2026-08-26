@@ -289,7 +289,7 @@ test("cross-session mutation stops after one POST and returns bounded outcome un
       assert.equal(error.details?.replay, "new-decision-required");
       assert.match(String(error.details?.reason), /session changed/);
       assert.deepEqual(error.nextActions, [
-        "Run unity_cli tools run editor.state to observe the selected Editor before making a new submission decision.",
+        "Run unitycli tools run editor.state to observe the selected Editor before making a new submission decision.",
         "Use the affected capability's read-only Tool or artifact readback to determine whether the prior mutation took effect.",
       ]);
       assert.doesNotMatch(error.nextActions.join(" "), /dialog|retry|repeat|replay/i);

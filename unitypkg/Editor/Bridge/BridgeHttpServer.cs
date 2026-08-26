@@ -147,7 +147,7 @@ namespace UnityCli
 
         private static string BridgePackageAssetPath()
         {
-            return "Packages/com.unity_cli/Editor/UnityCliBridge.cs";
+            return "Packages/com.alpsckr.unitycli/Editor/UnityCliBridge.cs";
         }
 
         private static string BridgePackageName()
@@ -242,7 +242,7 @@ namespace UnityCli
             catch (Exception exception)
             {
                 WriteLog("handle_http_unhandled " + exception.GetType().Name + ": " + exception.Message);
-                TryWriteSerializeErrorEnvelope(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled Bridge error.", "Run unity_cli instances list and inspect editor.state before retrying.");
+                TryWriteSerializeErrorEnvelope(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled Bridge error.", "Run unitycli instances list and inspect editor.state before retrying.");
             }
         }
 

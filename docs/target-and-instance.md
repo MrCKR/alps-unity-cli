@@ -11,9 +11,9 @@ CLI 只接受本机可证明的 Unity 项目目录。目录大小写、尾分隔
 ## 查看实例
 
 ```powershell
-unity_cli instances list
-unity_cli instances list --all
-unity_cli instances prune
+unitycli instances list
+unitycli instances list --all
+unitycli instances prune
 ```
 
 `instances list` 默认排除 `status="offline"` 的记录；存在隐藏项时返回 `hiddenOfflineCount`。只有需要审计历史/offline identity 时使用 `--all`，此时返回完整合法集合并省略 `hiddenOfflineCount`。每项公开字段固定为 `instanceId`、可选 `alias`、`canonicalProjectPath`、`displayProjectPath`、`projectName`、`status` 和可选 `unityVersion`；`--all` 不会恢复内部 session、快照、进程 claim 或诊断字段。
@@ -47,9 +47,9 @@ Tool discovery、describe、`tools run`与`command`使用同一严格选择规�
 不存在按PID、短hash、单个存活Editor或任意健康实例自动选取的路径。只有至少两个已验证live process claim才返回`E_INSTANCE_CONFLICT`；权限失败、超时或PID/start/project identity无法证明时返回`E_INSTANCE_UNVERIFIABLE`。选定项目已证明无运行进程时返回`E_INSTANCE_NOT_RUNNING`。
 
 ```powershell
-unity_cli tools describe editor.compile --instance <project-path>
-unity_cli tools run editor.compile --instance my-project --timeout-ms 120000
-unity_cli tools run editor.state --instance unity-<64-hex> --input '{}'
+unitycli tools describe editor.compile --instance <project-path>
+unitycli tools run editor.compile --instance my-project --timeout-ms 120000
+unitycli tools run editor.state --instance unity-<64-hex> --input '{}'
 ```
 
 ## Alias
@@ -57,9 +57,9 @@ unity_cli tools run editor.state --instance unity-<64-hex> --input '{}'
 `target` 只管理 canonical project identity alias，不保存全局活动目标：
 
 ```powershell
-unity_cli target alias set <projectPath|instanceId> <alias>
-unity_cli target alias list
-unity_cli target alias unset <alias>
+unitycli target alias set <projectPath|instanceId> <alias>
+unitycli target alias list
+unitycli target alias unset <alias>
 ```
 
 alias 绑定完整 `instanceId`、canonical project path 和 canonicalization version。Editor offline 时 alias 仍可解析 identity，但 Tool discovery 要求运行中的 Editor 并返回 `E_INSTANCE_NOT_RUNNING`。`--instance` 或 CWD 始终决定本次调用的目标。

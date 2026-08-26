@@ -81,12 +81,12 @@ describe("success envelope", () => {
 describe("failure envelope", () => {
   it("creates a failure envelope with ok=false, requestId, and error", () => {
     const requestId = createRequestId();
-    const result = failure(requestId, "UNKNOWN_COMMAND", "Unknown command: foo", ["Run unity_cli --help."]);
+    const result = failure(requestId, "UNKNOWN_COMMAND", "Unknown command: foo", ["Run unitycli --help."]);
     assert.ok(!result.ok);
     assert.equal(result.requestId, requestId);
     assert.equal(result.error?.code, "UNKNOWN_COMMAND");
     assert.equal(result.error?.message, "Unknown command: foo");
-    assert.deepEqual(result.error?.nextActions, ["Run unity_cli --help."]);
+    assert.deepEqual(result.error?.nextActions, ["Run unitycli --help."]);
   });
 
   it("transient errors are marked with transient=true and retryAfterMs", () => {

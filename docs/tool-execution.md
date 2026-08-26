@@ -6,13 +6,13 @@
 
 ```powershell
 # 通过 --input 传参（JSON 字符串）
-unity_cli tools run camera.list --input '{}'
+unitycli tools run camera.list --input '{}'
 
 # 通过 --input-file 传参（JSON 文件）
-unity_cli tools run camera.screenshot --input-file params.json
+unitycli tools run camera.screenshot --input-file params.json
 
 # 通过 --stdin 传参
-echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
+echo '{"target":"Main Camera"}' | unitycli tools run camera.screenshot --stdin
 ```
 
 ## 执行路由
@@ -33,10 +33,10 @@ echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
 
 ```powershell
 # 正确：提供 inputSchema 要求的字段
-unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":"shot.png"}'
+unitycli tools run camera.screenshot --input '{"target":"Main Camera","output":"shot.png"}'
 
 # 错误：缺少必需字段
-unity_cli tools run camera.screenshot --input '{}'
+unitycli tools run camera.screenshot --input '{}'
 # → E_SCHEMA_INVALID, nextActions 指向 tools describe
 ```
 
@@ -46,7 +46,7 @@ unity_cli tools run camera.screenshot --input '{}'
 
 ## 调用进程预算
 
-外层命令host必须等待`unity_cli`进程退出，不能在CLI仍运行时把调用报告为完成。`--timeout-ms T`分别提供最多`T`的Unity任务池准入等待，以及放行后最多`T`的业务执行；因此host等待预算至少为`2 * T + 5000`毫秒。未显式传timeout时，先从`tools describe`的example execution或Tool边界选择`T`。CLI在任一内部deadline到达后输出一个完整JSON envelope；stdout完成后立即退出，stdout未完成时最多再等待1秒。CLI timeout只结束调用方等待，不会强停Unity中已经开始的effect；host提前退出同样不能作为effect停止证明。
+外层命令host必须等待`unitycli`进程退出，不能在CLI仍运行时把调用报告为完成。`--timeout-ms T`分别提供最多`T`的Unity任务池准入等待，以及放行后最多`T`的业务执行；因此host等待预算至少为`2 * T + 5000`毫秒。未显式传timeout时，先从`tools describe`的example execution或Tool边界选择`T`。CLI在任一内部deadline到达后输出一个完整JSON envelope；stdout完成后立即退出，stdout未完成时最多再等待1秒。CLI timeout只结束调用方等待，不会强停Unity中已经开始的effect；host提前退出同样不能作为effect停止证明。
 
 ## Unity 任务池准入
 
@@ -67,7 +67,7 @@ Bridge-backed Tool由Unity Editor主线程执行。准入放行后，session sup
 `editor.compile` 是唯一公开编译 Tool。一次调用在同一 root request 下等待 pre-existing import/compile、触发 owned compilation cycle、跨 domain reload 恢复、收集本次 `CompilationPipeline` diagnostics，并等待 Editor 与 listener 重新稳定。公开成功要求 `compile.completed=true`、`errorCount=0`、`editorState.status=ready`；warning 可作为 diagnostics 返回。compiler error 返回 `E_UNITY_COMPILE_FAILED`，不会用旧 Console 历史判断本次结果。
 
 ```powershell
-unity_cli tools run editor.compile --input '{"refresh":true,"includeWarnings":true}' --timeout-ms 120000
+unitycli tools run editor.compile --input '{"refresh":true,"includeWarnings":true}' --timeout-ms 120000
 ```
 
 accepted、queued、phase、run ID 和 listener 字段仅属于内部 coordinator，不会成为公开成功。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh 或 compile。
@@ -82,10 +82,10 @@ accepted、queued、phase、run ID 和 listener 字段仅属于内部 coordinato
 
 ```powershell
 # 可选：支持时预览 plannedEffects，不执行 mutation
-unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
+unitycli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
 
 # 公开调用即授权并执行
-unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
+unitycli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
 ```
 
 不支持 `--dry-run` 的 Tool 使用该选项时返回 `E_DRY_RUN_UNSUPPORTED`；直接调用不受影响。
@@ -105,13 +105,13 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
 
 ```powershell
 # 先读场景小页，再用 nextCursor 续页
-unity_cli tools run scene.hierarchy --input '{"pageSize":50,"query":"Camera"}'
+unitycli tools run scene.hierarchy --input '{"pageSize":50,"query":"Camera"}'
 
 # 深读时只读需要的字段，并限制数组项
-unity_cli tools run component.get --input '{"path":"Player","component":"Inventory","paths":["items"],"maxArrayItems":20}'
+unitycli tools run component.get --input '{"path":"Player","component":"Inventory","paths":["items"],"maxArrayItems":20}'
 
 # Shader 源码分段读取
-unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","maxBytes":65536}'
+unitycli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","maxBytes":65536}'
 ```
 
 ## 验证策略
@@ -151,10 +151,10 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 
 ```powershell
 # 先读后改
-unity_cli tools run component.get --input '{"path":"Player","component":"Rigidbody"}'
-unity_cli tools run component.modify --input '{"path":"Player","component":"Rigidbody","pathPatches":[{"path":"m_Mass","op":"replace","value":10}]}'
+unitycli tools run component.get --input '{"path":"Player","component":"Rigidbody"}'
+unitycli tools run component.modify --input '{"path":"Player","component":"Rigidbody","pathPatches":[{"path":"m_Mass","op":"replace","value":10}]}'
 
-unity_cli tools run object.modify --input '{"path":"Player","pathPatches":[{"path":"m_Name","op":"replace","value":"PlayerModified"}]}'
+unitycli tools run object.modify --input '{"path":"Player","pathPatches":[{"path":"m_Name","op":"replace","value":"PlayerModified"}]}'
 ```
 
 ## reflection.method.call
@@ -162,7 +162,7 @@ unity_cli tools run object.modify --input '{"path":"Player","pathPatches":[{"pat
 `reflection.method.call` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），且 `destructiveHint: true`。先用 `reflection.method.find` 获取签名；存在同名 overload 时，将选中签名的 `parameterType` 数组作为 `parameterTypes`。公开调用即授权：
 
 ```powershell
-unity_cli tools run reflection.method.call --input '{
+unitycli tools run reflection.method.call --input '{
   "typeName":"UnityEngine.Transform",
   "methodName":"Translate",
   "parameterTypes":["UnityEngine.Vector3","UnityEngine.Space"],

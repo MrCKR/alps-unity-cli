@@ -208,7 +208,7 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Runtime tool name is required.",
                     new Dictionary<string, object> { { "field", "name" } },
-                    new[] { "Run unity_cli tools search <keyword> --instance <id|projectPath|alias>, then execute a valid runtime Tool with --runtime." });
+                    new[] { "Run unitycli tools search <keyword> --instance <id|projectPath|alias>, then execute a valid runtime Tool with --runtime." });
             }
 
             if (!playModeReady)
@@ -216,14 +216,14 @@ namespace UnityCli
                 WriteLog("runtime_tool_not_ready requestId=" + request.RequestId + " name=" + name + " sessionId=" + (currentPlayModeSessionId ?? "null"));
                 throw new BridgeCommandException("E_RUNTIME_NOT_READY",
                     "Runtime Tool cannot execute because the selected Editor is not in a ready Play Mode session.",
-                    "Run unity_cli tools run editor.play, wait until editor.state reports ready Play Mode, then retry.");
+                    "Run unitycli tools run editor.play, wait until editor.state reports ready Play Mode, then retry.");
             }
 
             // Validate the tool exists and is a runtime tool
             if (!ProjectTools.ContainsKey(name))
             {
                 throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name,
-                    "Run unity_cli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
+                    "Run unitycli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 
             var definition = ProjectTools[name];

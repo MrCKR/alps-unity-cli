@@ -54,9 +54,9 @@ async function makeProjectDir(installedPackages: Record<string, string> = {}, en
 
   // Write extensions install state if any
   if (enabledExtensions.length > 0) {
-    await mkdir(join(dir, "Packages", "com.unity_cli"), { recursive: true });
+    await mkdir(join(dir, "Packages", "com.alpsckr.unitycli"), { recursive: true });
     await writeFile(
-      join(dir, "Packages", "com.unity_cli", "extensions.json"),
+      join(dir, "Packages", "com.alpsckr.unitycli", "extensions.json"),
       JSON.stringify({ extensions: enabledExtensions })
     );
   }
@@ -122,7 +122,7 @@ test("extensions list includes nextActions for unavailable extensions", async ()
     assert.equal(probuilder.availability, "unavailable");
     assert.ok(probuilder.nextActions.length > 0);
     assert.ok(probuilder.nextActions.some((a) => a.includes("Unity Package Manager")));
-    assert.ok(probuilder.nextActions.some((a) => a.includes("unity_cli extensions install probuilder")));
+    assert.ok(probuilder.nextActions.some((a) => a.includes("unitycli extensions install probuilder")));
   } finally {
     await rm(project, { recursive: true, force: true });
   }
@@ -195,10 +195,10 @@ test("extensions install creates a Unity extension directory package", async () 
     const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     assert.ok(result.ok);
     const data = result.data as { targetRoot: string; fileCount: number };
-    assert.ok(data.targetRoot.endsWith(join("Packages", "com.unity_cli", "Extensions", "probuilder")));
+    assert.ok(data.targetRoot.endsWith(join("Packages", "com.alpsckr.unitycli", "Extensions", "probuilder")));
     assert.ok(data.fileCount > 0);
 
-    const extensionRoot = join(project, "Packages", "com.unity_cli", "Extensions", "probuilder");
+    const extensionRoot = join(project, "Packages", "com.alpsckr.unitycli", "Extensions", "probuilder");
     const installedManifest = JSON.parse(await readFile(join(extensionRoot, "extension.json"), "utf8")) as { id: string; contributions: { tools: Array<{ name: string }> }; unityInstall: { layout: string } };
     assert.equal(installedManifest.id, "probuilder");
     assert.ok(installedManifest.contributions.tools.some((tool) => tool.name === "probuilder.create-shape"));
@@ -211,7 +211,7 @@ test("extensions install creates a Unity extension directory package", async () 
     await assert.rejects(() => stat(join(extensionRoot, "bridge")), { code: "ENOENT" });
     await assert.rejects(() => stat(join(extensionRoot, "tools")), { code: "ENOENT" });
 
-    const installManifest = JSON.parse(await readFile(join(project, "Packages", "com.unity_cli", "unity_cli.extensions.manifest.json"), "utf8")) as {
+    const installManifest = JSON.parse(await readFile(join(project, "Packages", "com.alpsckr.unitycli", "unitycli.extensions.manifest.json"), "utf8")) as {
       extensions: Array<{ extensionId: string; copyRoot: string; layout?: string; files: Array<{ path: string }> }>;
     };
     const entry = installManifest.extensions.find((item) => item.extensionId === "probuilder")!;
@@ -431,10 +431,10 @@ test("writeInstalledExtensions then readInstalledExtensions round-trips", async 
 test("writeInstalledExtensions creates nested directories", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-ext-store-"));
   try {
-    // State path is <project>/Packages/com.unity_cli/extensions.json — both dirs absent
+    // State path is <project>/Packages/com.alpsckr.unitycli/extensions.json — both dirs absent
     await writeInstalledExtensions(project, new Set(["probuilder"]));
     const stateContent = await readFile(
-      join(project, "Packages", "com.unity_cli", "extensions.json"),
+      join(project, "Packages", "com.alpsckr.unitycli", "extensions.json"),
       "utf8"
     );
     const parsed = JSON.parse(stateContent) as { extensions: string[] };
@@ -447,8 +447,8 @@ test("writeInstalledExtensions creates nested directories", async () => {
 test("readInstalledExtensions fails closed for malformed state", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-ext-store-"));
   try {
-    await mkdir(join(project, "Packages", "com.unity_cli"), { recursive: true });
-    await writeFile(join(project, "Packages", "com.unity_cli", "extensions.json"), "not valid json");
+    await mkdir(join(project, "Packages", "com.alpsckr.unitycli"), { recursive: true });
+    await writeFile(join(project, "Packages", "com.alpsckr.unitycli", "extensions.json"), "not valid json");
     await assert.rejects(() => readInstalledExtensions(project), { code: "E_EXTENSION_STATE_INVALID" });
   } finally {
     await rm(project, { recursive: true, force: true });

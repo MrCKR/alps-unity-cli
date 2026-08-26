@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/contracts/stable-session/editor-state.schema.json",
+  "$id": "https://unitycli.local/contracts/stable-session/editor-state.schema.json",
   "title": "editor.state public observation",
   "type": "object",
   "additionalProperties": false,

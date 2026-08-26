@@ -114,7 +114,7 @@ if ($Category -eq "workaround" -and [string]::IsNullOrWhiteSpace($Workaround)) {
     throw "Workaround is required when Category is workaround."
 }
 if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-    throw "LOCALAPPDATA is required to store local unity_cli feedback."
+    throw "LOCALAPPDATA is required to store local unitycli feedback."
 }
 # UNC、映射盘和其他远端 provider 会绕过本机 mutex，因此仅接受固定本地盘。
 try {
@@ -168,7 +168,7 @@ try {
         $mutexHeld = $true
     }
     if (-not $mutexHeld) {
-        throw "Timed out waiting for the unity_cli feedback writer."
+        throw "Timed out waiting for the unitycli feedback writer."
     }
 
     Assert-NoReparsePath -Path $feedbackRoot

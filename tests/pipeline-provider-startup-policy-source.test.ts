@@ -28,7 +28,7 @@ test("project settings default Bridge AutoStart on and keep handoff marker one-w
   assert.match(source, /internal bool PipelineHandoffApplied/);
   assert.match(source, /MarkPipelineHandoffApplied\(\)[\s\S]*?pipelineHandoffApplied = true;[\s\S]*?Save\(true\)/);
   assert.doesNotMatch(source, /pipelineHandoffApplied = false/);
-  assert.match(source, /SettingsProvider\("Project\/Unity CLI", SettingsScope\.Project\)/);
+  assert.match(source, /SettingsProvider\("Project\/UnityCLI", SettingsScope\.Project\)/);
   assert.doesNotMatch(source, /SetBridgeAutoStart[\s\S]*?(StartListener|StopListener|UnregisterAndStop)/);
 });
 

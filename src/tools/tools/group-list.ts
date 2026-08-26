@@ -20,13 +20,13 @@ export default defineTool<ToolsGroupListRequest, ToolsGroupListResult>({
   playModeSupport: "supported",
   examples: [{ description: "List tools in the camera group", argv: ["tools", "run", "tools.group-list", "--input", "{\"group\":\"camera\"}"] }],
   async execute(request, context) {
-    if (!request.group) throw new StructuredToolError("TOOLS_GROUP_LIST_NAME_REQUIRED", "Pass a group name: unity_cli tools group list <group>.", ["Run unity_cli tools group to see all tool groups."]);
+    if (!request.group) throw new StructuredToolError("TOOLS_GROUP_LIST_NAME_REQUIRED", "Pass a group name: unitycli tools group list <group>.", ["Run unitycli tools group to see all tool groups."]);
     const flags = context.flags ?? {};
     const catalog = await loadToolCatalog(flags, context, `${context.requestId}_group_list_execution`);
     if (catalog.ok === false) throw StructuredToolError.from(catalog.error ?? { code: "TOOL_DISCOVERY_FAILED", message: "Tool discovery failed." });
     const availabilityFlags = await extensionAvailabilityFlags(flags, context);
     const matches = catalog.tools.filter((tool) => tool.group === request.group);
-    if (matches.length === 0) throw new StructuredToolError("E_TOOL_GROUP_NOT_FOUND", `Tool group not found: ${request.group}.`, ["Run unity_cli tools group to see all tool groups."]);
+    if (matches.length === 0) throw new StructuredToolError("E_TOOL_GROUP_NOT_FOUND", `Tool group not found: ${request.group}.`, ["Run unitycli tools group to see all tool groups."]);
     const tools = await Promise.all(matches.map(async (tool) => {
       const availability = await checkToolExtensionAvailability(tool, availabilityFlags);
       return {

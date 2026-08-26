@@ -27,7 +27,7 @@
       "expires_at": "2027-08-05",
       "evidence": [
         "Owner decision D008",
-        "skills/unity_cli/references/feedback.md"
+        "skills/unitycli/references/feedback.md"
       ],
       "target_enforcement": {
         "openai": "Bundled runtime script path",

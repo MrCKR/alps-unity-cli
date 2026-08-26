@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unity-cli.local/contracts/stable-session/completion-contract.schema.json",
+  "$id": "https://unitycli.local/contracts/stable-session/completion-contract.schema.json",
   "title": "Public Tool completion contract registry",
   "type": "object",
   "additionalProperties": false,

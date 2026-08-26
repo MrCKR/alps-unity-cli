@@ -4,7 +4,7 @@
 
 ## 项目定位
 
-`unity_cli` 是面向 AI 的 Windows-first Unity Editor 自动化 CLI，不是 MCP server。
+`unitycli` 是面向 AI 的 Windows-first Unity Editor 自动化 CLI，不是 MCP server。
 
 核心目标不是维护供人记忆的传统命令手册，而是提供可发现、可描述、可审计、可验证的能力目录，让陌生 AI 仅凭公开 CLI 一次发现、一次理解、一次安全调用。
 
@@ -88,8 +88,8 @@ CLI控制面：
 ## Dev Unity 与正式环境隔离
 
 1. **正式根专用**：默认 `%LOCALAPPDATA%\UnityCli\` 只允许已发布 CLI、与其匹配的已发布 Unity Package 和用户真实项目使用。`./Dev/UnityProject`、源码构建 CLI、未发布 Unity Package、Live matrix、gate 或其他开发验证不得向该根写入实例、日志、请求或 artifact。
-2. **固定 Dev 根**：所有 `./Dev` 真实 Unity 验证统一使用 `%LOCALAPPDATA%\UnityCli-Dev\`；Unity Editor 进程与对应源码 CLI 必须在启动时逐进程注入同一个 `UNITY_CLI_DATA_DIR`。禁止按请求、日期或版本创建无限多个 Dev 根；Dev 根内临时文件仍放在其 `.temp\` 下并遵守数量与大小上限。
-3. **禁止全局环境污染**：不得用 `setx`、用户级或系统级环境变量切换 `UNITY_CLI_DATA_DIR`。变量只能注入本次 Dev Unity 进程和与其配套的 CLI 进程；正式版 CLI 必须保持默认根。通过已有 Unity Hub 普通启动 Dev 项目不能证明继承了隔离变量，禁止作为验证启动方式；启动后必须核对 Dev 记录只出现在 Dev 根，正式根文件集合未变化。
+2. **固定 Dev 根**：所有 `./Dev` 真实 Unity 验证统一使用 `%LOCALAPPDATA%\UnityCli-Dev\`；Unity Editor 进程与对应源码 CLI 必须在启动时逐进程注入同一个 `UNITYCLI_DATA_DIR`。禁止按请求、日期或版本创建无限多个 Dev 根；Dev 根内临时文件仍放在其 `.temp\` 下并遵守数量与大小上限。
+3. **禁止全局环境污染**：不得用 `setx`、用户级或系统级环境变量切换 `UNITYCLI_DATA_DIR`。变量只能注入本次 Dev Unity 进程和与其配套的 CLI 进程；正式版 CLI 必须保持默认根。通过已有 Unity Hub 普通启动 Dev 项目不能证明继承了隔离变量，禁止作为验证启动方式；启动后必须核对 Dev 记录只出现在 Dev 根，正式根文件集合未变化。
 4. **未发布格式不得进入正式根**：实例、health 或其他共享文件格式发生未发布变化时，即使 `package.json` 版本号尚未变化，也必须视为与正式版不同的开发实现并保持隔离。只有完成版本同步、发布门禁和正式发布后，匹配的 CLI 与 Unity Package 才能使用正式根。
 5. **故障清理精确到单文件**：清理错误实例记录前必须先确认写入它的 Unity 进程已退出，再列出文件绝对路径、所属项目、格式版本与备份目标；只允许移动或删除已确认的单个文件，禁止删除整个 `instances\`、整个数据根或其他项目记录。备份使用固定有界位置，不得形成逐次累积。
 6. **正式 Unity 进程不可代管**：自动化验证只可管理 `./Dev/UnityProject`。未经用户针对明确项目和明确动作的本轮授权，不得启动、关闭、重启或终止用户真实项目的 Unity Editor；“继续处理”“后面的你操作”等泛化授权不得解释为进程控制授权。即使获得关闭授权也应优先由 Unity 正常退出，禁止以强制终止替代正常关闭。
@@ -99,13 +99,13 @@ CLI控制面：
 
 项目 Skill 是硬规范，不是可选参考。命中任务后必须在实施前使用 `read` 完整读取对应 `SKILL.md`；系统提示中的 name/description 元数据不能替代正文。一个任务命中多个领域时必须全部加载。
 
-`.pi/skills/unity-cli-*` 只约束本仓库内的开发、验证与发布，不是安装产物。`skills/unity_cli/SKILL.md` 及其 `manifest.json` 允许投影的 references/scripts 才是 `init` 安装后提供给陌生 AI 的公开 `unity_cli` Skill；公开调用、等待、错误恢复或 host 预算变化时，必须在产品实现完成后同步更新该 Skill，禁止提前描述尚未实现的行为。
+`.pi/skills/unity-cli-*` 只约束本仓库内的开发、验证与发布，不是安装产物。`skills/unitycli/SKILL.md` 及其 `manifest.json` 允许投影的 references/scripts 才是 `init` 安装后提供给陌生 AI 的公开 `unitycli` Skill；公开调用、等待、错误恢复或 host 预算变化时，必须在产品实现完成后同步更新该 Skill，禁止提前描述尚未实现的行为。
 
 ### `unity-cli-issue-lifecycle`
 
 路径：`.pi/skills/unity-cli-issue-lifecycle/SKILL.md`
 
-在真实 Unity 项目或 Dev 项目发现产品缺陷，准备先修改已安装的 `Packages/com.unity_cli` 做验证、再同步 `unitypkg` 产品源码时必须读取。用户要求问题登记、`in-progress`/`completed` 状态管理、根因与修复闭环时也必须读取。
+在真实 Unity 项目或 Dev 项目发现产品缺陷，准备先修改已安装的 `Packages/com.alpsckr.unitycli` 做验证、再同步 `unitypkg` 产品源码时必须读取。用户要求问题登记、`in-progress`/`completed` 状态管理、根因与修复闭环时也必须读取。
 
 - 问题必须先登记到 `.issues/in-progress/`；Skill 启用前已经修改的现场必须立即补登记并如实标注。
 - 目标项目 Package 验证通过后才能同步 canonical 产品源码；产品验证全部通过后才能把同一文件移动到 `.issues/completed/`。

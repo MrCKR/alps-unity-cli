@@ -31,11 +31,11 @@ test("searchRegistry projects only the declared public package fields", async ()
   }
 });
 
-test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", async () => {
+test("ensurePackageBridge copies unitypkg contents to Packages/com.alpsckr.unitycli", async () => {
   const project = await makeUnityProject();
   const result = await ensurePackageBridge(project);
 
-  assert.equal(result.dependencyName, "com.unity_cli");
+  assert.equal(result.dependencyName, "com.alpsckr.unitycli");
   assert.equal(result.packageVersion, "0.3.3");
   assert.equal(result.installMode, "copy");
   assert.equal(result.projectHash.length, 64);
@@ -45,7 +45,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", a
   // Target directory should exist and contain the package
   const bridgePath = result.bridgePath;
   const packageJson = JSON.parse(await readFile(join(bridgePath, "package.json"), "utf8")) as { name: string; version: string };
-  assert.equal(packageJson.name, "com.unity_cli");
+  assert.equal(packageJson.name, "com.alpsckr.unitycli");
   assert.equal(packageJson.version, "0.3.3");
 
   // Editor files should be copied
@@ -61,21 +61,21 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.unity_cli", a
 
   // Install metadata should exist
   const metadata = JSON.parse(await readFile(result.installMetadataPath, "utf8")) as { packageName: string; installMode: string; sourceHash: string; managedFilesSha256: string };
-  assert.equal(metadata.packageName, "com.unity_cli");
+  assert.equal(metadata.packageName, "com.alpsckr.unitycli");
   assert.equal(metadata.installMode, "copy");
   assert.equal(metadata.sourceHash, result.sourceHash);
   assert.match(metadata.managedFilesSha256, /^[a-f0-9]{64}$/);
 
   // No file: dependency in manifest
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
-  assert.equal(manifest.dependencies["com.unity_cli"], undefined);
+  assert.equal(manifest.dependencies["com.alpsckr.unitycli"], undefined);
 });
 
 test("ensurePackageBridge refreshes orphaned legacy metadata when the package directory is absent", async () => {
   const project = await makeUnityProject();
-  const metadataPath = join(project, "Packages", "unity_cli.install.json");
+  const metadataPath = join(project, "Packages", "unitycli.install.json");
   await writeFile(metadataPath, `${JSON.stringify({
-    packageName: "com.unity_cli",
+    packageName: "com.alpsckr.unitycli",
     packageVersion: "0.1.0",
     sourceHash: "0".repeat(64),
     projectHash: "legacy",
@@ -94,10 +94,10 @@ test("ensurePackageBridge refreshes orphaned legacy metadata when the package di
 
 test("ensurePackageBridge rejects invalid metadata when the package directory exists", async () => {
   const project = await makeUnityProject();
-  const packagePath = join(project, "Packages", "com.unity_cli");
+  const packagePath = join(project, "Packages", "com.alpsckr.unitycli");
   await mkdir(packagePath, { recursive: true });
-  await writeFile(join(packagePath, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.1.0" }), "utf8");
-  await writeFile(join(project, "Packages", "unity_cli.install.json"), "{}\n", "utf8");
+  await writeFile(join(packagePath, "package.json"), JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.1.0" }), "utf8");
+  await writeFile(join(project, "Packages", "unitycli.install.json"), "{}\n", "utf8");
   await assert.rejects(() => ensurePackageBridge(project), { code: "INIT_CHECK_FAILED" });
 });
 
@@ -135,7 +135,7 @@ test("ensurePackageBridge removes a proven stale publish sibling before idempote
   const first = await ensurePackageBridge(project);
   const stale = `${first.bridgePath}.previous-00000000-0000-4000-8000-000000000001`;
   await mkdir(stale, { recursive: true });
-  await writeFile(join(stale, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.2.2" }), "utf8");
+  await writeFile(join(stale, "package.json"), JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.2.2" }), "utf8");
 
   const second = await ensurePackageBridge(project);
   assert.equal(second.installTime, first.installTime);
@@ -343,7 +343,7 @@ test("ensurePackageBridge republishes tampered identity and compatibility metada
 
     await ensurePackageBridge(project);
     const observed = JSON.parse(await readFile(installed.installMetadataPath, "utf8")) as Record<string, unknown>;
-    assert.equal(observed.packageName, "com.unity_cli");
+    assert.equal(observed.packageName, "com.alpsckr.unitycli");
     assert.equal(observed.cliCompatibilityRange, ">=0.2.0 <0.3.0");
   }
 });
@@ -354,7 +354,7 @@ test("checkPackageBridge succeeds for valid copy-mode install", async () => {
   await ensurePackageBridge(project);
   const checked = await checkPackageBridge(project);
 
-  assert.equal(checked.dependencyName, "com.unity_cli");
+  assert.equal(checked.dependencyName, "com.alpsckr.unitycli");
   assert.equal(checked.packageVersion, "0.3.3");
   assert.equal(checked.installMode, "copy");
   assert.equal(checked.projectHash.length, 64);
@@ -373,9 +373,9 @@ test("checkPackageBridge fails when install metadata is missing", async () => {
   const project = await makeUnityProject();
 
   // Copy the package without going through ensurePackageBridge
-  const packages = join(project, "Packages", "com.unity_cli");
+  const packages = join(project, "Packages", "com.alpsckr.unitycli");
   await mkdir(join(packages, "Editor"), { recursive: true });
-  await writeFile(join(packages, "package.json"), JSON.stringify({ name: "com.unity_cli", version: "0.2.2" }), "utf8");
+  await writeFile(join(packages, "package.json"), JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.2.2" }), "utf8");
 
   await assert.rejects(
     () => checkPackageBridge(project),
@@ -443,7 +443,7 @@ test("deployPackageSource rejects an existing target with an unreadable package 
 test("deployPackageSource rejects the internal deployment backup directory as package name", async () => {
   const project = await makeUnityProject();
   const source = await mkdtemp(join(tmpdir(), "unity-pkg-source-backup-name-"));
-  await writeFile(join(source, "package.json"), JSON.stringify({ name: ".unity_cli_deploy_backups", version: "1.0.0" }), "utf8");
+  await writeFile(join(source, "package.json"), JSON.stringify({ name: ".unitycli_deploy_backups", version: "1.0.0" }), "utf8");
 
   await assert.rejects(
     () => deployPackageSource(project, source),
@@ -466,7 +466,7 @@ test("deploy and restore retain the prior package until metadata commit", async 
   assert.equal(await readFile(join(target, "new.txt"), "utf8"), "new");
   assert.ok(deployed.backupPath);
   assert.equal(await readFile(join(deployed.backupPath!, "old.txt"), "utf8"), "old");
-  await assert.rejects(() => stat(join(project, "Packages", ".unity_cli_deploy_backups", "package-deployment-transaction.json")), { code: "ENOENT" });
+  await assert.rejects(() => stat(join(project, "Packages", ".unitycli_deploy_backups", "package-deployment-transaction.json")), { code: "ENOENT" });
   await writeFile(join(source, "package.json"), `${JSON.stringify({ name: packageName, version: "3.0.0" })}\n`, "utf8");
   const repeated = await deployPackageSource(project, source);
   assert.equal(repeated.backupPath, deployed.backupPath);
@@ -513,14 +513,14 @@ test("deploy rejects target drift against the durable pre-state before marker cr
     }
   }), { code: "PACKAGE_DEPLOY_PRESTATE_CHANGED" });
   assert.equal(await readFile(join(target, "concurrent.txt"), "utf8"), "concurrent");
-  await assert.rejects(() => stat(join(project, "Packages", ".unity_cli_deploy_backups", "package-deployment-transaction.json")), { code: "ENOENT" });
+  await assert.rejects(() => stat(join(project, "Packages", ".unitycli_deploy_backups", "package-deployment-transaction.json")), { code: "ENOENT" });
 });
 
 test("deployment recovery rejects a transaction root path without deleting backups", async () => {
   const project = await makeUnityProject();
   const source = await mkdtemp(join(tmpdir(), "unity-marker-source-"));
   await writeFile(join(source, "package.json"), `${JSON.stringify({ name: "com.example.marker", version: "1.0.0" })}\n`, "utf8");
-  const backupRoot = join(project, "Packages", ".unity_cli_deploy_backups");
+  const backupRoot = join(project, "Packages", ".unitycli_deploy_backups");
   await mkdir(backupRoot, { recursive: true });
   const sentinel = join(backupRoot, "sentinel.txt");
   await writeFile(sentinel, "keep", "utf8");
@@ -543,7 +543,7 @@ test("deployment recovery rejects an unsafe package target without deleting proj
   await mkdir(settings, { recursive: true });
   const sentinel = join(settings, "ProjectSettings.asset");
   await writeFile(sentinel, "keep", "utf8");
-  const backupRoot = join(project, "Packages", ".unity_cli_deploy_backups");
+  const backupRoot = join(project, "Packages", ".unitycli_deploy_backups");
   const transactionRoot = join(backupRoot, "transactions", "00000000-0000-4000-8000-000000000001");
   await mkdir(backupRoot, { recursive: true });
   await writeFile(join(backupRoot, "package-deployment-transaction.json"), `${JSON.stringify({
@@ -564,7 +564,7 @@ test("deploy rejects a non-canonical planned backup before transaction cleanup",
   await writeFile(join(target, "package.json"), `${JSON.stringify({ name: packageName, version: "1.0.0" })}\n`, "utf8");
   const source = await mkdtemp(join(tmpdir(), "unity-plan-source-"));
   await writeFile(join(source, "package.json"), `${JSON.stringify({ name: packageName, version: "2.0.0" })}\n`, "utf8");
-  const backupRoot = join(project, "Packages", ".unity_cli_deploy_backups");
+  const backupRoot = join(project, "Packages", ".unitycli_deploy_backups");
 
   await assert.rejects(() => deployPackageSource(project, source, { plannedBackupPath: backupRoot }), { code: "PACKAGE_DEPLOY_PLAN_INVALID" });
   await stat(join(target, "package.json"));
@@ -589,7 +589,7 @@ test("restore rejects backup drift against the durable pre-state before marker c
     backupExists: observed.backupExists, backupHash: observed.backupHash,
   } }), { code: "PACKAGE_RESTORE_PRESTATE_CHANGED" });
   assert.equal(JSON.parse(await readFile(join(target, "package.json"), "utf8")).version, "2.0.0");
-  await assert.rejects(() => stat(join(project, "Packages", ".unity_cli_deploy_backups", "package-deployment-transaction.json")), { code: "ENOENT" });
+  await assert.rejects(() => stat(join(project, "Packages", ".unitycli_deploy_backups", "package-deployment-transaction.json")), { code: "ENOENT" });
 });
 
 test("restore rejects a declared backup that is missing", async () => {

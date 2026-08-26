@@ -286,7 +286,7 @@ function checkCompileStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
   const errors = Array.isArray(compile.compileErrors) ? compile.compileErrors.filter((e): e is string => typeof e === "string") : [];
   const status: DoctorCheck["status"] = hasErrors ? "fail" : compiling ? "warn" : "pass";
   const message = hasErrors
-    ? `Unity has compile errors (${errors.length} shown). Often caused by a broken extension under Packages/com.unity_cli/Extensions.`
+    ? `Unity has compile errors (${errors.length} shown). Often caused by a broken extension under Packages/com.alpsckr.unitycli/Extensions.`
     : compiling
       ? "Unity is currently compiling scripts."
       : "Unity scripts compiled cleanly.";
@@ -510,24 +510,24 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
       switch (check.name) {
         case "instance_registry":
           if (check.status === "warn") {
-            suggestions.push("Open a Unity project with the Unity CLI Bridge package installed.");
-            suggestions.push("Run unity_cli init --project <path> to set up the bridge.");
+            suggestions.push("Open a Unity project with the UnityCLI Bridge package installed.");
+            suggestions.push("Run unitycli init --project <path> to set up the bridge.");
           }
           break;
         case "ready_instances":
           suggestions.push("Reopen the Unity Editor for the exact canonical project path if no session is active.");
-          suggestions.push("Run unity_cli instances list to inspect transitioning, blocked, offline, or conflicting claims.");
+          suggestions.push("Run unitycli instances list to inspect transitioning, blocked, offline, or conflicting claims.");
           break;
         case "bridge_connectivity":
-          suggestions.push("Ensure Unity Editor is running with the Unity CLI Bridge package for the selected --instance or CWD project.");
-          suggestions.push("Run unity_cli instances list to inspect identity, session, blocker, and transition state.");
+          suggestions.push("Ensure Unity Editor is running with the UnityCLI Bridge package for the selected --instance or CWD project.");
+          suggestions.push("Run unitycli instances list to inspect identity, session, blocker, and transition state.");
           break;
         case "project_tool_fingerprint":
-          suggestions.push("Inspect unity_cli doctor fingerprint details, then review project tool descriptor/handler code changes.");
+          suggestions.push("Inspect unitycli doctor fingerprint details, then review project tool descriptor/handler code changes.");
           suggestions.push("Apply the reported rePinValue only after accepting the exact Tool change.");
           break;
         case "data_directory":
-          suggestions.push("Run any unity_cli command to auto-create the data directory.");
+          suggestions.push("Run any unitycli command to auto-create the data directory.");
           break;
         case "config_integrity":
           suggestions.push("Re-initialize the canonical registry claim by restarting Unity Editor.");
@@ -536,17 +536,17 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Delete only the reported obsolete config.json, aliases.json, or aggregate instances.json files after auditing them.");
           break;
         case "unified_tool_discovery":
-          suggestions.push("Run unity_cli tools group to see tool groups.");
-          suggestions.push("Run unity_cli tools group list <group> with a connected Unity instance to inspect its complete Tool descriptors.");
+          suggestions.push("Run unitycli tools group to see tool groups.");
+          suggestions.push("Run unitycli tools group list <group> with a connected Unity instance to inspect its complete Tool descriptors.");
           break;
         case "extension_registry":
-          suggestions.push("Run unity_cli extensions list to see available extensions.");
-          suggestions.push("Run unity_cli extensions doctor to check extension status.");
+          suggestions.push("Run unitycli extensions list to see available extensions.");
+          suggestions.push("Run unitycli extensions doctor to check extension status.");
           break;
         case "extension_availability":
-          suggestions.push("Run 'unity_cli extensions doctor --project <path>' for detailed extension diagnostics.");
-          suggestions.push("Run 'unity_cli extensions list --project <path>' to see all extensions and their status.");
-          suggestions.push("Install missing Unity packages manually via Unity Package Manager or Packages/manifest.json, then run the matching 'unity_cli extensions install <id> --project <path>'.");
+          suggestions.push("Run 'unitycli extensions doctor --project <path>' for detailed extension diagnostics.");
+          suggestions.push("Run 'unitycli extensions list --project <path>' to see all extensions and their status.");
+          suggestions.push("Install missing Unity packages manually via Unity Package Manager or Packages/manifest.json, then run the matching 'unitycli extensions install <id> --project <path>'.");
           break;
       }
     }

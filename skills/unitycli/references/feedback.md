@@ -1,4 +1,4 @@
-# unity_cli 问题反馈
+# UnityCLI 问题反馈
 
 只在 `SKILL.md` 的 `FeedbackMode` 为 `on` 且本次实际出现摩擦时读取。正常成功、常规 discovery 或没有问题的调用不得记录。
 

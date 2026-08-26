@@ -1,10 +1,10 @@
 ---
 name: unity-cli-release
-description: unity_cli 的版本号语义与 npm 发布流程硬规范。升版本、打 tag、npm publish、push、本地安装验证时必须读取；判断一次改动应升大版本还是小版本、判断是否达到正式发布标准时也必须读取。
+description: unitycli 的版本号语义与 npm 发布流程硬规范。升版本、打 tag、npm publish、push、本地安装验证时必须读取；判断一次改动应升大版本还是小版本、判断是否达到正式发布标准时也必须读取。
 compatibility: 适用于 alps-unity-cli；需要 pwsh、npm、git 与已登录 npm 账号。
 ---
 
-# Unity CLI 版本与发布规范
+# UnityCLI 版本与发布规范
 
 约束「升版本 -> 门禁 -> tag -> publish -> push」的固定流程。发布是独立动作，不与功能提交捆绑：功能改动先提交，版本号与发布作为单独 `chore(release)` commit + tag。
 
@@ -28,19 +28,19 @@ compatibility: 适用于 alps-unity-cli；需要 pwsh、npm、git 与已登录 n
 
 - `package.json` → `version`
 - `unitypkg/package.json` → `version`
-- `skills/unity_cli/manifest.json` → `version`
+- `skills/unitycli/manifest.json` → `version`
 - `tests/package-manager.test.ts` → 当前版本断言
 - `dist/` → 由 build 重新生成，不手改
 
 改完后验证三处 version 一致：
-`node -e "console.log(require('./package.json').version, require('./unitypkg/package.json').version)"` 与 `skills/unity_cli/manifest.json` 一致。
+`node -e "console.log(require('./package.json').version, require('./unitypkg/package.json').version)"` 与 `skills/unitycli/manifest.json` 一致。
 
 ## 发布前置门禁（全部满足才发布）
 
 1. 发布所含增删改及其直接影响面的自动化测试全部通过，并记录测试命令与变更覆盖关系；不得默认运行无关的全仓测试。允许的唯一失败必须是在 `.issues/completed/` 已登记的 pre-existing 项。
 2. `node .pi/skills/unity-cli-issue-lifecycle/scripts/validate-issues.mjs` 输出 `failures: []`。
 3. 涉及工具/契约变更时，`contracts/static-capability-catalog.json` 已 re-capture，outputSchema 与源码一致。
-4. 涉及 skill 版本时，`skills/unity_cli/manifest.json` 与 `package.json` 一致。
+4. 涉及 skill 版本时，`skills/unitycli/manifest.json` 与 `package.json` 一致。
 5. 发布前 `npm whoami` 确认已登录 npm。
 
 ## 发布流程（严格顺序）
@@ -51,7 +51,7 @@ compatibility: 适用于 alps-unity-cli；需要 pwsh、npm、git 与已登录 n
 4. **tag**：`git tag vA.B.C`。
 5. **publish**：`npm publish --access public`（prepack 自动 build）。
 6. **push**：`git push origin main` + `git push origin vA.B.C`。
-7. **本地验证**：`npm i -g @alpsckr/unity_cli@A.B.C` + `unity_cli --version` 确认版本。
+7. **本地验证**：`npm i -g @alpsckr/unitycli@A.B.C` + `unitycli --version` 确认版本。
 
 ## 边界
 

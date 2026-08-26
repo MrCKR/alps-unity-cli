@@ -6,7 +6,7 @@ import { BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
 import "../src/extensions/index.js";
 
 const INTERNAL_SOURCE_PATTERN = /\b(CoplayDev|IvanMurzak|Aligns with|reference project|inspired by)\b/i;
-const COMMAND_SAMPLE_PATTERN = /\b(?:unity_cli\s+)?tools\s+run\s+[\w.-]+\b/i;
+const COMMAND_SAMPLE_PATTERN = /\b(?:unitycli\s+)?tools\s+run\s+[\w.-]+\b/i;
 const LARGE_OUTPUT_PATTERN = /\b(pageInfo|cursor|nextCursor|plannedEffects|artifactDir|truncated)\b/i;
 
 const P0_EXAMPLE_TOOLS = new Set([

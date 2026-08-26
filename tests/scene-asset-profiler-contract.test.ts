@@ -78,20 +78,20 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   assert.match(assetExists, /File\.Exists\(fullPath\)/);
   assert.match(assetExists, /AssetDatabase\.LoadMainAssetAtPath\(assetPath\) != null/);
   assert.doesNotMatch(assetExists, /AssetPathToGUID/);
-  assert.doesNotMatch(assetSource, /unity_cli asset/);
+  assert.doesNotMatch(assetSource, /unitycli asset/);
 
   assert.match(sceneSource, /class SceneHierarchyTool : IUnityCliTool</);
   assert.match(sceneSource, /public string Parent[\s\S]*public string Query[\s\S]*public string ComponentType[\s\S]*IncludeComponents/);
   assert.match(sceneSource, /CollectHierarchy\(Transform transform, List<HierarchyItem> items, int depth, int maxDepth, string query, bool includeInactive, bool includeComponents, string componentType\)/);
   assert.match(sceneSource, /BuildPageInfo\(pageSize, cursor, total, page\.Count\)/);
-  assert.doesNotMatch(sceneSource, /unity_cli scene/);
+  assert.doesNotMatch(sceneSource, /unitycli scene/);
 
   assert.match(goSource, /SearchGameObjects\(searchMethod, searchTerm, includeInactive\)[\s\S]*PageInfo = new GoPageInfo/);
   assert.match(goSource, /ResolveUniqueTarget[\s\S]*FindObjectsOfType<GameObject>\(true\)/);
   assert.match(goSource, /ResolveComponentType\(string componentName\)/);
   assert.match(goSource, /ValidateMutationInputs[\s\S]*ResolveModifyTargets\(request\)[\s\S]*UnityCliSceneMutation\.RecordObject/);
   assert.match(goSource, /GameObject look-at requires a lookAt target[\s\S]*go\.look-at --input/);
-  assert.doesNotMatch(goSource, /unity_cli scene hierarchy/);
+  assert.doesNotMatch(goSource, /unitycli scene hierarchy/);
 
   assert.match(consoleSource, /class ConsoleGetTool : IUnityCliTool/);
   assert.match(consoleSource, /Skip\(cursor\)\.Take\(count\)/);
@@ -100,7 +100,7 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   assert.match(menuSource, /string\.Equals\(request\.Path, "File\/Save"/);
   assert.match(menuSource, /ctx\.Wait\.UntilStable\([\s\S]*!activeScene\.isDirty/);
   assert.match(menuSource, /scene\.isDirty/);
-  assert.doesNotMatch(menuSource, /unity_cli editor menu/);
+  assert.doesNotMatch(menuSource, /unitycli editor menu/);
 });
 
 test("scene.view-frame synchronizes the hidden SceneView camera before frustum proof", async () => {

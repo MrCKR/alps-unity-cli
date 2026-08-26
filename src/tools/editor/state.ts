@@ -80,7 +80,7 @@ export async function readEditorState(context: EditorStateReadContext, dependenc
   const selectObservation = dependencies.selectObservation ?? selectObservationInstanceForFlags;
   const observer = dependencies.observer ?? new EditorBlockerObserver();
   const observationDeadlineMs = Math.min(startedAt + OBSERVATION_BUDGET_MS, context.absoluteDeadlineMs ?? Number.POSITIVE_INFINITY);
-  if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "Unity CLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <instanceId|projectPath|alias> or run from a Unity project directory."]);
+  if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "UnityCLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <instanceId|projectPath|alias> or run from a Unity project directory."]);
   let selection: InstanceSelection;
   let instance: UnityInstance;
   try {
