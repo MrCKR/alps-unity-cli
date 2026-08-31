@@ -12,12 +12,14 @@ const schema = JSON.parse(await readFile("schemas/init.schema.json", "utf8")) as
 function assertValid(value: unknown): void { assert.deepEqual(validateSchema(schema, value), [], JSON.stringify(value)); }
 
 test("init contract and schema enumerate the final command surface only", () => {
-  assert.equal(contract.version, 1);
+  assert.equal(contract.version, 2);
   assert.equal(contract.schema, "schemas/init.schema.json");
   assert.deepEqual(Object.keys(contract.subcommands), ["help", "discover", "package", "skill"]);
   assert.deepEqual(contract.subcommands.skill.agents, [".agents", "claude"]);
   assert.deepEqual(contract.subcommands.skill.scopes, ["workspace", "user"]);
-  assert.doesNotMatch(JSON.stringify({ contract, schema }), /pkg-only|skill-only|\.pi\/skills|<pi\|/);
+  assert.deepEqual(contract.subcommands.package.options, ["project", "close-editor", "check", "timeout-ms"]);
+  assert.deepEqual(contract.subcommands.skill.requiredAnyOf, [["target"], ["agent", "scope"]]);
+  assert.doesNotMatch(JSON.stringify({ contract, schema }), /pkg-only|skill-only|<pi\|/);
   assert.equal(schema.oneOf.length, 2);
   assert.ok(schema.$defs.helpData && schema.$defs.discoverData && schema.$defs.packageData && schema.$defs.skillData && schema.$defs.error);
 });
@@ -37,6 +39,7 @@ test("actual init success/check envelopes pass full JSON Schema validation", asy
       await execute(["init", "discover"], runtime),
       await execute(["init", "package", "--project", project, "--check"], runtime),
       await execute(["init", "skill", "--agent", ".agents", "--scope", "user", "--check"], runtime),
+      await execute(["init", "skill", "--target", join(root, ".pi", "skills", "unitycli"), "--check"], runtime),
     ];
     for (const result of results) { assert.equal(result.ok, true, JSON.stringify(result)); assertValid(result); }
     const helpWithUnknown = { ...results[0], unknown: true };

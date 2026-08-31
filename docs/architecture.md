@@ -51,11 +51,11 @@ Descriptions expose the input and execution boundary required for one correct ca
 Installation is split by ownership:
 
 - `init package` owns one explicit Unity project's `Packages/com.alpsckr.unitycli` copy.
-- `init skill` owns one explicit `.agents` or Claude workspace/user Skill target.
-- `init discover` is a bounded, read-only filesystem observation.
+- `init skill` owns one exact user-selected Skill directory or one `.agents`/Claude preset target.
+- `init discover` is a bounded, read-only current-project installation plan with exact Editor running state.
 - `init help` is the static, versioned AI setup protocol.
 
-Bridge and Skill installation are separate effects. The CLI is non-interactive; the AI asks the user for required project, agent, scope, and workspace decisions.
+Bridge and Skill installation are independent effects. The CLI is non-interactive; the AI preserves explicit user targets, infers the unique current project/workspace, and asks only unresolved decisions. Normally closing an exact running Editor requires separate explicit approval and the install-scoped `--close-editor`; force termination is never used.
 
 The Bridge source is the npm-local canonical `unitypkg`. `contracts/package-files.json` fixes every managed path, size, SHA-256, and the complete tree hash. Installation validates the source before planning and again before effect, publishes through staging/rename, and proves the target from fresh filesystem readback.
 

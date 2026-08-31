@@ -36,7 +36,7 @@ The Skill does not add confirmation, intent review, or a predefined operation ra
 
 - Full repository tests: 876/876 PASS; targeted Skill/installer/docs regression: 61/61 PASS.
 - Recorder concurrency, rotation, privacy negatives, PowerShell 5.1 BOM, and non-ASCII stdout: PASS.
-- Public runtime install, drifted update, check, marker preservation, and installed-recorder smoke across `.claude` and `.agents`: PASS.
+- Public exact-target and preset runtime install, drifted update, check, marker preservation, and installed-recorder smoke: PASS.
 - Resource boundary: 963 estimated initial-load tokens (691 Skill body tokens), limit 1300.
 - Trigger fixture gate: 29/29 classifications.
 - Output assertion gate: 5/5 with-skill cases, 100% pass rate.

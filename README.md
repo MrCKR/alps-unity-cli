@@ -8,7 +8,7 @@ Windows-first Unity Editor automation CLI for AI agents. The executable is `unit
 - Node.js 20 or newer
 - Unity 2022.3 or newer
 - A Unity project when installing the Bridge
-- An opened Unity Editor only when using live Unity capabilities; installation does not start or stop Unity
+- An opened Unity Editor only when using live Unity capabilities; installation may normally close only the exact target Editor after explicit user approval
 
 ## Install
 
@@ -22,14 +22,7 @@ Start your AI in the directory where you normally work and tell it:
 
 > 执行 unitycli init help，然后照做。
 
-`init help` contains the complete AI installation protocol. The AI first runs read-only discovery, then asks you:
-
-- which discovered Unity projects should receive the Bridge;
-- whether the Skill target is generic Agent Skills (`.agents`) or Claude;
-- whether the Skill belongs to one workspace or to the current user;
-- which directory is your normal AI workspace when workspace scope is selected.
-
-The AI does not silently choose these values. Multiple Bridge projects are installed one at a time. Installation does not start, close, restart, or terminate Unity.
+`init help` contains the complete AI installation protocol. Read-only discovery uses the unique current Unity project and workspace without asking you to repeat them, reports the installed and available Bridge versions, and accepts any exact Skill directory you already named. It asks only when a real choice remains, including permission to normally close the exact target Unity Editor before replacing an in-use Bridge. It never force-terminates Unity or decides an unsaved-scene prompt.
 
 ## Manual Setup
 
@@ -40,14 +33,22 @@ unitycli init help
 unitycli init discover
 ```
 
-Install or repair the Bridge in one explicit Unity project:
+Install or repair the Bridge in one explicit Unity project. Use `--close-editor` only after the user approves normally closing that exact project:
 
 ```powershell
 unitycli init package --project C:\path\UnityProject
+unitycli init package --project C:\path\UnityProject --close-editor
 unitycli init package --project C:\path\UnityProject --check
 ```
 
-Install or check generic Agent Skills in one workspace:
+Install or check an exact user-selected Skill directory, including Pi:
+
+```powershell
+unitycli init skill --target C:\path\Workspace\.pi\skills\unitycli
+unitycli init skill --target C:\path\Workspace\.pi\skills\unitycli --check
+```
+
+Generic Agent Skills remain available as a preset:
 
 ```powershell
 unitycli init skill --agent .agents --scope workspace --workspace C:\path\Workspace
@@ -71,7 +72,7 @@ unitycli init skill --agent claude --scope user
 unitycli init skill --agent claude --scope user --check
 ```
 
-Workspace and user scope are separate choices. UnityCLI does not install both automatically. A workspace can be the parent of one or more Unity projects.
+Preset workspace and user scope are separate choices. An exact `--target` is final user intent and cannot be combined with preset agent/scope options. Bridge and Skill are independently authorized effects; failure of one does not invalidate or block the other.
 
 ## Verify And Diagnose
 
@@ -79,6 +80,7 @@ Package and Skill checks are read-only:
 
 ```powershell
 unitycli init package --project C:\path\UnityProject --check
+unitycli init skill --target C:\path\Workspace\.pi\skills\unitycli --check
 unitycli init skill --agent .agents --scope workspace --workspace C:\path\Workspace --check
 ```
 
@@ -161,6 +163,7 @@ unitycli init help
 To remove a workspace or user Skill, delete only the selected `unitycli` Skill directory:
 
 ```text
+<explicit-target>/unitycli
 <workspace>/.agents/skills/unitycli
 <workspace>/.claude/skills/unitycli
 ~/.agents/skills/unitycli

@@ -15,9 +15,11 @@ async function makeUnityProject(path: string, version = "2022.3.61f1"): Promise<
   await writeFile(join(path, "ProjectSettings", "ProjectVersion.txt"), `m_EditorVersion: ${version}\n`, "utf8");
 }
 
-function projects(data: Record<string, unknown>): Array<{ path: string; unityVersion: string; relation: string; depth: number }> {
-  return data.unityProjects as Array<{ path: string; unityVersion: string; relation: string; depth: number }>;
+function projects(data: Record<string, unknown>): Array<{ path: string; unityVersion: string; relation: string; depth: number; bridge: { status: string }; editor: { status: string; processCount?: number } }> {
+  return data.unityProjects as Array<{ path: string; unityVersion: string; relation: string; depth: number; bridge: { status: string }; editor: { status: string; processCount?: number } }>;
 }
+
+const stoppedRuntime = { findUnityProjectProcesses: async () => [] };
 
 async function snapshot(root: string, relative = ""): Promise<Array<{ path: string; sha256: string }>> {
   const result: Array<{ path: string; sha256: string }> = [];
@@ -40,7 +42,7 @@ test("discover finds CWD, ancestor, and bounded descendant Unity projects with e
     await mkdir(workspace, { recursive: true });
     await Promise.all([makeUnityProject(direct, "2022.3.61f1"), makeUnityProject(nested, "2023.2.20f1"), makeUnityProject(ancestor, "6000.0.40f1")]);
 
-    const descendantData = await discoverInitEnvironment(workspace, root);
+    const descendantData = await discoverInitEnvironment(workspace, root, stoppedRuntime);
     assert.equal(descendantData.cwd, resolve(workspace));
     assert.equal(descendantData.repositoryRoot, resolve(root));
     assert.deepEqual(projects(descendantData).map((item) => ({ path: item.path, version: item.unityVersion, relation: item.relation, depth: item.depth })), [
@@ -48,12 +50,39 @@ test("discover finds CWD, ancestor, and bounded descendant Unity projects with e
       { path: resolve(nested), version: "2023.2.20f1", relation: "descendant", depth: 2 },
     ]);
 
-    const cwdData = await discoverInitEnvironment(direct, root);
-    assert.ok(projects(cwdData).some((item) => item.path === resolve(direct) && item.relation === "cwd" && item.depth === 0));
+    const cwdData = await discoverInitEnvironment(direct, root, stoppedRuntime);
+    assert.deepEqual(projects(cwdData).map((item) => ({ path: item.path, relation: item.relation, depth: item.depth, bridge: item.bridge.status, editor: item.editor.status })), [
+      { path: resolve(direct), relation: "cwd", depth: 0, bridge: "missing", editor: "stopped" },
+    ]);
+    assert.equal(cwdData.scan, undefined);
     const child = join(ancestor, "Tools", "Sub");
     await mkdir(child, { recursive: true });
-    const ancestorData = await discoverInitEnvironment(child, root);
+    const ancestorData = await discoverInitEnvironment(child, root, stoppedRuntime);
     assert.ok(projects(ancestorData).some((item) => item.path === resolve(ancestor) && item.relation === "ancestor" && item.depth === 2));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("discover reports one close-Editor decision for the exact running current project", async () => {
+  const root = await mkdtemp(join(tmpdir(), "unity-discover-running-"));
+  try {
+    await makeUnityProject(root);
+    const data = await discoverInitEnvironment(root, root, {
+      findUnityProjectProcesses: async (_instanceId, projectPath) => [{ processId: 42, processStartedAt: "2026-08-31T00:00:00.000Z", executablePath: "C:\\Unity\\Unity.exe", argv: ["Unity.exe", "-projectPath", projectPath], projectPath }],
+      inspectPackageBridge: async (projectPath) => ({ status: "drifted", projectPath, bridgePath: join(projectPath, "Packages", "com.alpsckr.unitycli"), sourceHash: "a".repeat(64), installedVersion: "0.4.0", availableVersion: "0.4.1", reasonCode: "PACKAGE_INSTALL_DRIFTED" }),
+    });
+    const project = projects(data)[0];
+    assert.equal(project.editor.status, "running");
+    assert.equal(project.editor.processCount, 1);
+    assert.equal(project.bridge.status, "drifted");
+    assert.deepEqual((data.requiredDecisions as Array<{ id: string; projectPath: string }>), [{
+      id: "closeEditor",
+      question: "May UnityCLI normally close the exact target Unity project before Bridge installation?",
+      projectPath: resolve(root),
+      multiple: false,
+    }]);
+    assert.equal(data.scan, undefined);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -76,7 +105,7 @@ test("discover rejects partial markers and skips ignored, linked, and over-depth
     await makeUnityProject(external);
     await symlink(external, join(workspace, "LinkedGame"), "junction");
 
-    const data = await discoverInitEnvironment(workspace, root);
+    const data = await discoverInitEnvironment(workspace, root, stoppedRuntime);
     assert.deepEqual(projects(data), []);
     assert.equal((data.scan as { truncated: boolean }).truncated, false);
   } finally {
@@ -84,7 +113,7 @@ test("discover rejects partial markers and skips ignored, linked, and over-depth
   }
 });
 
-test("discover reports Skill copies, hashes, per-host shadowing, decisions, and zero writes", async () => {
+test("discover returns one recommended workspace Skill target without enumerating every host and scope", async () => {
   const root = await mkdtemp(join(tmpdir(), "unity-discover-skills-"));
   try {
     const workspace = join(root, "workspace");
@@ -93,38 +122,19 @@ test("discover reports Skill copies, hashes, per-host shadowing, decisions, and 
     await mkdir(userHome);
     const sourcePath = await findSkillSourcePath();
     await agentSkillInstaller.installForAgents([".agents"], sourcePath, workspace);
-    await agentSkillInstaller.installForAgents([".agents"], sourcePath, userHome);
-    await agentSkillInstaller.installForAgents(["claude"], sourcePath, workspace);
-    await agentSkillInstaller.installForAgents(["claude"], sourcePath, userHome);
-    await writeFile(join(userHome, ".agents", "skills", "unitycli", "references", "custom-tools.md"), "# drifted\n", "utf8");
-    await writeFile(join(workspace, ".claude", "skills", "unitycli", "SKILL.md"), "# damaged\n\nFeedbackMode: invalid\n", "utf8");
     const before = await snapshot(root);
 
-    const data = await discoverInitEnvironment(workspace, userHome);
-    const copies = data.skillCopies as Array<{ scope: string; agent: string; status: string; targetPath: string; sourceHash: string; hash?: string }>;
-    assert.equal(copies.length, 4);
-    const by = (scope: string, agent: string) => copies.find((copy) => copy.scope === scope && copy.agent === agent)!;
-    assert.equal(by("workspace", ".agents").status, "installed");
-    assert.match(by("workspace", ".agents").hash!, /^[a-f0-9]{64}$/);
-    assert.equal(by("user", ".agents").status, "drifted");
-    assert.match(by("user", ".agents").sourceHash, /^[a-f0-9]{64}$/);
-    assert.equal(by("workspace", "claude").status, "damaged");
-    assert.equal(by("user", "claude").status, "installed");
-    assert.equal(by("workspace", ".agents").targetPath, join(resolve(workspace), ".agents", "skills", "unitycli"));
-    assert.equal(by("user", "claude").targetPath, join(resolve(userHome), ".claude", "skills", "unitycli"));
-
-    const risks = data.shadowingRisks as Array<{ agent: string; precedence: string[]; copies: unknown[] }>;
-    assert.equal(risks.length, 2);
-    const genericRisk = risks.find((risk) => risk.agent === ".agents")!;
-    const claudeRisk = risks.find((risk) => risk.agent === "claude")!;
-    assert.deepEqual(genericRisk.precedence, ["workspace", "user"]);
-    assert.equal(genericRisk.copies.length, 2);
-    assert.deepEqual(claudeRisk.precedence, ["user", "workspace"]);
-    assert.equal(claudeRisk.copies.length, 2);
+    const data = await discoverInitEnvironment(workspace, userHome, stoppedRuntime);
+    const skill = data.skill as { workspace: string; recommendedTarget: string; explicitTargetSupported: boolean; status: string; hash?: string };
+    assert.equal(skill.workspace, resolve(workspace));
+    assert.equal(skill.recommendedTarget, join(resolve(workspace), ".agents", "skills", "unitycli"));
+    assert.equal(skill.explicitTargetSupported, true);
+    assert.equal(skill.status, "installed");
+    assert.match(skill.hash!, /^[a-f0-9]{64}$/);
     assert.deepEqual(projects(data), []);
-    assert.deepEqual((data.skillWorkspaces as Array<{ path: string }>).map((item) => item.path), [resolve(workspace)]);
-    assert.deepEqual((data.requiredDecisions as Array<{ id: string }>).map((item) => item.id), ["bridgeProjects", "skillAgent", "skillScope", "skillWorkspace"]);
-    assert.ok((data.nextActions as string[]).every((item) => /user|help/i.test(item)));
+    assert.deepEqual(data.requiredDecisions, []);
+    assert.equal("skillCopies" in data, false);
+    assert.equal("shadowingRisks" in data, false);
     assert.deepEqual(await snapshot(root), before);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -136,19 +146,19 @@ test("discover returns stable zero/multi results and caps a large directory queu
   try {
     const empty = join(root, "empty");
     await mkdir(empty);
-    const zero = await discoverInitEnvironment(empty, root);
+    const zero = await discoverInitEnvironment(empty, root, stoppedRuntime);
     assert.deepEqual(projects(zero), []);
-    assert.ok((zero.skillCopies as Array<{ status: string }>).every((copy) => copy.status === "missing"));
-    assert.deepEqual(zero.shadowingRisks, []);
+    assert.equal((zero.skill as { status: string }).status, "missing");
+    assert.deepEqual(zero.requiredDecisions, []);
 
     const large = join(root, "large");
     await mkdir(large);
     await Promise.all(Array.from({ length: 2005 }, (_, index) => mkdir(join(large, `dir-${String(index).padStart(4, "0")}`))));
-    const bounded = await discoverInitEnvironment(large, root);
+    const bounded = await discoverInitEnvironment(large, root, stoppedRuntime);
     assert.deepEqual(projects(bounded), []);
     assert.equal((bounded.scan as { truncated: boolean }).truncated, true);
     assert.ok((bounded.scan as { scannedDirectories: number }).scannedDirectories <= 2000);
-    assert.deepEqual(bounded.limits, { maxDescendantDepth: 4, maxScannedDirectories: 2000, maxUnityProjects: 100, maxWorkspaceCandidates: 20 });
+    assert.deepEqual(bounded.scan, { scannedDirectories: 2000, truncated: true, maxDescendantDepth: 4, maxScannedDirectories: 2000, maxUnityProjects: 100 });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

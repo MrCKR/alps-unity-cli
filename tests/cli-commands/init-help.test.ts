@@ -17,29 +17,30 @@ async function tree(root: string, relative = ""): Promise<Array<{ path: string; 
   return result.sort((left, right) => left.path.localeCompare(right.path));
 }
 
-test("init help is self-contained for AI decisions, serial effects, checks, and stop boundaries", async () => {
+test("init help is self-contained for minimal decisions, explicit targets, normal close, and independent effects", async () => {
   const result = await execute(["init", "help"]);
   assert.equal(result.ok, true, JSON.stringify(result));
   if (!result.ok) throw new Error("Expected init help success.");
   const data = result.data as any;
   assert.equal(data.action, "init_help");
   assert.equal(data.audience, "ai");
-  assert.equal(data.protocolVersion, 1);
+  assert.equal(data.protocolVersion, 2);
   assert.equal(data.nextCommand, "unitycli init discover");
-  assert.deepEqual(Object.keys(data.commands).sort(), ["discover", "packageCheck", "packageInstall", "userSkillCheck", "userSkillInstall", "workspaceSkillCheck", "workspaceSkillInstall"]);
-  assert.match(data.commands.packageInstall, /init package --project <UnityProject>/);
+  assert.deepEqual(Object.keys(data.commands).sort(), ["discover", "explicitSkillCheck", "explicitSkillInstall", "packageCheck", "packageInstall", "packageInstallAndCloseEditor", "userSkillCheck", "userSkillInstall", "workspaceSkillCheck", "workspaceSkillInstall"]);
+  assert.match(data.commands.packageInstallAndCloseEditor, /--close-editor/);
+  assert.match(data.commands.explicitSkillInstall, /--target <SkillDirectory>/);
   assert.match(data.commands.workspaceSkillInstall, /--agent <\.agents\|claude> --scope workspace --workspace <path>/);
-  assert.match(data.commands.userSkillInstall, /--scope user/);
   const instructions = data.aiInstructions.join("\n");
   assert.match(instructions, /Run `unitycli init discover`/);
-  assert.match(instructions, /ask the user.*Unity projects.*agent\/scope\/workspace/i);
-  assert.match(instructions, /strict serial order/);
-  assert.match(instructions, /Skill only once/i);
-  assert.match(instructions, /corresponding command with `--check`/);
-  assert.match(instructions, /Stop immediately after the first unexpected CLI failure or failed business check/);
-  assert.match(instructions, /Do not start, close, restart, or terminate Unity Editor/);
-  assert.match(instructions, /authorized effects.*do not add another confirmation gate/i);
-  assert.doesNotMatch(JSON.stringify(data), /README|pkg-only|skill-only|\.pi\/skills/);
+  assert.match(instructions, /user already specified as final/i);
+  assert.match(instructions, /Ask only entries present in discovery.requiredDecisions/i);
+  assert.match(instructions, /ask once.*closed normally/i);
+  assert.match(instructions, /never force-terminate/i);
+  assert.match(instructions, /independent authorized effects/i);
+  assert.match(instructions, /failure blocks only that effect/i);
+  assert.match(instructions, /corresponding `--check`/);
+  assert.doesNotMatch(instructions, /Stop immediately after the first unexpected|do not continue with later installation/i);
+  assert.doesNotMatch(JSON.stringify(data), /README|pkg-only|skill-only/);
 });
 
 test("init help reads no workspace files and rejects additional input", async () => {

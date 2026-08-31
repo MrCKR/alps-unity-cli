@@ -82,4 +82,4 @@ unitycli extensions remove <id> --project <path>
 unitycli extensions doctor --project <path>
 ```
 
-安装协议先使用`unitycli init help`学习，再由`init discover`只读发现现场。Bridge只用`init package --project <UnityProject>`安装，并用同命令加`--check`校验；Skill只用`init skill --agent <.agents|claude> --scope <workspace|user>`，workspace scope还必须传`--workspace <path>`，同命令加`--check`校验。不得使用裸`init`或混装Bridge与Skill。Unity project文件投影完成后，如任务要求Editor效果，仍需在已连接实例中完成import/compile和业务readback；安装协议本身不得管理Unity进程。
+安装协议先使用`unitycli init help`学习，再由`init discover`只读返回当前项目计划。Bridge使用`init package --project <UnityProject>`安装；准确目标Unity正在运行且用户同意正常关闭时增加`--close-editor`，不得强制终止或替用户处理未保存场景。Skill明确目录使用`init skill --target <SkillDirectory>`，预设目标仍可使用`init skill --agent <.agents|claude> --scope <workspace|user>`，workspace scope同时传`--workspace <path>`；每种形式都用原命令加`--check`校验。用户已指定的目标不得重复询问。Bridge与Skill是独立效果，一个失败不阻断另一个。不得使用裸`init`或把两种效果合并为一个命令。Unity project文件投影完成后，如任务要求Editor效果，仍需在已连接实例中完成import/compile和业务readback。

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { ensurePackageBridge, checkPackageBridge, deployPackageSource, hashPackageTree, inspectPackageAssemblyConflicts, inspectPackageBridge, inspectPackageDeploymentFiles, preparePackageBridgeInstall, removePackageBridge, restoreDeployedPackage, searchRegistry, verifyPackageSourceIntegrity } from "../src/package-manager.js";
+import { ensurePackageBridge, checkPackageBridge, deployPackageSource, hashPackageTree, inspectPackageAssemblyConflicts, inspectPackageBridge, inspectPackageDeploymentFiles, PackageManagerError, preparePackageBridgeInstall, removePackageBridge, restoreDeployedPackage, searchRegistry, verifyPackageSourceIntegrity } from "../src/package-manager.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -118,6 +118,8 @@ test("Bridge inspection distinguishes missing, damaged, drifted, and repaired in
   try {
     const missing = await inspectPackageBridge(project);
     assert.equal(missing.status, "missing");
+    assert.equal(missing.availableVersion, "0.4.1");
+    assert.equal(missing.installedVersion, undefined);
     assert.equal(missing.reasonCode, "PACKAGE_NOT_INSTALLED");
     await assert.rejects(() => stat(missing.bridgePath), { code: "ENOENT" });
 
@@ -146,6 +148,8 @@ test("Bridge inspection distinguishes missing, damaged, drifted, and repaired in
     await writeFile(installed.installMetadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
     const drifted = await inspectPackageBridge(project);
     assert.equal(drifted.status, "drifted");
+    assert.equal(drifted.installedVersion, "0.4.1");
+    assert.equal(drifted.availableVersion, "0.4.1");
     assert.equal(drifted.reasonCode, "PACKAGE_INSTALL_DRIFTED");
     await ensurePackageBridge(project);
     assert.equal((await inspectPackageBridge(project)).status, "installed");
@@ -360,7 +364,13 @@ test("ensurePackageBridge restores the previous target when staged publish exhau
       }
       await rename(source, target);
     },
-  }), { code: "EPERM" });
+  }), (error: unknown) => {
+    assert.ok(error instanceof PackageManagerError);
+    assert.equal(error.code, "PACKAGE_DIRECTORY_LOCKED");
+    assert.equal(error.transient, false);
+    assert.match(error.nextActions[0], /Close the exact target Unity Editor/);
+    return true;
+  });
 
   assert.equal(await readFile(managedFile, "utf8"), previousContent);
 });

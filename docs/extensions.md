@@ -16,6 +16,8 @@ Bridge 与 AI Skill 是两个独立安装对象。先用安装协议发现并选
 unitycli init help
 unitycli init discover
 unitycli init package --project C:\path\UnityProject
+# 仅在用户批准正常关闭这个准确项目后使用
+unitycli init package --project C:\path\UnityProject --close-editor
 unitycli init package --project C:\path\UnityProject --check
 ```
 
@@ -24,7 +26,7 @@ Bridge 安装内容：
 - `Packages/unitycli.install.json` — 安装元数据（项目 hash、source hash、managed-file hash、版本与支持范围）
 - `Packages/com.alpsckr.unitycli/unitycli.files.json` — 受管文件路径清单
 
-Skill 使用`init skill`安装到用户选择的`.agents`或Claude workspace/user目标，不属于Unity项目Package安装。
+Skill 使用`init skill --target <SkillDirectory>`安装到用户明确目录，或使用`.agents`/Claude workspace/user预设；它不属于Unity项目Package安装，Bridge失败也不阻止这个独立效果。
 
 ### 项目能力发现
 

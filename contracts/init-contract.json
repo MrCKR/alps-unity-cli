@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "topLevel": "init",
   "schema": "schemas/init.schema.json",
   "subcommands": {
@@ -12,6 +12,7 @@
     "package": {
       "options": [
         "project",
+        "close-editor",
         "check",
         "timeout-ms"
       ],
@@ -31,12 +32,18 @@
         "agent",
         "scope",
         "workspace",
+        "target",
         "check",
         "timeout-ms"
       ],
-      "required": [
-        "agent",
-        "scope"
+      "requiredAnyOf": [
+        [
+          "target"
+        ],
+        [
+          "agent",
+          "scope"
+        ]
       ],
       "agents": [
         ".agents",

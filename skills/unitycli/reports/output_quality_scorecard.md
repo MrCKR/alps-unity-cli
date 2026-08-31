@@ -24,7 +24,7 @@ The feedback output contract requires category, concise issue summary, optional 
 | Feedback privacy negatives | PASS | Secret/endpoint/path negative matrix | Novel secret formats can still exist |
 | Concurrent JSONL validity | PASS | 16 parallel Windows PowerShell writers | Cross-session Windows desktop contention not measured |
 | Rolling bound | PASS | Main + 3 archives, each <= 64 KiB | Longitudinal retention utility not measured |
-| Installed bundle reachability | PASS | Public workspace/user install, drifted-update, check, and recorder smoke for `.agents` and Claude | Verified with isolated filesystem targets |
+| Installed bundle reachability | PASS | Public exact-target and preset workspace/user install, drifted-update, check, and recorder smoke | Verified with isolated filesystem targets |
 | Clean Agent interpretation | PASS | Black-box runtime discovery transcript and main-agent audit | Human adjudication unavailable |
 
 ## Rollback Boundary

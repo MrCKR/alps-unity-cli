@@ -12,25 +12,31 @@ export type AgentKind = "claude" | ".agents";
 /** All valid agent kinds. */
 export const AGENT_KINDS: readonly AgentKind[] = ["claude", ".agents"];
 
-/** Result of installing a skill for a single agent. */
-export interface SkillInstallResult {
-  agent: AgentKind;
+/** 一个明确Skill bundle目标的安装结果。 */
+export interface SkillTargetInstallResult {
   targetPath: string;
   status: "installed" | "skipped" | "updated";
-  /** Populated when status is "skipped" (hash match). */
   hash?: string;
-  /** Populated when status is "updated" (hash mismatch, overwritten). */
   previousHash?: string;
   newHash?: string;
 }
 
-/** Result of checking a skill for a single agent. */
-export interface SkillCheckResult {
+/** 一个预设agent目标的安装结果。 */
+export interface SkillInstallResult extends SkillTargetInstallResult {
   agent: AgentKind;
+}
+
+/** 一个明确Skill bundle目标的检查结果。 */
+export interface SkillTargetCheckResult {
   targetPath: string;
   status: "installed" | "missing" | "outdated";
   hash?: string;
   sourceHash?: string;
+}
+
+/** 一个预设agent目标的检查结果。 */
+export interface SkillCheckResult extends SkillTargetCheckResult {
+  agent: AgentKind;
 }
 
 export interface SkillTargetInspection {
@@ -125,6 +131,12 @@ let beforeSkillPublishForTest: (() => Promise<void>) | undefined;
 let afterSkillPublishForTest: (() => Promise<void>) | undefined;
 let beforeSkillRollbackForTest: (() => Promise<void>) | undefined;
 let beforeSkillPreviousCleanupForTest: (() => Promise<void>) | undefined;
+let beforeSkillTargetLoadForTest: (() => Promise<void>) | undefined;
+
+/** 仅测试使用：在读取既有target前制造底层文件系统失败。 */
+export function setBeforeSkillTargetLoadForTest(hook: (() => Promise<void>) | undefined): void {
+  beforeSkillTargetLoadForTest = hook;
+}
 
 /** 仅测试使用：在 target 保持完整时、首次发布写入前制造等待或失败。 */
 export function setBeforeSkillPublishForTest(hook: (() => Promise<void>) | undefined): void {
@@ -250,17 +262,52 @@ async function loadBundle(root: string, allowMissingFeedbackMode: boolean): Prom
   };
 }
 
+/** 既有非空目录只有包含Skill入口时才证明归本安装器所有。 */
+async function assertTargetOwnedOrEmpty(targetRoot: string, deadlineMs?: number): Promise<void> {
+  if (!await exists(targetRoot, deadlineMs) || await exists(join(targetRoot, "SKILL.md"), deadlineMs)) return;
+  const entries = await readdir(targetRoot);
+  if (entries.length > 0) {
+    throw new SkillInstallerError(
+      "E_SKILL_TARGET_OWNERSHIP_UNPROVEN",
+      "The selected Skill target is non-empty but does not contain a UnityCLI SKILL.md entry.",
+      ["Choose the exact UnityCLI Skill directory or empty the intended target before installing."],
+    );
+  }
+}
+
+function isRepairableSkillDamage(error: unknown): error is SkillInstallerError {
+  return error instanceof SkillInstallerError
+    && (error.code === "E_SKILL_BUNDLE_INVALID" || error.code === "E_SKILL_FEEDBACK_MODE_INVALID");
+}
+
+function skillTargetReadError(error: unknown): SkillInstallerError {
+  if (error instanceof SkillInstallerError) return error;
+  const code = (error as NodeJS.ErrnoException).code;
+  return new SkillInstallerError(
+    "E_SKILL_TARGET_UNREADABLE",
+    `The selected UnityCLI Skill target could not be read${code ? ` (${code})` : ""}.`,
+    ["Close processes holding the Skill files, restore read access, then run the same check again."],
+  );
+}
+
+async function loadTargetBundle(targetRoot: string): Promise<SkillBundle> {
+  await beforeSkillTargetLoadForTest?.();
+  return loadBundle(targetRoot, true);
+}
+
 /** 不获取安装 mutex、不写文件，只读比较一个明确 Skill target 与 bundled source。 */
 export async function inspectSkillTarget(sourcePath: string, targetPath: string): Promise<SkillTargetInspection> {
   const source = await loadBundle(dirname(sourcePath), false);
-  if (!await exists(join(targetPath, "SKILL.md"))) return { status: "missing", targetPath, sourceHash: source.hash };
   try {
-    const target = await loadBundle(targetPath, true);
+    await assertTargetOwnedOrEmpty(targetPath);
+    if (!await exists(join(targetPath, "SKILL.md"))) return { status: "missing", targetPath, sourceHash: source.hash };
+    const target = await loadTargetBundle(targetPath);
     return target.hash === source.hash
       ? { status: "installed", targetPath, sourceHash: source.hash, hash: target.hash }
       : { status: "drifted", targetPath, sourceHash: source.hash, hash: target.hash };
   } catch (error) {
-    return { status: "damaged", targetPath, sourceHash: source.hash, message: error instanceof Error ? error.message : String(error) };
+    if (isRepairableSkillDamage(error)) return { status: "damaged", targetPath, sourceHash: source.hash, message: error.message };
+    throw skillTargetReadError(error);
   }
 }
 
@@ -633,6 +680,85 @@ async function publishBundle(
 
 // ─── Installer interface ─────────────────────────────────────────────────────
 
+/** 复用唯一bundle事务实现安装一个已经过调用层安全校验的明确目标。 */
+async function installBundleAtTarget(
+  sourcePath: string,
+  targetRoot: string,
+  workspace: InstallWorkspace,
+  absoluteDeadlineMs: number,
+): Promise<SkillTargetInstallResult> {
+  const targetPath = join(targetRoot, "SKILL.md");
+  const source = await loadBundle(dirname(sourcePath), false);
+  return withSkillInstallMutex(targetRoot, absoluteDeadlineMs, async () => {
+    try {
+      await recoverInstallWorkspace(targetRoot, workspace, absoluteDeadlineMs);
+      await assertTargetOwnedOrEmpty(targetRoot, absoluteDeadlineMs);
+      let existing: SkillBundle | undefined;
+      let replacedDamaged = false;
+      if (await exists(targetPath, absoluteDeadlineMs)) {
+        try {
+          existing = await retrySharingViolation(absoluteDeadlineMs, () => loadTargetBundle(targetRoot));
+        } catch (error) {
+          if (!isRepairableSkillDamage(error)) throw error;
+          if (await exists(workspace.previousRoot, absoluteDeadlineMs)) {
+            await restorePreviousBundle(targetRoot, workspace, absoluteDeadlineMs);
+            existing = await retrySharingViolation(absoluteDeadlineMs, () => loadTargetBundle(targetRoot));
+          } else {
+            replacedDamaged = true;
+          }
+        }
+      }
+
+      if (existing?.hash === source.hash) {
+        await retrySharingViolation(absoluteDeadlineMs, () => rm(workspace.previousRoot, { recursive: true, force: true }));
+        return { targetPath, status: "skipped", hash: source.hash };
+      }
+      if (existing && await exists(workspace.previousRoot, absoluteDeadlineMs)) {
+        await retrySharingViolation(absoluteDeadlineMs, () => rm(workspace.previousRoot, { recursive: true, force: true }));
+      }
+      const feedbackMode = existing?.feedbackMode ?? source.feedbackMode;
+      await publishBundle(source, existing, feedbackMode, targetRoot, workspace, absoluteDeadlineMs);
+      if (existing || replacedDamaged) {
+        return { targetPath, status: "updated", ...(existing ? { previousHash: existing.hash } : {}), newHash: source.hash };
+      }
+      return { targetPath, status: "installed", hash: source.hash };
+    } catch (error) {
+      throw skillInstallIoError(error, "complete its runtime bundle installation");
+    }
+  });
+}
+
+/** 明确目录和预设agent都通过同一mutex读取，避免检查观察到发布中间态。 */
+async function checkBundleAtTarget(sourcePath: string, targetRoot: string, absoluteDeadlineMs: number): Promise<SkillTargetCheckResult> {
+  const source = await loadBundle(dirname(sourcePath), false);
+  return withSkillInstallMutex(targetRoot, absoluteDeadlineMs, async () => {
+    const targetPath = join(targetRoot, "SKILL.md");
+    if (!await exists(targetPath, absoluteDeadlineMs)) return { targetPath, status: "missing", sourceHash: source.hash };
+    const installed = await retrySharingViolation(absoluteDeadlineMs, () => loadTargetBundle(targetRoot));
+    return installed.hash === source.hash
+      ? { targetPath, status: "installed", hash: installed.hash, sourceHash: source.hash }
+      : { targetPath, status: "outdated", hash: installed.hash, sourceHash: source.hash };
+  });
+}
+
+export async function installSkillTarget(
+  sourcePath: string,
+  targetRoot: string,
+  installRoot: string,
+  absoluteDeadlineMs = Date.now() + defaultInstallTimeoutMs,
+): Promise<SkillTargetInstallResult> {
+  const workspace = { stagingRoot: join(installRoot, "staging"), previousRoot: join(installRoot, "previous") };
+  return installBundleAtTarget(sourcePath, resolve(targetRoot), workspace, absoluteDeadlineMs);
+}
+
+export async function checkSkillTarget(
+  sourcePath: string,
+  targetRoot: string,
+  absoluteDeadlineMs = Date.now() + defaultInstallTimeoutMs,
+): Promise<SkillTargetCheckResult> {
+  return checkBundleAtTarget(sourcePath, resolve(targetRoot), absoluteDeadlineMs);
+}
+
 export interface SkillInstaller {
   /** Agent kind this installer handles. */
   readonly agent: AgentKind;
@@ -654,55 +780,9 @@ class BaseSkillInstaller implements SkillInstaller {
   }
 
   async install(sourcePath: string, projectRoot: string, absoluteDeadlineMs = Date.now() + defaultInstallTimeoutMs, installRoot?: string): Promise<SkillInstallResult> {
-    const sourceRoot = dirname(sourcePath);
-    const targetPath = this.resolveTargetPath(projectRoot);
-    const targetRoot = dirname(targetPath);
-    const source = await loadBundle(sourceRoot, false);
-    const workspace = installWorkspace(projectRoot, this.agent, installRoot);
-
-    return withSkillInstallMutex(targetRoot, absoluteDeadlineMs, async () => {
-      try {
-        await recoverInstallWorkspace(targetRoot, workspace, absoluteDeadlineMs);
-        let existing: SkillBundle | undefined;
-        let replacedDamaged = false;
-        if (await exists(targetPath, absoluteDeadlineMs)) {
-          try {
-            existing = await retrySharingViolation(absoluteDeadlineMs, () => loadBundle(targetRoot, true));
-          } catch {
-            if (await exists(workspace.previousRoot, absoluteDeadlineMs)) {
-              await restorePreviousBundle(targetRoot, workspace, absoluteDeadlineMs);
-              existing = await retrySharingViolation(absoluteDeadlineMs, () => loadBundle(targetRoot, true));
-            } else {
-              replacedDamaged = true;
-            }
-          }
-        }
-
-        if (existing?.hash === source.hash) {
-          await retrySharingViolation(absoluteDeadlineMs, () => rm(workspace.previousRoot, { recursive: true, force: true }));
-          return { agent: this.agent, targetPath, status: "skipped", hash: source.hash };
-        }
-
-        if (existing && await exists(workspace.previousRoot, absoluteDeadlineMs)) {
-          await retrySharingViolation(absoluteDeadlineMs, () => rm(workspace.previousRoot, { recursive: true, force: true }));
-        }
-        const feedbackMode = existing?.feedbackMode ?? source.feedbackMode;
-        await publishBundle(source, existing, feedbackMode, targetRoot, workspace, absoluteDeadlineMs);
-
-        if (existing || replacedDamaged) {
-          return {
-            agent: this.agent,
-            targetPath,
-            status: "updated",
-            ...(existing ? { previousHash: existing.hash } : {}),
-            newHash: source.hash,
-          };
-        }
-        return { agent: this.agent, targetPath, status: "installed", hash: source.hash };
-      } catch (error) {
-        throw skillInstallIoError(error, "complete its runtime bundle installation");
-      }
-    });
+    const targetRoot = dirname(this.resolveTargetPath(projectRoot));
+    const result = await installBundleAtTarget(sourcePath, targetRoot, installWorkspace(projectRoot, this.agent, installRoot), absoluteDeadlineMs);
+    return { agent: this.agent, ...result };
   }
 
   async check(
@@ -710,21 +790,8 @@ class BaseSkillInstaller implements SkillInstaller {
     projectRoot: string,
     absoluteDeadlineMs = Date.now() + defaultInstallTimeoutMs,
   ): Promise<SkillCheckResult> {
-    const source = await loadBundle(dirname(sourcePath), false);
-    const targetPath = this.resolveTargetPath(projectRoot);
-    const targetRoot = dirname(targetPath);
-    const deadlineMs = absoluteDeadlineMs;
-    return withSkillInstallMutex(targetRoot, deadlineMs, async () => {
-      if (!await exists(targetPath, deadlineMs)) {
-        return { agent: this.agent, targetPath, status: "missing", sourceHash: source.hash };
-      }
-
-      const installed = await retrySharingViolation(deadlineMs, () => loadBundle(targetRoot, true));
-      if (installed.hash === source.hash) {
-        return { agent: this.agent, targetPath, status: "installed", hash: installed.hash, sourceHash: source.hash };
-      }
-      return { agent: this.agent, targetPath, status: "outdated", hash: installed.hash, sourceHash: source.hash };
-    });
+    const targetRoot = dirname(this.resolveTargetPath(projectRoot));
+    return { agent: this.agent, ...await checkBundleAtTarget(sourcePath, targetRoot, absoluteDeadlineMs) };
   }
 }
 

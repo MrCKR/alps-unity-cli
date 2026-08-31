@@ -38,6 +38,22 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_OPTION_VALUE_INVALID` | boolean option 的 attached value 不是 `true` 或 `false` | 使用 `--option`、`--option=true` 或 `--option=false` |
 | `E_OBSOLETE_OPTION` | option 已从当前公开语义删除 | 按 `nextActions` 删除旧 option |
 
+### Init 安装错误
+
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_INIT_EDITOR_RUNNING` | 准确目标Unity项目正在运行，未授权安装器关闭 | 只询问一次；用户同意后对同一项目使用`init package --close-editor` |
+| `E_EDITOR_STATE_UNVERIFIABLE` | 安装前无法严格判断准确项目的Editor进程 | 确认目标项目未在Unity中打开，再重新执行安装 |
+| `E_EDITOR_CLOSE_FAILED` | 无法向准确目标Editor发送正常关闭请求 | 用户正常关闭该项目后重新安装；不得强制终止 |
+| `E_EDITOR_CLOSE_BLOCKED` | 正常关闭后Editor仍存在，通常有未保存或modal提示 | 由用户处理Unity提示并正常关闭，再重新安装 |
+| `PACKAGE_DIRECTORY_LOCKED` | Windows持续占用现有Bridge目录，原子替换无法提交 | 关闭使用该Package的Unity、IDE或扫描进程，再重新安装；不要手工部分删除 |
+| `E_INIT_SKILL_TARGET_REQUIRED` | 既未给出明确Skill目录，也未给出预设agent/scope | 使用`--target <SkillDirectory>`，或选择一个预设目标 |
+| `E_INIT_SKILL_TARGET_CONFLICT` | 明确`--target`与预设agent/scope参数混用 | 保留明确目录或预设形式之一 |
+| `E_INIT_SKILL_TARGET_INVALID` | 明确目标不是安全的本地`unitycli`目录，或位于安装事务目录 | 传独立的固定本地完整目录，例如`.pi/skills/unitycli` |
+| `E_SKILL_TARGET_OVERLAPS_SOURCE` | 安装目标与npm内置Skill准源互相包含 | 选择独立安装目录 |
+| `E_SKILL_TARGET_OWNERSHIP_UNPROVEN` | 非空目标没有UnityCLI `SKILL.md`，不能证明归安装器所有 | 选择准确UnityCLI目录或先清空明确的新目标 |
+| `E_SKILL_TARGET_UNREADABLE` | 目标因权限或文件占用无法只读验证 | 恢复读取权限后重试；不得把不可读当成损坏并覆盖 |
+
 ### Project Identity / Instance 错误
 
 | 错误码 | 含义 | 恢复 |

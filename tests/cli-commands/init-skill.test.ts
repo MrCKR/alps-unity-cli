@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { execute } from "../../src/cli.js";
 import { resolveInitSkillTarget } from "../../src/cli-commands/init-skill.js";
+import { findSkillSourcePath } from "../../src/cli-commands/skill-installer.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 async function entries(path: string): Promise<string[]> { try { return (await readdir(path)).sort(); } catch { return []; } }
 
-test("Skill target model maps exactly four agent/scope destinations", async () => {
+test("Skill preset target model maps four agent/scope destinations", async () => {
   const root = await mkdtemp(join(tmpdir(), "unity-skill-targets-"));
   try {
     const workspace = join(root, "workspace");
@@ -54,7 +55,7 @@ test("Skill checks support a Unity project parent workspace and zero-Unity user 
   }
 });
 
-test("Skill installation covers four targets, idempotence, checks, and bounded transaction cleanup", async () => {
+test("preset Skill installation covers four targets, idempotence, checks, and bounded transaction cleanup", async () => {
   const root = await mkdtemp(join(tmpdir(), "unity-skill-install-matrix-"));
   try {
     const workspace = join(root, "workspace");
@@ -96,6 +97,62 @@ test("Skill installation covers four targets, idempotence, checks, and bounded t
     await assert.rejects(() => access(join(workspace, ".claude", "skills", ".unitycli-install")), { code: "ENOENT" });
     await assert.rejects(() => access(join(dataDir, ".temp", "skill-install", "agents")), { code: "ENOENT" });
     await assert.rejects(() => access(join(dataDir, ".temp", "skill-install", "claude")), { code: "ENOENT" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("explicit Skill target installs and updates a Pi workspace with exact readback", async () => {
+  const root = await mkdtemp(join(tmpdir(), "unity-skill-explicit-"));
+  try {
+    const target = join(root, ".pi", "skills", "unitycli");
+    const runtime = { dataDir: join(root, "data"), userHome: join(root, "home") } as never;
+    const argv = ["init", "skill", "--target", target];
+    const installed = await execute(argv, runtime);
+    assert.equal(installed.ok, true, JSON.stringify(installed));
+    if (!installed.ok) throw new Error("Expected explicit Skill installation.");
+    assert.equal((installed.data as any).target, resolve(target));
+    assert.equal((installed.data as any).changes[0].status, "installed");
+    assert.equal((installed.data as any).skill.status, "installed");
+    await access(join(target, "SKILL.md"));
+
+    const checked = await execute([...argv, "--check"], runtime);
+    assert.equal(checked.ok, true, JSON.stringify(checked));
+    assert.equal((checked.data as any).skill.status, "installed");
+    assert.deepEqual((checked.data as any).nextActions, []);
+
+    await writeFile(join(target, "references", "custom-tools.md"), "# drifted\n", "utf8");
+    assert.equal(((await execute([...argv, "--check"], runtime)) as any).data.skill.status, "drifted");
+    const updated = await execute(argv, runtime);
+    assert.equal(updated.ok, true, JSON.stringify(updated));
+    assert.equal((updated as any).data.changes[0].status, "updated");
+    assert.equal(((await execute([...argv, "--check"], runtime)) as any).data.skill.status, "installed");
+    await assert.rejects(() => access(join(root, ".pi", "skills", ".unitycli-install")), { code: "ENOENT" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("explicit Skill target preserves a non-owned directory and rejects bundled source overlap", async () => {
+  const root = await mkdtemp(join(tmpdir(), "unity-skill-ownership-"));
+  try {
+    const target = join(root, ".pi", "skills", "unitycli");
+    await mkdir(target, { recursive: true });
+    const sentinel = join(target, "unrelated.txt");
+    await writeFile(sentinel, "keep\n", "utf8");
+    const runtime = { dataDir: join(root, "data"), userHome: join(root, "home") } as never;
+    const unowned = await execute(["init", "skill", "--target", target], runtime);
+    assert.equal(unowned.ok, false, JSON.stringify(unowned));
+    assert.equal(unowned.error.code, "E_SKILL_TARGET_OWNERSHIP_UNPROVEN");
+    assert.equal(await readFile(sentinel, "utf8"), "keep\n");
+    assert.deepEqual(await entries(target), ["unrelated.txt"]);
+
+    const sourceTarget = dirname(await findSkillSourcePath());
+    const sourceBefore = await readFile(join(sourceTarget, "SKILL.md"), "utf8");
+    const overlap = await execute(["init", "skill", "--target", sourceTarget], runtime);
+    assert.equal(overlap.ok, false, JSON.stringify(overlap));
+    assert.equal(overlap.error.code, "E_SKILL_TARGET_OVERLAPS_SOURCE");
+    assert.equal(await readFile(join(sourceTarget, "SKILL.md"), "utf8"), sourceBefore);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -160,6 +217,9 @@ test("Skill target validation rejects removed agents, illegal combinations, and 
       { argv: ["init", "skill", "--agent", ".agents", "--scope", "workspace"], code: "E_INIT_WORKSPACE_REQUIRED" },
       { argv: ["init", "skill", "--agent", ".agents", "--scope", "user", "--workspace", workspace], code: "E_INIT_WORKSPACE_FORBIDDEN" },
       { argv: ["init", "skill", "--agent", ".agents", "--scope", "workspace", "--workspace", join(root, "missing")], code: "E_SKILL_ROOT_INVALID" },
+      { argv: ["init", "skill", "--target", join(workspace, ".pi", "skills")], code: "E_INIT_SKILL_TARGET_INVALID" },
+      { argv: ["init", "skill", "--target", join(workspace, ".unitycli-install", "unitycli")], code: "E_INIT_SKILL_TARGET_INVALID" },
+      { argv: ["init", "skill", "--target", join(workspace, ".pi", "skills", "unitycli"), "--agent", ".agents", "--scope", "workspace", "--workspace", workspace], code: "E_INIT_SKILL_TARGET_CONFLICT" },
     ];
     for (const item of cases) {
       const result = await execute(item.argv, runtime);
@@ -179,6 +239,9 @@ test("Skill target validation rejects removed agents, illegal combinations, and 
     const linkedTarget = await execute(["init", "skill", "--agent", ".agents", "--scope", "workspace", "--workspace", workspace], runtime);
     assert.equal(linkedTarget.ok, false);
     assert.equal(linkedTarget.error.code, "E_SKILL_TARGET_UNSAFE");
+    const explicitLinkedTarget = await execute(["init", "skill", "--target", join(linkedSkills, "unitycli")], runtime);
+    assert.equal(explicitLinkedTarget.ok, false);
+    assert.equal(explicitLinkedTarget.error.code, "E_SKILL_TARGET_UNSAFE");
     assert.deepEqual(await entries(external), []);
     assert.deepEqual(await entries(userHome), []);
   } finally {

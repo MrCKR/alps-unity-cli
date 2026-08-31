@@ -42,14 +42,16 @@ test("governed manifest declares ownership, runtime projection, contracts, and m
 test("public Skill delegates installation to the final self-contained init protocol", async () => {
   const skill = await readFile(join(skillRoot, "SKILL.md"), "utf8");
   const operation = await readFile(join(skillRoot, "references", "operation-protocol.md"), "utf8");
-  for (const required of ["unitycli init help", "init discover", "init package --project <UnityProject>", "init skill --agent <.agents|claude>", "--scope <workspace|user>", "--workspace <path>", "--check"]) {
+  for (const required of ["unitycli init help", "init discover", "init package --project <UnityProject>", "--close-editor", "init skill --target <SkillDirectory>", "init skill --agent <.agents|claude>", "--scope <workspace|user>", "--workspace <path>", "--check"]) {
     assert.match(`${skill}\n${operation}`, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(skill, /向用户询问.*agent、scope.*workspace/);
-  assert.match(skill, /逐个严格串行安装/);
-  assert.match(skill, /第一次非预期CLI失败或业务check失败立即停止/);
-  assert.match(skill, /不得启动、关闭、重启或终止Unity Editor/);
-  assert.doesNotMatch(`${skill}\n${operation}`, /pkg-only|skill-only|\.pi\/skills|init --check|init --project/);
+  assert.match(skill, /用户已经指定.*最终决定/);
+  assert.match(skill, /只询问一次是否正常关闭/);
+  assert.match(skill, /不得强制终止/);
+  assert.match(skill, /Bridge与Skill是独立授权效果/);
+  assert.match(skill, /一个失败只阻断自身检查/);
+  assert.doesNotMatch(skill, /第一次非预期CLI失败或业务check失败立即停止|不得启动、关闭、重启或终止Unity Editor/);
+  assert.doesNotMatch(`${skill}\n${operation}`, /pkg-only|skill-only|init --check|init --project/);
 });
 
 test("agent interface is broad-triggered, PowerShell-local, and network-denied", async () => {

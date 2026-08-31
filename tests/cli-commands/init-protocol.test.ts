@@ -62,7 +62,7 @@ test("final init invalid inputs fail before effects with stable closed errors", 
       { argv: ["init", "unknown"], code: "UNKNOWN_INIT_COMMAND" },
       { argv: ["init", "package"], code: "E_INIT_PROJECT_REQUIRED" },
       { argv: ["init", "package", "--project", project, "extra"], code: "E_INIT_ARGUMENT_UNEXPECTED" },
-      { argv: ["init", "skill", "--scope", "user"], code: "E_INIT_AGENT_REQUIRED" },
+      { argv: ["init", "skill", "--scope", "user"], code: "E_INIT_SKILL_TARGET_REQUIRED" },
       { argv: ["init", "skill", "--agent", "pi", "--scope", "user"], code: "UNKNOWN_AGENT_KIND" },
       { argv: ["init", "skill", "--agent", "claude,.agents", "--scope", "user"], code: "E_INIT_AGENT_INVALID" },
       { argv: ["init", "skill", "--agent", ".agents"], code: "E_INIT_SCOPE_INVALID" },
@@ -96,5 +96,7 @@ test("init protocol remains non-interactive and does not persist setup choices",
   ]);
   const text = sources.join("\n");
   assert.doesNotMatch(text, /readline|inquirer|prompt\(|question\(|confirm\(|settings\.json|config\.json/i);
-  assert.doesNotMatch(text, /pkg-only|skill-only|defaultAgentKinds|detectAgentKinds/);
+  assert.doesNotMatch(text, /pkg-only|skill-only|defaultAgentKinds|detectAgentKinds|Stop immediately after the first unexpected/);
+  assert.match(text, /close-editor/);
+  assert.match(text, /init skill --target/);
 });

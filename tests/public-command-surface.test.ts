@@ -15,7 +15,8 @@ test("public help exposes only the frozen top-level command surface", async () =
   assert.deepEqual(initCommands, [
     "init help",
     "init discover",
-    "init package --project <UnityProject> [--check] [--timeout-ms <n>]",
+    "init package --project <UnityProject> [--close-editor] [--check] [--timeout-ms <n>]",
+    "init skill --target <SkillDirectory> [--check] [--timeout-ms <n>]",
     "init skill --agent <.agents|claude> --scope workspace --workspace <path> [--check] [--timeout-ms <n>]",
     "init skill --agent <.agents|claude> --scope user [--check] [--timeout-ms <n>]",
   ]);

@@ -470,6 +470,8 @@ export interface PackageBridgeInspection {
   projectPath: string;
   bridgePath: string;
   sourceHash: string;
+  availableVersion: string;
+  installedVersion?: string;
   reasonCode?: string;
   message?: string;
   conflicts?: PackageAssemblyConflict[];
@@ -814,6 +816,15 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
         ]);
       }
     }
+    if (isTransientRenameError(error)) {
+      const code = String((error as NodeJS.ErrnoException).code ?? "EPERM");
+      throw new PackageManagerError(
+        "PACKAGE_DIRECTORY_LOCKED",
+        `Windows kept the existing UnityCLI package directory open while replacement was attempted (${code}).`,
+        ["Close the exact target Unity Editor and any process using the package directory, then rerun the same init package command."],
+        { operation: "replace-existing-package", nativeCode: code },
+      );
+    }
     throw error;
   } finally {
     await removePackagePublishDirectory(stagingPath, "INIT_STAGING_CLEANUP_FAILED");
@@ -945,13 +956,14 @@ export async function inspectPackageBridge(projectPath: string): Promise<Package
   const paths = packagePaths(projectPath);
   const sourcePath = packageSourcePath();
   const canonical = await verifyPackageSourceIntegrity(sourcePath);
+  const availableVersion = canonical.packageManifest.version;
   const assemblyInspection = await inspectPackageAssemblyConflicts(paths.projectPath);
   const targetPath = join(paths.projectPath, "Packages", bridgePackageName);
   if (assemblyInspection.status === "conflict") {
-    return { status: "conflict", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_ASSEMBLY_CONFLICT", message: `${bridgePackageName} is blocked by a protected assembly name from another Package.`, conflicts: assemblyInspection.conflicts };
+    return { status: "conflict", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, availableVersion, reasonCode: "PACKAGE_ASSEMBLY_CONFLICT", message: `${bridgePackageName} is blocked by a protected assembly name from another Package.`, conflicts: assemblyInspection.conflicts };
   }
   if (!await directoryExists(targetPath)) {
-    return { status: "missing", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_NOT_INSTALLED", message: `${bridgePackageName} is not installed.` };
+    return { status: "missing", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, availableVersion, reasonCode: "PACKAGE_NOT_INSTALLED", message: `${bridgePackageName} is not installed.` };
   }
 
   const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
@@ -962,27 +974,28 @@ export async function inspectPackageBridge(projectPath: string): Promise<Package
     packageManifest = await readPackageManifest(targetPath);
     installMetadata = await readOptionalInstallMetadata(installMetadataPath);
   } catch (error) {
-    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: error instanceof Error ? error.message : String(error) };
+    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, availableVersion, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: error instanceof Error ? error.message : String(error) };
   }
+  const installedVersion = packageManifest.version;
   if (!installMetadata || installMetadata.packageName !== bridgePackageName || installMetadata.installMode !== "copy") {
-    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} install metadata is missing or does not describe a managed copy.` };
+    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, availableVersion, installedVersion, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} install metadata is missing or does not describe a managed copy.` };
   }
 
   const projectHash = await hashProjectPath(paths.projectPath);
   if (packageManifest.version !== canonical.packageManifest.version || installMetadata.packageVersion !== canonical.packageManifest.version
     || installMetadata.sourceHash !== canonical.sourceHash || installMetadata.cliCompatibilityRange !== cliCompatibilityRange) {
-    return { status: "drifted", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DRIFTED", message: `${bridgePackageName} version or source hash differs from the bundled canonical package.` };
+    return { status: "drifted", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, availableVersion, installedVersion, reasonCode: "PACKAGE_INSTALL_DRIFTED", message: `${bridgePackageName} version or source hash differs from the bundled canonical package.` };
   }
   if (installMetadata.projectHash !== projectHash) {
-    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} install metadata belongs to a different canonical project.` };
+    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, availableVersion, installedVersion, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} install metadata belongs to a different canonical project.` };
   }
   try {
     await readVerifiedManagedFileList(fileManifestPath, installMetadata.managedFilesSha256);
     if (!await managedPackageFilesMatch(sourcePath, targetPath, fileManifestPath)) {
-      return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} managed files are missing or do not match canonical bytes.` };
+      return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, availableVersion, installedVersion, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} managed files are missing or do not match canonical bytes.` };
     }
   } catch (error) {
-    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: error instanceof Error ? error.message : String(error) };
+    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, availableVersion, installedVersion, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: error instanceof Error ? error.message : String(error) };
   }
 
   return {
@@ -990,6 +1003,8 @@ export async function inspectPackageBridge(projectPath: string): Promise<Package
     projectPath: paths.projectPath,
     bridgePath: targetPath,
     sourceHash: canonical.sourceHash,
+    availableVersion,
+    installedVersion,
     install: {
       manifestPath: paths.manifestPath,
       bridgePath: targetPath,
@@ -1436,6 +1451,8 @@ export class PackageManagerError extends Error {
     message: string,
     readonly nextActions: string[] = [],
     readonly details?: Record<string, unknown>,
+    readonly transient = false,
+    readonly retryAfterMs = 0,
   ) {
     super(message);
   }

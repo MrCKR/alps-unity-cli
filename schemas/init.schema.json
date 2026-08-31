@@ -52,7 +52,7 @@
       "properties": {
         "action": { "const": "init_help" },
         "audience": { "const": "ai" },
-        "protocolVersion": { "type": "integer", "minimum": 1 },
+        "protocolVersion": { "const": 2 },
         "aiInstructions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
         "commands": { "type": "object", "additionalProperties": { "type": "string" } },
         "nextCommand": { "type": "string" },
@@ -67,16 +67,87 @@
         "action": { "const": "init_discover" },
         "cwd": { "type": "string" },
         "repositoryRoot": { "type": ["string", "null"] },
-        "limits": { "type": "object" },
-        "scan": { "type": "object" },
-        "unityProjects": { "type": "array" },
-        "skillWorkspaces": { "type": "array" },
-        "skillCopies": { "type": "array" },
-        "shadowingRisks": { "type": "array" },
-        "requiredDecisions": { "type": "array", "minItems": 4 },
+        "unityProjects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": { "type": "string" },
+              "unityVersion": { "type": "string" },
+              "relation": { "enum": ["cwd", "ancestor", "descendant"] },
+              "depth": { "type": "integer", "minimum": 0 },
+              "bridge": {
+                "type": "object",
+                "properties": {
+                  "status": { "enum": ["installed", "missing", "damaged", "drifted", "conflict", "unverifiable", "not-inspected"] },
+                  "installedVersion": { "type": "string" },
+                  "availableVersion": { "type": "string" },
+                  "reasonCode": { "type": "string" },
+                  "message": { "type": "string" }
+                },
+                "required": ["status"],
+                "additionalProperties": false
+              },
+              "editor": {
+                "type": "object",
+                "properties": {
+                  "status": { "enum": ["running", "stopped", "unverifiable", "not-inspected"] },
+                  "processCount": { "type": "integer", "minimum": 0 },
+                  "message": { "type": "string" }
+                },
+                "required": ["status"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["path", "unityVersion", "relation", "depth", "bridge", "editor"],
+            "additionalProperties": false
+          }
+        },
+        "skill": {
+          "type": "object",
+          "properties": {
+            "workspace": { "type": "string" },
+            "recommendedTarget": { "type": "string" },
+            "explicitTargetSupported": { "const": true },
+            "status": { "enum": ["installed", "missing", "drifted", "damaged"] },
+            "targetPath": { "type": "string" },
+            "sourceHash": { "$ref": "#/$defs/sha256" },
+            "hash": { "$ref": "#/$defs/sha256" },
+            "message": { "type": "string" }
+          },
+          "required": ["workspace", "recommendedTarget", "explicitTargetSupported", "status", "targetPath", "sourceHash"],
+          "additionalProperties": false
+        },
+        "requiredDecisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "enum": ["bridgeProjects", "closeEditor"] },
+              "question": { "type": "string" },
+              "choices": { "type": "array", "items": { "type": "string" } },
+              "projectPath": { "type": "string" },
+              "multiple": { "type": "boolean" }
+            },
+            "required": ["id", "question", "multiple"],
+            "additionalProperties": false
+          }
+        },
+        "scan": {
+          "type": "object",
+          "properties": {
+            "scannedDirectories": { "type": "integer", "minimum": 0, "maximum": 2000 },
+            "truncated": { "type": "boolean" },
+            "maxDescendantDepth": { "const": 4 },
+            "maxScannedDirectories": { "const": 2000 },
+            "maxUnityProjects": { "const": 100 }
+          },
+          "required": ["scannedDirectories", "truncated", "maxDescendantDepth", "maxScannedDirectories", "maxUnityProjects"],
+          "additionalProperties": false
+        },
         "nextActions": { "$ref": "#/$defs/nextActions" }
       },
-      "required": ["action", "cwd", "repositoryRoot", "limits", "scan", "unityProjects", "skillWorkspaces", "skillCopies", "shadowingRisks", "requiredDecisions", "nextActions"],
+      "required": ["action", "cwd", "repositoryRoot", "unityProjects", "skill", "requiredDecisions", "nextActions"],
       "additionalProperties": false
     },
     "packageData": {
@@ -85,6 +156,15 @@
         "action": { "enum": ["init_package", "init_package_check"] },
         "projectPath": { "type": "string" },
         "projectIdentity": { "type": "object" },
+        "editorClose": {
+          "type": "object",
+          "properties": {
+            "status": { "enum": ["not-running", "closed"] },
+            "requested": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["status", "requested"],
+          "additionalProperties": false
+        },
         "package": {
           "type": "object",
           "properties": { "status": { "enum": ["installed", "missing", "damaged", "drifted", "conflict"] } },
@@ -102,6 +182,7 @@
         "agent": { "enum": [".agents", "claude"] },
         "scope": { "enum": ["workspace", "user"] },
         "workspace": { "type": "string" },
+        "target": { "type": "string" },
         "changes": { "type": "array" },
         "skill": {
           "type": "object",
@@ -117,7 +198,11 @@
         },
         "nextActions": { "$ref": "#/$defs/nextActions" }
       },
-      "required": ["action", "agent", "scope", "skill", "nextActions"],
+      "required": ["action", "skill", "nextActions"],
+      "oneOf": [
+        { "type": "object", "required": ["agent", "scope"] },
+        { "type": "object", "required": ["target"] }
+      ],
       "additionalProperties": false
     }
   }

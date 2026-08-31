@@ -18,7 +18,11 @@ async function makeUnityProject(): Promise<string> {
   return project;
 }
 
-function runtime(project: string): { dataDir: string } { return { dataDir: join(project, "data") }; }
+function runtime(project: string, overrides: Record<string, unknown> = {}): Record<string, unknown> { return { dataDir: join(project, "data"), findUnityProjectProcesses: async () => [], ...overrides }; }
+
+function runningEditor(project: string) {
+  return { processId: 42, processStartedAt: "2026-08-31T00:00:00.000Z", executablePath: "C:\\Unity\\Unity.exe", argv: ["Unity.exe", "-projectPath", project], projectPath: project };
+}
 
 test("init routes only help, discover, package, and skill subcommands", async () => {
   const userHome = await mkdtemp(join(tmpdir(), "unity-init-user-home-"));
@@ -76,6 +80,60 @@ test("init package installs, checks read-only, and repairs managed damage", asyn
   }
 });
 
+test("init package requires explicit close authorization for a running exact Editor", async () => {
+  const project = await makeUnityProject();
+  try {
+    let closeCalls = 0;
+    const processRuntime = runtime(project, {
+      findUnityProjectProcesses: async () => [runningEditor(project)],
+      closeUnityProjectProcesses: async () => { closeCalls += 1; return { requested: 1, remaining: 0 }; },
+    }) as never;
+    const blocked = await execute(["init", "package", "--project", project], processRuntime);
+    assert.equal(blocked.ok, false, JSON.stringify(blocked));
+    assert.equal(blocked.error.code, "E_INIT_EDITOR_RUNNING");
+    assert.equal(closeCalls, 0);
+    await assert.rejects(() => readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json")), { code: "ENOENT" });
+
+    const installed = await execute(["init", "package", "--project", project, "--close-editor"], processRuntime);
+    assert.equal(installed.ok, true, JSON.stringify(installed));
+    assert.equal(closeCalls, 1);
+    assert.deepEqual((installed as any).data.editorClose, { status: "closed", requested: 1 });
+    assert.equal((installed as any).data.package.readback.status, "installed");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("init package fails closed when exact Editor state cannot be verified", async () => {
+  const project = await makeUnityProject();
+  try {
+    const result = await execute(["init", "package", "--project", project], runtime(project, {
+      findUnityProjectProcesses: async () => { throw new Error("process observation denied"); },
+    }) as never);
+    assert.equal(result.ok, false, JSON.stringify(result));
+    assert.equal(result.error.code, "E_EDITOR_STATE_UNVERIFIABLE");
+    await assert.rejects(() => readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json")), { code: "ENOENT" });
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("init package stops without package effects when normal Editor close remains blocked", async () => {
+  const project = await makeUnityProject();
+  try {
+    const result = await execute(["init", "package", "--project", project, "--close-editor"], runtime(project, {
+      findUnityProjectProcesses: async () => [runningEditor(project)],
+      closeUnityProjectProcesses: async () => ({ requested: 1, remaining: 1 }),
+    }) as never);
+    assert.equal(result.ok, false, JSON.stringify(result));
+    assert.equal(result.error.code, "E_EDITOR_CLOSE_BLOCKED");
+    assert.match(result.error.nextActions[0], /unsaved-scene|modal/i);
+    await assert.rejects(() => readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json")), { code: "ENOENT" });
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
 test("init package rejects missing project, positional arguments, old flags, and Skill options", async () => {
   const project = await makeUnityProject();
   try {
@@ -85,6 +143,7 @@ test("init package rejects missing project, positional arguments, old flags, and
       { argv: ["init", "package", "--project", project, "--pkg-only"], code: "E_UNKNOWN_OPTION" },
       { argv: ["init", "package", "--project", project, "--agent", ".agents"], code: "E_UNKNOWN_OPTION" },
       { argv: ["init", "package", "--project", project, "--timeout-ms", "0"], code: "E_INIT_TIMEOUT_INVALID" },
+      { argv: ["init", "package", "--project", project, "--check", "--close-editor"], code: "E_INIT_CLOSE_EDITOR_CHECK_FORBIDDEN" },
     ];
     for (const item of cases) {
       const result = await execute(item.argv, runtime(project) as never);

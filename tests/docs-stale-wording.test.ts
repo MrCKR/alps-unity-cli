@@ -127,8 +127,8 @@ test("README is an operational npm page for one-line AI setup and manual verific
   const readme = readDocFile("README.md");
   assert.match(readme, /npm install -g @alpsckr\/unitycli/);
   assert.match(readme, /执行 unitycli init help，然后照做。/);
-  for (const decision of ["Unity projects", "Agent Skills", "workspace", "current user"]) assert.match(readme, new RegExp(decision, "i"));
-  for (const command of ["unitycli init help", "unitycli init discover", "unitycli init package --project", "unitycli init skill --agent .agents --scope workspace", "unitycli init skill --agent claude --scope user", "--check", "unitycli doctor", "unitycli instances list", "npm uninstall -g @alpsckr/unitycli"]) assert.match(readme, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const behavior of ["unique current Unity project", "exact Skill directory", "normally close", "independently authorized effects"]) assert.match(readme, new RegExp(behavior, "i"));
+  for (const command of ["unitycli init help", "unitycli init discover", "unitycli init package --project", "--close-editor", "unitycli init skill --target", "unitycli init skill --agent .agents --scope workspace", "unitycli init skill --agent claude --scope user", "--check", "unitycli doctor", "unitycli instances list", "npm uninstall -g @alpsckr/unitycli"]) assert.match(readme, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(readme, /Node\.js 20/);
   assert.match(readme, /Unity 2022\.3/);
   assert.match(readme, /First Unity Call/);

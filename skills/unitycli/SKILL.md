@@ -27,7 +27,7 @@ FeedbackMode: off
 unitycli init help
 ```
 
-严格执行返回的版本化`aiInstructions`，不要依赖本Skill记忆安装步骤。先运行`init discover`，再向用户询问要安装Bridge的Unity项目，以及Skill的agent、scope和常用workspace；不得静默选择。多个Bridge项目逐个严格串行安装，每次等待terminal并执行对应`--check`后才能继续；Skill通常只安装到用户选择的一个`.agents`或Claude workspace/user目标。第一次非预期CLI失败或业务check失败立即停止，不重试、纠参或继续后续effect。安装流程不得启动、关闭、重启或终止Unity Editor。用户完成选择后的明确安装调用即授权，不增加第二次确认。
+严格执行返回的版本化`aiInstructions`，不要依赖本Skill记忆安装步骤。先运行`init discover`；当前目录只有一个Unity项目时直接采用，用户已经指定的项目、scope、host或Skill目录都是最终决定，不得重复询问。未指定Skill目录时使用发现结果的当前workspace推荐目标；明确目录使用`init skill --target <SkillDirectory>`。准确目标Unity正在运行时只询问一次是否正常关闭；同意后使用`init package --close-editor`，不得强制终止，也不得替用户决定未保存场景弹窗。Bridge与Skill是独立授权效果，一个失败只阻断自身检查，不阻断另一个；每个成功效果都立即执行对应`--check`并最终汇总全部状态。安装流程不得启动或重启Unity。用户安装请求授权所选效果，除关闭Editor外不增加确认。
 
 ## 执行骨架
 

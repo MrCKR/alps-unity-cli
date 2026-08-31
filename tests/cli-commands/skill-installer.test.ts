@@ -13,6 +13,7 @@ import {
   setBeforeSkillPublishForTest,
   setBeforeSkillPreviousCleanupForTest,
   setBeforeSkillRollbackForTest,
+  setBeforeSkillTargetLoadForTest,
   SkillInstallerError
 } from "../../src/cli-commands/skill-installer.js";
 
@@ -406,6 +407,30 @@ test("damaged target FeedbackMode is repaired while invalid source fails closed"
     assert.equal(error.code, "E_SKILL_FEEDBACK_MODE_INVALID");
     return true;
   });
+
+  await rm(dirname(dirname(sourcePath)), { recursive: true });
+  await rm(project, { recursive: true });
+});
+
+test("target access failures never authorize damaged-bundle replacement", async () => {
+  const reg = registry();
+  const sourcePath = await makeSkillSource("# UnityCLI Skill\nUnreadable target");
+  const project = await makeProject();
+  const targetSkill = join(project, ".agents", "skills", "unitycli", "SKILL.md");
+  await reg.installForAgents(".agents", sourcePath, project);
+  const before = await readFile(targetSkill, "utf8");
+  setBeforeSkillTargetLoadForTest(async () => { throw Object.assign(new Error("sharing denied"), { code: "EACCES" }); });
+  try {
+    await assert.rejects(() => reg.installForAgents(".agents", sourcePath, project, Date.now() + 1_000), (error: unknown) => {
+      assert.ok(error instanceof SkillInstallerError);
+      assert.equal(error.code, "E_EXECUTION_TIMEOUT");
+      return true;
+    });
+  } finally {
+    setBeforeSkillTargetLoadForTest(undefined);
+  }
+  assert.equal(await readFile(targetSkill, "utf8"), before);
+  assert.equal((await reg.checkForAgents(".agents", sourcePath, project))[0].status, "installed");
 
   await rm(dirname(dirname(sourcePath)), { recursive: true });
   await rm(project, { recursive: true });
