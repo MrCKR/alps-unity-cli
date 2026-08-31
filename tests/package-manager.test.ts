@@ -37,7 +37,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.alpsckr.unity
   const result = await ensurePackageBridge(project);
 
   assert.equal(result.dependencyName, "com.alpsckr.unitycli");
-  assert.equal(result.packageVersion, "0.4.0");
+  assert.equal(result.packageVersion, "0.4.1");
   assert.equal(result.installMode, "copy");
   assert.equal(result.projectHash.length, 64);
   assert.equal(result.sourceHash.length, 64);
@@ -47,7 +47,7 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.alpsckr.unity
   const bridgePath = result.bridgePath;
   const packageJson = JSON.parse(await readFile(join(bridgePath, "package.json"), "utf8")) as { name: string; version: string };
   assert.equal(packageJson.name, "com.alpsckr.unitycli");
-  assert.equal(packageJson.version, "0.4.0");
+  assert.equal(packageJson.version, "0.4.1");
 
   // Editor files should be copied
   const bridgeSource = await readFile(join(bridgePath, "Editor", "UnityCliBridge.cs"), "utf8");
@@ -79,14 +79,14 @@ test("canonical package source manifest fixes every file hash and fails closed o
   const sentinelPath = join(root, "target-sentinel.txt");
   try {
     await mkdir(source);
-    const packageBytes = Buffer.from(`${JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.4.0", unity: "2022.3" }, null, 2)}\n`, "utf8");
+    const packageBytes = Buffer.from(`${JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.4.1", unity: "2022.3" }, null, 2)}\n`, "utf8");
     await writeFile(join(source, "package.json"), packageBytes);
     await writeFile(sentinelPath, "unchanged\n", "utf8");
     const sourceHash = await hashPackageTree(source);
     const contract = {
       schemaVersion: 1,
       packageName: "com.alpsckr.unitycli",
-      packageVersion: "0.4.0",
+      packageVersion: "0.4.1",
       sourceHash,
       files: [{ path: "package.json", size: packageBytes.length, sha256: createHash("sha256").update(packageBytes).digest("hex") }],
     };
@@ -219,8 +219,8 @@ test("ensurePackageBridge refreshes orphaned legacy metadata when the package di
 
   const installed = await ensurePackageBridge(project);
   const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
-  assert.equal(installed.packageVersion, "0.4.0");
-  assert.equal(metadata.packageVersion, "0.4.0");
+  assert.equal(installed.packageVersion, "0.4.1");
+  assert.equal(metadata.packageVersion, "0.4.1");
   assert.equal(metadata.cliCompatibilityRange, ">=0.4.0 <0.5.0");
   assert.match(String(metadata.managedFilesSha256), /^[a-f0-9]{64}$/);
 });
@@ -288,12 +288,12 @@ test("ensurePackageBridge overwrites when version or hash changes", async () => 
 
   // Second install should detect the mismatch and re-copy
   const second = await ensurePackageBridge(project);
-  assert.equal(second.packageVersion, "0.4.0");
+  assert.equal(second.packageVersion, "0.4.1");
   assert.notEqual(second.installTime, first.installTime);
 
   // Verify the metadata was corrected
   const updatedMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as { packageVersion: string };
-  assert.equal(updatedMetadata.packageVersion, "0.4.0");
+  assert.equal(updatedMetadata.packageVersion, "0.4.1");
 });
 
 test("ensurePackageBridge retries transient Windows rename failures before publishing", async () => {
@@ -488,7 +488,7 @@ test("checkPackageBridge succeeds for valid copy-mode install", async () => {
   const checked = await checkPackageBridge(project);
 
   assert.equal(checked.dependencyName, "com.alpsckr.unitycli");
-  assert.equal(checked.packageVersion, "0.4.0");
+  assert.equal(checked.packageVersion, "0.4.1");
   assert.equal(checked.installMode, "copy");
   assert.equal(checked.projectHash.length, 64);
   assert.equal(checked.sourceHash.length, 64);
