@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
-  "packageVersion": "0.4.1",
-  "sourceHash": "a8eda19a9815e4bd522fe3fab9411f1a1387edf7e863a086a62d7e429b866b87",
+  "packageVersion": "0.4.2",
+  "sourceHash": "3849b321c2e4793eec4ec7368c27a58a167913e1b92903a2b1c53f6578193d61",
   "files": [
     {
       "path": "Editor/Bridge/BridgeCommandContext.cs",
@@ -1947,7 +1947,7 @@
     {
       "path": "package.json",
       "size": 268,
-      "sha256": "d4bb4b63708abe75ac76b8428141a227ae0eefc4819e5e946152fb5b61f2d28d"
+      "sha256": "35d9fba8bf248922183ec5dd3f70d4fafb66ef3ffab59f9adf4ccc549ed2f9fd"
     }
   ]
 }
