@@ -2,25 +2,29 @@ import { failure, success } from "../output.js";
 import type { CliResult } from "../types.js";
 import { loadToolCatalog, publicToolDescriptor, resolveCatalogIndependentOperabilityTool } from "../tools/catalog.js";
 import { dispatchCatalogProjection, dispatchTool, type ToolsRuntime } from "../tools/dispatcher.js";
+import { StructuredToolError } from "../tools/errors.js";
 import type { ToolMetadata } from "../tools/metadata/index.js";
+import { paginateDiscovery, type DiscoveryPageRequest } from "../tools/tools/pagination.js";
 
 const ATTRIBUTE_PREFIX = "UnityPipeline_";
 const ATTRIBUTE_GROUP = "UnityPipeline";
 
 const HEAD_CONTROL_OPTIONS = new Map<string, "boolean" | "value">([
   ["help", "boolean"],
-  ["raw", "boolean"],
+  ["pretty", "boolean"],
   ["instance", "value"],
   ["project-path", "value"],
   ["timeout", "value"],
   ["timeout-ms", "value"],
   ["artifact-dir", "value"],
   ["dry-run", "boolean"],
+  ["page-size", "value"],
+  ["cursor", "value"],
 ]);
 
 const TRAILING_CONTROL_OPTIONS = new Map<string, "boolean" | "value">([
   ["help", "boolean"],
-  ["raw", "boolean"],
+  ["pretty", "boolean"],
   ["instance", "value"],
   ["project-path", "value"],
   ["timeout-ms", "value"],
@@ -53,7 +57,7 @@ export async function handleCommand(
   const { commandName, businessTokens, flags } = invocation.value;
   if (!commandName && (flags.help === true || flags.help === "true")) {
     return success(requestId, {
-      usage: "unitycli command [--project-path <path>] [name] [--field <value>|<positional>...]",
+      usage: "unitycli command [--project-path <path>] [--page-size <n>] [--cursor <n>] [name] [--field <value>|<positional>...]",
       inputForms: ["--field value", "--field=value", "--boolean-field", "<positional>"],
       nameResolution: {
         nativeExactFirst: true,
@@ -62,22 +66,27 @@ export async function handleCommand(
         similarNameMapping: false,
       },
       catalogDiscovery: {
-        commandListing: "unitycli command --project-path <path>",
+        commandListing: "unitycli command --project-path <path> [--page-size <n>] [--cursor <n>]",
         toolSearch: "unitycli tools search <k1|k2|...> --instance <id|projectPath|alias>",
         toolDescribe: "unitycli tools describe <tool> --instance <id|projectPath|alias>",
       },
-      note: "Omit name without --help to list the selected instance live catalog command projection.",
+      note: "Omit name without --help to read bounded command summaries; continue with pageInfo.nextCursor and use command <name> --help for parameters.",
     });
   }
 
   if (!commandName) {
-    return dispatchCatalogProjection("command.list", {}, flags, runtime, requestId, async (rootRuntime) => {
+    const pageRequest = commandPageRequest(flags);
+    try {
+      paginateDiscovery([], pageRequest, "command.list");
+    } catch (error) {
+      if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
+      throw error;
+    }
+    return dispatchCatalogProjection("command.list", pageRequest as Record<string, unknown>, flags, runtime, requestId, async (rootRuntime) => {
       const catalog = await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
       if (!catalog.ok) return catalog;
-      return success(requestId, {
-        usage: "unitycli command [command-options] [name] [business-args]",
-        commands: commandDescriptors(catalog.tools),
-      });
+      const page = paginateDiscovery(commandSummaries(catalog.tools), pageRequest, "command.list");
+      return success(requestId, { commands: page.items, pageInfo: page.pageInfo });
     });
   }
 
@@ -489,14 +498,22 @@ function commandNotFound(requestId: string, commandName: string): CliResult {
   ], { commandName });
 }
 
-/** 省略name时返回同一live catalog的command投影，不建立第二份目录。 */
-function commandDescriptors(tools: ToolMetadata[]): Record<string, unknown>[] {
+/** 省略name时只返回分页所需的最小路由摘要。 */
+function commandSummaries(tools: ToolMetadata[]): Record<string, unknown>[] {
   const nativeNames = new Set(tools.filter((tool) => !isOfficialAttributeTool(tool)).map((tool) => tool.name));
   return tools.map((tool) => {
     const attributeName = isOfficialAttributeTool(tool) ? tool.name.slice(ATTRIBUTE_PREFIX.length) : tool.name;
-    const commandName = isOfficialAttributeTool(tool) && !nativeNames.has(attributeName) ? attributeName : tool.name;
-    return commandDescriptor(tool, commandName);
-  });
+    const name = isOfficialAttributeTool(tool) && !nativeNames.has(attributeName) ? attributeName : tool.name;
+    const available = tool.available ?? true;
+    return { name, summary: tool.summary, group: tool.group, ...(!available ? { available: false, unavailableReason: tool.unavailableReason } : {}) };
+  }).sort((left, right) => String(left.name).localeCompare(String(right.name)));
+}
+
+function commandPageRequest(flags: Record<string, string | boolean>): DiscoveryPageRequest {
+  return {
+    ...(flags["page-size"] !== undefined ? { pageSize: Number(flags["page-size"]) } : {}),
+    ...(flags.cursor !== undefined ? { cursor: Number(flags.cursor) } : {}),
+  };
 }
 
 /** 构造稳定command descriptor，并保留其唯一公开Tool身份。 */

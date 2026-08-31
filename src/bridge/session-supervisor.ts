@@ -3,6 +3,7 @@ import { defaultDataDir } from "../platform.js";
 import { EditorBlockerObserver, sanitizeEditorBlockers, type EditorBlockerObservation } from "../editor-blocker-observer.js";
 import {
   clearInstanceHealthCache,
+  InstanceRegistryError,
   selectInstanceForFlags,
   selectObservationInstanceForFlags,
   selectTransitionInstanceForFlags,
@@ -66,6 +67,12 @@ const TRANSITION_CODES = new Set([
   "E_UNITY_PLAY_MODE",
   "E_QUEUE_START_TIMEOUT",
   "E_RUNTIME_NOT_READY",
+]);
+const STARTING_SELECTION_CODES = new Set([
+  "E_INSTANCE_NOT_FOUND",
+  "E_INSTANCE_NOT_RUNNING",
+  "E_INSTANCE_IDENTITY_MISMATCH",
+  "E_INSTANCE_UNVERIFIABLE",
 ]);
 
 export type SessionSupervisorMode = "execute" | "read" | "observeNow";
@@ -404,22 +411,28 @@ export class SessionSupervisor {
 
   /** 首个POST被admission层明确拒绝时可在原执行deadline内换取新token；不得刷新deadline。 */
   private async reacquireAdmission(binding: ValidatedBinding, admission: RootAdmissionLease, absoluteDeadlineMs: number): Promise<boolean> {
-    const remainingMs = remainingBudget(absoluteDeadlineMs, this.dependencies.now());
-    if (remainingMs <= 0) return false;
-    const request: RootAdmissionRequest = {
-      requestId: admission.requestId,
-      command: admission.command,
-      input: {},
-      dryRun: false,
-      target: admission.target,
-      completionContractIdentity: admission.completionContractIdentity,
-      timeoutMs: remainingMs,
-      admissionAbsoluteDeadlineMs: absoluteDeadlineMs,
-    };
-    const reply = await this.dependencies.acquire(binding, request, admission.rootFingerprint, remainingMs);
-    if (!attestationMatches(binding, reply.attestation) || !reply.granted || !reply.token) return false;
-    admission.token = reply.token;
-    return true;
+    for (;;) {
+      const remainingMs = remainingBudget(absoluteDeadlineMs, this.dependencies.now());
+      if (remainingMs <= 0) return false;
+      const request: RootAdmissionRequest = {
+        requestId: admission.requestId,
+        command: admission.command,
+        input: {},
+        dryRun: false,
+        target: admission.target,
+        completionContractIdentity: admission.completionContractIdentity,
+        timeoutMs: remainingMs,
+        admissionAbsoluteDeadlineMs: absoluteDeadlineMs,
+      };
+      const reply = await this.dependencies.acquire(binding, request, admission.rootFingerprint, remainingMs);
+      if (!attestationMatches(binding, reply.attestation)) return false;
+      if (reply.granted && reply.token) {
+        admission.token = reply.token;
+        admission.grantExpiresAtMs = this.dependencies.now() + reply.grantExpiresInMs;
+        return true;
+      }
+      await this.dependencies.sleep(Math.min(admissionPollDelay(this.dependencies.random()), remainingMs));
+    }
   }
 
   /** 业务 deadline 之后只执行一次独立的只读诊断；绝不重放或延长业务请求。 */
@@ -524,11 +537,30 @@ export class SessionSupervisor {
           const observed = await this.observeInstance(observationSelection.instance, observationDeadlineMs);
           if (observed?.outcome === "observed-blocked") throw blockedObservation(observationSelection.instance.instanceId, observed);
           if (observed?.outcome === "conflict") throw blockerObservationConflict(observationSelection.instance.instanceId, observed);
+          if (observed?.outcome === "observed-empty") {
+            const initialSelection = await this.waitForStartingSelection(observationSelection.instance.instanceId, target, selectionDeadlineMs, allowTransitionBinding);
+            return { target, instanceId: initialSelection.instance.instanceId, initialSelection, injected: false };
+          }
         } catch (observationError) {
           if (observationError instanceof SessionSupervisorError) throw observationError;
         }
       }
       throw selectionError;
+    }
+  }
+
+  /** 已证明唯一Unity进程正在启动后，使用固定instanceId等待正式ready状态。 */
+  private async waitForStartingSelection(instanceId: string, target: InstanceTarget, absoluteDeadlineMs: number, allowTransitionBinding: boolean): Promise<InstanceSelection> {
+    for (;;) {
+      try {
+        return await this.selectWithinDeadline({ instance: instanceId }, target, absoluteDeadlineMs, () => selectionTransitionTimeout(instanceId, absoluteDeadlineMs), allowTransitionBinding);
+      } catch (error) {
+        if (!(error instanceof InstanceRegistryError) || !STARTING_SELECTION_CODES.has(error.code)) throw error;
+      }
+      const remainingMs = remainingBudget(absoluteDeadlineMs, this.dependencies.now());
+      if (remainingMs <= 0) throw selectionTransitionTimeout(instanceId, absoluteDeadlineMs);
+      await this.dependencies.sleep(Math.min(REGISTRY_POLL_INTERVAL_MS, remainingMs));
+      clearInstanceHealthCache();
     }
   }
 

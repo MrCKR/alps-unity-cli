@@ -208,7 +208,7 @@ export function clearInstanceHealthCache(): void {
   healthCache.clear();
 }
 
-/** 顶层 instances 控制面只读 registry；prune 由 C# writer 的 PID/start-time reducer 完成。 */
+/** 顶层instances list只读正式registry；writer-owned prune由独立控制面路由。 */
 export async function handleInstancesCommand(
   command: string | undefined,
   flags: Record<string, string | boolean>,
@@ -233,21 +233,8 @@ export async function handleInstancesCommand(
     });
   }
 
-  if (command === "prune") {
-    const { instances, invalidRecordCount } = await readInstancesWithProjectProcessClaims(dataDir);
-    return success(requestId, {
-      removed: 0,
-      remaining: instances.length,
-      ...(invalidRecordCount === 0 ? {} : { invalidRecordCount }),
-      writer: "unity-bridge",
-      note: "Only the C# registry writer may remove PID/start-time-invalid claims or expired offline records.",
-      instances: instances.map(instanceListSummary),
-    });
-  }
-
-  return failure(requestId, "UNKNOWN_INSTANCES_COMMAND", "Expected instances list or instances prune.", [
+  return failure(requestId, "UNKNOWN_INSTANCES_COMMAND", "Expected instances list.", [
     "Run unitycli instances list to inspect project identities and Editor sessions.",
-    "Run unitycli instances prune to request writer-owned cleanup.",
   ]);
 }
 
@@ -410,7 +397,15 @@ export async function selectObservationInstanceForFlags(
 ): Promise<InstanceSelection> {
   const observationDeadlineMs = remainingMs === undefined ? undefined : Date.now() + Math.max(0, remainingMs);
   const selection = await resolveInstanceSelectionIdentity(flags, dataDir, cwd, observationDeadlineMs);
-  const record = await readRegistryRecord(dataDir, selection.identity.instanceId, observationDeadlineMs);
+  let record: InstanceRegistryV3 | undefined;
+  try {
+    record = await readRegistryRecord(dataDir, selection.identity.instanceId, observationDeadlineMs);
+  } catch (error) {
+    if (!(error instanceof InstanceRegistryError)
+      || (error.code !== "E_INSTANCE_IDENTITY_MISMATCH" && error.code !== "E_INSTANCE_UNVERIFIABLE")) throw error;
+    // 启动中的当前Unity会重建不可读状态；observation只保留已解析的canonical identity供进程证明。
+    return { instance: offlineObservationInstance(selection.identity, target), matchedBy: selection.matchedBy };
+  }
   // observation 不要求 Bridge 已注册；canonical identity 仍可归因到启动中的 Unity process。
   if (!record) return { instance: offlineObservationInstance(selection.identity, target), matchedBy: selection.matchedBy };
   const processBudgetMs = Math.max(0, observationDeadlineMs === undefined ? PROCESS_OBSERVATION_TIMEOUT_MS : observationDeadlineMs - Date.now());
@@ -516,35 +511,35 @@ async function resolveInstanceSelectionIdentity(
   return { identity, matchedBy, explicit };
 }
 
-function missingSelectedInstance(identity: ProjectIdentity, explicit: string | undefined, target: InstanceTarget): InstanceRegistryError {
+function missingSelectedInstance(_identity: ProjectIdentity, explicit: string | undefined, target: InstanceTarget): InstanceRegistryError {
   const code = explicit && INSTANCE_ID_PATTERN.test(explicit) ? "E_INSTANCE_NOT_FOUND" : target === "runtime" ? "E_RUNTIME_NOT_RUNNING" : "E_INSTANCE_NOT_RUNNING";
   return new InstanceRegistryError(code, `No ${target} registry record exists for the selected project identity.`, [
     target === "runtime" ? "Launch a development Player built from this exact Unity project." : "Open this exact Unity project in Unity Editor.",
     "Run unitycli instances list to inspect known project identities.",
-  ], { instanceId: identity.instanceId, canonicalProjectPath: identity.canonicalProjectPath, target });
+  ]);
 }
 
 /** 为 target 离线返回稳定且可执行的选择错误。 */
-function targetNotRunning(instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
+function targetNotRunning(_instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
   return new InstanceRegistryError(target === "runtime" ? "E_RUNTIME_NOT_RUNNING" : "E_INSTANCE_NOT_RUNNING", `The selected Unity project has no active ${target} session.`, [
     target === "runtime" ? "Launch a development Player built from this exact Unity project." : "Open this exact Unity project in Unity Editor.",
-  ], { instance: instanceListSummary(instance), target });
+  ]);
 }
 
 /** conflict只表示已证明的同项目plural live claims。 */
-function targetConflict(instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
+function targetConflict(_instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
   return new InstanceRegistryError("E_INSTANCE_CONFLICT", `Multiple verified ${target} processes claim the selected canonical project identity.`, [
     `Close every duplicate ${target} process except the intended session.`,
     "Run unitycli instances list to inspect all verified claimants.",
-  ], { instance: instanceListSummary(instance), target });
+  ]);
 }
 
 /** identity观察不完整时fail closed，但不得建议关闭并不存在的duplicate。 */
-function targetUnverifiable(instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
+function targetUnverifiable(_instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
   return new InstanceRegistryError("E_INSTANCE_UNVERIFIABLE", `The selected ${target} process identity could not be verified safely.`, [
     "Run unitycli instances list or tools run editor.state to observe the current identity again.",
     "Do not retry a prior mutation whose outcome is unknown.",
-  ], { instance: instanceListSummary(instance), target },);
+  ]);
 }
 
 /** 即时观察只归约原始 registry：不得发 health 请求或扫描旧 PID。 */
@@ -873,17 +868,10 @@ export async function obsoleteLocalStatePaths(dataDir: string): Promise<string[]
 }
 
 async function readRegistryRecords(dataDir: string): Promise<RegistryRecordCollection> {
-  let names: string[];
-  try {
-    names = await readdir(instancesDir(dataDir));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { records: [], invalidRecordCount: 0 };
-    throw error;
-  }
-
+  const names = await readCanonicalRegistryNames(dataDir);
   const records: InstanceRegistryV3[] = [];
   let invalidRecordCount = 0;
-  for (const name of names.filter((entry) => INSTANCE_ID_PATTERN.test(entry.replace(/\.json$/i, "")) && entry.endsWith(".json")).sort()) {
+  for (const name of names) {
     try {
       const parsed = await readRegistrySnapshot(join(instancesDir(dataDir), name), true);
       if (`${parsed.identity.instanceId}.json` !== name) throw new Error("Registry filename does not match its canonical instanceId.");
@@ -894,6 +882,25 @@ async function readRegistryRecords(dataDir: string): Promise<RegistryRecordColle
     }
   }
   return { records, invalidRecordCount };
+}
+
+/** 原子replace期间正式文件名可能短暂不可见；只重读目录，不读取或选择固定.tmp。 */
+async function readCanonicalRegistryNames(dataDir: string): Promise<string[]> {
+  const directory = instancesDir(dataDir);
+  for (let attempt = 0; ; attempt += 1) {
+    let names: string[];
+    try {
+      names = await readdir(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+    const canonical = names
+      .filter((entry) => entry.endsWith(".json") && INSTANCE_ID_PATTERN.test(entry.slice(0, -".json".length)))
+      .sort();
+    if (canonical.length > 0 || attempt >= REGISTRY_READ_RETRY_DELAYS_MS.length) return canonical;
+    await new Promise((complete) => setTimeout(complete, REGISTRY_READ_RETRY_DELAYS_MS[attempt]));
+  }
 }
 
 /** Observation paths already know the deterministic v3 filename and must not enumerate unrelated records. */
@@ -1166,10 +1173,22 @@ async function resolveSelectorIdentity(selector: string, dataDir: string, observ
   const alias = store.aliases.find((binding) => binding.alias === selector);
   if (alias) return projectIdentityFromBinding(alias);
   if (INSTANCE_ID_PATTERN.test(selector)) {
-    // instanceId 已决定固定文件名；直接读取才能对 Windows replace 窗口做有界重试。
-    const record = await readRegistryRecord(dataDir, selector, observationDeadlineMs);
-    if (!record) throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project identity not found: ${selector}.`, ["Pass an existing project path or run unitycli instances list."]);
-    return projectIdentityFromRegistry(record.identity);
+    // instanceId 已决定固定文件名；observation有截止时间时可等待启动中的writer首次发布。
+    for (;;) {
+      let record: InstanceRegistryV3 | undefined;
+      try {
+        record = await readRegistryRecord(dataDir, selector, observationDeadlineMs);
+      } catch (error) {
+        if (observationDeadlineMs === undefined || !(error instanceof InstanceRegistryError)
+          || (error.code !== "E_INSTANCE_IDENTITY_MISMATCH" && error.code !== "E_INSTANCE_UNVERIFIABLE")) throw error;
+      }
+      if (record) return projectIdentityFromRegistry(record.identity);
+      const remainingMs = observationDeadlineMs === undefined ? 0 : observationDeadlineMs - Date.now();
+      if (remainingMs <= 0) {
+        throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project identity not found: ${selector}.`, ["Pass an existing project path or run unitycli instances list."]);
+      }
+      await new Promise((complete) => setTimeout(complete, Math.min(100, remainingMs)));
+    }
   }
   if (!looksLikePath(selector)) {
     throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project alias not found: ${selector}.`, ["Run unitycli target alias list or pass a project path."]);

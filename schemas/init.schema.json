@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alpsckr.dev/unitycli/schemas/init.schema.json",
+  "title": "UnityCLI init envelope",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "ok": { "const": true },
+        "requestId": { "type": "string", "minLength": 1 },
+        "data": {
+          "oneOf": [
+            { "$ref": "#/$defs/helpData" },
+            { "$ref": "#/$defs/discoverData" },
+            { "$ref": "#/$defs/packageData" },
+            { "$ref": "#/$defs/skillData" }
+          ]
+        }
+      },
+      "required": ["ok", "requestId", "data"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "ok": { "const": false },
+        "requestId": { "type": "string", "minLength": 1 },
+        "error": { "$ref": "#/$defs/error" }
+      },
+      "required": ["ok", "requestId", "error"],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "nextActions": { "type": "array", "items": { "type": "string" } },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "nextActions": { "$ref": "#/$defs/nextActions" },
+        "transient": { "type": "boolean" },
+        "retryAfterMs": { "type": "number", "minimum": 0 },
+        "details": { "x-unityCliAnyJson": true }
+      },
+      "required": ["code", "message", "nextActions", "transient", "retryAfterMs"],
+      "additionalProperties": false
+    },
+    "helpData": {
+      "type": "object",
+      "properties": {
+        "action": { "const": "init_help" },
+        "audience": { "const": "ai" },
+        "protocolVersion": { "type": "integer", "minimum": 1 },
+        "aiInstructions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "commands": { "type": "object", "additionalProperties": { "type": "string" } },
+        "nextCommand": { "type": "string" },
+        "nextActions": { "$ref": "#/$defs/nextActions" }
+      },
+      "required": ["action", "audience", "protocolVersion", "aiInstructions", "commands", "nextCommand", "nextActions"],
+      "additionalProperties": false
+    },
+    "discoverData": {
+      "type": "object",
+      "properties": {
+        "action": { "const": "init_discover" },
+        "cwd": { "type": "string" },
+        "repositoryRoot": { "type": ["string", "null"] },
+        "limits": { "type": "object" },
+        "scan": { "type": "object" },
+        "unityProjects": { "type": "array" },
+        "skillWorkspaces": { "type": "array" },
+        "skillCopies": { "type": "array" },
+        "shadowingRisks": { "type": "array" },
+        "requiredDecisions": { "type": "array", "minItems": 4 },
+        "nextActions": { "$ref": "#/$defs/nextActions" }
+      },
+      "required": ["action", "cwd", "repositoryRoot", "limits", "scan", "unityProjects", "skillWorkspaces", "skillCopies", "shadowingRisks", "requiredDecisions", "nextActions"],
+      "additionalProperties": false
+    },
+    "packageData": {
+      "type": "object",
+      "properties": {
+        "action": { "enum": ["init_package", "init_package_check"] },
+        "projectPath": { "type": "string" },
+        "projectIdentity": { "type": "object" },
+        "package": {
+          "type": "object",
+          "properties": { "status": { "enum": ["installed", "missing", "damaged", "drifted", "conflict"] } },
+          "required": ["status"]
+        },
+        "nextActions": { "$ref": "#/$defs/nextActions" }
+      },
+      "required": ["action", "projectPath", "package", "nextActions"],
+      "additionalProperties": false
+    },
+    "skillData": {
+      "type": "object",
+      "properties": {
+        "action": { "enum": ["init_skill", "init_skill_check"] },
+        "agent": { "enum": [".agents", "claude"] },
+        "scope": { "enum": ["workspace", "user"] },
+        "workspace": { "type": "string" },
+        "changes": { "type": "array" },
+        "skill": {
+          "type": "object",
+          "properties": {
+            "status": { "enum": ["installed", "missing", "drifted", "damaged"] },
+            "targetPath": { "type": "string" },
+            "sourceHash": { "$ref": "#/$defs/sha256" },
+            "hash": { "$ref": "#/$defs/sha256" },
+            "message": { "type": "string" }
+          },
+          "required": ["status", "targetPath", "sourceHash"],
+          "additionalProperties": false
+        },
+        "nextActions": { "$ref": "#/$defs/nextActions" }
+      },
+      "required": ["action", "agent", "scope", "skill", "nextActions"],
+      "additionalProperties": false
+    }
+  }
+}

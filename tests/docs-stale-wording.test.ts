@@ -123,6 +123,20 @@ test("docs contain required current command references", () => {
   );
 });
 
+test("README is an operational npm page for one-line AI setup and manual verification", () => {
+  const readme = readDocFile("README.md");
+  assert.match(readme, /npm install -g @alpsckr\/unitycli/);
+  assert.match(readme, /执行 unitycli init help，然后照做。/);
+  for (const decision of ["Unity projects", "Agent Skills", "workspace", "current user"]) assert.match(readme, new RegExp(decision, "i"));
+  for (const command of ["unitycli init help", "unitycli init discover", "unitycli init package --project", "unitycli init skill --agent .agents --scope workspace", "unitycli init skill --agent claude --scope user", "--check", "unitycli doctor", "unitycli instances list", "npm uninstall -g @alpsckr/unitycli"]) assert.match(readme, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(readme, /Node\.js 20/);
+  assert.match(readme, /Unity 2022\.3/);
+  assert.match(readme, /First Unity Call/);
+  assert.doesNotMatch(readme, /Project Baseline|Bridge command、handler、journal|completion contract都是内部实现|--pkg-only|--skill-only/);
+  assert.match(readDocFile("docs/architecture.md"), /Registry v3|Health v3|Tool Catalog|Installation Control Plane/);
+  assert.match(readDocFile("docs/development.md"), /build:test|architecture:validate|Dev Unity Isolation|npm pack --dry-run/);
+});
+
 test("public search guidance uses the current pipe-token syntax", () => {
   const oldSearchPlaceholder = "tools search <" + "keyword>";
   const violations: string[] = [];
@@ -164,8 +178,12 @@ test("public instance guidance explains default filtering and explicit full expa
   for (const [file, content] of [["README.md", readme], ["docs/target-and-instance.md", targetDocs], ["skills/unitycli/SKILL.md", skill]] as const) {
     assert.match(content, /invalidRecordCount/, `${file} must expose isolated invalid record count`);
     assert.match(content, /(?:旧格式|损坏|不可读).{0,60}(?:不(?:会)?阻断|继续返回|逐文件|隔离)/s, `${file} must explain per-record isolation`);
-    assert.match(content, /(?:不(?:会|得)|不能).{0,30}(?:兼容|转换|移动|删除|读取)/s, `${file} must reject compatibility or automatic cleanup`);
+    assert.match(content, /instances prune --instance/, `${file} must publish writer-owned historical cleanup`);
+    assert.match(content, /removed.{0,30}(?:deferred|remaining)|deferred.{0,30}removed/s, `${file} must explain real prune counters`);
+    assert.match(content, /(?:不得|不要|不能).{0,30}(?:读取|删除).{0,20}(?:内部|记录|文件)/s, `${file} must reject manual internal-state mutation`);
+    assert.match(content, /(?:首次|启动|编译|重载).{0,60}(?:等待|ready)/is, `${file} must explain bounded readiness waiting`);
   }
+  assert.doesNotMatch(`${readme}\n${targetDocs}\n${skill}`, /Only the C# registry writer may remove|固定返回\s*removed.?0|只报告.{0,20}removed.?0/i);
 });
 
 test("skill does not use stale CLI parameter/field/error names", () => {
@@ -261,8 +279,9 @@ test("public docs do not expose private Bridge HTTP routes", () => {
 
 test("docs expose only the current Tool、command和extension surfaces", () => {
   const readme = readDocFile("README.md");
+  const architecture = readDocFile("docs/architecture.md");
   assert.doesNotMatch(readme, /\bcontext (?:list|search|describe|read)\b/);
-  assert.match(readme, /能力入口只允许：[\s\S]*`tools`[\s\S]*`command`/);
+  assert.match(architecture, /Public top-level commands are frozen to:[\s\S]*tools[\s\S]*command[\s\S]*init/);
 
   const staleContextDocs: string[] = [];
   const staleCliDocs: string[] = [];
@@ -284,7 +303,7 @@ test("docs expose only the current Tool、command和extension surfaces", () => {
   assert.deepEqual(staleCliDocs, [], "public text must not invoke Unity capability domains as top-level commands");
   assert.deepEqual(staleCountDocs, [], "public text must not freeze obsolete generated inventory counts");
 
-  for (const file of ["README.md", "AGENTS.md", "skills/unitycli/SKILL.md", "docs/availability-differences.md"]) {
+  for (const file of ["docs/architecture.md", "AGENTS.md", "skills/unitycli/SKILL.md", "docs/availability-differences.md"]) {
     const content = readDocFile(file);
     for (const boundary of ["auth", "Unity Hub", "Cloud", "License", "proxy"]) {
       assert.match(content, new RegExp(boundary, "i"), `${file} must state the external control-plane boundary for ${boundary}`);

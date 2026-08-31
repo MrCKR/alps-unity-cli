@@ -971,7 +971,7 @@ function inputDeadlineExceeded(requestId: string): ParsedInput {
 }
 
 const TOOL_CONTROL_FLAGS = new Set([
-  "input", "input-file", "stdin", "raw", "format",
+  "input", "input-file", "stdin", "pretty", "format",
   "instance", "project", "runtime", "timeout-ms", "artifact-dir", "dry-run"
 ]);
 

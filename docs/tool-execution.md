@@ -58,7 +58,7 @@ unitycli tools run camera.screenshot --input '{}'
 
 ## Bridge 执行约束
 
-Bridge-backed Tool由Unity Editor主线程执行。准入放行后，session supervisor只创建一次execution absolute deadline，并在该deadline内处理compile、import、domain reload和listener generation交接；token重取、status、rebind和terminal recovery不得刷新预算。读取可在新generation重新执行完整读取；mutation只有在`editorSessionId`未改变时才可用完全相同的request bytes续接durable terminal。
+Bridge-backed Tool由Unity Editor主线程执行。业务请求发送前，session supervisor会在准入deadline内等待首次ready记录、compile、import、domain reload和listener generation交接；只有能证明目标Unity正在运行时才等待，证明未运行时立即返回。准入放行后只创建一次execution absolute deadline，token重取、status、rebind和terminal recovery不得刷新预算。读取可在新generation重新执行完整读取；mutation只有在`editorSessionId`未改变时才可用完全相同的request bytes续接durable terminal。
 
 首次mutation POST后若Editor session改变，CLI禁止向新session再次POST，并返回`E_EXECUTION_TIMEOUT`、`outcome:unknown`。其他超时或终态前断连同样表示没有可信终态；调用方应先用业务读取或`editor.state`收集证据，再决定是否提交全新请求。`editor.state`使用frozen本地descriptor绕过被阻断的Live catalog，再读取Registry/Health v3、内存主线程pulse、Bridge和Windows modal证据；两个dialog recovery Tool保持同一例外，其他Tool不建立静态fallback。
 
@@ -96,7 +96,8 @@ unitycli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
 
 通用规则：
 
-- 列表/层级工具优先传 `pageSize`、`cursor`、`parent`、`query`、`componentType` 或 `className`。继续读取时将输出里的 `pageInfo.nextCursor` 原值传回 `cursor`；两者保持相同 JSON 类型。`hasMore`、`truncated` 或 `childrenTruncated` 表示还有更深或更多内容。
+- discovery 的 `tools group list`、`tools search` 和省略name的`command`列表默认每页20项、最大100项；继续读取时将`pageInfo.nextCursor`原值传回CLI `--cursor`。
+- 业务列表/层级工具优先传 JSON `pageSize`、`cursor`、`parent`、`query`、`componentType` 或 `className`。继续读取时将输出里的 `pageInfo.nextCursor` 原值传回 `cursor`；两者保持相同 JSON 类型。`hasMore`、`truncated` 或 `childrenTruncated` 表示还有更深或更多内容。
 - 深度序列化工具（`object.get-data`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`，并保持 `maxDepth` 较低。数组、列表和字典受 `maxArrayItems` 限制；输出里的 `totalCount`、`returnedCount`、`truncated`、`nextPath` 用于判断是否需要继续按路径读取。CLR 的 `NaN`、正无穷和负无穷无法作为 JSON number，会在 AnyJson 值节点中分别表示为字符串 `"NaN"`、`"Infinity"`、`"-Infinity"`。
 - 文本源码工具（如 `shader.read`）使用 `offset` 和 `maxBytes` 分段读取。输出 `truncated=true` 时，下一次把 `nextOffset` 作为新的 `offset`。
 - 截图和相机工具默认返回 artifact 路径。只有确实需要内联图片时才传 `inlineBase64:true`；图片超过 Bridge 内联上限时会省略 `imageBase64` 并返回 warning，继续使用 artifact 路径。

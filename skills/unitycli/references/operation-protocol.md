@@ -6,9 +6,11 @@
 
 `--instance <full-id|canonical-project-path|alias>`是通用显式实例选择器；`command --project-path <path>`是同一canonical identity选择语法。显式空值必须失败；业务`input.instance`不是selector。未传selector时只从当前Unity项目CWD解析；无法确定实例即稳定失败，`--project`和Tool input都不能选实例。
 
-`target alias` 只维护 canonical project identity alias。`source` 只供说明和审计，不影响显示、describe、owner 路由或执行。连接实例的 Tool 目录是权威目录；离线静态 catalog 不能替代它。PowerShell中执行多token搜索时使用`tools search '<k1|k2|...>'`；单引号必须包住完整关键词，避免`|`被解释为shell管道。
+`target alias` 只维护 canonical project identity alias。`source` 只供说明和审计，不影响显示、describe、owner 路由或执行，也不进入搜索结果。连接实例的 Tool 目录是权威目录；离线静态 catalog 不能替代它。PowerShell中执行多token搜索时使用`tools search '<k1|k2|...>'`；单引号必须包住完整关键词，避免`|`被解释为shell管道。
 
-`instances list`逐个验证当前Registry v3正式文件。旧格式、损坏或不可读文件不参与路由，也不阻断其他合法实例；存在时结果包含`invalidRecordCount`，应使用`doctor`读取计数告警。不得读取、兼容解析、转换、移动或删除内部文件。显式选择对应坏instanceId仍严格失败。
+`tools group list`、`tools search`和省略name的`command`列表按名称稳定分页，默认20项、最大100项。存在`pageInfo.nextCursor`时，将其原值传回同一查询的`--cursor`；不要重新解释或递增cursor。stdout默认是单行紧凑JSON，`--pretty`只增加缩进。
+
+`instances list`逐个验证当前正式实例记录。旧格式、损坏或不可读文件不参与路由，也不阻断其他合法实例；存在时结果包含`invalidRecordCount`。当前项目由Unity在ready时自动重建。需要清理历史记录时调用`instances prune --instance <id|projectPath|alias>`并检查`removed`、`remaining`、`deferred`、`scanned`和`truncated`；不得读取、兼容解析、转换、移动或手工删除内部文件。
 
 ## Descriptor
 
@@ -46,7 +48,7 @@ Tool descriptor 常用字段：
 
 每个live Editor或Development Player session拥有独立任务池，默认达到5个active root时关闭准入，降到4仍关闭，降到3才重开。CLI在业务请求前自动等待；AI不手工轮询、不读取active count，也不管理内部token。统一catalog在Editor和Runtime同时在线时，会分别经过两个session的准入后才返回完整结果。
 
-`--timeout-ms T`先提供一份最多`T`的准入预算。准入deadline的`E_UNITY_BUSY`明确证明业务Bridge请求未发送、effect未开始，可以稍后提交新root。获得grant后再创建一份完整`T`的execution预算；token重取、status、rebind、reload和terminal recovery都只能消费该预算，不能刷新第三份预算。
+`--timeout-ms T`先提供一份最多`T`的准入预算。CLI在其中等待首次ready记录、当前编译/导入/重载和任务池；证明Unity未运行时立即返回。准入deadline的`E_UNITY_BUSY`明确证明业务Bridge请求未发送、effect未开始，可以稍后提交新root。获得grant后再创建一份完整`T`的execution预算；token重取、status、rebind、reload和terminal recovery都只能消费该预算，不能刷新第三份预算。
 
 `E_EXECUTION_TIMEOUT`、放行后的transport丢失、进程中断或没有可信terminal envelope时，只能确定本次调用没有返回可信终态，不能据此判断mutation是否发生。先读取对象、场景、Package、build/test状态或artifact manifest；只有形成新的业务决策后才提交新请求，不把outcome unknown自动重放。
 
@@ -80,4 +82,4 @@ unitycli extensions remove <id> --project <path>
 unitycli extensions doctor --project <path>
 ```
 
-Skill/runtime bundle 安装使用 `init`；`init --check` 只读校验。Unity project 文件投影完成后，如任务要求 Editor 效果，仍需在已连接实例中完成 import/compile 和业务 readback。
+安装协议先使用`unitycli init help`学习，再由`init discover`只读发现现场。Bridge只用`init package --project <UnityProject>`安装，并用同命令加`--check`校验；Skill只用`init skill --agent <.agents|claude> --scope <workspace|user>`，workspace scope还必须传`--workspace <path>`，同命令加`--check`校验。不得使用裸`init`或混装Bridge与Skill。Unity project文件投影完成后，如任务要求Editor效果，仍需在已连接实例中完成import/compile和业务readback；安装协议本身不得管理Unity进程。

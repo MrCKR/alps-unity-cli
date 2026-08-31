@@ -11,8 +11,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -33,9 +31,6 @@ namespace UnityCli
         private const int MaxCodeTerminalBytes = 1536 * 1024;
         private const int MaxRoslynOutputBytes = 512 * 1024;
         private const int MaxRoslynDiagnostics = 100;
-
-        // code.exec 编译核心开关：默认 in-process Roslyn（官方方案）；置 false 回退到 csc.exe 子进程。
-        private const bool CodeExecUseInProcessRoslyn = true;
 
         // 注册运行时代码执行命令。
         private static void RegisterCodeExecCommand(BridgeCommandRegistry registry)
@@ -90,9 +85,7 @@ namespace UnityCli
             byte[] assemblyBytes;
             try
             {
-                var compilation = CodeExecUseInProcessRoslyn
-                    ? CompileInProcess(source, references, request.StringArg("defines"), request, cancellationToken)
-                    : CompileWithCscFallback(source, references, request.StringArg("defines"), request, cancellationToken);
+                var compilation = CompileWithUnityCompiler(source, references, request.StringArg("defines"), request, cancellationToken);
                 if (compilation.TimedOut)
                     return CodeExecutionResult.Fail("E_EXECUTION_TIMEOUT", "Runtime Code compilation exceeded the immutable deadline.", new Dictionary<string, object>(), "Inspect the Editor state before submitting a new request.");
                 if (!compilation.Success)
@@ -215,8 +208,8 @@ namespace UnityCli
         }
 
         /// <summary>
-        /// 汇总 in-process Roslyn 所需引用；跟随官方 Editor 模式全包含 AppDomain 已加载程序集，
-        /// 不排除 mscorlib/System*/netstandard，避免针对 mscorlib 编译的项目程序集缺核心库引用。
+        /// 汇总 Unity Editor 编译器所需引用；全包含 AppDomain 已加载程序集，
+        /// 不排除 mscorlib/System*/netstandard，避免项目程序集缺少核心库引用。
         /// </summary>
         private static IEnumerable<string> DefaultCodeReferences(string refsCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
@@ -245,7 +238,7 @@ namespace UnityCli
             if (!references.Contains(reference)) references.Add(reference);
         }
 
-        // in-process 与 csc.exe 回退共用的编译结果；成功时携带程序集字节，失败时携带错误诊断。
+        // Unity Editor 编译器结果；成功时携带程序集字节，失败时携带结构化诊断。
         private sealed class CodeCompilationResult
         {
             public bool Success;
@@ -255,71 +248,9 @@ namespace UnityCli
         }
 
         /// <summary>
-        /// 用 in-process Roslyn（Microsoft.CodeAnalysis.CSharp）编译源码。
-        /// 引用集全包含 AppDomain 已加载程序集，与官方 Editor 模式一致；
-        /// 编译无法中途终止，只能在编译前后重验 immutable deadline。
+        /// 使用当前 Unity Editor 自带的 csc.exe 编译源码；子进程受请求 deadline 约束并可终止。
         /// </summary>
-        private static CodeCompilationResult CompileInProcess(string source, IEnumerable<string> references, string definesCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
-        {
-            var result = new CodeCompilationResult();
-            try
-            {
-                EnsureCodePreEffectDeadline(request, cancellationToken);
-                var parseOptions = new CSharpParseOptions(preprocessorSymbols: SplitCsv(definesCsv));
-                var tree = CSharpSyntaxTree.ParseText(WrapCodeSource(source), parseOptions);
-                var metadataReferences = new List<MetadataReference>();
-                foreach (var reference in references)
-                {
-                    if (string.IsNullOrEmpty(reference)) continue;
-                    try { metadataReferences.Add(MetadataReference.CreateFromFile(reference)); }
-                    catch { /* 跳过不可读引用，避免个别文件缺失中断整次编译 */ }
-                }
-                var compilation = CSharpCompilation.Create(
-                    "UnityCli.RuntimeCode",
-                    new[] { tree },
-                    metadataReferences,
-                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-                using (var ms = new MemoryStream())
-                {
-                    var emitResult = compilation.Emit(ms);
-                    foreach (var diagnostic in emitResult.Diagnostics)
-                    {
-                        if (diagnostic.Severity != DiagnosticSeverity.Error) continue;
-                        if (result.Diagnostics.Count >= MaxRoslynDiagnostics) continue;
-                        var lineSpan = diagnostic.Location.GetLineSpan();
-                        result.Diagnostics.Add(new Dictionary<string, object>
-                        {
-                            { "severity", "error" }, { "id", BoundedText(diagnostic.Id, 64) },
-                            { "message", BoundedText(diagnostic.GetMessage(), 4096) },
-                            { "file", BoundedText(lineSpan.Path ?? string.Empty, 2048) },
-                            { "line", (long)(lineSpan.StartLinePosition.Line + 1) },
-                            { "column", (long)(lineSpan.StartLinePosition.Character + 1) },
-                            { "span", null }
-                        });
-                    }
-                    result.Success = emitResult.Success;
-                    if (emitResult.Success) result.AssemblyBytes = ms.ToArray();
-                }
-                // in-process 无法中途终止；编译完成后重验 deadline，拒绝超时结果。
-                int remainingMs;
-                if (cancellationToken.IsCancellationRequested || request == null || !request.TryDeadlineRemainingMs(out remainingMs))
-                {
-                    result.TimedOut = true;
-                    result.Success = false;
-                    result.AssemblyBytes = null;
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                result.TimedOut = true;
-            }
-            return result;
-        }
-
-        /// <summary>
-        /// csc.exe 子进程编译回退；保留原临时文件与子进程超时终止逻辑，仅在 in-process 编译不可用时切换回来。
-        /// </summary>
-        private static CodeCompilationResult CompileWithCscFallback(string source, IEnumerable<string> references, string definesCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
+        private static CodeCompilationResult CompileWithUnityCompiler(string source, IEnumerable<string> references, string definesCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             var result = new CodeCompilationResult();
             var editorDataPath = EditorDataPath();
@@ -339,7 +270,7 @@ namespace UnityCli
             {
                 File.WriteAllText(sourceFilePath, WrapCodeSource(source), new UTF8Encoding(true));
                 WriteReferenceResponseFile(responseFilePath, references);
-                var compilation = CompileWithRoslyn(editorDataPath, sourceFilePath, responseFilePath, assemblyFilePath, definesCsv, request, cancellationToken);
+                var compilation = RunUnityCompiler(editorDataPath, sourceFilePath, responseFilePath, assemblyFilePath, definesCsv, request, cancellationToken);
                 if (compilation.TimedOut)
                 {
                     result.TimedOut = true;
@@ -394,7 +325,7 @@ namespace UnityCli
         /// <summary>
         /// 使用 Unity 内置 Roslyn 编译临时源码；进程最多运行 60 秒，输出仅用于诊断，成功程序集由调用方读取到内存。
         /// </summary>
-        private static RoslynCompilation CompileWithRoslyn(string editorDataPath, string sourceFilePath, string responseFilePath, string assemblyFilePath, string definesCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
+        private static RoslynCompilation RunUnityCompiler(string editorDataPath, string sourceFilePath, string responseFilePath, string assemblyFilePath, string definesCsv, UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             var monoPath = Path.Combine(editorDataPath, "MonoBleedingEdge", "bin", "mono.exe");
             var cscPath = Path.Combine(editorDataPath, "MonoBleedingEdge", "lib", "mono", "4.5", "csc.exe");

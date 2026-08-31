@@ -86,6 +86,7 @@ namespace UnityCli
             RegisterInstalledExtensionCommands(registry);
             RegisterCodeExecCommand(registry);
             RegisterEditorStateSnapshotCommand(registry);
+            RegisterInstanceCleanupCommand(registry);
             UnityCliCompileCoordinator.Register(registry);
             UnityCliLiveBuildCoordinator.Register(registry);
             UnityCliLiveRefreshCoordinator.Register(registry);

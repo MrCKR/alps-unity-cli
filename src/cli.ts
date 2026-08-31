@@ -7,13 +7,14 @@ import { parseArgs, getBoolean, getString, type CliArgsSpec } from "./args.js";
 import { registerBuiltinExtensionContributions } from "./extensions/index.js";
 import { handleCommand } from "./cli-commands/command.js";
 import { handleExtensionsCommand } from "./cli-commands/extensions.js";
+import { handleInstances } from "./cli-commands/instances.js";
 import { handleInit } from "./cli-commands/package.js";
 import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
 import { createRequestId, failure, serializeResult, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
 import { handleToolsCommand } from "./tools/commands.js";
 import { handleDoctorCommand } from "./doctor.js";
-import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
+import { handleTargetCommand } from "./instances.js";
 import type { CliResult } from "./types.js";
 
 /**
@@ -24,9 +25,9 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["tools", { run: ({ command, args, flags, runtime, requestId }) => handleToolsCommand(command, args, flags, runtime, requestId) }],
   ["command", { run: ({ args, flags, runtime, requestId }) => handleCommand(args, flags, runtime, requestId) }],
   ["extensions", { run: ({ command, args, flags, runtime, requestId }) => handleExtensionsCommand(command, args, flags, runtime, requestId) }],
-  ["init", { run: ({ flags, runtime, requestId }) => handleInit(flags, runtime, requestId) }],
+  ["init", { run: ({ command, args, flags, runtime, requestId }) => handleInit(command, args, flags, runtime, requestId) }],
   ["target", { run: ({ command, args, flags, runtime, requestId }) => handleTopLevelTarget(command, args, flags, runtime, requestId) }],
-  ["instances", { run: ({ command, flags, runtime, requestId }) => handleTopLevelInstances(command, flags, runtime, requestId) }],
+  ["instances", { run: ({ command, flags, runtime, requestId }) => handleInstances(command, flags, runtime, requestId) }],
   ["doctor", { run: ({ flags, runtime, requestId }) => handleDoctorCommand(flags, runtime, requestId) }]
 ]);
 
@@ -37,7 +38,7 @@ export const CLI_ARGS_SPEC: CliArgsSpec = {
   options: {
     help: "boolean",
     version: "boolean",
-    raw: "boolean",
+    pretty: "boolean",
     instance: "value",
     project: "value",
     input: "value",
@@ -46,10 +47,12 @@ export const CLI_ARGS_SPEC: CliArgsSpec = {
     "dry-run": "boolean",
     "timeout-ms": "value",
     "artifact-dir": "value",
+    "page-size": "value",
+    cursor: "value",
     runtime: "boolean",
     agent: "value",
-    "pkg-only": "boolean",
-    "skill-only": "boolean",
+    scope: "value",
+    workspace: "value",
     check: "boolean",
     force: "boolean",
     all: "boolean",
@@ -59,7 +62,6 @@ export const CLI_ARGS_SPEC: CliArgsSpec = {
     "bridge-endpoint": "value",
     retry: "value",
     target: "value",
-    unity: "value",
   },
 };
 
@@ -159,20 +161,26 @@ function createRuntime(dataDir = defaultDataDir()): Runtime { return { dataDir }
 /** 返回当前 route 可用的 option 集；undefined 表示顶层命令本身未知，应由 UNKNOWN_COMMAND 处理。 */
 function commandOptionNames(group: string | undefined, command: string | undefined): ReadonlySet<string> | undefined {
   if (!group || !CLI_COMMANDS.has(group)) return undefined;
-  const global = ["help", "version", "raw"];
+  const global = ["help", "version", "pretty"];
   if (group === "tools") {
     const common = [...global, "instance"];
     if (command === "run") return new Set([...common, "input", "input-file", "stdin", "dry-run", "timeout-ms", "artifact-dir", "runtime"]);
+    if (command === "search" || command === "group") return new Set([...common, "page-size", "cursor"]);
     return new Set(common);
   }
-  if (group === "command") return new Set([...global, "instance", "timeout-ms", "artifact-dir", "dry-run", "runtime"]);
+  if (group === "command") return new Set([...global, "instance", "timeout-ms", "artifact-dir", "dry-run", "runtime", "page-size", "cursor"]);
   if (group === "extensions") {
     const common = [...global, "project"];
     return new Set(command === "install" || command === "remove" ? [...common, "timeout-ms"] : common);
   }
-  if (group === "init") return new Set([...global, "project", "agent", "pkg-only", "skill-only", "check", "timeout-ms", "unity"]);
+  if (group === "init") {
+    if (command === "help" || command === "discover") return new Set(global);
+    if (command === "package") return new Set([...global, "project", "check", "timeout-ms"]);
+    if (command === "skill") return new Set([...global, "agent", "scope", "workspace", "check", "timeout-ms"]);
+    return new Set(global);
+  }
   if (group === "target") return new Set([...global, "force"]);
-  if (group === "instances") return new Set([...global, "all"]);
+  if (group === "instances") return new Set(command === "prune" ? [...global, "instance", "timeout-ms"] : [...global, "all"]);
   return new Set([...global, "instance", "project"]);
 }
 
@@ -191,17 +199,6 @@ async function handleTopLevelTarget(
     "Run unitycli target alias list.",
     "Run unitycli target alias set <projectPath|instanceId> <alias>."
   ]);
-}
-
-/** 顶层 instances 控制面：读取和清理 Unity 实例注册表。 */
-async function handleTopLevelInstances(
-  command: string | undefined,
-  flags: Record<string, string | boolean>,
-  runtime: Runtime,
-  requestId: string
-): Promise<CliResult> {
-  const subCommand = command ?? "list";
-  return handleInstancesCommand(subCommand, flags, runtime.dataDir, requestId);
 }
 
 /** 业务 Tool input 可拥有 target 字段，但控制面和 discovery 不得把 --target 当 instance selector。 */
@@ -223,19 +220,20 @@ function help(): Record<string, unknown> {
     usage: "unitycli [options] <command> [options]",
     commands: [
       "tools group [--instance <id|projectPath|alias>]",
-      "tools group list <group> [--instance <id|projectPath|alias>]",
+      "tools group list <group> [--page-size <n>] [--cursor <n>] [--instance <id|projectPath|alias>]",
       "tools describe <tool> [--instance <id|projectPath|alias>]",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--artifact-dir <path>] [--runtime] [--instance <id|projectPath|alias>]",
-      "tools search <k1|k2|...> [--instance <id|projectPath|alias>]",
-      "command [--project-path <path>] [<name> [--field <value>|<positional>...]]",
+      "tools search <k1|k2|...> [--page-size <n>] [--cursor <n>] [--instance <id|projectPath|alias>]",
+      "command [--project-path <path>] [--page-size <n>] [--cursor <n>] [<name> [--field <value>|<positional>...]]",
       "extensions list [--project <path>]",
       "extensions install <id|name> [--project <path>]",
       "extensions remove <id|name> [--project <path>]",
       "extensions doctor [--project <path>]",
-      "init [--project <path>] [--agent <pi|claude|.agents>]  # auto-installs Skill when .pi/.claude/.agents exists",
-      "init --pkg-only [--project <path>]",
-      "init --skill-only --agent <pi|claude|.agents,...> [--project <path>]",
-      "init --check [--project <path>] [--agent <pi|claude|.agents,...>]",
+      "init help",
+      "init discover",
+      "init package --project <UnityProject> [--check] [--timeout-ms <n>]",
+      "init skill --agent <.agents|claude> --scope workspace --workspace <path> [--check] [--timeout-ms <n>]",
+      "init skill --agent <.agents|claude> --scope user [--check] [--timeout-ms <n>]",
       "target alias list",
       "target alias set <projectPath|instanceId> <alias> [--force]",
       "target alias unset <alias>",
@@ -244,9 +242,9 @@ function help(): Record<string, unknown> {
       "doctor [--instance <id|projectPath|alias>] [--project <path>]"
     ],
     options: [
-      "--raw  Print the same JSON envelope as compact single-line JSON for pipes and scripts."
+      "--pretty  Indent the JSON envelope; default stdout is compact single-line JSON."
     ],
-    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Descriptor `examples[].input` is business JSON; optional `examples[].execution` carries dryRun and timeoutMs controls. In PowerShell, wrap inline JSON and pipe-separated tools search keywords in single quotes."
+    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Discovery lists default to 20 items, allow at most 100, and continue with `pageInfo.nextCursor`. Descriptor `examples[].input` is business JSON; optional `examples[].execution` carries dryRun and timeoutMs controls. Run `init help` for the self-contained AI installation protocol; Bridge and Skill installation are separate explicit effects. stdout is compact JSON unless `--pretty` is explicit. In PowerShell, wrap inline JSON and pipe-separated tools search keywords in single quotes."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {
@@ -278,7 +276,7 @@ export interface CliExitRuntime {
 /** 输出完成后结束CLI；残留socket、timer或child handle不得延长公开调用生命周期。 */
 export function finishCliProcess(
   result: CliResult,
-  raw: boolean,
+  pretty: boolean,
   runtime: CliExitRuntime = {
     write: (text, complete) => { process.stdout.write(text, complete); },
     schedule: (complete, delayMs) => setTimeout(complete, delayMs),
@@ -296,28 +294,28 @@ export function finishCliProcess(
     runtime.exit(exitCode);
   };
   timer = runtime.schedule(finish, CLI_OUTPUT_FLUSH_GRACE_MS);
-  runtime.write(serializeResult(result, { raw }), finish);
+  runtime.write(serializeResult(result, { pretty }), finish);
 }
 
 if (isCliEntryPoint(import.meta.url, process.argv[1])) {
   const argv = process.argv.slice(2);
-  const rawOutput = readRawOutputFlag(argv);
+  const prettyOutput = readPrettyOutputFlag(argv);
   void execute(stripOutputOnlyFlags(argv)).then(
-    (result) => finishCliProcess(result, rawOutput),
-    (error) => finishCliProcess(failure(createRequestId(), "COMMAND_FAILED", error instanceof Error ? error.message : String(error), ["Run unitycli --help for available commands."]), rawOutput),
+    (result) => finishCliProcess(result, prettyOutput),
+    (error) => finishCliProcess(failure(createRequestId(), "COMMAND_FAILED", error instanceof Error ? error.message : String(error), ["Run unitycli --help for available commands."]), prettyOutput),
   );
 }
 
-/** 读取只影响 stdout 序列化的全局 raw 开关，支持放在命令前后。 */
-function readRawOutputFlag(argv: string[]): boolean {
+/** 读取只影响 stdout 空白的 pretty 开关，支持放在命令前后。 */
+function readPrettyOutputFlag(argv: string[]): boolean {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === "--raw") {
+    if (token === "--pretty") {
       const next = argv[index + 1];
       return next === "false" ? false : true;
     }
-    if (token === "--raw=false") return false;
-    if (token === "--raw=true") return true;
+    if (token === "--pretty=false") return false;
+    if (token === "--pretty=true") return true;
   }
   return false;
 }
@@ -327,12 +325,12 @@ function stripOutputOnlyFlags(argv: string[]): string[] {
   const stripped: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === "--raw") {
+    if (token === "--pretty") {
       const next = argv[index + 1];
       if (next === "true" || next === "false") index += 1;
       continue;
     }
-    if (token === "--raw=true" || token === "--raw=false") continue;
+    if (token === "--pretty=true" || token === "--pretty=false") continue;
     stripped.push(token);
   }
   return stripped;

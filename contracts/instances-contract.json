@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "topLevel": "instances",
+  "schema": "schemas/instances.schema.json",
+  "registry": {
+    "version": 3,
+    "canonicalizationVersion": 1,
+    "statuses": [
+      "ready",
+      "transitioning",
+      "blocked",
+      "unresponsive",
+      "unverifiable",
+      "offline",
+      "conflict"
+    ],
+    "readerPollMs": 100,
+    "writer": "unity-bridge"
+  },
+  "subcommands": {
+    "list": {
+      "options": ["all"],
+      "readOnly": true
+    },
+    "prune": {
+      "options": ["instance", "timeout-ms"],
+      "privateCommand": "internal.instances.prune",
+      "mutation": true,
+      "retention": {
+        "offlineMax": 100,
+        "damagedMax": 20,
+        "maxAgeDays": 30,
+        "scanLimit": 2000,
+        "deleteLimit": 20
+      }
+    }
+  },
+  "errors": [
+    "E_INSTANCE_NOT_FOUND",
+    "E_INSTANCE_NOT_RUNNING",
+    "E_INSTANCE_UNVERIFIABLE",
+    "E_UNITY_TRANSITION_TIMEOUT",
+    "E_UNITY_BUSY",
+    "E_EXECUTION_TIMEOUT",
+    "E_BRIDGE_RESPONSE_INVALID",
+    "E_SCHEMA_INVALID",
+    "BRIDGE_CONNECTION_FAILED"
+  ]
+}

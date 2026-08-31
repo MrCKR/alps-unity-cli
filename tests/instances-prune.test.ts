@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { BridgeRequest } from "../src/bridge/types.js";
 import { execute } from "../src/cli.js";
 import {
   InstanceRegistryError,
@@ -14,6 +15,7 @@ import {
   reduceObservationRegistryRecord,
   reduceRegistryRecord,
   selectInstanceForFlags,
+  selectObservationInstanceForFlags,
 } from "../src/instances.js";
 import { clearProjectIdentityCache } from "../src/project-identity.js";
 import {
@@ -45,16 +47,41 @@ async function writeInvalidRegistry(dataDir: string, instanceId: string, value: 
   return path;
 }
 
-test("registry writer remains one v3 file per canonical project with durable replacement", async () => {
+test("registry writers share one project lock and publish one durable v3 file", async () => {
+  const [editor, runtime, reader] = await Promise.all([
+    readFile("unitypkg/Editor/Infrastructure/UnityCliInstanceRegistry.cs", "utf8"),
+    readFile("unitypkg/Runtime/Infrastructure/UnityCliRuntimeRegistry.cs", "utf8"),
+    readFile("src/instances.ts", "utf8"),
+  ]);
+  assert.ok(editor.includes('WithCurrentUserMutex("Local\\\\UnityCli.Registry." + InstanceId()'));
+  assert.ok(runtime.includes('"Local\\\\UnityCli.Registry." + identity.InstanceId'));
+  assert.match(editor, /WithRegistryMutex\(\(\) =>[\s\S]*?ReadCurrentRegistryForPublication[\s\S]*?WriteRegistryTextAtomically/);
+  assert.match(runtime, /WithRegistryMutex\(delegate[\s\S]*?var record = ReadRecord\(\)[\s\S]*?WriteRecord/);
+  assert.match(editor, /stream\.Flush\(true\)/);
+  assert.match(editor, /File\.Replace\(temporaryPath, path, null\)/);
+  assert.match(runtime, /stream\.Flush\(true\)/);
+  assert.match(runtime, /File\.Replace\(temporary, path, null\)/);
+  assert.match(editor, /"version", 3L/);
+  assert.match(editor, /"sessions", sessions\.Cast<object>\(\)\.ToList\(\)/);
+  assert.match(editor, /"publishedAt", DateTime\.UtcNow\.ToString\("O", CultureInfo\.InvariantCulture\)/);
+  assert.match(editor, /"publicationSequence", sequence/);
+  assert.match(reader, /entry\.endsWith\("\.json"\)[\s\S]*?entry\.slice\(0, -"\.json"\.length\)/);
+  assert.doesNotMatch(reader, /readFile\([^\n]*\.tmp|readRegistrySnapshot\([^\n]*\.tmp/);
+  assert.doesNotMatch(editor, /instances\.json|projectHash.*processId/);
+});
+
+test("Editor publication rebuilds non-inheritable current state without CLI repair files", async () => {
   const source = await readFile("unitypkg/Editor/Infrastructure/UnityCliInstanceRegistry.cs", "utf8");
-  assert.ok(source.includes('WithCurrentUserMutex("Local\\\\UnityCli.Registry." + InstanceId()'));
-  assert.match(source, /stream\.Flush\(true\)/);
-  assert.match(source, /File\.Replace\(temporaryPath, path, null\)/);
-  assert.match(source, /"version", 3L/);
-  assert.match(source, /"sessions", sessions\.Cast<object>\(\)\.ToList\(\)/);
-  assert.match(source, /"publishedAt", DateTime\.UtcNow\.ToString\("O", CultureInfo\.InvariantCulture\)/);
-  assert.match(source, /"publicationSequence", sequence/);
-  assert.doesNotMatch(source, /instances\.json|projectHash.*processId/);
+  assert.match(source, /private const long RegistryMaxBytes = 1024L \* 1024L/);
+  assert.match(source, /var registry = ReadCurrentRegistryForPublication\(out recoveryReason\)/);
+  assert.match(source, /catch \(FormatException\)[\s\S]*?recoveryReason = "malformed-json"/);
+  assert.match(source, /parsed == null[\s\S]*?recoveryReason = "non-object-root"/);
+  assert.match(source, /ReadLong\(parsed, "version"\) != 3L[\s\S]*?recoveryReason = "unsupported-version"/);
+  assert.match(source, /!RegistryIdentityMatchesCurrentProject[\s\S]*?recoveryReason = "identity-mismatch"/);
+  assert.match(source, /new FileInfo\(path\)\.Length > RegistryMaxBytes[\s\S]*?recoveryReason = "oversized"/);
+  assert.match(source, /WriteRegistryTextAtomically\(InstancePath\(\), UnityCliSerializer\.Serialize\(data\) \+ "\\n"\)[\s\S]*?instance_registry_recovered reason=/);
+  assert.match(source, /private static Dictionary<string, object> ReadCurrentRegistry\(\)[\s\S]*?throw new InvalidDataException\("Instance registry is not a JSON object\."\)[\s\S]*?throw new InvalidDataException\("Instance registry identity does not match CanonicalPath v1\."\)/);
+  assert.doesNotMatch(source, /quarantine|registry-recovery|\.bad["']/i);
 });
 
 test("Editor and Runtime publish lifecycle changes immediately with a thirty-second fallback refresh", async () => {
@@ -64,33 +91,146 @@ test("Editor and Runtime publish lifecycle changes immediately with a thirty-sec
     readFile("unitypkg/Runtime/Infrastructure/UnityCliRuntimeBridge.cs", "utf8"),
   ]);
   assert.match(bridge, /private const double RegistryRefreshSeconds = 30\.0/);
+  assert.match(bridge, /Task\.Run\(ListenLoop\);[\s\S]*?RegisterInstance\("transitioning"\)[\s\S]*?readyPublicationPending = true/);
   assert.match(bridge, /RegisterInstance\(playModeChanging \? "transitioning" : "ready"\)/);
   assert.match(bridge, /nextRegistryRefreshAt = EditorApplication\.timeSinceStartup \+ RegistryRefreshSeconds/);
-  assert.match(workQueue, /EditorApplication\.timeSinceStartup >= nextRegistryRefreshAt/);
+  assert.match(workQueue, /var listenerWasStarted = started/);
+  assert.match(workQueue, /cachedIsCompiling != isCompiling[\s\S]*?cachedIsUpdating != isUpdating[\s\S]*?cachedIsBuilding != isBuilding[\s\S]*?cachedIsPlayModeChanging != isPlayModeChanging/);
+  assert.match(workQueue, /listenerWasStarted && started[\s\S]*?readyPublicationPending \|\| lifecycleChanged \|\| EditorApplication\.timeSinceStartup >= nextRegistryRefreshAt[\s\S]*?readyPublicationPending = false;[\s\S]*?RegisterInstance\("ready"\)/);
   assert.match(workQueue, /nextRegistryRefreshAt = EditorApplication\.timeSinceStartup \+ RegistryRefreshSeconds/);
   assert.match(runtime, /private const int RegistryRefreshSeconds = 30/);
   assert.match(runtime, /nextRegistryRefreshAt = Time\.realtimeSinceStartup \+ RegistryRefreshSeconds/);
   assert.doesNotMatch(`${bridge}\n${workQueue}\n${runtime}`, /nextHeartbeatAt|HeartbeatSeconds|\+ 2\.0/);
 });
 
-test("instances prune only reports C# writer-owned cleanup and never rewrites registry", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-prune-"));
-  const projectPath = await project("unity-cli-prune-project-");
-  const identity = registryIdentity(projectPath);
-  const session = await makeRegistrySession("http://127.0.0.1:47991", {
-    publishedAt: new Date(Date.now() - 60_000).toISOString(),
-  });
-  await writeRegistry(dataDir, makeRegistry(identity, [session]));
-  const path = join(dataDir, "instances", `${identity.instanceId}.json`);
-  const before = await readFile(path, "utf8");
-  const result = await execute(["instances", "prune"], { dataDir } as never);
-  const after = await readFile(path, "utf8");
+test("Editor registry publication uses one bounded same-domain retry chain", async () => {
+  const [registry, bridge, workQueue, unityTests] = await Promise.all([
+    readFile("unitypkg/Editor/Infrastructure/UnityCliInstanceRegistry.cs", "utf8"),
+    readFile("unitypkg/Editor/UnityCliBridge.cs", "utf8"),
+    readFile("unitypkg/Editor/Bridge/BridgeWorkQueue.cs", "utf8"),
+    readFile("unitypkg/Tests/Editor/UnityCliInstancePublicationRetryTests.cs", "utf8"),
+  ]);
+  assert.match(registry, /private const int RegistryPublicationMaxAttempts = 4/);
+  assert.match(registry, /if \(registryPublicationRetryExhausted\) return false;[\s\S]*?if \(registryPublicationRetryPending\)[\s\S]*?pendingRegistryRequestedState = requestedState;[\s\S]*?return false/);
+  assert.match(registry, /!registryPublicationRetryPending \|\| registryPublicationRetryExhausted \|\| !started \|\| domainReloading/);
+  assert.match(registry, /registryPublicationRetryPending = false;[\s\S]*?AttemptInstancePublication\(string\.IsNullOrEmpty\(requestedState\) \? "ready" : requestedState\)/);
+  assert.match(registry, /registryPublicationAttemptCount >= RegistryPublicationMaxAttempts[\s\S]*?registryPublicationRetryExhausted = true[\s\S]*?instance_publication_retry_stopped kind=[\s\S]*?nextAction=restore-data-root-write-access-then-reload-domain/);
+  assert.match(registry, /failure is IOException[\s\S]*?failure is UnauthorizedAccessException[\s\S]*?failure is TimeoutException[\s\S]*?failure is Win32Exception/);
+  assert.match(registry, /failedAttempts <= 1\) return 0\.25;[\s\S]*?failedAttempts == 2\) return 0\.5;[\s\S]*?return 1\.0/);
+  assert.match(registry, /instance_publication_retry_succeeded attempts=/);
+  assert.match(bridge, /Task\.Run\(ListenLoop\);[\s\S]*?RegisterInstance\("transitioning"\);[\s\S]*?readyPublicationPending = true/);
+  assert.match(bridge, /started = false;[\s\S]*?readyPublicationPending = false;[\s\S]*?CancelInstancePublicationRetry\(\)/);
+  assert.match(workQueue, /TickInstancePublicationRetry\(\);[\s\S]*?var startedThisTick = 0/);
+  assert.match(unityTests, /new FileStream\(paths\.Temporary[\s\S]*?register\.Invoke[\s\S]*?Thread\.Sleep\(300\)[\s\S]*?tick\.Invoke/);
+  assert.match(unityTests, /PersistentWriteFailureStopsAtFourAndDoesNotStartAnotherChain[\s\S]*?attemptCount[\s\S]*?Is\.EqualTo\(4\)[\s\S]*?exhausted[\s\S]*?Is\.True/);
+  assert.match(unityTests, /CancelClearsExhaustionForTheNextDomainOwner[\s\S]*?register\.Invoke[\s\S]*?Is\.True/);
+  assert.doesNotMatch(`${registry}\n${bridge}\n${workQueue}`, /EditorApplication\.update \+=.*Retry|new Timer|Task\.Delay/);
+});
 
-  assert.ok(result.ok);
-  assert.equal((result.data as { removed: number; writer: string }).removed, 0);
-  assert.equal((result.data as { writer: string }).writer, "unity-bridge");
-  assert.equal(Object.hasOwn(result.data as object, "registryPath"), false);
-  assert.equal(after, before);
+test("automatic instance retention is globally locked, oldest-first, and bounded", async () => {
+  const [registry, cleanup, cleanupTests] = await Promise.all([
+    readFile("unitypkg/Editor/Infrastructure/UnityCliInstanceRegistry.cs", "utf8"),
+    readFile("unitypkg/Editor/Infrastructure/UnityCliInstanceCleanup.cs", "utf8"),
+    readFile("unitypkg/Tests/Editor/UnityCliInstanceCleanupTests.cs", "utf8"),
+  ]);
+  assert.match(registry, /TryRunAutomaticInstanceCleanup\(\);[\s\S]*?return true/);
+  assert.match(cleanup, /InstanceCleanupMaxScanned = 2000/);
+  assert.match(cleanup, /InstanceCleanupMaxDeleted = 20/);
+  assert.match(cleanup, /InstanceCleanupRetainedOffline = 100/);
+  assert.match(cleanup, /InstanceCleanupRetainedDamaged = 20/);
+  assert.match(cleanup, /InstanceCleanupRetentionDays = 30/);
+  assert.match(cleanup, /TryWithCurrentUserMutex\("Local\\\\UnityCli\.Registry\.Cleanup", 0/);
+  assert.match(cleanup, /summary\.Scanned < InstanceCleanupMaxScanned/);
+  assert.match(cleanup, /OrderBy\(value => value\.LastActivity\)[\s\S]*?Take\(InstanceCleanupMaxDeleted\)/);
+  assert.match(cleanup, /sessions\.Any\(IsProcessClaimAliveOrUnverifiable\)\) return false/);
+  assert.match(cleanup, /FileAttributes\.ReparsePoint/);
+  assert.match(cleanup, /TryWithCurrentUserMutex\("Local\\\\UnityCli\.Registry\." \+ candidate\.InstanceId, 0[\s\S]*?TryInspectCleanupCandidate[\s\S]*?File\.Delete\(candidate\.Path\)/);
+  assert.match(cleanup, /current\.Damaged != candidate\.Damaged \|\| current\.LastActivity > candidate\.LastActivity/);
+  assert.match(cleanup, /instance_cleanup_completed scanned=/);
+  assert.match(cleanupTests, /index < 115[\s\S]*?index < 30[\s\S]*?WriteClaim\("active"[\s\S]*?WriteClaim\("unverifiable"[\s\S]*?WriteMixedClaims/);
+  assert.match(cleanupTests, /Deleted"\), Is\.EqualTo\(20\)[\s\S]*?Deleted"\), Is\.EqualTo\(5\)[\s\S]*?CountOffline\(\), Is\.EqualTo\(100\)[\s\S]*?CountDamaged\(\), Is\.EqualTo\(20\)/);
+  assert.match(cleanupTests, /new Mutex\(false, "Local\\\\UnityCli\.Registry\." \+ instanceId\)[\s\S]*?Deferred"\), Is\.EqualTo\(1\)[\s\S]*?File\.Exists\(candidate\), Is\.False/);
+  assert.match(cleanup, /InstanceCleanupCompletion = new UnityCliToolCompletionContract\([\s\S]*?"atomic-typed-result-v1", "required", true\)/);
+  assert.match(cleanup, /"internal\.instances\.prune"[\s\S]*?BeginDirectEffect\(request\.RequestId\)[\s\S]*?"removed"[\s\S]*?"remaining"[\s\S]*?"deferred"[\s\S]*?"scanned"[\s\S]*?"truncated"[\s\S]*?"retention"[\s\S]*?RecordDirectCompletionEvidence/);
+  assert.doesNotMatch(cleanup, /Delete.*current|quarantine|\.bad["']/i);
+});
+
+test("registry recovery and cleanup reuse fixed temp paths and bounded rolling logs", async () => {
+  const [log, registry, cleanup] = await Promise.all([
+    readFile("unitypkg/Editor/Infrastructure/UnityCliLog.cs", "utf8"),
+    readFile("unitypkg/Editor/Infrastructure/UnityCliInstanceRegistry.cs", "utf8"),
+    readFile("unitypkg/Editor/Infrastructure/UnityCliInstanceCleanup.cs", "utf8"),
+  ]);
+  assert.match(log, /BridgeLogMaxBytes = 10L \* 1024 \* 1024/);
+  assert.match(log, /BridgeLogMaxEntryBytes = 64 \* 1024/);
+  assert.match(log, /var oldPath = path \+ "\.old"[\s\S]*?File\.Copy\(path, oldPath, true\)/);
+  assert.match(log, /BoundedBridgeLogLine\(line, lineBudget\)/);
+  assert.match(registry, /var temporaryPath = path \+ "\.tmp"[\s\S]*?if \(File\.Exists\(temporaryPath\)\) File\.Delete\(temporaryPath\)/);
+  assert.match(registry, /instance_registry_recovered reason=/);
+  assert.match(registry, /instance_publication_retry_(?:succeeded|stopped)/);
+  assert.match(cleanup, /instance_cleanup_(?:completed|deferred|failed)/);
+  assert.doesNotMatch(`${registry}\n${cleanup}`, /quarantine|registry-recovery|Guid\.NewGuid\(\).*file|requestId.*File/);
+});
+
+test("instances prune invokes only the Unity writer and returns its bounded result", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-prune-"));
+  const commands: string[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    commands.push(payload.command);
+    assert.equal(payload.command, "internal.instances.prune");
+    return {
+      ok: true as const,
+      requestId: payload.requestId,
+      data: {
+        removed: 3,
+        remaining: 7,
+        deferred: 1,
+        scanned: 11,
+        truncated: false,
+        retention: { offlineMax: 100, damagedMax: 20, maxAgeDays: 30, scanLimit: 2000, deleteLimit: 20 },
+      },
+    };
+  };
+  const result = await execute(["instances", "prune", "--timeout-ms", "5000"], { dataDir, bridgeExecute } as never);
+  assert.ok(result.ok, JSON.stringify(result));
+  assert.deepEqual(result.data, {
+    removed: 3,
+    remaining: 7,
+    deferred: 1,
+    scanned: 11,
+    truncated: false,
+    retention: { offlineMax: 100, damagedMax: 20, maxAgeDays: 30, scanLimit: 2000, deleteLimit: 20 },
+  });
+  assert.deepEqual(commands, ["internal.instances.prune"]);
+
+  const invalid = await execute(["instances", "prune", "--timeout-ms", "0"], { dataDir, bridgeExecute } as never);
+  assert.equal(invalid.ok, false);
+  if (!invalid.ok) assert.equal(invalid.error.code, "E_SCHEMA_INVALID");
+  assert.deepEqual(commands, ["internal.instances.prune"]);
+});
+
+test("instances prune preserves busy errors and rejects non-contract Bridge data", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-prune-errors-"));
+  const busy = await execute(["instances", "prune"], { dataDir, bridgeExecute: async (payload: BridgeRequest) => ({
+    ok: false as const,
+    requestId: payload.requestId,
+    error: { code: "E_UNITY_BUSY", message: "cleanup busy", nextActions: ["Retry later."], transient: true, retryAfterMs: 100 },
+  }) } as never);
+  assert.equal(busy.ok, false);
+  if (!busy.ok) {
+    assert.equal(busy.error.code, "E_UNITY_BUSY");
+    assert.equal(busy.error.transient, true);
+    assert.equal(busy.error.retryAfterMs, 100);
+    assert.deepEqual(busy.error.nextActions, ["Retry later."]);
+  }
+
+  const malformed = await execute(["instances", "prune"], { dataDir, bridgeExecute: async (payload: BridgeRequest) => ({
+    ok: true as const,
+    requestId: payload.requestId,
+    data: { removed: 0, remaining: 1, deferred: 0, scanned: 1, truncated: false, retention: { offlineMax: 100, damagedMax: 20, maxAgeDays: 30, scanLimit: 2000, deleteLimit: 20 }, internalPath: "forbidden" },
+  }) } as never);
+  assert.equal(malformed.ok, false);
+  if (!malformed.ok) assert.equal(malformed.error.code, "E_BRIDGE_RESPONSE_INVALID");
 });
 
 test("instances list hides offline instances by default and reveals compact summaries with --all", async () => {
@@ -158,6 +298,56 @@ test("instances list omits hiddenOfflineCount when no offline instance is hidden
   assert.equal(Object.hasOwn(list.data as object, "invalidRecordCount"), false);
 });
 
+test("full instance id observation waits for the first fixed-file publication", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-first-instance-publication-"));
+  const projectPath = await project("unity-cli-first-instance-project-");
+  const identity = registryIdentity(projectPath);
+  const delayedWrite = new Promise<void>((resolveWrite, rejectWrite) => {
+    setTimeout(() => { writeRegistry(dataDir, makeRegistry(identity, [])).then(() => resolveWrite(), rejectWrite); }, 20);
+  });
+  const observing = selectObservationInstanceForFlags({ instance: identity.instanceId }, dataDir, 500, projectPath);
+  const [observed] = await Promise.all([observing, delayedWrite]);
+  assert.equal(observed.instance.instanceId, identity.instanceId);
+  assert.equal(observed.instance.canonicalProjectPath, identity.canonicalProjectPath);
+  assert.equal(observed.instance.status, "offline");
+});
+
+test("observation preserves canonical identity while the running writer replaces invalid state", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-invalid-observation-"));
+  const projectPath = await project("unity-cli-invalid-observation-project-");
+  const identity = registryIdentity(projectPath);
+  await writeInvalidRegistry(dataDir, identity.instanceId, "not-a-registry");
+  const observed = await selectObservationInstanceForFlags({ instance: projectPath }, dataDir, 500, projectPath);
+  assert.equal(observed.instance.instanceId, identity.instanceId);
+  assert.equal(observed.instance.canonicalProjectPath, identity.canonicalProjectPath);
+  assert.equal(observed.instance.status, "offline");
+  assert.equal(observed.instance.sessions.length, 0);
+});
+
+test("recovery-boundary fixtures cover malformed, non-object, old-version, and identity mismatch state", async () => {
+  for (const fixture of ["malformed", "non-object", "old-version", "identity-mismatch"] as const) {
+    const dataDir = await mkdtemp(join(tmpdir(), `unity-cli-recovery-${fixture}-`));
+    const projectPath = await project(`unity-cli-recovery-project-${fixture}-`);
+    const identity = registryIdentity(projectPath);
+    const directory = join(dataDir, "instances");
+    const file = join(directory, `${identity.instanceId}.json`);
+    await mkdir(directory, { recursive: true });
+    const content = fixture === "malformed" ? '{"version":3,'
+      : fixture === "non-object" ? "[]"
+        : fixture === "old-version" ? JSON.stringify({ version: 2 })
+          : JSON.stringify({ ...makeRegistry(identity, []), identity: { ...identity, canonicalProjectPath: `${identity.canonicalProjectPath}\\wrong` } });
+    await writeFile(file, content, "utf8");
+    const observed = await selectObservationInstanceForFlags({ instance: projectPath }, dataDir, 200, projectPath);
+    assert.equal(observed.instance.instanceId, identity.instanceId, fixture);
+    assert.equal(observed.instance.status, "offline", fixture);
+    await assert.rejects(
+      selectInstanceForFlags({ instance: projectPath }, dataDir, projectPath),
+      (error: unknown) => error instanceof InstanceRegistryError && error.code === "E_INSTANCE_IDENTITY_MISMATCH",
+      fixture,
+    );
+  }
+});
+
 test("full instance views isolate invalid records while exact selection still fails closed", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-invalid-registry-mixed-"));
   const validIdentity = registryIdentity(await project("unity-cli-invalid-registry-valid-"));
@@ -183,10 +373,6 @@ test("full instance views isolate invalid records while exact selection still fa
   assert.equal(Object.hasOwn(all.data as object, "hiddenOfflineCount"), false);
   assert.doesNotMatch(JSON.stringify(all), new RegExp(invalidPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
 
-  const prune = await execute(["instances", "prune"], { dataDir } as never);
-  assert.ok(prune.ok, JSON.stringify(prune));
-  assert.equal((prune.data as { remaining: number }).remaining, 1);
-  assert.equal((prune.data as { invalidRecordCount: number }).invalidRecordCount, 1);
   assert.equal(await readFile(invalidPath, "utf8"), invalidBefore);
 
   await assert.rejects(
@@ -210,6 +396,38 @@ test("instances list reports all invalid records without inventing offline insta
   const all = await execute(["instances", "list", "--all"], { dataDir } as never);
   assert.ok(all.ok, JSON.stringify(all));
   assert.deepEqual(all.data, { instances: [], invalidRecordCount: 2 });
+});
+
+test("full instance view converges when the formal name appears during an empty enumeration window", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-instance-enumeration-convergence-"));
+  const projectPath = await project("unity-cli-instance-enumeration-project-");
+  const identity = registryIdentity(projectPath);
+  await mkdir(join(dataDir, "instances"), { recursive: true });
+  await writeFile(join(dataDir, "instances", `${identity.instanceId}.json.tmp`), "temporary", "utf8");
+
+  const delayedWrite = new Promise<void>((resolveWrite, rejectWrite) => {
+    setTimeout(() => { writeRegistry(dataDir, makeRegistry(identity, [])).then(() => resolveWrite(), rejectWrite); }, 8);
+  });
+  const reading = readInstancesWithRegistryDiagnostics(dataDir);
+  const [result] = await Promise.all([reading, delayedWrite]);
+  assert.equal(result.invalidRecordCount, 0);
+  assert.deepEqual(result.instances.map((instance) => instance.instanceId), [identity.instanceId]);
+  assert.equal(result.instances[0].status, "offline");
+});
+
+test("missing selected instance errors omit redundant identity details", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-missing-details-"));
+  const projectPath = await project("unity-cli-missing-details-project-");
+  try {
+    await assert.rejects(
+      selectInstanceForFlags({ instance: projectPath }, dataDir, projectPath),
+      (error: unknown) => error instanceof InstanceRegistryError
+        && error.code === "E_INSTANCE_NOT_RUNNING"
+        && error.details === undefined,
+    );
+  } finally {
+    await Promise.all([rm(dataDir, { recursive: true, force: true }), rm(projectPath, { recursive: true, force: true })]);
+  }
 });
 
 test("Windows process observation proves the current PID under the production startup budget", { skip: process.platform !== "win32" }, async () => {

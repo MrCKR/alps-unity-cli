@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "packageName": "com.alpsckr.unitycli",
+  "minimumUnityVersion": "2022.3",
+  "bundledAssemblies": [],
+  "editorProvidedAssemblies": [
+    {
+      "fileName": "Newtonsoft.Json.dll",
+      "assemblyName": "Newtonsoft.Json",
+      "minimumAssemblyVersion": "13.0.0.0",
+      "provider": "Unity Editor/Data/Managed",
+      "referencedBy": "UnityCli.Editor.asmdef"
+    }
+  ],
+  "compiler": {
+    "mode": "editor-bundled-csc-subprocess",
+    "monoRelativePath": "MonoBleedingEdge/bin/mono.exe",
+    "compilerRelativePath": "MonoBleedingEdge/lib/mono/4.5/csc.exe",
+    "packageOwnedRoslyn": false,
+    "temporaryRoot": "Library/UnityCli/code-exec-temp"
+  },
+  "conflictPolicy": {
+    "protectedAssemblyFileNames": [
+      "Newtonsoft.Json.dll"
+    ],
+    "allowedPackageProviders": [
+      "com.unity.nuget.newtonsoft-json"
+    ],
+    "maxDirectories": 4096,
+    "maxFiles": 50000,
+    "maxConflicts": 100
+  }
+}

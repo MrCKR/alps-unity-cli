@@ -61,15 +61,20 @@ object、array和任意JSON值必须是有效JSON。字段大小写和下划线�
 ## Command级控制项
 
 ```powershell
+# 省略name时只返回有界路由摘要；参数在单命令help中读取
+unitycli command --project-path C:\path\MyProject --page-size 20
+unitycli command --project-path C:\path\MyProject --page-size 20 --cursor 20
+
 unitycli command --project-path C:\path\MyProject <name> ...
 unitycli command --timeout 120 <name> ...
 unitycli command <name> ... --timeout-ms 120000 --dry-run
 ```
 
 - `--project-path <path>`绑定现有canonical项目实例，不直连endpoint，也不写入active target。
+- 省略name时，`--page-size`默认20、最大100；存在`pageInfo.nextCursor`时将其原值传回`--cursor`。列表项不展开parameters，使用`command <name> --help`读取参数。
 - `--timeout <seconds>`位于name前；`--timeout-ms <milliseconds>`使用本项目执行控制语义。
 - `--dry-run`、`--runtime`、`--artifact-dir`和`--instance`仍是执行/选择控制项，不进入Tool business input。
-- `--raw`只改变同一JSON envelope的排版。
+- stdout默认是单行紧凑JSON；`--pretty`只增加缩进，不改变envelope字段。
 
 ## 等价性
 

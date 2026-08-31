@@ -5,6 +5,7 @@ import type { CliResult } from "../types.js";
 
 export interface Runtime extends BridgeRuntime, ToolsRuntime, DoctorRuntime {
   dataDir: string;
+  userHome?: string;
 }
 
 export interface CliCommandContext {

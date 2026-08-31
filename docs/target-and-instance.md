@@ -13,12 +13,12 @@ CLI 只接受本机可证明的 Unity 项目目录。目录大小写、尾分隔
 ```powershell
 unitycli instances list
 unitycli instances list --all
-unitycli instances prune
+unitycli instances prune --instance <id|projectPath|alias>
 ```
 
 `instances list` 默认排除 `status="offline"` 的记录；存在隐藏项时返回 `hiddenOfflineCount`。只有需要审计历史/offline identity 时使用 `--all`，此时返回完整合法集合并省略 `hiddenOfflineCount`。每项公开字段固定为 `instanceId`、可选 `alias`、`canonicalProjectPath`、`displayProjectPath`、`projectName`、`status` 和可选 `unityVersion`；`--all` 不会恢复内部 session、快照、进程 claim 或诊断字段。
 
-实例目录按文件独立验证。旧格式、损坏、不可读或identity不匹配的记录不参与列表和路由，也不阻断其他合法Registry v3实例；存在时`instances list`和`instances prune`增加`invalidRecordCount`。CLI不会兼容解析、转换、移动或删除这些记录，`doctor`以warn报告合法和无效数量。显式选择无效记录对应的instanceId仍严格失败；应更新或重启该项目使用的匹配Unity Package，而不是绕过校验。
+实例目录按文件独立验证。旧格式、损坏、不可读或identity不匹配的记录不参与列表和路由，也不阻断其他合法Registry v3实例；`instances list`存在这类文件时返回`invalidRecordCount`。当前项目的Unity在启动或重载完成后会使用当前进程和连接重建自己的记录；CLI在能够证明目标Unity正在运行时等待该结果。不要兼容解析、转换、移动或手工删除内部记录。
 
 实例状态：
 
@@ -32,7 +32,7 @@ unitycli instances prune
 | `offline` | 该项目没有已证明存活的Editor session |
 | `conflict` | 至少两个已验证live process claim同属该project identity |
 
-`instances prune` 不直接删除进程、无效记录或伪造状态；PID/start-time 无效 claim 和过期 offline record 只由 Unity Bridge registry writer 清理。`invalidRecordCount`只报告本次被隔离的文件数量。
+`instances prune --instance <id|projectPath|alias>`只授权选定的当前Unity执行有界历史清理，CLI本身不删除记录。Unity保留当前、存活、无法确认、链接或被占用的记录；关闭记录最多保留最近100个，损坏记录最多保留最近20个，30天前的记录优先清理。每次最多检查2000个、删除20个。结果中的`removed`、`remaining`、`deferred`、`scanned`和`truncated`描述本次真实结果；`deferred>0`时可在当前清理完成后再次调用。
 
 不要读取 registry 文件、listener ID、端口或 URL，也不要直接调用 Bridge HTTP。transport binding 是 session supervisor 的内部职责。
 
@@ -43,6 +43,8 @@ Tool discovery、describe、`tools run`与`command`使用同一严格选择规�
 1. 显式 `--instance <full-instance-id|canonical-project-path|alias>`。
 2. 未传 selector 时，从 CWD 向上寻找最近的 Unity project root，并解析其 canonical identity。
 3. 无法得到唯一项目身份时返回结构化 instance error。
+
+目标项目已有唯一Unity进程但尚未发布记录、正在编译/导入/重载或正在更换连接时，CLI会在原命令截止时间内等待；Unity没有运行时不会进行无意义的完整等待。完整instance ID无法反推出项目路径，因此显式ID会直接等待其固定记录直到截止时间。
 
 不存在按PID、短hash、单个存活Editor或任意健康实例自动选取的路径。只有至少两个已验证live process claim才返回`E_INSTANCE_CONFLICT`；权限失败、超时或PID/start/project identity无法证明时返回`E_INSTANCE_UNVERIFIABLE`。选定项目已证明无运行进程时返回`E_INSTANCE_NOT_RUNNING`。
 
@@ -70,7 +72,7 @@ alias 绑定完整 `instanceId`、canonical project path 和 canonicalization ve
 
 - 每个Editor或Development Player session独立维护默认5/3高低水位，不跨进程共享计数；
 - 对一次transport尝试绑定listener generation；
-- 在compile、import、domain reload或listener restart后重新验证generation，但不刷新execution deadline；
+- 首次记录尚未出现或在compile、import、domain reload、listener restart期间，等待当前ready generation，但不刷新execution deadline；
 - 同一次mutation调用只在`editorSessionId`未改变时，使用完全相同的root request ID与request bytes续接durable canonical terminal；
 - 首次mutation POST后若`editorSessionId`改变，禁止向新session再次POST，返回`E_EXECUTION_TIMEOUT`与outcome unknown；
 - 准入deadline到达返回effect-before `E_UNITY_BUSY`并证明业务请求未发送；

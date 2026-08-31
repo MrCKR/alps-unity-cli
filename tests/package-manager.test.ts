@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { ensurePackageBridge, checkPackageBridge, deployPackageSource, hashPackageTree, inspectPackageDeploymentFiles, preparePackageBridgeInstall, removePackageBridge, restoreDeployedPackage, searchRegistry } from "../src/package-manager.js";
+import { ensurePackageBridge, checkPackageBridge, deployPackageSource, hashPackageTree, inspectPackageAssemblyConflicts, inspectPackageBridge, inspectPackageDeploymentFiles, preparePackageBridgeInstall, removePackageBridge, restoreDeployedPackage, searchRegistry, verifyPackageSourceIntegrity } from "../src/package-manager.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -69,6 +70,138 @@ test("ensurePackageBridge copies unitypkg contents to Packages/com.alpsckr.unity
   // No file: dependency in manifest
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.alpsckr.unitycli"], undefined);
+});
+
+test("canonical package source manifest fixes every file hash and fails closed on damage", async () => {
+  const root = await mkdtemp(join(tmpdir(), "unity-canonical-source-"));
+  const source = join(root, "unitypkg");
+  const contractPath = join(root, "package-files.json");
+  const sentinelPath = join(root, "target-sentinel.txt");
+  try {
+    await mkdir(source);
+    const packageBytes = Buffer.from(`${JSON.stringify({ name: "com.alpsckr.unitycli", version: "0.4.0", unity: "2022.3" }, null, 2)}\n`, "utf8");
+    await writeFile(join(source, "package.json"), packageBytes);
+    await writeFile(sentinelPath, "unchanged\n", "utf8");
+    const sourceHash = await hashPackageTree(source);
+    const contract = {
+      schemaVersion: 1,
+      packageName: "com.alpsckr.unitycli",
+      packageVersion: "0.4.0",
+      sourceHash,
+      files: [{ path: "package.json", size: packageBytes.length, sha256: createHash("sha256").update(packageBytes).digest("hex") }],
+    };
+    await writeFile(contractPath, `${JSON.stringify(contract, null, 2)}\n`, "utf8");
+
+    const verified = await verifyPackageSourceIntegrity(source, contractPath);
+    assert.equal(verified.sourceHash, sourceHash);
+    assert.deepEqual(verified.files, ["package.json"]);
+
+    await writeFile(join(source, "package.json"), "{}\n", "utf8");
+    await assert.rejects(() => verifyPackageSourceIntegrity(source, contractPath), { code: "PACKAGE_SOURCE_INTEGRITY_FAILED" });
+    assert.equal(await readFile(sentinelPath, "utf8"), "unchanged\n");
+
+    await writeFile(join(source, "package.json"), packageBytes);
+    await rm(contractPath);
+    await assert.rejects(() => verifyPackageSourceIntegrity(source, contractPath), { code: "PACKAGE_SOURCE_INTEGRITY_FAILED" });
+    assert.equal(await readFile(sentinelPath, "utf8"), "unchanged\n");
+
+    await writeFile(contractPath, `${JSON.stringify({ ...contract, sourceHash: "0".repeat(64) }, null, 2)}\n`, "utf8");
+    await assert.rejects(() => verifyPackageSourceIntegrity(source, contractPath), { code: "PACKAGE_SOURCE_INTEGRITY_FAILED" });
+    assert.equal(await readFile(sentinelPath, "utf8"), "unchanged\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Bridge inspection distinguishes missing, damaged, drifted, and repaired installs", async () => {
+  const project = await makeUnityProject();
+  try {
+    const missing = await inspectPackageBridge(project);
+    assert.equal(missing.status, "missing");
+    assert.equal(missing.reasonCode, "PACKAGE_NOT_INSTALLED");
+    await assert.rejects(() => stat(missing.bridgePath), { code: "ENOENT" });
+
+    const installed = await ensurePackageBridge(project);
+    const installedHashBeforeCheck = await hashPackageTree(installed.bridgePath);
+    assert.equal((await inspectPackageBridge(project)).status, "installed");
+    assert.equal(await hashPackageTree(installed.bridgePath), installedHashBeforeCheck);
+    const managedFile = join(installed.bridgePath, "Editor", "UnityCliBridge.cs");
+    const canonicalBytes = await readFile(join("unitypkg", "Editor", "UnityCliBridge.cs"));
+
+    await rm(managedFile);
+    const missingFile = await inspectPackageBridge(project);
+    assert.equal(missingFile.status, "damaged");
+    assert.equal(missingFile.reasonCode, "PACKAGE_INSTALL_DAMAGED");
+    await ensurePackageBridge(project);
+    assert.deepEqual(await readFile(managedFile), canonicalBytes);
+    assert.equal((await inspectPackageBridge(project)).status, "installed");
+
+    await writeFile(managedFile, "// damaged\n", "utf8");
+    assert.equal((await inspectPackageBridge(project)).status, "damaged");
+    await ensurePackageBridge(project);
+    assert.deepEqual(await readFile(managedFile), canonicalBytes);
+
+    const metadata = JSON.parse(await readFile(installed.installMetadataPath, "utf8")) as { sourceHash: string };
+    metadata.sourceHash = "0".repeat(64);
+    await writeFile(installed.installMetadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+    const drifted = await inspectPackageBridge(project);
+    assert.equal(drifted.status, "drifted");
+    assert.equal(drifted.reasonCode, "PACKAGE_INSTALL_DRIFTED");
+    await ensurePackageBridge(project);
+    assert.equal((await inspectPackageBridge(project)).status, "installed");
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("assembly conflict inspection blocks unknown providers and allows Pipeline plus official Newtonsoft", async () => {
+  const project = await makeUnityProject();
+  try {
+    const otherDll = join(project, "Packages", "com.example.conflict", "Plugins", "Newtonsoft.Json.dll");
+    const pipelineDll = join(project, "Packages", "com.unity.pipeline", "Runtime", "Plugins", "CodeAnalysis", "Microsoft.CodeAnalysis.dll");
+    await mkdir(join(otherDll, ".."), { recursive: true });
+    await mkdir(join(pipelineDll, ".."), { recursive: true });
+    await writeFile(otherDll, "conflict", "utf8");
+    await writeFile(pipelineDll, "pipeline roslyn is not protected by UnityCLI", "utf8");
+
+    const conflict = await inspectPackageAssemblyConflicts(project);
+    assert.equal(conflict.status, "conflict");
+    assert.equal(conflict.conflicts.length, 1);
+    assert.equal(conflict.conflicts[0].provider, "com.example.conflict");
+    assert.equal(conflict.conflicts[0].assemblyFileName, "Newtonsoft.Json.dll");
+    assert.match(conflict.conflicts[0].sha256, /^[a-f0-9]{64}$/);
+    await assert.rejects(() => preparePackageBridgeInstall(project), (error: unknown) => {
+      const typed = error as { code?: string; details?: { conflicts?: Array<{ relativePath?: string }> }; nextActions?: string[] };
+      assert.equal(typed.code, "PACKAGE_ASSEMBLY_CONFLICT");
+      assert.match(String(typed.details?.conflicts?.[0]?.relativePath), /com\.example\.conflict/);
+      assert.ok((typed.nextActions ?? []).length > 0);
+      return true;
+    });
+    await assert.rejects(() => stat(join(project, "Packages", "com.alpsckr.unitycli")), { code: "ENOENT" });
+    assert.equal((await inspectPackageBridge(project)).status, "conflict");
+
+    await rm(join(project, "Packages", "com.example.conflict"), { recursive: true, force: true });
+    const cacheDll = join(project, "Library", "PackageCache", "com.example.cached@1.0.0", "Runtime", "Newtonsoft.Json.dll");
+    await mkdir(join(cacheDll, ".."), { recursive: true });
+    await writeFile(cacheDll, "cached conflict", "utf8");
+    const cacheConflict = await inspectPackageAssemblyConflicts(project);
+    assert.equal(cacheConflict.conflicts[0].provider, "com.example.cached");
+    assert.equal(cacheConflict.conflicts[0].source, "PackageCache");
+    await rm(join(project, "Library", "PackageCache", "com.example.cached@1.0.0"), { recursive: true, force: true });
+
+    const officialDll = join(project, "Packages", "com.unity.nuget.newtonsoft-json", "Runtime", "Newtonsoft.Json.dll");
+    await mkdir(join(officialDll, ".."), { recursive: true });
+    await writeFile(officialDll, "official provider", "utf8");
+    const clear = await inspectPackageAssemblyConflicts(project);
+    assert.equal(clear.status, "clear");
+    assert.equal(clear.conflicts.length, 0);
+    assert.equal(clear.allowedMatches.length, 1);
+    assert.equal(clear.allowedMatches[0].provider, "com.unity.nuget.newtonsoft-json");
+    const installed = await ensurePackageBridge(project);
+    assert.equal((await checkPackageBridge(project)).sourceHash, installed.sourceHash);
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
 });
 
 test("ensurePackageBridge refreshes orphaned legacy metadata when the package directory is absent", async () => {

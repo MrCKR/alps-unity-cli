@@ -383,7 +383,7 @@ export function publicMatrixArgv(base, project, primaryProject, target) {
   const argv = [...base];
   if (base[0] === "extensions" || base[0] === "init") argv.push("--project", project);
   else if ((base[0] === "tools" || base[0] === "doctor") && resolve(project) === resolve(primaryProject) && target && !base.includes("--instance")) argv.push("--instance", target);
-  return [...argv, "--raw"];
+  return argv;
 }
 function inputFrom(argv) { const i = argv.indexOf("--input"); try { return i < 0 ? {} : JSON.parse(argv[i + 1]); } catch { return null; } }
 
@@ -460,11 +460,17 @@ async function discover(m) {
   const groups = await m.call("tools.group", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } }));
   for (const item of groups.envelope?.data?.groups ?? []) {
     const group = nameOf(item); if (!group) continue;
-    const listed = await m.call(`tools.group.${group}`, ["tools", "group", "list", group], (e) => assertSuccess(e, { required: ["tools"] }));
-    for (const tool of listed.envelope?.data?.tools ?? []) {
-      const name = nameOf(tool); if (!name) continue;
-      if (!m.discovered.tools.includes(name)) m.discovered.tools.push(name);
-    }
+    let cursor;
+    do {
+      const argv = ["tools", "group", "list", group, "--page-size", "100", ...(cursor === undefined ? [] : ["--cursor", String(cursor)])];
+      const suffix = cursor === undefined ? "first" : String(cursor);
+      const listed = await m.call(`tools.group.${group}.${suffix}`, argv, (e) => assertSuccess(e, { required: ["tools", "pageInfo"] }));
+      for (const tool of listed.envelope?.data?.tools ?? []) {
+        const name = nameOf(tool); if (!name) continue;
+        if (!m.discovered.tools.includes(name)) m.discovered.tools.push(name);
+      }
+      cursor = listed.envelope?.data?.pageInfo?.nextCursor;
+    } while (Number.isSafeInteger(cursor) && cursor >= 0);
   }
   const ext = await m.call("extensions.list", ["extensions", "list"], (e) => assertSuccess(e, {}));
   const doc = await m.call("extensions.doctor", ["extensions", "doctor"], (e) => assertSuccess(e, {}));
@@ -503,7 +509,6 @@ function matrixExampleFlags(flags) {
   const result = [];
   const routed = new Set(["--project", "--instance"]);
   for (let index = 0; index < flags.length; index += 1) {
-    if (flags[index] === "--raw") continue;
     if (routed.has(flags[index])) { index += 1; continue; }
     result.push(flags[index]);
   }

@@ -43,11 +43,11 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
 | `E_INSTANCE_REQUIRED` | 没有显式 selector，CWD 也不在 Unity 项目中 | 传完整 `--instance <id|projectPath|alias>` 或从项目目录调用 |
-| `E_INSTANCE_NOT_FOUND` | selector 无法解析到 canonical project identity | 运行 `instances list` 或核对项目路径/alias |
-| `E_INSTANCE_NOT_RUNNING` | 项目 identity 已确定，但没有可验证的运行中 Editor | 打开该项目并等待 Bridge 注册 |
+| `E_INSTANCE_NOT_FOUND` | selector 在当前截止时间内没有对应项目记录 | 核对项目路径/alias；完整instance ID在目标Unity启动时会等待首次记录 |
+| `E_INSTANCE_NOT_RUNNING` | 项目 identity 已确定，且没有可验证的运行中 Editor | 打开该项目；CLI会在本次调用内等待首次ready记录 |
 | `E_INSTANCE_CONFLICT` | 至少两个已验证live process claim声明同一项目 | 关闭重复Editor，只保留目标session |
 | `E_INSTANCE_UNVERIFIABLE` | PID/start、project claim、Registry读取或权限证据不完整 | 重新观察identity；不得把未知mutation自动重投 |
-| `E_INSTANCE_IDENTITY_MISMATCH` | Registry、Health或请求中的canonical identity不一致 | 停止调用并检查项目移动、Registry claim或Bridge安装 |
+| `E_INSTANCE_IDENTITY_MISMATCH` | 当前Unity无法在截止时间内重建并证明一致的项目身份 | 更新匹配的CLI/Package，打开该项目并重新观察；不要手工修改内部记录 |
 | `E_UNITY_UNRESPONSIVE` | transport identity存在，但近期Unity主线程pulse或Bridge响应不可证明 | 读取`editor.state`与`editor.dialogs`后处理transition/modal |
 | `E_INSTANCE_PROJECT_MISMATCH` | 显式项目约束与 selector 指向不同 identity | 统一 `--project` 和 `--instance` |
 | `E_INSTANCE_PATH_UNAVAILABLE` | 无法取得可证明的物理 canonical path | 修复不可访问路径、broken link 或 reparse 配置 |
@@ -168,8 +168,8 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 |
 |--------|------|
 | `E_UNITY_BLOCKED` | effect 前已证明 Unity/UI blocker；原错误的 `details.blockers` 含结构化弹窗摘要 |
-| `E_UNITY_BUSY` | 两种可区分语义：任务池准入deadline到达时message明确`no business request was sent`，effect未开始且可稍后提交新root；已进入池后mutation lease竞争则业务请求已经发送，等待当前mutation terminal后再决策 |
-| `E_UNITY_TRANSITION_TIMEOUT` | 可恢复 lifecycle transition 未在当前阶段的 absolute deadline 内稳定 |
+| `E_UNITY_BUSY` | 任务池、修改owner或实例清理owner正在工作；按message与`nextActions`区分是否尚未发送业务请求，`instances prune`可按`retryAfterMs`稍后重试 |
+| `E_UNITY_TRANSITION_TIMEOUT` | 首次ready记录或可恢复状态变化未在原命令截止时间内稳定；确认Unity仍在推进后才使用更大的timeout重试 |
 | `E_EXECUTION_TIMEOUT` | 已放行调用未在execution deadline内返回终态、连接提前断开，或首次mutation POST后Editor session改变；outcome unknown，CLI不向新session自动重投 |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |

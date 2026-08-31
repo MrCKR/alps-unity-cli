@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "topLevel": "init",
+  "schema": "schemas/init.schema.json",
+  "subcommands": {
+    "help": {
+      "options": []
+    },
+    "discover": {
+      "options": []
+    },
+    "package": {
+      "options": [
+        "project",
+        "check",
+        "timeout-ms"
+      ],
+      "required": [
+        "project"
+      ],
+      "checkStatuses": [
+        "installed",
+        "missing",
+        "damaged",
+        "drifted",
+        "conflict"
+      ]
+    },
+    "skill": {
+      "options": [
+        "agent",
+        "scope",
+        "workspace",
+        "check",
+        "timeout-ms"
+      ],
+      "required": [
+        "agent",
+        "scope"
+      ],
+      "agents": [
+        ".agents",
+        "claude"
+      ],
+      "scopes": [
+        "workspace",
+        "user"
+      ],
+      "checkStatuses": [
+        "installed",
+        "missing",
+        "drifted",
+        "damaged"
+      ]
+    }
+  }
+}

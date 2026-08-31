@@ -221,14 +221,13 @@ export function printJson(result: CliResult): void {
   process.stdout.write(serializeResult(result));
 }
 
-/** 唯一CLI wire序列化；入口必须完整flush这段文本后再退出。 */
-export function serializeResult(result: CliResult, options: { raw?: boolean } = {}): string {
-  const spacing = options.raw ? undefined : 2;
-  return `${JSON.stringify(result, null, spacing)}\n`;
+/** 唯一CLI wire序列化；默认紧凑，只有显式pretty才增加空白。 */
+export function serializeResult(result: CliResult, options: { pretty?: boolean } = {}): string {
+  return `${JSON.stringify(result, null, options.pretty ? 2 : undefined)}\n`;
 }
 
-/** 按 CLI 输出模式序列化 envelope；raw 模式用于管道消费。 */
-export function printResult(result: CliResult, options: { raw?: boolean } = {}): void {
+/** 按 CLI 输出模式序列化同一个 JSON envelope。 */
+export function printResult(result: CliResult, options: { pretty?: boolean } = {}): void {
   process.stdout.write(serializeResult(result, options));
 }
 

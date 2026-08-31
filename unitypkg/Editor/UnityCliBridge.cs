@@ -67,6 +67,7 @@ namespace UnityCli
         private const double RegistryRefreshSeconds = 30.0;
         private static int port;
         private static double nextRegistryRefreshAt;
+        private static bool readyPublicationPending;
         private static readonly CancellationTokenSource BridgeLifetime = new CancellationTokenSource();
         private static CancellationTokenSource runtimeSession = new CancellationTokenSource();
 
@@ -194,7 +195,8 @@ namespace UnityCli
                 port = StartHttpListener(listener);
                 started = true;
                 Task.Run(ListenLoop);
-                if (!RegisterInstance("ready")) throw new InvalidOperationException("Initial instance registry publication failed.");
+                RegisterInstance("transitioning");
+                readyPublicationPending = true;
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
                 WriteRuntimeLoadDiagnostics("listener_started");
                 WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
@@ -338,6 +340,8 @@ namespace UnityCli
                 WriteLog("bridge_stop_failed " + exception.GetType().Name + ": " + exception.Message);
             }
             started = false;
+            readyPublicationPending = false;
+            CancelInstancePublicationRetry();
         }
 
         private static async ValueTask<string> Execute(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)

@@ -57,7 +57,9 @@ test("raw code.exec dry-run cannot compile source and normal execution rechecks 
   assert.doesNotMatch(entry, /CodeSuccessData\([^;]+NormalizeReturnValue/);
   assert.match(entry, /catch \(Exception exception\)[\s\S]*ReferenceEquals\(exception, effectBarrierException\)[\s\S]*ReferenceEquals\(exception, completionProbeException\)[\s\S]*throw;[\s\S]*E_CODE_RUNTIME_EXCEPTION/);
   assert.match(entry, /BeginCodeEffect[\s\S]*cancellationToken\.IsCancellationRequested[\s\S]*TryDeadlineRemainingMs[\s\S]*BeginDirectEffect\(request\.RequestId\)/);
-  assert.match(support, /CompileWithRoslyn[\s\S]*cancellationToken[\s\S]*TryDeadlineRemainingMs[\s\S]*WaitForExit\(Math\.Max[\s\S]*TerminateCompiler/);
+  assert.match(support, /RunUnityCompiler[\s\S]*cancellationToken[\s\S]*TryDeadlineRemainingMs[\s\S]*WaitForExit\(Math\.Max[\s\S]*TerminateCompiler/);
+  assert.match(support, /CompileWithUnityCompiler[\s\S]*Library", "UnityCli", "code-exec-temp"[\s\S]*finally[\s\S]*DeleteTemporaryCodeFile/);
+  assert.doesNotMatch(support, /Microsoft\.CodeAnalysis|CompileInProcess|CodeExecUseInProcessRoslyn|CompileWithCscFallback/);
   assert.match(support, /DefaultCodeReferences\(request\.StringArg\("refs"\), request, cancellationToken\)[\s\S]*EnsureCodePreEffectDeadline/);
   assert.match(support, /RoslynReferenceFailure[\s\S]*E_REFERENCE_RESOLUTION_FAILED/);
   const referenceDiscovery = support.slice(support.indexOf("private static IEnumerable<string> DefaultCodeReferences"), support.indexOf("private static IEnumerable<string> SplitCsv"));

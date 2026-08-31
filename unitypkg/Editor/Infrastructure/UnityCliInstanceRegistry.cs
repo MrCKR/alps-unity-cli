@@ -20,6 +20,8 @@ namespace UnityCli
     public static partial class UnityCliBridge
     {
         private const int RegistryMutexTimeoutMs = 5000;
+        private const long RegistryMaxBytes = 1024L * 1024L;
+        private const int RegistryPublicationMaxAttempts = 4;
         private const uint MutexAllAccess = 0x001F0001;
         private const uint WaitObject0 = 0x00000000;
         private const uint WaitAbandoned = 0x00000080;
@@ -34,6 +36,11 @@ namespace UnityCli
         private static string lastRegistrationSignature;
         private static long listenerGeneration;
         private static long publicationSequence;
+        private static bool registryPublicationRetryPending;
+        private static bool registryPublicationRetryExhausted;
+        private static int registryPublicationAttemptCount;
+        private static double nextRegistryPublicationRetryAt;
+        private static string pendingRegistryRequestedState;
 
         /// <summary>当前 listener generation 只用于 transport attestation 与 registry 内部一致性校验。</summary>
         private static long CurrentListenerGeneration()
@@ -182,8 +189,8 @@ namespace UnityCli
             }
         }
 
-        /// <summary>在 native current-user DACL named mutex 内执行临界区；abandoned 表示已取得所有权。</summary>
-        private static void WithCurrentUserMutex(string name, int timeoutMs, Action action)
+        /// <summary>在native current-user DACL named mutex内尝试临界区；timeout不执行action。</summary>
+        private static bool TryWithCurrentUserMutex(string name, int timeoutMs, Action action)
         {
             if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Mutex name is required.", "name");
             if (action == null) throw new ArgumentNullException("action");
@@ -207,12 +214,13 @@ namespace UnityCli
                 if (handle == IntPtr.Zero || handle == new IntPtr(-1))
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not create the current-user mutex.");
 
-                var wait = WaitForSingleObject(handle, (uint)timeoutMs);
-                if (wait == WaitTimeout) throw new TimeoutException("Timed out waiting for current-user mutex.");
+                var wait = WaitForSingleObject(handle, (uint)Math.Max(0, timeoutMs));
+                if (wait == WaitTimeout) return false;
                 if (wait == WaitFailed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not wait for current-user mutex.");
                 if (wait != WaitObject0 && wait != WaitAbandoned) throw new InvalidOperationException("Unexpected current-user mutex wait result: " + wait.ToString(CultureInfo.InvariantCulture));
                 acquired = true;
                 action();
+                return true;
             }
             finally
             {
@@ -220,6 +228,12 @@ namespace UnityCli
                 if (handle != IntPtr.Zero && handle != new IntPtr(-1)) CloseHandle(handle);
                 if (descriptor != IntPtr.Zero) LocalFree(descriptor);
             }
+        }
+
+        /// <summary>需要锁的业务写入保留原超时异常语义。</summary>
+        private static void WithCurrentUserMutex(string name, int timeoutMs, Action action)
+        {
+            if (!TryWithCurrentUserMutex(name, timeoutMs, action)) throw new TimeoutException("Timed out waiting for current-user mutex.");
         }
 
         /// <summary>保留 registry 原有锁名、超时和调用语义。</summary>
@@ -263,17 +277,84 @@ namespace UnityCli
             }
         }
 
-        /// <summary>写入或更新当前 editor session claim；同 identity 的其他存活 claim 必须保留以形成 conflict。</summary>
+        /// <summary>请求当前状态发布；已有失败链只更新最新状态，不创建第二条重试链。</summary>
         private static bool RegisterInstance(string requestedState)
         {
+            if (registryPublicationRetryExhausted) return false;
+            if (registryPublicationRetryPending)
+            {
+                pendingRegistryRequestedState = requestedState;
+                return false;
+            }
+            return AttemptInstancePublication(requestedState);
+        }
+
+        /// <summary>中央update入口推进唯一重试链；达到上限后本次domain不再后台尝试。</summary>
+        private static void TickInstancePublicationRetry()
+        {
+            if (!registryPublicationRetryPending || registryPublicationRetryExhausted || !started || domainReloading) return;
+            if (EditorApplication.timeSinceStartup < nextRegistryPublicationRetryAt) return;
+            var requestedState = pendingRegistryRequestedState;
+            registryPublicationRetryPending = false;
+            pendingRegistryRequestedState = null;
+            AttemptInstancePublication(string.IsNullOrEmpty(requestedState) ? "ready" : requestedState);
+        }
+
+        /// <summary>listener停止或domain结束时清空本次启动的重试状态。</summary>
+        private static void CancelInstancePublicationRetry()
+        {
+            registryPublicationRetryPending = false;
+            registryPublicationRetryExhausted = false;
+            registryPublicationAttemptCount = 0;
+            nextRegistryPublicationRetryAt = 0;
+            pendingRegistryRequestedState = null;
+        }
+
+        /// <summary>执行一次写入；只对文件、权限或锁类短暂失败安排有限重试。</summary>
+        private static bool AttemptInstancePublication(string requestedState)
+        {
+            Exception failure;
+            if (TryRegisterInstance(requestedState, out failure))
+            {
+                var recoveredAttempts = registryPublicationAttemptCount;
+                CancelInstancePublicationRetry();
+                if (recoveredAttempts > 0)
+                    WriteLog("instance_publication_retry_succeeded attempts=" + (recoveredAttempts + 1).ToString(CultureInfo.InvariantCulture));
+                return true;
+            }
+
+            registryPublicationAttemptCount += 1;
+            var failureKind = RegistryPublicationFailureKind(failure);
+            var retryable = IsRetryableRegistryPublicationFailure(failure);
+            WriteLog("instance_register_failed kind=" + failureKind + " retryable=" + (retryable ? "true" : "false") + " attempt=" + registryPublicationAttemptCount.ToString(CultureInfo.InvariantCulture));
+            if (!retryable || registryPublicationAttemptCount >= RegistryPublicationMaxAttempts)
+            {
+                registryPublicationRetryPending = false;
+                registryPublicationRetryExhausted = true;
+                pendingRegistryRequestedState = null;
+                WriteLog("instance_publication_retry_stopped kind=" + failureKind + " attempts=" + registryPublicationAttemptCount.ToString(CultureInfo.InvariantCulture) + " nextAction=restore-data-root-write-access-then-reload-domain");
+                return false;
+            }
+
+            pendingRegistryRequestedState = requestedState;
+            registryPublicationRetryPending = true;
+            nextRegistryPublicationRetryAt = EditorApplication.timeSinceStartup + RegistryPublicationRetryDelaySeconds(registryPublicationAttemptCount);
+            return false;
+        }
+
+        /// <summary>写入或更新当前editor session claim；同identity的其他存活claim必须保留以形成conflict。</summary>
+        private static bool TryRegisterInstance(string requestedState, out Exception failure)
+        {
+            failure = null;
             // AutoStart=false不即时停当前domain，但compile/reload边界开始后不得再把旧listener发布成transitioning。
             if (!UnityCliProjectSettings.Current.BridgeAutoStart
                 && (domainReloading || EditorApplication.isCompiling || EditorApplication.isUpdating)) return true;
             try
             {
+                string recoveryReason = null;
                 WithRegistryMutex(() =>
                 {
-                    var registry = ReadCurrentRegistry();
+                    var registry = ReadCurrentRegistryForPublication(out recoveryReason);
                     var sessions = ReadSessions(registry);
                     var previous = sessions.FirstOrDefault(IsCurrentSession);
                     EnsureListenerGeneration(registry);
@@ -289,6 +370,8 @@ namespace UnityCli
                     var data = RegistryData(revision, sessions);
                     WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(data) + "\n");
                 });
+                if (!string.IsNullOrEmpty(recoveryReason))
+                    WriteLog("instance_registry_recovered reason=" + recoveryReason + " id=" + InstanceId());
                 // Registry是低频publication，不是heartbeat；日志只记录生命周期或listener变化。
                 var registrationSignature = NormalizeSessionLifecycle(requestedState) + "|" + ListenerId + "|" + listenerGeneration.ToString(CultureInfo.InvariantCulture);
                 if (!string.Equals(registrationSignature, lastRegistrationSignature, StringComparison.Ordinal))
@@ -296,13 +379,38 @@ namespace UnityCli
                     lastRegistrationSignature = registrationSignature;
                     WriteLog("instance_registered id=" + InstanceId() + " session=" + EditorSessionId() + " lifecycle=" + NormalizeSessionLifecycle(requestedState) + " listenerId=" + ListenerId + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture));
                 }
+                TryRunAutomaticInstanceCleanup();
                 return true;
             }
             catch (Exception exception)
             {
-                WriteLog("instance_register_failed " + exception);
+                failure = exception;
                 return false;
             }
+        }
+
+        private static bool IsRetryableRegistryPublicationFailure(Exception failure)
+        {
+            return failure is IOException
+                || failure is UnauthorizedAccessException
+                || failure is TimeoutException
+                || failure is Win32Exception;
+        }
+
+        private static string RegistryPublicationFailureKind(Exception failure)
+        {
+            if (failure is UnauthorizedAccessException) return "access";
+            if (failure is TimeoutException) return "lock-timeout";
+            if (failure is Win32Exception) return "windows";
+            if (failure is IOException) return "io";
+            return failure == null ? "unknown" : failure.GetType().Name;
+        }
+
+        private static double RegistryPublicationRetryDelaySeconds(int failedAttempts)
+        {
+            if (failedAttempts <= 1) return 0.25;
+            if (failedAttempts == 2) return 0.5;
+            return 1.0;
         }
 
         /// <summary>Editor 退出只移除当前 session claim，保留 offline project identity 记录。</summary>
@@ -333,11 +441,59 @@ namespace UnityCli
             if (parsed == null) throw new InvalidDataException("Instance registry is not a JSON object.");
             if (ReadLong(parsed, "version") != 3L) return new Dictionary<string, object>();
             var identity = ReadDictionary(parsed, "identity");
-            if (identity == null
-                || !string.Equals(ReadString(identity, "instanceId"), InstanceId(), StringComparison.Ordinal)
-                || !string.Equals(ReadString(identity, "canonicalProjectPath"), ProjectIdentity().CanonicalProjectPath, StringComparison.Ordinal))
+            if (!RegistryIdentityMatchesCurrentProject(identity))
                 throw new InvalidDataException("Instance registry identity does not match CanonicalPath v1.");
             return parsed;
+        }
+
+        /// <summary>当前Unity发布时不继承不可验证的旧状态；文件IO失败仍由外层有界重试处理。</summary>
+        private static Dictionary<string, object> ReadCurrentRegistryForPublication(out string recoveryReason)
+        {
+            recoveryReason = null;
+            var path = InstancePath();
+            if (!File.Exists(path)) return new Dictionary<string, object>();
+            if (new FileInfo(path).Length > RegistryMaxBytes)
+            {
+                recoveryReason = "oversized";
+                return new Dictionary<string, object>();
+            }
+
+            object root;
+            try
+            {
+                root = UnityCliSerializer.Parse(File.ReadAllText(path, Encoding.UTF8));
+            }
+            catch (FormatException)
+            {
+                recoveryReason = "malformed-json";
+                return new Dictionary<string, object>();
+            }
+
+            var parsed = root as Dictionary<string, object>;
+            if (parsed == null)
+            {
+                recoveryReason = "non-object-root";
+                return new Dictionary<string, object>();
+            }
+            if (ReadLong(parsed, "version") != 3L)
+            {
+                recoveryReason = "unsupported-version";
+                return new Dictionary<string, object>();
+            }
+            if (!RegistryIdentityMatchesCurrentProject(ReadDictionary(parsed, "identity")))
+            {
+                recoveryReason = "identity-mismatch";
+                return new Dictionary<string, object>();
+            }
+            return parsed;
+        }
+
+        /// <summary>只信任与当前确定性文件名对应的CanonicalPath v1身份。</summary>
+        private static bool RegistryIdentityMatchesCurrentProject(Dictionary<string, object> identity)
+        {
+            return identity != null
+                && string.Equals(ReadString(identity, "instanceId"), InstanceId(), StringComparison.Ordinal)
+                && string.Equals(ReadString(identity, "canonicalProjectPath"), ProjectIdentity().CanonicalProjectPath, StringComparison.Ordinal);
         }
 
         /// <summary>读取当前 session 上一次 listener 代次；domain reload 后严格递增。</summary>

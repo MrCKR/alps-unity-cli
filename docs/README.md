@@ -6,6 +6,8 @@
 
 | 文档 | 内容 |
 |------|------|
+| [架构与公开边界](architecture.md) | 顶层命令、统一Tool catalog、安装职责、Bridge session与安全边界 |
+| [本地开发](development.md) | 构建、生成、测试、Dev Unity隔离与artifact检查 |
 | [Target 与 Instance](target-and-instance.md) | 运行中 Unity Editor 实例发现、目标选择、别名管理 |
 | [工具发现](tool-discovery.md) | `tools group` → `tools group list` → `tools describe` 的自发现流程 |
 | [工具执行](tool-execution.md) | `tools run`的结构化JSON执行、输入与验证方式 |
@@ -31,10 +33,11 @@
 
 ## AI Agent 阅读顺序
 
-1. 先读 `skills/unitycli/SKILL.md` 获取最小入口规则。
-2. 需要命令细节时读`target-and-instance.md`、`tool-discovery.md`、`tool-execution.md`和`command-execution.md`。
-3. 涉及写操作或高风险操作时读 `safety-boundaries.md` 与 `risk-and-side-effects.md`。
-4. 需要项目扩展能力时读 `extensions.md`。
+1. 安装或修复时直接运行`unitycli init help`，不要从文档猜安装流程。
+2. 正常Unity任务先读`skills/unitycli/SKILL.md`获取最小入口规则。
+3. 需要命令细节时读`target-and-instance.md`、`tool-discovery.md`、`tool-execution.md`和`command-execution.md`。
+4. 涉及写操作或高风险操作时读`safety-boundaries.md`与`risk-and-side-effects.md`。
+5. 需要项目扩展能力时读`extensions.md`。
 
 ## 相关目录
 

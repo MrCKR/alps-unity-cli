@@ -17,7 +17,7 @@ unitycli tools group --instance <id|projectPath|alias>
 
 ```text
 tools group
-    -> tools group list <group>
+    -> tools group list <group> [--page-size <n>] [--cursor <n>]
     -> tools describe <tool>
     -> tools run <tool> --input '<json>'
 ```
@@ -35,23 +35,25 @@ unitycli tools group --instance my-project
 
 ### `tools group list`
 
-列出一个真实分组中的全部 Tool 摘要：
+按名称稳定排序并返回一个真实分组中的 Tool 摘要页。默认 `pageSize=20`，最大 100：
 
 ```powershell
-unitycli tools group list camera
-unitycli tools group list probuilder --instance my-project
+unitycli tools group list camera --page-size 20
+unitycli tools group list probuilder --page-size 20 --cursor 20 --instance my-project
 ```
 
-分组名称必须来自当前实例的`tools group`输出，不要假设项目能力都位于`custom`分组。`tools group list`返回`nameSemantics.exact=true`与`groupPrefix=false`：每个`tools[].name`已经是完整精确调用名，group只用于筛选，绝不能拼到name前。
+分组名称必须来自当前实例的`tools group`输出，不要假设项目能力都位于`custom`分组。每个`tools[].name`已经是完整精确调用名，group只用于筛选，绝不能拼到name前；`available`仅在不可用时以`false`出现。存在`pageInfo.nextCursor`时，将其原值传回`--cursor`继续读取。
 
 ### `tools search`
 
-按名称、summary、description 和 group 搜索当前实例完整目录：
+按名称、summary、description 和 group 搜索当前实例完整目录，并只返回名称、summary、group组成的有界页。默认 `pageSize=20`，最大 100：
 
 ```powershell
-unitycli tools search 'screenshot|camera'
-unitycli tools search 'project-summary|scene' --instance my-project
+unitycli tools search 'screenshot|camera' --page-size 20
+unitycli tools search 'project-summary|scene' --page-size 20 --cursor 20 --instance my-project
 ```
+
+结果按精确 Tool name 排序；存在`pageInfo.nextCursor`时，将其原值传回同一关键词查询的`--cursor`。
 
 ### `tools describe`
 
@@ -74,7 +76,7 @@ unitycli tools describe camera.screenshot
 | `requiresPackages` | 非空 Unity Package 依赖 |
 | `examples` | `description`、结构化业务 `input` 与按需 `execution` |
 
-`group`、`summary` 和 `source` 已在发现层使用，不在单 Tool describe 重复；`outputSchema`、`permissions`、fingerprint、completion 和 handler 只保留在内部 metadata。
+`group`和`summary`已在发现层使用，不在单 Tool describe重复；`source`、`outputSchema`、`permissions`、fingerprint、completion 和 handler 只保留在内部 metadata。
 
 ## 完整目录语义
 
@@ -86,7 +88,7 @@ unitycli tools describe camera.screenshot
 
 1. 用 `instances list` 确认 canonical project identity，或切换到目标 Unity 项目 CWD。
 2. 用 `tools group` 读取当前实例目录。
-3. 用 `tools group list`、`tools search '<k1|k2|...>'` 缩小范围。
+3. 用 `tools group list`、`tools search '<k1|k2|...>'` 缩小范围，并消费完所需的`pageInfo.nextCursor`页面。
 4. 用 `tools describe` 获取 schema、状态约束、副作用和示例。
 5. 用 `tools run` 调用同一名称。
 6. 安装 Package、安装 Extension、domain reload 或切换 PlayMode 后重新 discovery。

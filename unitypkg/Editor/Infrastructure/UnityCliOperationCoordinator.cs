@@ -591,6 +591,7 @@ namespace UnityCli
         private static UnityCliToolCompletionContract ResolveRequestCompletionContract(BridgeRequest request)
         {
             var toolName = RequestToolName(request);
+            if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
             UnityCliToolCompletionContract contract;
             if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
             if (string.Equals(toolName, "code.exec", StringComparison.Ordinal))

@@ -7,10 +7,10 @@ import { fileURLToPath } from "node:url";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /** Supported agent identifiers for skill installation. */
-export type AgentKind = "pi" | "claude" | ".agents";
+export type AgentKind = "claude" | ".agents";
 
 /** All valid agent kinds. */
-export const AGENT_KINDS: readonly AgentKind[] = ["pi", "claude", ".agents"];
+export const AGENT_KINDS: readonly AgentKind[] = ["claude", ".agents"];
 
 /** Result of installing a skill for a single agent. */
 export interface SkillInstallResult {
@@ -33,36 +33,24 @@ export interface SkillCheckResult {
   sourceHash?: string;
 }
 
-// ─── Agent skill target paths ────────────────────────────────────────────────
+export interface SkillTargetInspection {
+  status: "installed" | "missing" | "drifted" | "damaged";
+  targetPath: string;
+  sourceHash: string;
+  hash?: string;
+  message?: string;
+}
 
-/** Maps an agent kind to its root directory relative to the Unity project root. */
-const AGENT_ROOT_DIR: Record<AgentKind, string> = {
-  pi: ".pi",
-  claude: ".claude",
-  ".agents": ".agents",
-};
+// ─── Agent skill target paths ────────────────────────────────────────────────
 
 /** Maps an agent kind to its skill directory relative to the Unity project root. */
 const AGENT_SKILL_DIR: Record<AgentKind, string> = {
-  pi: ".pi/skills/unitycli",
   claude: ".claude/skills/unitycli",
   ".agents": ".agents/skills/unitycli",
 };
 
-/** 探测项目中已存在的 Agent 目录,用于 init 默认安装 Skill。 */
-export async function detectAgentKinds(projectRoot: string): Promise<AgentKind[]> {
-  const detected: AgentKind[] = [];
-  for (const agent of AGENT_KINDS) {
-    try {
-      const rootStat = await stat(join(projectRoot, AGENT_ROOT_DIR[agent]));
-      if (rootStat.isDirectory()) {
-        detected.push(agent);
-      }
-    } catch {
-      // 未配置该 Agent 时跳过,避免凭空创建新的 Agent 根目录。
-    }
-  }
-  return detected;
+export function resolveSkillTarget(basePath: string, agent: AgentKind): string {
+  return join(basePath, AGENT_SKILL_DIR[agent]);
 }
 
 // ─── Skill source resolution ─────────────────────────────────────────────────
@@ -262,6 +250,20 @@ async function loadBundle(root: string, allowMissingFeedbackMode: boolean): Prom
   };
 }
 
+/** 不获取安装 mutex、不写文件，只读比较一个明确 Skill target 与 bundled source。 */
+export async function inspectSkillTarget(sourcePath: string, targetPath: string): Promise<SkillTargetInspection> {
+  const source = await loadBundle(dirname(sourcePath), false);
+  if (!await exists(join(targetPath, "SKILL.md"))) return { status: "missing", targetPath, sourceHash: source.hash };
+  try {
+    const target = await loadBundle(targetPath, true);
+    return target.hash === source.hash
+      ? { status: "installed", targetPath, sourceHash: source.hash, hash: target.hash }
+      : { status: "drifted", targetPath, sourceHash: source.hash, hash: target.hash };
+  } catch (error) {
+    return { status: "damaged", targetPath, sourceHash: source.hash, message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 /** 把目标本地反馈开关投影到待发布 SKILL.md，其余文件保持原字节。 */
 function renderBundleFile(file: SkillBundleFile, feedbackMode: FeedbackMode): Buffer {
   if (file.path !== "SKILL.md") return file.content;
@@ -453,8 +455,8 @@ interface CommittedTargetMarker {
 const committedTargetMarkerName = "committed-target.json";
 
 /** 返回固定 workspace；每个 project + agent 最多只有 staging 和 previous 两个机制目录。 */
-function installWorkspace(projectRoot: string, agent: AgentKind): InstallWorkspace {
-  const root = join(projectRoot, "Library", "UnityCli", "skill-install", agent === ".agents" ? "agents" : agent);
+function installWorkspace(projectRoot: string, agent: AgentKind, explicitRoot?: string): InstallWorkspace {
+  const root = explicitRoot ?? join(projectRoot, "Library", "UnityCli", "skill-install", agent === ".agents" ? "agents" : agent);
   return { stagingRoot: join(root, "staging"), previousRoot: join(root, "previous") };
 }
 
@@ -637,7 +639,7 @@ export interface SkillInstaller {
   /** Resolve the target SKILL.md path for the given project root. */
   resolveTargetPath(projectRoot: string): string;
   /** Install the complete runtime Skill bundle within one immutable deadline. */
-  install(sourcePath: string, projectRoot: string, absoluteDeadlineMs?: number): Promise<SkillInstallResult>;
+  install(sourcePath: string, projectRoot: string, absoluteDeadlineMs?: number, installRoot?: string): Promise<SkillInstallResult>;
   /** Check the complete runtime Skill bundle without writing. */
   check(sourcePath: string, projectRoot: string, absoluteDeadlineMs?: number): Promise<SkillCheckResult>;
 }
@@ -651,24 +653,28 @@ class BaseSkillInstaller implements SkillInstaller {
     return join(projectRoot, AGENT_SKILL_DIR[this.agent], "SKILL.md");
   }
 
-  async install(sourcePath: string, projectRoot: string, absoluteDeadlineMs = Date.now() + defaultInstallTimeoutMs): Promise<SkillInstallResult> {
+  async install(sourcePath: string, projectRoot: string, absoluteDeadlineMs = Date.now() + defaultInstallTimeoutMs, installRoot?: string): Promise<SkillInstallResult> {
     const sourceRoot = dirname(sourcePath);
     const targetPath = this.resolveTargetPath(projectRoot);
     const targetRoot = dirname(targetPath);
     const source = await loadBundle(sourceRoot, false);
-    const workspace = installWorkspace(projectRoot, this.agent);
+    const workspace = installWorkspace(projectRoot, this.agent, installRoot);
 
     return withSkillInstallMutex(targetRoot, absoluteDeadlineMs, async () => {
       try {
         await recoverInstallWorkspace(targetRoot, workspace, absoluteDeadlineMs);
         let existing: SkillBundle | undefined;
+        let replacedDamaged = false;
         if (await exists(targetPath, absoluteDeadlineMs)) {
           try {
             existing = await retrySharingViolation(absoluteDeadlineMs, () => loadBundle(targetRoot, true));
-          } catch (error) {
-            if (!await exists(workspace.previousRoot, absoluteDeadlineMs)) throw error;
-            await restorePreviousBundle(targetRoot, workspace, absoluteDeadlineMs);
-            existing = await retrySharingViolation(absoluteDeadlineMs, () => loadBundle(targetRoot, true));
+          } catch {
+            if (await exists(workspace.previousRoot, absoluteDeadlineMs)) {
+              await restorePreviousBundle(targetRoot, workspace, absoluteDeadlineMs);
+              existing = await retrySharingViolation(absoluteDeadlineMs, () => loadBundle(targetRoot, true));
+            } else {
+              replacedDamaged = true;
+            }
           }
         }
 
@@ -683,12 +689,12 @@ class BaseSkillInstaller implements SkillInstaller {
         const feedbackMode = existing?.feedbackMode ?? source.feedbackMode;
         await publishBundle(source, existing, feedbackMode, targetRoot, workspace, absoluteDeadlineMs);
 
-        if (existing) {
+        if (existing || replacedDamaged) {
           return {
             agent: this.agent,
             targetPath,
             status: "updated",
-            previousHash: existing.hash,
+            ...(existing ? { previousHash: existing.hash } : {}),
             newHash: source.hash,
           };
         }
@@ -747,13 +753,14 @@ export class AgentSkillInstallerRegistry {
 
   /**
    * Install the skill for the specified agents.
-   * @param agents Comma-separated or array of agent kinds (e.g. "pi,claude")
+   * @param agents Comma-separated or array of agent kinds (e.g. "claude,.agents")
    */
   async installForAgents(
     agents: string | AgentKind[],
     sourcePath: string,
     projectRoot: string,
     absoluteDeadlineMs?: number,
+    installRoot?: string,
   ): Promise<SkillInstallResult[]> {
     const resolved = parseAgentList(agents);
     const results: SkillInstallResult[] = [];
@@ -767,7 +774,7 @@ export class AgentSkillInstallerRegistry {
           [`Use one of: ${AGENT_KINDS.join(", ")}`]
         );
       }
-      results.push(await installer.install(sourcePath, projectRoot, absoluteDeadlineMs));
+      results.push(await installer.install(sourcePath, projectRoot, absoluteDeadlineMs, installRoot));
     }
 
     return results;
@@ -820,7 +827,7 @@ export function parseAgentList(agents: string | AgentKind[]): AgentKind[] {
       throw new SkillInstallerError(
         "UNKNOWN_AGENT_KIND",
         `Unknown agent kind: "${agent}". Supported: ${AGENT_KINDS.join(", ")}`,
-        [`Use one or more of: ${AGENT_KINDS.join(", ")}, comma-separated (e.g. "pi,claude,.agents")`]
+        [`Use one or more of: ${AGENT_KINDS.join(", ")}, comma-separated (e.g. "claude,.agents")`]
       );
     }
     // Deduplicate

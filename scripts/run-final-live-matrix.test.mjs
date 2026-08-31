@@ -531,10 +531,10 @@ test("matrix assertions validate the exact public envelope and business schema",
 });
 
 test("matrix routes capabilities by instance and reserves project for control commands", () => {
-  assert.deepEqual(publicMatrixArgv(["tools", "run", "sample.echo", "--input", "{}"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "sample.echo", "--input", "{}", "--instance", "unity-main", "--raw"]);
-  assert.deepEqual(publicMatrixArgv(["tools", "run", "editor.state", "--input", "{}"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-main", "--raw"]);
-  assert.deepEqual(publicMatrixArgv(["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-stale"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-stale", "--raw"]);
-  assert.deepEqual(publicMatrixArgv(["extensions", "doctor"], "D:/Main", "D:/Main", "unity-main"), ["extensions", "doctor", "--project", "D:/Main", "--raw"]);
+  assert.deepEqual(publicMatrixArgv(["tools", "run", "sample.echo", "--input", "{}"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "sample.echo", "--input", "{}", "--instance", "unity-main"]);
+  assert.deepEqual(publicMatrixArgv(["tools", "run", "editor.state", "--input", "{}"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-main"]);
+  assert.deepEqual(publicMatrixArgv(["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-stale"], "D:/Main", "D:/Main", "unity-main"), ["tools", "run", "editor.state", "--input", "{}", "--instance", "unity-stale"]);
+  assert.deepEqual(publicMatrixArgv(["extensions", "doctor"], "D:/Main", "D:/Main", "unity-main"), ["extensions", "doctor", "--project", "D:/Main"]);
   assert.doesNotMatch(publicMatrixArgv(["tools", "run", "sample.echo"], "D:/Main", "D:/Main", "unity-main").join(" "), /--project/);
 });
 

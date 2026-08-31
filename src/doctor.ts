@@ -511,7 +511,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "instance_registry":
           if (check.status === "warn") {
             suggestions.push("Open a Unity project with the UnityCLI Bridge package installed.");
-            suggestions.push("Run unitycli init --project <path> to set up the bridge.");
+            suggestions.push("Run unitycli init package --project <UnityProject> to set up the Bridge.");
           }
           break;
         case "ready_instances":

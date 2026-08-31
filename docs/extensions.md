@@ -10,23 +10,21 @@
 
 ### Bridge 包安装
 
-通过 `init` 命令安装 Unity Editor Bridge 包：
+Bridge 与 AI Skill 是两个独立安装对象。先用安装协议发现并选择项目，再单独安装或检查 Bridge：
 
 ```powershell
-# 默认安装 Bridge；若项目已有 .pi/.claude/.agents，则自动安装 Skill
-unitycli init --project C:\path\MyProject
-
-# 仅安装 Bridge 包
-unitycli init --project C:\path\MyProject --pkg-only
-
-# 检查安装状态
-unitycli init --check --project C:\path\MyProject
+unitycli init help
+unitycli init discover
+unitycli init package --project C:\path\UnityProject
+unitycli init package --project C:\path\UnityProject --check
 ```
 
-安装内容：
-- `Packages/com.alpsckr.unitycli/` — Bridge 包（copy 模式）
-- `Packages/unitycli.install.json` — 安装元数据（项目 hash、版本、支持范围）
-- `.pi/skills/unitycli/`、`.claude/skills/unitycli/` 或 `.agents/skills/unitycli/` — 仅当对应 Agent 目录已存在，或显式传入 `--agent` 时安装完整 runtime bundle（`SKILL.md`、`references/**`、`scripts/**`）
+Bridge 安装内容：
+- `Packages/com.alpsckr.unitycli/` — canonical Bridge 包（copy 模式）
+- `Packages/unitycli.install.json` — 安装元数据（项目 hash、source hash、managed-file hash、版本与支持范围）
+- `Packages/com.alpsckr.unitycli/unitycli.files.json` — 受管文件路径清单
+
+Skill 使用`init skill`安装到用户选择的`.agents`或Claude workspace/user目标，不属于Unity项目Package安装。
 
 ### 项目能力发现
 

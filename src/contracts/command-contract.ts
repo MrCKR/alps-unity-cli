@@ -12,6 +12,7 @@ export type CommandHandlerType = "bridge" | "bridge-runtime" | "hybrid" | "offli
 /** Bridge 内部路由的唯一清单；这些 command 永远不得进入 public command contract。 */
 export const PRIVATE_BRIDGE_COMMANDS: ReadonlySet<string> = new Set([
   "internal.editor.state.snapshot",
+  "internal.instances.prune",
   "internal.editor.compile.start",
   "internal.editor.compile.status",
   "internal.build.run.start",

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { CLI_OUTPUT_FLUSH_GRACE_MS, execute, finishCliProcess } from "../src/cli.js";
+import { serializeResult } from "../src/output.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -29,6 +30,14 @@ test("help and version use the public success envelope", async () => {
   assert.ok(version.ok);
   assert.match(String((version.data as { version?: string }).version), /^\d+\.\d+\.\d+/);
   assert.deepEqual(Object.keys(version).sort(), ["data", "ok", "requestId"]);
+});
+
+test("JSON output is compact by default and pretty only when requested", () => {
+  const envelope = { ok: true as const, requestId: "req_format", data: { value: 1 } };
+  assert.equal(serializeResult(envelope), "{\"ok\":true,\"requestId\":\"req_format\",\"data\":{\"value\":1}}\n");
+  const pretty = serializeResult(envelope, { pretty: true });
+  assert.match(pretty, /^\{\n  \"ok\": true,/);
+  assert.equal(JSON.parse(pretty).data.value, 1);
 });
 
 test("command help is self-contained before instance discovery", async () => {
@@ -70,12 +79,15 @@ test("global value options are equivalent before and after commands", async () =
   assert.deepEqual(withoutRequestId(projectBefore), withoutRequestId(projectAfter));
 });
 
-test("generic output format options are rejected", async () => {
+test("generic and removed output format options are rejected", async () => {
   for (const value of ["json", "text", "tsv", "ndjson"]) {
     const result = await execute(["tools", "group", "--format", value], runtime);
     assert.equal(result.ok, false);
     assert.equal(result.error.code, "E_UNKNOWN_OPTION");
   }
+  const removedRaw = await execute(["tools", "group", "--raw"], runtime);
+  assert.equal(removedRaw.ok, false);
+  assert.equal(removedRaw.error.code, "E_UNKNOWN_OPTION");
 });
 
 test("known options are rejected outside their declared route", async () => {
@@ -120,7 +132,7 @@ test("CLI exit waits for envelope flush and uses one bounded fallback", () => {
   let cancelled = 0;
   const exits: number[] = [];
 
-  finishCliProcess(result, true, {
+  finishCliProcess(result, false, {
     write: (text, complete) => { output = text; flush = complete; },
     schedule: (complete, delayMs) => {
       assert.equal(delayMs, CLI_OUTPUT_FLUSH_GRACE_MS);
@@ -141,7 +153,7 @@ test("CLI exit waits for envelope flush and uses one bounded fallback", () => {
 
   let fallbackOnly: (() => void) | undefined;
   const fallbackExits: number[] = [];
-  finishCliProcess({ ok: false, requestId: "req_timeout_fixture", error: { code: "E_EXECUTION_TIMEOUT", message: "timeout", nextActions: [], transient: false, retryAfterMs: 0 } }, true, {
+  finishCliProcess({ ok: false, requestId: "req_timeout_fixture", error: { code: "E_EXECUTION_TIMEOUT", message: "timeout", nextActions: [], transient: false, retryAfterMs: 0 } }, false, {
     write: () => undefined,
     schedule: (complete) => { fallbackOnly = complete; return "fallback-timer"; },
     cancel: () => undefined,
@@ -161,7 +173,7 @@ test("compiled CLI exits after one envelope even when a preloaded handle remains
   writeFileSync(preloadPath, "setInterval(() => {}, 1000);\n", "utf8");
   const startedAt = Date.now();
   try {
-    const result = spawnSync(process.execPath, [cliPath, "--raw", "--help"], {
+    const result = spawnSync(process.execPath, [cliPath, "--help"], {
       cwd: process.cwd(),
       encoding: "utf8",
       timeout: 5_000,
@@ -188,7 +200,7 @@ test("compiled CLI emits one raw JSON envelope and a failure exit code", (contex
     context.skip("compiled CLI is verified by build:test output");
     return;
   }
-  for (const argv of [["--raw", "not-a-command"], ["not-a-command", "--raw"]]) {
+  for (const argv of [["not-a-command"], ["not-a-command", "--pretty=false"]]) {
     const result = spawnSync(process.execPath, [cliPath, ...argv], {
       cwd: process.cwd(),
       encoding: "utf8",

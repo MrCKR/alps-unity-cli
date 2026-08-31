@@ -26,16 +26,17 @@ test("tools group, search, and describe use one connected instance catalog", asy
     assert.equal(Object.hasOwn(describe.data as object, field), false, field);
 });
 
-test("tools search splits keywords by | with OR matching and routing-only fields", async () => {
-  const result = await execute(["tools", "search", "hierarchy|console|screenshot"], connected as never);
+test("tools search returns sorted routing-only pages without input or source echoes", async () => {
+  const result = await execute(["tools", "search", "hierarchy|console|screenshot", "--page-size", "100"], connected as never);
   assert.ok(result.ok, JSON.stringify(result));
-  const data = result.data as { tokens: string[]; count: number; tools: Array<Record<string, unknown>> };
-  assert.deepEqual(data.tokens, ["hierarchy", "console", "screenshot"]);
-  assert.ok(data.count > 0);
-  for (const tool of data.tools) {
-    assert.deepEqual(Object.keys(tool).sort(), ["group", "name", "source", "summary"]);
-  }
+  const data = result.data as { pageInfo: { cursor: number; pageSize: number; total: number; nextCursor?: number }; tools: Array<Record<string, unknown>> };
+  assert.equal(data.pageInfo.cursor, 0);
+  assert.equal(data.pageInfo.pageSize, 100);
+  assert.equal(data.pageInfo.total, data.tools.length);
+  assert.equal(data.pageInfo.nextCursor, undefined);
+  for (const tool of data.tools) assert.deepEqual(Object.keys(tool).sort(), ["group", "name", "summary"]);
   const names = data.tools.map((tool) => tool.name as string);
+  assert.deepEqual(names, [...names].sort());
   assert.ok(names.includes("scene.hierarchy"));
   assert.ok(names.some((name) => name.includes("console")));
   assert.ok(names.some((name) => name.startsWith("screenshot.") || name === "camera.screenshot"));
@@ -55,30 +56,73 @@ test("tools search trims and filters tokens, matches every routing field case-in
 
   const multi = await execute(["tools", "search", "  NAME-HIT || summary-hit | DESCRIPTION-HIT | group-hit | "], runtime as never);
   assert.ok(multi.ok, JSON.stringify(multi));
-  assert.deepEqual((multi.data as { tokens: string[] }).tokens, ["name-hit", "summary-hit", "description-hit", "group-hit"]);
   const names = new Set((multi.data as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name));
   for (const name of ["fixture.name-hit", "fixture.summary", "fixture.description", "fixture.group"]) assert.ok(names.has(name), name);
 
   const single = await execute(["tools", "search", "  SuMmArY-Hit  "], runtime as never);
   assert.ok(single.ok, JSON.stringify(single));
-  assert.deepEqual((single.data as { tokens: string[]; tools: Array<{ name: string }> }).tokens, ["summary-hit"]);
   assert.deepEqual((single.data as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name), ["fixture.summary"]);
 
   const noMatch = await execute(["tools", "search", "definitely-absent-search-token"], runtime as never);
   assert.ok(noMatch.ok, JSON.stringify(noMatch));
-  assert.deepEqual(noMatch.data, { keyword: "definitely-absent-search-token", tokens: ["definitely-absent-search-token"], count: 0, tools: [] });
+  assert.deepEqual(noMatch.data, { pageInfo: { cursor: 0, pageSize: 20, total: 0 }, tools: [] });
 
   const empty = await execute(["tools", "search", "||  |"], runtime as never);
   assert.ok(!empty.ok);
   assert.equal(empty.error?.code, "TOOLS_SEARCH_KEYWORD_REQUIRED");
 });
 
-test("tools group list声明返回name是exact且group不是前缀", async () => {
-  const result = await execute(["tools", "group", "list", "scene"], connected as never);
+test("tools group list returns exact sorted names and omits true availability", async () => {
+  const result = await execute(["tools", "group", "list", "scene", "--page-size", "100"], connected as never);
   assert.ok(result.ok, JSON.stringify(result));
-  assert.deepEqual((result.data as { nameSemantics: unknown }).nameSemantics, { exact: true, groupPrefix: false });
-  const tools = (result.data as { tools: Array<{ name: string }> }).tools;
-  assert.ok(tools.every((tool) => !tool.name.startsWith("scene/")));
+  const data = result.data as { pageInfo: { total: number }; tools: Array<{ name: string; available?: false }> };
+  assert.equal(data.pageInfo.total, data.tools.length);
+  const names = data.tools.map((tool) => tool.name);
+  assert.deepEqual(names, [...names].sort());
+  assert.ok(data.tools.every((tool) => !tool.name.startsWith("scene/") && !Object.hasOwn(tool, "available")));
+});
+
+test("discovery pagination returns stable continuation pages and rejects invalid bounds", async () => {
+  const projectTools = Array.from({ length: 25 }, (_, index) => makeLiveTool({
+    name: `fixture.page-${String(index).padStart(2, "0")}`,
+    summary: `Page-hit ${index}.`,
+    description: "Pagination fixture.",
+    group: "page-fixture",
+    ...(index === 24 ? { available: false, unavailableReason: "fixture unavailable" } : {}),
+  }));
+  const runtime = { ...connected, projectTools, runtimeTools: [] };
+
+  const first = await execute(["tools", "search", "page-hit"], runtime as never);
+  assert.ok(first.ok, JSON.stringify(first));
+  const firstData = first.data as { pageInfo: { cursor: number; pageSize: number; total: number; nextCursor?: number }; tools: Array<{ name: string }> };
+  assert.deepEqual(firstData.pageInfo, { cursor: 0, pageSize: 20, total: 25, nextCursor: 20 });
+  assert.equal(firstData.tools.length, 20);
+
+  const second = await execute(["tools", "search", "page-hit", "--cursor", "20"], runtime as never);
+  assert.ok(second.ok, JSON.stringify(second));
+  const secondData = second.data as { pageInfo: { cursor: number; pageSize: number; total: number }; tools: Array<{ name: string }> };
+  assert.deepEqual(secondData.pageInfo, { cursor: 20, pageSize: 20, total: 25 });
+  assert.deepEqual(secondData.tools.map((tool) => tool.name), projectTools.slice(20).map((tool) => tool.name));
+
+  const group = await execute(["tools", "group", "list", "page-fixture", "--page-size", "10", "--cursor", "20"], runtime as never);
+  assert.ok(group.ok, JSON.stringify(group));
+  const groupData = group.data as { pageInfo: { cursor: number; pageSize: number; total: number }; tools: Array<{ name: string; available?: false }> };
+  assert.deepEqual(groupData.pageInfo, { cursor: 20, pageSize: 10, total: 25 });
+  assert.equal(groupData.tools.length, 5);
+  assert.equal(groupData.tools.at(-1)?.available, false);
+
+  const beyond = await execute(["tools", "search", "page-hit", "--cursor", "100"], runtime as never);
+  assert.ok(beyond.ok, JSON.stringify(beyond));
+  assert.deepEqual(beyond.data, { pageInfo: { cursor: 100, pageSize: 20, total: 25 }, tools: [] });
+
+  for (const argv of [
+    ["tools", "search", "page-hit", "--page-size", "101"],
+    ["tools", "group", "list", "page-fixture", "--cursor", "-1"],
+  ]) {
+    const invalid = await execute(argv, runtime as never);
+    assert.equal(invalid.ok, false, JSON.stringify(invalid));
+    if (!invalid.ok) assert.equal(invalid.error.code, "E_SCHEMA_INVALID");
+  }
 });
 
 test("target both keeps default editor availability when runtime is not ready", async () => {

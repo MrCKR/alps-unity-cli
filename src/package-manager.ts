@@ -447,19 +447,85 @@ export interface UnityCliPackageInstall {
   fileManifestPath: string;
 }
 
+export type PackageBridgeInspectionStatus = "installed" | "missing" | "damaged" | "drifted" | "conflict";
+
+export interface PackageAssemblyConflict {
+  assemblyFileName: string;
+  provider: string;
+  source: "Packages" | "PackageCache";
+  relativePath: string;
+  sha256: string;
+}
+
+export interface PackageAssemblyInspection {
+  status: "clear" | "conflict";
+  conflicts: PackageAssemblyConflict[];
+  allowedMatches: PackageAssemblyConflict[];
+  scannedDirectories: number;
+  scannedFiles: number;
+}
+
+export interface PackageBridgeInspection {
+  status: PackageBridgeInspectionStatus;
+  projectPath: string;
+  bridgePath: string;
+  sourceHash: string;
+  reasonCode?: string;
+  message?: string;
+  conflicts?: PackageAssemblyConflict[];
+  install?: UnityCliPackageInstall;
+}
+
+interface CanonicalPackageFile {
+  path: string;
+  size: number;
+  sha256: string;
+}
+
+interface CanonicalPackageFiles {
+  schemaVersion: number;
+  packageName: string;
+  packageVersion: string;
+  sourceHash: string;
+  files: CanonicalPackageFile[];
+}
+
+interface PackageAssemblyConflictPolicy {
+  protectedAssemblyFileNames: string[];
+  allowedPackageProviders: string[];
+  maxDirectories: number;
+  maxFiles: number;
+  maxConflicts: number;
+}
+
+interface PackageAssemblyClosureContract {
+  schemaVersion: number;
+  packageName: string;
+  conflictPolicy: PackageAssemblyConflictPolicy;
+}
+
+interface VerifiedCanonicalPackageSource {
+  packageManifest: { name: string; version: string };
+  sourceHash: string;
+  files: string[];
+}
+
 export interface PackageBridgeInstallRuntime {
   absoluteDeadlineMs?: number;
   publishRetryDelayMs?: number;
   renameDirectory?: typeof rename;
 }
 
-/** 在任何 init filesystem effect 前冻结 Bridge 源、目标与哈希。 */
+/** 在任何 init filesystem effect 前验证并冻结 canonical Bridge 源、目标与哈希。 */
 export async function preparePackageBridgeInstall(projectPath: string): Promise<UnityCliPackageInstallPlan> {
   const paths = packagePaths(projectPath);
   const sourcePath = packageSourcePath();
-  const packageManifest = await readPackageManifest(sourcePath);
+  const canonical = await verifyPackageSourceIntegrity(sourcePath);
+  const assemblyInspection = await inspectPackageAssemblyConflicts(paths.projectPath);
+  if (assemblyInspection.status === "conflict") throw packageAssemblyConflictError(assemblyInspection);
+  const packageManifest = canonical.packageManifest;
   const projectHash = await hashProjectPath(paths.projectPath);
-  const sourceHash = await hashSourcePath(sourcePath);
+  const sourceHash = canonical.sourceHash;
   const bridgePath = join(paths.projectPath, "Packages", bridgePackageName);
   return {
     manifestPath: paths.manifestPath,
@@ -610,9 +676,12 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
   const paths = packagePaths(projectPath);
   const sourcePath = packageSourcePath();
   const plan = prepared ?? await preparePackageBridgeInstall(paths.projectPath);
-  const packageManifest = await readPackageManifest(sourcePath);
-  // init plan 的 sourceHash 是 effect 前冻结证据；任何目标写入前必须重新散列并严格匹配。
-  const freshSourceHash = await hashSourcePath(sourcePath);
+  // init plan 的 sourceHash 是 effect 前冻结证据；任何目标写入前必须重验 canonical 清单与全部文件字节。
+  const canonical = await verifyPackageSourceIntegrity(sourcePath);
+  const assemblyInspection = await inspectPackageAssemblyConflicts(paths.projectPath);
+  if (assemblyInspection.status === "conflict") throw packageAssemblyConflictError(assemblyInspection);
+  const packageManifest = canonical.packageManifest;
+  const freshSourceHash = canonical.sourceHash;
   if (plan.sourceHash !== freshSourceHash || plan.packageVersion !== packageManifest.version) {
     throw new PackageManagerError("INIT_PLAN_STALE", "Bridge package source changed after init prevalidation.", ["Submit init again so it can build a fresh transaction plan."]);
   }
@@ -624,7 +693,7 @@ async function ensurePackageBridgeLocked(projectPath: string, prepared?: UnityCl
   const publishDeadlineMs = runtime.absoluteDeadlineMs ?? Date.now() + 5_000;
   const abandonedPreviousCount = await recoverAbandonedPackagePublish(targetPath, publishDeadlineMs, runtime);
   // Check existing installation: skip if same version & hash
-  const expectedManagedFiles = await listManagedSourceFiles(sourcePath);
+  const expectedManagedFiles = canonical.files;
   const expectedManagedFilesSha256 = managedFilesSha256(expectedManagedFiles);
   const targetExists = await directoryExists(targetPath);
   // 包目录不存在时 metadata 只是孤立残留；普通 init 可用当前完整投影替换它。
@@ -860,7 +929,8 @@ async function verifyCurrentPackageBridge(projectPath: string, code: string, nex
   const { packageManifest, installMetadata } = await readInstalledPackageBridge(paths.projectPath, code, nextActions);
   const projectHash = await hashProjectPath(paths.projectPath);
   const sourcePath = packageSourcePath();
-  const sourceHash = await hashSourcePath(sourcePath);
+  const canonical = await verifyPackageSourceIntegrity(sourcePath);
+  const sourceHash = canonical.sourceHash;
   if (installMetadata.packageVersion !== packageManifest.version || installMetadata.sourceHash !== sourceHash
     || installMetadata.projectHash !== projectHash || installMetadata.cliCompatibilityRange !== cliCompatibilityRange)
     throw new PackageManagerError(code, `${bridgePackageName} install metadata does not match the current project and bundled source.`, nextActions);
@@ -870,8 +940,76 @@ async function verifyCurrentPackageBridge(projectPath: string, code: string, nex
   return { paths, targetPath, installMetadataPath, fileManifestPath, packageManifest, installMetadata, projectHash, sourceHash, managedFiles };
 }
 
+/** 只读检查 Bridge 投影，供 `init package --check` 区分缺失、损坏与版本漂移。 */
+export async function inspectPackageBridge(projectPath: string): Promise<PackageBridgeInspection> {
+  const paths = packagePaths(projectPath);
+  const sourcePath = packageSourcePath();
+  const canonical = await verifyPackageSourceIntegrity(sourcePath);
+  const assemblyInspection = await inspectPackageAssemblyConflicts(paths.projectPath);
+  const targetPath = join(paths.projectPath, "Packages", bridgePackageName);
+  if (assemblyInspection.status === "conflict") {
+    return { status: "conflict", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_ASSEMBLY_CONFLICT", message: `${bridgePackageName} is blocked by a protected assembly name from another Package.`, conflicts: assemblyInspection.conflicts };
+  }
+  if (!await directoryExists(targetPath)) {
+    return { status: "missing", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_NOT_INSTALLED", message: `${bridgePackageName} is not installed.` };
+  }
+
+  const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
+  const fileManifestPath = join(targetPath, fileManifestFileName);
+  let packageManifest: { name: string; version: string };
+  let installMetadata: UnityCliInstallMetadata | undefined;
+  try {
+    packageManifest = await readPackageManifest(targetPath);
+    installMetadata = await readOptionalInstallMetadata(installMetadataPath);
+  } catch (error) {
+    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: error instanceof Error ? error.message : String(error) };
+  }
+  if (!installMetadata || installMetadata.packageName !== bridgePackageName || installMetadata.installMode !== "copy") {
+    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} install metadata is missing or does not describe a managed copy.` };
+  }
+
+  const projectHash = await hashProjectPath(paths.projectPath);
+  if (packageManifest.version !== canonical.packageManifest.version || installMetadata.packageVersion !== canonical.packageManifest.version
+    || installMetadata.sourceHash !== canonical.sourceHash || installMetadata.cliCompatibilityRange !== cliCompatibilityRange) {
+    return { status: "drifted", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DRIFTED", message: `${bridgePackageName} version or source hash differs from the bundled canonical package.` };
+  }
+  if (installMetadata.projectHash !== projectHash) {
+    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} install metadata belongs to a different canonical project.` };
+  }
+  try {
+    await readVerifiedManagedFileList(fileManifestPath, installMetadata.managedFilesSha256);
+    if (!await managedPackageFilesMatch(sourcePath, targetPath, fileManifestPath)) {
+      return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: `${bridgePackageName} managed files are missing or do not match canonical bytes.` };
+    }
+  } catch (error) {
+    return { status: "damaged", projectPath: paths.projectPath, bridgePath: targetPath, sourceHash: canonical.sourceHash, reasonCode: "PACKAGE_INSTALL_DAMAGED", message: error instanceof Error ? error.message : String(error) };
+  }
+
+  return {
+    status: "installed",
+    projectPath: paths.projectPath,
+    bridgePath: targetPath,
+    sourceHash: canonical.sourceHash,
+    install: {
+      manifestPath: paths.manifestPath,
+      bridgePath: targetPath,
+      dependencyName: bridgePackageName,
+      packageVersion: canonical.packageManifest.version,
+      sourceHash: canonical.sourceHash,
+      projectHash,
+      installMode: "copy",
+      installTime: installMetadata.installTime,
+      cliCompatibilityRange,
+      installMetadataPath,
+      fileManifestPath,
+    },
+  };
+}
+
 export async function checkPackageBridge(projectPath: string): Promise<UnityCliPackageInstall> {
-  const verified = await verifyCurrentPackageBridge(projectPath, "INIT_CHECK_FAILED", ["Run unitycli init --project <path> to restore the bundled package projection."]);
+  const assemblyInspection = await inspectPackageAssemblyConflicts(projectPath);
+  if (assemblyInspection.status === "conflict") throw packageAssemblyConflictError(assemblyInspection);
+  const verified = await verifyCurrentPackageBridge(projectPath, "INIT_CHECK_FAILED", ["Run unitycli init package --project <UnityProject> to restore the bundled package projection."]);
   const { paths, targetPath, installMetadataPath, fileManifestPath, packageManifest, installMetadata, projectHash, sourceHash } = verified;
   return {
     manifestPath: paths.manifestPath,
@@ -895,7 +1033,7 @@ export async function removePackageBridge(projectPath: string, options: RemovePa
 }
 
 async function removePackageBridgeLocked(projectPath: string, options: RemovePackageBridgeOptions = {}): Promise<UnityCliPackageRemoval> {
-  const verificationActions = ["Run unitycli init --project <path> to restore a fully verified bundled package before removal."];
+  const verificationActions = ["Run unitycli init package --project <UnityProject> to restore a fully verified bundled package before removal."];
   const verified = await verifyCurrentPackageBridge(projectPath, "BRIDGE_PACKAGE_REMOVE_UNVERIFIED", verificationActions);
   const { paths, targetPath, installMetadataPath, fileManifestPath, packageManifest, installMetadata, managedFiles } = verified;
   const plannedEffects: Array<Record<string, unknown>> = [
@@ -1296,7 +1434,8 @@ export class PackageManagerError extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly nextActions: string[] = []
+    readonly nextActions: string[] = [],
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -1304,6 +1443,159 @@ export class PackageManagerError extends Error {
 
 function packageSourcePath(): string {
   return resolve(fileURLToPath(new URL("../unitypkg", import.meta.url)));
+}
+
+function packageFilesContractPath(): string {
+  return resolve(fileURLToPath(new URL("../contracts/package-files.json", import.meta.url)));
+}
+
+function packageAssemblyClosureContractPath(): string {
+  return resolve(fileURLToPath(new URL("../contracts/package-assembly-closure.json", import.meta.url)));
+}
+
+function packageSourceIntegrityError(detail: string): PackageManagerError {
+  return new PackageManagerError(
+    "PACKAGE_SOURCE_INTEGRITY_FAILED",
+    `Bundled ${bridgePackageName} source integrity check failed: ${detail}`,
+    ["Reinstall or upgrade @alpsckr/unitycli; do not copy package files or DLLs from a Unity installation or another project."]
+  );
+}
+
+async function readPackageAssemblyConflictPolicy(): Promise<PackageAssemblyConflictPolicy> {
+  try {
+    const contract = JSON.parse(stripJsonBom(await readFile(packageAssemblyClosureContractPath(), "utf8"))) as Partial<PackageAssemblyClosureContract>;
+    const policy = contract.conflictPolicy;
+    if (contract.schemaVersion !== 1 || contract.packageName !== bridgePackageName || !policy
+      || !Array.isArray(policy.protectedAssemblyFileNames) || policy.protectedAssemblyFileNames.length === 0
+      || !policy.protectedAssemblyFileNames.every((item) => typeof item === "string" && item.toLowerCase().endsWith(".dll"))
+      || !Array.isArray(policy.allowedPackageProviders) || !policy.allowedPackageProviders.every((item) => typeof item === "string" && item.length > 0)
+      || !Number.isSafeInteger(policy.maxDirectories) || policy.maxDirectories <= 0
+      || !Number.isSafeInteger(policy.maxFiles) || policy.maxFiles <= 0
+      || !Number.isSafeInteger(policy.maxConflicts) || policy.maxConflicts <= 0) {
+      throw new Error("assembly conflict policy schema is invalid");
+    }
+    return policy;
+  } catch (error) {
+    throw packageSourceIntegrityError(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function packageCacheProvider(directoryName: string): string {
+  const versionSeparator = directoryName.lastIndexOf("@");
+  return versionSeparator > 0 ? directoryName.slice(0, versionSeparator) : directoryName;
+}
+
+function packageAssemblyScanError(code: string, message: string, details: Record<string, unknown>): PackageManagerError {
+  return new PackageManagerError(code, message, ["Inspect the reported package path, then remove or update the conflicting package before retrying init."], details);
+}
+
+/** 只读扫描项目 Package roots 中会遮蔽 UnityCLI 显式预编译引用的同名程序集。 */
+export async function inspectPackageAssemblyConflicts(projectPath: string): Promise<PackageAssemblyInspection> {
+  const projectRoot = packagePaths(projectPath).projectPath;
+  const policy = await readPackageAssemblyConflictPolicy();
+  const protectedNames = new Set(policy.protectedAssemblyFileNames.map((item) => item.toLowerCase()));
+  const allowedProviders = new Set(policy.allowedPackageProviders.map((item) => item.toLowerCase()));
+  const conflicts: PackageAssemblyConflict[] = [];
+  const allowedMatches: PackageAssemblyConflict[] = [];
+  let scannedDirectories = 0;
+  let scannedFiles = 0;
+  const queue: Array<{ directory: string; provider: string; source: "Packages" | "PackageCache" }> = [];
+
+  const addPackageRoots = async (root: string, source: "Packages" | "PackageCache"): Promise<void> => {
+    let entries;
+    try { entries = await readdir(root, { withFileTypes: true }); }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR") return;
+      throw error;
+    }
+    for (const entry of entries.sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)) {
+      if (entry.isSymbolicLink()) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_UNSAFE", "Package assembly scan found a linked package root.", { path: posix.normalize(relative(projectRoot, join(root, entry.name)).split("\\").join("/")) });
+      if (!entry.isDirectory()) continue;
+      const provider = source === "Packages" ? entry.name : packageCacheProvider(entry.name);
+      if (provider.toLowerCase() === bridgePackageName) continue;
+      queue.push({ directory: join(root, entry.name), provider, source });
+    }
+  };
+
+  await addPackageRoots(join(projectRoot, "Packages"), "Packages");
+  await addPackageRoots(join(projectRoot, "Library", "PackageCache"), "PackageCache");
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    scannedDirectories += 1;
+    if (scannedDirectories > policy.maxDirectories) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_LIMIT", "Package assembly scan exceeded its directory limit.", { scannedDirectories, scannedFiles });
+    const entries = (await readdir(current.directory, { withFileTypes: true })).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+    for (const entry of entries) {
+      const absolute = join(current.directory, entry.name);
+      const relativePath = posix.normalize(relative(projectRoot, absolute).split("\\").join("/"));
+      if (entry.isSymbolicLink()) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_UNSAFE", "Package assembly scan found a linked entry.", { path: relativePath, provider: current.provider });
+      if (entry.isDirectory()) { queue.push({ ...current, directory: absolute }); continue; }
+      if (!entry.isFile()) continue;
+      scannedFiles += 1;
+      if (scannedFiles > policy.maxFiles) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_LIMIT", "Package assembly scan exceeded its file limit.", { scannedDirectories, scannedFiles });
+      if (!protectedNames.has(entry.name.toLowerCase())) continue;
+      const match: PackageAssemblyConflict = {
+        assemblyFileName: entry.name,
+        provider: current.provider,
+        source: current.source,
+        relativePath,
+        sha256: createHash("sha256").update(await readFile(absolute)).digest("hex"),
+      };
+      if (allowedProviders.has(current.provider.toLowerCase())) allowedMatches.push(match);
+      else {
+        conflicts.push(match);
+        if (conflicts.length >= policy.maxConflicts) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_LIMIT", "Package assembly scan reached its conflict limit.", { scannedDirectories, scannedFiles, conflicts });
+      }
+    }
+  }
+  return { status: conflicts.length ? "conflict" : "clear", conflicts, allowedMatches, scannedDirectories, scannedFiles };
+}
+
+function packageAssemblyConflictError(inspection: PackageAssemblyInspection): PackageManagerError {
+  return new PackageManagerError(
+    "PACKAGE_ASSEMBLY_CONFLICT",
+    `${bridgePackageName} cannot be installed because another Package provides a protected assembly name.`,
+    ["Remove or update the reported package, or use the official allowed provider, then rerun init package."],
+    { conflicts: inspection.conflicts, allowedMatches: inspection.allowedMatches }
+  );
+}
+
+/** 安装源必须逐文件匹配 npm artifact 内固定清单；任何异常都在目标 effect 前 fail closed。 */
+export async function verifyPackageSourceIntegrity(sourcePath: string, contractPath = packageFilesContractPath()): Promise<VerifiedCanonicalPackageSource> {
+  try {
+    const contract = JSON.parse(stripJsonBom(await readFile(contractPath, "utf8"))) as Partial<CanonicalPackageFiles>;
+    const packageManifest = await readPackageManifest(sourcePath);
+    if (contract.schemaVersion !== 1 || contract.packageName !== bridgePackageName || contract.packageName !== packageManifest.name
+      || contract.packageVersion !== packageManifest.version || !isSha256(contract.sourceHash) || !Array.isArray(contract.files) || contract.files.length === 0) {
+      throw packageSourceIntegrityError("canonical manifest identity or schema is invalid");
+    }
+    const expectedFiles = await listManagedSourceFiles(sourcePath);
+    const identities = new Set<string>();
+    const manifestFiles: string[] = [];
+    for (const rawEntry of contract.files as unknown[]) {
+      if (!rawEntry || typeof rawEntry !== "object") throw packageSourceIntegrityError("canonical manifest contains a non-object file entry");
+      const entry = rawEntry as Partial<CanonicalPackageFile>;
+      assertManagedRelativeFilePath(entry.path, contractPath);
+      if (!Number.isSafeInteger(entry.size) || (entry.size as number) < 0 || !isSha256(entry.sha256))
+        throw packageSourceIntegrityError(`canonical manifest entry is invalid: ${entry.path}`);
+      const identity = entry.path.toLowerCase();
+      if (identities.has(identity)) throw packageSourceIntegrityError(`canonical manifest contains a duplicate path: ${entry.path}`);
+      identities.add(identity);
+      manifestFiles.push(entry.path);
+      const content = await readFile(join(sourcePath, entry.path));
+      const sha256 = createHash("sha256").update(content).digest("hex");
+      if (content.length !== entry.size || sha256 !== entry.sha256)
+        throw packageSourceIntegrityError(`canonical file bytes do not match: ${entry.path}`);
+    }
+    if (manifestFiles.length !== expectedFiles.length || manifestFiles.some((file, index) => file !== expectedFiles[index]))
+      throw packageSourceIntegrityError("canonical file set does not match the bundled package directory");
+    const sourceHash = await hashSourcePath(sourcePath);
+    if (sourceHash !== contract.sourceHash) throw packageSourceIntegrityError("canonical package tree hash does not match");
+    return { packageManifest, sourceHash, files: manifestFiles };
+  } catch (error) {
+    if (error instanceof PackageManagerError && error.code === "PACKAGE_SOURCE_INTEGRITY_FAILED") throw error;
+    throw packageSourceIntegrityError(error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** 读取并确认项目内 Bridge 包是 init 托管的 copy-mode 安装。 */
@@ -1412,7 +1704,7 @@ async function readInstallMetadata(path: string): Promise<UnityCliInstallMetadat
   try {
     const metadata = JSON.parse(stripJsonBom(await readFile(path, "utf8"))) as Partial<UnityCliInstallMetadata>;
     if (typeof metadata.packageName !== "string" || typeof metadata.packageVersion !== "string" || !isSha256(metadata.sourceHash) || !isSha256(metadata.managedFilesSha256) || typeof metadata.projectHash !== "string" || metadata.installMode !== "copy" || typeof metadata.installTime !== "string" || typeof metadata.cliCompatibilityRange !== "string") {
-      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid: ${path}`, ["Run unitycli init --project <path> to refresh install metadata."]);
+      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid: ${path}`, ["Run unitycli init package --project <UnityProject> to refresh install metadata."]);
     }
     return metadata as UnityCliInstallMetadata;
   } catch (error) {
@@ -1421,10 +1713,10 @@ async function readInstallMetadata(path: string): Promise<UnityCliInstallMetadat
     }
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "ENOENT") {
-      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata not found: ${path}`, ["Run unitycli init --project <path> to create install metadata."]);
+      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata not found: ${path}`, ["Run unitycli init package --project <UnityProject> to create install metadata."]);
     }
     if (error instanceof SyntaxError) {
-      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid JSON: ${path}`, ["Run unitycli init --project <path> to refresh install metadata."]);
+      throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid JSON: ${path}`, ["Run unitycli init package --project <UnityProject> to refresh install metadata."]);
     }
     throw error;
   }
@@ -1661,10 +1953,14 @@ async function managedPackageFilesMatch(sourcePath: string, targetPath: string, 
 async function listManagedSourceFiles(sourcePath: string): Promise<string[]> {
   const files: string[] = [];
   const visit = async (dir: string): Promise<void> => {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const entries = (await readdir(dir, { withFileTypes: true })).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+    for (const entry of entries) {
       const fullPath = join(dir, entry.name);
+      const relPath = posix.normalize(relative(sourcePath, fullPath).split("\\").join("/"));
+      if (entry.isSymbolicLink()) throw packageSourceIntegrityError(`canonical package source contains a link: ${relPath}`);
       if (entry.isDirectory()) await visit(fullPath);
-      else if (entry.isFile()) files.push(posix.normalize(relative(sourcePath, fullPath).split("\\").join("/")));
+      else if (entry.isFile()) files.push(relPath);
+      else throw packageSourceIntegrityError(`canonical package source contains an unsupported entry: ${relPath}`);
     }
   };
   await visit(sourcePath);

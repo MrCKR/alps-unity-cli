@@ -7,8 +7,9 @@ import {
   computeRequestDigestV1,
   freezeRequest,
 } from "../src/bridge/session-supervisor.js";
+import type { RootAdmissionLease } from "../src/bridge/admission.js";
 import { EditorBlockerObserver } from "../src/editor-blocker-observer.js";
-import type { InstanceSelection, UnityInstance, UnityInstanceStatus } from "../src/instances.js";
+import { InstanceRegistryError, type InstanceSelection, type UnityInstance, type UnityInstanceStatus } from "../src/instances.js";
 
 const INSTANCE_ID = `unity-${"a".repeat(64)}`;
 const SESSION_ID = `session-${"b".repeat(64)}`;
@@ -493,6 +494,76 @@ test("pre-registry selector failure reports unique process modal before dispatch
   assert.equal(posts, 0);
 });
 
+test("unique starting Unity process waits for its first ready registry before one POST", async () => {
+  let now = 40_000;
+  let selections = 0;
+  let posts = 0;
+  const offline = selection("offline", 1);
+  offline.instance.sessions = [];
+  offline.instance.activeSession = undefined;
+  const supervisor = new SessionSupervisor({ instance: "C:\\repo\\project" }, { dataDir: "test" }, {
+    now: () => now,
+    sleep: async (ms) => { now += ms; },
+    select: async () => {
+      selections += 1;
+      if (selections <= 2) throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "not ready");
+      return selection("ready", 2);
+    },
+    selectObservation: async () => offline,
+    observer: observer("observed-empty"),
+    post: async (_binding, request) => {
+      posts += 1;
+      return { response: { ok: true, requestId: request.payload.requestId, data: { ready: true } }, attestation: attestation(2) };
+    },
+  });
+  const result = await supervisor.read({ requestId: "req_wait_first_registry", command: "project-tool.run", input: {}, timeoutMs: 1_000 });
+  assert.equal(result.ok, true);
+  assert.equal(selections, 3);
+  assert.equal(posts, 1);
+  assert.equal(now, 40_100);
+});
+
+test("starting Unity registry wait stops at the original deadline without POST", async () => {
+  let now = 41_000;
+  let posts = 0;
+  const offline = selection("offline", 1);
+  offline.instance.sessions = [];
+  offline.instance.activeSession = undefined;
+  const supervisor = new SessionSupervisor({ instance: "C:\\repo\\project" }, { dataDir: "test" }, {
+    now: () => now,
+    sleep: async (ms) => { now += ms; },
+    select: async () => { throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "not ready"); },
+    selectObservation: async () => offline,
+    observer: observer("observed-empty"),
+    post: async () => { posts += 1; throw new Error("must not post"); },
+  });
+  await assert.rejects(
+    supervisor.read({ requestId: "req_wait_first_registry_timeout", command: "project-tool.run", input: {}, timeoutMs: 300 }),
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_UNITY_TRANSITION_TIMEOUT",
+  );
+  assert.equal(posts, 0);
+  assert.ok(now <= 41_300);
+});
+
+test("missing registry does not wait when no matching Unity process is running", async () => {
+  let sleeps = 0;
+  const offline = selection("offline", 1);
+  offline.instance.sessions = [];
+  offline.instance.activeSession = undefined;
+  const supervisor = new SessionSupervisor({ instance: "C:\\repo\\project" }, { dataDir: "test" }, {
+    now: () => 42_000,
+    sleep: async () => { sleeps += 1; },
+    select: async () => { throw new InstanceRegistryError("E_INSTANCE_NOT_RUNNING", "not running"); },
+    selectObservation: async () => offline,
+    observer: observer("offline"),
+  });
+  await assert.rejects(
+    supervisor.read({ requestId: "req_no_process_no_wait", command: "project-tool.run", input: {}, timeoutMs: 500 }),
+    (error: unknown) => error instanceof InstanceRegistryError && error.code === "E_INSTANCE_NOT_RUNNING",
+  );
+  assert.equal(sleeps, 0);
+});
+
 test("observeNow binds and posts once during a transitioning session without waiting or rebinding", async () => {
   let sleeps = 0;
   let posts = 0;
@@ -694,6 +765,59 @@ test("root admission polls serially with jitter and grants a fresh full executio
   assert.equal(now, 1_180);
   assert.equal(admission.executionAbsoluteDeadlineMs, 2_180);
   assert.equal(admission.consumed, false);
+});
+
+test("explicit pre-effect admission rejection polls reacquire until capacity is available", async () => {
+  let now = 3_000;
+  let acquireCalls = 0;
+  let posts = 0;
+  const sleeps: number[] = [];
+  const admission: RootAdmissionLease = {
+    requestId: "req_reacquire_capacity",
+    command: "project.info",
+    rootFingerprint: "f".repeat(64),
+    completionContractIdentity: "atomic-read-v1",
+    target: "editor",
+    instanceId: INSTANCE_ID,
+    canonicalProjectPath: "c:\\repo\\project",
+    sessionId: SESSION_ID,
+    token: "a".repeat(64),
+    consumed: false,
+    grantExpiresAtMs: 3_100,
+    executionAbsoluteDeadlineMs: 4_000,
+    injected: false,
+  };
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => now,
+    random: () => 0,
+    sleep: async (ms) => { sleeps.push(ms); now += ms; },
+    select: async () => selection("ready", 1),
+    acquire: async () => {
+      acquireCalls += 1;
+      return {
+        granted: acquireCalls === 3,
+        ...(acquireCalls === 3 ? { token: "c".repeat(64), grantExpiresInMs: 2_000 } : { grantExpiresInMs: 0 }),
+        retryAfterMs: 100,
+        attestation: attestation(1),
+      };
+    },
+    post: async (_binding, request, _remainingMs, requestAdmission) => {
+      posts += 1;
+      if (posts === 1) return {
+        response: { ok: false, requestId: request.payload.requestId, error: { code: "E_ADMISSION_IDENTITY_MISMATCH", message: "expired", nextActions: [], transient: false, retryAfterMs: 0 } },
+        attestation: attestation(1),
+      };
+      assert.equal(requestAdmission?.token, "c".repeat(64));
+      return { response: { ok: true, requestId: request.payload.requestId, data: { done: true } }, attestation: attestation(1) };
+    },
+  });
+  const result = await supervisor.read({ requestId: admission.requestId, command: "project-tool.run", input: {}, absoluteDeadlineMs: 4_000, rootAdmission: admission });
+  assert.equal(result.ok, true);
+  assert.equal(posts, 2);
+  assert.equal(acquireCalls, 3);
+  assert.deepEqual(sleeps, [80, 80]);
+  assert.equal(admission.executionAbsoluteDeadlineMs, 4_000);
+  assert.equal(admission.grantExpiresAtMs, 5_160);
 });
 
 test("root admission deadline returns effect-before busy without a business POST", async () => {

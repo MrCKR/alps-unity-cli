@@ -39,6 +39,19 @@ test("governed manifest declares ownership, runtime projection, contracts, and m
   assert.ok(Object.values(manifest.evidence_status).filter((value) => value === "missing evidence").length >= 4);
 });
 
+test("public Skill delegates installation to the final self-contained init protocol", async () => {
+  const skill = await readFile(join(skillRoot, "SKILL.md"), "utf8");
+  const operation = await readFile(join(skillRoot, "references", "operation-protocol.md"), "utf8");
+  for (const required of ["unitycli init help", "init discover", "init package --project <UnityProject>", "init skill --agent <.agents|claude>", "--scope <workspace|user>", "--workspace <path>", "--check"]) {
+    assert.match(`${skill}\n${operation}`, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(skill, /向用户询问.*agent、scope.*workspace/);
+  assert.match(skill, /逐个严格串行安装/);
+  assert.match(skill, /第一次非预期CLI失败或业务check失败立即停止/);
+  assert.match(skill, /不得启动、关闭、重启或终止Unity Editor/);
+  assert.doesNotMatch(`${skill}\n${operation}`, /pkg-only|skill-only|\.pi\/skills|init --check|init --project/);
+});
+
 test("agent interface is broad-triggered, PowerShell-local, and network-denied", async () => {
   const text = await readFile(join(skillRoot, "agents", "interface.yaml"), "utf8");
   assert.match(text, /display_name: "UnityCLI"/);
@@ -70,22 +83,26 @@ test("file-backed output evals and governed reports are internally reachable", a
   assert.match(scorecard, /missing evidence/i);
 });
 
-test("product installer projects only the five runtime files", async () => {
+test("product installer projects byte-identical five-file runtime bundles for both hosts", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-governed-install-"));
   const sourcePath = join(skillRoot, "SKILL.md");
+  const expected = [
+    "SKILL.md",
+    "references/custom-tools.md",
+    "references/feedback.md",
+    "references/operation-protocol.md",
+    "scripts/record-feedback.ps1",
+  ];
   try {
     const registry = new AgentSkillInstallerRegistry();
-    await registry.installForAgents("pi", sourcePath, project);
-    const target = join(project, ".pi", "skills", "unitycli");
-    assert.deepEqual(await listFiles(target), [
-      "SKILL.md",
-      "references/custom-tools.md",
-      "references/feedback.md",
-      "references/operation-protocol.md",
-      "scripts/record-feedback.ps1",
-    ]);
-    await assert.rejects(access(join(target, "manifest.json")));
-    await assert.rejects(access(join(target, "reports")));
+    for (const agent of [".agents", "claude"] as const) {
+      await registry.installForAgents(agent, sourcePath, project);
+      const target = join(project, agent === ".agents" ? ".agents" : ".claude", "skills", "unitycli");
+      assert.deepEqual(await listFiles(target), expected);
+      for (const file of expected) assert.deepEqual(await readFile(join(target, file)), await readFile(join(skillRoot, file)), `${agent}:${file}`);
+      await assert.rejects(access(join(target, "manifest.json")));
+      await assert.rejects(access(join(target, "reports")));
+    }
   } finally {
     await rm(project, { recursive: true, force: true });
   }

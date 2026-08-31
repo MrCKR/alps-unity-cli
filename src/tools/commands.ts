@@ -21,13 +21,13 @@ export async function handleToolsCommand(
   }
   if (command === "group") {
     if (positional[0] === "list") {
-      return dispatchTool("tools.group-list", positional[1], flags, runtime, requestId, { group: positional[1] });
+      return dispatchTool("tools.group-list", positional[1], flags, runtime, requestId, { group: positional[1], ...pageSeed(flags) });
     }
     return dispatchTool("tools.group", undefined, flags, runtime, requestId);
   }
   if (command === "search") {
     const keyword = positional[0] ?? getString(flags, "keyword") ?? getString(flags, "query");
-    return dispatchTool("tools.search", undefined, flags, runtime, requestId, { keyword });
+    return dispatchTool("tools.search", undefined, flags, runtime, requestId, { keyword, ...pageSeed(flags) });
   }
   if (command === "describe") {
     const name = positional[0] ?? getString(flags, "name") ?? getString(flags, "tool");
@@ -46,13 +46,21 @@ function rejectUnknownToolFlags(
   flags: Record<string, string | boolean>,
   requestId: string
 ): CliResult | undefined {
-  const common = ["instance", "raw"];
+  const common = ["instance", "pretty"];
+  const pagedDiscovery = command === "search" || command === "group" && positional[0] === "list";
   const allowed = command === "run"
     ? [...common, "input", "input-file", "stdin", "dry-run", "timeout-ms", "artifact-dir", "runtime"]
-    : common;
+    : pagedDiscovery ? [...common, "page-size", "cursor"] : common;
   const unknown = Object.keys(flags).find((flag) => !allowed.includes(flag));
   if (!unknown) return undefined;
   return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for tools ${command ?? ""}: --${unknown}.`, [
     command === "run" ? "Put business fields inside --input <json>." : "Run unitycli --help for the supported options."
   ], { option: `--${unknown}`, command: `tools ${command ?? ""}`.trim(), positional });
+}
+
+function pageSeed(flags: Record<string, string | boolean>): Record<string, unknown> {
+  return {
+    ...(flags["page-size"] !== undefined ? { pageSize: Number(flags["page-size"]) } : {}),
+    ...(flags.cursor !== undefined ? { cursor: Number(flags.cursor) } : {}),
+  };
 }

@@ -60,22 +60,34 @@ namespace UnityCli
             // pulse只证明EditorApplication.update最近推进；具体请求仍由TryStart证明开始。
             Volatile.Write(ref mainThreadPulseTimestamp, System.Diagnostics.Stopwatch.GetTimestamp());
             Interlocked.Increment(ref mainThreadPulseSequence);
-            cachedIsCompiling = EditorApplication.isCompiling;
-            cachedIsUpdating = EditorApplication.isUpdating;
+            var listenerWasStarted = started;
+            var isCompiling = EditorApplication.isCompiling;
+            var isUpdating = EditorApplication.isUpdating;
+            var isBuilding = BuildPipeline.isBuildingPlayer;
+            var isPlayModeChanging = IsPlayModeChanging();
+            var lifecycleChanged = cachedIsCompiling != isCompiling
+                || cachedIsUpdating != isUpdating
+                || cachedIsBuilding != isBuilding
+                || cachedIsPlayModeChanging != isPlayModeChanging;
+            cachedIsCompiling = isCompiling;
+            cachedIsUpdating = isUpdating;
             cachedIsPlayingOrWillChangePlaymode = EditorApplication.isPlayingOrWillChangePlaymode;
             cachedIsPlaying = EditorApplication.isPlaying;
-            cachedIsBuilding = BuildPipeline.isBuildingPlayer;
-            cachedIsPlayModeChanging = IsPlayModeChanging();
+            cachedIsBuilding = isBuilding;
+            cachedIsPlayModeChanging = isPlayModeChanging;
             AdvanceBridgeStartup();
             UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
             UnityCliWaitScheduler.Tick();
 
-            // 生命周期变化会即时登记；这里仅低频刷新，修复漏事件并更新诊断快照。
-            if (started && EditorApplication.timeSinceStartup >= nextRegistryRefreshAt)
+            // 新listener先保留至少一个主线程update的transitioning状态；后续生命周期变化即时发布，30秒刷新只修复漏事件。
+            if (listenerWasStarted && started
+                && (readyPublicationPending || lifecycleChanged || EditorApplication.timeSinceStartup >= nextRegistryRefreshAt))
             {
+                readyPublicationPending = false;
                 RegisterInstance("ready");
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
             }
+            TickInstancePublicationRetry();
             var startedThisTick = 0;
             while (startedThisTick < MaxWorkStartsPerTick)
             {

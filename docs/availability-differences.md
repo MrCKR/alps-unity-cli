@@ -80,7 +80,7 @@ Unity API版本门禁不从major版本猜测。Tool仍在当前实例catalog中�
 
 ## Domain Reload
 
-Domain reload期间，Registry v3 lifecycle将实例归约为`transitioning`，listener generation随后交接；Health v3中该generation的首个Unity主线程pulse才允许归约为`ready`。系统不读取固定三分钟或其他deadline marker。session supervisor只在同一`editorSessionId`内续接完全相同的请求；首次mutation POST后若session改变，不向新session重投，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。调用方先读取业务状态，再决定是否提交全新请求。
+Domain reload期间，Registry v3 lifecycle将实例归约为`transitioning`，listener generation随后交接；Health v3中该generation的首个Unity主线程pulse才允许归约为`ready`。CLI在原命令截止时间内等待首次记录或新ready generation，不读取固定时长marker，也不要求AI轮询。session supervisor只在同一`editorSessionId`内续接完全相同的请求；首次mutation POST后若session改变，不向新session重投，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。调用方先读取业务状态，再决定是否提交全新请求。
 
 ## AI Agent 处理方式
 

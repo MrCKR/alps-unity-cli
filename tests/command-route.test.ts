@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { BridgeRequest } from "../src/bridge/index.js";
 import { execute } from "../src/cli.js";
-import type { ToolMetadata } from "../src/tools/metadata/index.js";
+import { builtinToolMetadata, type ToolMetadata } from "../src/tools/metadata/index.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
@@ -75,7 +75,7 @@ test("command help结构化声明native优先、attribute显式名与零映射",
     similarNameMapping: false,
   });
   assert.deepEqual((result.data as { catalogDiscovery: unknown }).catalogDiscovery, {
-    commandListing: "unitycli command --project-path <path>",
+    commandListing: "unitycli command --project-path <path> [--page-size <n>] [--cursor <n>]",
     toolSearch: "unitycli tools search <k1|k2|...> --instance <id|projectPath|alias>",
     toolDescribe: "unitycli tools describe <tool> --instance <id|projectPath|alias>",
   });
@@ -90,14 +90,45 @@ test("command help复用精简Tool descriptor且不公开结果schema", async ()
     assert.equal(Object.hasOwn(tool, field), false, field);
 });
 
-test("command省略name时投影同一live Tool catalog", async () => {
-  const result = await execute(["command"], runtimeFor([attributeEvalTool()], []) as never);
+test("command省略name时投影分页路由摘要", async () => {
+  const result = await execute(["command", "--page-size", "100"], runtimeFor([attributeEvalTool()], []) as never);
   assert.ok(result.ok, JSON.stringify(result));
-  const commands = (result.data as { commands: Array<Record<string, unknown>> }).commands;
-  const descriptor = commands.find((item) => item.name === "eval");
-  assert.equal(descriptor?.name, "eval");
-  assert.equal(descriptor?.group, "UnityPipeline");
-  assert.deepEqual(descriptor?.parameters, ["code", "count", "pdb", "ratio", "tags", "config", "payload", "display_name", "nullable"]);
+  const data = result.data as { commands: Array<Record<string, unknown>>; pageInfo: { cursor: number; pageSize: number; total: number; nextCursor?: number } };
+  assert.equal(data.pageInfo.cursor, 0);
+  assert.equal(data.pageInfo.pageSize, 100);
+  assert.equal(data.pageInfo.total, builtinToolMetadata().length + 1);
+  assert.equal(data.pageInfo.nextCursor, undefined);
+  assert.deepEqual(data.commands.find((item) => item.name === "eval"), { name: "eval", summary: "Evaluate a test command.", group: "UnityPipeline" });
+});
+
+test("command listing paginates stable summaries and validates bounds", async () => {
+  const tools = Array.from({ length: 25 }, (_, index) => makeLiveTool({
+    name: `fixture.command-${String(index).padStart(2, "0")}`,
+    summary: `Command page ${index}.`,
+    description: "Command pagination fixture.",
+    group: "fixture",
+    ...(index === 24 ? { available: false, unavailableReason: "fixture unavailable" } : {}),
+  }));
+  const runtime = runtimeFor(tools, []);
+  const expectedNames = [...builtinToolMetadata().map((tool) => tool.name), ...tools.map((tool) => tool.name)].sort();
+  const page = await execute(["command", "--page-size", "10", "--cursor", "10"], runtime as never);
+  assert.ok(page.ok, JSON.stringify(page));
+  const data = page.data as { commands: Array<Record<string, unknown>>; pageInfo: Record<string, unknown> };
+  assert.deepEqual(data.pageInfo, { cursor: 10, pageSize: 10, total: expectedNames.length, nextCursor: 20 });
+  assert.deepEqual(data.commands.map((item) => item.name), expectedNames.slice(10, 20));
+  assert.ok(data.commands.every((item) => !Object.hasOwn(item, "parameters") && !Object.hasOwn(item, "available")));
+
+  const all = await execute(["command", "--page-size", "100"], runtime as never);
+  assert.ok(all.ok, JSON.stringify(all));
+  const unavailable = (all.data as { commands: Array<Record<string, unknown>> }).commands.find((item) => item.name === "fixture.command-24");
+  assert.equal(unavailable?.available, false);
+  assert.equal(unavailable?.unavailableReason, "fixture unavailable");
+
+  for (const argv of [["command", "--page-size", "0"], ["command", "--cursor", "-1"]]) {
+    const invalid = await execute(argv, runtime as never);
+    assert.equal(invalid.ok, false, JSON.stringify(invalid));
+    if (!invalid.ok) assert.equal(invalid.error.code, "E_SCHEMA_INVALID");
+  }
 });
 
 test("command按live schema解析positional、named、bare boolean与AnyJSON并只分发一次", async () => {
@@ -168,7 +199,7 @@ test("command名称选择保持native exact优先且不做相似能力映射", a
   const requests: BridgeRequest[] = [];
   const runtime = runtimeFor([native, attribute], requests);
 
-  const listing = await execute(["command"], runtime as never);
+  const listing = await execute(["command", "--page-size", "100"], runtime as never);
   const bare = await execute(["command", "eval", "return 1;"], runtime as never);
   const explicit = await execute(["command", "UnityPipeline_eval", "return 2;"], runtime as never);
   const missing = await execute(["command", "recompile"], runtime as never);

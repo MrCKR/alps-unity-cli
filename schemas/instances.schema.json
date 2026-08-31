@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alpsckr.dev/unitycli/schemas/instances.schema.json",
+  "title": "UnityCLI instances envelope",
+  "oneOf": [
+    { "$ref": "#/$defs/listSuccess" },
+    { "$ref": "#/$defs/pruneSuccess" },
+    { "$ref": "#/$defs/errorEnvelope" }
+  ],
+  "$defs": {
+    "instanceSummary": {
+      "type": "object",
+      "properties": {
+        "instanceId": { "type": "string", "pattern": "^unity-[a-f0-9]{64}$" },
+        "canonicalProjectPath": { "type": "string", "minLength": 3 },
+        "displayProjectPath": { "type": "string", "minLength": 3 },
+        "projectName": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["ready", "transitioning", "blocked", "unresponsive", "unverifiable", "offline", "conflict"] },
+        "unityVersion": { "type": "string", "minLength": 1 },
+        "alias": { "type": "string", "minLength": 1 }
+      },
+      "required": ["instanceId", "canonicalProjectPath", "displayProjectPath", "projectName", "status"],
+      "additionalProperties": false
+    },
+    "listData": {
+      "type": "object",
+      "properties": {
+        "instances": { "type": "array", "items": { "$ref": "#/$defs/instanceSummary" } },
+        "hiddenOfflineCount": { "type": "integer", "minimum": 0 },
+        "invalidRecordCount": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["instances"],
+      "additionalProperties": false
+    },
+    "retention": {
+      "type": "object",
+      "properties": {
+        "offlineMax": { "const": 100 },
+        "damagedMax": { "const": 20 },
+        "maxAgeDays": { "const": 30 },
+        "scanLimit": { "const": 2000 },
+        "deleteLimit": { "const": 20 }
+      },
+      "required": ["offlineMax", "damagedMax", "maxAgeDays", "scanLimit", "deleteLimit"],
+      "additionalProperties": false
+    },
+    "pruneData": {
+      "type": "object",
+      "properties": {
+        "removed": { "type": "integer", "minimum": 0 },
+        "remaining": { "type": "integer", "minimum": 0 },
+        "deferred": { "type": "integer", "minimum": 0 },
+        "scanned": { "type": "integer", "minimum": 0, "maximum": 2000 },
+        "truncated": { "type": "boolean" },
+        "retention": { "$ref": "#/$defs/retention" }
+      },
+      "required": ["removed", "remaining", "deferred", "scanned", "truncated", "retention"],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "nextActions": { "type": "array", "items": { "type": "string" } },
+        "transient": { "type": "boolean" },
+        "retryAfterMs": { "type": "number", "minimum": 0 },
+        "details": { "x-unityCliAnyJson": true }
+      },
+      "required": ["code", "message", "nextActions", "transient", "retryAfterMs"],
+      "additionalProperties": false
+    },
+    "listSuccess": {
+      "type": "object",
+      "properties": {
+        "ok": { "const": true },
+        "requestId": { "type": "string", "minLength": 1 },
+        "data": { "$ref": "#/$defs/listData" }
+      },
+      "required": ["ok", "requestId", "data"],
+      "additionalProperties": false
+    },
+    "pruneSuccess": {
+      "type": "object",
+      "properties": {
+        "ok": { "const": true },
+        "requestId": { "type": "string", "minLength": 1 },
+        "data": { "$ref": "#/$defs/pruneData" }
+      },
+      "required": ["ok", "requestId", "data"],
+      "additionalProperties": false
+    },
+    "errorEnvelope": {
+      "type": "object",
+      "properties": {
+        "ok": { "const": false },
+        "requestId": { "type": "string", "minLength": 1 },
+        "error": { "$ref": "#/$defs/error" }
+      },
+      "required": ["ok", "requestId", "error"],
+      "additionalProperties": false
+    }
+  }
+}
