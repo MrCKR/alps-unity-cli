@@ -54,13 +54,15 @@ unitycli tools run camera.screenshot --input '{}'
 
 准入等待超过`T`时返回`E_UNITY_BUSY`、`transient:true`和`retryAfterMs:100`。该错误明确证明本次业务Bridge请求未发送、effect未开始，可以稍后提交一个新root。放行后的timeout、断连或终态不明仍返回`E_EXECUTION_TIMEOUT`，表示outcome unknown，必须先观察业务状态。
 
-统一catalog在Editor和Runtime同时在线时，会在每个参与公开结果的target session分别准入；任一在线target未获准时不返回跨池的部分catalog。
+统一catalog在Editor和Runtime同时在线时，会在每个参与公开结果的target session分别准入；任一在线target未获准时不返回跨池的部分catalog。exact `editor.state`、`editor.dialogs`、`editor.dialog.click`是唯一例外：它们使用冻结的本地descriptor完成相同contract、availability、schema、结果与envelope校验，但不取得或撤销业务admission。其他offline Tool、相邻名称、group或handler不会获得该例外。
 
 ## Bridge 执行约束
 
 Bridge-backed Tool由Unity Editor主线程执行。业务请求发送前，session supervisor会在准入deadline内等待首次ready记录、compile、import、domain reload和listener generation交接；只有能证明目标Unity正在运行时才等待，证明未运行时立即返回。准入放行后只创建一次execution absolute deadline，token重取、status、rebind和terminal recovery不得刷新预算。读取可在新generation重新执行完整读取；mutation只有在`editorSessionId`未改变时才可用完全相同的request bytes续接durable terminal。
 
-首次mutation POST后若Editor session改变，CLI禁止向新session再次POST，并返回`E_EXECUTION_TIMEOUT`、`outcome:unknown`。其他超时或终态前断连同样表示没有可信终态；调用方应先用业务读取或`editor.state`收集证据，再决定是否提交全新请求。`editor.state`使用frozen本地descriptor绕过被阻断的Live catalog，再读取Registry/Health v3、内存主线程pulse、Bridge和Windows modal证据；两个dialog recovery Tool保持同一例外，其他Tool不建立静态fallback。
+首次mutation POST后若Editor session改变，CLI禁止向新session再次POST，并返回`E_EXECUTION_TIMEOUT`、`outcome:unknown`。其他超时或终态前断连同样表示没有可信终态；调用方应先用业务读取或`editor.state`收集证据，再决定是否提交全新请求。`editor.state`使用frozen本地descriptor绕过被阻断的Live catalog和strict ordinary selector，再读取Registry/Health v3、内存主线程pulse、Bridge和Windows modal证据；它唯一可发出一次无admission的private `internal.editor.state.snapshot` observeNow POST。两个dialog recovery Tool保持同一观察lane，其他Tool不建立静态fallback。
+
+一次调用的selector、Bridge、Windows观察和错误blocker补充都消费适用的同一absolute deadline；10秒诊断上限只能缩短它，剩余时间为零时不再观察，主错误保持不变。本地Tool的公开deadline先到后只返回一个固定`E_EXECUTION_TIMEOUT` envelope；迟到Promise不能改变terminal或重放effect，且首次effect barrier已关闭。迟到清理只处理未消费lease，并与stdout共用现有最多1秒退出宽限；Unity已消费root仍由WorkItem、coordinator或recovery owner收敛。
 
 ### `editor.compile`
 

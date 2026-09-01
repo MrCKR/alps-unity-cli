@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getString, type CliArgsSpec } from "./args.js";
 import { registerBuiltinExtensionContributions } from "./extensions/index.js";
 import { handleCommand } from "./cli-commands/command.js";
+import { hasPendingCliProcessOwners, waitForCliProcessOwners } from "./cli-process-owners.js";
 import { handleExtensionsCommand } from "./cli-commands/extensions.js";
 import { handleInstances } from "./cli-commands/instances.js";
 import { handleInit } from "./cli-commands/package.js";
@@ -275,7 +276,7 @@ export interface CliExitRuntime {
   exit(code: number): void;
 }
 
-/** 输出完成后结束CLI；残留socket、timer或child handle不得延长公开调用生命周期。 */
+/** 输出与本地owner都完成时退出；单一宽限timer仍是唯一强制退出authority。 */
 export function finishCliProcess(
   result: CliResult,
   pretty: boolean,
@@ -288,6 +289,8 @@ export function finishCliProcess(
 ): void {
   const exitCode = result.ok ? 0 : 1;
   let finished = false;
+  let outputFlushed = false;
+  let ownersSettled = !hasPendingCliProcessOwners();
   let timer: unknown;
   const finish = (): void => {
     if (finished) return;
@@ -295,8 +298,18 @@ export function finishCliProcess(
     if (timer !== undefined) runtime.cancel(timer);
     runtime.exit(exitCode);
   };
+  const finishWhenSettled = (): void => {
+    if (outputFlushed && ownersSettled) finish();
+  };
   timer = runtime.schedule(finish, CLI_OUTPUT_FLUSH_GRACE_MS);
-  runtime.write(serializeResult(result, { pretty }), finish);
+  if (!ownersSettled) void waitForCliProcessOwners().then(() => {
+    ownersSettled = true;
+    finishWhenSettled();
+  });
+  runtime.write(serializeResult(result, { pretty }), () => {
+    outputFlushed = true;
+    finishWhenSettled();
+  });
 }
 
 if (isCliEntryPoint(import.meta.url, process.argv[1])) {

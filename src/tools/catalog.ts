@@ -60,6 +60,7 @@ export async function loadToolCatalog(
   flags: Record<string, string | boolean>,
   runtime: ToolCatalogRuntime,
   requestId: string,
+  absoluteDeadlineMs?: number,
 ): Promise<ToolCatalogResult> {
   const editorAdmission = runtime.rootAdmissions?.editor ?? (runtime.rootAdmission?.target === "editor" ? runtime.rootAdmission : undefined);
   const runtimeAdmission = runtime.rootAdmissions?.runtime ?? (runtime.rootAdmission?.target === "runtime" ? runtime.rootAdmission : undefined);
@@ -67,10 +68,11 @@ export async function loadToolCatalog(
   const runtimeTargetRuntime = { ...runtime, rootAdmission: runtimeAdmission };
   const editorRequestId = editorRuntime.rootAdmission?.requestId ?? `${requestId}_editor_catalog`;
   const runtimeRequestId = runtimeTargetRuntime.rootAdmission?.requestId ?? `${requestId}_runtime_catalog`;
-  const editor = await discoverProjectTools(flags, editorRuntime, editorRequestId, { requireBridge: true });
+  const catalogDeadlineMs = absoluteDeadlineMs ?? editorAdmission?.executionAbsoluteDeadlineMs ?? runtimeAdmission?.executionAbsoluteDeadlineMs;
+  const editor = await discoverProjectTools(flags, editorRuntime, editorRequestId, { requireBridge: true, absoluteDeadlineMs: catalogDeadlineMs });
   if (editor.ok === false && editor.error?.code !== "E_INSTANCE_NOT_RUNNING") return editor;
 
-  const runtimeCatalog = await discoverRuntimeTools(flags, runtimeTargetRuntime, runtimeRequestId, { requireBridge: true });
+  const runtimeCatalog = await discoverRuntimeTools(flags, runtimeTargetRuntime, runtimeRequestId, { requireBridge: true, absoluteDeadlineMs: catalogDeadlineMs });
   if (runtimeCatalog.ok === false && runtimeCatalog.error?.code !== "E_RUNTIME_NOT_RUNNING") return runtimeCatalog;
   if (editor.ok === false && runtimeCatalog.ok === false) return editor;
 
@@ -83,11 +85,12 @@ export async function resolveCatalogTool(
   name: string,
   flags: Record<string, string | boolean>,
   runtime: ToolCatalogRuntime,
-  requestId: string
+  requestId: string,
+  absoluteDeadlineMs?: number,
 ): Promise<{ ok: true; tool?: ToolMetadata } | (CliResult & { ok: false })> {
   const operabilityTool = resolveCatalogIndependentOperabilityTool(name);
   if (operabilityTool) return { ok: true, tool: operabilityTool };
-  const catalog = await loadToolCatalog(flags, runtime, requestId);
+  const catalog = await loadToolCatalog(flags, runtime, requestId, absoluteDeadlineMs);
   return catalog.ok ? { ok: true, tool: catalog.tools.find((tool) => tool.name === name) } : catalog;
 }
 

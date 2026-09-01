@@ -16,13 +16,13 @@ catalog只包含必须由已打开Unity Editor或development Player提供的项�
 |------|------------------|
 | `ready` | 返回当前实例完整Tool catalog；session/listener与近期主线程pulse均已证明 |
 | `transitioning` | supervisor在同一deadline内等待lifecycle与listener generation交接 |
-| `blocked` | 返回blocker error；`editor.state` / `editor.dialogs`提供独立只读恢复路径 |
+| `blocked` | 普通catalog/Tool返回blocker error；exact `editor.state` / `editor.dialogs` / `editor.dialog.click`保留无业务准入的本地观察与恢复路径 |
 | `unresponsive` | transport存在但主线程不可响应；返回`E_UNITY_UNRESPONSIVE` |
 | `unverifiable` | ownership证据不完整；返回`E_INSTANCE_UNVERIFIABLE`，不得误报duplicate |
 | `offline` | 不返回capability catalog；返回`E_INSTANCE_NOT_RUNNING` |
 | `conflict` | 至少两个verified live claim；返回`E_INSTANCE_CONFLICT` |
 
-没有 selector 且 CWD 不在 Unity 项目中时返回 `E_INSTANCE_REQUIRED`。静态 snapshot 不作为公开 fallback。
+没有 selector 且 CWD 不在 Unity 项目中时返回 `E_INSTANCE_REQUIRED`。静态 snapshot 不作为公开 fallback。只有三个exact观察名称及`tools describe`对它们的精确学习入口可使用冻结本地descriptor；相邻名称、alias、group、handler和其他offline Tool仍按Live catalog与普通准入失败。dialogs只在Windows可用。
 
 ## Package 与 Extension
 

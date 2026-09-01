@@ -48,18 +48,25 @@ test("editor.state progress kind remains extensible and blockers are dialog DTOs
 test("direct-call semantics 固定 immutable request、单 generation read 与 observeNow", () => {
   const semantics = readFixture("direct-call-semantics.json") as {
     request: { digest: string; redelivery: string };
-    contextRead: { ordinary: { journal: boolean; completion: string }; "editor.state": { budgetMs: number; bridgeProbeBudgetMs: number; journal: boolean } };
-    directCall: { terminal: string; timeout: string; replay: string; audit: string };
+    admission: { exactObservationExclusion: string[]; exactObservationRule: string };
+    contextRead: { ordinary: { journal: boolean; completion: string }; "editor.state": { budgetMs: number; bridgeProbeBudgetMs: number; journal: boolean; privateBridgeCommand: string } };
+    directCall: { terminal: string; timeout: string; replay: string; audit: string; oneDeadline: string; localTimeoutOwnership: string; localProcessExit: string };
     deferredDelivery?: unknown;
   };
   assert.match(semantics.request.digest, /exactRequestBodyBytes/);
   assert.match(semantics.request.redelivery, /editorSessionId is unchanged/);
+  assert.deepEqual(semantics.admission.exactObservationExclusion, ["editor.state", "editor.dialogs", "editor.dialog.click"]);
+  assert.match(semantics.admission.exactObservationRule, /without business admission acquire\/revoke/);
   assert.equal(semantics.contextRead.ordinary.journal, false);
   assert.match(semantics.contextRead.ordinary.completion, /one validated listener generation/);
   assert.equal(semantics.contextRead["editor.state"].budgetMs, 4000);
   assert.equal(semantics.contextRead["editor.state"].bridgeProbeBudgetMs, 3500);
   assert.equal(semantics.contextRead["editor.state"].journal, false);
+  assert.match(semantics.contextRead["editor.state"].privateBridgeCommand, /internal\.editor\.state\.snapshot only/);
   assert.match(semantics.directCall.terminal, /terminal business result/);
+  assert.match(semantics.directCall.oneDeadline, /never creates another budget/);
+  assert.match(semantics.directCall.localTimeoutOwnership, /run is invoked once/);
+  assert.match(semantics.directCall.localProcessExit, /1000ms stdout flush grace/);
   assert.match(semantics.directCall.timeout, /E_EXECUTION_TIMEOUT/);
   assert.match(semantics.directCall.replay, /cross-session mutation redelivery is forbidden/);
   assert.match(semantics.directCall.audit, /session-level append log/);

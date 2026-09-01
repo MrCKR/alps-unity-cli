@@ -16,7 +16,6 @@ import { rootAdmissionFingerprint, type RootAdmissionLease, type RootAdmissionRe
 import type { BridgeFlags, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 
 export const EDITOR_STATE_OBSERVATION_BUDGET_MS = 10_000;
-const BLOCKER_DIAGNOSTIC_BUDGET_MS = 10_000;
 export const EDITOR_STATE_BRIDGE_PROBE_BUDGET_MS = 3_500;
 const DEFAULT_EXECUTION_TIMEOUT_MS = 60_000;
 const REGISTRY_POLL_INTERVAL_MS = 100;
@@ -59,7 +58,6 @@ const ROOT_TRANSITION_COMMANDS = new Set([
   "internal.occlusion.bake.snapshot",
   "internal.occlusion.bake.cancel",
 ]);
-const ADMISSION_OBSERVATION_TOOLS = new Set(["editor.state", "editor.dialogs", "editor.dialog.click"]);
 const TRANSITION_CODES = new Set([
   "E_UNITY_DOMAIN_RELOAD",
   "E_UNITY_COMPILING",
@@ -215,9 +213,9 @@ export class SessionSupervisor {
     return this.run("read", { ...template, mutation: false });
   }
 
-  /** editor.state 专用即时入口；固定预算内只观察一次，不等待状态改变。 */
+  /** editor.state 私有即时入口；调用者必须显式提供完整只读约束。 */
   public observeNow(template: BridgeRequestTemplate): Promise<BridgeResponse> {
-    return this.run("observeNow", { ...template, mutation: false });
+    return this.run("observeNow", template);
   }
 
   /** 在准入deadline内原子取得一个root grant；业务执行deadline只在grant返回后创建一次。 */
@@ -242,16 +240,8 @@ export class SessionSupervisor {
       };
     }
 
-    let target: SupervisorTarget;
-    let binding: ValidatedBinding;
-    if (request.target === "editor" && ADMISSION_OBSERVATION_TOOLS.has(request.command)) {
-      const selection = await this.dependencies.selectObservation(this.flags, this.runtime.dataDir ?? defaultDataDir(), remainingBudget(request.admissionAbsoluteDeadlineMs, this.dependencies.now()), "editor");
-      target = { target: "editor", instanceId: selection.instance.instanceId, initialSelection: selection, injected: false };
-      binding = bindingFrom(selection.instance);
-    } else {
-      target = await this.resolveTarget(request.target, request.admissionAbsoluteDeadlineMs, startedAtMs, request.admissionAbsoluteDeadlineMs, false);
-      binding = await this.bind(target, request.admissionAbsoluteDeadlineMs, false, target.initialSelection);
-    }
+    const target = await this.resolveTarget(request.target, request.admissionAbsoluteDeadlineMs, startedAtMs, request.admissionAbsoluteDeadlineMs, false);
+    let binding = await this.bind(target, request.admissionAbsoluteDeadlineMs, false, target.initialSelection);
     const fingerprint = rootAdmissionFingerprint(request, binding.instanceId);
     for (;;) {
       const remainingMs = remainingBudget(request.admissionAbsoluteDeadlineMs, this.dependencies.now());
@@ -311,6 +301,9 @@ export class SessionSupervisor {
   /** 首次调用时冻结 identity、deadline 与逐字节 request body；恢复过程不得重建。 */
   private async run(mode: SessionSupervisorMode, template: BridgeRequestTemplate): Promise<BridgeResponse> {
     const startedAtMs = this.dependencies.now();
+    if (mode === "observeNow" && (template.command !== "internal.editor.state.snapshot" || template.mutation !== false || bridgeTarget(template.command) !== "editor" || template.rootAdmission !== undefined)) {
+      throw new SessionSupervisorError("E_INTERNAL_INVOCATION_INVALID", "observeNow is restricted to the private read-only Editor state snapshot without root admission.", [], { command: template.command });
+    }
     if (template.allowTransitionBinding === true && !ROOT_TRANSITION_COMMANDS.has(template.command)) {
       throw new SessionSupervisorError("E_INTERNAL_INVOCATION_INVALID", "Transition binding is restricted to private durable root coordinator commands.", [], { command: template.command });
     }
@@ -435,10 +428,9 @@ export class SessionSupervisor {
     }
   }
 
-  /** 业务 deadline 之后只执行一次独立的只读诊断；绝不重放或延长业务请求。 */
-  private async executionTimeoutWithObservation(instanceId: string, binding: ValidatedBinding, _deadlineMs: number, reason: string): Promise<SessionSupervisorError> {
-    const observationDeadlineMs = this.dependencies.now() + BLOCKER_DIAGNOSTIC_BUDGET_MS;
-    return executionTimeout(instanceId, reason, await this.observeBlockers(binding, observationDeadlineMs));
+  /** timeout诊断只能消费原execution deadline的剩余预算。 */
+  private async executionTimeoutWithObservation(instanceId: string, binding: ValidatedBinding, deadlineMs: number, reason: string): Promise<SessionSupervisorError> {
+    return executionTimeout(instanceId, reason, await this.observeBlockers(binding, deadlineMs));
   }
 
   /** 失败路径的 observer 严格复用调用 deadline。 */
@@ -486,12 +478,9 @@ export class SessionSupervisor {
     const probeTimeoutMs = Math.min(remainingMs, EDITOR_STATE_BRIDGE_PROBE_BUDGET_MS);
     if (this.runtime.bridgeExecute) return this.dispatchInjected(request, probeTimeoutMs);
     try {
-      assertAdmissionBinding(template.rootAdmission, binding);
-      const requestAdmission = template.rootAdmission?.requestId === template.requestId ? template.rootAdmission : undefined;
-      const reply = await this.dependencies.post(binding, request, probeTimeoutMs, requestAdmission);
+      const reply = await this.dependencies.post(binding, request, probeTimeoutMs);
       if (!attestationMatches(binding, reply.attestation)) throw identityMismatch(instance.instanceId);
       assertResponseRequestId(request.payload.requestId, reply.response);
-      if (requestAdmission && !admissionWasRejected(reply.response)) requestAdmission.consumed = true;
       return reply.response;
     } catch (error) {
       if (error instanceof SessionSupervisorError) throw error;

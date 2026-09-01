@@ -14,6 +14,8 @@
   },
   "admission": {
     "timeout": "admissionDeadline = dispatchStartedAt + normalized --timeout-ms T",
+    "exactObservationExclusion": ["editor.state", "editor.dialogs", "editor.dialog.click"],
+    "exactObservationRule": "only these exact frozen local definitions execute without business admission acquire/revoke and without the ordinary strict instance selector; names, aliases, groups, handlers and arbitrary offline Tools cannot inherit the exclusion",
     "consumes": ["input parsing", "live target binding", "identity and lifecycle checks", "internal acquire polling"],
     "polling": "one acquire at a time; each denied response sleeps an independent integer in [80,120] milliseconds",
     "capacity": { "defaultMaxActive": 5, "defaultReopenAt": 3, "hysteresis": "5 closes; 4 remains closed; 3 reopens" },
@@ -51,7 +53,8 @@
     },
     "editor.state": {
       "mode": "observeNow",
-      "completion": "one immediate read-only registry, Bridge and Windows observation after root admission",
+      "completion": "one immediate read-only registry, Bridge and Windows observation in the exact admission-independent observation lane",
+      "privateBridgeCommand": "internal.editor.state.snapshot only; mutation=false; target=editor; rootAdmission absent",
       "budgetMs": 4000,
       "bridgeProbeBudgetMs": 3500,
       "transitionPolicy": "never wait for state change",
@@ -70,10 +73,13 @@
   },
   "directCall": {
     "terminal": "each direct call returns a proven terminal business result or terminal structured failure",
+    "oneDeadline": "selectors, Bridge requests, Windows observations and blocker enrichment consume the applicable existing absolute deadline; blocker diagnosis may shorten it to 10 seconds but never creates another budget",
+    "localTimeoutOwnership": "run is invoked once; when the public deadline wins its E_EXECUTION_TIMEOUT envelope is immutable, the first local effect barrier closes, and one late-settlement continuation may clean only locally unconsumed leases",
+    "localProcessExit": "pending local cleanup shares the single 1000ms stdout flush grace; a never-settling Promise cannot add another timer or keep the CLI alive beyond it",
     "admissionBusy": "E_UNITY_BUSY before business POST proves no effect started and permits a later new root",
     "timeout": "after grant or POST, timeout, disconnect or cross-session mutation fence returns E_EXECUTION_TIMEOUT with unknown outcome; observe business state before a new submission decision",
     "replay": "same-session exact terminal recovery may return an existing terminal without a new slot; cross-session mutation redelivery is forbidden",
-    "slotRelease": "unconsumed grants expire or are revoked; consumed roots are released only by the Unity terminal owner or exact cleanup",
+    "slotRelease": "unconsumed grants expire or are revoked; consumed roots are released only by the Unity terminal owner or exact cleanup; completeRootAdmission cleanup is separately bounded and cannot rewrite the public terminal",
     "audit": "business audit is a session-level append log; admission probes never enter it"
   },
   "host": {

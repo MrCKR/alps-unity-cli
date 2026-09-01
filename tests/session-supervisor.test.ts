@@ -337,12 +337,15 @@ test("read transport recovery may rerun on a replacement Editor session", async 
 test("mutation without recoverable terminal becomes execution timeout at the one deadline", async () => {
   let now = 25_000;
   let posts = 0;
+  const observations = { value: 0 };
   const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
     now: () => now,
     sleep: async (ms) => { now += ms; },
     select: async () => selection("ready", 1),
+    observer: observer("observed-blocked", observations),
     post: async () => {
       posts += 1;
+      now = 25_250;
       throw new Error("response remains unavailable");
     },
   });
@@ -351,8 +354,9 @@ test("mutation without recoverable terminal becomes execution timeout at the one
     supervisor.execute({ requestId: "req_mutation_timeout", command: "project-tool.run", input: {}, timeoutMs: 250, mutation: true }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
-  assert.ok(posts >= 2);
+  assert.equal(posts, 1);
   assert.equal(now, 25_250);
+  assert.equal(observations.value, 0);
 });
 
 test("post-dispatch rebind failure becomes execution timeout", async () => {
@@ -564,6 +568,41 @@ test("missing registry does not wait when no matching Unity process is running",
   assert.equal(sleeps, 0);
 });
 
+test("observeNow rejects every command, mutation, and admission shape outside the private snapshot before selection or POST", async () => {
+  let selections = 0;
+  let posts = 0;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    selectObservation: async () => { selections += 1; return selection("ready", 1); },
+    post: async () => { posts += 1; throw new Error("must not post"); },
+  });
+  const admission = {
+    requestId: "req_observe_guard",
+    command: "editor.state",
+    rootFingerprint: "f".repeat(64),
+    completionContractIdentity: "atomic-read-v1",
+    target: "editor" as const,
+    instanceId: INSTANCE_ID,
+    canonicalProjectPath: "c:\\repo\\project",
+    sessionId: SESSION_ID,
+    token: "a".repeat(64),
+    consumed: false,
+    grantExpiresAtMs: Date.now() + 1_000,
+    executionAbsoluteDeadlineMs: Date.now() + 1_000,
+    injected: false,
+  };
+  for (const template of [
+    { requestId: "req_project", command: "project-tool.run", input: {}, mutation: false },
+    { requestId: "req_runtime", command: "runtime-tool.run", input: {}, mutation: false },
+    { requestId: "req_missing_read_guard", command: "internal.editor.state.snapshot", input: {} },
+    { requestId: "req_mutation", command: "internal.editor.state.snapshot", input: {}, mutation: true },
+    { requestId: "req_admitted", command: "internal.editor.state.snapshot", input: {}, mutation: false, rootAdmission: admission },
+  ]) {
+    await assert.rejects(() => supervisor.observeNow(template), (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_INTERNAL_INVOCATION_INVALID");
+  }
+  assert.equal(selections, 0);
+  assert.equal(posts, 0);
+});
+
 test("observeNow binds and posts once during a transitioning session without waiting or rebinding", async () => {
   let sleeps = 0;
   let posts = 0;
@@ -582,7 +621,7 @@ test("observeNow binds and posts once during a transitioning session without wai
     },
   });
 
-  const result = await supervisor.observeNow({ requestId: "req_observe", command: "project-tool.run", input: { name: "editor.state" }, timeoutMs: 99_000 });
+  const result = await supervisor.observeNow({ requestId: "req_observe", command: "internal.editor.state.snapshot", input: {}, timeoutMs: 99_000, mutation: false });
   assert.equal(result.ok, true);
   assert.equal(sleeps, 0);
   assert.equal(posts, 1);
@@ -608,8 +647,9 @@ test("observeNow freezes the caller absolute deadline after selector time is con
 
   const result = await supervisor.observeNow({
     requestId: "req_observe_deadline",
-    command: "project-tool.run",
+    command: "internal.editor.state.snapshot",
     input: {},
+    mutation: false,
     observationAbsoluteDeadlineMs: 50_500,
   });
   assert.equal(result.ok, true);
@@ -634,7 +674,7 @@ test("observeNow preserves an already-consumed supplied budget and does not POST
   });
 
   await assert.rejects(
-    supervisor.observeNow({ requestId: "req_observe_expired", command: "project-tool.run", input: {}, timeoutMs: 50 }),
+    supervisor.observeNow({ requestId: "req_observe_expired", command: "internal.editor.state.snapshot", input: {}, timeoutMs: 50, mutation: false }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
   assert.equal(posts, 0);
@@ -653,7 +693,7 @@ test("injected observeNow freezes the selected real instance and caps a suspende
     },
   });
   await assert.rejects(
-    supervisor.observeNow({ requestId: "req_injected_timeout", command: "project-tool.run", input: {} }),
+    supervisor.observeNow({ requestId: "req_injected_timeout", command: "internal.editor.state.snapshot", input: {}, mutation: false }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
   assert.equal(selected, 1);
@@ -670,7 +710,7 @@ test("observeNow does not POST for offline or conflict observations", async () =
       selectObservation: async () => selection(status, 1),
       post: async () => { posts += 1; throw new Error("must not post"); },
     });
-    await assert.rejects(() => supervisor.observeNow({ requestId: `req_${status}`, command: "project-tool.run", input: {} }), SessionSupervisorError);
+    await assert.rejects(() => supervisor.observeNow({ requestId: `req_${status}`, command: "internal.editor.state.snapshot", input: {}, mutation: false }), SessionSupervisorError);
     assert.equal(posts, 0);
   }
 });

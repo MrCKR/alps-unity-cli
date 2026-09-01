@@ -33,10 +33,11 @@
 - `tools run <tool>` 的实际执行。
 - `command <name>` 的实际执行。
 - 作为独立公开命令发起并需要 live target 的 catalog、describe 或读取调用。
-- `editor.state`、`editor.dialogs` 等公开观察调用。
 - `--dry-run` 调用，只要它需要 live Unity target。
 
-同一公开 root 内部产生的 catalog resolution、readiness、start、status、terminal、rebind 和 completion readback 都属于同一个 root，不得重复占槽。
+只有 exact `editor.state`、`editor.dialogs`、`editor.dialog.click` 使用冻结的本地 descriptor 进入观察执行 lane，不取得或撤销业务 admission，也不执行普通 strict instance pre-gate；名称 alias、group、handler 或其他 offline Tool 均不能继承该例外。它们仍执行 completion contract、Extension availability、输入/输出 schema 和统一 JSON envelope 校验。`tools describe` 只在描述这三个 exact 名称时可读取同一冻结 descriptor，不因此形成通用离线 catalog。
+
+同一普通公开 root 内部产生的 catalog resolution、readiness、start、status、terminal、rebind 和 completion readback 都属于同一个 root，不得重复占槽。
 
 `instances`、`target`、`doctor`、`init`、`extensions` 等 CLI 控制面不因本规范自动成为 Unity root；只有其内部明确进入 live Unity 业务执行时，才按对应业务 root 计数。
 
@@ -49,8 +50,9 @@
 - 公开业务调用为解析同一 live descriptor 发出的隐藏 catalog 请求。
 - durable root 的内部 status、terminal recovery 和 exact cleanup。
 - domain reload、listener generation 交接和 session shutdown 清理。
+- exact观察 lane 的 Registry/PID/start/Windows UI读取，以及`editor.state`唯一一次 private `internal.editor.state.snapshot` observeNow POST。
 
-公开读取即使纯只读也不因只读属性绕过任务池。绕过请求不得产生业务 effect，不得调用任意 Tool handler，也不得成为公开成功结果。
+除上述三个 exact观察定义外，公开读取即使纯只读也不因只读属性或`handler: offline`绕过任务池。private observeNow 必须在 POST 前同时证明 command exact、`mutation=false`、target=editor 且没有`rootAdmission`；任一条件不满足返回稳定内部调用错误。
 
 ### 2.4 Grant、Consumed root 与 Active
 
@@ -198,6 +200,8 @@ executionDeadline = grantObservedAt + T
 
 如果 grant 后、首个业务 POST 前 token 因 generation 变化或 2000ms TTL 失效，CLI 只能在当前 execution deadline 的剩余预算内重新 acquire；重新获得 token不创建第三份预算。
 
+三个 exact观察定义不建立双预算：它们从`dispatchStartedAt + T`得到一份absolute deadline，内部4秒/10秒观察上限只能缩短该deadline。普通catalog失败诊断消费既有dispatch/admission deadline，live执行失败诊断消费冻结的execution deadline；blocker enrichment最多取`min(existingDeadline, now+10s)`。剩余时间为零时不得再执行selector或Windows observer，也不得用新诊断覆盖主错误。
+
 首个 mutation POST 后继续遵守现有 fence：Editor session 改变时禁止向新 session 第二次 POST；终态前 timeout、断连或无法证明结果仍返回 `E_EXECUTION_TIMEOUT` 与 outcome unknown。
 
 ### 6.3 Host 预算
@@ -232,6 +236,7 @@ granted -> expired|revoked -> removed
 - Runtime Tool：Player main-thread request owner。
 - CLI 与 Unity 协同的 hybrid root：持有 durable root 的 coordinator；内部 status 不拥有槽。
 - 纯 CLI 本地工作若未发送 Unity 业务请求：CLI 只能通过内部 revoke 释放未消费 grant。任何已经 consumed 的 Editor/Runtime root 都只能由对应 Unity terminal owner 或 exact cleanup 释放，CLI 不提供通用 complete 旁路。
+- exact观察 lane 没有grant；`editor.dialog.click`仍在首个desktop effect前执行本地effect barrier。公开deadline先到时barrier关闭，之后首次`commitEffect`必须在effect前失败；已经跨过barrier时仍返回outcome unknown。
 
 不得由多个 owner 竞争释放同一槽。所有释放都必须匹配 session、root requestId、root fingerprint 和内部 token identity，并具有幂等性。
 
@@ -249,7 +254,7 @@ granted -> expired|revoked -> removed
 
 ### 7.4 CLI 断开
 
-HTTP client 断开不释放已消费 root，也不取消 coordinator 已接受的 mutation。未被消费的 grant按 TTL 清理。CLI 退出后，Unity terminal owner继续完成、持久化终态并释放槽。
+HTTP client 断开不释放已消费 root，也不取消 coordinator 已接受的 mutation。未被消费的 grant按 TTL 清理。CLI 退出后，Unity terminal owner继续完成、持久化终态并释放槽。本地`run()`只调用一次；公开deadline获胜后terminal固定为`E_EXECUTION_TIMEOUT`，底层Promise仅由exactly-once迟到continuation收敛。该continuation只清理仍未消费的本地lease，`completeRootAdmission`自己的1秒cleanup预算不得改写公开terminal。pending owner与stdout共用唯一`CLI_OUTPUT_FLUSH_GRACE_MS=1000`退出authority；不允许第二个或无界退出timer，永不settle的Promise不能延长该宽限。
 
 ## 8. Session、reload 与机制状态
 
@@ -282,7 +287,7 @@ HTTP client 断开不释放已消费 root，也不取消 coordinator 已接受�
 
 只有已消费 grant 的首个业务请求才能进入 WorkQueue；同一 root 的内部 status/control按绕过规则执行。WorkQueue 每帧启动限制继续存在。任务池不能把 Unity API 执行移到 HTTP thread，也不能改变 read 与 mutation 的主线程执行约束。
 
-公开 read roots 可以与其他 root交错，任务池不提供事务快照。公开 `editor.state` 也受池控制；gate closed 时它会等待准入。只有内部 health、admission 和 durable terminal/status可以继续推进恢复。
+公开 read roots 可以与其他 root交错，任务池不提供事务快照。只有 exact `editor.state`、`editor.dialogs`、`editor.dialog.click` 不受gate阻断，以便观察或恢复当前Editor；其他公开读取仍受池控制。只有内部 health、admission、durable terminal/status和该exact观察路径可以继续推进恢复。
 
 ### 9.3 Runtime transport queue
 

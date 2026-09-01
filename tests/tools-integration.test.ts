@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { BridgeRequest } from "../src/bridge/index.js";
+import type { BridgeRequest, RootAdmissionLease } from "../src/bridge/index.js";
 import { execute } from "../src/cli.js";
 import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
-import { settleToolExecutionAtDeadline } from "../src/tools/dispatcher.js";
+import { LocalEffectBarrier, completeUnconsumedRootAdmission, settleToolExecutionAtDeadline } from "../src/tools/dispatcher.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -261,6 +261,107 @@ test("shared Tool deadline settles a non-returning mutation without claiming can
   assert.match(result.error.nextActions[0], /Inspect editor\.state and the affected business state/);
   assert.doesNotMatch(result.error.nextActions[0], /retry|repeat|replay/i);
   assert.ok(Date.now() - startedAt < 1_000);
+});
+
+test("late local settlement cleans an unconsumed lease exactly once without changing the timeout terminal", async () => {
+  let settle: (() => void) | undefined;
+  let cleanupCalls = 0;
+  let revokes = 0;
+  let runCalls = 0;
+  const admission = {
+    requestId: "req_late_cleanup",
+    command: "fixture.local",
+    rootFingerprint: "f".repeat(64),
+    completionContractIdentity: "atomic-read-v1",
+    target: "editor",
+    instanceId: `unity-${"a".repeat(64)}`,
+    canonicalProjectPath: "c:\\repo\\project",
+    sessionId: `session-${"b".repeat(64)}`,
+    token: "a".repeat(64),
+    consumed: false,
+    grantExpiresAtMs: Date.now() + 2_000,
+    executionAbsoluteDeadlineMs: Date.now() + 100,
+    injected: false,
+  } as RootAdmissionLease;
+  const deferred = new Promise<void>((resolve) => { settle = resolve; });
+  const result = await settleToolExecutionAtDeadline("fixture.local", admission.requestId, false, admission.executionAbsoluteDeadlineMs, async () => {
+    runCalls += 1;
+    await deferred;
+    return { ok: true, requestId: admission.requestId, data: { late: true } };
+  }, {
+    cleanupAfterLateSettlement: async () => {
+      cleanupCalls += 1;
+      await completeUnconsumedRootAdmission(admission, { completeRootAdmission: async () => { revokes += 1; } });
+    },
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
+  settle?.();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(runCalls, 1);
+  assert.equal(cleanupCalls, 1);
+  assert.equal(revokes, 1);
+});
+
+test("late cleanup never revokes a lease consumed before local settlement", async () => {
+  let settle: (() => void) | undefined;
+  let cleanupCalls = 0;
+  let revokes = 0;
+  const admission = {
+    requestId: "req_consumed_cleanup",
+    command: "fixture.local",
+    rootFingerprint: "f".repeat(64),
+    completionContractIdentity: "atomic-mutation-v1",
+    target: "editor",
+    instanceId: `unity-${"a".repeat(64)}`,
+    canonicalProjectPath: "c:\\repo\\project",
+    sessionId: `session-${"b".repeat(64)}`,
+    token: "a".repeat(64),
+    consumed: false,
+    grantExpiresAtMs: Date.now() + 2_000,
+    executionAbsoluteDeadlineMs: Date.now() + 100,
+    injected: false,
+  } as RootAdmissionLease;
+  const deferred = new Promise<void>((resolve) => { settle = resolve; });
+  const result = await settleToolExecutionAtDeadline("fixture.local", admission.requestId, true, admission.executionAbsoluteDeadlineMs, async () => {
+    await deferred;
+    return { ok: true, requestId: admission.requestId, data: { late: true } };
+  }, {
+    cleanupAfterLateSettlement: async () => {
+      cleanupCalls += 1;
+      await completeUnconsumedRootAdmission(admission, { completeRootAdmission: async () => { revokes += 1; } });
+    },
+  });
+  assert.equal(result.ok, false);
+  admission.consumed = true;
+  settle?.();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(cleanupCalls, 1);
+  assert.equal(revokes, 0);
+});
+
+test("public timeout closes the first local effect barrier and absorbs late rejection", async () => {
+  let continueRun: (() => void) | undefined;
+  const barrier = new LocalEffectBarrier("fixture.effect");
+  const deferred = new Promise<void>((resolve) => { continueRun = resolve; });
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown): void => { unhandled.push(reason); };
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    const result = await settleToolExecutionAtDeadline("fixture.effect", "req_effect_barrier", true, Date.now() + 100, async () => {
+      await deferred;
+      await barrier.commitEffect();
+      return { ok: true, requestId: "req_effect_barrier", data: { crossed: true } };
+    }, { closeEffectBarrier: barrier.close });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
+    continueRun?.();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, []);
+    await assert.rejects(() => barrier.commitEffect(), (error: unknown) => error instanceof Error && (error as { code?: string }).code === "E_EXECUTION_TIMEOUT");
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
 });
 
 test("shared Tool deadline preserves a terminal returned before the deadline", async () => {

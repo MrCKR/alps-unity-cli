@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { CLI_OUTPUT_FLUSH_GRACE_MS, execute, finishCliProcess } from "../src/cli.js";
 import { serializeResult } from "../src/output.js";
@@ -192,6 +192,36 @@ test("compiled CLI exits after one envelope even when a preloaded handle remains
   } finally {
     unlinkSync(preloadPath);
   }
+});
+
+test("compiled CLI emits one envelope and exits within the existing grace with a never-settling local owner", (context) => {
+  const cliPath = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+  const ownersPath = fileURLToPath(new URL("../src/cli-process-owners.js", import.meta.url));
+  if (!existsSync(cliPath) || !existsSync(ownersPath)) {
+    context.skip("compiled CLI is verified by build:test output");
+    return;
+  }
+  const script = [
+    `import { finishCliProcess } from ${JSON.stringify(pathToFileURL(cliPath).href)};`,
+    `import { trackCliProcessOwner } from ${JSON.stringify(pathToFileURL(ownersPath).href)};`,
+    "trackCliProcessOwner(new Promise(() => undefined));",
+    "finishCliProcess({ ok: true, requestId: 'req_pending_owner', data: { terminal: true } }, false);",
+  ].join("\n");
+  const startedAt = Date.now();
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    timeout: 4_000,
+    env: { ...process.env, UNITY_CLI_ALLOW_NON_WINDOWS: "1" },
+  });
+  const elapsedMs = Date.now() - startedAt;
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.signal, null);
+  assert.ok(elapsedMs >= CLI_OUTPUT_FLUSH_GRACE_MS - 100, `elapsed=${elapsedMs}`);
+  assert.ok(elapsedMs < 3_000, `elapsed=${elapsedMs}`);
+  const lines = result.stdout.trim().split(/\r?\n/);
+  assert.equal(lines.length, 1);
+  assert.deepEqual(JSON.parse(lines[0]), { ok: true, requestId: "req_pending_owner", data: { terminal: true } });
 });
 
 test("compiled CLI emits one raw JSON envelope and a failure exit code", (context) => {

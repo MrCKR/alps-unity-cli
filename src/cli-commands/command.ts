@@ -91,18 +91,13 @@ export async function handleCommand(
   }
 
   if (flags.help === true || flags.help === "true") {
+    const operabilityTool = resolveCatalogIndependentOperabilityTool(commandName);
+    if (operabilityTool) return commandHelpResult(requestId, commandName, operabilityTool);
     return dispatchCatalogProjection("command.describe", { commandName }, flags, runtime, requestId, async (rootRuntime) => {
-      const operabilityTool = resolveCatalogIndependentOperabilityTool(commandName);
-      const catalog = operabilityTool ? { ok: true as const, tools: [operabilityTool] } : await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
+      const catalog = await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
       if (!catalog.ok) return catalog;
       const tool = resolveCommandTool(catalog.tools, commandName);
-      if (!tool) return commandNotFound(requestId, commandName);
-      const descriptor = commandDescriptor(tool, commandName);
-      return success(requestId, {
-        usage: `unitycli command ${commandName} [business-args]`,
-        command: { name: descriptor.name, summary: descriptor.summary, parameters: descriptor.parameters },
-        tool: publicToolDescriptor(tool),
-      });
+      return tool ? commandHelpResult(requestId, commandName, tool) : commandNotFound(requestId, commandName);
     });
   }
 
@@ -117,6 +112,16 @@ export async function handleCommand(
   if (!input.ok) return input.result;
 
   return dispatchTool(tool.name, undefined, flags, runtime, requestId, input.value, tool);
+}
+
+/** exact观察descriptor的command help不依赖live catalog或业务准入。 */
+function commandHelpResult(requestId: string, commandName: string, tool: ToolMetadata): CliResult {
+  const descriptor = commandDescriptor(tool, commandName);
+  return success(requestId, {
+    usage: `unitycli command ${commandName} [business-args]`,
+    command: { name: descriptor.name, summary: descriptor.summary, parameters: descriptor.parameters },
+    tool: publicToolDescriptor(tool),
+  });
 }
 
 /** 分离command级控制项与业务token；选择实例的控制项在catalog加载前冻结。 */

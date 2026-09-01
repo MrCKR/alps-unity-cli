@@ -17,11 +17,12 @@ import { PackageManagerError } from "../package-manager.js";
 import { instanceSelectionFailure, selectInstanceForFlags, selectObservationInstanceForFlags, type InstanceSelection, type InstanceTarget } from "../instances.js";
 import { EditorBlockerObserver, sanitizeEditorBlockers } from "../editor-blocker-observer.js";
 import { defaultDataDir } from "../platform.js";
+import { trackCliProcessOwner } from "../cli-process-owners.js";
 import type { ProjectToolRuntime } from "../project-tool-discovery.js";
 import { validateSchema } from "../schema/validator.js";
 import type { CliResult } from "../types.js";
 import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../extension-availability.js";
-import { resolveCatalogIndependentInvocationTool, resolveCatalogTool } from "./catalog.js";
+import { resolveCatalogIndependentInvocationTool, resolveCatalogIndependentOperabilityTool, resolveCatalogTool } from "./catalog.js";
 import { generatedToolCompletionContract, type GeneratedToolCompletionContract } from "./.generated-completion-registry.js";
 import { findDefineTool, type ToolContext } from "./define.js";
 import { StructuredToolError } from "./errors.js";
@@ -30,9 +31,17 @@ import { EXTENSION_GROUPS, findToolByName, toolIsMutation, type ToolMetadata } f
 export type ToolsRuntime = ProjectToolRuntime & Partial<BridgeRuntime> & {
   dataDir?: string;
   fetch?: (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
+  /** 仅供隔离测试观察准入边界。 */
+  createSessionSupervisor?: (flags: Record<string, string | boolean>, runtime: BridgeRuntime) => SessionSupervisor;
 };
 
 type ParsedInput = { ok: true; input: Record<string, unknown> } | { ok: false; error: CliResult };
+
+/** 生产使用唯一supervisor实现；隔离测试只能替换构造边界。 */
+function createSessionSupervisor(flags: Record<string, string | boolean>, runtime: ToolsRuntime): SessionSupervisor {
+  return runtime.createSessionSupervisor?.(flags, runtime) ?? new SessionSupervisor(flags, runtime);
+}
+
 const MULTI_TARGET_CATALOG_TOOLS = new Set(["tools.group", "tools.group-list", "tools.search", "tools.describe", "diagnose.capabilities"]);
 type TargetAdmissionContext = {
   admissions: Partial<Record<InstanceTarget, RootAdmissionLease>>;
@@ -100,11 +109,13 @@ export async function dispatchTool(
     return dispatchResolvedTool(localMetadata, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
   }
   if (coreSpec && runtime.bridgeExecute && runtime.projectTools === undefined) {
-    return executeCoreBridgeSpec(name, coreSpec, parsed.input, dispatchFlags, runtime, requestId, positionalTarget);
+    return executeCoreBridgeSpec(name, coreSpec, parsed.input, dispatchFlags, runtime, requestId, dispatchStartedAtMs, positionalTarget);
   }
 
-  const resolved = await resolveCatalogTool(name, catalogFlags, runtime, requestId);
-  if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime);
+  const catalogTimeoutMs = Math.max(1, executionFromFlags(dispatchFlags).timeoutMs ?? localMetadata?.timeoutMs ?? 30_000);
+  const catalogAbsoluteDeadlineMs = dispatchStartedAtMs + catalogTimeoutMs;
+  const resolved = await resolveCatalogTool(name, catalogFlags, runtime, requestId, catalogAbsoluteDeadlineMs);
+  if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime, catalogAbsoluteDeadlineMs);
   const tool = resolved.tool;
   if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
 
@@ -144,7 +155,7 @@ async function acquireCatalogAdmissions(
   const context: TargetAdmissionContext = { admissions: {}, supervisors: {}, executionAbsoluteDeadlineMs: 0 };
   let lastOffline: CliResult | undefined;
   for (const target of ["editor", "runtime"] as InstanceTarget[]) {
-    const supervisor = new SessionSupervisor(flags, runtime);
+    const supervisor = createSessionSupervisor(flags, runtime);
     try {
       const admission = await supervisor.acquireRootAdmission({ requestId, command, input, dryRun: false, target, completionContractIdentity, timeoutMs, admissionAbsoluteDeadlineMs });
       context.admissions[target] = admission;
@@ -172,8 +183,14 @@ async function releaseUnconsumedCatalogAdmissions(context: TargetAdmissionContex
   for (const target of ["editor", "runtime"] as InstanceTarget[]) {
     const admission = context.admissions[target];
     const supervisor = context.supervisors[target];
-    if (admission && supervisor) await supervisor.completeRootAdmission(admission);
+    if (admission && supervisor) await completeUnconsumedRootAdmission(admission, supervisor);
   }
+}
+
+/** 迟到cleanup只接管仍由CLI持有的未消费lease。 */
+export async function completeUnconsumedRootAdmission(admission: RootAdmissionLease, supervisor: Pick<SessionSupervisor, "completeRootAdmission">): Promise<void> {
+  if (admission.consumed) return;
+  await supervisor.completeRootAdmission(admission);
 }
 
 function catalogAdmissionFailure(requestId: string, error: unknown): CliResult & { ok: false } {
@@ -227,14 +244,18 @@ async function executeCoreBridgeSpec(
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string,
+  dispatchStartedAtMs: number,
   positionalTarget?: string
 ): Promise<CliResult> {
   let args = await spec.buildArgs({ command: name, flags: bridgeWrapperFlags(flags, input), positionalTarget });
   if (spec.toolName) args = { name: spec.toolName, input: args };
+  const timeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? 30_000);
+  const absoluteDeadlineMs = dispatchStartedAtMs + timeoutMs;
   return enrichTargetFailureWithDialogBlocker(await executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, undefined, {
     mode: "execute",
     mutation: true,
-  }), flags, runtime);
+    absoluteDeadlineMs,
+  }), flags, runtime, absoluteDeadlineMs);
 }
 
 async function executeDefinition(
@@ -251,8 +272,13 @@ async function executeDefinition(
   const execution = executionFromFlags(flags);
   const timeoutMs = Math.max(1, execution.timeoutMs ?? tool.timeoutMs ?? 30_000);
   const admissionAbsoluteDeadlineMs = dispatchStartedAtMs + timeoutMs;
-  let selected: InstanceSelection | undefined;
 
+  // exact观察定义及其describe投影在完成公共校验后不进入业务准入或strict selector。
+  if (isAdmissionIndependentLocalDefinition(tool, input)) {
+    return executeLocalDefinition(tool, completion, definition, input, flags, runtime, requestId, projectPath, execution, admissionAbsoluteDeadlineMs);
+  }
+
+  let selected: InstanceSelection | undefined;
   // package本地Tool也是live target的一等root；先固定实例，再由同一实例原子发放准入。
   try {
     if (!runtime.bridgeExecute && runtime.projectTools === undefined) {
@@ -277,9 +303,36 @@ async function executeDefinition(
   const admissionContext = await acquireToolAdmission(tool, completion, input, flags, runtime, requestId, timeoutMs, admissionAbsoluteDeadlineMs, selected);
   if ("result" in admissionContext) return admissionContext.result;
   const { admission, admissions, supervisors, executionAbsoluteDeadlineMs } = admissionContext;
-  const absoluteDeadlineMs = executionAbsoluteDeadlineMs;
   const rootRuntime: ToolsRuntime = { ...runtime, rootAdmission: admission, rootAdmissions: admissions };
+  const cleanup = async (): Promise<void> => {
+    await releaseUnconsumedCatalogAdmissions({ admissions, supervisors, executionAbsoluteDeadlineMs });
+  };
+  const result = await executeLocalDefinition(tool, completion, definition, input, flags, rootRuntime, requestId, projectPath, execution, executionAbsoluteDeadlineMs, cleanup);
+  if (rootResultHasTrustedTerminal(result)) await cleanup();
+  return result;
+}
 
+/** exact owner判定只接受三个公开名及其精确describe目标。 */
+function isAdmissionIndependentLocalDefinition(tool: ToolMetadata, input: Record<string, unknown>): boolean {
+  if (resolveCatalogIndependentOperabilityTool(tool.name)) return true;
+  return tool.name === "tools.describe" && typeof input.name === "string" && !!resolveCatalogIndependentOperabilityTool(input.name);
+}
+
+/** 本地定义统一执行输出校验、effect barrier和deadline terminal。 */
+async function executeLocalDefinition(
+  tool: ToolMetadata,
+  completion: GeneratedToolCompletionContract | NonNullable<ToolMetadata["completionContract"]>,
+  definition: NonNullable<ReturnType<typeof findDefineTool>>,
+  input: Record<string, unknown>,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string,
+  projectPath: string,
+  execution: ToolContext["execution"],
+  absoluteDeadlineMs: number,
+  cleanupAfterLateSettlement?: () => Promise<void>,
+): Promise<CliResult> {
+  const barrier = new LocalEffectBarrier(tool.name);
   const run = async (): Promise<CliResult> => {
     try {
       const data = await definition.execute(input, {
@@ -287,16 +340,16 @@ async function executeDefinition(
         projectPath,
         absoluteDeadlineMs,
         execution,
-        dataDir: rootRuntime.dataDir,
-        artifactDir: getString(flags, "artifact-dir") ?? rootRuntime.dataDir ?? projectPath,
+        dataDir: runtime.dataDir,
+        artifactDir: getString(flags, "artifact-dir") ?? runtime.dataDir ?? projectPath,
         logPath: typeof input.logPath === "string" ? input.logPath : undefined,
         flags,
-        projectTools: rootRuntime.projectTools,
-        rootAdmission: admission,
-        rootAdmissions: admissions,
-        bridgeExecute: rootRuntime.bridgeExecute,
-        fetch: rootRuntime.fetch,
-        commitEffect: async () => undefined,
+        projectTools: runtime.projectTools,
+        rootAdmission: runtime.rootAdmission,
+        rootAdmissions: runtime.rootAdmissions,
+        bridgeExecute: runtime.bridgeExecute,
+        fetch: runtime.fetch,
+        commitEffect: barrier.commitEffect,
       });
       if (!tool.outputSchema) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", `Tool ${tool.name} has no output schema for terminal proof.`, [
         `Regenerate the Tool schema and completion registry for ${tool.name}.`
@@ -323,41 +376,88 @@ async function executeDefinition(
     }
   };
 
-  let result: CliResult;
   try {
-    result = await settleToolExecutionAtDeadline(tool.name, requestId, completion.mutation, absoluteDeadlineMs, run);
+    return await settleToolExecutionAtDeadline(tool.name, requestId, completion.mutation, absoluteDeadlineMs, run, {
+      closeEffectBarrier: barrier.close,
+      cleanupAfterLateSettlement,
+    });
   } catch (error) {
-    if (error instanceof PackageManagerError) result = failure(requestId, error.code, error.message, error.nextActions);
-    else if (error instanceof StructuredToolError) result = failure(requestId, error.code, error.message, error.nextActions, error.details);
-    else result = failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
+    if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
+    if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
       `Run unitycli tools describe ${tool.name} for input requirements and examples.`
     ]);
   }
-  if (rootResultHasTrustedTerminal(result)) await releaseUnconsumedCatalogAdmissions({ admissions, supervisors, executionAbsoluteDeadlineMs });
-  return result;
 }
 
-/** Tool自己的wait未按时settle时由框架结束CLI等待；已开始的Unity effect不因此停止。 */
+/** 首个effect barrier在公开timeout后永久关闭；此前已跨过时保持原owner。 */
+export class LocalEffectBarrier {
+  private closed = false;
+  private committed = false;
+
+  public constructor(private readonly toolName: string) {}
+
+  public readonly commitEffect = async (): Promise<void> => {
+    if (this.committed) return;
+    if (this.closed) throw new StructuredToolError("E_EXECUTION_TIMEOUT", `Tool ${this.toolName} cannot start its first effect after the public deadline.`, [
+      "Inspect editor.state and the affected business state before deciding whether to submit a new request."
+    ], { reason: "post-deadline-effect-barrier" });
+    this.committed = true;
+  };
+
+  public readonly close = (): void => { this.closed = true; };
+}
+
+export interface LocalExecutionDeadlineHooks {
+  closeEffectBarrier?: () => void;
+  cleanupAfterLateSettlement?: () => Promise<void>;
+}
+
+/** Tool自己的wait未按时settle时只关闭公开terminal；迟到settlement仅执行一次精确cleanup。 */
 export async function settleToolExecutionAtDeadline(
   toolName: string,
   requestId: string,
   mutation: boolean,
   absoluteDeadlineMs: number,
   run: () => Promise<CliResult>,
+  hooks: LocalExecutionDeadlineHooks = {},
 ): Promise<CliResult> {
   const remainingMs = absoluteDeadlineMs - Date.now();
-  if (remainingMs <= 0) return toolDeadlineFailure(toolName, requestId, mutation);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      run(),
-      new Promise<CliResult>((resolveTimeout) => {
-        timer = setTimeout(() => resolveTimeout(toolDeadlineFailure(toolName, requestId, mutation)), remainingMs);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
+  if (remainingMs <= 0) {
+    hooks.closeEffectBarrier?.();
+    return toolDeadlineFailure(toolName, requestId, mutation);
   }
+
+  let deadlineWon = false;
+  let cleanupStarted = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const runPromise = Promise.resolve().then(run);
+  const settlement = runPromise.then(
+    (value) => ({ fulfilled: true as const, value }),
+    (reason: unknown) => ({ fulfilled: false as const, reason }),
+  );
+  const owner = settlement.then(async () => {
+    if (!deadlineWon || cleanupStarted || !hooks.cleanupAfterLateSettlement) return;
+    cleanupStarted = true;
+    try { await hooks.cleanupAfterLateSettlement(); }
+    catch { /* cleanup不能重写已返回的timeout terminal。 */ }
+  });
+  trackCliProcessOwner(owner);
+
+  const winner = await Promise.race([
+    settlement,
+    new Promise<undefined>((resolveTimeout) => {
+      timer = setTimeout(() => {
+        deadlineWon = true;
+        hooks.closeEffectBarrier?.();
+        resolveTimeout(undefined);
+      }, remainingMs);
+    }),
+  ]);
+  if (timer) clearTimeout(timer);
+  if (winner === undefined) return toolDeadlineFailure(toolName, requestId, mutation);
+  if (winner.fulfilled) return winner.value;
+  throw winner.reason;
 }
 
 /** mutation超时只能读取业务状态，不能建议直接重试或声称底层执行已取消。 */
@@ -732,7 +832,7 @@ async function acquireToolAdmission(
   }
   const target = selected?.instance.activeSession?.target ?? selected?.instance.target ?? toolTarget(tool, flags);
   const admissionFlags = selected ? { ...flags, instance: selected.instance.instanceId } : flags;
-  const supervisor = new SessionSupervisor(admissionFlags, runtime);
+  const supervisor = createSessionSupervisor(admissionFlags, runtime);
   try {
     const admission = await supervisor.acquireRootAdmission({
       requestId,
@@ -809,17 +909,27 @@ async function executeLiveTool(
     mutation,
     defaultTimeoutMs: timeoutMs,
     absoluteDeadlineMs: admission.executionAbsoluteDeadlineMs,
-  }), flags, rootRuntime);
+  }), flags, rootRuntime, admission.executionAbsoluteDeadlineMs);
   if (rootResultHasTrustedTerminal(result)) await supervisor.completeRootAdmission(admission);
   return result;
 }
 
-/** Bridge wrappers may discard supervisor details; append one independent read-only modal diagnosis to target failures. */
-export async function enrichTargetFailureWithDialogBlocker(result: CliResult, flags: Record<string, string | boolean>, runtime: ToolsRuntime, observer = new EditorBlockerObserver()): Promise<CliResult> {
+/** Bridge wrapper失败只在原absolute deadline内追加一次有界modal诊断。 */
+export async function enrichTargetFailureWithDialogBlocker(
+  result: CliResult,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  absoluteDeadlineMs: number,
+  observer = new EditorBlockerObserver(),
+  selectObservation = selectObservationInstanceForFlags,
+  now = Date.now,
+): Promise<CliResult> {
   if (result.ok || (result.error.details && typeof result.error.details === "object" && Array.isArray((result.error.details as Record<string, unknown>).blockers))) return result;
+  const deadlineMs = Math.min(absoluteDeadlineMs, now() + 10_000);
+  if (deadlineMs - now() <= 0) return result;
   try {
-    const deadlineMs = Date.now() + 10_000;
-    const selection = await selectObservationInstanceForFlags(flags, runtime.dataDir ?? defaultDataDir(), Math.max(0, deadlineMs - Date.now()));
+    const selection = await selectObservation(flags, runtime.dataDir ?? defaultDataDir(), Math.max(0, deadlineMs - now()));
+    if (deadlineMs - now() <= 0) return result;
     const instance = selection.instance;
     const observation = await observer.observe({ instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath }, deadlineMs, instance.activeSession);
     const blockers = observation.outcome === "observed-blocked" ? sanitizeEditorBlockers(observation.blockers) : [];
@@ -831,7 +941,7 @@ export async function enrichTargetFailureWithDialogBlocker(result: CliResult, fl
       "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label.",
     ] } };
   } catch {
-    // An unproven probe must not be represented as an empty blocker list or replace the original failure.
+    // 未证明的诊断不能替换主错误。
     return result;
   }
 }

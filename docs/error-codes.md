@@ -24,7 +24,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 `error` 只允许上述协议字段；`details` 仅承载业务诊断，不公开内部日志、审计、endpoint、port、listener/process identity、native window handle 或 Windows command line。blocker 使用固定公开 DTO。
 
-普通Tool在业务effect前确认阻断时返回`E_UNITY_BLOCKED`，同一响应的`details.blockers`包含已清洗blocker。同一次调用只在`editorSessionId`未改变时续接完全相同的请求；首次mutation POST后若session改变，禁止向新session再次POST。超时或断连统一返回`E_EXECUTION_TIMEOUT`与outcome unknown；调用方先观察业务状态，再作新的提交决策。
+普通Tool在业务effect前确认阻断时返回`E_UNITY_BLOCKED`，同一响应的`details.blockers`包含已清洗blocker。同一次调用只在`editorSessionId`未改变时续接完全相同的请求；首次mutation POST后若session改变，禁止向新session再次POST。超时或断连统一返回`E_EXECUTION_TIMEOUT`与outcome unknown；调用方先观察业务状态，再作新的提交决策。blocker补充只能消费当前dispatch/admission或execution absolute deadline，最多缩短到10秒；剩余时间为零或没有blocker proof时保留原错误及其字段。
 
 ## 错误分类
 
@@ -186,7 +186,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_UNITY_BLOCKED` | effect 前已证明 Unity/UI blocker；原错误的 `details.blockers` 含结构化弹窗摘要 |
 | `E_UNITY_BUSY` | 任务池、修改owner或实例清理owner正在工作；按message与`nextActions`区分是否尚未发送业务请求，`instances prune`可按`retryAfterMs`稍后重试 |
 | `E_UNITY_TRANSITION_TIMEOUT` | 首次ready记录或可恢复状态变化未在原命令截止时间内稳定；确认Unity仍在推进后才使用更大的timeout重试 |
-| `E_EXECUTION_TIMEOUT` | 已放行调用未在execution deadline内返回终态、连接提前断开，或首次mutation POST后Editor session改变；outcome unknown，CLI不向新session自动重投 |
+| `E_EXECUTION_TIMEOUT` | 已放行调用或本地执行未在既有absolute deadline内返回终态、连接提前断开，或首次mutation POST后Editor session改变；outcome unknown，公开terminal固定且迟到settlement不能改写或重投effect |
 | `E_REQUEST_ID_REUSED` | 同一 root request ID 被不同 exact request bytes 使用 |
 | `E_TOOL_COMPLETION_PROOF_INVALID` | Tool 返回值不满足其 completion contract 或 proof 校验 |
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |

@@ -48,11 +48,11 @@ Tool descriptor 常用字段：
 
 每个live Editor或Development Player session拥有独立任务池，默认达到5个active root时关闭准入，降到4仍关闭，降到3才重开。CLI在业务请求前自动等待；AI不手工轮询、不读取active count，也不管理内部token。统一catalog在Editor和Runtime同时在线时，会分别经过两个session的准入后才返回完整结果。
 
-`--timeout-ms T`先提供一份最多`T`的准入预算。CLI在其中等待首次ready记录、当前编译/导入/重载和任务池；证明Unity未运行时立即返回。准入deadline的`E_UNITY_BUSY`明确证明业务Bridge请求未发送、effect未开始，可以稍后提交新root。获得grant后再创建一份完整`T`的execution预算；token重取、status、rebind、reload和terminal recovery都只能消费该预算，不能刷新第三份预算。
+`--timeout-ms T`先提供一份最多`T`的准入预算。CLI在其中等待首次ready记录、当前编译/导入/重载和任务池；证明Unity未运行时立即返回。准入deadline的`E_UNITY_BUSY`明确证明业务Bridge请求未发送、effect未开始，可以稍后提交新root。获得grant后再创建一份完整`T`的execution预算；token重取、status、rebind、reload、terminal recovery和blocker诊断都只能消费该预算，不能刷新第三份预算。blocker补充最多把现有deadline缩短到10秒；没有剩余时间或没有proof时保持主错误不变。
 
 `E_EXECUTION_TIMEOUT`、放行后的transport丢失、进程中断或没有可信terminal envelope时，只能确定本次调用没有返回可信终态，不能据此判断mutation是否发生。先读取对象、场景、Package、build/test状态或artifact manifest；只有形成新的业务决策后才提交新请求，不把outcome unknown自动重放。
 
-调用公开CLI的命令host必须等待进程退出；传入`--timeout-ms T`时至少等待`2 * T + 5000`毫秒，不得后台分离。CLI在stdout写完或最多1秒后退出。CLI timeout不会强停Unity中已开始的effect，host提前退出也不能作为停止证明。
+调用公开CLI的命令host必须等待进程退出；传入`--timeout-ms T`时至少等待`2 * T + 5000`毫秒，不得后台分离。CLI只输出一个terminal envelope，并在stdout与本地迟到清理完成或最多1秒后退出；永不settle的本地Promise不能延长该宽限。CLI timeout不会强停Unity中已开始的effect，host提前退出也不能作为停止证明。
 
 compile、import、domain reload和listener generation交接由session supervisor在同一execution absolute deadline内处理。同一次调用仅在`editorSessionId`未改变时，才能用完全相同的request bytes续接durable terminal；首次mutation POST后若session改变，CLI禁止向新session再次POST并返回`E_EXECUTION_TIMEOUT`。
 
@@ -67,7 +67,7 @@ compile、import、domain reload和listener generation交接由session superviso
 
 ## 弹窗与长操作
 
-`editor.state`公开状态固定为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。它与`editor.dialogs`、`editor.dialog.click`使用exact本地descriptor进入统一dispatcher，不依赖可能被阻断的Live catalog；其他Tool不使用静态fallback。`conflict`只表示至少两个verified live claim；身份读取失败使用`unverifiable`，transport存在但主线程不推进使用`unresponsive`。原错误包含`details.blockers`时，先`tools run editor.dialogs`。点击前使用当前返回的dialogId和规范化button label；只能选择当前可见且enabled的按钮。点击后必须证明弹窗消失或状态改变。
+`editor.state`公开状态固定为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。它与`editor.dialogs`、`editor.dialog.click`是仅有的三个exact观察名称：使用冻结本地descriptor进入统一dispatcher，不依赖可能被阻断的Live catalog或普通业务admission；alias、group、handler和其他offline Tool不继承该路径。`tools describe`可精确学习这三个descriptor。三者仍执行schema、availability、completion和结果校验，共用从dispatch开始的一份absolute deadline；`editor.state`只可发出一次private snapshot观察，dialogs仅Windows可用。`conflict`只表示至少两个verified live claim；身份读取失败使用`unverifiable`，transport存在但主线程不推进使用`unresponsive`。原错误包含`details.blockers`时，先`tools run editor.dialogs`。点击前使用当前返回的dialogId和规范化button label；只能选择当前可见且enabled的按钮。点击会保留最小pre-effect预算，deadline先到会关闭首次effect barrier；点击后必须证明弹窗消失或状态改变。
 
 `build.run`、`test.run`、`editor.refresh`、`code.exec` 和需要刷新 Editor 的 Package Tool 在一次调用内等待最终业务结果。超时只表示该次调用没有可信终态，后续动作由调用方决定。`code.exec`的同步C#一旦在Unity主线程开始，timeout不能中止它；死循环、阻塞等待或长期Unity API调用可继续占用Editor。调用方应先判断这类代码是否确有必要；决定执行后应把timeout视为outcome unknown并在重试前观察业务状态。
 

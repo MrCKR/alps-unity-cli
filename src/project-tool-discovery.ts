@@ -16,13 +16,13 @@ export async function discoverProjectTools(
   flags: Record<string, string | boolean>,
   runtime: ProjectToolRuntime,
   requestId: string,
-  _options: { requireBridge?: boolean } = {}
+  options: { requireBridge?: boolean; absoluteDeadlineMs?: number } = {}
 ): Promise<ProjectToolDiscovery> {
   if (runtime.projectTools) {
     return { ok: true, tools: runtime.projectTools.map(ensureProjectToolDefaults), mode: "runtime" };
   }
 
-  const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false });
+  const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }
@@ -263,7 +263,7 @@ export async function discoverRuntimeTools(
   flags: Record<string, string | boolean>,
   runtime: ProjectToolRuntime,
   requestId: string,
-  _options: { requireBridge?: boolean } = {}
+  options: { requireBridge?: boolean; absoluteDeadlineMs?: number } = {}
 ): Promise<ProjectToolDiscovery> {
   if (runtime.projectTools) {
     const runtimeTools = runtime.projectTools
@@ -272,7 +272,7 @@ export async function discoverRuntimeTools(
     return { ok: true, tools: runtimeTools, mode: "runtime" };
   }
 
-  const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false });
+  const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }
