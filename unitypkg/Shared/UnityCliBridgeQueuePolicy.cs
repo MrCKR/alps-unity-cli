@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 
 namespace UnityCli
 {
-    /// <summary>Bridge主线程队列的纯分类、容量与启动选择策略；BridgeWorkQueue集成待完成。</summary>
+    /// <summary>Bridge主线程队列的纯分类、容量与启动选择策略。</summary>
     public static class UnityCliBridgeQueuePolicy
     {
         public const int MaxBypassIdentities = 128;

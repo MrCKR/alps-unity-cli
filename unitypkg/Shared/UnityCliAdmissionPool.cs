@@ -13,6 +13,8 @@ namespace UnityCli
         public enum AdmissionOwnerState { Granted, WorkItem, Coordinator, Continuation, Recovery, TerminalCleanup }
         public enum AcquireOutcome { Granted, AlreadyConsumed, Closed, Invalid, IdentityMismatch, RecoveryBlocked }
         public enum AuthorizeOutcome { Authorized, AlreadyConsumed, Missing, Expired, IdentityMismatch, Invalid, RecoveryBlocked }
+        public enum ExactIdentityOutcome { ExactCurrent, DefinitelyAbsent, IdentityMismatchOrBlocked }
+        public enum CompletionOutcome { ExactCurrentCompleted, DefinitelyAbsent, IdentityMismatchOrBlocked }
 
         public sealed class AcquireResult
         {
@@ -184,7 +186,9 @@ namespace UnityCli
                     if (!records.TryGetValue(requestId, out entry)) return Authorized(AuthorizeOutcome.Missing);
                     if (!string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal) || !FixedEquals(entry.Token, token)) return Authorized(AuthorizeOutcome.IdentityMismatch);
                     if (entry.Consumed)
-                        return Authorized(entry.ExecutionDeadlineMs == executionDeadlineMs && string.Equals(entry.RequestDigest, requestDigest, StringComparison.Ordinal) ? AuthorizeOutcome.AlreadyConsumed : AuthorizeOutcome.IdentityMismatch);
+                        return entry.ExecutionDeadlineMs == executionDeadlineMs && string.Equals(entry.RequestDigest, requestDigest, StringComparison.Ordinal)
+                            ? Authorized(AuthorizeOutcome.AlreadyConsumed, Identity(entry))
+                            : Authorized(AuthorizeOutcome.IdentityMismatch);
                     if (entry.GrantExpiresAtMs <= monotonicNowMs())
                     {
                         records.Remove(requestId);
@@ -314,19 +318,42 @@ namespace UnityCli
             }
         }
 
-        /// <summary>只有WorkItem、Continuation或TerminalCleanup可走各自exact completion path。</summary>
-        public bool CompleteTrusted(ConsumedIdentity identity)
+        /// <summary>transfer marker按冻结字段识别当前root；owner state由同一锁内的current record另行裁决。</summary>
+        public ExactIdentityOutcome InspectExactIdentityFields(ConsumedIdentity identity)
         {
             lock (sync)
             {
+                if (identity == null || recoveryBlocked) return ExactIdentityOutcome.IdentityMismatchOrBlocked;
                 AdmissionRecord entry;
-                if (identity == null || !records.TryGetValue(identity.RequestId, out entry)) return true;
-                if (!ValidConsumedRecord(entry) || !Matches(entry, identity) || !entry.TransferCommitted
-                    || entry.IntendedOwnerState != entry.OwnerState || !CanComplete(entry.OwnerState)) return false;
+                if (!records.TryGetValue(identity.RequestId, out entry)) return ExactIdentityOutcome.DefinitelyAbsent;
+                return ValidConsumedRecord(entry) && MatchesIdentityFields(entry, identity)
+                    ? ExactIdentityOutcome.ExactCurrent
+                    : ExactIdentityOutcome.IdentityMismatchOrBlocked;
+            }
+        }
+
+        /// <summary>只有WorkItem、Continuation或TerminalCleanup可完成；返回值保留absent与mismatch差异。</summary>
+        public CompletionOutcome CompleteTrusted(ConsumedIdentity identity)
+        {
+            lock (sync)
+            {
+                if (identity == null || recoveryBlocked) return CompletionOutcome.IdentityMismatchOrBlocked;
+                AdmissionRecord entry;
+                if (!records.TryGetValue(identity.RequestId, out entry)) return CompletionOutcome.DefinitelyAbsent;
+                if (!ValidConsumedRecord(entry) || !Matches(entry, identity) || !CanComplete(entry.OwnerState))
+                    return CompletionOutcome.IdentityMismatchOrBlocked;
+                if (entry.OwnerState != AdmissionOwnerState.WorkItem
+                    && (!entry.TransferCommitted || entry.IntendedOwnerState != entry.OwnerState))
+                    return CompletionOutcome.IdentityMismatchOrBlocked;
                 records.Remove(identity.RequestId);
                 UpdateGateAfterRemoval();
-                return true;
+                return CompletionOutcome.ExactCurrentCompleted;
             }
+        }
+
+        public static bool IsLegalOwnerTransfer(AdmissionOwnerState source, AdmissionOwnerState target)
+        {
+            return source == target || LegalTransfer(source, target);
         }
 
         /// <summary>未消费grant只能按完整identity执行Granted→removed。</summary>

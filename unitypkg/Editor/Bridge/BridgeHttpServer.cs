@@ -448,33 +448,14 @@ namespace UnityCli
                 WriteLog("http_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlaying=" + Bool(cachedIsPlaying));
             }
 
-            AdmissionQueueReservation admissionReservation;
-            try { admissionReservation = AuthorizeAdmissionForQueue(context.Request, request, rawBody); }
-            catch (BridgeCommandException exception)
-            {
-                WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, exception), 200);
-                return;
-            }
-
             BridgeWorkItem item;
             bool created;
             int queueDepth;
-            try
-            {
-                item = EnqueueOrAttach(request, rawBody, ListenerId, CurrentListenerGeneration(), admissionReservation.Owner, out created, out queueDepth);
-                MarkAdmissionQueuePublished(admissionReservation);
-            }
+            try { item = EnqueueOrAttach(context.Request, request, rawBody, ListenerId, CurrentListenerGeneration(), out created, out queueDepth); }
             catch (BridgeCommandException exception)
             {
-                if (!CompensateAdmissionBeforeQueuePublication(admissionReservation))
-                    exception = new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission compensation could not prove exact pre-queue cleanup.");
                 WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, exception), 200);
                 return;
-            }
-            catch
-            {
-                CompensateAdmissionBeforeQueuePublication(admissionReservation);
-                throw;
             }
             WriteLog((created ? "bridge_request_enqueued" : "bridge_request_attached") + " requestId=" + request.RequestId + " command=" + request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
 

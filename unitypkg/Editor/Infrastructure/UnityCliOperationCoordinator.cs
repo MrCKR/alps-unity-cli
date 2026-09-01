@@ -611,20 +611,43 @@ namespace UnityCli
             return request == null ? null : request.Command;
         }
 
-        /// <summary>queue 只需保守判断资源所有权；解析失败按 mutation 串行，最终错误仍由 coordinator 结构化返回。</summary>
-        private static bool CoordinatedRequestIsMutation(BridgeRequest request)
+        /// <summary>HTTP publication只做纯输入分类；可能依赖Unity对象现状的create/read按writer保守线性化。</summary>
+        private static bool QueueRequestIsMutation(BridgeRequest request)
         {
             try
             {
+                if (request != null && UnityCliBridgeQueuePolicy.IsSafeStatusCommand(request.Command)) return false;
                 if (request != null && string.Equals(request.Command, "internal.editor.compile.start", StringComparison.Ordinal))
                     return request.Execution == null || request.Execution.DryRun != true;
                 var contract = ResolveRequestCompletionContract(request);
+                if (request == null || contract == null || !contract.Mutation
+                    || request.Execution != null && request.Execution.DryRun == true) return false;
+                var name = contract.ToolName;
+                var input = RequestBusinessInput(request);
+                if (name == "graphics.reflection-probe")
+                    return HasAnyMeaningfulInput(input, "mode", "resolution", "bounces", "hdr", "boxSize", "boxOffset") || InputBoolean(input, "create");
+                if (name == "graphics.light-probe-group")
+                    return HasAnyMeaningfulInput(input, "positions") || InputBoolean(input, "create");
+                if (name == "physics.rigidbody")
+                    return !InputBoolean(input, "validate") && (HasAnyMeaningfulInput(input, "angularDrag", "drag", "isKinematic", "mass", "useGravity", "target"));
                 return RequestRequiresMutation(request, contract);
             }
             catch
             {
                 return true;
             }
+        }
+
+        /// <summary>durable mutation lease读取失败、被占用与空闲分别投影为queue policy三态。</summary>
+        private static UnityCliBridgeQueuePolicy.DurableMutationBarrier CurrentDurableMutationBarrier()
+        {
+            string requestId;
+            string requestDigest;
+            if (!UnityCliSessionMutationLease.TryGetCurrentOwner(out requestId, out requestDigest))
+                return UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable;
+            return string.IsNullOrEmpty(requestId) && string.IsNullOrEmpty(requestDigest)
+                ? UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear
+                : UnityCliBridgeQueuePolicy.DurableMutationBarrier.Held;
         }
 
         /// <summary>descriptor 表示潜在风险；本次 input 没有 setter/action 时按 read 执行。</summary>

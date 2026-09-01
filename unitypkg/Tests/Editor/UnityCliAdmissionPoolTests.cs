@@ -67,7 +67,11 @@ namespace UnityCli.Tests
             Assert.That(result.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
             Assert.That(result.NewlyConsumed, Is.True);
             Assert.That(result.Identity.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
-            Assert.That(pool.AuthorizeAndCapture(Request(0), Fingerprint(0), Digest(0), grant.Token, ListenerId, 1, 5000).Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.AlreadyConsumed));
+            var replay = pool.AuthorizeAndCapture(Request(0), Fingerprint(0), Digest(0), grant.Token, ListenerId, 1, 5000);
+            Assert.That(replay.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.AlreadyConsumed));
+            Assert.That(replay.Identity.RequestDigest, Is.EqualTo(result.Identity.RequestDigest));
+            Assert.That(replay.Identity.Token, Is.EqualTo(result.Identity.Token));
+            Assert.That(replay.Identity.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
             Assert.That(pool.AuthorizeAndCapture(Request(0), Fingerprint(0), Digest(9), grant.Token, ListenerId, 1, 5000).Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.IdentityMismatch));
             Assert.That(pool.CompensateAuthorization(result.Identity), Is.True);
             Assert.That(pool.CompensateAuthorization(result.Identity), Is.True);
@@ -76,7 +80,7 @@ namespace UnityCli.Tests
             var successor = Consume(pool, 0);
             Assert.That(pool.CompensateAuthorization(result.Identity), Is.False);
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
-            Assert.That(pool.CompleteTrusted(successor), Is.True);
+            Assert.That(pool.CompleteTrusted(successor), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
         }
 
         [Test]
@@ -125,13 +129,13 @@ namespace UnityCli.Tests
             {
                 var pool = Pool();
                 var owner = OwnerAt(pool, state);
-                Assert.That(pool.CompleteTrusted(owner), Is.True, state.ToString());
-                Assert.That(pool.CompleteTrusted(owner), Is.True, "idempotent " + state);
+                Assert.That(pool.CompleteTrusted(owner), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted), state.ToString());
+                Assert.That(pool.CompleteTrusted(owner), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent), "idempotent " + state);
             }
             foreach (var state in new[] { UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, UnityCliAdmissionPool.AdmissionOwnerState.Recovery })
             {
                 var pool = Pool();
-                Assert.That(pool.CompleteTrusted(OwnerAt(pool, state)), Is.False, state.ToString());
+                Assert.That(pool.CompleteTrusted(OwnerAt(pool, state)), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked), state.ToString());
                 Assert.That(pool.Capture().Active, Is.EqualTo(1));
             }
         }
@@ -143,13 +147,13 @@ namespace UnityCli.Tests
             var owner = Consume(pool, 0);
             var staleToken = Consume(Pool(), 0);
             Assert.That(pool.PrepareOwnerTransfer(staleToken, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), Is.False);
-            Assert.That(pool.CompleteTrusted(staleToken), Is.False);
+            Assert.That(pool.CompleteTrusted(staleToken), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked));
 
             UnityCliAdmissionPool.ConsumedIdentity coordinator;
             Assert.That(pool.PrepareOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), Is.True);
             Assert.That(pool.CommitOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, out coordinator), Is.True);
             Assert.That(pool.PrepareOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup), Is.False);
-            Assert.That(pool.CompleteTrusted(owner), Is.False);
+            Assert.That(pool.CompleteTrusted(owner), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked));
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
         }
 
@@ -158,11 +162,11 @@ namespace UnityCli.Tests
         {
             var pool = Pool();
             var oldIdentity = Consume(pool, 0);
-            Assert.That(pool.CompleteTrusted(oldIdentity), Is.True);
+            Assert.That(pool.CompleteTrusted(oldIdentity), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
             var successor = Consume(pool, 0, 1);
-            Assert.That(pool.CompleteTrusted(oldIdentity), Is.False);
+            Assert.That(pool.CompleteTrusted(oldIdentity), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked));
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
-            Assert.That(pool.CompleteTrusted(successor), Is.True);
+            Assert.That(pool.CompleteTrusted(successor), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
         }
 
         [Test]
@@ -282,7 +286,7 @@ namespace UnityCli.Tests
         {
             var source = Pool();
             var owners = Enumerable.Range(0, 5).Select(index => Consume(source, index)).ToArray();
-            Assert.That(source.CompleteTrusted(owners[0]), Is.True);
+            Assert.That(source.CompleteTrusted(owners[0]), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
             var before = source.CaptureRecovery();
             Assert.That(before.Active, Is.EqualTo(4));
             Assert.That(before.GateClosed, Is.True);

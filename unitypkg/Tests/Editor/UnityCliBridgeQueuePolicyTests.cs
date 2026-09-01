@@ -5,7 +5,7 @@ using NUnit.Framework;
 
 namespace UnityCli.Tests
 {
-    /// <summary>仅验证纯队列策略；BridgeWorkQueue集成待完成。</summary>
+    /// <summary>验证BridgeWorkQueue复用的纯分类、容量与启动选择策略。</summary>
     public sealed class UnityCliBridgeQueuePolicyTests
     {
         private const string SafeStatusCommand = "internal.editor.compile.status";
@@ -167,7 +167,7 @@ namespace UnityCli.Tests
             var result = UnityCliBridgeQueuePolicy.SelectStarts(
                 queued, 0, false, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable);
 
-            Assert.That(Ids(result), Is.EqualTo(new[] { "exact-status", "snapshot" }));
+            Assert.That(Ids(result), Is.EqualTo(new[] { "exact-status" }));
             Assert.That(result.Starts.All(item => item.Class == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus), Is.True);
         }
 
