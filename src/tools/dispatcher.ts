@@ -67,21 +67,22 @@ export async function dispatchTool(
   const executionFlagError = validateExecutionTimeoutFlags(flags, requestId);
   if (executionFlagError) return executionFlagError;
 
-  const codeInputDeadlineMs = name === "code.exec"
-    ? dispatchStartedAtMs + (typeof flags["timeout-ms"] === "string" ? Number(flags["timeout-ms"]) : 60_000)
-    : undefined;
-  const parsed = await parseTypedInput(flags, requestId, name === "code.exec" ? 1024 * 1024 : undefined, codeInputDeadlineMs);
+  const localMetadata = findToolByName(name);
+  const defaultTimeoutMs = name === "code.exec" ? 60_000 : 30_000;
+  const admissionTimeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? localMetadata?.timeoutMs ?? defaultTimeoutMs);
+  const admissionAbsoluteDeadlineMs = dispatchStartedAtMs + admissionTimeoutMs;
+  const parsed = await parseTypedInput(flags, requestId, name === "code.exec" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
   if (!parsed.ok) return parsed.error;
   const dispatchFlags = withStructuredInput(flags, parsed.input);
+  const dispatchResolved = (tool: ToolMetadata, input: Record<string, unknown>): Promise<CliResult> => dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs);
   // command入口已从同一次live catalog读取schema；直接使用该descriptor，避免二次发现改变绑定。
   if (resolvedTool) {
     if (resolvedTool.name !== name) return failure(requestId, "E_TOOL_SCHEMA_CONFLICT", `Resolved Tool name ${resolvedTool.name} does not match requested name ${name}.`, [
       "Refresh the selected Unity instance catalog and retry the same command."
     ], { requestedName: name, resolvedName: resolvedTool.name });
     const input = requestFromInput(resolvedTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
-    return dispatchResolvedTool(resolvedTool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+    return dispatchResolved(resolvedTool, input);
   }
-  const localMetadata = findToolByName(name);
   const localProperties = localMetadata?.inputSchema.properties as Record<string, unknown> | undefined;
   // TS-local schema 的 project 仅约束已选实例；不得把其他业务字段写入 selector/execution flags。
   const catalogFlags = localMetadata && localProperties && "project" in localProperties
@@ -93,32 +94,30 @@ export async function dispatchTool(
   const catalogIndependentTool = resolveCatalogIndependentInvocationTool(name, typeof describedName === "string" ? describedName : undefined);
   if (catalogIndependentTool) {
     const input = requestFromInput(catalogIndependentTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
-    return dispatchResolvedTool(catalogIndependentTool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+    return dispatchResolved(catalogIndependentTool, input);
   }
   const coreSpec = bridgeCommandRegistry.specs().find((spec) => (spec.toolName === name || spec.bridgeCommand === name) && !EXTENSION_GROUPS.has(spec.group) && spec.internal !== true);
   // Runtime descriptor 的唯一 owner 在 TS catalog；执行直接进入共享 runtime wrapper，目标缺失时返回 runtime selector 错误。
   if (localMetadata?.handler === "bridge-runtime") {
     const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
-    return dispatchResolvedTool(localMetadata, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+    return dispatchResolved(localMetadata, input);
   }
   // 无 catalog fixture 的注入式 bridgeExecute 仅用于隔离测试；其余路径必须 catalog-first。
   if (runtime.bridgeExecute && runtime.projectTools === undefined && localMetadata) {
     const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
-    return dispatchResolvedTool(localMetadata, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+    return dispatchResolved(localMetadata, input);
   }
   if (coreSpec && runtime.bridgeExecute && runtime.projectTools === undefined) {
-    return executeCoreBridgeSpec(name, coreSpec, parsed.input, dispatchFlags, runtime, requestId, dispatchStartedAtMs, positionalTarget);
+    return executeCoreBridgeSpec(name, coreSpec, parsed.input, dispatchFlags, runtime, requestId, admissionAbsoluteDeadlineMs, positionalTarget);
   }
 
-  const catalogTimeoutMs = Math.max(1, executionFromFlags(dispatchFlags).timeoutMs ?? localMetadata?.timeoutMs ?? 30_000);
-  const catalogAbsoluteDeadlineMs = dispatchStartedAtMs + catalogTimeoutMs;
-  const resolved = await resolveCatalogTool(name, catalogFlags, runtime, requestId, catalogAbsoluteDeadlineMs);
-  if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime, catalogAbsoluteDeadlineMs);
+  const resolved = await resolveCatalogTool(name, catalogFlags, runtime, requestId, admissionAbsoluteDeadlineMs);
+  if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime, admissionAbsoluteDeadlineMs);
   const tool = resolved.tool;
   if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
 
   const input = requestFromInput(tool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
-  return dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
+  return dispatchResolved(tool, input);
 }
 
 /** 公开统一catalog对每个在线target session分别占一个slot，禁止跨池旁路输出。 */
@@ -204,7 +203,8 @@ async function dispatchResolvedTool(
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string,
-  dispatchStartedAtMs: number,
+  admissionTimeoutMs: number,
+  admissionAbsoluteDeadlineMs: number,
 ): Promise<CliResult> {
   const definition = findDefineTool(tool.name);
   const executionTool = tool;
@@ -230,8 +230,8 @@ async function dispatchResolvedTool(
     errors: schemaErrors
   });
   return definition && executionTool.handler !== "bridge-runtime"
-    ? executeDefinition(executionTool, completion, definition, input, flags, runtime, requestId, dispatchStartedAtMs)
-    : executeLiveTool(executionTool, completion, input, flags, runtime, requestId, dispatchStartedAtMs);
+    ? executeDefinition(executionTool, completion, definition, input, flags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs)
+    : executeLiveTool(executionTool, completion, input, flags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs);
 }
 
 /** 已有 core bridge spec 使用统一参数构造，不进入 live custom wrapper。 */
@@ -242,13 +242,11 @@ async function executeCoreBridgeSpec(
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string,
-  dispatchStartedAtMs: number,
+  absoluteDeadlineMs: number,
   positionalTarget?: string
 ): Promise<CliResult> {
   let args = await spec.buildArgs({ command: name, flags: bridgeWrapperFlags(flags, input), positionalTarget });
   if (spec.toolName) args = { name: spec.toolName, input: args };
-  const timeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? 30_000);
-  const absoluteDeadlineMs = dispatchStartedAtMs + timeoutMs;
   return enrichTargetFailureWithDialogBlocker(await executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, undefined, {
     mode: "execute",
     mutation: true,
@@ -264,12 +262,11 @@ async function executeDefinition(
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string,
-  dispatchStartedAtMs: number,
+  timeoutMs: number,
+  admissionAbsoluteDeadlineMs: number,
 ): Promise<CliResult> {
   let projectPath = typeof input.project === "string" ? input.project : process.cwd();
   const execution = executionFromFlags(flags);
-  const timeoutMs = Math.max(1, execution.timeoutMs ?? tool.timeoutMs ?? 30_000);
-  const admissionAbsoluteDeadlineMs = dispatchStartedAtMs + timeoutMs;
 
   // exact观察定义及其describe投影在完成公共校验后不进入业务准入或strict selector。
   if (isAdmissionIndependentLocalDefinition(tool, input)) {
@@ -900,10 +897,10 @@ async function executeLiveTool(
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string,
-  dispatchStartedAtMs: number,
+  timeoutMs: number,
+  admissionAbsoluteDeadlineMs: number,
 ): Promise<CliResult> {
-  const timeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? tool.timeoutMs ?? 30_000);
-  const admissionContext = await acquireToolAdmission(tool, completion, input, flags, runtime, requestId, timeoutMs, dispatchStartedAtMs + timeoutMs);
+  const admissionContext = await acquireToolAdmission(tool, completion, input, flags, runtime, requestId, timeoutMs, admissionAbsoluteDeadlineMs);
   if ("result" in admissionContext) return admissionContext.result;
   const { admission, supervisor } = admissionContext;
   const runtimeTarget = admission.target === "runtime";
@@ -1088,7 +1085,7 @@ function inputTooLarge(requestId: string, source: string, maxBytes: number): Par
 }
 
 function inputDeadlineExceeded(requestId: string): ParsedInput {
-  return { ok: false, error: failure(requestId, "E_EXECUTION_TIMEOUT", "code.exec typed input did not finish reading before the immutable deadline.", ["Provide bounded input from a responsive local source or submit a new request with a sufficient timeout."]) };
+  return { ok: false, error: failure(requestId, "E_EXECUTION_TIMEOUT", "Tool typed input did not finish reading before the immutable admission deadline.", ["Provide bounded input from a responsive local source or submit a new request with a sufficient timeout."]) };
 }
 
 const TOOL_CONTROL_FLAGS = new Set([
