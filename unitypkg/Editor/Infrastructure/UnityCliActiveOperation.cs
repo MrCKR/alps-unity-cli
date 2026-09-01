@@ -118,6 +118,7 @@ namespace UnityCli
             {
                 try { admissionOwner = UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(cleanupScope, marker, requestId, requestDigest); }
                 catch { return true; }
+                if (admissionOwner == null) return false;
             }
             Dictionary<string, object> active;
             try { active = Load(scope); }

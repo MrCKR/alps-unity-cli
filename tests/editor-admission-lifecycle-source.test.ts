@@ -14,14 +14,16 @@ test("Admission pool has explicit owner states and no dead expiry outcome", asyn
   assert.ok(!pool.includes("Expired, IdentityMismatch"));
 });
 
-test("Queue settlement is outside QueueLock and has a finally signal path", async () => {
+test("Queue settlement keeps pool completion and map removal in one QueueLock boundary", async () => {
   const queue = await read("unitypkg/Editor/Bridge/BridgeWorkQueue.cs");
   const complete = queue.indexOf("private static void CompleteWorkItem");
   assert.ok(complete >= 0);
   assert.ok(queue.indexOf("UnityCliQueueSettlement.Complete", complete) > complete);
+  assert.ok(queue.indexOf("lock (QueueLock)", complete) > complete);
+  assert.ok(queue.indexOf("pool.CompleteTrusted", complete) > complete);
+  assert.ok(queue.indexOf("ActiveRequestWork.Remove", complete) > queue.indexOf("pool.CompleteTrusted", complete));
   assert.ok(queue.indexOf("item.Completed.Set()", complete) > complete);
   assert.ok(queue.indexOf("UnityCliTransactionLog.Append", complete) > queue.indexOf("item.Completed.Set()", complete));
-  assert.ok(!queue.includes("QueuePublicationTestHook"));
 });
 
 test("Queue publication uses the shared rollback transaction and snapshots its barrier outside the lock", async () => {
@@ -41,7 +43,7 @@ test("Accepted durable failure retains owner and direct mutations have a recover
   assert.ok(admission.includes("enum AdmissionTransferResult"));
   assert.ok(admission.includes("TransferPending"));
   assert.ok(admission.includes("command == \"project-tool.run\" || command == \"code.exec\""));
-  assert.ok(admission.includes("if (transfer == AdmissionTransferResult.TransferPending) return;"));
+  assert.ok(admission.includes("if (transfer == AdmissionTransferResult.TransferPending) return transfer;"));
   assert.ok(admission.includes("AdmissionAcceptedTopDigest"));
 });
 
@@ -57,7 +59,7 @@ test("Reload reconciliation accepts source committed and source pending transfer
 test("Cancel ownership is bound to the parent digest and Continuation", async () => {
   const cancel = await read("unitypkg/Editor/Infrastructure/UnityCliTestRunCoordinator.cs");
   assert.ok(cancel.includes("cancelOwner.TopRequestDigest, root.RequestDigest"));
-  assert.ok(cancel.includes("admissionRequestDigest\"), cancelDigest"));
+  assert.ok(cancel.includes("cancelNeedsContinuation"));
   assert.ok(cancel.includes("AdmissionOwnerState.Continuation"));
   assert.ok(cancel.includes("CompleteAdmissionRoot(cancelOwner)"));
 });

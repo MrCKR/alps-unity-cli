@@ -45,6 +45,13 @@ namespace UnityCli
         private float nextRegistryRefreshAt;
         private bool previousRunInBackground;
         private bool runInBackgroundCaptured;
+        internal Action<string> RuntimeTestBoundary;
+
+        private void HitRuntimeTestBoundary(string name)
+        {
+            var boundary = RuntimeTestBoundary;
+            if (boundary != null) boundary(name);
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void StartBeforeSceneLoad()
@@ -120,15 +127,8 @@ namespace UnityCli
         /// <summary>终止listener，完成active请求，清空session state并移除registry claim。</summary>
         private void StopBridge()
         {
-            lock (requestCacheSync)
-            {
-                // cancellation与request入队共享同一线性化点，锁释放后不能再产生本session work。
-                try { stopping.Cancel(); } catch { }
-                foreach (var entry in requestCache.Values)
-                    if (!entry.Completion.Task.IsCompleted) entry.Completion.TrySetResult(Error(ReadString(entry.Request, "requestId") ?? string.Empty, "E_RUNTIME_SESSION_STALE", "The development Player session ended before the request completed.", new[] { "Launch a new development Player and submit a new request." }));
-                requestCache.Clear();
-                if (admissionPool != null) { admissionPool.Reset(); admissionPool = null; }
-            }
+            // cancellation与request入队共享同一线性化点，锁释放后不能再产生本session work。
+            StopRuntimeRequestsLocked();
             try { if (listener != null) { listener.Stop(); listener.Close(); listener = null; } } catch { }
             try { UnityCliRuntimeTools.Shutdown(); } catch { }
             try { if (registry != null) { registry.Dispose(); registry = null; } } catch { }
@@ -193,7 +193,9 @@ namespace UnityCli
                 var digest = Sha256(body);
                 PendingRequest work = null;
                 string immediate = null;
-                // requestCacheSync内先规划、不变更旧terminal；授权与queue/cache publication成功后才提交一次淘汰。
+                UnityCliAdmissionPool.ConsumedIdentity admissionOwner = null;
+                var newlyConsumed = false;
+                // cache规划、准入与pending publication共享requestCacheSync；旧terminal只在新entry成功入队后淘汰。
                 lock (requestCacheSync)
                 {
                     if (stopping.IsCancellationRequested)
@@ -208,31 +210,32 @@ namespace UnityCli
                     else
                     {
                         var deadline = ValidateRequest(envelope);
-                        var reservation = requestCache.Plan(requestId, digest, entry => entry.Completion.Task.IsCompleted, entry => entry.Order);
-                        if (reservation == null)
-                            immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime request cache is full of active work.", new[] { "Wait for active Player requests to complete and retry." }, true, 100);
-                        else if (pending.Count >= MaxQueueItems)
-                            immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime bridge queue is full.", new[] { "Wait for the Player to process pending requests and retry." }, true, 100);
+                        var pool = admissionPool;
+                        var admissionError = AuthorizeRuntimeAdmission(pool, context.Request, envelope, digest, out admissionOwner, out newlyConsumed);
+                        if (admissionError != null) immediate = admissionError;
                         else
                         {
-                            var pool = admissionPool;
-                            UnityCliAdmissionPool.ConsumedIdentity admissionOwner;
-                            bool newlyConsumed;
-                            var admissionError = AuthorizeRuntimeAdmission(pool, context.Request, envelope, digest, out admissionOwner, out newlyConsumed);
-                            if (admissionError != null) immediate = admissionError;
-                            else
+                            try
                             {
-                                try
-                                {
-                                    work = new PendingRequest(envelope, deadline, digest, ++requestOrder, admissionOwner);
-                                    if (!requestCache.Publish(reservation, work, value => { pending.Enqueue(value); return true; }))
-                                        throw new InvalidOperationException("Runtime request publication reservation changed before enqueue.");
-                                }
-                                catch
+                                work = new PendingRequest(envelope, deadline, digest, ++requestOrder, admissionOwner);
+                                PendingRequest existing;
+                                var outcome = TryPublishPreparedRequest(work, out existing);
+                                if (outcome == RuntimePublicationOutcome.Existing) work = existing;
+                                else if (outcome == RuntimePublicationOutcome.Stopping)
                                 {
                                     if (newlyConsumed && admissionOwner != null && pool != null) pool.CompensateAuthorization(admissionOwner);
-                                    throw;
+                                    immediate = Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." });
                                 }
+                                else if (outcome == RuntimePublicationOutcome.CacheFull || outcome == RuntimePublicationOutcome.QueueFull)
+                                {
+                                    if (newlyConsumed && admissionOwner != null && pool != null) pool.CompensateAuthorization(admissionOwner);
+                                    immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime bridge capacity is full.", new[] { "Wait for the Player to process active requests and retry." }, true, 100);
+                                }
+                            }
+                            catch
+                            {
+                                if (newlyConsumed && admissionOwner != null && pool != null) pool.CompensateAuthorization(admissionOwner);
+                                throw;
                             }
                         }
                     }
@@ -594,7 +597,44 @@ namespace UnityCli
         private static string ProcessStartedAt(Process process) { return process.StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture); }
         private static string RuntimeBuildGuid() { var property = typeof(Application).GetProperty("buildGUID", BindingFlags.Static | BindingFlags.Public); return property == null ? string.Empty : property.GetValue(null, null) as string ?? string.Empty; }
 
-        private sealed class PendingRequest
+        internal enum RuntimePublicationOutcome { Published, Existing, Stopping, CacheFull, QueueFull }
+
+        internal RuntimePublicationOutcome TryPublishPreparedRequest(PendingRequest work, out PendingRequest existing)
+        {
+            if (work == null) throw new ArgumentNullException("work");
+            lock (requestCacheSync)
+            {
+                existing = null;
+                if (stopping.IsCancellationRequested) return RuntimePublicationOutcome.Stopping;
+                if (requestCache.TryGet(work.RequestId, out existing))
+                {
+                    if (!string.Equals(existing.RequestDigest, work.RequestDigest, StringComparison.Ordinal))
+                        throw new InvalidOperationException("Runtime request identity does not match the existing cache entry.");
+                    return RuntimePublicationOutcome.Existing;
+                }
+                var reservation = requestCache.Plan(work.RequestId, work.RequestDigest, entry => entry.Completion.Task.IsCompleted, entry => entry.Order);
+                if (reservation == null) return RuntimePublicationOutcome.CacheFull;
+                if (pending.Count >= MaxQueueItems) return RuntimePublicationOutcome.QueueFull;
+                HitRuntimeTestBoundary("before-runtime-publish");
+                if (!requestCache.Publish(reservation, work, value => { pending.Enqueue(value); return true; })) return RuntimePublicationOutcome.QueueFull;
+                return RuntimePublicationOutcome.Published;
+            }
+        }
+
+        internal void StopRuntimeRequestsLocked()
+        {
+            lock (requestCacheSync)
+            {
+                try { HitRuntimeTestBoundary("before-runtime-stop"); } catch { }
+                try { stopping.Cancel(); } catch { }
+                foreach (var entry in requestCache.Values)
+                    if (!entry.Completion.Task.IsCompleted) entry.Completion.TrySetResult(Error(ReadString(entry.Request, "requestId") ?? string.Empty, "E_RUNTIME_SESSION_STALE", "The development Player session ended before the request completed.", new[] { "Launch a new development Player and submit a new request." }));
+                requestCache.Clear();
+                if (admissionPool != null) { admissionPool.Reset(); admissionPool = null; }
+            }
+        }
+
+        internal sealed class PendingRequest
         {
             internal PendingRequest(Dictionary<string, object> request, long absoluteDeadlineMs, string requestDigest, long order, UnityCliAdmissionPool.ConsumedIdentity admissionOwner)
             {
@@ -606,6 +646,7 @@ namespace UnityCli
                 AdmissionOwner = admissionOwner;
             }
             internal Dictionary<string, object> Request;
+            internal string RequestId { get { return ReadString(Request, "requestId") ?? string.Empty; } }
             internal TaskCompletionSource<string> Completion;
             internal long AbsoluteDeadlineMs;
             internal string RequestDigest;

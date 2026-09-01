@@ -215,7 +215,7 @@ namespace UnityCli.Tests
                 "internal.occlusion.bake.status"
             };
             foreach (var command in allowed)
-                Assert.That(UnityCliBridgeQueuePolicy.Classify(command, false),
+                Assert.That(UnityCliBridgeQueuePolicy.Classify(command, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus),
                     Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.SafeStatus), command);
 
             var excluded = new[]
@@ -225,22 +225,21 @@ namespace UnityCli.Tests
                 "internal.unknown.status",
                 "project-tool.run",
                 "profiler.status",
-                "extension.status",
-                "internal.navmesh.bake.plan",
-                "internal.navmesh.bake.snapshot",
-                "internal.navmesh.bake.cancel",
-                "internal.test.run.cancel"
+                "extension.status"
             };
             foreach (var command in excluded)
             {
                 Assert.That(UnityCliBridgeQueuePolicy.IsSafeStatusCommand(command), Is.False, command);
-                Assert.That(UnityCliBridgeQueuePolicy.Classify(command, false),
+                Assert.That(UnityCliBridgeQueuePolicy.Classify(command, UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
                     Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead), command);
             }
 
-            Assert.That(UnityCliBridgeQueuePolicy.Classify("project-tool.run", true),
+            foreach (var command in new[] { "internal.navmesh.bake.plan", "internal.navmesh.bake.snapshot", "internal.navmesh.bake.cancel", "internal.test.run.cancel" })
+                Assert.That(UnityCliBridgeQueuePolicy.Classify(command, UnityCliBridgeQueuePolicy.WorkClass.Mutation),
+                    Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation), command);
+            Assert.That(UnityCliBridgeQueuePolicy.Classify("project-tool.run", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
                 Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation));
-            Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(SafeStatusCommand, true));
+            Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(SafeStatusCommand, UnityCliBridgeQueuePolicy.WorkClass.Mutation));
         }
 
         [Test]
@@ -269,9 +268,9 @@ namespace UnityCli.Tests
         [Test]
         public void CommandLengthMatchesCanonicalAdmissionBoundary()
         {
-            Assert.That(UnityCliBridgeQueuePolicy.Classify(new string('c', 256), false),
+            Assert.That(UnityCliBridgeQueuePolicy.Classify(new string('c', 256), UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
                 Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead));
-            Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(new string('c', 257), false));
+            Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(new string('c', 257), UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead));
         }
 
         private static UnityCliBridgeQueuePolicy.TickSelection Select(IReadOnlyList<UnityCliBridgeQueuePolicy.QueueNode> queued)
@@ -284,18 +283,17 @@ namespace UnityCli.Tests
         {
             if (workClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus)
                 throw new ArgumentException("Tests must create SafeStatus through its exact command.", "workClass");
-            return new UnityCliBridgeQueuePolicy.QueueNode(
-                id, "project-tool.run", workClass == UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+            return new UnityCliBridgeQueuePolicy.QueueNode(id, "project-tool.run", workClass);
         }
 
         private static UnityCliBridgeQueuePolicy.QueueNode Safe(string id)
         {
-            return Classified(id, SafeStatusCommand, false);
+            return new UnityCliBridgeQueuePolicy.QueueNode(id, SafeStatusCommand, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
         }
 
         private static UnityCliBridgeQueuePolicy.QueueNode Classified(string id, string command, bool mutation)
         {
-            return new UnityCliBridgeQueuePolicy.QueueNode(id, command, mutation);
+            return new UnityCliBridgeQueuePolicy.QueueNode(id, command, mutation ? UnityCliBridgeQueuePolicy.WorkClass.Mutation : UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
         }
 
         private static UnityCliBridgeQueuePolicy.BypassIdentity Identity(int requestIndex, int digestIndex)

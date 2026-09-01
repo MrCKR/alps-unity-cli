@@ -18,17 +18,26 @@ namespace UnityCli
                 string domain,
                 bool destructive,
                 int timeoutMs,
-                Func<TInput, CancellationToken, ValueTask<object>> handler)
+                Func<TInput, CancellationToken, ValueTask<object>> handler,
+                UnityCliBridgeQueuePolicy.WorkClass? queueClass = null)
             {
                 if (string.IsNullOrWhiteSpace(command)) throw new ArgumentException("Bridge command registration requires a command name.", "command");
                 if (handler == null) throw new ArgumentNullException("handler");
                 if (commands.ContainsKey(command)) throw new InvalidOperationException("Duplicate bridge command registration: " + command);
+                var registeredQueueClass = queueClass;
+                if (!registeredQueueClass.HasValue && command.StartsWith("internal.", StringComparison.Ordinal))
+                    registeredQueueClass = UnityCliBridgeQueuePolicy.IsSafeStatusCommand(command)
+                        ? UnityCliBridgeQueuePolicy.WorkClass.SafeStatus
+                        : UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+                if (registeredQueueClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus && !UnityCliBridgeQueuePolicy.IsSafeStatusCommand(command))
+                    throw new InvalidOperationException("Only exact SafeStatus commands may use SafeStatus classification: " + command);
                 commands.Add(command, new BridgeCommandDefinition(
                     command,
                     domain,
                     destructive,
                     timeoutMs,
                     typeof(TInput),
+                    registeredQueueClass,
                     async (input, cancellationToken) => await handler((TInput)input, cancellationToken)));
             }
 
@@ -58,17 +67,39 @@ namespace UnityCli
                 BridgeCommandDefinition definition;
                 return command != null && commands.TryGetValue(command, out definition) && definition.Destructive;
             }
+
+            public bool TryGetQueueClass(string command, out UnityCliBridgeQueuePolicy.WorkClass workClass)
+            {
+                BridgeCommandDefinition definition;
+                if (command != null && commands.TryGetValue(command, out definition) && definition.QueueClass.HasValue)
+                {
+                    workClass = definition.QueueClass.Value;
+                    return true;
+                }
+                workClass = default(UnityCliBridgeQueuePolicy.WorkClass);
+                return false;
+            }
+
+            internal IReadOnlyDictionary<string, UnityCliBridgeQueuePolicy.WorkClass> InternalQueueClasses()
+            {
+                var result = new Dictionary<string, UnityCliBridgeQueuePolicy.WorkClass>(StringComparer.Ordinal);
+                foreach (var pair in commands)
+                    if (pair.Key.StartsWith("internal.", StringComparison.Ordinal) && pair.Value.QueueClass.HasValue)
+                        result.Add(pair.Key, pair.Value.QueueClass.Value);
+                return result;
+            }
         }
 
         private sealed class BridgeCommandDefinition
         {
-            public BridgeCommandDefinition(string command, string domain, bool destructive, int timeoutMs, Type inputType, Func<object, CancellationToken, ValueTask<object>> handler)
+            public BridgeCommandDefinition(string command, string domain, bool destructive, int timeoutMs, Type inputType, UnityCliBridgeQueuePolicy.WorkClass? queueClass, Func<object, CancellationToken, ValueTask<object>> handler)
             {
                 Command = command;
                 Domain = domain;
                 Destructive = destructive;
                 TimeoutMs = timeoutMs;
                 InputType = inputType;
+                QueueClass = queueClass;
                 Handler = handler;
             }
 
@@ -77,7 +108,13 @@ namespace UnityCli
             public bool Destructive { get; private set; }
             public int TimeoutMs { get; private set; }
             public Type InputType { get; private set; }
+            public UnityCliBridgeQueuePolicy.WorkClass? QueueClass { get; private set; }
             public Func<object, CancellationToken, ValueTask<object>> Handler { get; private set; }
+        }
+
+        internal static IReadOnlyDictionary<string, UnityCliBridgeQueuePolicy.WorkClass> InternalQueueClassesForTests()
+        {
+            return CommandRegistry.InternalQueueClasses();
         }
 
         private static BridgeCommandRegistry CreateCommandRegistry()

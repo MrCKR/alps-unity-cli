@@ -57,16 +57,20 @@ namespace UnityCli
             public string RequestDigest { get; internal set; }
             public string Token { get; internal set; }
             public string SessionId { get; internal set; }
+            public string ListenerId { get; internal set; }
+            public long ListenerGeneration { get; internal set; }
+            public long ExecutionDeadlineMs { get; internal set; }
             public AdmissionOwnerState OwnerState { get; internal set; }
         }
 
         /// <summary>跨assembly owner只通过完整字段创建不可变transition identity。</summary>
-        public static ConsumedIdentity CreateConsumedIdentity(string requestId, string rootFingerprint, string requestDigest, string token, string ownerSessionId, AdmissionOwnerState ownerState)
+        public static ConsumedIdentity CreateConsumedIdentity(string requestId, string rootFingerprint, string requestDigest, string token, string ownerSessionId, AdmissionOwnerState ownerState, string listenerId, long listenerGeneration, long executionDeadlineMs)
         {
             if (!ValidRequestId(requestId) || !IsSha256(rootFingerprint) || !IsSha256(requestDigest) || !IsToken(token)
-                || string.IsNullOrWhiteSpace(ownerSessionId) || ownerState == AdmissionOwnerState.Granted || !Enum.IsDefined(typeof(AdmissionOwnerState), ownerState))
+                || string.IsNullOrWhiteSpace(ownerSessionId) || !ValidListener(listenerId, listenerGeneration) || executionDeadlineMs <= 0
+                || ownerState == AdmissionOwnerState.Granted || !Enum.IsDefined(typeof(AdmissionOwnerState), ownerState))
                 throw new ArgumentException("Admission consumed identity is invalid.");
-            return new ConsumedIdentity { RequestId = requestId, RootFingerprint = rootFingerprint, RequestDigest = requestDigest, Token = token, SessionId = ownerSessionId, OwnerState = ownerState };
+            return new ConsumedIdentity { RequestId = requestId, RootFingerprint = rootFingerprint, RequestDigest = requestDigest, Token = token, SessionId = ownerSessionId, ListenerId = listenerId, ListenerGeneration = listenerGeneration, ExecutionDeadlineMs = executionDeadlineMs, OwnerState = ownerState };
         }
 
         public sealed class Snapshot
@@ -255,6 +259,43 @@ namespace UnityCli
                     || entry.ExecutionDeadlineMs != executionDeadlineMs) return false;
                 entry.ListenerId = listenerId;
                 entry.ListenerGeneration = listenerGeneration;
+                return true;
+            }
+        }
+
+        /// <summary>marker与pool同时落在reload窗口时按完整identity重建唯一consumed record。</summary>
+        public bool RestoreConsumed(ConsumedIdentity identity, AdmissionOwnerState intendedOwner, bool transferCommitted)
+        {
+            lock (sync)
+            {
+                if (recoveryBlocked || identity == null || identity.OwnerState == AdmissionOwnerState.Granted
+                    || !Enum.IsDefined(typeof(AdmissionOwnerState), intendedOwner) || intendedOwner == AdmissionOwnerState.Granted
+                    || !ValidRequestId(identity.RequestId) || !IsSha256(identity.RootFingerprint) || !IsSha256(identity.RequestDigest)
+                    || !IsToken(identity.Token) || !string.Equals(identity.SessionId, sessionId, StringComparison.Ordinal)
+                    || !ValidListener(identity.ListenerId, identity.ListenerGeneration) || identity.ExecutionDeadlineMs <= 0
+                    || !IsLegalOwnerTransfer(identity.OwnerState, intendedOwner)) return false;
+                AdmissionRecord existing;
+                if (records.TryGetValue(identity.RequestId, out existing))
+                    return Matches(existing, identity) && existing.OwnerState == identity.OwnerState;
+                if (records.Count >= maxActive) { gateClosed = true; return false; }
+                records.Add(identity.RequestId, new AdmissionRecord
+                {
+                    InstanceId = instanceId,
+                    SessionId = sessionId,
+                    RequestId = identity.RequestId,
+                    RootFingerprint = identity.RootFingerprint,
+                    RequestDigest = identity.RequestDigest,
+                    Token = identity.Token,
+                    ListenerId = identity.ListenerId,
+                    ListenerGeneration = identity.ListenerGeneration,
+                    GrantExpiresAtMs = 0,
+                    ExecutionDeadlineMs = identity.ExecutionDeadlineMs,
+                    OwnerState = identity.OwnerState,
+                    IntendedOwnerState = transferCommitted ? identity.OwnerState : intendedOwner,
+                    TransferCommitted = transferCommitted
+                });
+                effectiveMaxActive = Math.Max(effectiveMaxActive, records.Count);
+                if (records.Count >= maxActive) gateClosed = true;
                 return true;
             }
         }
@@ -511,7 +552,7 @@ namespace UnityCli
         private bool ValidConsumedRecord(AdmissionRecord value) { return RecordOwnedByPool(value) && value.Consumed && IsSha256(value.RequestDigest) && Enum.IsDefined(typeof(AdmissionOwnerState), value.OwnerState) && Enum.IsDefined(typeof(AdmissionOwnerState), value.IntendedOwnerState) && value.GrantExpiresAtMs == 0 && value.ExecutionDeadlineMs > 0 && ((value.TransferCommitted && value.OwnerState == value.IntendedOwnerState) || (!value.TransferCommitted && LegalTransfer(value.OwnerState, value.IntendedOwnerState))); }
         private AdmissionRecord Clone(AdmissionRecord value) { return new AdmissionRecord { InstanceId = value.InstanceId, SessionId = value.SessionId, RequestId = value.RequestId, RootFingerprint = value.RootFingerprint, RequestDigest = value.RequestDigest, Token = value.Token, ListenerId = value.ListenerId, ListenerGeneration = value.ListenerGeneration, GrantExpiresAtMs = value.GrantExpiresAtMs, ExecutionDeadlineMs = value.ExecutionDeadlineMs, OwnerState = value.OwnerState, IntendedOwnerState = value.IntendedOwnerState, TransferCommitted = value.TransferCommitted }; }
         private bool ValidRestoredRecord(AdmissionRecord value) { return ValidConsumedRecord(value); }
-        private static ConsumedIdentity Identity(AdmissionRecord value) { return new ConsumedIdentity { RequestId = value.RequestId, RootFingerprint = value.RootFingerprint, RequestDigest = value.RequestDigest, Token = value.Token, SessionId = value.SessionId, OwnerState = value.OwnerState }; }
+        private static ConsumedIdentity Identity(AdmissionRecord value) { return new ConsumedIdentity { RequestId = value.RequestId, RootFingerprint = value.RootFingerprint, RequestDigest = value.RequestDigest, Token = value.Token, SessionId = value.SessionId, ListenerId = value.ListenerId, ListenerGeneration = value.ListenerGeneration, ExecutionDeadlineMs = value.ExecutionDeadlineMs, OwnerState = value.OwnerState }; }
         private static bool Matches(AdmissionRecord value, ConsumedIdentity identity) { return MatchesIdentityFields(value, identity) && value.OwnerState == identity.OwnerState; }
         private static bool MatchesIdentityFields(AdmissionRecord value, ConsumedIdentity identity) { return value != null && identity != null && string.Equals(value.RequestId, identity.RequestId, StringComparison.Ordinal) && string.Equals(value.RootFingerprint, identity.RootFingerprint, StringComparison.Ordinal) && string.Equals(value.RequestDigest, identity.RequestDigest, StringComparison.Ordinal) && FixedEquals(value.Token, identity.Token) && string.Equals(value.SessionId, identity.SessionId, StringComparison.Ordinal); }
         private static bool ValidListener(string listenerId, long generation) { return !string.IsNullOrWhiteSpace(listenerId) && listenerId.Length <= 200 && generation >= 1; }

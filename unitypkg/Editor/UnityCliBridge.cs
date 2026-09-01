@@ -81,6 +81,17 @@ namespace UnityCli
         private static volatile bool cachedIsBuilding;
         private static volatile bool cachedIsPlayModeChanging;
         private static volatile bool playModeChanging = EditorApplication.isPlaying != EditorApplication.isPlayingOrWillChangePlaymode;
+        private static bool queuePublicationOpen = true;
+        internal static Action<string> QueueTestBoundary;
+
+        internal static void HitQueueTestBoundary(string name)
+        {
+            var boundary = QueueTestBoundary;
+            if (boundary != null) boundary(name);
+        }
+
+        internal static string ListenerIdForTests { get { return ListenerId; } }
+        internal static long ListenerGenerationForTests { get { return CurrentListenerGeneration(); } }
 
         static UnityCliBridge()
         {
@@ -107,6 +118,7 @@ namespace UnityCli
             EditorApplication.quitting += UnregisterAndStop;
             EditorApplication.playModeStateChanged += OnBridgePlayModeStateChanged;
             domainReloading = false;
+            lock (QueueLock) queuePublicationOpen = true;
             ScheduleBridgeStartup();
         }
 
@@ -193,6 +205,7 @@ namespace UnityCli
             {
                 listener = new HttpListener();
                 port = StartHttpListener(listener);
+                lock (QueueLock) queuePublicationOpen = true;
                 started = true;
                 Task.Run(ListenLoop);
                 RegisterInstance("transitioning");
@@ -212,6 +225,7 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
+            lock (QueueLock) queuePublicationOpen = false;
             SaveAdmissionPoolBeforeReload();
             ReleaseActiveDirectMutationLease();
             UnityCliCompilationEventBroker.BeforeReload();
@@ -241,6 +255,7 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
+            lock (QueueLock) queuePublicationOpen = true;
             InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
@@ -265,6 +280,7 @@ namespace UnityCli
 
         private static void UnregisterAndStop()
         {
+            lock (QueueLock) queuePublicationOpen = false;
             ShutdownAdmissionPool();
             ReleaseActiveDirectMutationLease();
             StartupState.Reset();
@@ -340,6 +356,7 @@ namespace UnityCli
                 WriteLog("bridge_stop_failed " + exception.GetType().Name + ": " + exception.Message);
             }
             started = false;
+            lock (QueueLock) queuePublicationOpen = false;
             readyPublicationPending = false;
             CancelInstancePublicationRetry();
         }

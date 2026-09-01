@@ -36,11 +36,11 @@ namespace UnityCli
 
         public sealed class QueueNode
         {
-            public QueueNode(string nodeId, string command, bool mutation)
+            public QueueNode(string nodeId, string command, WorkClass workClass)
             {
                 ValidateNodeId(nodeId);
                 NodeId = nodeId;
-                Class = Classify(command, mutation);
+                Class = Classify(command, workClass);
             }
 
             public string NodeId { get; }
@@ -99,16 +99,17 @@ namespace UnityCli
             public int NodesExamined { get; }
         }
 
-        /// <summary>只把固定内部terminal status命令归为SafeStatus；声明为mutation时拒绝矛盾输入。</summary>
-        public static WorkClass Classify(string command, bool mutation)
+        /// <summary>只接受生产注册表裁决的闭集分类；SafeStatus命令不能被降级为普通读取。</summary>
+        public static WorkClass Classify(string command, WorkClass workClass)
         {
             ValidateCommand(command);
-            if (IsSafeStatusCommand(command))
-            {
-                if (mutation) throw new ArgumentException("SafeStatus command cannot be declared as a mutation.", "mutation");
-                return WorkClass.SafeStatus;
-            }
-            return mutation ? WorkClass.Mutation : WorkClass.OrdinaryRead;
+            ValidateEnum(workClass, "workClass");
+            var safeStatus = IsSafeStatusCommand(command);
+            if (safeStatus && workClass != WorkClass.SafeStatus)
+                throw new ArgumentException("SafeStatus command must use SafeStatus classification.", "workClass");
+            if (!safeStatus && workClass == WorkClass.SafeStatus)
+                throw new ArgumentException("Only the exact SafeStatus allowlist may use SafeStatus classification.", "workClass");
+            return workClass;
         }
 
         /// <summary>精确白名单不接受后缀、大小写或project-tool间接名称。</summary>

@@ -449,6 +449,7 @@ namespace UnityCli
                 AdmissionOwnerIdentity admissionOwner;
                 try { admissionOwner = ReconcileAdmissionTransferForLiveMarker(PreEffectCleanupScope, cleanup, requestId, requestDigest); }
                 catch (Exception exception) { WriteLog(Scope + " pre-effect admission transfer retry failed: " + exception.Message); return true; }
+                if (admissionOwner == null) { ClearPendingPreEffectCleanup(requestId, requestDigest); return true; }
 
                 Dictionary<string, object> active = null;
                 if (UnityCliActiveOperation.Exists(Scope))
@@ -560,6 +561,7 @@ namespace UnityCli
                 AdmissionOwnerIdentity admissionOwner;
                 try { admissionOwner = ReconcileAdmissionTransferForLiveMarker(TerminalCleanupScope, cleanup, requestId, requestDigest); }
                 catch (Exception exception) { WriteLog(Scope + " terminal admission transfer retry failed: " + exception.Message); return true; }
+                if (admissionOwner == null) { ClearPendingTerminalCleanup(requestId, requestDigest); return true; }
 
                 Dictionary<string, object> active = null;
                 if (UnityCliActiveOperation.Exists(Scope))

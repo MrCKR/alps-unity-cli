@@ -19,11 +19,11 @@ async function sources(): Promise<Record<keyof typeof RUNTIME_FILES, string>> {
   return Object.fromEntries(entries) as Record<keyof typeof RUNTIME_FILES, string>;
 }
 
-test("development Player runtime assembly stays Windows-only and Editor-independent", async () => {
+test("development Player runtime assembly stays UnityEditor-independent and testable", async () => {
   const source = await sources();
   const asmdef = JSON.parse(source.asmdef) as { name: string; includePlatforms: string[]; references: string[] };
   assert.equal(asmdef.name, "UnityCli.Runtime");
-  assert.deepEqual(asmdef.includePlatforms, ["WindowsStandalone32", "WindowsStandalone64"]);
+  assert.deepEqual(asmdef.includePlatforms, ["Editor", "WindowsStandalone32", "WindowsStandalone64"]);
   assert.deepEqual(asmdef.references, ["UnityCli.Shared"]);
   for (const text of [source.bridge, source.json, source.registry]) {
     assert.doesNotMatch(text, /using UnityEditor|Newtonsoft\.|System\.Web\./);

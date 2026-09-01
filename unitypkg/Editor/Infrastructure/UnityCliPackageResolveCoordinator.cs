@@ -150,15 +150,11 @@ namespace UnityCli
                     }
                     if (!UnityCliSessionMutationLease.TryAcquire(request.RequestId, requestDigest, out newlyAcquiredLease)) return BusyEnvelope(request.RequestId);
                     PackageActiveDecision decision;
-                    try
-                    {
-                        UnityCliToolCompletionContract contract;
-                        if (!UnityCliToolCompletionRegistry.TryGetPackageRoot(args.Operation, out contract)) throw new BridgeCommandException("E_SCHEMA_INVALID", "Unsupported package root operation.");
-                        decision = AcceptPackageActiveOperation(request, raw, contract, newlyAcquiredLease,
-                            () => { if (accept == null || !accept()) throw new OperationCanceledException(); },
-                            () => ValidateStart(args), root => InitializeRoot(root, args));
-                    }
-                    catch { if (newlyAcquiredLease) UnityCliSessionMutationLease.Release(request.RequestId, requestDigest); throw; }
+                    UnityCliToolCompletionContract contract;
+                    if (!UnityCliToolCompletionRegistry.TryGetPackageRoot(args.Operation, out contract)) throw new BridgeCommandException("E_SCHEMA_INVALID", "Unsupported package root operation.");
+                    decision = AcceptPackageActiveOperation(request, raw, contract, newlyAcquiredLease,
+                        () => { if (accept == null || !accept()) throw new OperationCanceledException(); },
+                        () => ValidateStart(args), root => InitializeRoot(root, args));
                     if (decision.TerminalEnvelope != null)
                     {
                         UnityCliSessionMutationLease.Release(request.RequestId, requestDigest);
@@ -172,7 +168,31 @@ namespace UnityCli
                     await Task.FromResult(0);
                     return UnityCliSerializer.Serialize(StartState(request.RequestId));
                 }
-                catch (BridgeCommandException exception) { return SerializeBridgeExceptionEnvelope(request.RequestId, exception); }
+                catch (BridgeCommandException exception) { return FinishStartFault(request, requestDigest, exception); }
+                catch (Exception exception) { return FinishStartFault(request, requestDigest, exception); }
+            }
+
+            private static string FinishStartFault(BridgeRequest request, string requestDigest, Exception exception)
+            {
+                try
+                {
+                    var root = LoadPackageActiveOperation();
+                    if (root != null && string.Equals(root.RequestId, request.RequestId, StringComparison.Ordinal)
+                        && string.Equals(root.RequestDigest, requestDigest, StringComparison.Ordinal))
+                    {
+                        if (!IsTerminal(root))
+                            TerminalTimeout(root, "Package operation failed after its active root was persisted: " + exception.GetType().Name + ".");
+                        return StartTerminal(request.RequestId, RequiredRoot(request.RequestId).TerminalEnvelope);
+                    }
+                }
+                catch { RecoverCorruptPackageRoot(); }
+                UnityCliSessionMutationLease.Release(request.RequestId, requestDigest);
+                var normalized = exception is BridgeCommandException
+                    ? (BridgeCommandException)exception
+                    : exception is OperationCanceledException
+                        ? new BridgeCommandException("E_EXECUTION_TIMEOUT", "Package operation did not begin before the request deadline.")
+                        : new BridgeCommandException("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log.");
+                return SerializeBridgeExceptionEnvelope(request.RequestId, normalized);
             }
 
             private static string CurrentReloadEpoch()

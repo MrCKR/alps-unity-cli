@@ -611,30 +611,30 @@ namespace UnityCli
             return request == null ? null : request.Command;
         }
 
-        /// <summary>HTTP publication只做纯输入分类；可能依赖Unity对象现状的create/read按writer保守线性化。</summary>
-        private static bool QueueRequestIsMutation(BridgeRequest request)
+        /// <summary>由实际注册表先裁决内部命令；未知或解析失败的effectful请求统一按Mutation fail closed。</summary>
+        internal static UnityCliBridgeQueuePolicy.WorkClass QueueRequestWorkClass(BridgeRequest request)
         {
             try
             {
-                if (request != null && UnityCliBridgeQueuePolicy.IsSafeStatusCommand(request.Command)) return false;
-                if (request != null && string.Equals(request.Command, "internal.editor.compile.start", StringComparison.Ordinal))
-                    return request.Execution == null || request.Execution.DryRun != true;
+                if (request == null) return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+                UnityCliBridgeQueuePolicy.WorkClass registered;
+                if (CommandRegistry.TryGetQueueClass(request.Command, out registered))
+                    return request.Execution != null && request.Execution.DryRun == true && registered == UnityCliBridgeQueuePolicy.WorkClass.Mutation
+                        ? UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead
+                        : registered;
                 var contract = ResolveRequestCompletionContract(request);
-                if (request == null || contract == null || !contract.Mutation
-                    || request.Execution != null && request.Execution.DryRun == true) return false;
-                var name = contract.ToolName;
-                var input = RequestBusinessInput(request);
-                if (name == "graphics.reflection-probe")
-                    return HasAnyMeaningfulInput(input, "mode", "resolution", "bounces", "hdr", "boxSize", "boxOffset") || InputBoolean(input, "create");
-                if (name == "graphics.light-probe-group")
-                    return HasAnyMeaningfulInput(input, "positions") || InputBoolean(input, "create");
-                if (name == "physics.rigidbody")
-                    return !InputBoolean(input, "validate") && (HasAnyMeaningfulInput(input, "angularDrag", "drag", "isKinematic", "mass", "useGravity", "target"));
-                return RequestRequiresMutation(request, contract);
+                if (contract == null)
+                    return IsReadOnlyBridgeCommand(request.Command)
+                        ? UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead
+                        : UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+                if (request.Execution != null && request.Execution.DryRun == true) return UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
+                return RequestRequiresMutation(request, contract)
+                    ? UnityCliBridgeQueuePolicy.WorkClass.Mutation
+                    : UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
             }
             catch
             {
-                return true;
+                return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
             }
         }
 
