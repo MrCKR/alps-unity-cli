@@ -25,12 +25,9 @@ namespace UnityCli
         private const int MaxRequestsPerFrame = 16;
         private const int RegistryRefreshSeconds = 30;
         private static UnityCliRuntimeBridge current;
-#if UNITY_INCLUDE_TESTS
-        internal static Action<string> RequestPublicationTestHook;
-#endif
         private readonly ConcurrentQueue<PendingRequest> pending = new ConcurrentQueue<PendingRequest>();
         private readonly object requestCacheSync = new object();
-        private readonly Dictionary<string, PendingRequest> requestCache = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
+        private readonly UnityCliRuntimeRequestPublication<PendingRequest> requestCache = new UnityCliRuntimeRequestPublication<PendingRequest>(MaxRequestCacheItems);
         private readonly CancellationTokenSource stopping = new CancellationTokenSource();
         private long requestOrder;
         private long mainThreadPulseSequence;
@@ -203,7 +200,7 @@ namespace UnityCli
                     {
                         immediate = Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." });
                     }
-                    else if (requestCache.TryGetValue(requestId, out work))
+                    else if (requestCache.TryGet(requestId, out work))
                     {
                         if (!string.Equals(work.RequestDigest, digest, StringComparison.Ordinal))
                             immediate = Error(requestId, "E_REQUEST_REPLAY_MISMATCH", "requestId was reused with different immutable request bytes.", new[] { "Submit a new requestId for different Runtime Tool input." });
@@ -211,49 +208,29 @@ namespace UnityCli
                     else
                     {
                         var deadline = ValidateRequest(envelope);
-                        var reservation = PlanRequestCacheReservation();
-                        if (!reservation.Available)
+                        var reservation = requestCache.Plan(requestId, digest, entry => entry.Completion.Task.IsCompleted, entry => entry.Order);
+                        if (reservation == null)
                             immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime request cache is full of active work.", new[] { "Wait for active Player requests to complete and retry." }, true, 100);
                         else if (pending.Count >= MaxQueueItems)
                             immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime bridge queue is full.", new[] { "Wait for the Player to process pending requests and retry." }, true, 100);
                         else
                         {
+                            var pool = admissionPool;
                             UnityCliAdmissionPool.ConsumedIdentity admissionOwner;
                             bool newlyConsumed;
-                            var admissionError = AuthorizeRuntimeAdmission(context.Request, envelope, digest, out admissionOwner, out newlyConsumed);
+                            var admissionError = AuthorizeRuntimeAdmission(pool, context.Request, envelope, digest, out admissionOwner, out newlyConsumed);
                             if (admissionError != null) immediate = admissionError;
                             else
                             {
-                                PendingRequest evicted = null;
                                 try
                                 {
                                     work = new PendingRequest(envelope, deadline, digest, ++requestOrder, admissionOwner);
-#if UNITY_INCLUDE_TESTS
-                                    var hook = RequestPublicationTestHook;
-                                    if (hook != null) hook("after-construction-before-publication");
-#endif
-                                    if (reservation.EvictionRequestId != null)
-                                    {
-                                        PendingRequest candidate;
-                                        if (!requestCache.TryGetValue(reservation.EvictionRequestId, out candidate)
-                                            || !object.ReferenceEquals(candidate, reservation.EvictionCandidate) || !candidate.Completion.Task.IsCompleted)
-                                            throw new InvalidOperationException("Runtime cache reservation changed before commit.");
-                                        evicted = candidate;
-                                        requestCache.Remove(reservation.EvictionRequestId);
-                                    }
-                                    requestCache.Add(requestId, work);
-#if UNITY_INCLUDE_TESTS
-                                    if (hook != null) hook("after-cache-insert-before-queue");
-#endif
-                                    pending.Enqueue(work);
+                                    if (!requestCache.Publish(reservation, work, value => { pending.Enqueue(value); return true; }))
+                                        throw new InvalidOperationException("Runtime request publication reservation changed before enqueue.");
                                 }
                                 catch
                                 {
-                                    PendingRequest currentRequest;
-                                    if (requestCache.TryGetValue(requestId, out currentRequest) && object.ReferenceEquals(currentRequest, work))
-                                        requestCache.Remove(requestId);
-                                    if (evicted != null) requestCache.Add(reservation.EvictionRequestId, evicted);
-                                    if (newlyConsumed && admissionOwner != null) admissionPool.CompensateAuthorization(admissionOwner);
+                                    if (newlyConsumed && admissionOwner != null && pool != null) pool.CompensateAuthorization(admissionOwner);
                                     throw;
                                 }
                             }
@@ -346,7 +323,7 @@ namespace UnityCli
         }
 
         /// <summary>新业务request必须消费同session grant；同字节requestCache replay不再次授权。</summary>
-        private string AuthorizeRuntimeAdmission(HttpListenerRequest httpRequest, Dictionary<string, object> request, string requestDigest, out UnityCliAdmissionPool.ConsumedIdentity admissionOwner, out bool newlyConsumed)
+        private string AuthorizeRuntimeAdmission(UnityCliAdmissionPool pool, HttpListenerRequest httpRequest, Dictionary<string, object> request, string requestDigest, out UnityCliAdmissionPool.ConsumedIdentity admissionOwner, out bool newlyConsumed)
         {
             admissionOwner = null;
             newlyConsumed = false;
@@ -369,7 +346,8 @@ namespace UnityCli
             DateTimeOffset deadline;
             if (!DateTimeOffset.TryParse(deadlineText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline))
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission deadline is invalid.", new[] { "Submit the request through the current unitycli." });
-            var result = admissionPool.AuthorizeAndCapture(rootId, fingerprint, requestDigest, token, listenerId, 1L, deadline.ToUnixTimeMilliseconds());
+            if (pool == null) return Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session ended before admission completed.", new[] { "Launch a new development Player and submit a new request." });
+            var result = pool.AuthorizeAndCapture(rootId, fingerprint, requestDigest, token, listenerId, 1L, deadline.ToUnixTimeMilliseconds());
             if (result.Outcome != UnityCliAdmissionPool.AuthorizeOutcome.Authorized || result.Identity == null)
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission token is missing, expired, or bound to another root.", new[] { "Wait for a fresh Runtime admission before submitting business work." });
             admissionOwner = result.Identity;
@@ -417,10 +395,11 @@ namespace UnityCli
 
         private void CompleteRuntimeAdmissionRoot(UnityCliAdmissionPool.ConsumedIdentity identity)
         {
-            if (admissionPool == null || identity == null) return;
-            var outcome = admissionPool.CompleteTrusted(identity);
+            var pool = admissionPool;
+            if (pool == null || identity == null) return;
+            var outcome = pool.CompleteTrusted(identity);
             if (outcome != UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked)
-                Debug.Log("UnityCli admission_terminal requestId=" + identity.RequestId + " outcome=" + outcome.ToString() + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                Debug.Log("UnityCli admission_terminal requestId=" + identity.RequestId + " outcome=" + outcome.ToString() + " active=" + pool.Capture().Active.ToString(CultureInfo.InvariantCulture));
         }
 
         private Dictionary<string, object> HealthData()
@@ -611,25 +590,10 @@ namespace UnityCli
         private static Dictionary<string, object> ReadObject(Dictionary<string, object> value, string key) { object result; return value != null && value.TryGetValue(key, out result) ? result as Dictionary<string, object> : null; }
         private static bool IsHex(string value, int length) { if (string.IsNullOrEmpty(value) || value.Length != length) return false; foreach (var item in value) if (!Uri.IsHexDigit(item)) return false; return true; }
         private static bool HasOnlyKeys(Dictionary<string, object> value, params string[] allowed) { if (value == null) return false; var names = new HashSet<string>(allowed, StringComparer.Ordinal); foreach (var key in value.Keys) if (!names.Contains(key)) return false; return true; }
-        /// <summary>只规划最旧terminal候选；拒绝、授权失败与publication异常都不改变cache。</summary>
-        private RequestCacheReservation PlanRequestCacheReservation()
-        {
-            if (requestCache.Count < MaxRequestCacheItems) return new RequestCacheReservation { Available = true };
-            PendingRequest oldest = null;
-            string oldestId = null;
-            foreach (var pair in requestCache)
-                if (pair.Value.Completion.Task.IsCompleted && (oldest == null || pair.Value.Order < oldest.Order))
-                {
-                    oldest = pair.Value;
-                    oldestId = pair.Key;
-                }
-            return new RequestCacheReservation { Available = oldest != null, EvictionRequestId = oldestId, EvictionCandidate = oldest };
-        }
         private static string Sha256(string value) { using (var sha = SHA256.Create()) { var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(value)); var result = new StringBuilder(bytes.Length * 2); foreach (var item in bytes) result.Append(item.ToString("x2")); return result.ToString(); } }
         private static string ProcessStartedAt(Process process) { return process.StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture); }
         private static string RuntimeBuildGuid() { var property = typeof(Application).GetProperty("buildGUID", BindingFlags.Static | BindingFlags.Public); return property == null ? string.Empty : property.GetValue(null, null) as string ?? string.Empty; }
 
-        private sealed class RequestCacheReservation { internal bool Available; internal string EvictionRequestId; internal PendingRequest EvictionCandidate; }
         private sealed class PendingRequest
         {
             internal PendingRequest(Dictionary<string, object> request, long absoluteDeadlineMs, string requestDigest, long order, UnityCliAdmissionPool.ConsumedIdentity admissionOwner)

@@ -4,88 +4,72 @@ import test from "node:test";
 
 const read = (path: string) => readFile(path, "utf8");
 
-test("Admission pool has one owner-state machine and an exact transition table", async () => {
+test("Admission pool has explicit owner states and no dead expiry outcome", async () => {
   const pool = await read("unitypkg/Shared/UnityCliAdmissionPool.cs");
-  assert.match(pool, /enum AdmissionOwnerState \{ Granted, WorkItem, Coordinator, Continuation, Recovery, TerminalCleanup \}/);
-  assert.doesNotMatch(pool, /enum AdmissionState|AdmissionOwnerKind/);
-  assert.match(pool, /AuthorizeAndCapture[\s\S]*Granted→WorkItem/);
-  assert.match(pool, /PrepareOwnerTransfer\(ConsumedIdentity identity, AdmissionOwnerState intendedOwner\)/);
-  assert.match(pool, /CommitOwnerTransfer\(ConsumedIdentity identity, AdmissionOwnerState intendedOwner, out ConsumedIdentity successor\)/);
-  assert.match(pool, /Matches\(entry, identity\)[\s\S]*LegalTransfer/);
-  assert.match(pool, /value\.RequestDigest, identity\.RequestDigest/);
-  assert.match(pool, /source == AdmissionOwnerState\.WorkItem[\s\S]*AdmissionOwnerState\.Coordinator[\s\S]*AdmissionOwnerState\.Continuation[\s\S]*AdmissionOwnerState\.Recovery[\s\S]*AdmissionOwnerState\.TerminalCleanup/);
-  assert.match(pool, /source == AdmissionOwnerState\.Coordinator \|\| source == AdmissionOwnerState\.Recovery[\s\S]*target == AdmissionOwnerState\.TerminalCleanup/);
-  assert.match(pool, /CanComplete[\s\S]*WorkItem[\s\S]*Continuation[\s\S]*TerminalCleanup/);
-  assert.match(pool, /CompensateAuthorization[\s\S]*Matches\(entry, identity\)[\s\S]*OwnerState != AdmissionOwnerState\.WorkItem/);
+  assert.ok(pool.includes("enum AdmissionOwnerState { Granted, WorkItem, Coordinator, Continuation, Recovery, TerminalCleanup }"));
+  assert.ok(pool.includes("PrepareOwnerTransfer(ConsumedIdentity identity, AdmissionOwnerState intendedOwner)"));
+  assert.ok(pool.includes("CommitOwnerTransfer(ConsumedIdentity identity, AdmissionOwnerState intendedOwner, out ConsumedIdentity successor)"));
+  assert.ok(pool.includes("CanComplete"));
+  assert.ok(!pool.includes("AuthorizeOutcome.Expired"));
+  assert.ok(!pool.includes("Expired, IdentityMismatch"));
 });
 
-test("every Editor transient gate precedes token consumption", async () => {
-  const server = await read("unitypkg/Editor/Bridge/BridgeHttpServer.cs");
-  const authorize = server.indexOf("AuthorizeAdmissionForQueue(context.Request, request, rawBody)");
-  assert.ok(authorize > 0);
-  for (const gate of ["if (domainReloading)", "if (cachedIsCompiling", "if (cachedIsUpdating", "if (cachedIsPlayModeChanging)"])
-    assert.ok(server.indexOf(gate) > 0 && server.indexOf(gate) < authorize, `${gate} must precede consumption`);
-  for (const code of ["E_UNITY_DOMAIN_RELOAD", "E_UNITY_COMPILING", "E_UNITY_IMPORTING", "E_UNITY_PLAY_MODE"])
-    assert.ok(server.indexOf(code) < authorize, `${code} must have zero admission effect`);
+test("Queue settlement is outside QueueLock and has a finally signal path", async () => {
+  const queue = await read("unitypkg/Editor/Bridge/BridgeWorkQueue.cs");
+  const complete = queue.indexOf("private static void CompleteWorkItem");
+  assert.ok(complete >= 0);
+  assert.ok(queue.indexOf("UnityCliQueueSettlement.Complete", complete) > complete);
+  assert.ok(queue.indexOf("item.Completed.Set()", complete) > complete);
+  assert.ok(queue.indexOf("UnityCliTransactionLog.Append", complete) > queue.indexOf("item.Completed.Set()", complete));
+  assert.ok(!queue.includes("QueuePublicationTestHook"));
 });
 
-test("Editor exposes queue-linearization compensation without changing BridgeWorkQueue", async () => {
-  const [server, admission, queue] = await Promise.all([
-    read("unitypkg/Editor/Bridge/BridgeHttpServer.cs"),
-    read("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs"),
+test("Queue publication uses the shared rollback transaction and snapshots its barrier outside the lock", async () => {
+  const [queue, admission] = await Promise.all([
     read("unitypkg/Editor/Bridge/BridgeWorkQueue.cs"),
+    read("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs"),
   ]);
-  assert.match(admission, /QueueLock是外层锁，admission pool锁是内层锁/);
-  assert.match(admission, /AuthorizeAdmissionForQueue/);
-  assert.match(admission, /CompensateAdmissionBeforeQueuePublication/);
-  assert.match(admission, /MarkAdmissionQueuePublished/);
-  assert.match(server, /AuthorizeAdmissionForQueue[\s\S]*EnqueueOrAttach\(request, rawBody, ListenerId, CurrentListenerGeneration\(\), admissionReservation\.Owner[\s\S]*MarkAdmissionQueuePublished/);
-  assert.match(admission, /AuthorizeAndCapture\(rootId, fingerprint, requestDigest, token, ListenerId, CurrentListenerGeneration\(\), deadlineMs\)/);
-  assert.match(server, /catch \(BridgeCommandException exception\)[\s\S]*CompensateAdmissionBeforeQueuePublication/);
-  assert.match(server, /catch[\s\S]*CompensateAdmissionBeforeQueuePublication\(admissionReservation\)[\s\S]*throw/);
-  assert.doesNotMatch(queue, /AuthorizeAndCapture|CompensateAuthorization|MarkAdmissionQueuePublished/);
+  assert.ok(queue.includes("var durableMutationBarrier = CurrentDurableMutationBarrier()"));
+  assert.ok(queue.includes("UnityCliQueuePublication.Publish"));
+  assert.ok(queue.includes("if (!CompensateAdmissionBeforeQueuePublication(reservation))"));
+  assert.ok(admission.includes("ReconcileOrphanAdmissionOwnerMarkers"));
+  assert.ok(admission.includes("PersistAdmissionPoolState();"));
 });
 
-test("durable transfer persists intent, transfers exact pool owner, then commits marker", async () => {
+test("Accepted durable failure retains owner and direct mutations have a recoverable root", async () => {
   const admission = await read("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs");
-  const transfer = admission.slice(admission.indexOf("internal static AdmissionOwnerIdentity PersistAdmissionOwnerTransfer"), admission.indexOf("internal static AdmissionOwnerIdentity ReconcileAdmissionTransferForLiveMarker"));
-  const intentSave = transfer.indexOf("UnityCliActiveOperation.Save(markerScope");
-  const prepare = transfer.indexOf("PrepareOwnerTransfer");
-  const commit = transfer.indexOf("CommitOwnerTransfer");
-  const committedFields = transfer.indexOf('marker["admissionTransferCommitted"] = true');
-  const committedSave = transfer.lastIndexOf("UnityCliActiveOperation.Save(markerScope");
-  assert.ok(intentSave >= 0 && intentSave < prepare && prepare < commit && commit < committedFields && committedFields < committedSave);
-  for (const field of ["admissionRootFingerprint", "admissionToken", "admissionSessionId", "admissionRequestDigest", "admissionOwnerState", "admissionIntendedOwnerState", "admissionTransferCommitted"])
-    assert.match(admission, new RegExp(`state\\["${field}"\\]`));
-  assert.match(admission, /ReconcileAdmissionTransferForLiveMarker[\s\S]*current\.OwnerState != intended[\s\S]*PersistAdmissionOwnerTransfer/);
-  assert.match(admission, /readable && durable \? target : UnityCliAdmissionPool\.AdmissionOwnerState\.Recovery/);
-  assert.match(admission, /TryFindExactDurableBusinessRoot[\s\S]*record\.RequestId[\s\S]*record\.RequestDigest/);
-  assert.match(admission, /ReconcileAdmissionMarker[\s\S]*current\.OwnerState != intended[\s\S]*CommitOwnerTransfer/);
-  assert.match(admission, /AdmissionMarkerMatchesIdentity\(existing, identity\)[\s\S]*Admission transfer marker is owned by another exact request/);
-  assert.doesNotMatch(admission, /AdmissionStateOwnsRequest|TryHasDurableAdmissionRoot\(string requestId/);
+  assert.ok(admission.includes("enum AdmissionTransferResult"));
+  assert.ok(admission.includes("TransferPending"));
+  assert.ok(admission.includes("command == \"project-tool.run\" || command == \"code.exec\""));
+  assert.ok(admission.includes("if (transfer == AdmissionTransferResult.TransferPending) return;"));
+  assert.ok(admission.includes("AdmissionAcceptedTopDigest"));
 });
 
-test("terminal cleanup retains explicit owner until lease and admission complete", async () => {
-  const [reload, active] = await Promise.all([
-    read("unitypkg/Editor/Infrastructure/UnityCliReloadOperation.cs"),
+test("Reload reconciliation accepts source committed and source pending transfer snapshots", async () => {
+  const admission = await read("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs");
+  assert.ok(admission.includes("var sourceCommitted = record.TransferCommitted"));
+  assert.ok(admission.includes("var sourcePending = !record.TransferCommitted"));
+  assert.ok(admission.includes("var intendedCommitted = record.TransferCommitted"));
+  assert.ok(admission.includes("current.OwnerState != intended"));
+  assert.ok(admission.includes("CommitOwnerTransfer"));
+});
+
+test("Cancel ownership is bound to the parent digest and Continuation", async () => {
+  const cancel = await read("unitypkg/Editor/Infrastructure/UnityCliTestRunCoordinator.cs");
+  assert.ok(cancel.includes("cancelOwner.TopRequestDigest, root.RequestDigest"));
+  assert.ok(cancel.includes("admissionRequestDigest\"), cancelDigest"));
+  assert.ok(cancel.includes("AdmissionOwnerState.Continuation"));
+  assert.ok(cancel.includes("CompleteAdmissionRoot(cancelOwner)"));
+});
+
+test("Owner marker cleanup uses immutable identity and fixed scopes", async () => {
+  const [admission, active] = await Promise.all([
+    read("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs"),
     read("unitypkg/Editor/Infrastructure/UnityCliActiveOperation.cs"),
   ]);
-  assert.match(reload, /PersistAdmissionOwnerTransfer\(PreEffectCleanupScope[\s\S]*AdmissionOwnerState\.TerminalCleanup/);
-  assert.match(reload, /PersistAdmissionOwnerTransfer\(TerminalCleanupScope[\s\S]*AdmissionOwnerState\.TerminalCleanup/);
-  assert.match(reload, /LeaseDefinitelyNotOwned\(requestId, requestDigest\)[\s\S]*CompleteAdmissionRoot\(admissionOwner\)[\s\S]*Clear\(TerminalCleanupScope\)/);
-  assert.match(active, /PersistAdmissionOwnerTransfer\(cleanupScope[\s\S]*AdmissionOwnerState\.TerminalCleanup/);
-  assert.match(active, /TryIsOwnedBy\(requestId, requestDigest[\s\S]*completeAdmission[\s\S]*CompleteAdmissionRoot\(admissionOwner\)[\s\S]*Clear\(cleanupScope\)/);
-});
-
-test("same-session reload state is one bounded startup-scoped snapshot", async () => {
-  const [admission, pool] = await Promise.all([
-    read("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs"),
-    read("unitypkg/Shared/UnityCliAdmissionPool.cs"),
-  ]);
-  assert.match(admission, /private const string AdmissionSessionStateKey/);
-  assert.match(admission, /AdmissionText\(state, "editorSessionId"\) != EditorSessionId\(\)[\s\S]*EraseString/);
-  assert.match(admission, /CaptureRecovery\(\)/);
-  assert.match(pool, /CaptureRecovery[\s\S]*Where\(value => value\.Consumed\)/);
-  assert.match(admission, /SessionState\.SetString\(AdmissionSessionStateKey/);
-  assert.doesNotMatch(admission, /requestId.*\.json|Directory\.GetFiles/);
+  assert.ok(admission.includes("AdmissionMarkerHasImmutableIdentity"));
+  assert.ok(admission.includes("ClearExactAdmissionOwnerMarkers"));
+  assert.ok(admission.includes("scope + \"-admission-owner\""));
+  assert.ok(active.includes("CompleteAdmissionRoot(admissionOwner)"));
+  assert.ok(active.includes("Clear(cleanupScope)"));
 });

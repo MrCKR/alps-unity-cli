@@ -12,7 +12,7 @@ namespace UnityCli
     {
         public enum AdmissionOwnerState { Granted, WorkItem, Coordinator, Continuation, Recovery, TerminalCleanup }
         public enum AcquireOutcome { Granted, AlreadyConsumed, Closed, Invalid, IdentityMismatch, RecoveryBlocked }
-        public enum AuthorizeOutcome { Authorized, AlreadyConsumed, Missing, Expired, IdentityMismatch, Invalid, RecoveryBlocked }
+        public enum AuthorizeOutcome { Authorized, AlreadyConsumed, Missing, IdentityMismatch, Invalid, RecoveryBlocked }
         public enum ExactIdentityOutcome { ExactCurrent, DefinitelyAbsent, IdentityMismatchOrBlocked }
         public enum CompletionOutcome { ExactCurrentCompleted, DefinitelyAbsent, IdentityMismatchOrBlocked }
 
@@ -189,12 +189,6 @@ namespace UnityCli
                         return entry.ExecutionDeadlineMs == executionDeadlineMs && string.Equals(entry.RequestDigest, requestDigest, StringComparison.Ordinal)
                             ? Authorized(AuthorizeOutcome.AlreadyConsumed, Identity(entry))
                             : Authorized(AuthorizeOutcome.IdentityMismatch);
-                    if (entry.GrantExpiresAtMs <= monotonicNowMs())
-                    {
-                        records.Remove(requestId);
-                        UpdateGateAfterRemoval();
-                        return Authorized(AuthorizeOutcome.Expired);
-                    }
                     if (!string.Equals(entry.ListenerId, listenerId, StringComparison.Ordinal) || entry.ListenerGeneration != listenerGeneration)
                     {
                         records.Remove(requestId);

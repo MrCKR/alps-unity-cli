@@ -31,9 +31,6 @@ namespace UnityCli
         private static readonly LinkedList<BridgeWorkItem> WorkQueue = new LinkedList<BridgeWorkItem>();
         private static readonly HashSet<BridgeWorkItem> RunningWork = new HashSet<BridgeWorkItem>();
         private static readonly Dictionary<string, BridgeWorkItem> ActiveRequestWork = new Dictionary<string, BridgeWorkItem>(StringComparer.Ordinal);
-#if UNITY_INCLUDE_TESTS
-        internal static Action<string> QueuePublicationTestHook;
-#endif
 
         private static void CancelQueuedWork()
         {
@@ -90,6 +87,7 @@ namespace UnityCli
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
             }
             TickInstancePublicationRetry();
+            var durableMutationBarrier = CurrentDurableMutationBarrier();
             List<BridgeWorkItem> selected;
             var queueDepth = 0;
             lock (QueueLock)
@@ -106,7 +104,7 @@ namespace UnityCli
                     snapshotItems.Select(item => item.PolicyNode).ToArray(),
                     RunningWork.Count(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
                     RunningWork.Any(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Mutation),
-                    CurrentDurableMutationBarrier());
+                    durableMutationBarrier);
                 selected = new List<BridgeWorkItem>(selection.Starts.Count);
                 foreach (var decision in selection.Starts)
                 {
@@ -172,20 +170,31 @@ namespace UnityCli
             }
         }
 
-        /// <summary>QueueLock外层、pool锁内层完成authorize/attach、map插入、queue publication与published标记。</summary>
+        /// <summary>先在QueueLock外完成authorize与文件读取，再在锁内只提交map和queue的publication。</summary>
         private static BridgeWorkItem EnqueueOrAttach(HttpListenerRequest httpRequest, UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string admissionListenerId, long admissionGeneration, out bool created, out int queueDepth)
         {
-            lock (QueueLock)
+            var digest = UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId);
+            var mutation = QueueRequestIsMutation(request);
+            var workClass = UnityCliBridgeQueuePolicy.Classify(request.Command, mutation);
+            AdmissionQueueReservation reservation = null;
+            BridgeWorkItem item = null;
+            try
             {
-                var digest = UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId);
-                var mutation = QueueRequestIsMutation(request);
-                var workClass = UnityCliBridgeQueuePolicy.Classify(request.Command, mutation);
-                AdmissionQueueReservation reservation = null;
-                BridgeWorkItem item = null;
-                var mapInserted = false;
-                try
+                reservation = AuthorizeAdmissionForQueue(httpRequest, request, rawRequestBytes);
+                lock (QueueLock)
                 {
-                    reservation = AuthorizeAdmissionForQueue(httpRequest, request, rawRequestBytes);
+                    var bypass = AdmissionBypassCommand(request.Command) && reservation.Owner == null;
+                    UnityCliBridgeQueuePolicy.BypassAdmissionDecision bypassDecision = null;
+                    if (bypass)
+                    {
+                        var identities = ActiveRequestWork.Values.Where(active => active.AdmissionBypass)
+                            .Select(active => new UnityCliBridgeQueuePolicy.BypassIdentity(active.Request.RequestId, active.RequestDigest)).ToArray();
+                        bypassDecision = UnityCliBridgeQueuePolicy.DecideBypassAdmission(identities, new UnityCliBridgeQueuePolicy.BypassIdentity(request.RequestId, digest));
+                        if (bypassDecision.Outcome == UnityCliBridgeQueuePolicy.BypassAdmissionOutcome.RejectCapacity)
+                            throw new BridgeCommandException("E_UNITY_BUSY", "Admission-bypass Bridge capacity is full.", "Wait for an active status or package-control request to complete before retrying.");
+                        if (bypassDecision.Outcome == UnityCliBridgeQueuePolicy.BypassAdmissionOutcome.RejectIdentityMismatch)
+                            throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Admission-bypass requestId identity is inconsistent.");
+                    }
                     BridgeWorkItem existing;
                     if (ActiveRequestWork.TryGetValue(request.RequestId, out existing))
                     {
@@ -198,48 +207,27 @@ namespace UnityCli
                         queueDepth = WorkQueue.Count;
                         return existing;
                     }
-
-                    var bypass = AdmissionBypassCommand(request.Command) && reservation.Owner == null;
-                    if (bypass)
-                    {
-                        var identities = ActiveRequestWork.Values.Where(active => active.AdmissionBypass)
-                            .Select(active => new UnityCliBridgeQueuePolicy.BypassIdentity(active.Request.RequestId, active.RequestDigest)).ToArray();
-                        var bypassDecision = UnityCliBridgeQueuePolicy.DecideBypassAdmission(
-                            identities, new UnityCliBridgeQueuePolicy.BypassIdentity(request.RequestId, digest));
-                        if (bypassDecision.Outcome == UnityCliBridgeQueuePolicy.BypassAdmissionOutcome.RejectCapacity)
-                            throw new BridgeCommandException("E_UNITY_BUSY", "Admission-bypass Bridge capacity is full.", "Wait for an active status or package-control request to complete before retrying.");
-                        if (bypassDecision.Outcome != UnityCliBridgeQueuePolicy.BypassAdmissionOutcome.Enqueue)
-                            throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Admission-bypass requestId identity is inconsistent.");
-                    }
+                    if (bypass && bypassDecision.Outcome == UnityCliBridgeQueuePolicy.BypassAdmissionOutcome.Attach)
+                        throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Admission-bypass attach target disappeared before publication.");
 
                     item = new BridgeWorkItem(request, rawRequestBytes, digest, admissionListenerId, admissionGeneration, reservation.Owner, workClass, bypass);
-                    ActiveRequestWork.Add(request.RequestId, item);
-                    mapInserted = true;
-#if UNITY_INCLUDE_TESTS
-                    var hook = QueuePublicationTestHook;
-                    if (hook != null) hook("after-active-map-before-queue");
-#endif
-                    item.QueueNode = WorkQueue.AddLast(item);
-                    MarkAdmissionQueuePublished(reservation);
+                    UnityCliQueuePublication.Publish(
+                        () => ActiveRequestWork.Add(request.RequestId, item),
+                        () => item.QueueNode = WorkQueue.AddLast(item),
+                        () => { BridgeWorkItem current; if (ActiveRequestWork.TryGetValue(request.RequestId, out current) && object.ReferenceEquals(current, item)) ActiveRequestWork.Remove(request.RequestId); },
+                        () => { if (item.QueueNode != null && item.QueueNode.List == WorkQueue) { WorkQueue.Remove(item.QueueNode); item.QueueNode = null; } },
+                        () => MarkAdmissionQueuePublished(reservation));
                     created = true;
                     queueDepth = WorkQueue.Count;
                     return item;
                 }
-                catch
-                {
-                    if (item != null && item.QueueNode != null && item.QueueNode.List == WorkQueue)
-                    {
-                        WorkQueue.Remove(item.QueueNode);
-                        item.QueueNode = null;
-                    }
-                    BridgeWorkItem current;
-                    if (mapInserted && ActiveRequestWork.TryGetValue(request.RequestId, out current) && object.ReferenceEquals(current, item))
-                        ActiveRequestWork.Remove(request.RequestId);
-                    if (item != null) item.DisposeUnpublished();
-                    if (!CompensateAdmissionBeforeQueuePublication(reservation))
-                        throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission compensation could not prove exact pre-queue cleanup.");
-                    throw;
-                }
+            }
+            catch
+            {
+                if (item != null && !reservation.QueuePublished) item.DisposeUnpublished();
+                if (!CompensateAdmissionBeforeQueuePublication(reservation))
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission compensation could not prove exact pre-queue cleanup.");
+                throw;
             }
         }
 
@@ -252,18 +240,24 @@ namespace UnityCli
                 && string.Equals(left.SessionId, right.SessionId, StringComparison.Ordinal);
         }
 
-        /// <summary>owner settlement、running/map removal与完成信号共享QueueLock；transaction log永远是best-effort。</summary>
+        /// <summary>durable settlement在锁外执行；无论settlement异常与否都移除队列状态并发完成信号。</summary>
         private static void CompleteWorkItem(BridgeWorkItem item)
         {
-            lock (QueueLock)
-            {
-                SettleAdmissionAfterWorkItem(item.AdmissionOwner, item.Request.Command, item.Response);
-                RunningWork.Remove(item);
-                BridgeWorkItem current;
-                if (ActiveRequestWork.TryGetValue(item.Request.RequestId, out current) && object.ReferenceEquals(current, item))
-                    ActiveRequestWork.Remove(item.Request.RequestId);
-                item.Completed.Set();
-            }
+            var settlementException = UnityCliQueueSettlement.Complete(
+                () => SettleAdmissionAfterWorkItem(item.AdmissionOwner, item.Request.Command, item.Response),
+                () =>
+                {
+                    lock (QueueLock)
+                    {
+                        RunningWork.Remove(item);
+                        BridgeWorkItem current;
+                        if (ActiveRequestWork.TryGetValue(item.Request.RequestId, out current) && object.ReferenceEquals(current, item))
+                            ActiveRequestWork.Remove(item.Request.RequestId);
+                    }
+                },
+                () => item.Completed.Set());
+            if (settlementException != null)
+                WriteLog("admission_settlement_failed requestId=" + item.Request.RequestId + " " + settlementException.GetType().Name);
             try
             {
                 UnityCliTransactionLog.Append(item.Request.RequestId, item.Request.Command, Encoding.UTF8.GetString(item.RawRequestBytes), item.Response ?? UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
@@ -281,6 +275,7 @@ namespace UnityCli
             private bool started;
             private bool accepted;
             private bool acceptanceCancelled;
+            private readonly UnityCliBridgeWorkItemState lifecycle = new UnityCliBridgeWorkItemState();
             private readonly CancellationTokenSource cancellation;
 
             public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest, string admissionListenerId, long admissionGeneration, AdmissionOwnerIdentity admissionOwner, UnityCliBridgeQueuePolicy.WorkClass workClass, bool admissionBypass)
@@ -323,29 +318,27 @@ namespace UnityCli
             {
                 lock (StateLock)
                 {
-                    if (cancelled)
-                    {
-                        return false;
-                    }
                     // admission与主线程开始必须属于同一listener epoch；reload后的旧队列项不得执行。
-                    if (!string.Equals(AdmissionListenerId, ListenerId, StringComparison.Ordinal)
-                        || AdmissionGeneration != CurrentListenerGeneration())
+                    int remainingMs = 0;
+                    if (Request != null) Request.TryDeadlineRemainingMs(out remainingMs);
+                    var outcome = lifecycle.TryStart(
+                        string.Equals(AdmissionListenerId, ListenerId, StringComparison.Ordinal) && AdmissionGeneration == CurrentListenerGeneration(),
+                        remainingMs);
+                    if (outcome != UnityCliBridgeWorkItemState.StartOutcome.Started)
                     {
-                        cancelled = true;
-                        cancellation.Cancel();
-                        response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                            Request.RequestId,
-                            "E_UNITY_DOMAIN_RELOAD",
-                            "Unity listener generation changed before the queued request started.",
-                            nextActions: new[] { "Keep the same root requestId and immutable request bytes while the session supervisor rebinds." },
-                            transient: true,
-                            retryAfterMs: 1000));
-                        return false;
-                    }
-                    int remainingMs;
-                    if (Request == null || !Request.TryDeadlineRemainingMs(out remainingMs))
-                    {
-                        cancelled = true;
+                        if (outcome == UnityCliBridgeWorkItemState.StartOutcome.DeadlineElapsed) cancelled = true;
+                        if (outcome == UnityCliBridgeWorkItemState.StartOutcome.Cancelled) cancelled = true;
+                        if (outcome == UnityCliBridgeWorkItemState.StartOutcome.ListenerChanged)
+                        {
+                            cancelled = true;
+                            response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                                Request.RequestId,
+                                "E_UNITY_DOMAIN_RELOAD",
+                                "Unity listener generation changed before the queued request started.",
+                                nextActions: new[] { "Keep the same root requestId and immutable request bytes while the session supervisor rebinds." },
+                                transient: true,
+                                retryAfterMs: 1000));
+                        }
                         cancellation.Cancel();
                         return false;
                     }
@@ -360,7 +353,7 @@ namespace UnityCli
             {
                 lock (StateLock)
                 {
-                    if (started)
+                    if (started || !lifecycle.CancelBeforeStart())
                     {
                         return false;
                     }
@@ -375,7 +368,7 @@ namespace UnityCli
             {
                 lock (StateLock)
                 {
-                    if (acceptanceCancelled) return false;
+                    if (acceptanceCancelled || !lifecycle.TryAccept()) return false;
                     accepted = true;
                     return true;
                 }
@@ -386,7 +379,7 @@ namespace UnityCli
             {
                 lock (StateLock)
                 {
-                    if (accepted) return false;
+                    if (accepted || !lifecycle.CancelBeforeAcceptance()) return false;
                     acceptanceCancelled = true;
                     cancellation.Cancel();
                     return true;

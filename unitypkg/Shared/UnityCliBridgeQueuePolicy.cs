@@ -40,12 +40,10 @@ namespace UnityCli
             {
                 ValidateNodeId(nodeId);
                 NodeId = nodeId;
-                Command = command;
                 Class = Classify(command, mutation);
             }
 
             public string NodeId { get; }
-            public string Command { get; }
             public WorkClass Class { get; }
         }
 

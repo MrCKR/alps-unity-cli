@@ -178,7 +178,7 @@ test("runtime security, cache, artifacts, and shutdown remain bounded", async ()
   assert.match(bridge, /DateTimeOffset\.UtcNow\.ToUnixTimeMilliseconds\(\) >= deadline/);
   assert.match(bridge, /E_RUNTIME_QUEUE_FULL/);
   assert.match(bridge, /E_REQUEST_REPLAY_MISMATCH/);
-  assert.ok(bridge.indexOf("requestCache.TryGetValue") < bridge.indexOf("var deadline = ValidateRequest(envelope)"));
+  assert.ok(bridge.indexOf("requestCache.TryGet(requestId, out work)") < bridge.indexOf("var deadline = ValidateRequest(envelope)"));
   assert.match(bridge, /E_RUNTIME_SESSION_STALE/);
   assert.match(bridge, /requestCache\.Clear\(\)/);
   assert.match(bridge, /UnityCliRuntimeTools\.Shutdown\(\)/);

@@ -421,7 +421,23 @@ namespace UnityCli
                     throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation terminal identity is incomplete; outcome is unknown.");
                 var cancelEnvelope = ProtocolEnvelopeFactory.Success(cancelTerminalRequestId, data);
                 UnityCliActiveOperation.StoreTerminalFirst(CancelTerminalScope, cancelTerminalRequestId, cancelDigest, root.RequestDigest, cancelEnvelope);
-                CompleteAdmissionRoot(ReadAdmissionOwnerFields(root.TestOperation, cancelTerminalRequestId));
+                var markerOwner = ReadAdmissionOwnerFields(root.TestOperation, cancelTerminalRequestId);
+                if (markerOwner == null || !Same(markerOwner.RequestDigest, cancelDigest) || !Same(markerOwner.TopRequestDigest, root.RequestDigest)
+                    || !Same(AdmissionText(root.TestOperation, "admissionRequestDigest"), cancelDigest)
+                    || (UnityCliAdmissionPool.AdmissionOwnerState)AdmissionLong(root.TestOperation, "admissionIntendedOwnerState") != UnityCliAdmissionPool.AdmissionOwnerState.Continuation)
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation admission identity is not bound to the expected continuation.");
+                var cancelOwner = CaptureAdmissionOwner(cancelTerminalRequestId, cancelDigest);
+                cancelOwner.TopRequestDigest = root.RequestDigest;
+                if (cancelOwner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Continuation)
+                {
+                    var cancelMarker = new Dictionary<string, object>
+                    {
+                        { "requestId", cancelTerminalRequestId }, { "requestDigest", root.RequestDigest }, { "editorSessionId", EditorSessionId() }
+                    };
+                    cancelOwner = PersistAdmissionOwnerTransfer(CancelTerminalScope + "-admission-owner", cancelMarker, cancelOwner, UnityCliAdmissionPool.AdmissionOwnerState.Continuation);
+                }
+                if (cancelOwner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Continuation || !CompleteAdmissionRoot(cancelOwner))
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation continuation owner could not be completed.");
                 cancelTerminalData = data;
                 Finish(root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_TEST_RUN_CANCELLED", "The exact tracked Unity test run was cancelled.", data, new[] { "Inspect the test.cancel proof before starting another test run." }));
             }

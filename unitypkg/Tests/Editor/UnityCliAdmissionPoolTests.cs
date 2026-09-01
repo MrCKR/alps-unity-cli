@@ -269,6 +269,19 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void PendingTransferCannotCompleteTheWorkItemOwner()
+        {
+            var pool = Pool();
+            var owner = Consume(pool, 0);
+            Assert.That(pool.PrepareOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery), Is.True);
+            Assert.That(pool.CompleteTrusted(owner), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked));
+            Assert.That(pool.Capture().Records.Single().OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+            UnityCliAdmissionPool.ConsumedIdentity recovery;
+            Assert.That(pool.CommitOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery, out recovery), Is.True);
+            Assert.That(recovery.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+        }
+
+        [Test]
         public void RecoverySnapshotExcludesGrantsAndRemainsBounded()
         {
             var pool = Pool();
@@ -298,6 +311,25 @@ namespace UnityCli.Tests
             Assert.That(restored.RecoverConsumed(Request(1), Fingerprint(1), Digest(1), "listener-after-reload", 2, 5000), Is.True);
             Assert.That(restored.AttachConsumed(Request(1), Fingerprint(1), Digest(1), "listener-after-reload", 2, 5000), Is.True);
             Assert.That(restored.Acquire(Request(6), Fingerprint(6), "listener-after-reload", 2).Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Closed));
+        }
+
+        [Test]
+        public void RestoreReopensExactlyAtThreeAfterFiveOwnerHysteresis()
+        {
+            var source = Pool();
+            var owners = Enumerable.Range(0, 5).Select(index => Consume(source, index)).ToArray();
+            var snapshot = source.CaptureRecovery();
+            Assert.That(snapshot.Active, Is.EqualTo(5));
+            Assert.That(snapshot.GateClosed, Is.True);
+            var restored = Pool();
+            restored.Restore(snapshot.Records, snapshot.Active, snapshot.GateClosed, snapshot.RecoveryDigest, snapshot.ConfiguredMaxActive, snapshot.ReopenAt);
+            Assert.That(restored.CompleteTrusted(owners[0]), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
+            Assert.That(restored.Capture().Active, Is.EqualTo(4));
+            Assert.That(restored.Capture().GateClosed, Is.True);
+            Assert.That(restored.CompleteTrusted(owners[1]), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
+            Assert.That(restored.Capture().Active, Is.EqualTo(3));
+            Assert.That(restored.Capture().GateClosed, Is.False);
+            Assert.That(restored.Acquire(Request(5), Fingerprint(5), ListenerId, 1).Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
         }
 
         [Test]
