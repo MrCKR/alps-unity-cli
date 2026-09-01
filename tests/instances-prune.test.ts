@@ -91,8 +91,7 @@ test("Editor and Runtime publish lifecycle changes immediately with a thirty-sec
     readFile("unitypkg/Runtime/Infrastructure/UnityCliRuntimeBridge.cs", "utf8"),
   ]);
   assert.match(bridge, /private const double RegistryRefreshSeconds = 30\.0/);
-  assert.match(bridge, /private static bool queuePublicationOpen;/);
-  assert.match(bridge, /PrepareListenerGenerationForStart\(\);[\s\S]*?StartHttpListener\(listener\)[\s\S]*?RegisterInstance\("transitioning"\)[\s\S]*?queuePublicationOpen = true[\s\S]*?Task\.Run\(ListenLoop\);[\s\S]*?readyPublicationPending = true/);
+  assert.match(bridge, /PrepareListenerGenerationForStart\(\);[\s\S]*?StartHttpListener\(listener\)[\s\S]*?RegisterInstance\("transitioning"\)[\s\S]*?ProductionQueueState\.ListenerGeneration = Math\.Max\(1, CurrentListenerGeneration\(\)\)[\s\S]*?ProductionQueueState\.QueuePublicationOpen = true[\s\S]*?Task\.Run\(ListenLoop\);[\s\S]*?readyPublicationPending = true/);
   assert.match(bridge, /catch \(Exception exception\)[\s\S]*?StopListener\(\);[\s\S]*?listener_start_failed/);
   assert.match(bridge, /RegisterInstance\(playModeChanging \? "transitioning" : "ready"\)/);
   assert.match(bridge, /nextRegistryRefreshAt = EditorApplication\.timeSinceStartup \+ RegistryRefreshSeconds/);
@@ -120,7 +119,7 @@ test("Editor registry publication uses one bounded same-domain retry chain", asy
   assert.match(registry, /failure is IOException[\s\S]*?failure is UnauthorizedAccessException[\s\S]*?failure is TimeoutException[\s\S]*?failure is Win32Exception/);
   assert.match(registry, /failedAttempts <= 1\) return 0\.25;[\s\S]*?failedAttempts == 2\) return 0\.5;[\s\S]*?return 1\.0/);
   assert.match(registry, /instance_publication_retry_succeeded attempts=/);
-  assert.match(bridge, /PrepareListenerGenerationForStart\(\);[\s\S]*?if \(!RegisterInstance\("transitioning"\)\) throw[\s\S]*?queuePublicationOpen = true[\s\S]*?Task\.Run\(ListenLoop\);[\s\S]*?readyPublicationPending = true/);
+  assert.match(bridge, /PrepareListenerGenerationForStart\(\);[\s\S]*?if \(!RegisterInstance\("transitioning"\)\) throw[\s\S]*?ProductionQueueState\.QueuePublicationOpen = true[\s\S]*?Task\.Run\(ListenLoop\);[\s\S]*?readyPublicationPending = true/);
   assert.match(bridge, /started = false;[\s\S]*?readyPublicationPending = false;[\s\S]*?CancelInstancePublicationRetry\(\)/);
   assert.match(workQueue, /RetryPendingWorkItemSettlements\(\);[\s\S]*?TickInstancePublicationRetry\(\);[\s\S]*?CurrentDurableMutationBarrier\(\)[\s\S]*?UnityCliBridgeQueuePolicy\.SelectStarts/);
   assert.match(unityTests, /new FileStream\(paths\.Temporary[\s\S]*?register\.Invoke[\s\S]*?Thread\.Sleep\(300\)[\s\S]*?tick\.Invoke/);

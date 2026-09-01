@@ -103,7 +103,6 @@ namespace UnityCli
                 {
                     var dispatchRoot = RequiredRoot(root.RequestId);
                     RequireLease(dispatchRoot);
-                    HitPackageResolveEffectTestBoundary("after-package-resolve-effect-started");
                     Client.Resolve();
                     AdvancePackageOperation(root.RequestId, current => { current.PackageOperation["resolveReturned"] = true; current.PackageOperation["phase"] = "resolve_returned"; });
                 }

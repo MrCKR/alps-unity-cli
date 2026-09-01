@@ -15,18 +15,21 @@ namespace UnityCli.Tests
         private UnityCliAdmissionPool pool;
         private BridgeQueueState state;
         private string fingerprint;
+        private long monotonicNowMs;
 
         [SetUp]
         public void SetUp()
         {
             pool = new UnityCliAdmissionPool("test-instance", "test-session", 4, 1);
             fingerprint = new string('a', 64);
-            state = UnityCliBridge.CreateQueueStateForTests(pool);
+            monotonicNowMs = 1000L;
+            state = UnityCliBridge.CreateQueueStateForTests(pool, () => monotonicNowMs);
         }
 
         [TearDown]
         public void TearDown()
         {
+            state.Boundary = null;
             state.AssertEmptyForTests();
         }
 
@@ -36,7 +39,7 @@ namespace UnityCli.Tests
             var request = Request("queue-race-attach");
             var raw = RequestBytes(request);
             var deadline = Deadline(request);
-            var grant = pool.Acquire(request.RequestId, fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
             Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
             bool firstCreated;
             var first = Enqueue(request, raw, grant.Token, deadline, out firstCreated);
@@ -76,7 +79,7 @@ namespace UnityCli.Tests
             var request = Request("queue-race-complete");
             var raw = RequestBytes(request);
             var deadline = Deadline(request);
-            var grant = pool.Acquire(request.RequestId, fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
             bool ignoredCreated;
             var first = Enqueue(request, raw, grant.Token, deadline, out ignoredCreated);
             var entered = new ManualResetEventSlim(false);
@@ -117,12 +120,12 @@ namespace UnityCli.Tests
             var request = Request("queue-reload-sweep");
             var raw = RequestBytes(request);
             var deadline = Deadline(request);
-            var grant = pool.Acquire(request.RequestId, fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
             bool created;
             var first = Enqueue(request, raw, grant.Token, deadline, out created);
             Assert.That(created, Is.True);
 
-            UnityCliBridge.SweepQueuedWorkForTests();
+            UnityCliBridge.SweepQueuedWorkForTests(state);
 
             Assert.That(first.Completed.IsSet, Is.True);
             Assert.That(first.Response, Does.Contain("E_UNITY_DOMAIN_RELOAD"));
@@ -138,7 +141,7 @@ namespace UnityCli.Tests
             var request = Request("queue-publication-fault");
             var raw = RequestBytes(request);
             var deadline = Deadline(request);
-            var grant = pool.Acquire(request.RequestId, fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
             var persistOutside = false;
             var logOutside = false;
             state.Boundary = name =>
@@ -162,7 +165,7 @@ namespace UnityCli.Tests
             var request = Request("queue-completion-fault");
             var raw = RequestBytes(request);
             var deadline = Deadline(request);
-            var grant = pool.Acquire(request.RequestId, fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
             bool created;
             var item = Enqueue(request, raw, grant.Token, deadline, out created);
             var faultObservedInside = false;
@@ -179,13 +182,93 @@ namespace UnityCli.Tests
                 if (name == "before-queue-boundary-fault-log") logOutside = !UnityCliBridge.QueueLockHeldForTests(state);
             };
 
-            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.True);
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.False);
 
             Assert.That(faultObservedInside, Is.True);
-            Assert.That(persistOutside, Is.True);
             Assert.That(logOutside, Is.True);
+            Assert.That(item.Completed.IsSet, Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
+
+            state.Boundary = name =>
+            {
+                if (name == "before-admission-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests(state);
+            };
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+
+            Assert.That(persistOutside, Is.True);
             Assert.That(item.Completed.IsSet, Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+        }
+
+        [TestCase("persist")]
+        [TestCase("marker-clear")]
+        public void DurableSettlementFailureRetainsMapAndSignalUntilRetry(string fault)
+        {
+            var request = Request("queue-durable-" + fault);
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            bool created;
+            var item = Enqueue(request, raw, grant.Token, deadline, out created);
+            Assert.That(created, Is.True);
+            if (fault == "persist") state.PersistPoolState = () => false;
+            else state.ClearOwnerMarkers = identity => false;
+
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.False);
+
+            Assert.That(item.Completed.IsSet, Is.False);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+
+            state.PersistPoolState = () => true;
+            state.ClearOwnerMarkers = null;
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void SuccessorIdentityMismatchBlocksFrozenCompletionUntilSuccessorEnds()
+        {
+            var request = Request("queue-successor-mismatch");
+            var raw = RequestBytes(request);
+            var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            bool created;
+            var item = Enqueue(request, raw, grant.Token, deadline, out created);
+            Assert.That(created, Is.True);
+            UnityCliAdmissionPool.ConsumedIdentity successor = null;
+            state.Boundary = name =>
+            {
+                if (name != "before-completion-memory") return;
+                state.Boundary = null;
+                UnityCliAdmissionPool.ConsumedIdentity current;
+                Assert.That(pool.TryGetConsumedIdentity(request.RequestId, out current), Is.True);
+                Assert.That(pool.CompleteTrusted(current), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
+                var nextGrant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+                Assert.That(nextGrant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+                var authorized = pool.AuthorizeAndCapture(request.RequestId, fingerprint, digest, nextGrant.Token, state.ListenerId, state.ListenerGeneration, deadline);
+                Assert.That(authorized.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+                successor = authorized.Identity;
+            };
+
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.False);
+
+            Assert.That(successor, Is.Not.Null);
+            Assert.That(item.Completed.IsSet, Is.False);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(pool.CompleteTrusted(successor), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+
+            Assert.That(item.Completed.IsSet, Is.True);
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
         }
 
@@ -196,7 +279,8 @@ namespace UnityCli.Tests
             {
                 ProjectToolRequest("worker-rigidbody", "physics.rigidbody", new Dictionary<string, object> { { "target", "MissingTarget" } }),
                 ProjectToolRequest("worker-reflection", "graphics.reflection-probe", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } }),
-                ProjectToolRequest("worker-light-probes", "graphics.light-probe-group", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } })
+                ProjectToolRequest("worker-light-probes", "graphics.light-probe-group", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } }),
+                ProjectToolRequest("worker-scene-read", "scene.active", new Dictionary<string, object>())
             };
 
             var task = Task.Run(() => requests.Select(UnityCliBridge.QueueRequestWorkClass).ToArray());

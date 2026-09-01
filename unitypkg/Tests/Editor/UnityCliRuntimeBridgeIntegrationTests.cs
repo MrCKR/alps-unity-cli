@@ -144,6 +144,9 @@ namespace UnityCli.Tests
             var originalRequest = Request(requestId, "runtime-tool.list", originalDeadline);
             var seeded = bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput());
             Assert.That(seeded.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
+            var terminalWork = TakeNext();
+            Assert.That(terminalWork, Is.SameAs(seeded.Work));
+            Assert.That(Finalize(terminalWork, "expired-existing-terminal", 1), Is.True);
             utcNowMs = originalDeadline + 1L;
             Assert.That(utcNowMs, Is.GreaterThanOrEqualTo(originalDeadline));
 
@@ -153,6 +156,7 @@ namespace UnityCli.Tests
             Assert.That(Task.WaitAll(new Task[] { exactTask, mismatchTask }, 5000), Is.True);
             Assert.That(exactTask.Result.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
             Assert.That(exactTask.Result.Work, Is.SameAs(seeded.Work));
+            Assert.That(exactTask.Result.Work.Completion.Task.Result, Is.EqualTo("expired-existing-terminal"));
             Assert.That(mismatchTask.Result.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
             Assert.That(mismatchTask.Result.Error, Does.Contain("E_REQUEST_REPLAY_MISMATCH"));
 
@@ -162,6 +166,21 @@ namespace UnityCli.Tests
             Assert.That(miss.Error, Does.Contain("E_SCHEMA_INVALID"));
             Assert.That(bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput()).Outcome,
                 Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
+        }
+
+        [Test]
+        public void ShutdownFinalizesQueuedRequestBeforeAnyDequeueEffectOwnership()
+        {
+            var publication = PublishBypass("runtime-queued-shutdown");
+            Assert.That(publication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
+
+            bridge.StopRuntimeRequestsLocked();
+
+            Assert.That(publication.Work.Completion.Task.IsCompleted, Is.True);
+            Assert.That(publication.Work.Completion.Task.Result, Does.Contain("E_RUNTIME_SESSION_STALE"));
+            UnityCliRuntimeBridge.PendingRequest ignored;
+            Assert.That(TryTake(out ignored), Is.False);
+            Assert.That(ignored, Is.Null);
         }
 
         [Test]
@@ -205,11 +224,19 @@ namespace UnityCli.Tests
 
         private UnityCliRuntimeBridge.PendingRequest TakeNext()
         {
+            UnityCliRuntimeBridge.PendingRequest request;
+            Assert.That(TryTake(out request), Is.True);
+            return request;
+        }
+
+        private bool TryTake(out UnityCliRuntimeBridge.PendingRequest request)
+        {
             var method = typeof(UnityCliRuntimeBridge).GetMethod("TryTakeNextRuntimeRequest", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null);
             var arguments = new object[] { null };
-            Assert.That((bool)method.Invoke(bridge, arguments), Is.True);
-            return (UnityCliRuntimeBridge.PendingRequest)arguments[0];
+            var result = (bool)method.Invoke(bridge, arguments);
+            request = (UnityCliRuntimeBridge.PendingRequest)arguments[0];
+            return result;
         }
 
         private static bool Finalize(UnityCliRuntimeBridge.PendingRequest request, string terminal, int expectedState)
@@ -226,7 +253,7 @@ namespace UnityCli.Tests
             field.SetValue(bridge, value);
         }
 
-        private static Dictionary<string, object> Request(string requestId, string command)
+        private Dictionary<string, object> Request(string requestId, string command)
         {
             return Request(requestId, command, Deadline());
         }
@@ -246,7 +273,7 @@ namespace UnityCli.Tests
             };
         }
 
-        private static long Deadline() { return DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds(); }
+        private long Deadline() { return utcNowMs + 60000L; }
         private static string Digest(char value) { return new string(value, 64); }
         private static string DigestFor(string requestId)
         {

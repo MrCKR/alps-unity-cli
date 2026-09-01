@@ -27,8 +27,10 @@ test("Bridge main-thread scheduler advances every durable coordinator before que
   }
   assert.match(waitSource, /private static void TickCoordinator\(string owner, Action tick\)[\s\S]*catch \(Exception exception\)[\s\S]*CoordinatorFailures/);
   const schedulerCall = bridgeScheduler.indexOf("UnityCliWaitScheduler.Tick();");
-  const emptyQueueReturn = bridgeScheduler.indexOf("if (WorkQueue.Count == 0) return;");
-  assert.ok(schedulerCall >= 0 && emptyQueueReturn > schedulerCall, "durable roots must progress even with no queued HTTP work");
+  const emptyQueueReturn = bridgeScheduler.indexOf("if (state.WorkQueue.Count == 0) return;");
+  assert.ok(schedulerCall >= 0, "missing durable scheduler call");
+  assert.ok(emptyQueueReturn >= 0, "missing empty queue return");
+  assert.ok(emptyQueueReturn > schedulerCall, "durable roots must progress even with no queued HTTP work");
   // Continuation 由显式队列驱动，不能覆盖 Unity 主线程原生 SynchronizationContext。
   assert.doesNotMatch(waitSource, /SetSynchronizationContext|:\s*SynchronizationContext/);
   assert.doesNotMatch(bridgeSource, /EnsureMainThreadSynchronizationContext/);

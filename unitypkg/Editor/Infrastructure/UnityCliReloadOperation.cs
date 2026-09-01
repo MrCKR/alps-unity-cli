@@ -116,42 +116,54 @@ namespace UnityCli
             /// <summary>root不可读时，业务必须仅凭独立durable terminal决定清理、重试或拒绝。</summary>
             protected virtual TerminalCleanupDecision EvaluateUnreadableTerminalCleanup(string requestId, string requestDigest) { return TerminalCleanupDecision.Cleanup; }
 
-            /// <summary>每tick先消费scope准入marker；root缺失时只发布outcome-unknown并保留exact owner。</summary>
+            /// <summary>每tick先消费scope准入marker；只有root与lease的exact状态都可证明时才推进或清理owner。</summary>
             protected bool RetryAdmissionOwnerRecoveryMarker()
             {
                 var markerScope = Scope + "-admission-owner";
+                if (UnityCliActiveOperation.Exists(Scope + "-terminal-cleanup"))
+                {
+                    try
+                    {
+                        if (UnityCliActiveOperation.RetryExactTerminalCleanup(Scope)) return true;
+                    }
+                    catch { return true; }
+                }
                 if (!UnityCliActiveOperation.Exists(markerScope)) return false;
                 Dictionary<string, object> marker;
                 try { marker = UnityCliActiveOperation.Load(markerScope); }
                 catch { return true; }
                 if (marker == null) return true;
                 var requestId = Text(marker, "requestId");
-                var requestDigest = Text(marker, "admissionRequestDigest");
-                if (string.IsNullOrEmpty(requestDigest)) requestDigest = Text(marker, "requestDigest");
-                if (string.IsNullOrEmpty(requestId) || !IsSha256(requestDigest)) return true;
+                var ownerRequestDigest = Text(marker, "admissionRequestDigest");
+                var topRequestDigest = Text(marker, "requestDigest");
+                if (!IsSafeId(requestId) || !IsSha256(ownerRequestDigest) || !IsSha256(topRequestDigest)) return true;
                 AdmissionOwnerIdentity owner;
-                try { owner = ReconcileAdmissionTransferForLiveMarker(markerScope, marker, requestId, requestDigest); }
+                try { owner = ReconcileAdmissionTransferForLiveMarker(markerScope, marker, requestId, ownerRequestDigest); }
                 catch { return true; }
-                if (owner == null) return true;
+                if (owner == null || !string.Equals(owner.TopRequestDigest, topRequestDigest, StringComparison.Ordinal)) return true;
 
-                Dictionary<string, object> root = null;
+                Dictionary<string, object> root;
                 try { root = UnityCliActiveOperation.Load(Scope); }
                 catch { return true; }
-                var rootMatches = root != null && string.Equals(Text(root, "requestId"), requestId, StringComparison.Ordinal)
-                    && string.Equals(Text(root, "requestDigest"), requestDigest, StringComparison.Ordinal);
-                if (rootMatches) return false;
+                if (root != null)
+                {
+                    var rootMatches = string.Equals(Text(root, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal)
+                        && string.Equals(Text(root, "requestId"), requestId, StringComparison.Ordinal)
+                        && string.Equals(Text(root, "requestDigest"), topRequestDigest, StringComparison.Ordinal);
+                    return !rootMatches;
+                }
 
                 bool leaseOwned;
-                if (!UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out leaseOwned)) return true;
+                if (!UnityCliSessionMutationLease.TryIsOwnedBy(owner.RequestId, owner.RequestDigest, out leaseOwned)) return true;
                 if (leaseOwned)
                 {
                     try
                     {
                         var terminal = ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", OperationDisplayName + " active root disappeared while its admission owner was retained; outcome is unknown.", null, new[] { "Inspect the affected business state before submitting another mutation." });
-                        UnityCliActiveOperation.StoreTerminalFirst(Scope, requestId, requestDigest, terminal);
-                        UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, requestDigest);
+                        UnityCliActiveOperation.StoreTerminalFirst(Scope, requestId, topRequestDigest, terminal);
+                        UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, topRequestDigest);
                     }
-                    catch { }
+                    catch { return true; }
                     return true;
                 }
 

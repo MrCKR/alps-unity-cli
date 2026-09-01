@@ -293,6 +293,13 @@ namespace UnityCli
             return result;
         }
 
+        /// <summary>主循环重试已发布direct terminal的exact cleanup；失败保留固定marker等待下一帧。</summary>
+        private static void RetryDirectMutationTerminalCleanup()
+        {
+            try { UnityCliActiveOperation.RetryExactTerminalCleanup(DirectMutationTerminalScope); }
+            catch (Exception exception) { WriteLog("direct_mutation_cleanup_retry_failed " + exception.GetType().Name); }
+        }
+
         /// <summary>terminal类型不决定slot释放；只要exact owner仍存在就必须转TerminalCleanup并完成。</summary>
         private static void CleanupPublishedDirectMutation(string requestId, string requestDigest, Action<string> cleanupBoundary = null)
         {
@@ -305,11 +312,6 @@ namespace UnityCli
                 UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, completeAdmission, cleanupBoundary);
             }
             catch { }
-        }
-
-        internal static void CleanupPublishedDirectMutationForTests(string requestId, string requestDigest, Action<string> cleanupBoundary = null)
-        {
-            CleanupPublishedDirectMutation(requestId, requestDigest, cleanupBoundary);
         }
 
         private static void FinalizeDirectMutationExecution(string requestId, string requestDigest)
@@ -612,6 +614,9 @@ namespace UnityCli
         internal static UnityCliBridgeQueuePolicy.WorkClass QueueRequestWorkClass(BridgeRequest request)
         {
             if (request == null) return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+            var toolName = RequestToolName(request);
+            if (!string.IsNullOrEmpty(toolName) && toolName.StartsWith("scene.", StringComparison.Ordinal))
+                return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
             UnityCliBridgeQueuePolicy.WorkClass registered;
             if (CommandRegistry.TryGetQueueClass(request.Command, out registered)) return registered;
             var contract = ResolveQueueCompletionContract(request);

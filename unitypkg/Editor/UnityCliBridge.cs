@@ -86,9 +86,6 @@ namespace UnityCli
             if (boundary != null) boundary(name);
         }
 
-        internal static string ListenerIdForTests { get { return ListenerId; } }
-        internal static long ListenerGenerationForTests { get { return CurrentListenerGeneration(); } }
-
         static UnityCliBridge()
         {
             // AssetImportWorker 不是可寻址 Editor 实例，不得启动 listener 或写入 instance registry。

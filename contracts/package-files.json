@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "fda2f107c2c55648d024f960491ab27ec28b1829a5923c7a2d4fa586974c3842",
+  "sourceHash": "cd2079717aafe73a27a95b642dc5f34459f3e9568cccbdfa536137a265a21594",
   "files": [
     {
       "path": "Editor/Bridge/BridgeCommandContext.cs",
@@ -21,8 +21,13 @@
     },
     {
       "path": "Editor/Bridge/BridgeHttpServer.cs",
-      "size": 28792,
-      "sha256": "b2a51730d694bf95177e69de236f64f68c1358e58801e42f534cd9decd73e17e"
+      "size": 28215,
+      "sha256": "3b807608a53847f0df4c01943ed04fec782e1c5c43551c1fbf2d85faa0d35088"
+    },
+    {
+      "path": "Editor/Bridge/BridgeQueueState.cs",
+      "size": 11043,
+      "sha256": "feced8d7d33cb6b4915e75771ca44247ef5d6403379a1fdcea09fe291ce72197"
     },
     {
       "path": "Editor/Bridge/BridgeResponse.cs",
@@ -31,8 +36,8 @@
     },
     {
       "path": "Editor/Bridge/BridgeWorkQueue.cs",
-      "size": 30163,
-      "sha256": "ec88984b6387f9a7c90ef73e875e622b16c93d4f39c58699a44f304fd2894e86"
+      "size": 36425,
+      "sha256": "9324044478ab56cde9fcfe01b1491c63d48de1d25c622c6f3d39a0acd5f3cad3"
     },
     {
       "path": "Editor/BridgeStartupStateMachine.cs",
@@ -66,13 +71,13 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliActiveOperation.cs",
-      "size": 25904,
-      "sha256": "87f1b5f6aac5df7ddd719eb7afba1c36606ca7a193efddf28b9cfda1f61606eb"
+      "size": 28607,
+      "sha256": "c7525d3e6565f0effb82632f461e7bfb6a2f08ed510b368e97e46762d71f4c91"
     },
     {
       "path": "Editor/Infrastructure/UnityCliAdmission.cs",
-      "size": 77742,
-      "sha256": "443e78203b833788284d283508efc92067d976fd647abe4cb661ddb66c07d6c0"
+      "size": 95400,
+      "sha256": "720f73f1a5de693a936041395b8957e45211c5f4ca8ea538e63837ae139a79ce"
     },
     {
       "path": "Editor/Infrastructure/UnityCliArtifacts.cs",
@@ -136,8 +141,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliLiveBuildCoordinator.cs",
-      "size": 33015,
-      "sha256": "1669c147fc1f73b00a38388e62ac14687ef4823fbba26f3ab9742c06802f4134"
+      "size": 34055,
+      "sha256": "af02ec5ea65baad7d8c5222f00621281fe9b045b36f807c1f165d6e360026d00"
     },
     {
       "path": "Editor/Infrastructure/UnityCliLiveRefreshCoordinator.cs",
@@ -176,8 +181,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliOperationCoordinator.cs",
-      "size": 58104,
-      "sha256": "6069346837d3d343d7a1cdba6f7e69c91fd51ba999b505a1b52c62dda834da2c"
+      "size": 58519,
+      "sha256": "8d3d6186d7ba902928a70b598e74b248b7e05d2bdbcd228a48ebce6a44524ef7"
     },
     {
       "path": "Editor/Infrastructure/UnityCliPackageEmbedCoordinator.cs",
@@ -186,13 +191,13 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliPackageResolveCoordinator.cs",
-      "size": 38897,
-      "sha256": "3dc2c7d6c5cb1ff2360f52647ab7065a527f0edadbb0fd2449bb010b9159fff2"
+      "size": 40190,
+      "sha256": "2aab58cb4119ad45d8fee1980ff575bf621b36eb1f5eecde70ddfa16af8d8127"
     },
     {
       "path": "Editor/Infrastructure/UnityCliPackageResolveState.cs",
-      "size": 48546,
-      "sha256": "96a1ea2ef4d60757d42f10c464a781fce1752be1dee2698df16425a1098b2fd3"
+      "size": 48449,
+      "sha256": "0a06a4ae1f99d5ee23aa484333eeb29e3e455a815eaac47ecf3b3b31a93f37e3"
     },
     {
       "path": "Editor/Infrastructure/UnityCliPipelineHandoff.cs",
@@ -216,8 +221,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliReloadOperation.cs",
-      "size": 46427,
-      "sha256": "62b77609d4a6bd6fad7bf13fa9cfaeb7e493362cd11361bf6e3b12270d61bc75"
+      "size": 50150,
+      "sha256": "f06854e4643e9bdb084b02bff6372c8d435f83ce40b08c4ad0a25a9f7d899c2e"
     },
     {
       "path": "Editor/Infrastructure/UnityCliRequestDigest.cs",
@@ -251,8 +256,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliSessionMutationLease.cs",
-      "size": 31251,
-      "sha256": "202daaa45396610d565c24cbdfd55f9e99bdd70df5f1f894f9fde1334913fb22"
+      "size": 31172,
+      "sha256": "4798f81a067f316b6512dd816ce9adcab0942ec6726c929ea2b83dfb51cad0b8"
     },
     {
       "path": "Editor/Infrastructure/UnityCliStateIO.cs",
@@ -261,8 +266,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliTestRunCoordinator.cs",
-      "size": 67497,
-      "sha256": "6a218d370cafb72f3578b372e36ca66168f1d92b165909141631f818863974fa"
+      "size": 70789,
+      "sha256": "1545178c75b785c45cee8080f9158c3773af2b35ee82f3f7e7dea84c4d173520"
     },
     {
       "path": "Editor/Infrastructure/UnityCliTransactionLog.cs",
@@ -1881,8 +1886,8 @@
     },
     {
       "path": "Editor/UnityCliBridge.cs",
-      "size": 27077,
-      "sha256": "935b0ed94808286d1bce9443f99b30c4cb99919521317fbdee86ba475f8d97b5"
+      "size": 27091,
+      "sha256": "733e9bfcfdf56b77704d00da3b301faa76ef8fe5a915e75a0d89f7fcf96471d0"
     },
     {
       "path": "Editor/UnityCliBridgeBuildInfo.cs",
@@ -1891,8 +1896,8 @@
     },
     {
       "path": "Runtime/Infrastructure/UnityCliRuntimeBridge.cs",
-      "size": 50122,
-      "sha256": "b53a0760ff278c3dcb9111e2129fd361fa565abffea8d2eeefd22e2f91f92d08"
+      "size": 50435,
+      "sha256": "983537355f402601ed6a8d5a2839d606309c06a2dc832de9777b6fab17dd865d"
     },
     {
       "path": "Runtime/Infrastructure/UnityCliRuntimeJson.cs",
@@ -1906,8 +1911,8 @@
     },
     {
       "path": "Runtime/Properties/AssemblyInfo.cs",
-      "size": 96,
-      "sha256": "8a7b5c2641b88032798edaf61abd1ca1e8323b61ace0b53a72882690f68a30cf"
+      "size": 120,
+      "sha256": "c92975ae24685fc2ee2a84e4f44d3e8637a8e6c7a1acc0ddf33e69a1cc641fba"
     },
     {
       "path": "Runtime/Tools/UnityCliRuntimeTools.cs",
@@ -1956,8 +1961,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliAdmissionCoordinatorIntegrationTests.cs",
-      "size": 38584,
-      "sha256": "757d473ee1329e47845eee0e1e0c9da54cb996cbb25eaa942f1d9cf8cd8c03d1"
+      "size": 17617,
+      "sha256": "10f6e59f5039a924f27466541f273e800ca69242be485a77216a668e39415545"
     },
     {
       "path": "Tests/Editor/UnityCliAdmissionPoolTests.cs",
@@ -1971,8 +1976,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliBridgeAdmissionIntegrationTests.cs",
-      "size": 15131,
-      "sha256": "647410afca03af4e884e77c63f87c3b612f37e9776738b769e7466bb232778f2"
+      "size": 19644,
+      "sha256": "81c9f841b893eae3faba300b261f5131c8870336a4c1fdeea45270af7ea1cec6"
     },
     {
       "path": "Tests/Editor/UnityCliBridgeQueuePolicyTests.cs",
@@ -1991,8 +1996,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliRuntimeBridgeIntegrationTests.cs",
-      "size": 14130,
-      "sha256": "3d896bd1901231b68e72d55e893a6365f598931324c1d517a0fd2aeb4eeddea1"
+      "size": 15250,
+      "sha256": "932b6212240ec9e21ad4c16c13584d234eba61824cbb9990f5a1da08316405ea"
     },
     {
       "path": "UnityCli.Editor.asmdef",

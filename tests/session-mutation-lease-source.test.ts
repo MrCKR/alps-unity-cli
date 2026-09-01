@@ -5,6 +5,14 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 async function source(path: string): Promise<string> { return readFile(new URL(path, root), "utf8"); }
 
+function assertBefore(text: string, first: string, second: string): void {
+  const firstIndex = text.indexOf(first);
+  const secondIndex = text.indexOf(second);
+  assert.ok(firstIndex >= 0, `missing source anchor: ${first}`);
+  assert.ok(secondIndex >= 0, `missing source anchor: ${second}`);
+  assert.ok(firstIndex < secondIndex, `${first} must precede ${second}`);
+}
+
 async function sourceTree(directory: URL): Promise<Array<{ path: string; text: string }>> {
   const entries = await readdir(directory, { withFileTypes: true });
   const nested = await Promise.all(entries.map(async (entry) => {
@@ -96,8 +104,17 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(operation, /TryFinalizeRecoveredPlayModeRoot[\s\S]*DirectMutationCleanupPendingSessionKey[\s\S]*DirectMutationBindingMatches\(requestId, requestDigest\)[\s\S]*ReleaseDirectMutationLease\(requestId, requestDigest\)/);
   assert.match(operation, /ReleaseDirectMutationLease[\s\S]*SetBool\(DirectMutationCleanupPendingSessionKey, true\)[\s\S]*TryIsOwnedBy\(requestId, requestDigest, out isOwned\)[\s\S]*SetBool\(DirectMutationCleanupPendingSessionKey, false\)/);
   assert.match(bridge, /OnBeforeAssemblyReload\(\)[\s\S]*ReleaseActiveDirectMutationLease\(\)/);
-  assert.ok(operation.indexOf("if (!mutation)") < operation.indexOf("TryAcquire(request.RequestId, requestDigest"));
-  assert.ok(operation.indexOf("TryAcquire(request.RequestId, requestDigest") < operation.indexOf("var response = await Execute(request, cancellationToken)", operation.indexOf("TryAcquire(request.RequestId, requestDigest")));
+  assert.match(workQueue, /RetryDirectMutationTerminalCleanup\(\);[\s\S]*RetryPendingWorkItemSettlements\(\);/);
+  const admission = await source("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs");
+  assert.match(admission, /TryConfirmDurableTransferredOwner[\s\S]*ReconcileAdmissionTransferForLiveMarker/);
+  assert.match(admission, /ReconcileAdmissionTransferForLiveMarker\(BridgeQueueState state[\s\S]*PersistAdmissionPoolState\(state\)/);
+  assert.match(operation, /RetryDirectMutationTerminalCleanup[\s\S]*RetryExactTerminalCleanup\(DirectMutationTerminalScope\)/);
+  assertBefore(operation, "if (!mutation)", "TryAcquire(request.RequestId, requestDigest");
+  const acquireIndex = operation.indexOf("TryAcquire(request.RequestId, requestDigest");
+  const executeIndex = operation.indexOf("var response = await Execute(request, cancellationToken)", acquireIndex);
+  assert.ok(acquireIndex >= 0, "missing direct mutation lease acquisition");
+  assert.ok(executeIndex >= 0, "missing direct mutation execution");
+  assert.ok(acquireIndex < executeIndex, "lease acquisition must precede direct mutation execution");
   assert.match(reloadOperation, /TryGetCurrentOwner\(out currentOwnerRequestId, out currentOwnerRequestDigest\)[\s\S]*E_EXECUTION_TIMEOUT[\s\S]*E_REQUEST_ID_REUSED[\s\S]*var root = Load\(\)[\s\S]*TryRecoverExact\(request\.RequestId, digest[\s\S]*TryAcquire\(request\.RequestId, digest/);
   assert.match(reloadOperation, /catch \(IOException exception\)[\s\S]*active state cannot be read yet[\s\S]*catch \(Exception exception\)[\s\S]*active state corrupt/);
   assert.match(reloadOperation, /TryGetCurrentOwner\(out missingOwnerRequestId, out missingOwnerRequestDigest\)/);
@@ -111,10 +128,18 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(reloadOperation, /RetryTerminalCleanup\([\s\S]*activeRequestId[\s\S]*activeRequestDigest[\s\S]*markerMatchesActive[\s\S]*UnityCliSessionMutationLease\.Release\(requestId, requestDigest\)[\s\S]*LeaseDefinitelyNotOwned\(requestId, requestDigest\)/s);
   assert.match(reloadOperation, /LeaseDefinitelyNotOwned[\s\S]*TryIsOwnedBy\(requestId, requestDigest, out isOwned\) && !isOwned/);
   assert.match(reloadOperation, /terminal active root read failed[\s\S]*IsOwnedBy\(requestId, requestDigest\)[\s\S]*UnityCliActiveOperation\.Clear\(Scope\)/s);
-  const retryCleanup = reloadOperation.slice(reloadOperation.indexOf("private bool RetryTerminalCleanup"), reloadOperation.indexOf("internal bool Update"));
-  const normalActiveCleanup = retryCleanup.slice(retryCleanup.indexOf("if (active != null)"), retryCleanup.indexOf("UnityCliSessionMutationLease.Release(requestId, requestDigest)"));
-  assert.ok(normalActiveCleanup.indexOf("if (!markerMatchesActive)") < normalActiveCleanup.indexOf("UnityCliActiveOperation.Clear(Scope)"));
-  assert.match(reloadOperation, /pendingTerminalCleanupRequestId = requestId;[\s\S]*UnityCliActiveOperation\.Save\(TerminalCleanupScope, marker\)/s);
+  const retryCleanupStart = reloadOperation.indexOf("private bool RetryTerminalCleanup");
+  const retryCleanupEnd = reloadOperation.indexOf("internal bool Update", retryCleanupStart);
+  assert.ok(retryCleanupStart >= 0, "missing terminal cleanup retry");
+  assert.ok(retryCleanupEnd > retryCleanupStart, "missing terminal cleanup retry boundary");
+  const retryCleanup = reloadOperation.slice(retryCleanupStart, retryCleanupEnd);
+  const activeCleanupStart = retryCleanup.indexOf("if (active != null)");
+  const activeCleanupEnd = retryCleanup.indexOf("UnityCliSessionMutationLease.Release(requestId, requestDigest)", activeCleanupStart);
+  assert.ok(activeCleanupStart >= 0, "missing active cleanup branch");
+  assert.ok(activeCleanupEnd > activeCleanupStart, "missing active cleanup release boundary");
+  const normalActiveCleanup = retryCleanup.slice(activeCleanupStart, activeCleanupEnd);
+  assertBefore(normalActiveCleanup, "if (!markerMatchesActive)", "UnityCliActiveOperation.Clear(Scope)");
+  assert.match(reloadOperation, /pendingTerminalCleanupRequestId = requestId;[\s\S]*PersistAdmissionOwnerTransfer\(TerminalCleanupScope, marker[\s\S]*UnityCliActiveOperation\.Save\(TerminalCleanupScope, cleanup\)/s);
   assert.match(retryCleanup, /if \(!UnityCliActiveOperation\.Exists\(TerminalCleanupScope\)\)[\s\S]*UnityCliActiveOperation\.Save\(TerminalCleanupScope, cleanup\)[\s\S]*return true[\s\S]*UnityCliActiveOperation\.Clear\(Scope\)/s);
   assert.match(reloadOperation, /enum TerminalCleanupDecision[\s\S]*Cleanup[\s\S]*Retry[\s\S]*Reject/);
   assert.match(retryCleanup, /TerminalCleanupDecision\.Retry\) return true/);
@@ -175,8 +200,9 @@ test("Build reload retains its unknown root but releases the terminated domain l
   ]);
   assert.match(build, /Initialize\(\)[\s\S]*MarkReloadOutcomeUnknownAndRelease[\s\S]*reloadOutcomeUnknown[\s\S]*UnityCliSessionMutationLease\.Release\(requestId, requestDigest\)/);
   assert.match(build, /TryGetTerminal\(Scope, request\.RequestId, digest, out recoveredTerminal\)[\s\S]*active != null[\s\S]*requestId[\s\S]*requestDigest[\s\S]*reloadOutcomeUnknown[\s\S]*FinishTerminal/);
-  assert.match(build, /FinishTerminal[\s\S]*StoreTerminalFirst\(Scope, id, digest, envelope\)[\s\S]*BeginExactTerminalCleanup\(Scope, id, digest\)/);
-  assert.match(build, /RecoverTerminalCleanup[\s\S]*RetryExactTerminalCleanup\(Scope\)/);
+  assert.match(build, /FinishTerminal[\s\S]*StoreTerminalFirst\(Scope, id, digest, envelope\)[\s\S]*BeginExactTerminalCleanup\(Scope, id, digest, queueState\)/);
+  assert.match(build, /RecoverTerminalCleanup[\s\S]*RetryExactTerminalCleanup\(Scope, state\)/);
+  assert.match(build, /FinishBuildTerminalAfterRootFault[\s\S]*PersistAdmissionOwnerTransfer\(queueState, Scope \+ "-admission-owner"[\s\S]*AdmissionOwnerState\.Recovery/);
   assert.match(bridge, /UnityCliCompileCoordinator\.Initialize\(\);\s*UnityCliLiveBuildCoordinator\.Initialize\(\);/);
   assert.match(bridge, /UnityCliCompileCoordinator\.BeforeReload\(\);\s*UnityCliLiveBuildCoordinator\.BeforeReload\(\);/);
   assert.match(bridge, /UnityCliCompileCoordinator\.Shutdown\(\);\s*UnityCliLiveBuildCoordinator\.Shutdown\(\);/);
@@ -192,7 +218,8 @@ test("Package coordinator uses active-operation state and terminal cleanup", asy
   assert.match(coordinator, /internal static void Tick\(\) \{ RecoverTerminalCleanup\(\); operation\.Tick\(\); \}/);
   assert.match(coordinator, /AdditionalCommands[\s\S]*ClaimFilesCommand[\s\S]*CommitFilesCommand[\s\S]*ProveFilesCommand[\s\S]*FailFilesCommand/);
   assert.match(coordinator, /ExecuteAdditionalCommand\([\s\S]*ClaimFiles\(request\)[\s\S]*CommitFiles\(request\)[\s\S]*ProveFiles\(request\)[\s\S]*FailFiles\(request\)/);
-  assert.match(coordinator, /AcceptPackageActiveOperation\(request, raw, contract, newlyAcquiredLease/);
+  assert.match(coordinator, /TryGetPackageRoot\(args\.Operation, out contract\)[\s\S]*TryAcquire\(request\.RequestId, requestDigest, out newlyAcquiredLease\)[\s\S]*AcceptPackageActiveOperation\(request, raw, contract, newlyAcquiredLease/);
+  assert.match(coordinator, /RetainPackageAdmissionRecovery[\s\S]*PersistAdmissionOwnerTransfer\(state, ActiveScope \+ "-admission-owner"[\s\S]*AdmissionOwnerState\.Recovery/);
   assert.match(state, /AcceptPackageActiveOperation[\s\S]*bool allowCreate[\s\S]*if \(!allowCreate\)[\s\S]*outcome is unknown/);
   assert.match(coordinator, /phase == "awaiting_files" \|\| phase == "files_committing"[\s\S]*package-file-revoke[\s\S]*TerminalTimeout/);
   assert.match(coordinator, /RequireLease\(root\)/);
@@ -212,19 +239,26 @@ test("TestRunner attribution persists dispatch, returned identity, callback iden
   assert.match(testCoordinator, /private sealed class Coordinator : UnityCliReloadOperation/);
   assert.match(testCoordinator, /internal static Task<string> Execute\([\s\S]*operation\.Execute/);
   assert.match(testCoordinator, /internal static void Tick\(\) \{ operation\.Tick\(\); \}/);
+  assert.match(testCoordinator, /RetryAdmissionOwnerRecoveryMarker\(\) \|\| RetryCancelAdmissionOwnerMarker\(\)/);
+  assert.match(testCoordinator, /CancelAdmissionMarker[\s\S]*rootRequestId[\s\S]*rootRequestDigest[\s\S]*runId/);
+  assert.match(testCoordinator, /RetryCancelAdmissionOwnerMarker[\s\S]*TryGetTerminal\(CancelTerminalScope, cancelRequestId, cancelRequestDigest[\s\S]*TryIsOwnedBy\(rootRequestId, rootRequestDigest[\s\S]*CompleteAdmissionRoot\(owner\)/);
   for (const field of ["execute_dispatching", "run_identity_pending", "returnedRunId", "observedRunId", "pendingFinished", "CompletePending"])
     assert.match(testCoordinator, new RegExp(field));
   assert.match(testCoordinator, /TryGetTerminal\(Scope, request\.RequestId, digest, out durableTerminal\)[\s\S]*terminalRequestDigest = digest/);
   assert.match(testCoordinator, /root\.RequestDigest, digest[\s\S]*E_REQUEST_ID_REUSED/);
   assert.match(testCoordinator, /EnsureLegacyApi\(\)[\s\S]*api == null \|\| broker == null[\s\S]*InitializeLegacy\(\)/);
-  assert.ok(testCoordinator.indexOf("try { root = Load(); }") < testCoordinator.indexOf("TryAcquire(request.RequestId, digest"));
+  assertBefore(testCoordinator, "try { root = Load(); }", "TryAcquire(request.RequestId, digest");
   assert.match(testCoordinator, /TryAcquire\(request\.RequestId, digest, out newlyAcquiredLease\) \|\| !newlyAcquiredLease/);
   assert.doesNotMatch(testCoordinator, /LoadSafely/);
   assert.match(testCoordinator, /Test active state cannot be read; outcome is unknown/);
   assert.match(testCoordinator, /failures\.Count >= 100[\s\S]*BoundedText\(node\.StackTrace, 8192\)/);
   assert.match(testCoordinator, /catch \(Exception\) \{ return; \}/);
   assert.match(testCoordinator, /Finish\(Root root, object envelope\)[\s\S]*StoreTerminalFirst\(Scope, root\.RequestId, root\.RequestDigest, envelope\)[\s\S]*BeginExactTerminalCleanup\(Scope, root\.RequestId, root\.RequestDigest\)/);
-  const deadlineRecovery = testCoordinator.slice(testCoordinator.indexOf("private static void RecoverAfterDeadline"), testCoordinator.indexOf("private static void RecoverRunIdentity"));
+  const deadlineRecoveryStart = testCoordinator.indexOf("private static void RecoverAfterDeadline");
+  const deadlineRecoveryEnd = testCoordinator.indexOf("private static void RecoverRunIdentity", deadlineRecoveryStart);
+  assert.ok(deadlineRecoveryStart >= 0, "missing test deadline recovery");
+  assert.ok(deadlineRecoveryEnd > deadlineRecoveryStart, "missing test deadline recovery boundary");
+  const deadlineRecovery = testCoordinator.slice(deadlineRecoveryStart, deadlineRecoveryEnd);
   assert.match(deadlineRecovery, /ids\.Length == 1 && Same\(ids\[0\], runId\)\) return/);
   assert.match(deadlineRecovery, /Fail\(root, "E_EXECUTION_TIMEOUT"/);
   assert.doesNotMatch(testCoordinator, /RequestJournal|E_REQUEST_OUTCOME_UNKNOWN/);

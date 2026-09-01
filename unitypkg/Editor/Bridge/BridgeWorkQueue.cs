@@ -36,10 +36,10 @@ namespace UnityCli
             var state = new BridgeQueueState(pool, monotonicNowMs)
             {
                 QueuePublicationOpen = true,
-                ListenerId = ListenerId,
-                ListenerGeneration = Math.Max(1, CurrentListenerGeneration()),
+                ListenerId = "test-listener-" + Guid.NewGuid().ToString("N"),
+                ListenerGeneration = 1,
                 PersistPoolState = () => true,
-                ClearOwnerMarkers = identity => true
+                IsolatedExecution = new BridgeIsolatedExecutionState()
             };
             var intents = new HashSet<string>(StringComparer.Ordinal);
             state.PersistCompletionIntent = identity => intents.Add(CompletionIntentKey(identity));
@@ -51,7 +51,11 @@ namespace UnityCli
         /// <summary>关闭publication与摘除全部未启动WorkItem共享同一状态锁线性化点。</summary>
         private static List<BridgeWorkItem> CloseQueuePublicationAndTakeQueuedWork()
         {
-            var state = ProductionQueueState;
+            return CloseQueuePublicationAndTakeQueuedWork(ProductionQueueState);
+        }
+
+        private static List<BridgeWorkItem> CloseQueuePublicationAndTakeQueuedWork(BridgeQueueState state)
+        {
             lock (state.QueueLock)
             {
                 state.QueuePublicationOpen = false;
@@ -77,9 +81,10 @@ namespace UnityCli
             }
         }
 
-        internal static void SweepQueuedWorkForTests()
+        internal static void SweepQueuedWorkForTests(BridgeQueueState state)
         {
-            CancelQueuedWork(CloseQueuePublicationAndTakeQueuedWork());
+            if (state == null) throw new ArgumentNullException("state");
+            CancelQueuedWork(CloseQueuePublicationAndTakeQueuedWork(state));
         }
 
         private static void ProcessQueuedWork()
@@ -109,6 +114,7 @@ namespace UnityCli
             AdvanceBridgeStartup();
             UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
             UnityCliWaitScheduler.Tick();
+            RetryDirectMutationTerminalCleanup();
             RetryPendingWorkItemSettlements();
 
             // 新listener先保留至少一个主线程update的transitioning状态；后续生命周期变化即时发布，30秒刷新只修复漏事件。
@@ -429,15 +435,26 @@ namespace UnityCli
                 {
                     try { HitQueueTestBoundary(state, "before-completion-memory"); }
                     catch (Exception exception) { boundaryException = exception; }
-                    var pool = state.AdmissionPool;
-                    if (pool == null || !pool.TryGetConsumedIdentity(item.AdmissionOwner.RequestId, out current))
-                        completionOutcome = HasAdmissionCompletionIntent(state, item.AdmissionOwner) ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                    if (boundaryException != null)
+                    {
+                        completionOutcome = UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                    }
                     else
                     {
-                        frozen = ToAdmissionOwner(current, item.AdmissionOwner.RequestDigest);
-                        completionOutcome = SameAdmissionOwner(frozen, item.AdmissionOwner)
-                            ? pool.CompleteTrusted(ToPoolIdentity(frozen))
-                            : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                        var pool = state.AdmissionPool;
+                        if (pool == null)
+                            completionOutcome = UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                        else if (!pool.TryGetConsumedIdentity(item.AdmissionOwner.RequestId, out current))
+                            completionOutcome = item.CompletionIntentReady
+                                ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
+                                : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                        else
+                        {
+                            frozen = ToAdmissionOwner(current, item.AdmissionOwner.RequestDigest);
+                            completionOutcome = SameAdmissionOwner(frozen, item.AdmissionOwner)
+                                ? pool.CompleteTrusted(ToPoolIdentity(frozen))
+                                : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                        }
                     }
                     state.RunningWork.Remove(item);
                     state.PendingSettlementWork.Add(item);
@@ -450,14 +467,19 @@ namespace UnityCli
                 return false;
             }
 
-            if (boundaryException != null && !item.SettlementFailureLogged)
+            if (boundaryException != null)
             {
-                try { HitQueueTestBoundary(state, "before-queue-boundary-fault-log"); } catch { }
-                WriteLog("queue_test_boundary_failed " + boundaryException.GetType().Name);
+                if (!item.SettlementFailureLogged)
+                {
+                    try { HitQueueTestBoundary(state, "before-queue-boundary-fault-log"); } catch { }
+                    WriteLog("queue_test_boundary_failed " + boundaryException.GetType().Name);
+                }
+                HoldPendingSettlement(state, item, boundaryException.GetType().Name);
+                return false;
             }
-            if (settlementException != null || completionOutcome == UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked)
+            if (completionOutcome == UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked)
             {
-                HoldPendingSettlement(state, item, settlementException == null ? "completion-identity-blocked" : settlementException.GetType().Name);
+                HoldPendingSettlement(state, item, "completion-identity-blocked");
                 return false;
             }
 

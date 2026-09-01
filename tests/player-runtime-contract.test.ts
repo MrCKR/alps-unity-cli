@@ -177,13 +177,13 @@ test("runtime security, cache, artifacts, and shutdown remain bounded", async ()
   assert.match(bridge, /Completion\.Task\.IsCompleted/);
   assert.match(bridge, /private static bool FinalizeRuntimeRequest\([\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 2, expectedState\)[\s\S]*?pool\.CompleteTrusted\(identity\)[\s\S]*?request\.Completion\.TrySetResult\(terminal\)/);
   assert.match(bridge, /private bool TryTakeNextRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.IsCancellationRequested[\s\S]*?pending\.TryDequeue\(out request\)[\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 1, 0\)/);
-  assert.match(bridge, /internal RuntimePublicationResult PublishRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?requestCache\.TryGet\(requestId, out existing\)[\s\S]*?absoluteDeadlineMs <= DateTimeOffset\.UtcNow\.ToUnixTimeMilliseconds\(\)[\s\S]*?AuthorizeRuntimeAdmission[\s\S]*?PublishPreparedRequestLocked/);
+  assert.match(bridge, /internal RuntimePublicationResult PublishRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?requestCache\.TryGet\(requestId, out existing\)[\s\S]*?absoluteDeadlineMs <= UtcNowMs\(\)[\s\S]*?AuthorizeRuntimeAdmission[\s\S]*?PublishPreparedRequestLocked/);
   assert.match(bridge, /internal void StopRuntimeRequestsLocked\(\)[\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.Cancel\(\)[\s\S]*?FinalizeRuntimeRequest[\s\S]*?pending\.TryDequeue[\s\S]*?requestCache\.Clear\(\)/);
   assert.match(bridge, /while \(!work\.Completion\.Task\.IsCompleted\)[\s\S]*?FinalizeRuntimeRequest\(work, timeout, 0\)[\s\S]*?work\.Completion\.Task\.Wait\(\)/);
   assert.match(bridge, /E_RUNTIME_QUEUE_FULL/);
   assert.match(bridge, /E_REQUEST_REPLAY_MISMATCH/);
-  assertBefore(bridge, "requestCache.TryGet(requestId, out existing)", "absoluteDeadlineMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()");
-  assertBefore(bridge, "absoluteDeadlineMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()", "AuthorizeRuntimeAdmission(pool, admission, request, requestDigest");
+  assertBefore(bridge, "requestCache.TryGet(requestId, out existing)", "absoluteDeadlineMs <= UtcNowMs()");
+  assertBefore(bridge, "absoluteDeadlineMs <= UtcNowMs()", "AuthorizeRuntimeAdmission(pool, admission, request, requestDigest");
   assert.match(bridge, /E_RUNTIME_SESSION_STALE/);
   assert.match(bridge, /requestCache\.Clear\(\)/);
   assert.match(bridge, /UnityCliRuntimeTools\.Shutdown\(\)/);
