@@ -1,22 +1,21 @@
 {
   "fallback_positive_concepts": [
-    "target_package",
+    "canonical_source",
     "defect_lifecycle",
-    "product_sync"
+    "test_install"
   ],
   "positive_concepts": {
-    "target_package": {
+    "canonical_source": {
       "weight": 0.4,
       "phrases": [
-        "packages com unity cli",
-        "com unity cli",
-        "installed package",
-        "target package",
-        "目标 package",
-        "真实 unity 项目",
-        "真实项目",
-        "dev 项目",
-        "package 热修"
+        "canonical product source",
+        "canonical source",
+        "canonical 源码",
+        "产品源码",
+        "unitypkg",
+        "typescript source",
+        "源码实现",
+        "源码修复"
       ]
     },
     "defect_lifecycle": {
@@ -35,16 +34,28 @@
         "issue"
       ]
     },
-    "product_sync": {
+    "test_install": {
       "weight": 0.3,
       "phrases": [
-        "sync the canonical product source",
-        "canonical product source",
-        "sync unitypkg",
-        "同步 unitypkg",
-        "同步产品源码",
-        "回写仓库",
-        "再同步仓库"
+        "install into the authorized test package",
+        "installed test package",
+        "authorized test environment",
+        "安装测试 package",
+        "授权测试环境",
+        "同步到 dev unityproject",
+        "dev unityproject packages",
+        "从 canonical 源码安装"
+      ]
+    },
+    "emergency_hotfix": {
+      "weight": 0.25,
+      "phrases": [
+        "urgent installed package hotfix",
+        "emergency target hotfix",
+        "紧急热修",
+        "明确授权先在",
+        "target first experiment",
+        "先在这个项目热修"
       ]
     },
     "live_validation": {
@@ -81,13 +92,15 @@
         "game business code"
       ]
     },
-    "canonical_only": {
-      "weight": 0.55,
+    "ordinary_one_off": {
+      "weight": 0.7,
       "exclusive": true,
       "phrases": [
-        "直接在 canonical 源码",
-        "没有目标项目 package",
-        "canonical only"
+        "ordinary unit failure",
+        "one-off unit fix",
+        "普通 typescript 单元测试失败",
+        "普通工具函数单测",
+        "不需要产品缺陷登记"
       ]
     },
     "documentation_only": {

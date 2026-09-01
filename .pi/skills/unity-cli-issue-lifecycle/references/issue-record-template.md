@@ -7,8 +7,8 @@ Status: in-progress
 IssueId: ISSUE-<三位序号>
 CreatedAt: <UTC ISO-8601>
 UpdatedAt: <UTC ISO-8601>
-ObservedProject: <绝对路径>
-TargetPackagePath: <绝对路径>/Packages/com.alpsckr.unitycli
+ObservedProject: <绝对路径或 none>
+TargetPackagePath: <授权测试环境的绝对路径>/Packages/com.alpsckr.unitycli 或 none
 
 ## Problem
 
@@ -26,17 +26,17 @@ TargetPackagePath: <绝对路径>/Packages/com.alpsckr.unitycli
 
 <最终修复策略及其安全边界。>
 
-## Target Package Status
-
-TargetPackageStatus: not-modified | modified-awaiting-validation | partially-verified | verified | failed | blocked | not-applicable
-
-- <修改与真实项目验证状态；`not-applicable` 时写明缺陷为何不属于 Package 及其 canonical owner。>
-
 ## Product Source Status
 
 ProductSourceStatus: not-synced | modified-awaiting-validation | verified | failed | blocked
 
-- <canonical 仓库源码同步和验证状态。>
+- <canonical owners 的实现、build、自动化与契约验证状态；首次源码修改后立即写 `modified-awaiting-validation`。>
+
+## Target Package Status
+
+TargetPackageStatus: not-modified | modified-awaiting-validation | partially-verified | verified | failed | blocked | not-applicable
+
+- <从 canonical 源码安装到授权测试环境后的同步与真实 Unity/Development Player 验证状态；通常使用 `Dev/UnityProject`。仅 owner 不需要安装 Package 或 Unity 验证时写 `not-applicable` 并说明理由。>
 
 ## Validation
 
@@ -44,9 +44,9 @@ ProductSourceStatus: not-synced | modified-awaiting-validation | verified | fail
 
 ## Files
 
-- Target package: <路径或 none>
 - Product source: <路径或 none>
-- Tests: <路径或 none>
+- Tests/contracts/docs: <路径或 none>
+- Installed test package: <路径或 none>
 
 ## Blockers
 
@@ -60,6 +60,8 @@ ProductSourceStatus: not-synced | modified-awaiting-validation | verified | fail
 约束：
 
 - `Status` 只允许 `in-progress` 或 `completed`，并必须与父目录一致。
-- 未确认根因时不得填写确定性修复结论。
-- 验证失败保留原结论，不得用后续局部 PASS 覆盖。
-- 完成时保留关键历史证据，但移除已失效的“下一步”叙述，`Next Action` 写 `none`。
+- `ProductSourceStatus` 按 `not-synced -> modified-awaiting-validation -> verified | failed | blocked` 更新。
+- `TargetPackageStatus` 描述源码实现后的安装验证投影，按 `not-modified -> modified-awaiting-validation -> partially-verified -> verified | failed | blocked` 更新；仅无需安装 Package 或 Unity 验证时使用 `not-applicable`。
+- 紧急目标优先实验必须记录实际顺序；最终仍需从 canonical 源码重新安装并验证。
+- 未确认根因时不得填写确定性修复结论。验证失败保留原结论，不得用后续局部 PASS 覆盖。
+- 完成要求 `ProductSourceStatus: verified` 且 `TargetPackageStatus: verified` 或 `not-applicable`；保留关键历史证据，`Blockers` 写 `- none`，`Next Action` 写 `none`。

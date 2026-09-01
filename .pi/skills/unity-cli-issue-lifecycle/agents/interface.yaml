@@ -1,7 +1,7 @@
 interface:
   display_name: "UnityCLI Issue Lifecycle"
-  short_description: "Track, validate, sync, and close UnityCLI defects"
-  default_prompt: "Use $unity-cli-issue-lifecycle to register this UnityCLI defect, validate the fix in the target Package, sync the canonical product source, and archive it only after all gates pass."
+  short_description: "Track source-first UnityCLI defect resolution"
+  default_prompt: "Use $unity-cli-issue-lifecycle to register this UnityCLI defect before changing canonical product source, implement and validate the final source semantics, install them into an authorized test Package when applicable, and archive only after all required automation, contracts, Live matrices, and gates pass."
 compatibility:
   canonical_format: "agent-skills"
   adapter_targets:

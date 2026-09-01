@@ -1,53 +1,49 @@
 ---
 name: unity-cli-issue-lifecycle
-description: 管理 unitycli 在真实 Unity 项目或 Dev 项目中发现的产品缺陷闭环。只要准备根据 Live/自动化失败修改已安装的 Packages/com.alpsckr.unitycli、先在目标项目热修验证、再同步仓库 unitypkg 源码，或用户提到问题登记、in-progress/completed、根因与修复记录时必须使用。纯问答、尚未准备修改产品的调查不创建记录。
+description: 管理 UnityCLI 产品缺陷从登记、canonical 源码实现、自动化与契约验证、授权测试安装、真实 Unity 验证到归档的闭环。准备修复 UnityCLI 产品缺陷并维护 issue 状态时必须使用；用户明确要求在指定真实或 Dev 项目紧急热修已安装 Package 时也必须使用。普通无关的一次性单元测试失败、纯问答和只调查不修改不触发。
 compatibility: 适用于 alps-unity-cli；需要 read、edit/write、pwsh、真实 Unity 验证和项目测试。
 ---
 
 # UnityCLI Issue Lifecycle
 
-本 Skill 约束“真实项目发现问题 -> 目标 Package 验证 -> 产品源码同步 -> 完成归档”的固定流程。问题根目录为仓库 `.issues/`，状态目录只使用英文：
-
-```text
-.issues/
-  in-progress/
-  completed/
-```
+本 Skill 约束“登记 -> canonical 源码实现与验证 -> 授权测试安装 -> 真实 Unity 验证与门禁 -> 归档”。问题根目录为 `.issues/`，状态目录仅为 `in-progress/` 和 `completed/`。
 
 ## 核心规则
 
-- 每个独立根因对应一个 Markdown 文件；文件名为 `<三位序号>-<english-slug>.md`，序号在两个状态目录中全局递增且永不复用。
-- 准备第一次修改目标项目 `Packages/com.alpsckr.unitycli` 前，必须先在 `.issues/in-progress/` 创建记录。
-- 若 Skill 启用前已经修改，立即补登记并如实写明当前状态，不得伪造“先登记后修改”。
-- 问题记录必须使用 [issue-record-template.md](references/issue-record-template.md) 的字段，持续更新问题、直接证据、根因、修复方法、目标 Package 状态、产品源码状态、验证和涉及文件。
-- 不得因局部编译通过、日志出现预期行或问题暂时消失而归档完成。
+- 每个独立根因使用一个 `<三位序号>-<english-slug>.md`；序号跨两个状态目录递增且永不复用。
+- 首次修改 canonical 产品源码前须在 `in-progress/` 登记；紧急例外须在首次修改指定项目 Package 前登记。工作已开始则立即补记真实顺序与状态，不得伪造历史。
+- 按 [issue-record-template.md](references/issue-record-template.md) 持续记录问题、证据、根因、修复、源码与安装 Package 状态、验证及涉及文件。局部编译、单行日志或暂时消失均不能支持归档。
 
 ## 执行顺序
 
-1. **登记**：读取 `.issues/in-progress/` 与 `.issues/completed/`，确认没有同根因记录；创建或更新唯一问题文件。
-2. **目标验证**：只在用户批准的真实项目或 Dev 项目 `Packages/com.alpsckr.unitycli` 内实施最小诊断和修复。不得顺带修改业务代码、其他 Package、ProjectSettings、资源或用户状态。若根因 owner 明确只在 TypeScript CLI、安装器或其他非 Package 产品层，记录 `TargetPackageStatus: not-applicable` 和 canonical owner，直接在该 owner 修复并用同一真实项目验证；不得用此分支绕过本应在 Package 验证的问题。
-3. **记录结果**：每次验证后立即更新问题文件。失败或证据不足时保持 `in-progress`，写明 blocker 与下一步。
-4. **同步产品**：只有目标 Package 已真实验证通过，才把同一语义修复同步到 `alps-unity-cli` 的 canonical owner，通常为 `unitypkg/`；非 Package owner 问题直接修改已登记的 canonical owner。不得把目标项目中的临时诊断或项目特例带回产品。
-5. **产品验证**：运行受影响自动化、契约检查和规定的真实 Unity 验证。确认目标 Package 与产品源码的最终语义一致。
-6. **归档**：所有完成门槛满足后，更新 `Status: completed`，再把原文件从 `in-progress` 移动到 `completed`。移动是状态转换，不复制文件、不保留双份。
-7. **校验**：每次创建、更新或移动问题文件后运行 `node .pi/skills/unity-cli-issue-lifecycle/scripts/validate-issues.mjs`；校验失败时状态转换无效。
+1. **登记**：检查两个状态目录无同根因记录，并创建或更新唯一问题文件。
+2. **源码实现**：先在 canonical owners 完整实现最终语义，包括适用的 `unitypkg`、TypeScript、tests、contracts、docs 和获明确授权的公开 Skill 投影；不得加入项目特例、临时旁路或兼容路径。
+3. **源码验证**：冻结实现后完成必需 build、受影响自动化和契约验证；结果立即入档。失败或证据不足时保持 `in-progress`，记录 blocker 与下一步。
+4. **测试安装**：从 canonical 源码安装或同步到授权测试环境，通常为 `Dev/UnityProject/Packages/com.alpsckr.unitycli`；使用真实用户项目须获项目与动作的精确授权。
+5. **真实验证**：运行受影响的真实 Unity 与 Development Player 矩阵、其余 canonical 产品验证及适用门禁并立即记录。Package 行为须确认安装副本来自当前 canonical 源码且最终语义一致。
+6. **归档**：满足全部门槛后写入 `Status: completed`，再将原文件从 `in-progress` 移至 `completed`；只移动，不复制或保留双份。
+7. **校验**：每次创建、更新或移动问题文件后运行 `node .pi/skills/unity-cli-issue-lifecycle/scripts/validate-issues.mjs`；失败则状态转换无效。
 
-触发边界由 `evals/trigger-cases.json` 与 `evals/semantic-config.json` 维护；修改 frontmatter `description` 后必须重跑 trigger eval。
+触发边界由 `evals/trigger-cases.json` 与 `evals/semantic-config.json` 维护；修改 frontmatter `description` 后须重跑 trigger eval。
+
+## 紧急例外
+
+仅当用户明确要求在具名真实或 Dev 项目紧急热修已安装 Package 时，才可目标优先实验：修改前登记并标明真实顺序；证明方向后在 canonical 源码重新实现完整最终语义，移除项目特例与临时诊断。随后重新构建、从 canonical 源码安装并重跑最终 Package 验证；实验 PASS 不算最终证据，项目专用诊断、临时代码或特例不得进入产品。
+
+## 状态语义
+
+- `ProductSourceStatus`：`not-synced` -> `modified-awaiting-validation` -> `verified | failed | blocked`；首次 canonical 修改后立即进入 `modified-awaiting-validation`。
+- `TargetPackageStatus`：`not-modified` -> `modified-awaiting-validation` -> `partially-verified` -> `verified | failed | blocked`，表示源码实现的安装验证投影；仅无需安装 Package 或 Unity 验证的 owner 可用 `not-applicable`。
+- 完成须同时为 `ProductSourceStatus: verified`，且 `TargetPackageStatus: verified` 或 `not-applicable`。
 
 ## 完成门槛
 
-问题文件只有同时满足以下条件才能移动到 `completed`：
+仅当以下条件全部满足才能移至 `completed`：
 
-- 根因已由可复核证据确认，不是基于最后一行日志或时间相关性的猜测。
-- 目标项目 Package 的最终修复通过真实 Editor 验证。
-- canonical 产品源码已实施同一修复，临时诊断已删除或证明属于最终有界诊断。
-- 相关自动化、契约和真实验证全部通过；未执行项有明确批准的非适用理由。
-- `TargetPackageStatus` 为 `verified`，或缺陷 owner 明确不在 Package 时为 `not-applicable`；`ProductSourceStatus` 必须为 `verified`。
-- 不存在 unresolved error、blocker、用户改动覆盖、范围漂移或待同步文件。
+- 可复核证据确认根因，而非末行日志或时间相关性猜测；canonical 源码已实现并验证最终语义，临时诊断已删除或属于最终有界诊断。
+- Package 行为已用 canonical 源码安装副本通过真实 Unity 验证；必需 build、自动化、契约、Live 矩阵和适用门禁全部通过，未执行项有明确批准的非适用理由。
+- 状态满足上述完成要求，且无 unresolved error、blocker、用户改动覆盖、范围漂移或待同步文件。
 
 ## 边界
 
-- 本 Skill 管理缺陷记录与状态转换，不替代 `unity-cli-capability`、`unity-cli-validation` 或 `unity-cli-wait`；任务命中时仍需同时加载。
-- 问题记录独立于普通任务跟踪；命中本 Skill 时必须维护同一份状态记录。
-- 不提交、不发布、不升级版本，除非用户另行要求。
-- 不把 `.issues/` 当执行日志仓库；只记录影响工程判断的证据和 terminal 结果。
+本 Skill 仅管理缺陷记录与状态转换，不替代命中的 `unity-cli-capability`、`unity-cli-validation` 或 `unity-cli-wait`。记录独立于普通任务跟踪；只保留影响工程判断的证据和 terminal 结果，不把 `.issues/` 当执行日志仓库。除非另行要求，不提交、发布或升级版本。

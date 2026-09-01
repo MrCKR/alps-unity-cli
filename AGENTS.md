@@ -67,6 +67,9 @@ CLI控制面：
 - 新增或修改Unity能力必须进入唯一Tool catalog；结构化调用使用`tools run <tool>`，schema参数调用使用`command <name>`，二者必须复用同一descriptor、dispatcher、安全、completion和JSON envelope。
 - `[CliCommand("name")]`只以`UnityPipeline_name`、group `UnityPipeline`进入`tools`；`command name`可选择该Tool，native完整精确名重名时native优先，attribute仍可用完整前缀名调用。禁止相似名称或语义映射。
 - README、docs、Skill、tests、contract和源码只能使用当前CLI形态，不得保留旧顶层命令、迁移语义或兼容说明。
+- `skills/unitycli/` 的职责是引导已经具备本 Skill 的 AI 使用已安装的公开 `unitycli` CLI：负责直接文件处理与 Live Unity 调用之间的路由、Tool catalog 的按需发现、少量跨 Tool 通用调用规则、必要 reference 的条件分流，以及开发期 `FeedbackMode` 反馈入口。它不是安装/配置协议、项目开发规范、发布或测试门禁、内部 Bridge 实现手册、完整 Tool 清单或逐能力操作手册。
+- Skill 主入口应只描述稳定的运行时路由和通用不变量；安装生命周期使用 CLI 自身的 `init help` 协议，具体协议和实现细节不得复制到 `SKILL.md`。新增 Unity 机制只有在确实改变 AI 的公开运行时路由或跨 Tool 调用规则时，才评估是否进入 Skill；单个 Tool 的参数、能力细节和内部实现应留在 live descriptor、CLI help 或按需 reference。
+- `skills/unitycli/` 是受保护的用户授权内容。Agent可以读取、审计和验证，但除非用户在当前请求中对明确的单次修改作出明确授权，不得修改、重写、删除、生成或自动同步其中任何内容，包括`SKILL.md`、`references/`、`manifest.json`、`evals/`、`reports/`和`scripts/`。普通功能开发、测试失败、版本发布或“保持同步”等泛化授权不构成该授权；授权仅覆盖用户指定的文件和本次变更，不得扩展到其他Skill文件或后续任务。
 
 ## 能力基本边界
 
@@ -105,12 +108,13 @@ CLI控制面：
 
 路径：`.pi/skills/unity-cli-issue-lifecycle/SKILL.md`
 
-在真实 Unity 项目或 Dev 项目发现产品缺陷，准备先修改已安装的 `Packages/com.alpsckr.unitycli` 做验证、再同步 `unitypkg` 产品源码时必须读取。用户要求问题登记、`in-progress`/`completed` 状态管理、根因与修复闭环时也必须读取。
+准备修复 UnityCLI 产品缺陷并维护问题登记、`in-progress`/`completed` 状态、根因、验证与归档闭环时必须读取。默认从 canonical 产品源码实施最终语义，再安装到授权测试环境验证；用户明确要求对指定真实或 Dev 项目做紧急已安装 Package 热修时也必须读取。
 
-- 问题必须先登记到 `.issues/in-progress/`；Skill 启用前已经修改的现场必须立即补登记并如实标注。
-- 目标项目 Package 验证通过后才能同步 canonical 产品源码；产品验证全部通过后才能把同一文件移动到 `.issues/completed/`。
-- 状态目录只使用英文；不得复制问题文件形成双份状态，不得把部分 PASS 写成完成。
-- 问题记录流程独立于普通任务跟踪；命中本 Skill 时仍必须完成登记、验证和归档闭环。
+- 第一次修改 canonical 产品源码前必须先登记到 `.issues/in-progress/`；紧急例外则必须在第一次修改指定项目 Package 前登记。Skill 启用前已经修改的现场必须立即补登记并如实标注。
+- 默认先完整修改 `unitypkg`、TypeScript 源码、tests、contracts、docs 及获明确授权的公开 Skill 投影，再完成受影响 build、自动化与契约验证，然后安装或同步到授权测试环境；不得为目标项目保留特例或临时兼容路径。
+- 真实用户项目 Package 不是默认开发面，必须取得精确授权。紧急目标优先实验验证后，仍须在 canonical 源码重新实现最终语义、重新构建、从 canonical 源码安装并重跑最终 Package 验证。
+- 只有 canonical 产品源码已验证、涉及 Package 时安装测试副本也已验证、全部必需自动化/契约/Live/门禁通过且无 blocker，才能移动到 `.issues/completed/`。
+- 状态目录只使用英文；不得复制问题文件形成双份状态，不得把部分 PASS 写成完成。问题记录流程独立于普通任务跟踪。
 
 ### `unity-cli-capability`
 

@@ -2,23 +2,27 @@
   "recommended_threshold": 0.42,
   "should_trigger": [
     {
-      "text": "Client-Jump 的 Packages/com.alpsckr.unitycli 连接失败，先在这个真实 Unity 项目热修验证，再同步 unitypkg 产品源码并登记问题。",
-      "family": "target-package-hotfix"
+      "text": "alps-unity-cli 仓库测试发现 Bridge 产品缺陷，先登记 issue，再在 canonical 源码实现完整修复，完成自动化和契约验证后安装到 Dev 项目实测。",
+      "family": "source-first-defect"
     },
     {
-      "text": "Register this UnityCLI defect as in-progress, validate the installed Package fix in the target Editor, then sync the canonical product source.",
-      "family": "issue-lifecycle"
+      "text": "Register this UnityCLI defect before changing the canonical product source, validate the frozen source implementation, then install it into the authorized test Package for Live validation.",
+      "family": "source-first-lifecycle"
     },
     {
-      "text": "Dev 项目里的 CLI Package 测试发现产品 bug，记录根因和修复方法，验证成功后移到 completed。",
-      "family": "dev-defect"
+      "text": "Dev 项目发现 UnityCLI 产品 bug；先维护 in-progress 记录并修 unitypkg，build 和契约通过后同步到 Dev/UnityProject，完成真实矩阵再归档。",
+      "family": "dev-source-first"
     },
     {
-      "text": "真实项目里的 com.alpsckr.unitycli reload 后没有 listener，我准备改 Package 做实验并把最终修复回写仓库。",
-      "family": "live-reload-defect"
+      "text": "仓库自己的测试发现 Bridge bug，按产品缺陷闭环直接在 canonical 源码修复，再安装测试 Package 验证，不要先热修改目标项目。",
+      "family": "canonical-defect-lifecycle"
     },
     {
-      "text": "Update the in-progress issue after the target Package validation failed; do not archive it yet.",
+      "text": "Client-Jump 的 Packages/com.alpsckr.unitycli 线上故障需要紧急实验，用户明确授权先在这个项目热修；先登记，验证方向后回到 canonical 源码重做、重装并复验。",
+      "family": "emergency-target-hotfix"
+    },
+    {
+      "text": "Update the in-progress UnityCLI issue after canonical source validation failed; keep ProductSourceStatus failed and do not archive it.",
       "family": "issue-update"
     }
   ],
@@ -46,8 +50,8 @@
   ],
   "near_neighbor": [
     {
-      "text": "alps-unity-cli 仓库自己的测试发现 Bridge bug，直接在 canonical 源码中修复，没有目标项目 Package 热修流程。",
-      "family": "canonical-only-fix"
+      "text": "alps-unity-cli 的一个普通工具函数单测失败，做一次性局部修复，不需要产品缺陷登记、Live 验证或 issue 状态管理。",
+      "family": "ordinary-unit-fix"
     },
     {
       "text": "在 Client-Jump 里修改游戏业务代码并验证战斗逻辑。",
