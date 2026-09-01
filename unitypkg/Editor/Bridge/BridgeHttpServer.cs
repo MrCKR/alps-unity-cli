@@ -403,18 +403,9 @@ namespace UnityCli
                     nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." })), 200);
                 return;
             }
-            AdmissionOwnerIdentity admissionOwner;
-            try { admissionOwner = AuthorizeAdmission(context.Request, request, rawBody); }
-            catch (BridgeCommandException exception)
-            {
-                WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, exception), 200);
-                return;
-            }
             WriteLog("bridge_request_body_read requestId=" + request.RequestId + " command=" + request.Command + " bytes=" + rawBody.Length.ToString(CultureInfo.InvariantCulture));
 
-            // Check for transient Unity state before queuing the request.
-            // During compile/import/domain reload, immediately return a transient error
-            // so the CLI can retry-after instead of waiting 60s for a timeout.
+            // 所有瞬态Editor gate必须在token消费前完成，拒绝路径对active pool零影响。
             if (domainReloading)
             {
                 WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
@@ -457,17 +448,33 @@ namespace UnityCli
                 WriteLog("http_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlaying=" + Bool(cachedIsPlaying));
             }
 
+            AdmissionQueueReservation admissionReservation;
+            try { admissionReservation = AuthorizeAdmissionForQueue(context.Request, request, rawBody); }
+            catch (BridgeCommandException exception)
+            {
+                WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, exception), 200);
+                return;
+            }
+
             BridgeWorkItem item;
             bool created;
             int queueDepth;
             try
             {
-                item = EnqueueOrAttach(request, rawBody, ListenerId, CurrentListenerGeneration(), admissionOwner, out created, out queueDepth);
+                item = EnqueueOrAttach(request, rawBody, ListenerId, CurrentListenerGeneration(), admissionReservation.Owner, out created, out queueDepth);
+                MarkAdmissionQueuePublished(admissionReservation);
             }
             catch (BridgeCommandException exception)
             {
+                if (!CompensateAdmissionBeforeQueuePublication(admissionReservation))
+                    exception = new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission compensation could not prove exact pre-queue cleanup.");
                 WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, exception), 200);
                 return;
+            }
+            catch
+            {
+                CompensateAdmissionBeforeQueuePublication(admissionReservation);
+                throw;
             }
             WriteLog((created ? "bridge_request_enqueued" : "bridge_request_attached") + " requestId=" + request.RequestId + " command=" + request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
 

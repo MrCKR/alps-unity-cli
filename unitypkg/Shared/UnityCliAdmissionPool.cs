@@ -7,11 +7,10 @@ using System.Text;
 
 namespace UnityCli
 {
-    /// <summary>每个Unity target session独占的有界原子准入池；terminal proof由既有业务owner持有。</summary>
+    /// <summary>每个Unity target session独占的有界原子准入池；owner state是唯一生命周期真相。</summary>
     public sealed class UnityCliAdmissionPool
     {
-        public enum AdmissionState { Granted, Consumed }
-        public enum AdmissionOwnerKind { WorkItem, Coordinator, Recovery }
+        public enum AdmissionOwnerState { Granted, WorkItem, Coordinator, Continuation, Recovery, TerminalCleanup }
         public enum AcquireOutcome { Granted, AlreadyConsumed, Closed, Invalid, IdentityMismatch, RecoveryBlocked }
         public enum AuthorizeOutcome { Authorized, AlreadyConsumed, Missing, Expired, IdentityMismatch, Invalid, RecoveryBlocked }
 
@@ -24,29 +23,48 @@ namespace UnityCli
             public bool NewlyGranted { get; internal set; }
         }
 
+        public sealed class AuthorizeResult
+        {
+            public AuthorizeOutcome Outcome { get; internal set; }
+            public ConsumedIdentity Identity { get; internal set; }
+            public bool NewlyConsumed { get; internal set; }
+        }
+
         public sealed class AdmissionRecord
         {
             public string InstanceId { get; set; }
             public string SessionId { get; set; }
             public string RequestId { get; set; }
             public string RootFingerprint { get; set; }
+            public string RequestDigest { get; set; }
             public string Token { get; set; }
             public string ListenerId { get; set; }
             public long ListenerGeneration { get; set; }
             public long GrantExpiresAtMs { get; set; }
             public long ExecutionDeadlineMs { get; set; }
-            public AdmissionState State { get; set; }
-            public AdmissionOwnerKind OwnerKind { get; set; }
-            public bool Consumed { get { return State == AdmissionState.Consumed; } }
+            public AdmissionOwnerState OwnerState { get; set; }
+            public AdmissionOwnerState IntendedOwnerState { get; set; }
+            public bool TransferCommitted { get; set; }
+            public bool Consumed { get { return OwnerState != AdmissionOwnerState.Granted; } }
         }
 
         public sealed class ConsumedIdentity
         {
             public string RequestId { get; internal set; }
             public string RootFingerprint { get; internal set; }
+            public string RequestDigest { get; internal set; }
             public string Token { get; internal set; }
             public string SessionId { get; internal set; }
-            public AdmissionOwnerKind OwnerKind { get; internal set; }
+            public AdmissionOwnerState OwnerState { get; internal set; }
+        }
+
+        /// <summary>跨assembly owner只通过完整字段创建不可变transition identity。</summary>
+        public static ConsumedIdentity CreateConsumedIdentity(string requestId, string rootFingerprint, string requestDigest, string token, string ownerSessionId, AdmissionOwnerState ownerState)
+        {
+            if (!ValidRequestId(requestId) || !IsSha256(rootFingerprint) || !IsSha256(requestDigest) || !IsToken(token)
+                || string.IsNullOrWhiteSpace(ownerSessionId) || ownerState == AdmissionOwnerState.Granted || !Enum.IsDefined(typeof(AdmissionOwnerState), ownerState))
+                throw new ArgumentException("Admission consumed identity is invalid.");
+            return new ConsumedIdentity { RequestId = requestId, RootFingerprint = rootFingerprint, RequestDigest = requestDigest, Token = token, SessionId = ownerSessionId, OwnerState = ownerState };
         }
 
         public sealed class Snapshot
@@ -104,12 +122,12 @@ namespace UnityCli
                     if (records.TryGetValue(requestId, out existing))
                     {
                         if (!string.Equals(existing.RootFingerprint, rootFingerprint, StringComparison.Ordinal)) return Result(AcquireOutcome.IdentityMismatch);
-                        if (existing.State == AdmissionState.Granted && (!string.Equals(existing.ListenerId, listenerId, StringComparison.Ordinal) || existing.ListenerGeneration != listenerGeneration))
+                        if (existing.OwnerState == AdmissionOwnerState.Granted && (!string.Equals(existing.ListenerId, listenerId, StringComparison.Ordinal) || existing.ListenerGeneration != listenerGeneration))
                         {
                             records.Remove(requestId);
                             UpdateGateAfterRemoval();
                         }
-                        else if (existing.State == AdmissionState.Consumed) return Result(AcquireOutcome.AlreadyConsumed);
+                        else if (existing.Consumed) return Result(AcquireOutcome.AlreadyConsumed);
                         else return Result(AcquireOutcome.Granted, existing.Token, RemainingGrantMs(existing), false);
                     }
 
@@ -136,8 +154,9 @@ namespace UnityCli
                         ListenerGeneration = listenerGeneration,
                         GrantExpiresAtMs = checked(monotonicNowMs() + GrantTtlMs),
                         ExecutionDeadlineMs = 0,
-                        State = AdmissionState.Granted,
-                        OwnerKind = AdmissionOwnerKind.WorkItem
+                        OwnerState = AdmissionOwnerState.Granted,
+                        IntendedOwnerState = AdmissionOwnerState.Granted,
+                        TransferCommitted = true
                     });
                     if (records.Count == maxActive) gateClosed = true;
                     return Result(AcquireOutcome.Granted, token, GrantTtlMs, true);
@@ -151,38 +170,40 @@ namespace UnityCli
             }
         }
 
-        /// <summary>首次业务POST只允许一次Granted→Consumed；generation mismatch原子撤销旧grant。</summary>
-        public AuthorizeOutcome Authorize(string requestId, string rootFingerprint, string token, string listenerId, long listenerGeneration, long executionDeadlineMs)
+        /// <summary>Granted→WorkItem与完整identity冻结共享一个线性化点。</summary>
+        public AuthorizeResult AuthorizeAndCapture(string requestId, string rootFingerprint, string requestDigest, string token, string listenerId, long listenerGeneration, long executionDeadlineMs)
         {
             lock (sync)
             {
                 try
                 {
                     CleanupExpiredGrants();
-                    if (recoveryBlocked) return AuthorizeOutcome.RecoveryBlocked;
-                    if (!ValidRequestId(requestId) || !IsSha256(rootFingerprint) || !IsToken(token) || !ValidListener(listenerId, listenerGeneration) || executionDeadlineMs <= utcNowMs()) return AuthorizeOutcome.Invalid;
+                    if (recoveryBlocked) return Authorized(AuthorizeOutcome.RecoveryBlocked);
+                    if (!ValidRequestId(requestId) || !IsSha256(rootFingerprint) || !IsSha256(requestDigest) || !IsToken(token) || !ValidListener(listenerId, listenerGeneration) || executionDeadlineMs <= utcNowMs()) return Authorized(AuthorizeOutcome.Invalid);
                     AdmissionRecord entry;
-                    if (!records.TryGetValue(requestId, out entry)) return AuthorizeOutcome.Missing;
-                    if (!string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal) || !FixedEquals(entry.Token, token)) return AuthorizeOutcome.IdentityMismatch;
-                    if (entry.State == AdmissionState.Consumed)
-                        return entry.ExecutionDeadlineMs == executionDeadlineMs ? AuthorizeOutcome.AlreadyConsumed : AuthorizeOutcome.IdentityMismatch;
+                    if (!records.TryGetValue(requestId, out entry)) return Authorized(AuthorizeOutcome.Missing);
+                    if (!string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal) || !FixedEquals(entry.Token, token)) return Authorized(AuthorizeOutcome.IdentityMismatch);
+                    if (entry.Consumed)
+                        return Authorized(entry.ExecutionDeadlineMs == executionDeadlineMs && string.Equals(entry.RequestDigest, requestDigest, StringComparison.Ordinal) ? AuthorizeOutcome.AlreadyConsumed : AuthorizeOutcome.IdentityMismatch);
                     if (entry.GrantExpiresAtMs <= monotonicNowMs())
                     {
                         records.Remove(requestId);
                         UpdateGateAfterRemoval();
-                        return AuthorizeOutcome.Expired;
+                        return Authorized(AuthorizeOutcome.Expired);
                     }
                     if (!string.Equals(entry.ListenerId, listenerId, StringComparison.Ordinal) || entry.ListenerGeneration != listenerGeneration)
                     {
                         records.Remove(requestId);
                         UpdateGateAfterRemoval();
-                        return AuthorizeOutcome.IdentityMismatch;
+                        return Authorized(AuthorizeOutcome.IdentityMismatch);
                     }
-                    entry.State = AdmissionState.Consumed;
-                    entry.OwnerKind = AdmissionOwnerKind.WorkItem;
+                    entry.RequestDigest = requestDigest;
+                    entry.OwnerState = AdmissionOwnerState.WorkItem;
+                    entry.IntendedOwnerState = AdmissionOwnerState.WorkItem;
+                    entry.TransferCommitted = true;
                     entry.ExecutionDeadlineMs = executionDeadlineMs;
                     entry.GrantExpiresAtMs = 0;
-                    return AuthorizeOutcome.Authorized;
+                    return Authorized(AuthorizeOutcome.Authorized, Identity(entry), true);
                 }
                 catch
                 {
@@ -193,29 +214,46 @@ namespace UnityCli
             }
         }
 
+        /// <summary>仅撤销本次新消费且尚未发布的WorkItem；完整identity避免删除后继。</summary>
+        public bool CompensateAuthorization(ConsumedIdentity identity)
+        {
+            lock (sync)
+            {
+                AdmissionRecord entry;
+                if (identity == null || !records.TryGetValue(identity.RequestId, out entry)) return true;
+                if (!Matches(entry, identity) || entry.OwnerState != AdmissionOwnerState.WorkItem
+                    || entry.IntendedOwnerState != AdmissionOwnerState.WorkItem || !entry.TransferCommitted) return false;
+                records.Remove(identity.RequestId);
+                UpdateGateAfterRemoval();
+                return true;
+            }
+        }
+
         /// <summary>同listener generation的已消费root只做attach检查，不再次消费token。</summary>
-        public bool AttachConsumed(string requestId, string rootFingerprint, string listenerId, long listenerGeneration, long executionDeadlineMs)
+        public bool AttachConsumed(string requestId, string rootFingerprint, string requestDigest, string listenerId, long listenerGeneration, long executionDeadlineMs)
         {
             lock (sync)
             {
                 if (recoveryBlocked) return false;
                 AdmissionRecord entry;
-                return records.TryGetValue(requestId, out entry) && entry.State == AdmissionState.Consumed
+                return records.TryGetValue(requestId, out entry) && ValidConsumedRecord(entry)
                     && string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal)
+                    && string.Equals(entry.RequestDigest, requestDigest, StringComparison.Ordinal)
                     && string.Equals(entry.ListenerId, listenerId, StringComparison.Ordinal) && entry.ListenerGeneration == listenerGeneration
                     && entry.ExecutionDeadlineMs == executionDeadlineMs;
             }
         }
 
-        /// <summary>durable owner证明同root恢复后显式重绑listener generation，不改变active。</summary>
-        public bool RecoverConsumed(string requestId, string rootFingerprint, string listenerId, long listenerGeneration, long executionDeadlineMs)
+        /// <summary>durable owner证明同root恢复后显式重绑listener generation，不改变owner。</summary>
+        public bool RecoverConsumed(string requestId, string rootFingerprint, string requestDigest, string listenerId, long listenerGeneration, long executionDeadlineMs)
         {
             lock (sync)
             {
                 if (recoveryBlocked || !ValidListener(listenerId, listenerGeneration)) return false;
                 AdmissionRecord entry;
-                if (!records.TryGetValue(requestId, out entry) || entry.State != AdmissionState.Consumed
+                if (!records.TryGetValue(requestId, out entry) || !ValidConsumedRecord(entry)
                     || !string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal)
+                    || !string.Equals(entry.RequestDigest, requestDigest, StringComparison.Ordinal)
                     || entry.ExecutionDeadlineMs != executionDeadlineMs) return false;
                 entry.ListenerId = listenerId;
                 entry.ListenerGeneration = listenerGeneration;
@@ -223,7 +261,7 @@ namespace UnityCli
             }
         }
 
-        /// <summary>terminal owner在写marker/绑定状态时冻结独立identity，禁止完成时自读当前owner。</summary>
+        /// <summary>冻结当前consumed identity；后续转移与完成仍必须提交全部字段和expected owner。</summary>
         public bool TryGetConsumedIdentity(string requestId, out ConsumedIdentity identity)
         {
             lock (sync)
@@ -231,52 +269,75 @@ namespace UnityCli
                 identity = null;
                 AdmissionRecord entry;
                 if (!records.TryGetValue(requestId, out entry) || !ValidConsumedRecord(entry)) return false;
-                identity = new ConsumedIdentity { RequestId = entry.RequestId, RootFingerprint = entry.RootFingerprint, Token = entry.Token, SessionId = entry.SessionId, OwnerKind = entry.OwnerKind };
+                identity = Identity(entry);
                 return true;
             }
         }
 
-        /// <summary>只有当前WorkItem owner可按完整identity原子转移给coordinator或reload recovery。</summary>
-        public bool TransferOwner(string requestId, string rootFingerprint, string token, string ownerSessionId, AdmissionOwnerKind targetOwner)
+        /// <summary>持久化层写完intent后登记expected→intended；重复同一intent幂等。</summary>
+        public bool PrepareOwnerTransfer(ConsumedIdentity identity, AdmissionOwnerState intendedOwner)
         {
             lock (sync)
             {
-                if (targetOwner == AdmissionOwnerKind.WorkItem) return false;
                 AdmissionRecord entry;
-                if (!records.TryGetValue(requestId, out entry) || !ValidConsumedRecord(entry)
-                    || !string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal) || !FixedEquals(entry.Token, token)
-                    || !string.Equals(entry.SessionId, ownerSessionId, StringComparison.Ordinal)) return false;
-                if (entry.OwnerKind == targetOwner) return true;
-                if (entry.OwnerKind != AdmissionOwnerKind.WorkItem) return false;
-                entry.OwnerKind = targetOwner;
+                if (identity == null || !records.TryGetValue(identity.RequestId, out entry) || !Matches(entry, identity)) return false;
+                if (entry.TransferCommitted && entry.OwnerState == intendedOwner && entry.IntendedOwnerState == intendedOwner) return true;
+                if (!entry.TransferCommitted) return entry.OwnerState == identity.OwnerState && entry.IntendedOwnerState == intendedOwner;
+                if (!LegalTransfer(entry.OwnerState, intendedOwner)) return false;
+                entry.IntendedOwnerState = intendedOwner;
+                entry.TransferCommitted = false;
                 return true;
             }
         }
 
-        /// <summary>Unity terminal owner必须提交冻结的完整identity与owner kind，旧owner不能删除同requestId后继。</summary>
-        public bool CompleteTrusted(string requestId, string rootFingerprint, string token, string ownerSessionId, AdmissionOwnerKind ownerKind)
+        /// <summary>只提交已登记的exact transfer；已提交同一target时幂等返回冻结后继identity。</summary>
+        public bool CommitOwnerTransfer(ConsumedIdentity identity, AdmissionOwnerState intendedOwner, out ConsumedIdentity successor)
+        {
+            lock (sync)
+            {
+                successor = null;
+                AdmissionRecord entry;
+                if (identity == null || !records.TryGetValue(identity.RequestId, out entry)) return false;
+                if (entry.TransferCommitted && entry.OwnerState == intendedOwner && entry.IntendedOwnerState == intendedOwner
+                    && MatchesIdentityFields(entry, identity) && (identity.OwnerState == intendedOwner || LegalTransfer(identity.OwnerState, intendedOwner)))
+                {
+                    successor = Identity(entry);
+                    return true;
+                }
+                if (!Matches(entry, identity) || entry.TransferCommitted || entry.IntendedOwnerState != intendedOwner
+                    || !LegalTransfer(entry.OwnerState, intendedOwner)) return false;
+                entry.OwnerState = intendedOwner;
+                entry.IntendedOwnerState = intendedOwner;
+                entry.TransferCommitted = true;
+                successor = Identity(entry);
+                return true;
+            }
+        }
+
+        /// <summary>只有WorkItem、Continuation或TerminalCleanup可走各自exact completion path。</summary>
+        public bool CompleteTrusted(ConsumedIdentity identity)
         {
             lock (sync)
             {
                 AdmissionRecord entry;
-                if (!records.TryGetValue(requestId, out entry)) return true;
-                if (!ValidConsumedRecord(entry) || !string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal)
-                    || !FixedEquals(entry.Token, token) || !string.Equals(entry.SessionId, ownerSessionId, StringComparison.Ordinal)
-                    || entry.OwnerKind != ownerKind) return false;
-                records.Remove(requestId);
+                if (identity == null || !records.TryGetValue(identity.RequestId, out entry)) return true;
+                if (!ValidConsumedRecord(entry) || !Matches(entry, identity) || !entry.TransferCommitted
+                    || entry.IntendedOwnerState != entry.OwnerState || !CanComplete(entry.OwnerState)) return false;
+                records.Remove(identity.RequestId);
                 UpdateGateAfterRemoval();
                 return true;
             }
         }
 
-        /// <summary>未消费grant只能按完整identity执行Granted→revoked→removed。</summary>
+        /// <summary>未消费grant只能按完整identity执行Granted→removed。</summary>
         public bool Revoke(string requestId, string rootFingerprint, string token)
         {
             lock (sync)
             {
                 AdmissionRecord entry;
                 if (!records.TryGetValue(requestId, out entry)) return true;
-                if (!RecordOwnedByPool(entry) || entry.State != AdmissionState.Granted || !string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal) || !FixedEquals(entry.Token, token)) return false;
+                if (!RecordOwnedByPool(entry) || entry.OwnerState != AdmissionOwnerState.Granted
+                    || !string.Equals(entry.RootFingerprint, rootFingerprint, StringComparison.Ordinal) || !FixedEquals(entry.Token, token)) return false;
                 records.Remove(requestId);
                 UpdateGateAfterRemoval();
                 return true;
@@ -287,7 +348,7 @@ namespace UnityCli
         {
             lock (sync)
             {
-                var remove = records.Values.Where(entry => entry.State == AdmissionState.Granted && string.Equals(entry.ListenerId, listenerId, StringComparison.Ordinal) && entry.ListenerGeneration == listenerGeneration).Select(entry => entry.RequestId).ToArray();
+                var remove = records.Values.Where(entry => entry.OwnerState == AdmissionOwnerState.Granted && string.Equals(entry.ListenerId, listenerId, StringComparison.Ordinal) && entry.ListenerGeneration == listenerGeneration).Select(entry => entry.RequestId).ToArray();
                 foreach (var requestId in remove) records.Remove(requestId);
                 UpdateGateAfterRemoval();
             }
@@ -298,22 +359,22 @@ namespace UnityCli
             lock (sync)
             {
                 CleanupExpiredGrants();
-                var values = records.Values.OrderBy(value => value.RequestId, StringComparer.Ordinal).Select(Clone).ToArray();
-                return new Snapshot
-                {
-                    GateClosed = gateClosed,
-                    Active = values.Length,
-                    MaxActive = effectiveMaxActive,
-                    ConfiguredMaxActive = maxActive,
-                    ReopenAt = reopenAt,
-                    RecoveryBlocked = recoveryBlocked,
-                    Records = values,
-                    RecoveryDigest = ComputeRecoveryDigest(values, values.Length, gateClosed, maxActive, reopenAt)
-                };
+                return SnapshotOf(records.Values.OrderBy(value => value.RequestId, StringComparer.Ordinal).Select(Clone).ToArray(), gateClosed, maxActive);
             }
         }
 
-        /// <summary>只在全部consumed active、声明count和digest验证成功后原子替换；不提供清空恢复fallback。</summary>
+        /// <summary>reload快照排除可撤销grant；digest与active count只覆盖durable consumed owner。</summary>
+        public Snapshot CaptureRecovery()
+        {
+            lock (sync)
+            {
+                CleanupExpiredGrants();
+                var values = records.Values.Where(value => value.Consumed).OrderBy(value => value.RequestId, StringComparer.Ordinal).Select(Clone).ToArray();
+                return SnapshotOf(values, values.Length >= maxActive || (gateClosed && values.Length > reopenAt), Math.Max(maxActive, values.Length));
+            }
+        }
+
+        /// <summary>只恢复当前启动的consumed owner；未提交transfer由durable marker reconciliation裁决。</summary>
         public void Restore(IEnumerable<AdmissionRecord> values, int expectedActiveCount, bool wasClosed, string expectedRecoveryDigest, int sourceMaxActive, int sourceReopenAt)
         {
             lock (sync)
@@ -351,10 +412,25 @@ namespace UnityCli
         public void BlockRecovery() { lock (sync) { recoveryBlocked = true; gateClosed = true; } }
         public void Reset() { lock (sync) { records.Clear(); effectiveMaxActive = maxActive; gateClosed = false; recoveryBlocked = false; } }
 
+        private Snapshot SnapshotOf(AdmissionRecord[] values, bool closed, int digestMaxActive)
+        {
+            return new Snapshot
+            {
+                GateClosed = closed,
+                Active = values.Length,
+                MaxActive = effectiveMaxActive,
+                ConfiguredMaxActive = digestMaxActive,
+                ReopenAt = reopenAt,
+                RecoveryBlocked = recoveryBlocked,
+                Records = values,
+                RecoveryDigest = ComputeRecoveryDigest(values, values.Length, closed, digestMaxActive, reopenAt)
+            };
+        }
+
         private void CleanupExpiredGrants()
         {
             var current = monotonicNowMs();
-            var remove = records.Values.Where(entry => entry.State == AdmissionState.Granted && entry.GrantExpiresAtMs <= current).Select(entry => entry.RequestId).ToArray();
+            var remove = records.Values.Where(entry => entry.OwnerState == AdmissionOwnerState.Granted && entry.GrantExpiresAtMs <= current).Select(entry => entry.RequestId).ToArray();
             foreach (var requestId in remove) records.Remove(requestId);
             if (remove.Length > 0) UpdateGateAfterRemoval();
         }
@@ -372,9 +448,10 @@ namespace UnityCli
             Append(builder, digestReopenAt.ToString(CultureInfo.InvariantCulture)); Append(builder, expectedActiveCount.ToString(CultureInfo.InvariantCulture)); Append(builder, wasClosed ? "1" : "0");
             foreach (var value in values.OrderBy(item => item.RequestId, StringComparer.Ordinal))
             {
-                Append(builder, value.InstanceId); Append(builder, value.SessionId); Append(builder, value.RequestId); Append(builder, value.RootFingerprint); Append(builder, value.Token);
+                Append(builder, value.InstanceId); Append(builder, value.SessionId); Append(builder, value.RequestId); Append(builder, value.RootFingerprint); Append(builder, value.RequestDigest); Append(builder, value.Token);
                 Append(builder, value.ListenerId); Append(builder, value.ListenerGeneration.ToString(CultureInfo.InvariantCulture)); Append(builder, value.GrantExpiresAtMs.ToString(CultureInfo.InvariantCulture));
-                Append(builder, value.ExecutionDeadlineMs.ToString(CultureInfo.InvariantCulture)); Append(builder, ((int)value.State).ToString(CultureInfo.InvariantCulture)); Append(builder, ((int)value.OwnerKind).ToString(CultureInfo.InvariantCulture));
+                Append(builder, value.ExecutionDeadlineMs.ToString(CultureInfo.InvariantCulture)); Append(builder, ((int)value.OwnerState).ToString(CultureInfo.InvariantCulture));
+                Append(builder, ((int)value.IntendedOwnerState).ToString(CultureInfo.InvariantCulture)); Append(builder, value.TransferCommitted ? "1" : "0");
             }
             using (var sha = SHA256.Create())
             {
@@ -385,6 +462,21 @@ namespace UnityCli
             }
         }
 
+        private static bool LegalTransfer(AdmissionOwnerState source, AdmissionOwnerState target)
+        {
+            if (source == AdmissionOwnerState.WorkItem)
+                return target == AdmissionOwnerState.Coordinator || target == AdmissionOwnerState.Continuation
+                    || target == AdmissionOwnerState.Recovery || target == AdmissionOwnerState.TerminalCleanup;
+            if (source == AdmissionOwnerState.Coordinator || source == AdmissionOwnerState.Recovery)
+                return target == AdmissionOwnerState.TerminalCleanup;
+            return false;
+        }
+
+        private static bool CanComplete(AdmissionOwnerState state)
+        {
+            return state == AdmissionOwnerState.WorkItem || state == AdmissionOwnerState.Continuation || state == AdmissionOwnerState.TerminalCleanup;
+        }
+
         private static void Append(StringBuilder builder, string value)
         {
             var item = value ?? string.Empty;
@@ -393,10 +485,14 @@ namespace UnityCli
 
         private int RemainingGrantMs(AdmissionRecord value) { return checked((int)Math.Max(0, Math.Min(GrantTtlMs, value.GrantExpiresAtMs - monotonicNowMs()))); }
         private static AcquireResult Result(AcquireOutcome outcome, string token = null, int grantExpiresInMs = 0, bool newlyGranted = false) { return new AcquireResult { Outcome = outcome, Token = token, RetryAfterMs = RetryAfterMs, GrantExpiresInMs = grantExpiresInMs, NewlyGranted = newlyGranted }; }
+        private static AuthorizeResult Authorized(AuthorizeOutcome outcome, ConsumedIdentity identity = null, bool newlyConsumed = false) { return new AuthorizeResult { Outcome = outcome, Identity = identity, NewlyConsumed = newlyConsumed }; }
         private bool RecordOwnedByPool(AdmissionRecord value) { return value != null && string.Equals(value.InstanceId, instanceId, StringComparison.Ordinal) && string.Equals(value.SessionId, sessionId, StringComparison.Ordinal) && ValidRequestId(value.RequestId) && IsSha256(value.RootFingerprint) && IsToken(value.Token) && ValidListener(value.ListenerId, value.ListenerGeneration); }
-        private bool ValidConsumedRecord(AdmissionRecord value) { return RecordOwnedByPool(value) && value.State == AdmissionState.Consumed && Enum.IsDefined(typeof(AdmissionOwnerKind), value.OwnerKind) && value.GrantExpiresAtMs == 0 && value.ExecutionDeadlineMs > 0; }
-        private AdmissionRecord Clone(AdmissionRecord value) { return new AdmissionRecord { InstanceId = value.InstanceId, SessionId = value.SessionId, RequestId = value.RequestId, RootFingerprint = value.RootFingerprint, Token = value.Token, ListenerId = value.ListenerId, ListenerGeneration = value.ListenerGeneration, GrantExpiresAtMs = value.GrantExpiresAtMs, ExecutionDeadlineMs = value.ExecutionDeadlineMs, State = value.State, OwnerKind = value.OwnerKind }; }
+        private bool ValidConsumedRecord(AdmissionRecord value) { return RecordOwnedByPool(value) && value.Consumed && IsSha256(value.RequestDigest) && Enum.IsDefined(typeof(AdmissionOwnerState), value.OwnerState) && Enum.IsDefined(typeof(AdmissionOwnerState), value.IntendedOwnerState) && value.GrantExpiresAtMs == 0 && value.ExecutionDeadlineMs > 0 && ((value.TransferCommitted && value.OwnerState == value.IntendedOwnerState) || (!value.TransferCommitted && LegalTransfer(value.OwnerState, value.IntendedOwnerState))); }
+        private AdmissionRecord Clone(AdmissionRecord value) { return new AdmissionRecord { InstanceId = value.InstanceId, SessionId = value.SessionId, RequestId = value.RequestId, RootFingerprint = value.RootFingerprint, RequestDigest = value.RequestDigest, Token = value.Token, ListenerId = value.ListenerId, ListenerGeneration = value.ListenerGeneration, GrantExpiresAtMs = value.GrantExpiresAtMs, ExecutionDeadlineMs = value.ExecutionDeadlineMs, OwnerState = value.OwnerState, IntendedOwnerState = value.IntendedOwnerState, TransferCommitted = value.TransferCommitted }; }
         private bool ValidRestoredRecord(AdmissionRecord value) { return ValidConsumedRecord(value); }
+        private static ConsumedIdentity Identity(AdmissionRecord value) { return new ConsumedIdentity { RequestId = value.RequestId, RootFingerprint = value.RootFingerprint, RequestDigest = value.RequestDigest, Token = value.Token, SessionId = value.SessionId, OwnerState = value.OwnerState }; }
+        private static bool Matches(AdmissionRecord value, ConsumedIdentity identity) { return MatchesIdentityFields(value, identity) && value.OwnerState == identity.OwnerState; }
+        private static bool MatchesIdentityFields(AdmissionRecord value, ConsumedIdentity identity) { return value != null && identity != null && string.Equals(value.RequestId, identity.RequestId, StringComparison.Ordinal) && string.Equals(value.RootFingerprint, identity.RootFingerprint, StringComparison.Ordinal) && string.Equals(value.RequestDigest, identity.RequestDigest, StringComparison.Ordinal) && FixedEquals(value.Token, identity.Token) && string.Equals(value.SessionId, identity.SessionId, StringComparison.Ordinal); }
         private static bool ValidListener(string listenerId, long generation) { return !string.IsNullOrWhiteSpace(listenerId) && listenerId.Length <= 200 && generation >= 1; }
 
         private static string NewToken()

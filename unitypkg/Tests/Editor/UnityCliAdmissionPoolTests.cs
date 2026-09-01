@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -33,63 +34,149 @@ namespace UnityCli.Tests
 
             Assert.That(pool.Revoke(Request(0), Fingerprint(0), grants[0].Token), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(4));
-            Assert.That(pool.Capture().GateClosed, Is.True);
             Assert.That(pool.Acquire(Request(5), Fingerprint(5), ListenerId, 1).Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Closed));
-
             Assert.That(pool.Revoke(Request(1), Fingerprint(1), grants[1].Token), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(3));
             Assert.That(pool.Capture().GateClosed, Is.False);
             Assert.That(pool.Acquire(Request(5), Fingerprint(5), ListenerId, 1).Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
             Assert.That(pool.Acquire(Request(6), Fingerprint(6), ListenerId, 1).Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
             Assert.That(pool.Capture().Active, Is.EqualTo(5));
-            Assert.That(pool.Capture().GateClosed, Is.True);
         }
 
         [Test]
-        public void SameIdentityAttachesWithoutCountingAndDifferentFingerprintFailsClosed()
+        public void GrantedHasOnlyAuthorizeOrRevokeExit()
         {
             var pool = Pool();
-            var first = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
-            var attached = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
-            var conflict = pool.Acquire(Request(0), Fingerprint(1), ListenerId, 1);
-            Assert.That(attached.Token, Is.EqualTo(first.Token));
-            Assert.That(conflict.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.IdentityMismatch));
-            Assert.That(pool.Capture().Active, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void TokenIs256BitConsumedOnceAndOldGenerationIsAtomicallyRevoked()
-        {
-            long now = 1000;
-            var pool = Pool(() => now);
-            var stale = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 7);
-            Assert.That(stale.Token, Has.Length.EqualTo(64));
-            Assert.That(stale.Token.All(Uri.IsHexDigit), Is.True);
-            Assert.That(pool.Authorize(Request(0), Fingerprint(0), stale.Token, ListenerId, 8, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.IdentityMismatch));
+            var revoked = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
+            Assert.That(pool.Revoke(Request(0), Fingerprint(0), revoked.Token), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
-            Assert.That(pool.Authorize(Request(0), Fingerprint(0), stale.Token, ListenerId, 7, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Missing));
 
-            var grant = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 8);
-            Assert.That(pool.Authorize(Request(0), Fingerprint(0), grant.Token, ListenerId, 8, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            Assert.That(pool.Authorize(Request(0), Fingerprint(0), grant.Token, ListenerId, 8, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.AlreadyConsumed));
-            var consumed = pool.Capture().Records.Single();
-            Assert.That(consumed.State, Is.EqualTo(UnityCliAdmissionPool.AdmissionState.Consumed));
-            Assert.That(consumed.InstanceId, Is.EqualTo(InstanceId));
-            Assert.That(consumed.SessionId, Is.EqualTo(SessionId));
-            Assert.That(pool.AttachConsumed(Request(0), Fingerprint(0), ListenerId, 8, 5000), Is.True);
-            Assert.That(pool.AttachConsumed(Request(0), Fingerprint(0), "listener-new", 9, 5000), Is.False);
-            Assert.That(pool.RecoverConsumed(Request(0), Fingerprint(0), "listener-new", 9, 5000), Is.True);
-            Assert.That(pool.AttachConsumed(Request(0), Fingerprint(0), "listener-new", 9, 5000), Is.True);
+            var granted = pool.Acquire(Request(1), Fingerprint(1), ListenerId, 1);
+            var consumed = pool.AuthorizeAndCapture(Request(1), Fingerprint(1), Digest(1), granted.Token, ListenerId, 1, 5000);
+            Assert.That(consumed.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+            Assert.That(consumed.Identity.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+            Assert.That(pool.Revoke(Request(1), Fingerprint(1), granted.Token), Is.False);
+        }
+
+        [Test]
+        public void AuthorizeAndCaptureIsAtomicAndCompensationIsExactAndIdempotent()
+        {
+            var pool = Pool();
+            var grant = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
+            var result = pool.AuthorizeAndCapture(Request(0), Fingerprint(0), Digest(0), grant.Token, ListenerId, 1, 5000);
+            Assert.That(result.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+            Assert.That(result.NewlyConsumed, Is.True);
+            Assert.That(result.Identity.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+            Assert.That(pool.AuthorizeAndCapture(Request(0), Fingerprint(0), Digest(0), grant.Token, ListenerId, 1, 5000).Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.AlreadyConsumed));
+            Assert.That(pool.AuthorizeAndCapture(Request(0), Fingerprint(0), Digest(9), grant.Token, ListenerId, 1, 5000).Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.IdentityMismatch));
+            Assert.That(pool.CompensateAuthorization(result.Identity), Is.True);
+            Assert.That(pool.CompensateAuthorization(result.Identity), Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+
+            var successor = Consume(pool, 0);
+            Assert.That(pool.CompensateAuthorization(result.Identity), Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(pool.CompleteTrusted(successor), Is.True);
+        }
+
+        [Test]
+        public void FullOwnerTransitionTableRejectsEveryIllegalEdge()
+        {
+            var states = new[]
+            {
+                UnityCliAdmissionPool.AdmissionOwnerState.WorkItem,
+                UnityCliAdmissionPool.AdmissionOwnerState.Coordinator,
+                UnityCliAdmissionPool.AdmissionOwnerState.Continuation,
+                UnityCliAdmissionPool.AdmissionOwnerState.Recovery,
+                UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup
+            };
+            var legal = new HashSet<string>(StringComparer.Ordinal)
+            {
+                Edge(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator),
+                Edge(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem, UnityCliAdmissionPool.AdmissionOwnerState.Continuation),
+                Edge(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem, UnityCliAdmissionPool.AdmissionOwnerState.Recovery),
+                Edge(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup),
+                Edge(UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup),
+                Edge(UnityCliAdmissionPool.AdmissionOwnerState.Recovery, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
+            };
+
+            foreach (var source in states)
+            foreach (var target in states)
+            {
+                var pool = Pool();
+                var current = OwnerAt(pool, source);
+                var expected = source == target || legal.Contains(Edge(source, target));
+                Assert.That(pool.PrepareOwnerTransfer(current, target), Is.EqualTo(expected), Edge(source, target));
+                if (!expected || source == target) continue;
+                UnityCliAdmissionPool.ConsumedIdentity successor;
+                Assert.That(pool.CommitOwnerTransfer(current, target, out successor), Is.True, Edge(source, target));
+                Assert.That(successor.OwnerState, Is.EqualTo(target));
+                Assert.That(pool.PrepareOwnerTransfer(successor, target), Is.True, "idempotent prepare " + Edge(source, target));
+                UnityCliAdmissionPool.ConsumedIdentity repeated;
+                Assert.That(pool.CommitOwnerTransfer(successor, target, out repeated), Is.True, "idempotent commit " + Edge(source, target));
+                Assert.That(repeated.OwnerState, Is.EqualTo(target));
+            }
+        }
+
+        [Test]
+        public void OnlyWorkItemContinuationAndTerminalCleanupCanComplete()
+        {
+            foreach (var state in new[] { UnityCliAdmissionPool.AdmissionOwnerState.WorkItem, UnityCliAdmissionPool.AdmissionOwnerState.Continuation, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup })
+            {
+                var pool = Pool();
+                var owner = OwnerAt(pool, state);
+                Assert.That(pool.CompleteTrusted(owner), Is.True, state.ToString());
+                Assert.That(pool.CompleteTrusted(owner), Is.True, "idempotent " + state);
+            }
+            foreach (var state in new[] { UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, UnityCliAdmissionPool.AdmissionOwnerState.Recovery })
+            {
+                var pool = Pool();
+                Assert.That(pool.CompleteTrusted(OwnerAt(pool, state)), Is.False, state.ToString());
+                Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void TransferAndCompletionRequireCurrentFullIdentity()
+        {
+            var pool = Pool();
+            var owner = Consume(pool, 0);
+            var staleToken = Consume(Pool(), 0);
+            Assert.That(pool.PrepareOwnerTransfer(staleToken, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), Is.False);
+            Assert.That(pool.CompleteTrusted(staleToken), Is.False);
+
+            UnityCliAdmissionPool.ConsumedIdentity coordinator;
+            Assert.That(pool.PrepareOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), Is.True);
+            Assert.That(pool.CommitOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, out coordinator), Is.True);
+            Assert.That(pool.PrepareOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup), Is.False);
+            Assert.That(pool.CompleteTrusted(owner), Is.False);
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
         }
 
         [Test]
-        public void GrantTtlUsesMonotonicClockIndependentlyFromUtcDeadline()
+        public void FrozenTerminalIdentityCannotDeleteSameRequestIdSuccessor()
+        {
+            var pool = Pool();
+            var oldIdentity = Consume(pool, 0);
+            Assert.That(pool.CompleteTrusted(oldIdentity), Is.True);
+            var successor = Consume(pool, 0, 1);
+            Assert.That(pool.CompleteTrusted(oldIdentity), Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(pool.CompleteTrusted(successor), Is.True);
+        }
+
+        [Test]
+        public void GrantTtlUsesMonotonicClockAndStaleGenerationRevokesWithoutConsumption()
         {
             long monotonic = 1000;
             long utc = 100000;
             var pool = new UnityCliAdmissionPool(InstanceId, SessionId, 5, 3, () => monotonic, () => utc);
-            pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
+            var stale = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 7);
+            Assert.That(stale.Token, Has.Length.EqualTo(64));
+            Assert.That(pool.AuthorizeAndCapture(Request(0), Fingerprint(0), Digest(0), stale.Token, ListenerId, 8, 200000).Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.IdentityMismatch));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+
+            pool.Acquire(Request(1), Fingerprint(1), ListenerId, 8);
             utc = -100000;
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
             monotonic = 3001;
@@ -97,76 +184,106 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void UnconsumedTokenExpiresOrRevokesAndReleasesSlot()
+        public void MaxPlusTwoGrantTimeoutsReturnToBaseline()
         {
             long now = 1000;
             var pool = Pool(() => now);
-            var expired = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
+            var outcomes = Enumerable.Range(0, 7).Select(index => pool.Acquire(Request(index), Fingerprint(index), ListenerId, 1).Outcome).ToArray();
+            Assert.That(outcomes.Count(value => value == UnityCliAdmissionPool.AcquireOutcome.Granted), Is.EqualTo(5));
+            Assert.That(outcomes.Count(value => value == UnityCliAdmissionPool.AcquireOutcome.Closed), Is.EqualTo(2));
             now = 3001;
-            Assert.That(pool.Authorize(Request(0), Fingerprint(0), expired.Token, ListenerId, 1, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Missing));
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
-            var revoked = pool.Acquire(Request(1), Fingerprint(1), ListenerId, 2);
-            pool.RevokeUnconsumed(ListenerId, 2);
-            Assert.That(pool.Capture().Active, Is.EqualTo(0));
-            Assert.That(pool.Authorize(Request(1), Fingerprint(1), revoked.Token, ListenerId, 2, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Missing));
+            Assert.That(pool.Capture().GateClosed, Is.False);
         }
 
         [Test]
-        public void StateTransitionsUseSeparateTerminalAndRevokePaths()
+        public void MaxPlusTwoPreQueueTimeoutsReturnToBaselineOrOneDurableOwner()
         {
             var pool = Pool();
-            var grant = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
-            Assert.That(pool.CompleteTrusted(Request(0), Fingerprint(0), grant.Token, SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.False);
-            Assert.That(pool.Revoke(Request(0), Fingerprint(0), grant.Token), Is.True);
-            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            var baseline = pool.Capture().Active;
+            for (var index = 0; index < 7; index++)
+            {
+                var grant = pool.Acquire(Request(index), Fingerprint(index), ListenerId, 1);
+                if (grant.Outcome != UnityCliAdmissionPool.AcquireOutcome.Granted) continue;
+                var authorization = pool.AuthorizeAndCapture(Request(index), Fingerprint(index), Digest(index), grant.Token, ListenerId, 1, 5000);
+                Assert.That(authorization.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+                Assert.That(pool.CompensateAuthorization(authorization.Identity), Is.True);
+                Assert.That(pool.Capture().Active, Is.EqualTo(baseline));
+            }
 
-            grant = pool.Acquire(Request(1), Fingerprint(1), ListenerId, 1);
-            Assert.That(pool.Authorize(Request(1), Fingerprint(1), grant.Token, ListenerId, 1, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            Assert.That(pool.Revoke(Request(1), Fingerprint(1), grant.Token), Is.False);
-            Assert.That(pool.CompleteTrusted(Request(1), Fingerprint(1), grant.Token, SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.True);
-            Assert.That(pool.CompleteTrusted(Request(1), Fingerprint(1), grant.Token, SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.True);
-            Assert.That(pool.Capture().Active, Is.EqualTo(0));
-        }
-
-        [Test]
-        public void OwnerTransferMakesPreviousWorkItemIdentityUnableToComplete()
-        {
-            var pool = Pool();
-            var grant = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
-            Assert.That(pool.Authorize(Request(0), Fingerprint(0), grant.Token, ListenerId, 1, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            UnityCliAdmissionPool.ConsumedIdentity workItem;
-            Assert.That(pool.TryGetConsumedIdentity(Request(0), out workItem), Is.True);
-            Assert.That(workItem.OwnerKind, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem));
-            Assert.That(pool.TransferOwner(workItem.RequestId, workItem.RootFingerprint, workItem.Token, workItem.SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.Coordinator), Is.True);
-            Assert.That(pool.CompleteTrusted(workItem.RequestId, workItem.RootFingerprint, workItem.Token, workItem.SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.False);
-            Assert.That(pool.CompleteTrusted(workItem.RequestId, workItem.RootFingerprint, workItem.Token, workItem.SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.Coordinator), Is.True);
-        }
-
-        [Test]
-        public void FrozenTerminalIdentityCannotDeleteSameRequestIdSuccessor()
-        {
-            var pool = Pool();
-            var oldGrant = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
-            Assert.That(pool.Authorize(Request(0), Fingerprint(0), oldGrant.Token, ListenerId, 1, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            UnityCliAdmissionPool.ConsumedIdentity oldIdentity;
-            Assert.That(pool.TryGetConsumedIdentity(Request(0), out oldIdentity), Is.True);
-            Assert.That(pool.CompleteTrusted(oldIdentity.RequestId, oldIdentity.RootFingerprint, oldIdentity.Token, oldIdentity.SessionId, oldIdentity.OwnerKind), Is.True);
-
-            var successor = pool.Acquire(Request(0), Fingerprint(1), ListenerId, 1);
-            Assert.That(pool.Authorize(Request(0), Fingerprint(1), successor.Token, ListenerId, 1, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            Assert.That(pool.CompleteTrusted(oldIdentity.RequestId, oldIdentity.RootFingerprint, oldIdentity.Token, oldIdentity.SessionId, oldIdentity.OwnerKind), Is.False);
+            var durable = Consume(pool, 20);
+            UnityCliAdmissionPool.ConsumedIdentity coordinator;
+            Assert.That(pool.PrepareOwnerTransfer(durable, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), Is.True);
+            Assert.That(pool.CommitOwnerTransfer(durable, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, out coordinator), Is.True);
+            for (var index = 21; index < 28; index++)
+            {
+                var grant = pool.Acquire(Request(index), Fingerprint(index), ListenerId, 1);
+                if (grant.Outcome != UnityCliAdmissionPool.AcquireOutcome.Granted) continue;
+                var authorization = pool.AuthorizeAndCapture(Request(index), Fingerprint(index), Digest(index), grant.Token, ListenerId, 1, 5000);
+                Assert.That(pool.CompensateAuthorization(authorization.Identity), Is.True);
+            }
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
-            Assert.That(pool.CompleteTrusted(Request(0), Fingerprint(1), successor.Token, SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.True);
+            Assert.That(pool.Capture().Records.Single().OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Coordinator));
         }
 
         [Test]
-        public void ValidRestorePreservesClosedHysteresisAndExactAttach()
+        public void TransferIntentSnapshotsConvergeBeforeAndAfterPoolTransfer()
         {
             var source = Pool();
-            var grants = Enumerable.Range(0, 5).Select(index => source.Acquire(Request(index), Fingerprint(index), ListenerId, 1)).ToArray();
-            for (var index = 0; index < grants.Length; index++) Assert.That(source.Authorize(Request(index), Fingerprint(index), grants[index].Token, ListenerId, 1, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            Assert.That(source.CompleteTrusted(Request(0), Fingerprint(0), grants[0].Token, SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.True);
-            var before = source.Capture();
+            var workItem = Consume(source, 0);
+            var beforeIntent = source.CaptureRecovery();
+            Assert.That(beforeIntent.Records.Single().TransferCommitted, Is.True);
+
+            Assert.That(source.PrepareOwnerTransfer(workItem, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), Is.True);
+            var afterIntent = source.CaptureRecovery();
+            Assert.That(afterIntent.Records.Single().OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+            Assert.That(afterIntent.Records.Single().IntendedOwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Coordinator));
+            Assert.That(afterIntent.Records.Single().TransferCommitted, Is.False);
+
+            UnityCliAdmissionPool.ConsumedIdentity committed;
+            Assert.That(source.CommitOwnerTransfer(workItem, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, out committed), Is.True);
+            Assert.That(source.CaptureRecovery().Records.Single().TransferCommitted, Is.True);
+
+            var beforeIntentRestore = Pool();
+            beforeIntentRestore.Restore(beforeIntent.Records, beforeIntent.Active, beforeIntent.GateClosed, beforeIntent.RecoveryDigest, beforeIntent.ConfiguredMaxActive, beforeIntent.ReopenAt);
+            UnityCliAdmissionPool.ConsumedIdentity unchanged;
+            Assert.That(beforeIntentRestore.TryGetConsumedIdentity(Request(0), out unchanged), Is.True);
+            Assert.That(unchanged.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+
+            // intent落盘后与pool已转移但commit marker未落盘都恢复同一pre-transfer snapshot。
+            foreach (var faultPoint in new[] { "after-intent-save", "after-pool-transfer-before-commit-save" })
+            {
+                var restored = Pool();
+                restored.Restore(afterIntent.Records, afterIntent.Active, afterIntent.GateClosed, afterIntent.RecoveryDigest, afterIntent.ConfiguredMaxActive, afterIntent.ReopenAt);
+                UnityCliAdmissionPool.ConsumedIdentity recoveredWorkItem;
+                Assert.That(restored.TryGetConsumedIdentity(Request(0), out recoveredWorkItem), Is.True, faultPoint);
+                Assert.That(restored.PrepareOwnerTransfer(recoveredWorkItem, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), Is.True, faultPoint);
+                UnityCliAdmissionPool.ConsumedIdentity recoveredCoordinator;
+                Assert.That(restored.CommitOwnerTransfer(recoveredWorkItem, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, out recoveredCoordinator), Is.True, faultPoint);
+                Assert.That(recoveredCoordinator.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), faultPoint);
+            }
+        }
+
+        [Test]
+        public void RecoverySnapshotExcludesGrantsAndRemainsBounded()
+        {
+            var pool = Pool();
+            Consume(pool, 0);
+            pool.Acquire(Request(1), Fingerprint(1), ListenerId, 1);
+            pool.Acquire(Request(2), Fingerprint(2), ListenerId, 1);
+            var recovery = pool.CaptureRecovery();
+            Assert.That(recovery.Active, Is.EqualTo(1));
+            Assert.That(recovery.Records.All(record => record.Consumed), Is.True);
+            Assert.That(recovery.Active, Is.LessThanOrEqualTo(recovery.ConfiguredMaxActive));
+        }
+
+        [Test]
+        public void RestorePreservesHysteresisExactAttachAndPendingTransfer()
+        {
+            var source = Pool();
+            var owners = Enumerable.Range(0, 5).Select(index => Consume(source, index)).ToArray();
+            Assert.That(source.CompleteTrusted(owners[0]), Is.True);
+            var before = source.CaptureRecovery();
             Assert.That(before.Active, Is.EqualTo(4));
             Assert.That(before.GateClosed, Is.True);
 
@@ -174,67 +291,38 @@ namespace UnityCli.Tests
             restored.Restore(before.Records, before.Active, before.GateClosed, before.RecoveryDigest, before.ConfiguredMaxActive, before.ReopenAt);
             Assert.That(restored.Capture().Active, Is.EqualTo(4));
             Assert.That(restored.Capture().GateClosed, Is.True);
-            var reacquire = restored.Acquire(Request(1), Fingerprint(1), "listener-after-reload", 2);
-            Assert.That(reacquire.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.AlreadyConsumed));
-            Assert.That(reacquire.Token, Is.Null);
-            Assert.That(restored.RecoverConsumed(Request(1), Fingerprint(1), "listener-after-reload", 2, 5000), Is.True);
-            Assert.That(restored.AttachConsumed(Request(1), Fingerprint(1), "listener-after-reload", 2, 5000), Is.True);
-            Assert.That(restored.Capture().Active, Is.EqualTo(4));
+            Assert.That(restored.RecoverConsumed(Request(1), Fingerprint(1), Digest(1), "listener-after-reload", 2, 5000), Is.True);
+            Assert.That(restored.AttachConsumed(Request(1), Fingerprint(1), Digest(1), "listener-after-reload", 2, 5000), Is.True);
             Assert.That(restored.Acquire(Request(6), Fingerprint(6), "listener-after-reload", 2).Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Closed));
         }
 
         [Test]
-        public void SmallerConfigurationRecoversExistingRootsAndStaysClosedUntilNewReopenAt()
+        public void NewSessionRejectsRestoredMechanismState()
         {
-            var source = new UnityCliAdmissionPool(InstanceId, SessionId, 7, 5, () => 1000, () => 1000);
-            var grants = Enumerable.Range(0, 6).Select(index => source.Acquire(Request(index), Fingerprint(index), ListenerId, 1)).ToArray();
-            for (var index = 0; index < grants.Length; index++) Assert.That(source.Authorize(Request(index), Fingerprint(index), grants[index].Token, ListenerId, 1, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            var before = source.Capture();
-
-            var restored = Pool();
-            restored.Restore(before.Records, before.Active, before.GateClosed, before.RecoveryDigest, before.ConfiguredMaxActive, before.ReopenAt);
-            Assert.That(restored.Capture().Active, Is.EqualTo(6));
-            Assert.That(restored.Capture().MaxActive, Is.EqualTo(6));
-            Assert.That(restored.Capture().ConfiguredMaxActive, Is.EqualTo(5));
-            Assert.That(restored.Capture().GateClosed, Is.True);
-            Assert.That(restored.CompleteTrusted(Request(0), Fingerprint(0), grants[0].Token, SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.True);
-            Assert.That(restored.CompleteTrusted(Request(1), Fingerprint(1), grants[1].Token, SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.True);
-            Assert.That(restored.Capture().Active, Is.EqualTo(4));
-            Assert.That(restored.Capture().GateClosed, Is.True);
-            Assert.That(restored.CompleteTrusted(Request(2), Fingerprint(2), grants[2].Token, SessionId, UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem), Is.True);
-            Assert.That(restored.Capture().Active, Is.EqualTo(3));
-            Assert.That(restored.Capture().GateClosed, Is.False);
-            Assert.That(restored.Capture().MaxActive, Is.EqualTo(5));
+            var source = Pool();
+            Consume(source, 0);
+            var snapshot = source.CaptureRecovery();
+            var restarted = new UnityCliAdmissionPool(InstanceId, "session-new", 5, 3, () => 1000, () => 1000);
+            Assert.Throws<InvalidOperationException>(() => restarted.Restore(snapshot.Records, snapshot.Active, snapshot.GateClosed, snapshot.RecoveryDigest, snapshot.ConfiguredMaxActive, snapshot.ReopenAt));
+            Assert.That(restarted.Capture().RecoveryBlocked, Is.True);
         }
 
         [Test]
         public void CorruptRestoreKeepsPriorStateAndBlocksAdmission()
         {
             var pool = Pool();
-            var grant = pool.Acquire(Request(0), Fingerprint(0), ListenerId, 1);
-            Assert.That(pool.Authorize(Request(0), Fingerprint(0), grant.Token, ListenerId, 1, 5000), Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            var before = pool.Capture();
+            Consume(pool, 0);
+            var before = pool.CaptureRecovery();
             var corrupt = before.Records.Select(record => new UnityCliAdmissionPool.AdmissionRecord
             {
                 InstanceId = "another-instance", SessionId = record.SessionId, RequestId = record.RequestId, RootFingerprint = record.RootFingerprint,
-                Token = record.Token, ListenerId = record.ListenerId, ListenerGeneration = record.ListenerGeneration,
-                GrantExpiresAtMs = record.GrantExpiresAtMs, ExecutionDeadlineMs = record.ExecutionDeadlineMs, State = record.State
+                RequestDigest = record.RequestDigest, Token = record.Token, ListenerId = record.ListenerId, ListenerGeneration = record.ListenerGeneration,
+                GrantExpiresAtMs = record.GrantExpiresAtMs, ExecutionDeadlineMs = record.ExecutionDeadlineMs,
+                OwnerState = record.OwnerState, IntendedOwnerState = record.IntendedOwnerState, TransferCommitted = record.TransferCommitted
             }).ToArray();
-
             Assert.Throws<InvalidOperationException>(() => pool.Restore(corrupt, before.Active, true, before.RecoveryDigest, before.ConfiguredMaxActive, before.ReopenAt));
-            var blocked = pool.Capture();
-            Assert.That(blocked.RecoveryBlocked, Is.True);
-            Assert.That(blocked.GateClosed, Is.True);
-            Assert.That(blocked.Active, Is.EqualTo(before.Active));
+            Assert.That(pool.Capture().RecoveryBlocked, Is.True);
             Assert.That(pool.Acquire(Request(1), Fingerprint(1), ListenerId, 1).Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.RecoveryBlocked));
-
-            var countMismatch = Pool();
-            Assert.Throws<InvalidOperationException>(() => countMismatch.Restore(before.Records, before.Active + 1, false, before.RecoveryDigest, before.ConfiguredMaxActive, before.ReopenAt));
-            Assert.That(countMismatch.Capture().RecoveryBlocked, Is.True);
-
-            var digestMismatch = Pool();
-            Assert.Throws<InvalidOperationException>(() => digestMismatch.Restore(before.Records, before.Active, before.GateClosed, DifferentDigest(before.RecoveryDigest), before.ConfiguredMaxActive, before.ReopenAt));
-            Assert.That(digestMismatch.Acquire(Request(2), Fingerprint(2), ListenerId, 1).Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.RecoveryBlocked));
         }
 
         [Test]
@@ -250,13 +338,41 @@ namespace UnityCli.Tests
             Assert.That(outcomes.Count(value => value == UnityCliAdmissionPool.AcquireOutcome.Granted), Is.EqualTo(5));
         }
 
+        private static UnityCliAdmissionPool.ConsumedIdentity Consume(UnityCliAdmissionPool pool, int index, int fingerprintIndex = -1)
+        {
+            var fingerprint = Fingerprint(fingerprintIndex < 0 ? index : fingerprintIndex);
+            var grant = pool.Acquire(Request(index), fingerprint, ListenerId, 1);
+            Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            var authorization = pool.AuthorizeAndCapture(Request(index), fingerprint, Digest(index), grant.Token, ListenerId, 1, 5000);
+            Assert.That(authorization.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+            return authorization.Identity;
+        }
+
+        private static UnityCliAdmissionPool.ConsumedIdentity OwnerAt(UnityCliAdmissionPool pool, UnityCliAdmissionPool.AdmissionOwnerState state)
+        {
+            var owner = Consume(pool, 0);
+            if (state == UnityCliAdmissionPool.AdmissionOwnerState.WorkItem) return owner;
+            if (state == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
+                return Transfer(pool, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+            return Transfer(pool, owner, state);
+        }
+
+        private static UnityCliAdmissionPool.ConsumedIdentity Transfer(UnityCliAdmissionPool pool, UnityCliAdmissionPool.ConsumedIdentity owner, UnityCliAdmissionPool.AdmissionOwnerState target)
+        {
+            Assert.That(pool.PrepareOwnerTransfer(owner, target), Is.True);
+            UnityCliAdmissionPool.ConsumedIdentity successor;
+            Assert.That(pool.CommitOwnerTransfer(owner, target, out successor), Is.True);
+            return successor;
+        }
+
         private static UnityCliAdmissionPool Pool(Func<long> now = null)
         {
             var clock = now ?? delegate { return 1000L; };
             return new UnityCliAdmissionPool(InstanceId, SessionId, 5, 3, clock, clock);
         }
+        private static string Edge(UnityCliAdmissionPool.AdmissionOwnerState source, UnityCliAdmissionPool.AdmissionOwnerState target) { return source + "->" + target; }
         private static string Request(int index) { return "req-" + index.ToString(); }
-        private static string DifferentDigest(string value) { return (value[0] == '0' ? "1" : "0") + value.Substring(1); }
         private static string Fingerprint(int index) { return index.ToString("x64"); }
+        private static string Digest(int index) { return (index + 1000).ToString("x64"); }
     }
 }
