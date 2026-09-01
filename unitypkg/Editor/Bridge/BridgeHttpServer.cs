@@ -465,19 +465,10 @@ namespace UnityCli
             var queueSignal = WaitHandle.WaitAny(new[] { item.Started.WaitHandle, item.Completed.WaitHandle }, queueRemainingMs);
             if (queueSignal == WaitHandle.WaitTimeout)
             {
-                if (item.CancelBeforeStart())
-                {
-                    WriteLog("bridge_queue_start_timeout requestId=" + request.RequestId + " command=" + request.Command);
-                    WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                        request.RequestId,
-                        "E_EXECUTION_TIMEOUT",
-                        "Unity Editor did not start the bridge request before the immutable deadline.",
-                        nextActions: new[] { "Inspect editor.state and retry only after Unity is responsive." })), 200);
-                    return;
-                }
+                // HTTP deadline只结束当前响应；WorkItem identity继续留在map，由主线程统一裁决是否开始或收敛。
                 WriteLog("bridge_queue_start_timeout requestId=" + request.RequestId + " command=" + request.Command);
                 WriteJson(context, ResolveStartedTimeoutResponse(item, request,
-                    "The immutable deadline elapsed after Unity started the request."), 200);
+                    "The immutable deadline elapsed before Unity confirmed the request start."), 200);
                 return;
             }
             if (queueSignal == 1)
@@ -490,7 +481,6 @@ namespace UnityCli
             if (!request.TryDeadlineRemainingMs(out executionRemainingMs)) executionRemainingMs = 0;
             if (!item.Completed.Wait(TimeSpan.FromMilliseconds(executionRemainingMs)))
             {
-                item.Cancel();
                 WriteLog("bridge_execution_timeout requestId=" + request.RequestId + " command=" + request.Command);
                 WriteJson(context, ResolveStartedTimeoutResponse(item, request,
                     "The immutable deadline elapsed after Unity started the request."), 200);
@@ -509,8 +499,7 @@ namespace UnityCli
             // CompleteWorkItem/Response 可能恰好在上述读取后发生；再读一次避免丢失已完成结果。
             if (item.Completed.Wait(0) && item.Response != null) return item.Response;
 
-            // 接受后的请求继续执行；只有 timeout 在接受前获胜时才取消执行 token。
-            item.CancelBeforeAcceptance();
+            // HTTP timeout不改变WorkItem acceptance、Completed或map；同identity attach仍返回同一个对象。
             return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                 request.RequestId,
                 "E_EXECUTION_TIMEOUT",

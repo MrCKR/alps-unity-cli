@@ -82,14 +82,15 @@ namespace UnityCli
                 internal string RootRequestId; internal string RootRequestDigest; internal string EditorSessionId; internal DateTimeOffset AbsoluteDeadlineUtc;
                 internal string RunId; internal string CancelRequestId; internal string CancelRequestDigest;
                 internal AdmissionOwnerIdentity AdmissionOwner;
+                internal BridgeQueueState QueueState;
             }
             private enum CancelDispatchOutcome { NotInvoked, Returned, OutcomeUnknown }
             internal static bool IsCommand(string command) { return operation.IsCommand(command); }
-            internal static bool FinalizeCancelForTests(string rootRequestId, string rootRequestDigest, string runId, string cancelRequestId, string cancelRequestDigest, string effectState)
+            internal static bool FinalizeCancelForTests(string rootRequestId, string rootRequestDigest, string runId, string cancelRequestId, string cancelRequestDigest, string effectState, BridgeQueueState state)
             {
                 var root = Load();
                 if (root == null || !Same(root.RequestId, rootRequestId) || !Same(root.RequestDigest, rootRequestDigest)) return false;
-                var owner = CaptureAdmissionOwner(cancelRequestId, cancelRequestDigest);
+                var owner = CaptureAdmissionOwner(state, cancelRequestId, cancelRequestDigest);
                 var dispatch = new CancelDispatchIdentity
                 {
                     RootRequestId = rootRequestId,
@@ -99,9 +100,15 @@ namespace UnityCli
                     RunId = runId,
                     CancelRequestId = cancelRequestId,
                     CancelRequestDigest = cancelRequestDigest,
-                    AdmissionOwner = owner
+                    AdmissionOwner = owner,
+                    QueueState = state
                 };
                 return FinalizeCancelTerminal(dispatch, ProtocolEnvelopeFactory.Error(cancelRequestId, "E_EXECUTION_TIMEOUT", "Injected cancellation terminal.", null, new[] { "Inspect test.run before retrying." }), effectState);
+            }
+
+            internal static bool FinalizeCancelForTests(string rootRequestId, string rootRequestDigest, string runId, string cancelRequestId, string cancelRequestDigest, string effectState)
+            {
+                return FinalizeCancelForTests(rootRequestId, rootRequestDigest, runId, cancelRequestId, cancelRequestDigest, effectState, ProductionQueueState);
             }
             internal static void Register(BridgeCommandRegistry registry) { operation.Register(registry); }
             internal static void Initialize() { operation.Initialize(); RecoverTerminalCleanup(); }
@@ -303,7 +310,7 @@ namespace UnityCli
                     return CancelAcceptedData(root, runId);
                 }
                 var cancelAdmissionOwner = CaptureAdmissionOwner(request.RequestId);
-                var dispatch = new CancelDispatchIdentity { RootRequestId = root.RequestId, RootRequestDigest = root.RequestDigest, EditorSessionId = root.EditorSessionId, AbsoluteDeadlineUtc = root.AbsoluteDeadlineUtc, RunId = runId, CancelRequestId = request.RequestId, CancelRequestDigest = cancelDigest, AdmissionOwner = cancelAdmissionOwner };
+                var dispatch = new CancelDispatchIdentity { RootRequestId = root.RequestId, RootRequestDigest = root.RequestDigest, EditorSessionId = root.EditorSessionId, AbsoluteDeadlineUtc = root.AbsoluteDeadlineUtc, RunId = runId, CancelRequestId = request.RequestId, CancelRequestDigest = cancelDigest, AdmissionOwner = cancelAdmissionOwner, QueueState = ProductionQueueState };
                 Update(root, value => { AddAdmissionOwnerFields(value.TestOperation, cancelAdmissionOwner); value.TestOperation["cancelRequested"] = true; value.TestOperation["cancelRequestId"] = dispatch.CancelRequestId; value.TestOperation["cancelRequestDigest"] = dispatch.CancelRequestDigest; value.TestOperation["cancelRootRequestDigest"] = dispatch.RootRequestDigest; value.TestOperation["cancelRunId"] = dispatch.RunId; value.TestOperation["cancelPhaseBefore"] = Text(value.TestOperation, "phase"); value.TestOperation["cancelEffectState"] = "dispatching"; value.TestOperation["cancelNeedsContinuation"] = false; });
                 bool isOwned;
                 try
@@ -459,7 +466,7 @@ namespace UnityCli
                 }
                 try
                 {
-                    var owner = CaptureAdmissionOwner(dispatch.CancelRequestId, dispatch.CancelRequestDigest);
+                    var owner = CaptureAdmissionOwner(dispatch.QueueState ?? ProductionQueueState, dispatch.CancelRequestId, dispatch.CancelRequestDigest);
                     owner.TopRequestDigest = dispatch.RootRequestDigest;
                     if (owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.WorkItem
                         || owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Recovery)
@@ -468,11 +475,12 @@ namespace UnityCli
                         {
                             { "requestId", owner.RequestId }, { "requestDigest", dispatch.RootRequestDigest }, { "editorSessionId", EditorSessionId() }
                         };
-                        owner = PersistAdmissionOwnerTransfer(CancelTerminalScope + "-admission-owner", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                        owner = PersistAdmissionOwnerTransfer(dispatch.QueueState ?? ProductionQueueState, CancelTerminalScope + "-admission-owner", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
                     }
                     if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Continuation
                         && owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup) return false;
-                    CompleteAdmissionRoot(owner);
+                    // completion失败时保留test-cancel-admission-owner，Tick会在WorkItem脱离map后重试。
+                    if (!CompleteAdmissionRoot(dispatch.QueueState ?? ProductionQueueState, owner)) return false;
                     return true;
                 }
                 catch { return false; }
@@ -493,7 +501,7 @@ namespace UnityCli
             {
                 try
                 {
-                    var owner = CaptureAdmissionOwner(dispatch.CancelRequestId, dispatch.CancelRequestDigest);
+                    var owner = CaptureAdmissionOwner(dispatch.QueueState ?? ProductionQueueState, dispatch.CancelRequestId, dispatch.CancelRequestDigest);
                     owner.TopRequestDigest = dispatch.RootRequestDigest;
                     if (owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Recovery
                         || owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Continuation) return true;
@@ -502,7 +510,7 @@ namespace UnityCli
                     {
                         { "requestId", owner.RequestId }, { "requestDigest", dispatch.RootRequestDigest }, { "editorSessionId", EditorSessionId() }
                     };
-                    PersistAdmissionOwnerTransfer(CancelTerminalScope + "-admission-owner", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+                    PersistAdmissionOwnerTransfer(dispatch.QueueState ?? ProductionQueueState, CancelTerminalScope + "-admission-owner", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
                     return true;
                 }
                 catch { return false; }

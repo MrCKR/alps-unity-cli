@@ -84,7 +84,7 @@ namespace UnityCli
                     }
                     catch (BridgeCommandException exception) { return SerializeBridgeExceptionEnvelope(request.RequestId, exception); }
                 }
-                internal override void Tick() { TickPackageRoots(); }
+                internal override void Tick() { if (RetryAdmissionOwnerRecoveryMarker()) return; TickPackageRoots(); }
             }
 
             internal static bool IsCommand(string command)
@@ -148,7 +148,17 @@ namespace UnityCli
                 return await operation.Execute(request, raw, accept, cancellationToken);
             }
 
-            private static async Task<string> ExecuteStart(BridgeRequest request, byte[] raw, Func<bool> accept, CancellationToken cancellationToken)
+            internal static Task<string> Execute(BridgeQueueState state, BridgeRequest request, byte[] raw, Func<bool> accept, CancellationToken cancellationToken)
+            {
+                return ExecuteStart(state, request, raw, accept, cancellationToken);
+            }
+
+            private static Task<string> ExecuteStart(BridgeRequest request, byte[] raw, Func<bool> accept, CancellationToken cancellationToken)
+            {
+                return ExecuteStart(ProductionQueueState, request, raw, accept, cancellationToken);
+            }
+
+            private static async Task<string> ExecuteStart(BridgeQueueState state, BridgeRequest request, byte[] raw, Func<bool> accept, CancellationToken cancellationToken)
             {
                 var leaseHeld = false;
                 var newlyAcquiredLease = false;
@@ -185,11 +195,11 @@ namespace UnityCli
                     await Task.FromResult(0);
                     return UnityCliSerializer.Serialize(StartState(request.RequestId));
                 }
-                catch (BridgeCommandException exception) { return FinishStartFault(request, requestDigest, leaseHeld, newlyAcquiredLease, exception); }
-                catch (Exception exception) { return FinishStartFault(request, requestDigest, leaseHeld, newlyAcquiredLease, exception); }
+                catch (BridgeCommandException exception) { return FinishStartFault(state, request, requestDigest, leaseHeld, newlyAcquiredLease, exception); }
+                catch (Exception exception) { return FinishStartFault(state, request, requestDigest, leaseHeld, newlyAcquiredLease, exception); }
             }
 
-            private static string FinishStartFault(BridgeRequest request, string requestDigest, bool leaseHeld, bool newlyAcquiredLease, Exception exception)
+            private static string FinishStartFault(BridgeQueueState state, BridgeRequest request, string requestDigest, bool leaseHeld, bool newlyAcquiredLease, Exception exception)
             {
                 var normalized = NormalizePackageStartFault(exception);
                 if (!leaseHeld) return SerializeBridgeExceptionEnvelope(request.RequestId, normalized);
@@ -229,7 +239,7 @@ namespace UnityCli
                 }
                 if (!newlyAcquiredLease)
                 {
-                    RetainPackageAdmissionRecovery(request.RequestId, requestDigest);
+                    RetainPackageAdmissionRecovery(state, request.RequestId, requestDigest);
                     return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Package has an exact pre-existing lease without a readable root; cleanup is blocked."));
                 }
                 try { UnityCliSessionMutationLease.Release(request.RequestId, requestDigest); } catch { }
@@ -240,13 +250,13 @@ namespace UnityCli
                 return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Package was rejected before its durable root, but exact lease cleanup remains pending."));
             }
 
-            private static void RetainPackageAdmissionRecovery(string requestId, string requestDigest)
+            private static void RetainPackageAdmissionRecovery(BridgeQueueState state, string requestId, string requestDigest)
             {
                 try
                 {
-                    var owner = CaptureAdmissionOwner(requestId, requestDigest);
+                    var owner = CaptureAdmissionOwner(state, requestId, requestDigest);
                     if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.WorkItem) return;
-                    PersistAdmissionOwnerTransfer(ActiveScope + "-admission-owner", new Dictionary<string, object>
+                    PersistAdmissionOwnerTransfer(state, ActiveScope + "-admission-owner", new Dictionary<string, object>
                     {
                         { "requestId", requestId }, { "requestDigest", requestDigest }, { "editorSessionId", EditorSessionId() }
                     }, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);

@@ -115,6 +115,57 @@ namespace UnityCli
             protected virtual TerminalCleanupDecision EvaluateTerminalCleanupRoot(Dictionary<string, object> root, string requestId, string requestDigest) { return TerminalCleanupDecision.Cleanup; }
             /// <summary>root不可读时，业务必须仅凭独立durable terminal决定清理、重试或拒绝。</summary>
             protected virtual TerminalCleanupDecision EvaluateUnreadableTerminalCleanup(string requestId, string requestDigest) { return TerminalCleanupDecision.Cleanup; }
+
+            /// <summary>每tick先消费scope准入marker；root缺失时只发布outcome-unknown并保留exact owner。</summary>
+            protected bool RetryAdmissionOwnerRecoveryMarker()
+            {
+                var markerScope = Scope + "-admission-owner";
+                if (!UnityCliActiveOperation.Exists(markerScope)) return false;
+                Dictionary<string, object> marker;
+                try { marker = UnityCliActiveOperation.Load(markerScope); }
+                catch { return true; }
+                if (marker == null) return true;
+                var requestId = Text(marker, "requestId");
+                var requestDigest = Text(marker, "admissionRequestDigest");
+                if (string.IsNullOrEmpty(requestDigest)) requestDigest = Text(marker, "requestDigest");
+                if (string.IsNullOrEmpty(requestId) || !IsSha256(requestDigest)) return true;
+                AdmissionOwnerIdentity owner;
+                try { owner = ReconcileAdmissionTransferForLiveMarker(markerScope, marker, requestId, requestDigest); }
+                catch { return true; }
+                if (owner == null) return true;
+
+                Dictionary<string, object> root = null;
+                try { root = UnityCliActiveOperation.Load(Scope); }
+                catch { return true; }
+                var rootMatches = root != null && string.Equals(Text(root, "requestId"), requestId, StringComparison.Ordinal)
+                    && string.Equals(Text(root, "requestDigest"), requestDigest, StringComparison.Ordinal);
+                if (rootMatches) return false;
+
+                bool leaseOwned;
+                if (!UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out leaseOwned)) return true;
+                if (leaseOwned)
+                {
+                    try
+                    {
+                        var terminal = ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", OperationDisplayName + " active root disappeared while its admission owner was retained; outcome is unknown.", null, new[] { "Inspect the affected business state before submitting another mutation." });
+                        UnityCliActiveOperation.StoreTerminalFirst(Scope, requestId, requestDigest, terminal);
+                        UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, requestDigest);
+                    }
+                    catch { }
+                    return true;
+                }
+
+                try
+                {
+                    if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
+                    {
+                        var cleanupMarker = new Dictionary<string, object>(marker);
+                        owner = PersistAdmissionOwnerTransfer(markerScope, cleanupMarker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                    }
+                    return !CompleteAdmissionRoot(owner);
+                }
+                catch { return true; }
+            }
             /// <summary>effect前放弃只能清理同identity且由业务证明从未越过effect barrier的root。</summary>
             protected virtual bool CanCleanupAbandonedPreEffectRoot(Dictionary<string, object> root, string requestId, string requestDigest) { return false; }
             /// <summary>root删除后、lease释放前，业务可清理同identity且未dispatch的附属status；失败必须重试。</summary>
@@ -248,6 +299,7 @@ namespace UnityCli
             /// <summary>每帧只推进当前 lease owner；session/deadline 不可确认时先持久化失败终态。</summary>
             internal virtual void Tick()
             {
+                if (RetryAdmissionOwnerRecoveryMarker()) return;
                 if (DateTime.UtcNow < nextTickUtc) return;
                 nextTickUtc = DateTime.UtcNow.AddMilliseconds(100);
                 if (RetryPreEffectCleanup()) return;

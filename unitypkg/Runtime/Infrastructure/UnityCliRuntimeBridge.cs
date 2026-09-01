@@ -37,6 +37,7 @@ namespace UnityCli
         private UnityCliRuntimeRegistry registry;
         private UnityCliRuntimeIdentity identity;
         private UnityCliAdmissionPool admissionPool;
+        private Func<long> utcNowMsProvider = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         private string sessionId;
         private string listenerId;
         private string buildId;
@@ -83,7 +84,7 @@ namespace UnityCli
                 var process = Process.GetCurrentProcess();
                 sessionId = "session-" + Sha256(config.InstanceId + "\0" + config.BuildId + "\0" + process.Id.ToString(CultureInfo.InvariantCulture) + "\0" + ProcessStartedAt(process));
                 listenerId = "listener-" + Guid.NewGuid().ToString("N");
-                admissionPool = new UnityCliAdmissionPool(config.InstanceId, sessionId, config.TaskPoolMaxActive, config.TaskPoolReopenAt);
+                admissionPool = new UnityCliAdmissionPool(config.InstanceId, sessionId, config.TaskPoolMaxActive, config.TaskPoolReopenAt, null, UtcNowMs);
                 int preferredPort;
                 listener = StartListener(config.InstanceId, out preferredPort, out port);
                 registry = new UnityCliRuntimeRegistry(identity, sessionId, listenerId, preferredPort, port, buildStamp, buildId);
@@ -197,7 +198,7 @@ namespace UnityCli
                 if (publication.Error != null) { Write(context, publication.Error); return; }
                 while (!work.Completion.Task.IsCompleted)
                 {
-                    var remaining = work.AbsoluteDeadlineMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    var remaining = work.AbsoluteDeadlineMs - UtcNowMs();
                     if (remaining > 0L)
                     {
                         if (work.Completion.Task.Wait((int)Math.Min(remaining, int.MaxValue))) break;
@@ -326,7 +327,7 @@ namespace UnityCli
             try
             {
                 var deadline = pendingRequest.AbsoluteDeadlineMs;
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= deadline)
+                if (UtcNowMs() >= deadline)
                     terminal = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request deadline elapsed before execution.", new[] { "Retry only after the Player is responsive." }, true, 100);
                 else
                 {
@@ -561,6 +562,17 @@ namespace UnityCli
         private static string ProcessStartedAt(Process process) { return process.StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture); }
         private static string RuntimeBuildGuid() { var property = typeof(Application).GetProperty("buildGUID", BindingFlags.Static | BindingFlags.Public); return property == null ? string.Empty : property.GetValue(null, null) as string ?? string.Empty; }
 
+        internal void InjectUtcNowProviderForTests(Func<long> provider)
+        {
+            if (provider == null) throw new ArgumentNullException("provider");
+            utcNowMsProvider = provider;
+        }
+
+        private long UtcNowMs()
+        {
+            return utcNowMsProvider();
+        }
+
         internal enum RuntimePublicationOutcome { Published, Existing, Stopping, CacheFull, QueueFull, Rejected }
 
         internal sealed class RuntimeAdmissionInput
@@ -594,7 +606,7 @@ namespace UnityCli
                         return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_REQUEST_REPLAY_MISMATCH", "requestId was reused with different immutable request bytes.", new[] { "Submit a new requestId for different Runtime Tool input." }));
                     return Publication(RuntimePublicationOutcome.Existing, existing, null);
                 }
-                if (absoluteDeadlineMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                if (absoluteDeadlineMs <= UtcNowMs())
                     return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_SCHEMA_INVALID", "Runtime request execution.absoluteDeadlineUtc must be in the future for a cache miss.", new[] { "Submit a new request with a future immutable deadline." }));
                 var pool = admissionPool;
                 UnityCliAdmissionPool.ConsumedIdentity admissionOwner;

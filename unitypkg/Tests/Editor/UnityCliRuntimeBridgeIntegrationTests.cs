@@ -19,6 +19,7 @@ namespace UnityCli.Tests
         private GameObject host;
         private UnityCliRuntimeBridge bridge;
         private UnityCliAdmissionPool pool;
+        private long utcNowMs;
 
         [SetUp]
         public void SetUp()
@@ -26,7 +27,9 @@ namespace UnityCli.Tests
             host = new GameObject("UnityCli.RuntimeBridge.Test");
             bridge = host.AddComponent<UnityCliRuntimeBridge>();
             bridge.enabled = false;
-            pool = new UnityCliAdmissionPool("runtime-test-instance", "runtime-test-session", 256, 64);
+            utcNowMs = 1000000L;
+            bridge.InjectUtcNowProviderForTests(() => utcNowMs);
+            pool = new UnityCliAdmissionPool("runtime-test-instance", "runtime-test-session", 256, 64, null, () => utcNowMs);
             SetField("admissionPool", pool);
             SetField("listenerId", ListenerId);
             SetField("sessionId", "runtime-test-session");
@@ -137,13 +140,12 @@ namespace UnityCli.Tests
         {
             var requestId = "runtime-expired-replay";
             var digest = DigestFor(requestId);
-            var originalDeadline = DateTimeOffset.UtcNow.AddMilliseconds(500).ToUnixTimeMilliseconds();
+            var originalDeadline = utcNowMs + 500L;
             var originalRequest = Request(requestId, "runtime-tool.list", originalDeadline);
             var seeded = bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput());
             Assert.That(seeded.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
-            var remaining = Math.Max(1L, originalDeadline - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 20L);
-            Thread.Sleep((int)remaining);
-            Assert.That(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Is.GreaterThanOrEqualTo(originalDeadline));
+            utcNowMs = originalDeadline + 1L;
+            Assert.That(utcNowMs, Is.GreaterThanOrEqualTo(originalDeadline));
 
             var exactTask = Task.Run(() => bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput()));
             var mismatchTask = Task.Run(() => bridge.PublishRuntimeRequest(originalRequest, originalDeadline, Digest('f'), new UnityCliRuntimeBridge.RuntimeAdmissionInput()));
@@ -154,7 +156,7 @@ namespace UnityCli.Tests
             Assert.That(mismatchTask.Result.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
             Assert.That(mismatchTask.Result.Error, Does.Contain("E_REQUEST_REPLAY_MISMATCH"));
 
-            var expired = DateTimeOffset.UtcNow.AddMinutes(-1).ToUnixTimeMilliseconds();
+            var expired = utcNowMs - 1L;
             var miss = bridge.PublishRuntimeRequest(Request("runtime-expired-miss", "runtime-tool.list", expired), expired, DigestFor("runtime-expired-miss"), new UnityCliRuntimeBridge.RuntimeAdmissionInput());
             Assert.That(miss.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
             Assert.That(miss.Error, Does.Contain("E_SCHEMA_INVALID"));

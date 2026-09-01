@@ -33,7 +33,6 @@ namespace UnityCli
         private const int PreferredPortRange = 4096;
         private const int PreferredPortRetryCount = 4;
         private const int DeterministicFallbackCount = 64;
-        private static readonly object QueueLock = new object();
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview" };
         private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.build-settings", "scene.create", "scene.load", "scene.save" };
         private static readonly string[] GameObjectCommands = { "go.find", "go.inspect", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
@@ -81,12 +80,9 @@ namespace UnityCli
         private static volatile bool cachedIsBuilding;
         private static volatile bool cachedIsPlayModeChanging;
         private static volatile bool playModeChanging = EditorApplication.isPlaying != EditorApplication.isPlayingOrWillChangePlaymode;
-        private static bool queuePublicationOpen;
-        internal static Action<string> QueueTestBoundary;
-
-        internal static void HitQueueTestBoundary(string name)
+        internal static void HitQueueTestBoundary(BridgeQueueState state, string name)
         {
-            var boundary = QueueTestBoundary;
+            var boundary = state == null ? null : state.Boundary;
             if (boundary != null) boundary(name);
         }
 
@@ -118,7 +114,7 @@ namespace UnityCli
             EditorApplication.quitting += UnregisterAndStop;
             EditorApplication.playModeStateChanged += OnBridgePlayModeStateChanged;
             domainReloading = false;
-            lock (QueueLock) queuePublicationOpen = false;
+            lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = false;
             ScheduleBridgeStartup();
         }
 
@@ -209,7 +205,9 @@ namespace UnityCli
                 port = StartHttpListener(listener);
                 started = true;
                 if (!RegisterInstance("transitioning")) throw new InvalidOperationException("Initial listener registry claim could not be published.");
-                lock (QueueLock) queuePublicationOpen = true;
+                ProductionQueueState.ListenerId = ListenerId;
+                ProductionQueueState.ListenerGeneration = Math.Max(1, CurrentListenerGeneration());
+                lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = true;
                 Task.Run(ListenLoop);
                 readyPublicationPending = true;
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
@@ -257,7 +255,7 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
-            lock (QueueLock) queuePublicationOpen = false;
+            lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = false;
             InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
@@ -358,7 +356,7 @@ namespace UnityCli
                 WriteLog("bridge_stop_failed " + exception.GetType().Name + ": " + exception.Message);
             }
             started = false;
-            lock (QueueLock) queuePublicationOpen = false;
+            lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = false;
             readyPublicationPending = false;
             CancelInstancePublicationRetry();
         }

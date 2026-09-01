@@ -13,6 +13,7 @@ namespace UnityCli.Tests
     public sealed class UnityCliBridgeAdmissionIntegrationTests
     {
         private UnityCliAdmissionPool pool;
+        private BridgeQueueState state;
         private string fingerprint;
 
         [SetUp]
@@ -20,13 +21,13 @@ namespace UnityCli.Tests
         {
             pool = new UnityCliAdmissionPool("test-instance", "test-session", 4, 1);
             fingerprint = new string('a', 64);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            state = UnityCliBridge.CreateQueueStateForTests(pool);
         }
 
         [TearDown]
         public void TearDown()
         {
-            UnityCliBridge.EndQueueTestScope();
+            state.AssertEmptyForTests();
         }
 
         [Test]
@@ -42,7 +43,7 @@ namespace UnityCli.Tests
             Assert.That(firstCreated, Is.True);
             var entered = new ManualResetEventSlim(false);
             var release = new ManualResetEventSlim(false);
-            UnityCliBridge.QueueTestBoundary = name =>
+            state.Boundary = name =>
             {
                 if (name != "before-existing-lookup") return;
                 entered.Set();
@@ -80,7 +81,7 @@ namespace UnityCli.Tests
             var first = Enqueue(request, raw, grant.Token, deadline, out ignoredCreated);
             var entered = new ManualResetEventSlim(false);
             var release = new ManualResetEventSlim(false);
-            UnityCliBridge.QueueTestBoundary = name =>
+            state.Boundary = name =>
             {
                 if (name != "before-completion-memory") return;
                 entered.Set();
@@ -140,11 +141,11 @@ namespace UnityCli.Tests
             var grant = pool.Acquire(request.RequestId, fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
             var persistOutside = false;
             var logOutside = false;
-            UnityCliBridge.QueueTestBoundary = name =>
+            state.Boundary = name =>
             {
                 if (name == "before-queue-publication") throw new InvalidOperationException("injected publication fault");
-                if (name == "before-admission-compensation-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests;
-                if (name == "before-admission-compensation-log") logOutside = !UnityCliBridge.QueueLockHeldForTests;
+                if (name == "before-admission-compensation-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests(state);
+                if (name == "before-admission-compensation-log") logOutside = !UnityCliBridge.QueueLockHeldForTests(state);
             };
 
             Assert.Throws<InvalidOperationException>(() => { bool created; Enqueue(request, raw, grant.Token, deadline, out created); });
@@ -152,7 +153,7 @@ namespace UnityCli.Tests
             Assert.That(persistOutside, Is.True);
             Assert.That(logOutside, Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
-            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
         }
 
         [Test]
@@ -167,15 +168,15 @@ namespace UnityCli.Tests
             var faultObservedInside = false;
             var persistOutside = false;
             var logOutside = false;
-            UnityCliBridge.QueueTestBoundary = name =>
+            state.Boundary = name =>
             {
                 if (name == "before-completion-memory")
                 {
-                    faultObservedInside = UnityCliBridge.QueueLockHeldForTests;
+                    faultObservedInside = UnityCliBridge.QueueLockHeldForTests(state);
                     throw new InvalidOperationException("injected completion boundary fault");
                 }
-                if (name == "before-admission-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests;
-                if (name == "before-queue-boundary-fault-log") logOutside = !UnityCliBridge.QueueLockHeldForTests;
+                if (name == "before-admission-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests(state);
+                if (name == "before-queue-boundary-fault-log") logOutside = !UnityCliBridge.QueueLockHeldForTests(state);
             };
 
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.True);
@@ -185,7 +186,7 @@ namespace UnityCli.Tests
             Assert.That(logOutside, Is.True);
             Assert.That(item.Completed.IsSet, Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
-            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
         }
 
         [Test]
@@ -263,7 +264,7 @@ namespace UnityCli.Tests
                 IsBypass = false
             };
             int depth;
-            return UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, out created, out depth);
+            return UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, state, out created, out depth);
         }
 
         private static BridgeRequest ProjectToolRequest(string requestId, string toolName, Dictionary<string, object> input)

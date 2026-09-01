@@ -28,19 +28,35 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static readonly LinkedList<BridgeWorkItem> WorkQueue = new LinkedList<BridgeWorkItem>();
-        private static readonly HashSet<BridgeWorkItem> RunningWork = new HashSet<BridgeWorkItem>();
-        private static readonly HashSet<BridgeWorkItem> PendingSettlementWork = new HashSet<BridgeWorkItem>();
-        private static readonly Dictionary<string, BridgeWorkItem> ActiveRequestWork = new Dictionary<string, BridgeWorkItem>(StringComparer.Ordinal);
+        private static readonly BridgeQueueState ProductionQueueState = new BridgeQueueState();
 
-        /// <summary>关闭publication与摘除全部未启动WorkItem共享同一QueueLock线性化点。</summary>
+        internal static BridgeQueueState CreateQueueStateForTests(UnityCliAdmissionPool pool, Func<long> monotonicNowMs = null)
+        {
+            if (pool == null) throw new ArgumentNullException("pool");
+            var state = new BridgeQueueState(pool, monotonicNowMs)
+            {
+                QueuePublicationOpen = true,
+                ListenerId = ListenerId,
+                ListenerGeneration = Math.Max(1, CurrentListenerGeneration()),
+                PersistPoolState = () => true,
+                ClearOwnerMarkers = identity => true
+            };
+            var intents = new HashSet<string>(StringComparer.Ordinal);
+            state.PersistCompletionIntent = identity => intents.Add(CompletionIntentKey(identity));
+            state.HasCompletionIntent = identity => intents.Contains(CompletionIntentKey(identity));
+            state.ClearCompletionIntent = identity => intents.Remove(CompletionIntentKey(identity));
+            return state;
+        }
+
+        /// <summary>关闭publication与摘除全部未启动WorkItem共享同一状态锁线性化点。</summary>
         private static List<BridgeWorkItem> CloseQueuePublicationAndTakeQueuedWork()
         {
-            lock (QueueLock)
+            var state = ProductionQueueState;
+            lock (state.QueueLock)
             {
-                queuePublicationOpen = false;
-                var pending = new List<BridgeWorkItem>(WorkQueue);
-                WorkQueue.Clear();
+                state.QueuePublicationOpen = false;
+                var pending = new List<BridgeWorkItem>(state.WorkQueue);
+                state.WorkQueue.Clear();
                 return pending;
             }
         }
@@ -68,6 +84,10 @@ namespace UnityCli
 
         private static void ProcessQueuedWork()
         {
+            var state = ProductionQueueState;
+            state.ListenerId = ListenerId;
+            state.ListenerGeneration = Math.Max(1, CurrentListenerGeneration());
+            state.AdmissionPool = admissionPool;
             // pulse只证明EditorApplication.update最近推进；具体请求仍由TryStart证明开始。
             Volatile.Write(ref mainThreadPulseTimestamp, System.Diagnostics.Stopwatch.GetTimestamp());
             Interlocked.Increment(ref mainThreadPulseSequence);
@@ -103,11 +123,11 @@ namespace UnityCli
             var durableMutationBarrier = CurrentDurableMutationBarrier();
             List<BridgeWorkItem> selected;
             var queueDepth = 0;
-            lock (QueueLock)
+            lock (state.QueueLock)
             {
-                if (WorkQueue.Count == 0) return;
-                var snapshotItems = new List<BridgeWorkItem>(Math.Min(WorkQueue.Count, UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
-                var cursor = WorkQueue.First;
+                if (state.WorkQueue.Count == 0) return;
+                var snapshotItems = new List<BridgeWorkItem>(Math.Min(state.WorkQueue.Count, UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+                var cursor = state.WorkQueue.First;
                 while (cursor != null && snapshotItems.Count < UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
                 {
                     snapshotItems.Add(cursor.Value);
@@ -115,19 +135,19 @@ namespace UnityCli
                 }
                 var selection = UnityCliBridgeQueuePolicy.SelectStarts(
                     snapshotItems.Select(item => item.PolicyNode).ToArray(),
-                    RunningWork.Count(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
-                    RunningWork.Any(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Mutation),
+                    state.RunningWork.Count(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
+                    state.RunningWork.Any(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Mutation),
                     durableMutationBarrier);
                 selected = new List<BridgeWorkItem>(selection.Starts.Count);
                 foreach (var decision in selection.Starts)
                 {
                     var item = snapshotItems[decision.QueueIndex];
-                    if (item.QueueNode == null || item.QueueNode.List != WorkQueue) continue;
-                    WorkQueue.Remove(item.QueueNode);
+                    if (item.QueueNode == null || item.QueueNode.List != state.WorkQueue) continue;
+                    state.WorkQueue.Remove(item.QueueNode);
                     item.QueueNode = null;
                     selected.Add(item);
                 }
-                queueDepth = WorkQueue.Count;
+                queueDepth = state.WorkQueue.Count;
             }
 
             foreach (var item in selected)
@@ -138,13 +158,13 @@ namespace UnityCli
                     WriteLog("bridge_request_skipped_expired requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
                     item.Response = item.Response ?? UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                         item.Request.RequestId,
-                        "E_BRIDGE_REQUEST_EXPIRED",
-                        "Bridge request expired before Unity started executing it.",
+                        "E_EXECUTION_TIMEOUT",
+                        "Bridge request deadline elapsed before Unity started executing it.",
                         nextActions: new[] { "Retry after Unity is no longer busy." }));
                     CompleteWorkItem(item);
                     continue;
                 }
-                lock (QueueLock) RunningWork.Add(item);
+                lock (state.QueueLock) state.RunningWork.Add(item);
                 _ = ExecuteWorkItemAsync(item);
             }
         }
@@ -188,45 +208,48 @@ namespace UnityCli
         {
             var reservation = PrepareAdmissionForQueue(httpRequest, request, rawRequestBytes);
             if (reservation.HasAdmissionHeaders) EnsureAdmissionPool();
-            return EnqueuePrepared(request, rawRequestBytes, admissionListenerId, admissionGeneration, reservation, out created, out queueDepth);
+            ProductionQueueState.AdmissionPool = admissionPool;
+            return EnqueuePrepared(ProductionQueueState, request, rawRequestBytes, admissionListenerId, admissionGeneration, reservation, out created, out queueDepth);
         }
 
-        internal static BridgeWorkItem EnqueuePreparedForTests(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, AdmissionQueueReservation reservation, out bool created, out int queueDepth)
+        internal static BridgeWorkItem EnqueuePreparedForTests(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, AdmissionQueueReservation reservation, BridgeQueueState state, out bool created, out int queueDepth)
         {
-            return EnqueuePrepared(request, rawRequestBytes, ListenerId, CurrentListenerGeneration(), reservation, out created, out queueDepth);
+            if (state == null) throw new ArgumentNullException("state");
+            return EnqueuePrepared(state, request, rawRequestBytes, state.ListenerId ?? ListenerId, state.ListenerGeneration, reservation, out created, out queueDepth);
         }
 
-        private static BridgeWorkItem EnqueuePrepared(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string admissionListenerId, long admissionGeneration, AdmissionQueueReservation reservation, out bool created, out int queueDepth)
+        private static BridgeWorkItem EnqueuePrepared(BridgeQueueState state, UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string admissionListenerId, long admissionGeneration, AdmissionQueueReservation reservation, out bool created, out int queueDepth)
         {
             var digest = UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId);
             var workClass = QueueRequestWorkClass(request);
+            if (state == null) throw new ArgumentNullException("state");
             if (reservation == null) throw new ArgumentNullException("reservation");
             BridgeWorkItem item = null;
             try
             {
-                lock (QueueLock)
+                lock (state.QueueLock)
                 {
-                    if (!queuePublicationOpen) throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Bridge queue admission is closed for the current Unity lifecycle.", null, new[] { "Wait for Unity to finish reloading and retry." }, true, 1000);
-                    HitQueueTestBoundary("before-existing-lookup");
+                    if (!state.QueuePublicationOpen) throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Bridge queue admission is closed for the current Unity lifecycle.", null, new[] { "Wait for Unity to finish reloading and retry." }, true, 1000);
+                    HitQueueTestBoundary(state, "before-existing-lookup");
                     BridgeWorkItem existing;
-                    if (ActiveRequestWork.TryGetValue(request.RequestId, out existing))
+                    if (state.ActiveRequestWork.TryGetValue(request.RequestId, out existing))
                     {
                         if (!string.Equals(existing.RequestDigest, digest, StringComparison.Ordinal))
                             throw new BridgeCommandException("E_REQUEST_ID_REUSED", "requestId is already bound to different request bytes.", "Generate a new requestId before retrying this command.");
-                        AuthorizeAdmissionForQueue(reservation, request);
+                        AuthorizeAdmissionForQueue(state, reservation, request);
                         if (!SameAdmissionOwner(existing.AdmissionOwner, reservation.Owner))
                             throw new BridgeCommandException("E_ADMISSION_IDENTITY_MISMATCH", "requestId is already attached to another admission root.");
                         MarkAdmissionQueuePublished(reservation);
                         created = false;
-                        queueDepth = WorkQueue.Count;
+                        queueDepth = state.WorkQueue.Count;
                         return existing;
                     }
-                    AuthorizeAdmissionForQueue(reservation, request);
+                    AuthorizeAdmissionForQueue(state, reservation, request);
                     var bypass = reservation.IsBypass && reservation.Owner == null;
                     UnityCliBridgeQueuePolicy.BypassAdmissionDecision bypassDecision = null;
                     if (bypass)
                     {
-                        var identities = ActiveRequestWork.Values.Where(active => active.AdmissionBypass)
+                        var identities = state.ActiveRequestWork.Values.Where(active => active.AdmissionBypass)
                             .Select(active => new UnityCliBridgeQueuePolicy.BypassIdentity(active.Request.RequestId, active.RequestDigest)).ToArray();
                         bypassDecision = UnityCliBridgeQueuePolicy.DecideBypassAdmission(identities, new UnityCliBridgeQueuePolicy.BypassIdentity(request.RequestId, digest));
                         if (bypassDecision.Outcome == UnityCliBridgeQueuePolicy.BypassAdmissionOutcome.RejectCapacity)
@@ -237,16 +260,16 @@ namespace UnityCli
                             throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Admission-bypass attach target disappeared before publication.");
                     }
 
-                    item = new BridgeWorkItem(request, rawRequestBytes, digest, admissionListenerId, admissionGeneration, reservation.Owner, workClass, bypass);
-                    HitQueueTestBoundary("before-queue-publication");
+                    item = new BridgeWorkItem(state, request, rawRequestBytes, digest, admissionListenerId, admissionGeneration, reservation.Owner, workClass, bypass);
+                    HitQueueTestBoundary(state, "before-queue-publication");
                     UnityCliQueuePublication.Publish(
-                        () => ActiveRequestWork.Add(request.RequestId, item),
-                        () => item.QueueNode = WorkQueue.AddLast(item),
-                        () => { BridgeWorkItem current; if (ActiveRequestWork.TryGetValue(request.RequestId, out current) && object.ReferenceEquals(current, item)) ActiveRequestWork.Remove(request.RequestId); },
-                        () => { if (item.QueueNode != null && item.QueueNode.List == WorkQueue) { WorkQueue.Remove(item.QueueNode); item.QueueNode = null; } },
+                        () => state.ActiveRequestWork.Add(request.RequestId, item),
+                        () => item.QueueNode = state.WorkQueue.AddLast(item),
+                        () => { BridgeWorkItem current; if (state.ActiveRequestWork.TryGetValue(request.RequestId, out current) && object.ReferenceEquals(current, item)) state.ActiveRequestWork.Remove(request.RequestId); },
+                        () => { if (item.QueueNode != null && item.QueueNode.List == state.WorkQueue) { state.WorkQueue.Remove(item.QueueNode); item.QueueNode = null; } },
                         () => MarkAdmissionQueuePublished(reservation));
                     created = true;
-                    queueDepth = WorkQueue.Count;
+                    queueDepth = state.WorkQueue.Count;
                     return item;
                 }
             }
@@ -254,21 +277,21 @@ namespace UnityCli
             {
                 if (item != null && !reservation.QueuePublished) item.DisposeUnpublished();
                 var compensationRequired = reservation.NewlyConsumed && reservation.Owner != null && !reservation.QueuePublished;
-                var compensated = CompensateAdmissionBeforeQueuePublication(reservation);
+                var compensated = CompensateAdmissionBeforeQueuePublication(state, reservation);
                 if (!compensated)
                     throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission compensation could not prove exact pre-queue cleanup.");
                 if (compensationRequired)
                 {
                     try
                     {
-                        HitQueueTestBoundary("before-admission-compensation-persist");
-                        PersistAdmissionPoolState();
-                        HitQueueTestBoundary("before-admission-compensation-log");
-                        WriteLog("admission_prequeue_compensated requestId=" + reservation.Owner.RequestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                        HitQueueTestBoundary(state, "before-admission-compensation-persist");
+                        if (!PersistAdmissionPoolState(state)) throw new IOException("Admission pool compensation persistence was not confirmed.");
+                        HitQueueTestBoundary(state, "before-admission-compensation-log");
+                        WriteLog("admission_prequeue_compensated requestId=" + reservation.Owner.RequestId + " active=" + state.AdmissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
                     }
                     catch (Exception exception)
                     {
-                        var pool = admissionPool;
+                        var pool = state.AdmissionPool;
                         if (pool != null) pool.BlockRecovery();
                         WriteLog("admission_prequeue_compensation_failed requestId=" + reservation.Owner.RequestId + " " + exception.GetType().Name);
                         throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission compensation could not be durably recorded after queue publication failed.");
@@ -284,7 +307,7 @@ namespace UnityCli
             return SameAdmissionImmutableIdentity(left, right);
         }
 
-        /// <summary>durable transfer先在锁外准备；pool completion与map/running removal在同一QueueLock临界区收敛。</summary>
+        /// <summary>completion只作为production算法入口；WorkItem携带其所属state，测试不替换production state。</summary>
         internal static bool CompleteWorkItemForTests(BridgeWorkItem item, string response)
         {
             if (item == null) throw new ArgumentNullException("item");
@@ -292,109 +315,209 @@ namespace UnityCli
             return CompleteWorkItem(item);
         }
 
-        /// <summary>同session主循环只重试已执行完、但尚无durable transfer证据的WorkItem settlement。</summary>
+        /// <summary>按单调时钟和固定退避重试settlement；一个tick不超过准入容量。</summary>
         private static void RetryPendingWorkItemSettlements()
         {
+            RetryPendingWorkItemSettlements(ProductionQueueState);
+        }
+
+        internal static void RetryPendingWorkItemSettlementsForTests(BridgeQueueState state)
+        {
+            RetryPendingWorkItemSettlements(state);
+        }
+
+        private static void RetryPendingWorkItemSettlements(BridgeQueueState state)
+        {
+            if (state == null) return;
+            var now = state.NowMs();
+            var limit = UnityCliBridgeQueuePolicy.MaxStartsPerTick;
+            if (state.AdmissionPool != null)
+            {
+                var snapshot = state.AdmissionPool.Capture();
+                limit = Math.Max(1, Math.Min(limit, snapshot.ConfiguredMaxActive));
+            }
             BridgeWorkItem[] pending;
-            lock (QueueLock) pending = PendingSettlementWork.ToArray();
+            lock (state.QueueLock)
+            {
+                pending = state.PendingSettlementWork.Where(item => item.NextSettlementRetryAtMs <= now)
+                    .OrderBy(item => item.NextSettlementRetryAtMs).ThenBy(item => item.Request.RequestId, StringComparer.Ordinal)
+                    .Take(limit).ToArray();
+            }
             foreach (var item in pending) CompleteWorkItem(item);
         }
 
-        internal static void RetryPendingWorkItemSettlementsForTests() { RetryPendingWorkItemSettlements(); }
-        internal static int ActiveRequestWorkCountForTests { get { lock (QueueLock) return ActiveRequestWork.Count; } }
-        internal static bool QueueLockHeldForTests { get { return Monitor.IsEntered(QueueLock); } }
+        internal static int ActiveRequestWorkCountForTests(BridgeQueueState state)
+        {
+            if (state == null) throw new ArgumentNullException("state");
+            lock (state.QueueLock) return state.ActiveRequestWork.Count;
+        }
+
+        internal static bool QueueLockHeldForTests(BridgeQueueState state)
+        {
+            return state != null && Monitor.IsEntered(state.QueueLock);
+        }
 
         private static bool CompleteWorkItem(BridgeWorkItem item)
         {
-            if (item == null || !item.TryBeginCompletion()) return false;
+            if (item == null) return false;
+            var state = item.QueueState;
+            if (!item.TryBeginCompletion()) return false;
             var transfer = AdmissionTransferResult.TransferPending;
             Exception settlementException = null;
-            try { transfer = SettleAdmissionAfterWorkItem(item.AdmissionOwner, item.Request.Command, item.Response); }
+            Exception boundaryException = null;
+            try
+            {
+                if (item.CompletionIntentReady)
+                    transfer = AdmissionTransferResult.NotAccepted;
+                else
+                    transfer = SettleAdmissionAfterWorkItem(state, item.AdmissionOwner, item.Request.Command, item.Response);
+            }
             catch (Exception exception) { settlementException = exception; }
+
             if (transfer == AdmissionTransferResult.TransferPending)
             {
-                lock (QueueLock)
-                {
-                    RunningWork.Remove(item);
-                    PendingSettlementWork.Add(item);
-                }
-                item.AllowCompletionRetry();
-                WriteLog("admission_settlement_deferred requestId=" + item.Request.RequestId + " reason=" + (settlementException == null ? "recovery-marker-pending" : settlementException.GetType().Name));
+                HoldPendingSettlement(state, item, settlementException == null ? "recovery-marker-pending" : settlementException.GetType().Name);
                 return false;
             }
 
-            var completedAdmission = false;
-            Exception boundaryException = null;
-            Exception memoryException = null;
-            lock (QueueLock)
+            // 已被Coordinator/Continuation/Recovery/TerminalCleanup durable接管的owner不再由WorkItem完成。
+            if (item.AdmissionOwner == null || transfer == AdmissionTransferResult.Transferred)
             {
-                try
+                lock (state.QueueLock)
                 {
-                    try { HitQueueTestBoundary("before-completion-memory"); }
-                    catch (Exception exception) { boundaryException = exception; }
-                    var pool = admissionPool;
-                    UnityCliAdmissionPool.ConsumedIdentity current;
-                    if (pool != null && item.AdmissionOwner != null && pool.TryGetConsumedIdentity(item.AdmissionOwner.RequestId, out current))
-                    {
-                        var frozen = ToAdmissionOwner(current, item.AdmissionOwner.RequestDigest);
-                        var canComplete = frozen.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup
-                            || transfer == AdmissionTransferResult.NotAccepted && frozen.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.WorkItem;
-                        if (canComplete && SameAdmissionOwner(frozen, item.AdmissionOwner))
-                            completedAdmission = pool.CompleteTrusted(ToPoolIdentity(frozen)) == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted;
-                    }
+                    state.RunningWork.Remove(item);
+                    state.PendingSettlementWork.Remove(item);
+                    RemoveActiveWorkItem(state, item);
                 }
-                catch (Exception exception)
-                {
-                    memoryException = exception;
-                    var pool = admissionPool;
-                    if (pool != null) pool.BlockRecovery();
-                }
-
-                RunningWork.Remove(item);
-                if (memoryException == null)
-                {
-                    PendingSettlementWork.Remove(item);
-                    BridgeWorkItem currentItem;
-                    if (ActiveRequestWork.TryGetValue(item.Request.RequestId, out currentItem) && object.ReferenceEquals(currentItem, item))
-                        ActiveRequestWork.Remove(item.Request.RequestId);
-                }
-                else PendingSettlementWork.Add(item);
+                CompleteAndLogWorkItem(item);
+                return true;
             }
 
-            if (boundaryException != null)
+            // 仍由WorkItem负责时，先在QueueLock外落completion intent，再锁内删除pool内存。
+            UnityCliAdmissionPool.ConsumedIdentity current;
+            AdmissionOwnerIdentity frozen;
+            try
             {
-                try { HitQueueTestBoundary("before-queue-boundary-fault-log"); } catch { }
+                if (item.CompletionIntentReady) frozen = item.AdmissionOwner;
+                else
+                {
+                    frozen = CaptureAdmissionOwner(state, item.AdmissionOwner.RequestId, item.AdmissionOwner.RequestDigest);
+                    if (!SameAdmissionOwner(frozen, item.AdmissionOwner)
+                        || frozen.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.WorkItem)
+                    {
+                        HoldPendingSettlement(state, item, "completion-owner-changed");
+                        return false;
+                    }
+                    if (!PersistAdmissionCompletionIntent(state, frozen, item.Request.Command))
+                    {
+                        HoldPendingSettlement(state, item, "completion-intent-pending");
+                        return false;
+                    }
+                    item.CompletionIntentReady = true;
+                }
+            }
+            catch (Exception exception)
+            {
+                HoldPendingSettlement(state, item, exception.GetType().Name);
+                return false;
+            }
+
+            UnityCliAdmissionPool.CompletionOutcome completionOutcome;
+            try
+            {
+                lock (state.QueueLock)
+                {
+                    try { HitQueueTestBoundary(state, "before-completion-memory"); }
+                    catch (Exception exception) { boundaryException = exception; }
+                    var pool = state.AdmissionPool;
+                    if (pool == null || !pool.TryGetConsumedIdentity(item.AdmissionOwner.RequestId, out current))
+                        completionOutcome = HasAdmissionCompletionIntent(state, item.AdmissionOwner) ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                    else
+                    {
+                        frozen = ToAdmissionOwner(current, item.AdmissionOwner.RequestDigest);
+                        completionOutcome = SameAdmissionOwner(frozen, item.AdmissionOwner)
+                            ? pool.CompleteTrusted(ToPoolIdentity(frozen))
+                            : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                    }
+                    state.RunningWork.Remove(item);
+                    state.PendingSettlementWork.Add(item);
+                }
+            }
+            catch (Exception exception)
+            {
+                if (state.AdmissionPool != null) state.AdmissionPool.BlockRecovery();
+                HoldPendingSettlement(state, item, exception.GetType().Name);
+                return false;
+            }
+
+            if (boundaryException != null && !item.SettlementFailureLogged)
+            {
+                try { HitQueueTestBoundary(state, "before-queue-boundary-fault-log"); } catch { }
                 WriteLog("queue_test_boundary_failed " + boundaryException.GetType().Name);
             }
-            if (memoryException != null)
+            if (settlementException != null || completionOutcome == UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked)
             {
-                try { HitQueueTestBoundary("before-admission-memory-fault-log"); } catch { }
-                WriteLog("admission_memory_settlement_failed requestId=" + item.Request.RequestId + " " + memoryException.GetType().Name);
-                item.AllowCompletionRetry();
+                HoldPendingSettlement(state, item, settlementException == null ? "completion-identity-blocked" : settlementException.GetType().Name);
                 return false;
             }
-            if (completedAdmission)
+
+            try
             {
-                try
-                {
-                    HitQueueTestBoundary("before-admission-persist");
-                    PersistAdmissionPoolState();
-                    ClearExactAdmissionOwnerMarkers(item.AdmissionOwner);
-                }
-                catch (Exception exception) { WriteLog("admission_settlement_failed requestId=" + item.Request.RequestId + " " + exception.GetType().Name); }
+                HitQueueTestBoundary(state, "before-admission-persist");
+                if (!state.PersistPool()) throw new IOException("Admission pool persistence was not confirmed.");
+                if (!state.ClearMarkers(item.AdmissionOwner)) throw new IOException("Admission owner marker cleanup was not confirmed.");
+                if (!ClearAdmissionCompletionIntent(state, item.AdmissionOwner)) throw new IOException("Admission completion intent cleanup was not confirmed.");
             }
-            if (settlementException != null)
-                WriteLog("admission_settlement_failed requestId=" + item.Request.RequestId + " " + settlementException.GetType().Name);
+            catch (Exception exception)
+            {
+                HoldPendingSettlement(state, item, exception.GetType().Name);
+                return false;
+            }
+
+            lock (state.QueueLock)
+            {
+                state.PendingSettlementWork.Remove(item);
+                RemoveActiveWorkItem(state, item);
+            }
+            CompleteAndLogWorkItem(item);
+            return true;
+        }
+
+        private static void HoldPendingSettlement(BridgeQueueState state, BridgeWorkItem item, string reason)
+        {
+            lock (state.QueueLock)
+            {
+                state.RunningWork.Remove(item);
+                state.PendingSettlementWork.Add(item);
+            }
+            item.ScheduleSettlementRetry(state.NowMs());
+            item.AllowCompletionRetry();
+            if (item.SettlementFailureLogged) return;
+            item.SettlementFailureLogged = true;
+            WriteLog("admission_settlement_deferred requestId=" + item.Request.RequestId + " reason=" + reason);
+        }
+
+        private static void RemoveActiveWorkItem(BridgeQueueState state, BridgeWorkItem item)
+        {
+            BridgeWorkItem current;
+            if (state.ActiveRequestWork.TryGetValue(item.Request.RequestId, out current) && object.ReferenceEquals(current, item))
+                state.ActiveRequestWork.Remove(item.Request.RequestId);
+        }
+
+        private static string CompletionIntentKey(AdmissionOwnerIdentity identity)
+        {
+            return identity == null ? string.Empty : identity.RequestId + "\0" + identity.RequestDigest + "\0" + (identity.TopRequestDigest ?? string.Empty);
+        }
+
+        private static void CompleteAndLogWorkItem(BridgeWorkItem item)
+        {
             item.Completed.Set();
             try
             {
                 UnityCliTransactionLog.Append(item.Request.RequestId, item.Request.Command, Encoding.UTF8.GetString(item.RawRequestBytes), item.Response ?? UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
-                    item.Request.RequestId,
-                    "E_BRIDGE_COMMAND_FAILED",
-                    "Bridge request completed without a response.")));
+                    item.Request.RequestId, "E_BRIDGE_COMMAND_FAILED", "Bridge request completed without a response.")));
             }
             catch (Exception exception) { WriteLog("transaction_log_append_failed requestId=" + item.Request.RequestId + " " + exception.GetType().Name); }
-            return true;
         }
 
         internal sealed class BridgeWorkItem
@@ -402,14 +525,14 @@ namespace UnityCli
             private readonly object StateLock = new object();
             private bool cancelled;
             private bool started;
-            private bool accepted;
-            private bool acceptanceCancelled;
             private bool completionStarted;
+            private int settlementRetryAttempt;
             private readonly UnityCliBridgeWorkItemState lifecycle = new UnityCliBridgeWorkItemState();
             private readonly CancellationTokenSource cancellation;
 
-            public BridgeWorkItem(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest, string admissionListenerId, long admissionGeneration, AdmissionOwnerIdentity admissionOwner, UnityCliBridgeQueuePolicy.WorkClass workClass, bool admissionBypass)
+            public BridgeWorkItem(BridgeQueueState queueState, UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest, string admissionListenerId, long admissionGeneration, AdmissionOwnerIdentity admissionOwner, UnityCliBridgeQueuePolicy.WorkClass workClass, bool admissionBypass)
             {
+                QueueState = queueState;
                 Request = request;
                 RawRequestBytes = rawRequestBytes;
                 RequestDigest = requestDigest;
@@ -422,6 +545,7 @@ namespace UnityCli
                 cancellation = CreateExecutionLifetime(request);
             }
 
+            public BridgeQueueState QueueState { get; private set; }
             public UnityCli.Protocol.BridgeRequest Request { get; private set; }
             public byte[] RawRequestBytes { get; private set; }
             public string RequestDigest { get; private set; }
@@ -442,10 +566,19 @@ namespace UnityCli
                 get { lock (StateLock) return response; }
                 set { lock (StateLock) response = value; }
             }
-            public bool TimedOut { get; private set; }
+            internal long NextSettlementRetryAtMs { get; private set; }
+            internal bool SettlementFailureLogged { get; set; }
+            internal bool CompletionIntentReady { get; set; }
 
             internal string RequestDigestValue { get { return RequestDigest; } }
             internal void SetResponseForTests(string response) { Response = response; }
+
+            internal void ScheduleSettlementRetry(long nowMs)
+            {
+                settlementRetryAttempt = Math.Min(settlementRetryAttempt + 1, 6);
+                var delay = Math.Min(5000L, 100L << (settlementRetryAttempt - 1));
+                NextSettlementRetryAtMs = checked(nowMs + delay);
+            }
 
             internal bool TryBeginCompletion()
             {
@@ -470,7 +603,7 @@ namespace UnityCli
                     int remainingMs = 0;
                     if (Request != null) Request.TryDeadlineRemainingMs(out remainingMs);
                     var outcome = lifecycle.TryStart(
-                        string.Equals(AdmissionListenerId, ListenerId, StringComparison.Ordinal) && AdmissionGeneration == CurrentListenerGeneration(),
+                        QueueState != null && string.Equals(AdmissionListenerId, QueueState.ListenerId, StringComparison.Ordinal) && AdmissionGeneration == QueueState.ListenerGeneration,
                         remainingMs);
                     if (outcome != UnityCliBridgeWorkItemState.StartOutcome.Started)
                     {
@@ -511,35 +644,10 @@ namespace UnityCli
                 }
             }
 
-            /// <summary>StateLock 使接受与 HTTP 超时取消使用同一内存裁决顺序。</summary>
+            /// <summary>StateLock使HTTP接受与主线程启动使用同一内存裁决顺序。</summary>
             public bool TryAccept()
             {
-                lock (StateLock)
-                {
-                    if (acceptanceCancelled || !lifecycle.TryAccept()) return false;
-                    accepted = true;
-                    return true;
-                }
-            }
-
-            /// <summary>HTTP timeout 仅能取消尚未被 coordinator 接受的 mutation。</summary>
-            public bool CancelBeforeAcceptance()
-            {
-                lock (StateLock)
-                {
-                    if (accepted || !lifecycle.CancelBeforeAcceptance()) return false;
-                    acceptanceCancelled = true;
-                    cancellation.Cancel();
-                    return true;
-                }
-            }
-
-            public void Cancel()
-            {
-                lock (StateLock)
-                {
-                    TimedOut = true;
-                }
+                lock (StateLock) return lifecycle.TryAccept();
             }
 
             public void DisposeUnpublished()

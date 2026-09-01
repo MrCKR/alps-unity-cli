@@ -54,8 +54,9 @@ namespace UnityCli
             }
 
             /// <summary>reload后先持久化outcome-unknown标记，再释放已终止旧domain的exact lease。</summary>
-            internal static void Initialize() { RecoverTerminalCleanup(); reloadRecoveryPending = true; MarkReloadOutcomeUnknownAndRelease(); }
-            internal static void Tick() { RecoverTerminalCleanup(); if (reloadRecoveryPending) MarkReloadOutcomeUnknownAndRelease(); }
+            internal static void Initialize() { RecoverTerminalCleanup(ProductionQueueState); reloadRecoveryPending = true; MarkReloadOutcomeUnknownAndRelease(); }
+            internal static void Tick() { Tick(ProductionQueueState); }
+            internal static void Tick(BridgeQueueState state) { RecoverTerminalCleanup(state); if (object.ReferenceEquals(state, ProductionQueueState) && reloadRecoveryPending) MarkReloadOutcomeUnknownAndRelease(); }
 
             private static void MarkReloadOutcomeUnknownAndRelease()
             {
@@ -90,11 +91,17 @@ namespace UnityCli
 
             internal static Task<string> Execute(BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAccept, CancellationToken cancellationToken)
             {
-                return Execute(request, rawRequestBytes, tryAccept, cancellationToken, BuildExecutionDependencies.Production());
+                return Execute(ProductionQueueState, request, rawRequestBytes, tryAccept, cancellationToken, BuildExecutionDependencies.Production());
             }
 
-            internal static async Task<string> Execute(BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAccept, CancellationToken cancellationToken, BuildExecutionDependencies dependencies)
+            internal static Task<string> Execute(BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAccept, CancellationToken cancellationToken, BuildExecutionDependencies dependencies)
             {
+                return Execute(ProductionQueueState, request, rawRequestBytes, tryAccept, cancellationToken, dependencies);
+            }
+
+            internal static async Task<string> Execute(BridgeQueueState queueState, BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAccept, CancellationToken cancellationToken, BuildExecutionDependencies dependencies)
+            {
+                if (queueState == null) throw new ArgumentNullException("queueState");
                 if (dependencies == null || dependencies.PrepareTarget == null || dependencies.RunEffect == null) throw new ArgumentNullException("dependencies");
                 var args = request.DeserializeArgs<Args>();
                 if (request.Execution != null && request.Execution.DryRun == true)
@@ -121,12 +128,12 @@ namespace UnityCli
                     if (!active.TryGetValue("reloadOutcomeUnknown", out reloadUnknown) || !(reloadUnknown is bool) || !(bool)reloadUnknown)
                         return Busy(request.RequestId);
                     var unknown = ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "A previous build did not reach a terminal result before reload or timeout.", null, new[] { "Inspect build output and editor.state before retrying." });
-                    return FinishTerminal(request.RequestId, digest, unknown);
+                    return FinishTerminal(queueState, request.RequestId, digest, unknown);
                 }
                 bool newlyAcquiredLease;
                 if (!UnityCliSessionMutationLease.TryAcquire(request.RequestId, digest, out newlyAcquiredLease) || !newlyAcquiredLease) return Busy(request.RequestId);
                 AdmissionOwnerIdentity queueAdmissionOwner;
-                try { queueAdmissionOwner = CaptureAdmissionOwner(request.RequestId, digest); }
+                try { queueAdmissionOwner = CaptureAdmissionOwner(queueState, request.RequestId, digest); }
                 catch (Exception exception)
                 {
                     return FinishBuildPreRootFault(request.RequestId, digest, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build queue admission identity could not be frozen: " + exception.GetType().Name + "."));
@@ -148,36 +155,36 @@ namespace UnityCli
                     {
                         bool ownedBefore;
                         if (!UnityCliSessionMutationLease.TryIsOwnedBy(request.RequestId, digest, out ownedBefore) || !ownedBefore)
-                            return FinishTerminal(request.RequestId, digest, UnknownLeaseTerminal(request.RequestId));
+                            return FinishTerminal(queueState, request.RequestId, digest, UnknownLeaseTerminal(request.RequestId));
                         reports.Add(Build(item, dependencies));
                         bool ownedAfter;
                         if (!UnityCliSessionMutationLease.TryIsOwnedBy(request.RequestId, digest, out ownedAfter) || !ownedAfter)
-                            return FinishTerminal(request.RequestId, digest, UnknownLeaseTerminal(request.RequestId));
+                            return FinishTerminal(queueState, request.RequestId, digest, UnknownLeaseTerminal(request.RequestId));
                     }
                     var data = new Dictionary<string, object> { { "targets", reports } };
                     var failed = reports.Cast<Dictionary<string, object>>().Any(x => !string.Equals(x["result"] as string, "Succeeded", StringComparison.Ordinal));
                     object envelope = failed ? (object)ProtocolEnvelopeFactory.Error(request.RequestId, "E_BUILD_FAILED", "One or more BuildPlayer reports were not successful.", data, new[] { "Inspect the returned BuildReport summaries and Unity Console." }) : ProtocolEnvelopeFactory.Success(request.RequestId, data);
-                    return FinishTerminal(request.RequestId, digest, envelope, dependencies);
+                    return FinishTerminal(queueState, request.RequestId, digest, envelope, dependencies);
                 }
                 catch (OperationCanceledException)
                 {
                     var error = new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build did not begin before the request deadline.");
                     if (!activeRootCreated && ActiveRootDefinitelyAbsent(request.RequestId, digest))
                         return FinishBuildPreRootFault(request.RequestId, digest, error);
-                    return FinishBuildTerminalAfterRootFault(request.RequestId, digest, ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Build did not complete before the request deadline.", null, new[] { "Inspect editor.state and retry." }), queueAdmissionOwner, dependencies);
+                    return FinishBuildTerminalAfterRootFault(queueState, request.RequestId, digest, ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Build did not complete before the request deadline.", null, new[] { "Inspect editor.state and retry." }), queueAdmissionOwner, dependencies);
                 }
                 catch (BridgeCommandException ex)
                 {
                     if (!activeRootCreated && ActiveRootDefinitelyAbsent(request.RequestId, digest))
                         return FinishBuildPreRootFault(request.RequestId, digest, ex);
-                    return FinishBuildTerminalAfterRootFault(request.RequestId, digest, BridgeExceptionTerminal(request.RequestId, ex), queueAdmissionOwner, dependencies);
+                    return FinishBuildTerminalAfterRootFault(queueState, request.RequestId, digest, BridgeExceptionTerminal(request.RequestId, ex), queueAdmissionOwner, dependencies);
                 }
                 catch (Exception ex)
                 {
                     var error = new BridgeCommandException("E_BRIDGE_COMMAND_FAILED", ex.Message, "Check Unity Console and UnityCliBridge.log.");
                     if (!activeRootCreated && ActiveRootDefinitelyAbsent(request.RequestId, digest))
                         return FinishBuildPreRootFault(request.RequestId, digest, error);
-                    return FinishBuildTerminalAfterRootFault(request.RequestId, digest, SerializeException(request.RequestId, ex), queueAdmissionOwner, dependencies);
+                    return FinishBuildTerminalAfterRootFault(queueState, request.RequestId, digest, SerializeException(request.RequestId, ex), queueAdmissionOwner, dependencies);
                 }
                 finally
                 {
@@ -216,17 +223,17 @@ namespace UnityCli
                 return SerializeBridgeExceptionEnvelope(id, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build was rejected before its durable root, but exact lease cleanup remains pending."));
             }
 
-            private static string FinishBuildTerminalAfterRootFault(string id, string digest, object envelope, AdmissionOwnerIdentity queueAdmissionOwner, BuildExecutionDependencies dependencies)
+            private static string FinishBuildTerminalAfterRootFault(BridgeQueueState queueState, string id, string digest, object envelope, AdmissionOwnerIdentity queueAdmissionOwner, BuildExecutionDependencies dependencies)
             {
-                try { return FinishTerminal(id, digest, envelope, dependencies); }
+                try { return FinishTerminal(queueState, id, digest, envelope, dependencies); }
                 catch (Exception exception)
                 {
                     var unknown = ProtocolEnvelopeFactory.Error(id, "E_EXECUTION_TIMEOUT", "Build active state or terminal publication failed after effect; outcome is unknown.", null, new[] { "Inspect build artifacts and editor.state before submitting another mutation." });
                     try
                     {
-                        var owner = queueAdmissionOwner ?? CaptureAdmissionOwner(id, digest);
+                        var owner = queueAdmissionOwner ?? CaptureAdmissionOwner(queueState, id, digest);
                         owner.TopRequestDigest = digest;
-                        PersistAdmissionOwnerTransfer(Scope + "-admission-owner", new Dictionary<string, object>
+                        PersistAdmissionOwnerTransfer(queueState, Scope + "-admission-owner", new Dictionary<string, object>
                         {
                             { "requestId", id }, { "requestDigest", digest }, { "editorSessionId", EditorSessionId() }
                         }, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
@@ -268,10 +275,15 @@ namespace UnityCli
 
             private static string FinishTerminal(string id, string digest, object envelope)
             {
-                return FinishTerminal(id, digest, envelope, BuildExecutionDependencies.Production());
+                return FinishTerminal(ProductionQueueState, id, digest, envelope, BuildExecutionDependencies.Production());
             }
 
-            private static string FinishTerminal(string id, string digest, object envelope, BuildExecutionDependencies dependencies)
+            private static string FinishTerminal(BridgeQueueState queueState, string id, string digest, object envelope)
+            {
+                return FinishTerminal(queueState, id, digest, envelope, BuildExecutionDependencies.Production());
+            }
+
+            private static string FinishTerminal(BridgeQueueState queueState, string id, string digest, object envelope, BuildExecutionDependencies dependencies)
             {
                 bool isOwned;
                 if (!UnityCliSessionMutationLease.TryIsOwnedBy(id, digest, out isOwned) || !isOwned) envelope = UnknownLeaseTerminal(id);
@@ -288,16 +300,16 @@ namespace UnityCli
                 }
                 dependencies.Hit("before-build-terminal-store");
                 var first = UnityCliActiveOperation.StoreTerminalFirst(Scope, id, digest, envelope);
-                UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, id, digest);
+                UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, id, digest, queueState);
                 return Terminal(id, first);
             }
-            private static void RecoverTerminalCleanup()
+            private static void RecoverTerminalCleanup(BridgeQueueState state)
             {
                 try
                 {
-                    if (UnityCliActiveOperation.RetryExactTerminalCleanup(Scope)) return;
+                    if (UnityCliActiveOperation.RetryExactTerminalCleanup(Scope, state)) return;
                     var active = UnityCliActiveOperation.Load(Scope);
-                    if (active == null) { RecoverFromBuildAdmissionMarker(); return; }
+                    if (active == null) { RecoverFromBuildAdmissionMarker(state); return; }
                     var requestId = Value(active, "requestId");
                     var requestDigest = Value(active, "requestDigest");
                     object terminal = null;
@@ -316,13 +328,13 @@ namespace UnityCli
                         }
                         terminal = UnityCliActiveOperation.StoreTerminalFirst(Scope, requestId, requestDigest, pending);
                     }
-                    if (terminal != null) UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, requestDigest);
+                    if (terminal != null) UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, requestDigest, state);
                 }
-                catch { RecoverFromBuildAdmissionMarker(); }
+                catch { RecoverFromBuildAdmissionMarker(state); }
             }
 
             /// <summary>active root不可读或缺失时只从完整Recovery marker发布保守终态并继续exact cleanup。</summary>
-            private static void RecoverFromBuildAdmissionMarker()
+            private static void RecoverFromBuildAdmissionMarker(BridgeQueueState state)
             {
                 try
                 {
@@ -331,11 +343,11 @@ namespace UnityCli
                     var requestId = Value(marker, "requestId");
                     var requestDigest = Value(marker, "requestDigest");
                     if (!IsSafeId(requestId) || !IsSha256(requestDigest)) return;
-                    ReconcileAdmissionTransferForLiveMarker(Scope + "-admission-owner", marker, requestId, requestDigest);
+                    ReconcileAdmissionTransferForLiveMarker(state, Scope + "-admission-owner", marker, requestId, requestDigest);
                     object terminal;
                     if (!UnityCliActiveOperation.TryGetTerminal(Scope, requestId, requestDigest, out terminal))
                         terminal = UnityCliActiveOperation.StoreTerminalFirst(Scope, requestId, requestDigest, UnknownLeaseTerminal(requestId));
-                    if (terminal != null) UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, requestDigest);
+                    if (terminal != null) UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, requestDigest, state);
                 }
                 catch { }
             }

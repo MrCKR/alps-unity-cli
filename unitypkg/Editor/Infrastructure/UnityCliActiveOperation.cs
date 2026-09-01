@@ -55,6 +55,11 @@ namespace UnityCli
         /// <summary>terminal已durable后以三段式transfer取得TerminalCleanup owner，再清root与lease。</summary>
         internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest, bool completeAdmission = true, Action<string> cleanupBoundary = null)
         {
+            BeginExactTerminalCleanup(scope, requestId, requestDigest, null, completeAdmission, cleanupBoundary);
+        }
+
+        internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest, BridgeQueueState state, bool completeAdmission = true, Action<string> cleanupBoundary = null)
+        {
             ValidateTerminalIdentity(scope, requestId, requestDigest);
             var cleanupScope = scope + "-terminal-cleanup";
             var existing = Load(cleanupScope);
@@ -73,8 +78,9 @@ namespace UnityCli
                 };
                 if (completeAdmission)
                 {
-                    var owner = UnityCliBridge.CaptureAdmissionOwner(requestId, requestDigest);
-                    UnityCliBridge.PersistAdmissionOwnerTransfer(cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                    var owner = state == null ? UnityCliBridge.CaptureAdmissionOwner(requestId, requestDigest) : UnityCliBridge.CaptureAdmissionOwner(state, requestId, requestDigest);
+                    if (state == null) UnityCliBridge.PersistAdmissionOwnerTransfer(cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                    else UnityCliBridge.PersistAdmissionOwnerTransfer(state, cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
                 }
                 else Save(cleanupScope, existing);
             }
@@ -82,21 +88,29 @@ namespace UnityCli
             {
                 object current;
                 if (!existing.TryGetValue("completeAdmission", out current) || !(current is bool)) return;
-                var owner = UnityCliBridge.CaptureAdmissionOwner(requestId, requestDigest);
+                var owner = state == null ? UnityCliBridge.CaptureAdmissionOwner(requestId, requestDigest) : UnityCliBridge.CaptureAdmissionOwner(state, requestId, requestDigest);
                 existing["completeAdmission"] = true;
                 if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
-                    UnityCliBridge.PersistAdmissionOwnerTransfer(cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                {
+                    if (state == null) UnityCliBridge.PersistAdmissionOwnerTransfer(cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                    else UnityCliBridge.PersistAdmissionOwnerTransfer(state, cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                }
                 else
                 {
                     existing["admissionTransferCommitted"] = true;
                     Save(cleanupScope, existing);
                 }
             }
-            RetryExactTerminalCleanup(scope, cleanupBoundary);
+            RetryExactTerminalCleanup(scope, state, cleanupBoundary);
         }
 
         /// <summary>只有确认exact owner已不存在才删除cleanup marker；读取不确定时保持原状。</summary>
         internal static bool RetryExactTerminalCleanup(string scope, Action<string> cleanupBoundary = null)
+        {
+            return RetryExactTerminalCleanup(scope, null, cleanupBoundary);
+        }
+
+        internal static bool RetryExactTerminalCleanup(string scope, BridgeQueueState state, Action<string> cleanupBoundary = null)
         {
             var cleanupScope = scope + "-terminal-cleanup";
             var marker = Load(cleanupScope);
@@ -116,7 +130,7 @@ namespace UnityCli
             UnityCliBridge.AdmissionOwnerIdentity admissionOwner = null;
             if (completeAdmission)
             {
-                try { admissionOwner = UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(cleanupScope, marker, requestId, requestDigest); }
+                try { admissionOwner = state == null ? UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(cleanupScope, marker, requestId, requestDigest) : UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(state, cleanupScope, marker, requestId, requestDigest); }
                 catch { return true; }
                 if (admissionOwner == null) return false;
             }
@@ -128,7 +142,7 @@ namespace UnityCli
                 if (!UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out markerOwnsLease)) return true;
                 if (!markerOwnsLease)
                 {
-                    if (completeAdmission && !UnityCliBridge.CompleteAdmissionRoot(admissionOwner)) return true;
+                    if (completeAdmission && !(state == null ? UnityCliBridge.CompleteAdmissionRoot(admissionOwner) : UnityCliBridge.CompleteAdmissionRoot(state, admissionOwner))) return true;
                     ClearForTerminalCleanup(cleanupScope, cleanupBoundary);
                     return false;
                 }
@@ -144,7 +158,7 @@ namespace UnityCli
             UnityCliBridge.UnityCliSessionMutationLease.Release(requestId, requestDigest);
             bool isOwned;
             if (!UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned) || isOwned) return true;
-            if (completeAdmission && !UnityCliBridge.CompleteAdmissionRoot(admissionOwner)) return true;
+            if (completeAdmission && !(state == null ? UnityCliBridge.CompleteAdmissionRoot(admissionOwner) : UnityCliBridge.CompleteAdmissionRoot(state, admissionOwner))) return true;
             ClearForTerminalCleanup(cleanupScope, cleanupBoundary);
             return false;
         }

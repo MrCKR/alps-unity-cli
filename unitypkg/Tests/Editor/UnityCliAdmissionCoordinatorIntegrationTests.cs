@@ -25,6 +25,7 @@ namespace UnityCli.Tests
             "direct-mutation", "direct-mutation-terminal-cleanup", "direct-mutation-admission-owner"
         };
         private Dictionary<string, byte[]> fileSnapshots;
+        private BridgeQueueState queueState;
         private string identityPrefix;
         private string originalLeaseRequestId;
         private string originalLeaseRequestDigest;
@@ -51,7 +52,7 @@ namespace UnityCli.Tests
         public void TearDown()
         {
             var failures = new List<string>();
-            try { UnityCliBridge.EndQueueTestScope(); } catch (Exception exception) { failures.Add("queue scope: " + exception.Message); }
+            try { if (queueState != null) queueState.AssertEmptyForTests(); } catch (Exception exception) { failures.Add("local queue state: " + exception.Message); }
             UnityCliBridge.UnityCliPackageResolveCoordinator.PackageStartTestBoundary = originalPackageStartBoundary;
             UnityCliBridge.UnityCliPackageResolveCoordinator.PackageResolveEffectTestBoundary = originalPackageEffectBoundary;
             UnityCliBridge.UnityCliTestRunCoordinator.CancelFinalizerTestBoundary = originalCancelBoundary;
@@ -94,7 +95,7 @@ namespace UnityCli.Tests
             var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
             var deadline = Deadline(request);
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("build-artifact-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             Consume(pool, request.RequestId, digest, deadline);
             bool created;
             var item = Enqueue(request, raw, Fingerprint, deadline, pool, out created);
@@ -109,7 +110,7 @@ namespace UnityCli.Tests
                 }
             });
 
-            var response = UnityCliBridge.UnityCliLiveBuildCoordinator.Execute(request, raw, () => true, CancellationToken.None, dependencies).GetAwaiter().GetResult();
+            var response = UnityCliBridge.UnityCliLiveBuildCoordinator.Execute(queueState, request, raw, () => true, CancellationToken.None, dependencies).GetAwaiter().GetResult();
 
             Assert.That(response, Does.Contain("E_BUILD_ARTIFACT_MISSING"));
             Assert.That(response, Does.Contain("terminal"));
@@ -119,7 +120,7 @@ namespace UnityCli.Tests
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, response), Is.True);
             Assert.That(item.Completed.IsSet, Is.True);
-            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(queueState), Is.EqualTo(0));
             UnityCliBridge.UnityCliLiveBuildCoordinator.Tick();
             AssertBuildSettled(pool, request.RequestId, digest);
         }
@@ -133,7 +134,7 @@ namespace UnityCli.Tests
             var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
             var deadline = Deadline(request);
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("build-recovery-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             Consume(pool, request.RequestId, digest, deadline);
             bool created;
             var item = Enqueue(request, raw, Fingerprint, deadline, pool, out created);
@@ -145,7 +146,7 @@ namespace UnityCli.Tests
                 if (fault == "terminal-store" && name == "before-build-terminal-store") throw new IOException("injected terminal store fault");
             };
 
-            var response = UnityCliBridge.UnityCliLiveBuildCoordinator.Execute(request, raw, () => true, CancellationToken.None, dependencies).GetAwaiter().GetResult();
+            var response = UnityCliBridge.UnityCliLiveBuildCoordinator.Execute(queueState, request, raw, () => true, CancellationToken.None, dependencies).GetAwaiter().GetResult();
 
             Assert.That(response, Does.Contain("E_EXECUTION_TIMEOUT"));
             Assert.That(pool.Capture().Records.Any(record => record.RequestId == request.RequestId
@@ -153,7 +154,7 @@ namespace UnityCli.Tests
                     || record.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)), Is.True);
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, response), Is.True);
             Assert.That(item.Completed.IsSet, Is.True);
-            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(queueState), Is.EqualTo(0));
 
             UnityCliBridge.UnityCliLiveBuildCoordinator.Tick();
 
@@ -171,7 +172,7 @@ namespace UnityCli.Tests
             var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
             var deadline = Deadline(request);
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("direct-success-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             Consume(pool, request.RequestId, digest, deadline);
             bool created;
             var item = Enqueue(request, raw, Fingerprint, deadline, pool, out created);
@@ -188,13 +189,13 @@ namespace UnityCli.Tests
 
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, UnityCliSerializer.Serialize(success)), Is.False);
             Assert.That(item.Completed.IsSet, Is.False);
-            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(1));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(queueState), Is.EqualTo(1));
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
 
             UnityCliActiveOperation.Clear("direct-mutation-admission-owner");
-            UnityCliBridge.RetryPendingWorkItemSettlementsForTests();
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(queueState);
             Assert.That(item.Completed.IsSet, Is.True);
-            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(queueState), Is.EqualTo(0));
             Assert.That(pool.Capture().Records.Single().OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
 
             UnityCliBridge.CleanupPublishedDirectMutationForTests(request.RequestId, digest, scope =>
@@ -227,7 +228,7 @@ namespace UnityCli.Tests
             var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
             var deadline = Deadline(request);
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("package-test-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             Consume(pool, request.RequestId, digest, deadline);
             bool created;
             var item = Enqueue(request, raw, Fingerprint, deadline, pool, out created);
@@ -238,7 +239,7 @@ namespace UnityCli.Tests
                     throw new UnityCliBridge.BridgeCommandException("E_PACKAGE_ROOT_TEST_FAULT", "Injected root-created package fault.");
             };
 
-            var response = UnityCliBridge.UnityCliPackageResolveCoordinator.Execute(request, raw, () => true, CancellationToken.None).GetAwaiter().GetResult();
+            var response = UnityCliBridge.UnityCliPackageResolveCoordinator.Execute(queueState, request, raw, () => true, CancellationToken.None).GetAwaiter().GetResult();
 
             Assert.That(response, Does.Contain("E_PACKAGE_ROOT_TEST_FAULT"));
             Assert.That(response, Does.Contain("terminal"));
@@ -264,11 +265,11 @@ namespace UnityCli.Tests
             var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
             var deadline = Deadline(request);
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("package-effect-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             Consume(pool, request.RequestId, digest, deadline);
             bool created;
             var item = Enqueue(request, raw, Fingerprint, deadline, pool, out created);
-            var accepted = UnityCliBridge.UnityCliPackageResolveCoordinator.Execute(request, raw, () => true, CancellationToken.None).GetAwaiter().GetResult();
+            var accepted = UnityCliBridge.UnityCliPackageResolveCoordinator.Execute(queueState, request, raw, () => true, CancellationToken.None).GetAwaiter().GetResult();
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, accepted), Is.True);
             var coordinator = UnityCliBridge.CaptureAdmissionOwner(request.RequestId, digest);
             Assert.That(coordinator.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Coordinator));
@@ -293,10 +294,10 @@ namespace UnityCli.Tests
         public void CancelNotInvokedAndOutcomeUnknownUseOneExactFinalizer()
         {
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("cancel-test-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             var notInvoked = PrepareCancel(pool, Unique("cancel-parent-a"), new string('a', 64), Guid.NewGuid().ToString(), Unique("cancel-not-invoked"));
 
-            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(notInvoked.ParentId, notInvoked.ParentDigest, notInvoked.RunId, notInvoked.CancelId, notInvoked.CancelDigest, "not_invoked"), Is.True);
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(notInvoked.ParentId, notInvoked.ParentDigest, notInvoked.RunId, notInvoked.CancelId, notInvoked.CancelDigest, "not_invoked", queueState), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
             var saved = UnityCliActiveOperation.Load("test-run");
             var operation = (Dictionary<string, object>)saved["testOperation"];
@@ -305,7 +306,7 @@ namespace UnityCli.Tests
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
 
             var unknown = PrepareCancel(pool, Unique("cancel-parent-b"), new string('b', 64), Guid.NewGuid().ToString(), Unique("cancel-unknown"));
-            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(unknown.ParentId, unknown.ParentDigest, unknown.RunId, unknown.CancelId, unknown.CancelDigest, "outcome_unknown"), Is.True);
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(unknown.ParentId, unknown.ParentDigest, unknown.RunId, unknown.CancelId, unknown.CancelDigest, "outcome_unknown", queueState), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
             Assert.That(UnityCliActiveOperation.Exists("test-run"), Is.False);
         }
@@ -314,7 +315,7 @@ namespace UnityCli.Tests
         public void CancelReturnedTransfersToContinuationBeforeTerminalCompletion()
         {
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("cancel-returned-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             var deadline = DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds();
             var cancelId = Unique("cancel-returned");
             var request = Request(cancelId, "internal.test.run.cancel", new Dictionary<string, object>());
@@ -335,16 +336,16 @@ namespace UnityCli.Tests
             };
             bool created;
             int depth;
-            var item = UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, out created, out depth);
+            var item = UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, queueState, out created, out depth);
             var accepted = UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Success(fixture.CancelId, new Dictionary<string, object>
             {
                 { "terminal", false }, { "accepted", true }, { "rootRequestDigest", fixture.ParentDigest }
             }));
 
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, accepted), Is.True);
-            var continuation = UnityCliBridge.CaptureAdmissionOwner(fixture.CancelId, fixture.CancelDigest);
+            var continuation = UnityCliBridge.CaptureAdmissionOwner(queueState, fixture.CancelId, fixture.CancelDigest);
             Assert.That(continuation.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Continuation));
-            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(fixture.ParentId, fixture.ParentDigest, fixture.RunId, fixture.CancelId, fixture.CancelDigest, "cancelled"), Is.True);
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(fixture.ParentId, fixture.ParentDigest, fixture.RunId, fixture.CancelId, fixture.CancelDigest, "cancelled", queueState), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
             CompleteParent(fixture);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
@@ -354,19 +355,19 @@ namespace UnityCli.Tests
         public void CancelDispatchSaveFaultRetainsRecoveryUntilRetryConverges()
         {
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("cancel-save-fault-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             var fixture = PrepareCancel(pool, Unique("cancel-parent-save"), new string('c', 64), Guid.NewGuid().ToString(), Unique("cancel-save-fault"));
             UnityCliBridge.UnityCliTestRunCoordinator.CancelFinalizerTestBoundary = name =>
             {
                 if (name == "before-cancel-root-save") throw new InvalidOperationException("injected save fault");
             };
 
-            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(fixture.ParentId, fixture.ParentDigest, fixture.RunId, fixture.CancelId, fixture.CancelDigest, "outcome_unknown"), Is.False);
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(fixture.ParentId, fixture.ParentDigest, fixture.RunId, fixture.CancelId, fixture.CancelDigest, "outcome_unknown", queueState), Is.False);
             Assert.That(pool.Capture().Active, Is.EqualTo(2));
             Assert.That(pool.Capture().Records.Any(record => record.RequestId == fixture.CancelId && record.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Recovery), Is.True);
 
             UnityCliBridge.UnityCliTestRunCoordinator.CancelFinalizerTestBoundary = null;
-            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(fixture.ParentId, fixture.ParentDigest, fixture.RunId, fixture.CancelId, fixture.CancelDigest, "outcome_unknown"), Is.True);
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(fixture.ParentId, fixture.ParentDigest, fixture.RunId, fixture.CancelId, fixture.CancelDigest, "outcome_unknown", queueState), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
         }
 
@@ -380,7 +381,7 @@ namespace UnityCli.Tests
             var markerSession = Unique("marker-window-session");
             var original = new UnityCliAdmissionPool(InstanceId, markerSession, 4, 1);
             var restored = new UnityCliAdmissionPool(InstanceId, markerSession, 4, 1);
-            UnityCliBridge.BeginQueueTestScope(original);
+            queueState = UnityCliBridge.CreateQueueStateForTests(original);
             var owner = Consume(original, requestId, digest, DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds());
             if (leaseOwned) Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryAcquire(requestId, digest, out _), Is.True);
             if (rootExists) UnityCliActiveOperation.Save("build", Root(requestId, digest, "terminal_pending"));
@@ -388,11 +389,11 @@ namespace UnityCli.Tests
             {
                 { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "completeAdmission", true }
             };
-            UnityCliBridge.PersistAdmissionOwnerTransfer("build-terminal-cleanup", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
-            UnityCliBridge.EndQueueTestScope();
-            UnityCliBridge.BeginQueueTestScope(restored);
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "build-terminal-cleanup", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+            queueState.AssertEmptyForTests();
+            queueState = UnityCliBridge.CreateQueueStateForTests(restored);
 
-            Assert.That(UnityCliActiveOperation.RetryExactTerminalCleanup("build"), Is.False);
+            Assert.That(UnityCliActiveOperation.RetryExactTerminalCleanup("build", queueState), Is.False);
             Assert.That(restored.Capture().Active, Is.EqualTo(0));
             Assert.That(restored.Capture().RecoveryBlocked, Is.False);
             Assert.That(UnityCliActiveOperation.Exists("build-terminal-cleanup"), Is.False);
@@ -406,17 +407,17 @@ namespace UnityCli.Tests
             var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
             var deadline = DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds();
             var pool = new UnityCliAdmissionPool(InstanceId, Unique("marker-listener-session"), 4, 1);
-            UnityCliBridge.BeginQueueTestScope(pool);
+            queueState = UnityCliBridge.CreateQueueStateForTests(pool);
             var owner = Consume(pool, requestId, digest, deadline);
             var marker = new Dictionary<string, object>
             {
                 { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
             };
-            UnityCliBridge.PersistAdmissionOwnerTransfer("build-admission-owner", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator);
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "build-admission-owner", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator);
             Assert.That(pool.RecoverConsumed(requestId, Fingerprint, digest, "listener-after-reload", 2, deadline), Is.True);
             var loaded = UnityCliActiveOperation.Load("build-admission-owner");
 
-            var reconciled = UnityCliBridge.ReconcileAdmissionTransferForLiveMarker("build-admission-owner", loaded, requestId, digest);
+            var reconciled = UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(queueState, "build-admission-owner", loaded, requestId, digest);
 
             Assert.That(reconciled.ListenerId, Is.EqualTo("listener-after-reload"));
             Assert.That(reconciled.ListenerGeneration, Is.EqualTo(2));
@@ -434,26 +435,26 @@ namespace UnityCli.Tests
             var mismatchSession = Unique("marker-mismatch-session");
             var original = new UnityCliAdmissionPool(InstanceId, mismatchSession, 4, 1);
             var restored = new UnityCliAdmissionPool(InstanceId, mismatchSession, 4, 1);
-            UnityCliBridge.BeginQueueTestScope(original);
+            queueState = UnityCliBridge.CreateQueueStateForTests(original);
             var owner = Consume(original, requestId, digest, deadline);
             var marker = new Dictionary<string, object>
             {
                 { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "completeAdmission", true }
             };
-            UnityCliBridge.PersistAdmissionOwnerTransfer("build-terminal-cleanup", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
-            UnityCliBridge.EndQueueTestScope();
-            UnityCliBridge.BeginQueueTestScope(restored);
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "build-terminal-cleanup", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+            queueState.AssertEmptyForTests();
+            queueState = UnityCliBridge.CreateQueueStateForTests(restored);
             var otherFingerprint = new string('d', 64);
-            var grant = restored.Acquire(requestId, otherFingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
-            restored.AuthorizeAndCapture(requestId, otherFingerprint, digest, grant.Token, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests, deadline);
+            var grant = restored.Acquire(requestId, otherFingerprint, queueState.ListenerId, queueState.ListenerGeneration);
+            restored.AuthorizeAndCapture(requestId, otherFingerprint, digest, grant.Token, queueState.ListenerId, queueState.ListenerGeneration, deadline);
             var loaded = UnityCliActiveOperation.Load("build-terminal-cleanup");
 
-            Assert.Throws<UnityCliBridge.BridgeCommandException>(() => UnityCliBridge.ReconcileAdmissionTransferForLiveMarker("build-terminal-cleanup", loaded, requestId, digest));
+            Assert.Throws<UnityCliBridge.BridgeCommandException>(() => UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(queueState, "build-terminal-cleanup", loaded, requestId, digest));
             Assert.That(restored.Capture().RecoveryBlocked, Is.True);
             Assert.That(UnityCliActiveOperation.Exists("build-terminal-cleanup"), Is.True);
         }
 
-        private static CancelFixture PrepareCancel(UnityCliAdmissionPool pool, string parentId, string parentDigest, string runId, string cancelId, string frozenCancelDigest = null, long? frozenDeadline = null)
+        private CancelFixture PrepareCancel(UnityCliAdmissionPool pool, string parentId, string parentDigest, string runId, string cancelId, string frozenCancelDigest = null, long? frozenDeadline = null)
         {
             var deadline = frozenDeadline ?? DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds();
             var parentOwner = Consume(pool, parentId, parentDigest, deadline);
@@ -472,38 +473,38 @@ namespace UnityCli.Tests
                 { "requestId", parentId }, { "requestDigest", parentDigest }, { "editorSessionId", UnityCliBridge.EditorSessionId() },
                 { "absoluteDeadlineUtc", DateTimeOffset.FromUnixTimeMilliseconds(deadline).ToString("O") }, { "testOperation", testOperation }
             });
-            UnityCliBridge.PersistAdmissionOwnerTransfer("test-run-admission-owner", new Dictionary<string, object>
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "test-run-admission-owner", new Dictionary<string, object>
             {
                 { "requestId", parentId }, { "requestDigest", parentDigest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
             }, parentOwner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator);
             return new CancelFixture { ParentId = parentId, ParentDigest = parentDigest, RunId = runId, CancelId = cancelId, CancelDigest = cancelDigest, Deadline = deadline };
         }
 
-        private static void CompleteParent(CancelFixture fixture)
+        private void CompleteParent(CancelFixture fixture)
         {
-            var owner = UnityCliBridge.CaptureAdmissionOwner(fixture.ParentId, fixture.ParentDigest);
-            owner = UnityCliBridge.PersistAdmissionOwnerTransfer("test-run-terminal-cleanup", new Dictionary<string, object>
+            var owner = UnityCliBridge.CaptureAdmissionOwner(queueState, fixture.ParentId, fixture.ParentDigest);
+            owner = UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "test-run-terminal-cleanup", new Dictionary<string, object>
             {
                 { "requestId", fixture.ParentId }, { "requestDigest", fixture.ParentDigest },
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "completeAdmission", true }
             }, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
             UnityCliActiveOperation.Clear("test-run");
             UnityCliBridge.UnityCliSessionMutationLease.Release(fixture.ParentId, fixture.ParentDigest);
-            Assert.That(UnityCliBridge.CompleteAdmissionRoot(owner), Is.True);
+            Assert.That(UnityCliBridge.CompleteAdmissionRoot(queueState, owner), Is.True);
             UnityCliActiveOperation.Clear("test-run-terminal-cleanup");
             UnityCliActiveOperation.Clear("test-run-admission-owner");
         }
 
-        private static UnityCliBridge.AdmissionOwnerIdentity Consume(UnityCliAdmissionPool pool, string requestId, string digest, long deadline)
+        private UnityCliBridge.AdmissionOwnerIdentity Consume(UnityCliAdmissionPool pool, string requestId, string digest, long deadline)
         {
-            var grant = pool.Acquire(requestId, Fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
+            var grant = pool.Acquire(requestId, Fingerprint, queueState.ListenerId, queueState.ListenerGeneration);
             Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
-            var result = pool.AuthorizeAndCapture(requestId, Fingerprint, digest, grant.Token, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests, deadline);
+            var result = pool.AuthorizeAndCapture(requestId, Fingerprint, digest, grant.Token, queueState.ListenerId, queueState.ListenerGeneration, deadline);
             Assert.That(result.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
-            return UnityCliBridge.CaptureAdmissionOwner(requestId, digest);
+            return UnityCliBridge.CaptureAdmissionOwner(queueState, requestId, digest);
         }
 
-        private static UnityCliBridge.BridgeWorkItem Enqueue(BridgeRequest request, byte[] raw, string fingerprint, long deadline, UnityCliAdmissionPool pool, out bool created)
+        private UnityCliBridge.BridgeWorkItem Enqueue(BridgeRequest request, byte[] raw, string fingerprint, long deadline, UnityCliAdmissionPool pool, out bool created)
         {
             var record = pool.Capture().Records.First(value => value.RequestId == request.RequestId);
             var reservation = new UnityCliBridge.AdmissionQueueReservation
@@ -513,7 +514,7 @@ namespace UnityCli.Tests
                 HasAdmissionHeaders = true, IsBypass = false
             };
             int depth;
-            return UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, out created, out depth);
+            return UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, queueState, out created, out depth);
         }
 
         private static BridgeRequest Request(string requestId, string command, Dictionary<string, object> input)
