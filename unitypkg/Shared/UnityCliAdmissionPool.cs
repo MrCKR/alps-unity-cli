@@ -276,7 +276,12 @@ namespace UnityCli
                     || !IsLegalOwnerTransfer(identity.OwnerState, intendedOwner)) return false;
                 AdmissionRecord existing;
                 if (records.TryGetValue(identity.RequestId, out existing))
-                    return Matches(existing, identity) && existing.OwnerState == identity.OwnerState;
+                {
+                    var expectedIntendedOwner = transferCommitted ? identity.OwnerState : intendedOwner;
+                    return Matches(existing, identity)
+                        && existing.IntendedOwnerState == expectedIntendedOwner
+                        && existing.TransferCommitted == transferCommitted;
+                }
                 if (records.Count >= maxActive) { gateClosed = true; return false; }
                 records.Add(identity.RequestId, new AdmissionRecord
                 {
@@ -554,7 +559,16 @@ namespace UnityCli
         private bool ValidRestoredRecord(AdmissionRecord value) { return ValidConsumedRecord(value); }
         private static ConsumedIdentity Identity(AdmissionRecord value) { return new ConsumedIdentity { RequestId = value.RequestId, RootFingerprint = value.RootFingerprint, RequestDigest = value.RequestDigest, Token = value.Token, SessionId = value.SessionId, ListenerId = value.ListenerId, ListenerGeneration = value.ListenerGeneration, ExecutionDeadlineMs = value.ExecutionDeadlineMs, OwnerState = value.OwnerState }; }
         private static bool Matches(AdmissionRecord value, ConsumedIdentity identity) { return MatchesIdentityFields(value, identity) && value.OwnerState == identity.OwnerState; }
-        private static bool MatchesIdentityFields(AdmissionRecord value, ConsumedIdentity identity) { return value != null && identity != null && string.Equals(value.RequestId, identity.RequestId, StringComparison.Ordinal) && string.Equals(value.RootFingerprint, identity.RootFingerprint, StringComparison.Ordinal) && string.Equals(value.RequestDigest, identity.RequestDigest, StringComparison.Ordinal) && FixedEquals(value.Token, identity.Token) && string.Equals(value.SessionId, identity.SessionId, StringComparison.Ordinal); }
+        private static bool MatchesIdentityFields(AdmissionRecord value, ConsumedIdentity identity)
+        {
+            return value != null && identity != null
+                && string.Equals(value.RequestId, identity.RequestId, StringComparison.Ordinal)
+                && string.Equals(value.RootFingerprint, identity.RootFingerprint, StringComparison.Ordinal)
+                && string.Equals(value.RequestDigest, identity.RequestDigest, StringComparison.Ordinal)
+                && FixedEquals(value.Token, identity.Token)
+                && string.Equals(value.SessionId, identity.SessionId, StringComparison.Ordinal)
+                && value.ExecutionDeadlineMs == identity.ExecutionDeadlineMs;
+        }
         private static bool ValidListener(string listenerId, long generation) { return !string.IsNullOrWhiteSpace(listenerId) && listenerId.Length <= 200 && generation >= 1; }
 
         private static string NewToken()

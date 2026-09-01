@@ -133,6 +133,13 @@ namespace UnityCli
             }
         }
 
+        /// <summary>internal普通读取只允许不触发plan、cancel或writer控制的精确观察命令。</summary>
+        public static bool IsOrdinaryReadInternalCommand(string command)
+        {
+            return string.Equals(command, "internal.navmesh.bake.snapshot", StringComparison.Ordinal)
+                || string.Equals(command, "internal.occlusion.bake.snapshot", StringComparison.Ordinal);
+        }
+
         /// <summary>同requestId同digest只attach；新identity达到固定上限时拒绝。</summary>
         public static BypassAdmissionDecision DecideBypassAdmission(IReadOnlyList<BypassIdentity> activeAndQueued, BypassIdentity candidate)
         {

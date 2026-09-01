@@ -29,7 +29,7 @@ test("development Player runtime assembly stays UnityEditor-independent and test
     assert.doesNotMatch(text, /using UnityEditor|Newtonsoft\.|System\.Web\./);
   }
   assert.match(source.bridge, /Debug\.isDebugBuild/);
-  assert.match(source.bridge, /UNITY_STANDALONE_WIN/);
+  assert.match(source.bridge, /UNITY_STANDALONE_WIN && !UNITY_EDITOR/);
 });
 
 test("post-build injection writes only the fixed development Player sidecar", async () => {

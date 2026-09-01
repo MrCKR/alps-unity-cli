@@ -362,6 +362,39 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void ExactRootIdentityKeepsDeadlineWhileRecoveryRebindsListener()
+        {
+            var pool = Pool();
+            var owner = Consume(pool, 0);
+            var wrongDeadline = UnityCliAdmissionPool.CreateConsumedIdentity(owner.RequestId, owner.RootFingerprint, owner.RequestDigest, owner.Token, owner.SessionId, owner.OwnerState, owner.ListenerId, owner.ListenerGeneration, owner.ExecutionDeadlineMs + 1);
+
+            Assert.That(pool.RecoverConsumed(owner.RequestId, owner.RootFingerprint, owner.RequestDigest, "listener-after-reload", 2, owner.ExecutionDeadlineMs), Is.True);
+            Assert.That(pool.InspectExactIdentityFields(owner), Is.EqualTo(UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent));
+            Assert.That(pool.InspectExactIdentityFields(wrongDeadline), Is.EqualTo(UnityCliAdmissionPool.ExactIdentityOutcome.IdentityMismatchOrBlocked));
+            UnityCliAdmissionPool.ConsumedIdentity rebound;
+            Assert.That(pool.TryGetConsumedIdentity(owner.RequestId, out rebound), Is.True);
+            Assert.That(rebound.ListenerId, Is.EqualTo("listener-after-reload"));
+            Assert.That(rebound.ListenerGeneration, Is.EqualTo(2));
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void RestoreConsumedRequiresTheExactTransferSnapshot()
+        {
+            var source = Pool();
+            var owner = Consume(source, 0);
+            Assert.That(source.PrepareOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator), Is.True);
+            var pending = source.Capture().Records.Single();
+            var restored = Pool();
+
+            Assert.That(restored.RestoreConsumed(owner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, false), Is.True);
+            Assert.That(restored.RestoreConsumed(owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery, false), Is.False);
+            Assert.That(restored.RestoreConsumed(owner, UnityCliAdmissionPool.AdmissionOwnerState.WorkItem, true), Is.False);
+            Assert.That(pending.TransferCommitted, Is.False);
+            Assert.That(restored.Capture().Active, Is.EqualTo(1));
+        }
+
+        [Test]
         public void ConcurrentAcquireNeverExceedsConfiguredMaximum()
         {
             var pool = Pool();

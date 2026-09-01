@@ -84,8 +84,8 @@ namespace UnityCli
                     || Array.IndexOf(phases ?? new string[0], Text(root, "phase")) < 0)
                     throw new InvalidDataException("Active root common fields are invalid.");
             }
-            /// <summary>供带有私有控制面的操作注册 start/status 之外的命令。</summary>
-            protected virtual IEnumerable<(string name, bool destructive)> AdditionalCommands { get { yield break; } }
+            /// <summary>供带有私有控制面的操作注册 start/status 之外的命令与唯一queue分类。</summary>
+            protected virtual IEnumerable<(string name, bool destructive, UnityCliBridgeQueuePolicy.WorkClass queueClass)> AdditionalCommands { get { yield break; } }
             protected virtual object ExecuteAdditionalCommand(BridgeRequest request)
             {
                 throw new BridgeCommandException("E_REQUEST_NOT_FOUND", OperationDisplayName + " command was not found.");
@@ -157,10 +157,10 @@ namespace UnityCli
             }
             internal void Register(BridgeCommandRegistry registry)
             {
-                registry.Register<BridgeRequest>(StartCommand, "internal", true, CommandTimeoutMs, (r, c) => { throw new InvalidOperationException(OperationDisplayName + " is coordinator-owned."); });
-                registry.Register<BridgeRequest>(StatusCommand, "internal", false, CommandTimeoutMs, (r, c) => { throw new InvalidOperationException(OperationDisplayName + " is coordinator-owned."); });
+                registry.Register<BridgeRequest>(StartCommand, "internal", true, CommandTimeoutMs, (r, c) => { throw new InvalidOperationException(OperationDisplayName + " is coordinator-owned."); }, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+                registry.Register<BridgeRequest>(StatusCommand, "internal", false, CommandTimeoutMs, (r, c) => { throw new InvalidOperationException(OperationDisplayName + " is coordinator-owned."); }, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
                 foreach (var additional in AdditionalCommands)
-                    registry.Register<BridgeRequest>(additional.name, "internal", additional.destructive, CommandTimeoutMs, (r, c) => { throw new InvalidOperationException(OperationDisplayName + " is coordinator-owned."); });
+                    registry.Register<BridgeRequest>(additional.name, "internal", additional.destructive, CommandTimeoutMs, (r, c) => { throw new InvalidOperationException(OperationDisplayName + " is coordinator-owned."); }, additional.queueClass);
             }
 
             /// <summary>HTTP 接受后建立或续接唯一 journal；lease 成功后任意异常都必须释放它。</summary>

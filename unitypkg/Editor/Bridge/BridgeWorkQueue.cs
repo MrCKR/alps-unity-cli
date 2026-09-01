@@ -32,15 +32,21 @@ namespace UnityCli
         private static readonly HashSet<BridgeWorkItem> RunningWork = new HashSet<BridgeWorkItem>();
         private static readonly Dictionary<string, BridgeWorkItem> ActiveRequestWork = new Dictionary<string, BridgeWorkItem>(StringComparer.Ordinal);
 
-        private static void CancelQueuedWork()
+        /// <summary>关闭publication与摘除全部未启动WorkItem共享同一QueueLock线性化点。</summary>
+        private static List<BridgeWorkItem> CloseQueuePublicationAndTakeQueuedWork()
         {
-            List<BridgeWorkItem> pending;
             lock (QueueLock)
             {
-                pending = new List<BridgeWorkItem>(WorkQueue);
+                queuePublicationOpen = false;
+                var pending = new List<BridgeWorkItem>(WorkQueue);
                 WorkQueue.Clear();
+                return pending;
             }
-            foreach (var item in pending)
+        }
+
+        private static void CancelQueuedWork(IEnumerable<BridgeWorkItem> pending)
+        {
+            foreach (var item in pending ?? Array.Empty<BridgeWorkItem>())
             {
                 item.CancelBeforeStart();
                 item.Response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
@@ -52,6 +58,11 @@ namespace UnityCli
                     retryAfterMs: 1000));
                 CompleteWorkItem(item);
             }
+        }
+
+        internal static void SweepQueuedWorkForTests()
+        {
+            CancelQueuedWork(CloseQueuePublicationAndTakeQueuedWork());
         }
 
         private static void ProcessQueuedWork()
@@ -250,22 +261,20 @@ namespace UnityCli
         private static bool SameAdmissionOwner(AdmissionOwnerIdentity left, AdmissionOwnerIdentity right)
         {
             if (left == null || right == null) return left == null && right == null;
-            return string.Equals(left.RequestId, right.RequestId, StringComparison.Ordinal)
-                && string.Equals(left.RootFingerprint, right.RootFingerprint, StringComparison.Ordinal)
-                && string.Equals(left.Token, right.Token, StringComparison.Ordinal)
-                && string.Equals(left.SessionId, right.SessionId, StringComparison.Ordinal);
+            return SameAdmissionImmutableIdentity(left, right);
         }
 
         /// <summary>durable transfer先在锁外准备；pool completion与map/running removal在同一QueueLock临界区收敛。</summary>
-        internal static void CompleteWorkItemForTests(BridgeWorkItem item, string response)
+        internal static bool CompleteWorkItemForTests(BridgeWorkItem item, string response)
         {
             if (item == null) throw new ArgumentNullException("item");
             item.SetResponseForTests(response);
-            CompleteWorkItem(item);
+            return CompleteWorkItem(item);
         }
 
-        private static void CompleteWorkItem(BridgeWorkItem item)
+        private static bool CompleteWorkItem(BridgeWorkItem item)
         {
+            if (item == null || !item.TryBeginCompletion()) return false;
             var transfer = AdmissionTransferResult.TransferPending;
             var completedAdmission = false;
             var settlementException = UnityCliQueueSettlement.Complete(
@@ -276,23 +285,34 @@ namespace UnityCli
                     {
                         lock (QueueLock)
                         {
-                            try { HitQueueTestBoundary("before-completion-memory"); } catch (Exception exception) { WriteLog("queue_test_boundary_failed " + exception.GetType().Name); }
-                            var pool = admissionPool;
-                            UnityCliAdmissionPool.ConsumedIdentity current;
-                            if (pool != null && item.AdmissionOwner != null && transfer != AdmissionTransferResult.TransferPending
-                                && pool.TryGetConsumedIdentity(item.AdmissionOwner.RequestId, out current))
+                            try
                             {
-                                var frozen = ToAdmissionOwner(current, item.AdmissionOwner.RequestDigest);
-                                var canComplete = transfer == AdmissionTransferResult.NotAccepted
-                                    ? frozen.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.WorkItem
-                                    : frozen.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup;
-                                if (canComplete && SameAdmissionOwner(frozen, item.AdmissionOwner))
-                                    completedAdmission = pool.CompleteTrusted(ToPoolIdentity(frozen)) == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted;
+                                try { HitQueueTestBoundary("before-completion-memory"); } catch (Exception exception) { WriteLog("queue_test_boundary_failed " + exception.GetType().Name); }
+                                var pool = admissionPool;
+                                UnityCliAdmissionPool.ConsumedIdentity current;
+                                if (pool != null && item.AdmissionOwner != null && transfer != AdmissionTransferResult.TransferPending
+                                    && pool.TryGetConsumedIdentity(item.AdmissionOwner.RequestId, out current))
+                                {
+                                    var frozen = ToAdmissionOwner(current, item.AdmissionOwner.RequestDigest);
+                                    var canComplete = frozen.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup
+                                        || transfer == AdmissionTransferResult.NotAccepted && frozen.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.WorkItem;
+                                    if (canComplete && SameAdmissionOwner(frozen, item.AdmissionOwner))
+                                        completedAdmission = pool.CompleteTrusted(ToPoolIdentity(frozen)) == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted;
+                                }
                             }
-                            RunningWork.Remove(item);
-                            BridgeWorkItem currentItem;
-                            if (ActiveRequestWork.TryGetValue(item.Request.RequestId, out currentItem) && object.ReferenceEquals(currentItem, item))
-                                ActiveRequestWork.Remove(item.Request.RequestId);
+                            catch (Exception exception)
+                            {
+                                var pool = admissionPool;
+                                if (pool != null) pool.BlockRecovery();
+                                WriteLog("admission_memory_settlement_failed requestId=" + item.Request.RequestId + " " + exception.GetType().Name);
+                            }
+                            finally
+                            {
+                                RunningWork.Remove(item);
+                                BridgeWorkItem currentItem;
+                                if (ActiveRequestWork.TryGetValue(item.Request.RequestId, out currentItem) && object.ReferenceEquals(currentItem, item))
+                                    ActiveRequestWork.Remove(item.Request.RequestId);
+                            }
                         }
                         if (completedAdmission)
                         {
@@ -313,6 +333,7 @@ namespace UnityCli
                     "Bridge request completed without a response.")));
             }
             catch (Exception exception) { WriteLog("transaction_log_append_failed requestId=" + item.Request.RequestId + " " + exception.GetType().Name); }
+            return true;
         }
 
         internal sealed class BridgeWorkItem
@@ -322,6 +343,7 @@ namespace UnityCli
             private bool started;
             private bool accepted;
             private bool acceptanceCancelled;
+            private bool completionStarted;
             private readonly UnityCliBridgeWorkItemState lifecycle = new UnityCliBridgeWorkItemState();
             private readonly CancellationTokenSource cancellation;
 
@@ -363,6 +385,16 @@ namespace UnityCli
 
             internal string RequestDigestValue { get { return RequestDigest; } }
             internal void SetResponseForTests(string response) { Response = response; }
+
+            internal bool TryBeginCompletion()
+            {
+                lock (StateLock)
+                {
+                    if (completionStarted) return false;
+                    completionStarted = true;
+                    return true;
+                }
+            }
 
             public bool TryStart()
             {

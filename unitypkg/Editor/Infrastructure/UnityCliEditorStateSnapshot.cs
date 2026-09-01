@@ -52,7 +52,8 @@ namespace UnityCli
                         { "progress", SnapshotProgress() },
                         { "blockers", new List<object>() }
                     });
-                });
+                },
+                UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
         }
 
         private static bool IsEditorStateSnapshotCommand(string command)

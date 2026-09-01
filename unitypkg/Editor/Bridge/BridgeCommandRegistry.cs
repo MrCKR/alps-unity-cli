@@ -31,6 +31,10 @@ namespace UnityCli
                         : UnityCliBridgeQueuePolicy.WorkClass.Mutation;
                 if (registeredQueueClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus && !UnityCliBridgeQueuePolicy.IsSafeStatusCommand(command))
                     throw new InvalidOperationException("Only exact SafeStatus commands may use SafeStatus classification: " + command);
+                if (command.StartsWith("internal.", StringComparison.Ordinal)
+                    && registeredQueueClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead
+                    && !UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand(command))
+                    throw new InvalidOperationException("Only exact observation commands may use OrdinaryRead classification: " + command);
                 commands.Add(command, new BridgeCommandDefinition(
                     command,
                     domain,

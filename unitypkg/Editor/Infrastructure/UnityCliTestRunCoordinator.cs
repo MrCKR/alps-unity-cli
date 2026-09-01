@@ -40,6 +40,13 @@ namespace UnityCli
             private static string cancelTerminalRequestId;
             private static object cancelTerminalData;
             private static readonly Coordinator operation = new Coordinator();
+            internal static Action<string> CancelFinalizerTestBoundary;
+
+            private static void HitCancelFinalizerTestBoundary(string name)
+            {
+                var boundary = CancelFinalizerTestBoundary;
+                if (boundary != null) boundary(name);
+            }
 
             private sealed class Coordinator : UnityCliReloadOperation
             {
@@ -53,9 +60,14 @@ namespace UnityCli
                 protected override Dictionary<string, object> CreateRoot(BridgeRequest request, string digest, object args) { return null; }
                 protected override void OnTick(Dictionary<string, object> root) { }
                 protected override object BuildSuccessData(Dictionary<string, object> root) { return null; }
-                protected override IEnumerable<(string name, bool destructive)> AdditionalCommands
+                protected override IEnumerable<(string name, bool destructive, UnityCliBridgeQueuePolicy.WorkClass queueClass)> AdditionalCommands
                 {
-                    get { yield return (CancelPlanCommand, false); yield return (CancelCommand, true); yield return (CancelStatusCommand, false); }
+                    get
+                    {
+                        yield return (CancelPlanCommand, false, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+                        yield return (CancelCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+                        yield return (CancelStatusCommand, false, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
+                    }
                 }
                 internal void Initialize() { InitializeLegacy(); }
                 internal void Shutdown() { ShutdownLegacy(); }
@@ -75,13 +87,15 @@ namespace UnityCli
             internal static bool IsCommand(string command) { return operation.IsCommand(command); }
             internal static bool FinalizeCancelForTests(string rootRequestId, string rootRequestDigest, string runId, string cancelRequestId, string cancelRequestDigest, string effectState)
             {
+                var root = Load();
+                if (root == null || !Same(root.RequestId, rootRequestId) || !Same(root.RequestDigest, rootRequestDigest)) return false;
                 var owner = CaptureAdmissionOwner(cancelRequestId, cancelRequestDigest);
                 var dispatch = new CancelDispatchIdentity
                 {
                     RootRequestId = rootRequestId,
                     RootRequestDigest = rootRequestDigest,
-                    EditorSessionId = EditorSessionId(),
-                    AbsoluteDeadlineUtc = DateTimeOffset.UtcNow.AddMinutes(1),
+                    EditorSessionId = root.EditorSessionId,
+                    AbsoluteDeadlineUtc = root.AbsoluteDeadlineUtc,
                     RunId = runId,
                     CancelRequestId = cancelRequestId,
                     CancelRequestDigest = cancelRequestDigest,
@@ -214,7 +228,7 @@ namespace UnityCli
                     {
                         var dispatch = ReadCancelDispatch(root);
                         if (dispatch == null || !FinalizeCancelTerminal(dispatch, ProtocolEnvelopeFactory.Error(dispatch.CancelRequestId, "E_EXECUTION_TIMEOUT", "Test cancellation outcome is unknown after the Editor session changed.", null, new[] { "Inspect test.run before starting another run or cancellation." }), "outcome_unknown")) return;
-                        Fail(root, "E_EXECUTION_TIMEOUT", "Test cancellation outcome is unknown after the Editor session changed."); return;
+                        return;
                     }
                     Fail(root, "E_EDITOR_SESSION_REPLACED", "The selected Editor session changed before tests began."); return;
                 }
@@ -227,7 +241,7 @@ namespace UnityCli
                         if (root == null) return;
                         var dispatch = ReadCancelDispatch(root);
                         if (dispatch == null || !FinalizeCancelTerminal(dispatch, ProtocolEnvelopeFactory.Error(dispatch.CancelRequestId, "E_EXECUTION_TIMEOUT", "Test cancellation did not reach a proven terminal before the deadline; outcome is unknown.", null, new[] { "Inspect test.run before starting another run or cancellation." }), "outcome_unknown")) return;
-                        Fail(root, "E_EXECUTION_TIMEOUT", "Test cancellation did not reach a proven terminal before the deadline."); return;
+                        return;
                     }
                     RecoverAfterDeadline(root); return;
                 }
@@ -301,7 +315,7 @@ namespace UnityCli
                 }
                 catch
                 {
-                    FinalizeCancelTerminal(dispatch, ProtocolEnvelopeFactory.Error(dispatch.CancelRequestId, "E_EXECUTION_TIMEOUT", "Test cancellation dispatch authorization became uncertain before OnRunCancel; cancellation was not invoked.", null, new[] { "Inspect test.run before submitting another cancellation." }), "outcome_unknown");
+                    FinalizeCancelTerminal(dispatch, ProtocolEnvelopeFactory.Error(dispatch.CancelRequestId, "E_EXECUTION_TIMEOUT", "Test cancellation dispatch authorization became uncertain before OnRunCancel; cancellation was not invoked.", null, new[] { "Inspect test.run before submitting another cancellation." }), "not_invoked");
                     throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation authorization expired before its effect.", "Inspect test.run before submitting another cancellation.");
                 }
                 string reason;
@@ -386,24 +400,39 @@ namespace UnityCli
             /// <summary>校验dispatch后重读root仍与effect前冻结的完整身份和selector一致。</summary>
             private static bool MatchesCancelDispatch(Root root, CancelDispatchIdentity dispatch)
             {
+                return MatchesCancelIdentity(root, dispatch)
+                    && Same(Text(root.TestOperation, "cancelEffectState"), "dispatching");
+            }
+
+            private static bool MatchesCancelIdentity(Root root, CancelDispatchIdentity dispatch)
+            {
                 return root != null && Same(root.RequestId, dispatch.RootRequestId) && Same(root.RequestDigest, dispatch.RootRequestDigest)
                     && Same(root.EditorSessionId, dispatch.EditorSessionId) && root.AbsoluteDeadlineUtc == dispatch.AbsoluteDeadlineUtc
                     && Same(Text(root.TestOperation, "runId"), dispatch.RunId) && Same(Text(root.TestOperation, "cancelRunId"), dispatch.RunId)
                     && Same(Text(root.TestOperation, "cancelRequestId"), dispatch.CancelRequestId)
                     && Same(Text(root.TestOperation, "cancelRequestDigest"), dispatch.CancelRequestDigest)
-                    && Same(Text(root.TestOperation, "cancelRootRequestDigest"), dispatch.RootRequestDigest)
-                    && Same(Text(root.TestOperation, "cancelEffectState"), "dispatching");
+                    && Same(Text(root.TestOperation, "cancelRootRequestDigest"), dispatch.RootRequestDigest);
             }
 
-            /// <summary>取消所有终态共享first-terminal、root记录与exact owner cleanup；失败只保留可重试marker。</summary>
-            private static bool FinalizeCancelTerminal(CancelDispatchIdentity dispatch, object envelope, string effectState, UnityCliAdmissionPool.AdmissionOwnerState targetOwner = UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
+            /// <summary>所有取消终态先冻结first terminal；父root保存成功后才允许exact owner进入可完成状态。</summary>
+            private static bool FinalizeCancelTerminal(CancelDispatchIdentity dispatch, object envelope, string effectState)
             {
                 if (dispatch == null || dispatch.AdmissionOwner == null) return false;
-                try
+                object first;
+                try { first = UnityCliActiveOperation.StoreTerminalFirst(CancelTerminalScope, dispatch.CancelRequestId, dispatch.CancelRequestDigest, dispatch.RootRequestDigest, envelope); }
+                catch { RetainCancelAdmissionForRecovery(dispatch); return false; }
+                Root root;
+                try { root = Load(); }
+                catch { RetainCancelAdmissionForRecovery(dispatch); return false; }
+                var parentAlreadyFinalized = root == null && effectState == "outcome_unknown" && CancelParentTerminalExists(dispatch);
+                if (!parentAlreadyFinalized && !MatchesCancelIdentity(root, dispatch))
                 {
-                    var first = UnityCliActiveOperation.StoreTerminalFirst(CancelTerminalScope, dispatch.CancelRequestId, dispatch.CancelRequestDigest, dispatch.RootRequestDigest, envelope);
-                    var root = Load();
-                    if (MatchesCancelDispatch(root, dispatch))
+                    RetainCancelAdmissionForRecovery(dispatch);
+                    return false;
+                }
+                if (!parentAlreadyFinalized)
+                {
+                    try
                     {
                         root.TestOperation["cancelEffectState"] = effectState;
                         root.TestOperation["cancelNeedsContinuation"] = effectState != "not_invoked";
@@ -414,18 +443,66 @@ namespace UnityCli
                             foreach (var key in new[] { "cancelRequestId", "cancelRequestDigest", "cancelRootRequestDigest", "cancelRunId", "cancelNeedsContinuation", "admissionRootFingerprint", "admissionToken", "admissionSessionId", "admissionListenerId", "admissionListenerGeneration", "admissionExecutionDeadlineMs", "admissionRequestDigest", "admissionOwnerState", "admissionIntendedOwnerState", "admissionTransferCommitted" })
                                 root.TestOperation.Remove(key);
                         }
+                        HitCancelFinalizerTestBoundary("before-cancel-root-save");
                         Save(root);
+                        if (effectState == "outcome_unknown")
+                            Finish(root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_EXECUTION_TIMEOUT", "Test cancellation may have occurred but its exact effect could not be proven.", null, new[] { "Inspect the Unity Test Runner before submitting another mutation." }));
                     }
-                    if (effectState != "not_invoked")
+                    catch
                     {
-                        var owner = dispatch.AdmissionOwner;
-                        if (owner.OwnerState != targetOwner)
+                        if (effectState != "outcome_unknown" || !CancelParentTerminalExists(dispatch))
                         {
-                            var marker = new Dictionary<string, object> { { "requestId", owner.RequestId }, { "requestDigest", owner.RequestDigest }, { "editorSessionId", EditorSessionId() } };
-                            owner = PersistAdmissionOwnerTransfer(CancelTerminalScope + "-admission-owner", marker, owner, targetOwner);
+                            RetainCancelAdmissionForRecovery(dispatch);
+                            return false;
                         }
-                        CompleteAdmissionRoot(owner);
                     }
+                }
+                try
+                {
+                    var owner = CaptureAdmissionOwner(dispatch.CancelRequestId, dispatch.CancelRequestDigest);
+                    owner.TopRequestDigest = dispatch.RootRequestDigest;
+                    if (owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.WorkItem
+                        || owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Recovery)
+                    {
+                        var marker = new Dictionary<string, object>
+                        {
+                            { "requestId", owner.RequestId }, { "requestDigest", dispatch.RootRequestDigest }, { "editorSessionId", EditorSessionId() }
+                        };
+                        owner = PersistAdmissionOwnerTransfer(CancelTerminalScope + "-admission-owner", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                    }
+                    if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Continuation
+                        && owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup) return false;
+                    CompleteAdmissionRoot(owner);
+                    return true;
+                }
+                catch { return false; }
+            }
+
+            private static bool CancelParentTerminalExists(CancelDispatchIdentity dispatch)
+            {
+                try
+                {
+                    object terminal;
+                    return UnityCliActiveOperation.TryGetTerminal(Scope, dispatch.RootRequestId, dispatch.RootRequestDigest, out terminal);
+                }
+                catch { return false; }
+            }
+
+            /// <summary>root不可读或保存失败时只把WorkItem推进到Recovery，禁止effect-unknown请求被queue完成。</summary>
+            private static bool RetainCancelAdmissionForRecovery(CancelDispatchIdentity dispatch)
+            {
+                try
+                {
+                    var owner = CaptureAdmissionOwner(dispatch.CancelRequestId, dispatch.CancelRequestDigest);
+                    owner.TopRequestDigest = dispatch.RootRequestDigest;
+                    if (owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Recovery
+                        || owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Continuation) return true;
+                    if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.WorkItem) return false;
+                    var marker = new Dictionary<string, object>
+                    {
+                        { "requestId", owner.RequestId }, { "requestDigest", dispatch.RootRequestDigest }, { "editorSessionId", EditorSessionId() }
+                    };
+                    PersistAdmissionOwnerTransfer(CancelTerminalScope + "-admission-owner", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
                     return true;
                 }
                 catch { return false; }
@@ -451,13 +528,11 @@ namespace UnityCli
                 var data = CancelData(root, true, false, ids);
                 var dispatch = ReadCancelDispatch(root);
                 if (dispatch == null) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation terminal identity is incomplete; outcome is unknown.");
-                if (!FinalizeCancelTerminal(dispatch, ProtocolEnvelopeFactory.Success(dispatch.CancelRequestId, data), "cancelled", UnityCliAdmissionPool.AdmissionOwnerState.Continuation))
+                if (!FinalizeCancelTerminal(dispatch, ProtocolEnvelopeFactory.Success(dispatch.CancelRequestId, data), "cancelled"))
                     throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation continuation owner could not be finalized.");
-                var cancelOwner = CaptureAdmissionOwner(dispatch.CancelRequestId, dispatch.CancelRequestDigest);
-                if (cancelOwner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Continuation || !CompleteAdmissionRoot(cancelOwner))
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation continuation owner could not be completed.");
                 cancelTerminalRequestId = dispatch.CancelRequestId;
                 cancelTerminalData = data;
+                root = Required();
                 Finish(root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_TEST_RUN_CANCELLED", "The exact tracked Unity test run was cancelled.", data, new[] { "Inspect the test.cancel proof before starting another test run." }));
             }
 

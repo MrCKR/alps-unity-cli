@@ -618,10 +618,7 @@ namespace UnityCli
             {
                 if (request == null) return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
                 UnityCliBridgeQueuePolicy.WorkClass registered;
-                if (CommandRegistry.TryGetQueueClass(request.Command, out registered))
-                    return request.Execution != null && request.Execution.DryRun == true && registered == UnityCliBridgeQueuePolicy.WorkClass.Mutation
-                        ? UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead
-                        : registered;
+                if (CommandRegistry.TryGetQueueClass(request.Command, out registered)) return registered;
                 var contract = ResolveRequestCompletionContract(request);
                 if (contract == null)
                     return IsReadOnlyBridgeCommand(request.Command)

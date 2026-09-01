@@ -60,13 +60,13 @@ namespace UnityCli
                 protected override string OperationDisplayName { get { return "Occlusion bake"; } }
                 protected override int CommandTimeoutMs { get { return 600000; } }
                 protected override bool IncludeAcceptedInStatus { get { return true; } }
-                protected override IEnumerable<(string name, bool destructive)> AdditionalCommands
+                protected override IEnumerable<(string name, bool destructive, UnityCliBridgeQueuePolicy.WorkClass queueClass)> AdditionalCommands
                 {
                     get
                     {
-                        yield return (PlanCommand, false);
-                        yield return (SnapshotCommand, false);
-                        yield return (CancelCommand, true);
+                        yield return (PlanCommand, false, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+                        yield return (SnapshotCommand, false, UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
+                        yield return (CancelCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
                     }
                 }
 

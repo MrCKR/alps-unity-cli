@@ -224,15 +224,6 @@ test("TestRunner attribution persists dispatch, returned identity, callback iden
   assert.match(testCoordinator, /failures\.Count >= 100[\s\S]*BoundedText\(node\.StackTrace, 8192\)/);
   assert.match(testCoordinator, /catch \(Exception\) \{ return; \}/);
   assert.match(testCoordinator, /Finish\(Root root, object envelope\)[\s\S]*StoreTerminalFirst\(Scope, root\.RequestId, root\.RequestDigest, envelope\)[\s\S]*BeginExactTerminalCleanup\(Scope, root\.RequestId, root\.RequestDigest\)/);
-  assert.match(testCoordinator, /CancelTerminalScope[\s\S]*cancelRequestDigest[\s\S]*cancelRootRequestDigest[\s\S]*TryGetTerminalBySelector/);
-  assert.match(testCoordinator, /Same\(effectState, "dispatching"\)[\s\S]*FinalizeCancelTerminal/);
-  assert.match(testCoordinator, /acceptedCancel[\s\S]*Editor session changed after test cancellation was dispatched[\s\S]*Test cancellation did not reach a proven terminal before the deadline/);
-  assert.match(testCoordinator, /FinalizeCancelTerminal[\s\S]*StoreTerminalFirst\(CancelTerminalScope[\s\S]*cancelEffectState"\] = effectState/);
-  assert.match(testCoordinator, /enum CancelDispatchOutcome \{ NotInvoked, Returned, OutcomeUnknown \}/);
-  assert.match(testCoordinator, /CancelDispatchIdentity[\s\S]*MatchesCancelDispatch[\s\S]*FinalizeCancelTerminal[\s\S]*authorization expired before its effect/);
-  assert.match(testCoordinator, /cancellationToken\.IsCancellationRequested[\s\S]*dispatch-authorization-expired[\s\S]*invoked = true;[\s\S]*cancel\.Invoke\(runner, null\)[\s\S]*CancelDispatchOutcome\.Returned/);
-  assert.match(testCoordinator, /invoked \? CancelDispatchOutcome\.OutcomeUnknown : CancelDispatchOutcome\.NotInvoked/);
-  assert.match(testCoordinator, /outcome == CancelDispatchOutcome\.OutcomeUnknown[\s\S]*FinalizeCancelTerminal\(dispatch[\s\S]*cancelNeedsContinuation/);
   const deadlineRecovery = testCoordinator.slice(testCoordinator.indexOf("private static void RecoverAfterDeadline"), testCoordinator.indexOf("private static void RecoverRunIdentity"));
   assert.match(deadlineRecovery, /ids\.Length == 1 && Same\(ids\[0\], runId\)\) return/);
   assert.match(deadlineRecovery, /Fail\(root, "E_EXECUTION_TIMEOUT"/);

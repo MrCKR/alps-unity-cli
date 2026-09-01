@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "1dc579796f92655e727bc4409af186091a9ba460ac76477af260f2955d1ca29a",
+  "sourceHash": "cb6e9f7ab3b1e31406d101d9e13daf219dc4928e04158fb7627f9a6ad26abe78",
   "files": [
     {
       "path": "Editor/Bridge/BridgeCommandContext.cs",
@@ -16,13 +16,13 @@
     },
     {
       "path": "Editor/Bridge/BridgeCommandRegistry.cs",
-      "size": 8109,
-      "sha256": "45d25270d8f8c737f2c09e2218a0d6d57afa0144c05c44b5fb9c4de0a77ce277"
+      "size": 10771,
+      "sha256": "5f2bf936914bb014110771f179118350f687582147ad0d3b3c3684087d5d2970"
     },
     {
       "path": "Editor/Bridge/BridgeHttpServer.cs",
-      "size": 29319,
-      "sha256": "21ef760cfdf4b84659dc928e6f68a6e6c0b80f0c86a74906b1f871f303ea42ed"
+      "size": 28792,
+      "sha256": "b2a51730d694bf95177e69de236f64f68c1358e58801e42f534cd9decd73e17e"
     },
     {
       "path": "Editor/Bridge/BridgeResponse.cs",
@@ -31,8 +31,8 @@
     },
     {
       "path": "Editor/Bridge/BridgeWorkQueue.cs",
-      "size": 16538,
-      "sha256": "753c7447be6f624284487f52bd2f8d3d75766ef13306773409155a6d57ebbee9"
+      "size": 27077,
+      "sha256": "4d011283bcf0611042ae6acb55da562e82db8ecb13b14cb123f913ad3ceeafc2"
     },
     {
       "path": "Editor/BridgeStartupStateMachine.cs",
@@ -66,13 +66,13 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliActiveOperation.cs",
-      "size": 24634,
-      "sha256": "c6ab53ad062f50c2da0cdd55eb1efe3a848bff46836a71b7602ce8bf5dce5445"
+      "size": 25407,
+      "sha256": "95c6989347962ce42d4f863875dfade25309265f067e41af38fc5278cd383b67"
     },
     {
       "path": "Editor/Infrastructure/UnityCliAdmission.cs",
-      "size": 31496,
-      "sha256": "c367b955496c1d645033cbad08751e1e18fbdbeb9551768e3c3062f252dcbbf4"
+      "size": 74644,
+      "sha256": "1914db3d8439fa0b053cec6d1089303b3c4f8eed1c39d182e0561b061936df1c"
     },
     {
       "path": "Editor/Infrastructure/UnityCliArtifacts.cs",
@@ -111,13 +111,13 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliEditorStateSnapshot.cs",
-      "size": 4375,
-      "sha256": "dba7c4f303ec46c52341d0e61f0b3ca4a44b47e064f059425c698d5c73d66aae"
+      "size": 4439,
+      "sha256": "70cc6da34d68a4f0d608b2590198106cad0578b1947b0e9093e9dc3929c25eba"
     },
     {
       "path": "Editor/Infrastructure/UnityCliInstanceCleanup.cs",
-      "size": 15310,
-      "sha256": "6948825b1d20397bd16e6e0b4dae74d906fe3839e4642e0f5fc90a6aa630bfe2"
+      "size": 15372,
+      "sha256": "e7276cdb9a92604406c6204f142cefa29bcce0c50786418a9288e19bd43d3bf1"
     },
     {
       "path": "Editor/Infrastructure/UnityCliInstanceRegistry.cs",
@@ -136,8 +136,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliLiveBuildCoordinator.cs",
-      "size": 21950,
-      "sha256": "a48d3536f1e38af37085bb3886d0d9f58efacc3797c079b8e4b9672e9c38b01d"
+      "size": 26893,
+      "sha256": "9907359206ad075506e54669b3277269c0aca751b60682cb0ba10c828f99edc4"
     },
     {
       "path": "Editor/Infrastructure/UnityCliLiveRefreshCoordinator.cs",
@@ -151,8 +151,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliNavMeshBakeCoordinator.cs",
-      "size": 140768,
-      "sha256": "30fa31845681707179741aeeb1fe7b9e8681ba85afbba3d045b04e217551f000"
+      "size": 140958,
+      "sha256": "fce45f607d728a91983a99b84c43e56efce8f9efeabff9be2c54d9742e5baace"
     },
     {
       "path": "Editor/Infrastructure/UnityCliObjectPatch.cs",
@@ -171,13 +171,13 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliOcclusionBakeCoordinator.cs",
-      "size": 117081,
-      "sha256": "34c4fa742ceacbe2c348ed28895fcb9e1ce708308f8f6590090d6818429e9f32"
+      "size": 117271,
+      "sha256": "17da69be1a8e2956bb11b6e5ffe9478e81e373bf81e1dbb084fb27581b9b6c41"
     },
     {
       "path": "Editor/Infrastructure/UnityCliOperationCoordinator.cs",
-      "size": 54927,
-      "sha256": "896c902767605b3b90f02cf582f61e1fd202822986e1e600a33f96c566e861e4"
+      "size": 56283,
+      "sha256": "33830220480e0b00e12b3f0e3d6bc0b78dfe1ad5d3993b32fefdaf451d99e6df"
     },
     {
       "path": "Editor/Infrastructure/UnityCliPackageEmbedCoordinator.cs",
@@ -186,13 +186,13 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliPackageResolveCoordinator.cs",
-      "size": 32194,
-      "sha256": "530f33ea5065fea8e8ea1ba34d0456fad31462a92ac800c2585ec20d75c30327"
+      "size": 38897,
+      "sha256": "3dc2c7d6c5cb1ff2360f52647ab7065a527f0edadbb0fd2449bb010b9159fff2"
     },
     {
       "path": "Editor/Infrastructure/UnityCliPackageResolveState.cs",
-      "size": 48449,
-      "sha256": "0a06a4ae1f99d5ee23aa484333eeb29e3e455a815eaac47ecf3b3b31a93f37e3"
+      "size": 48546,
+      "sha256": "96a1ea2ef4d60757d42f10c464a781fce1752be1dee2698df16425a1098b2fd3"
     },
     {
       "path": "Editor/Infrastructure/UnityCliPipelineHandoff.cs",
@@ -216,8 +216,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliReloadOperation.cs",
-      "size": 45950,
-      "sha256": "e58f14fe0d66097d7ef2936025a1257044ac053f501e5c88a2a079ca6a345f5d"
+      "size": 46427,
+      "sha256": "62b77609d4a6bd6fad7bf13fa9cfaeb7e493362cd11361bf6e3b12270d61bc75"
     },
     {
       "path": "Editor/Infrastructure/UnityCliRequestDigest.cs",
@@ -261,8 +261,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliTestRunCoordinator.cs",
-      "size": 59487,
-      "sha256": "666040d0420cfd80401d89694951b332cc77e5face5c54abe6e1040d8cb041a3"
+      "size": 67497,
+      "sha256": "6a218d370cafb72f3578b372e36ca66168f1d92b165909141631f818863974fa"
     },
     {
       "path": "Editor/Infrastructure/UnityCliTransactionLog.cs",
@@ -313,6 +313,11 @@
       "path": "Editor/ProjectTools/UnityCliSchemaDeriver.cs",
       "size": 14507,
       "sha256": "c90d89c45479b44aeeb36a6b98e5842d69986520ec971b4e6b9e6c88e8252f8b"
+    },
+    {
+      "path": "Editor/Properties/AssemblyInfo.cs",
+      "size": 96,
+      "sha256": "8a7b5c2641b88032798edaf61abd1ca1e8323b61ace0b53a72882690f68a30cf"
     },
     {
       "path": "Editor/Protocol/ProtocolEnvelopeFactory.cs",
@@ -756,8 +761,8 @@
     },
     {
       "path": "Editor/Tools/editor/menu-items.cs",
-      "size": 2284,
-      "sha256": "668478cd7c5c87e6a41bd560099c53f99954125e5a941f047f271f3f7e568b13"
+      "size": 2283,
+      "sha256": "7d2aa70d83c0963bb6217594c055b28f0388e8afe87aa4573e7209949c804a77"
     },
     {
       "path": "Editor/Tools/editor/menu.cs",
@@ -791,8 +796,8 @@
     },
     {
       "path": "Editor/Tools/editor/selection.cs",
-      "size": 9008,
-      "sha256": "549a7d3fe1f6560f805885825a2d17d50b056d6e274417483b47df3ebfcdd133"
+      "size": 9007,
+      "sha256": "0160dd48101b11c71781ffdeb46dbd704871e2e86f26a7d1366418310953e8c8"
     },
     {
       "path": "Editor/Tools/editor/selection/set.cs",
@@ -816,8 +821,8 @@
     },
     {
       "path": "Editor/Tools/editor/windows.cs",
-      "size": 3393,
-      "sha256": "9f92485c284932e3889badea590eedc8a535ed0bfb0f39fae6e92c63e073dab7"
+      "size": 3392,
+      "sha256": "51651bc743a4c8ffb27e47a7723f536688313e4642eaa6434cf33791eb11df67"
     },
     {
       "path": "Editor/Tools/extension/status.cs",
@@ -1011,8 +1016,8 @@
     },
     {
       "path": "Editor/Tools/instances/list.cs",
-      "size": 2791,
-      "sha256": "8a8312c6e7c2f5561b77cb83cad5fff76f1fb3dc4962abeffbaddfa735758a77"
+      "size": 2790,
+      "sha256": "597f71f3e4e1d1be96401dc32e4adfb985381be43ad9ae80ea2eeb1b7c52ff2e"
     },
     {
       "path": "Editor/Tools/material/MaterialToolSupport.cs",
@@ -1236,8 +1241,8 @@
     },
     {
       "path": "Editor/Tools/prefab/stage.cs",
-      "size": 2986,
-      "sha256": "0487e61991634cabe40c36b251d1520e73f721379347b033fc1ac60c081509de"
+      "size": 2985,
+      "sha256": "11855c98b732866cd93adff2cd7c163e88fddb7eb19f29d74f3a8d05389e0e9b"
     },
     {
       "path": "Editor/Tools/prefab/unpack.cs",
@@ -1416,8 +1421,8 @@
     },
     {
       "path": "Editor/Tools/project/info.cs",
-      "size": 2136,
-      "sha256": "a0128cc2ec2f0bd33d1ee9cdd4e5c05fd7abe0bb4814e61e925c3ebfe4350861"
+      "size": 2135,
+      "sha256": "948671b66b69a3fbc749cec09479ef73cb183424ac806492618b242e3490c26a"
     },
     {
       "path": "Editor/Tools/project/input-settings.cs",
@@ -1441,8 +1446,8 @@
     },
     {
       "path": "Editor/Tools/project/layers.cs",
-      "size": 2159,
-      "sha256": "2cd50b25b7cff62542226ab348bee61ef9b48c8d43eeedfb6d5aa180a84f6c6e"
+      "size": 2158,
+      "sha256": "724b03e528c2685137986424aab53362ac2fd676d6afe0ebf92c38c9890a08b2"
     },
     {
       "path": "Editor/Tools/project/player-settings.cs",
@@ -1466,8 +1471,8 @@
     },
     {
       "path": "Editor/Tools/project/tags.cs",
-      "size": 1656,
-      "sha256": "af9951086ed467ad67efb0ffbec8c8af83f242eb477bddb897baf1cf6a1d396d"
+      "size": 1655,
+      "sha256": "39cac574fa659de3cf65025997dee4f7c32820b48f29932b2787020305e97dac"
     },
     {
       "path": "Editor/Tools/project/time-settings.cs",
@@ -1526,8 +1531,8 @@
     },
     {
       "path": "Editor/Tools/scene/gameobject.cs",
-      "size": 5871,
-      "sha256": "154ca4aca405a5599eea41cac25c44f9c2e25a893bb95f8831e61998d440ed16"
+      "size": 5870,
+      "sha256": "fec2d249012890c41cb72be29a47baaba246f9abc647fb7e54f531bc0bc676c0"
     },
     {
       "path": "Editor/Tools/scene/gameobject/component.cs",
@@ -1536,8 +1541,8 @@
     },
     {
       "path": "Editor/Tools/scene/gameobject/components.cs",
-      "size": 3618,
-      "sha256": "353d1eb6c7857f55f49c37294691f32fdc00fa4934e836d435fe616e6f4dc0ae"
+      "size": 3617,
+      "sha256": "d28aea2733b75aa70cded94b2b016c329a0dedbd3f9f0e8346c2a8cca3b95880"
     },
     {
       "path": "Editor/Tools/scene/hierarchy.cs",
@@ -1696,8 +1701,8 @@
     },
     {
       "path": "Editor/Tools/tests/list.cs",
-      "size": 4131,
-      "sha256": "693fe7acdf13f3ee1908e605c8db86c8f28f16c33058347fdd0cba6737086849"
+      "size": 4130,
+      "sha256": "6cd334e5af7db3b2770cffb940524f0c5e1c51fedaba3ed19d1b1fda9dc8af31"
     },
     {
       "path": "Editor/Tools/texture/TextureToolSupport.cs",
@@ -1876,8 +1881,8 @@
     },
     {
       "path": "Editor/UnityCliBridge.cs",
-      "size": 25879,
-      "sha256": "955b240a093672fa2fc8f382c691422f814fa239a3e5ddd84551870976981705"
+      "size": 26795,
+      "sha256": "df225d423c12e0a4353e1138ed2b8d1a84ed58fad4e1043a75f98a53b164f0ee"
     },
     {
       "path": "Editor/UnityCliBridgeBuildInfo.cs",
@@ -1886,8 +1891,8 @@
     },
     {
       "path": "Runtime/Infrastructure/UnityCliRuntimeBridge.cs",
-      "size": 45282,
-      "sha256": "1394b3c6102c076f01aba824d1f44cce3de7f75bc01c0b78796db4e6f2709473"
+      "size": 49936,
+      "sha256": "17bc90131173d70e4becab58b812b926b7fdb3ded15d4e1c2f313ab3a90b7065"
     },
     {
       "path": "Runtime/Infrastructure/UnityCliRuntimeJson.cs",
@@ -1900,14 +1905,19 @@
       "sha256": "9e08ba71cf42d0ad6bd77bd26a7ac04a6360abda3a26f8b232a4e93e155c445e"
     },
     {
+      "path": "Runtime/Properties/AssemblyInfo.cs",
+      "size": 96,
+      "sha256": "8a7b5c2641b88032798edaf61abd1ca1e8323b61ace0b53a72882690f68a30cf"
+    },
+    {
       "path": "Runtime/Tools/UnityCliRuntimeTools.cs",
       "size": 45541,
       "sha256": "a7115213154d3abdb8a374dcc08de8e68c920dc23e2039f210afdde7d8a0b119"
     },
     {
       "path": "Runtime/UnityCli.Runtime.asmdef",
-      "size": 395,
-      "sha256": "34f111872ae236bb7d89c6e6d61dc71ca009db1084f0d00cc160f380dfbd788d"
+      "size": 405,
+      "sha256": "79d716e52d6d785c0ebd361a03f8d13e98e97f15e2d77d68bf730fb3a41d38d1"
     },
     {
       "path": "Shared/UnityCli.Shared.asmdef",
@@ -1916,18 +1926,63 @@
     },
     {
       "path": "Shared/UnityCliAdmissionPool.cs",
-      "size": 25223,
-      "sha256": "64301aeaefd22c4a3c297d73e934fa8e2dc7d769d04a496ce1218f0180ec4806"
+      "size": 36950,
+      "sha256": "3d64c5b0c5270d6d3c94fe3ebe229de2d85a19cd2f55c4005929a59ba4f9ebb5"
+    },
+    {
+      "path": "Shared/UnityCliBridgeQueuePolicy.cs",
+      "size": 11865,
+      "sha256": "c462044cddfccff6f6d3ac0e08852904c84a5367b58ece7820e6db0c9bc2fd71"
+    },
+    {
+      "path": "Shared/UnityCliBridgeWorkItemState.cs",
+      "size": 1379,
+      "sha256": "e7c4031ecbd01d329100f01d373424a93bf29af4e66b2353a9510039daa7d70a"
+    },
+    {
+      "path": "Shared/UnityCliQueuePublication.cs",
+      "size": 1036,
+      "sha256": "4a19cbd75c688ca2ec05fca38ee52027200602a76b7d6e33682af84df70bf31e"
+    },
+    {
+      "path": "Shared/UnityCliQueueSettlement.cs",
+      "size": 723,
+      "sha256": "a5bb0f356f98d7895d2b866d8f8bfaa668da9f519e3e2e5670aded36c1fac9d7"
+    },
+    {
+      "path": "Shared/UnityCliRuntimeRequestPublication.cs",
+      "size": 5159,
+      "sha256": "e83546e6b1f6519a7941d0bcc60b4f24f968ccf7cde15e997d25ff76ea001eb0"
     },
     {
       "path": "Tests/Editor/UnityCli.Editor.Tests.asmdef",
-      "size": 419,
-      "sha256": "49a352a88720abc0fbab5bfa8be83e3a782dd3812d642d107ad3cd4b38065a23"
+      "size": 459,
+      "sha256": "2823aed945c3fe84c96fb1c6f7922708ff6cf6a04bfff6a8d6bd819267bb63af"
+    },
+    {
+      "path": "Tests/Editor/UnityCliAdmissionCoordinatorIntegrationTests.cs",
+      "size": 27411,
+      "sha256": "f9f77fcf263379ee666201144b1d604ccc02181544d2fe5a4c487ca2fe4f484d"
     },
     {
       "path": "Tests/Editor/UnityCliAdmissionPoolTests.cs",
-      "size": 17577,
-      "sha256": "028160d5b0c44cab23f2e283695d08791ae70fee32882ff30a51520ea8fffd4f"
+      "size": 28434,
+      "sha256": "63f0f661348d4562a0f8616582a77e2249598d258f89b79b2f8fc619c448d9bf"
+    },
+    {
+      "path": "Tests/Editor/UnityCliAdmissionRepairStateTests.cs",
+      "size": 5048,
+      "sha256": "b589317b9c71eca656e21ed3e22cae1a7031e27de6a2689331db5ac9a540fea3"
+    },
+    {
+      "path": "Tests/Editor/UnityCliBridgeAdmissionIntegrationTests.cs",
+      "size": 10437,
+      "sha256": "024538a37ce6536424e6dc2affafdd89c95592e30d5ff9fd27dadf5e0f762a34"
+    },
+    {
+      "path": "Tests/Editor/UnityCliBridgeQueuePolicyTests.cs",
+      "size": 18995,
+      "sha256": "fd01127c7ffe503248a7543b85e83139ff58803170d0deb8756761a62ac80d44"
     },
     {
       "path": "Tests/Editor/UnityCliInstanceCleanupTests.cs",
@@ -1938,6 +1993,11 @@
       "path": "Tests/Editor/UnityCliInstancePublicationRetryTests.cs",
       "size": 6353,
       "sha256": "533f8e19841e3913d0ec6946068c71d8b0706df5fa9c8e2e4ce89902221ac416"
+    },
+    {
+      "path": "Tests/Editor/UnityCliRuntimeBridgeIntegrationTests.cs",
+      "size": 11392,
+      "sha256": "53e6bf60c0b31348f794d924fb6e6ff400614a2cf7b06520f150cde751cd9097"
     },
     {
       "path": "UnityCli.Editor.asmdef",

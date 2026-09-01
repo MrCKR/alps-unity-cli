@@ -158,10 +158,10 @@ namespace UnityCli.Tests
                 Node("mutation", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
                 Node("ordinary", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
                 Safe("exact-status"),
-                Classified("generic-status", "internal.unknown.status", false),
-                Classified("snapshot", "internal.navmesh.bake.snapshot", false),
-                Classified("plan", "internal.navmesh.bake.plan", false),
-                Classified("cancel", "internal.navmesh.bake.cancel", false)
+                Classified("generic-status", "internal.unknown.status", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
+                Classified("snapshot", "internal.navmesh.bake.snapshot", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
+                Classified("plan", "internal.navmesh.bake.plan", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
+                Classified("cancel", "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Mutation)
             };
 
             var result = UnityCliBridgeQueuePolicy.SelectStarts(
@@ -234,9 +234,14 @@ namespace UnityCli.Tests
                     Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead), command);
             }
 
-            foreach (var command in new[] { "internal.navmesh.bake.plan", "internal.navmesh.bake.snapshot", "internal.navmesh.bake.cancel", "internal.test.run.cancel" })
+            foreach (var command in new[] { "internal.navmesh.bake.plan", "internal.navmesh.bake.cancel", "internal.test.run.cancel" })
                 Assert.That(UnityCliBridgeQueuePolicy.Classify(command, UnityCliBridgeQueuePolicy.WorkClass.Mutation),
                     Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation), command);
+            Assert.That(UnityCliBridgeQueuePolicy.Classify("internal.navmesh.bake.snapshot", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
+                Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead));
+            Assert.That(UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand("internal.navmesh.bake.snapshot"), Is.True);
+            Assert.That(UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand("internal.occlusion.bake.snapshot"), Is.True);
+            Assert.That(UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand("internal.navmesh.bake.plan"), Is.False);
             Assert.That(UnityCliBridgeQueuePolicy.Classify("project-tool.run", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
                 Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation));
             Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(SafeStatusCommand, UnityCliBridgeQueuePolicy.WorkClass.Mutation));
@@ -249,7 +254,7 @@ namespace UnityCli.Tests
             {
                 Node("mutation", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
                 Node("ordinary", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
-                Classified("snapshot", "internal.editor.state.snapshot", false)
+                Safe("snapshot")
             };
 
             var mutationRunning = UnityCliBridgeQueuePolicy.SelectStarts(
@@ -291,9 +296,9 @@ namespace UnityCli.Tests
             return new UnityCliBridgeQueuePolicy.QueueNode(id, SafeStatusCommand, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
         }
 
-        private static UnityCliBridgeQueuePolicy.QueueNode Classified(string id, string command, bool mutation)
+        private static UnityCliBridgeQueuePolicy.QueueNode Classified(string id, string command, UnityCliBridgeQueuePolicy.WorkClass workClass)
         {
-            return new UnityCliBridgeQueuePolicy.QueueNode(id, command, mutation ? UnityCliBridgeQueuePolicy.WorkClass.Mutation : UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
+            return new UnityCliBridgeQueuePolicy.QueueNode(id, command, workClass);
         }
 
         private static UnityCliBridgeQueuePolicy.BypassIdentity Identity(int requestIndex, int digestIndex)

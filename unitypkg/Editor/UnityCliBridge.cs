@@ -225,7 +225,7 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
-            lock (QueueLock) queuePublicationOpen = false;
+            var queuedBeforeReload = CloseQueuePublicationAndTakeQueuedWork();
             SaveAdmissionPoolBeforeReload();
             ReleaseActiveDirectMutationLease();
             UnityCliCompilationEventBroker.BeforeReload();
@@ -239,7 +239,7 @@ namespace UnityCli
             UnityCliNavMeshBakeCoordinator.BeforeReload();
             UnityCliOcclusionBakeCoordinator.BeforeReload();
             BridgeLifetime.Cancel();
-            CancelQueuedWork();
+            CancelQueuedWork(queuedBeforeReload);
             CancelPendingWaits("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
             if (!UnityCliProjectSettings.Current.BridgeAutoStart)
             {
@@ -280,7 +280,7 @@ namespace UnityCli
 
         private static void UnregisterAndStop()
         {
-            lock (QueueLock) queuePublicationOpen = false;
+            var queuedBeforeShutdown = CloseQueuePublicationAndTakeQueuedWork();
             ShutdownAdmissionPool();
             ReleaseActiveDirectMutationLease();
             StartupState.Reset();
@@ -295,7 +295,7 @@ namespace UnityCli
             UnityCliNavMeshBakeCoordinator.Shutdown();
             UnityCliOcclusionBakeCoordinator.Shutdown();
             BridgeLifetime.Cancel();
-            CancelQueuedWork();
+            CancelQueuedWork(queuedBeforeShutdown);
             CancelPendingWaits("E_UNITY_QUITTING", "Unity Editor is quitting.", "Restart Unity and retry the request.", 5000);
             DeleteInstanceRegistration();
             StopListener();

@@ -29,7 +29,7 @@ namespace UnityCli
             }
             internal static void Register(BridgeCommandRegistry registry)
             {
-                registry.Register<BridgeRequest>(Command, "internal", true, 600000, (r, c) => { throw new InvalidOperationException("Build is coordinator-owned."); });
+                registry.Register<BridgeRequest>(Command, "internal", true, 600000, (r, c) => { throw new InvalidOperationException("Build is coordinator-owned."); }, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
             }
 
             /// <summary>reload后先持久化outcome-unknown标记，再释放已终止旧domain的exact lease。</summary>
@@ -128,29 +128,22 @@ namespace UnityCli
                 }
                 catch (OperationCanceledException)
                 {
-                    if (!activeRootCreated && !ActiveRootMayExist(request.RequestId, digest))
-                    {
-                        UnityCliSessionMutationLease.Release(request.RequestId, digest);
-                        return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build did not begin before the request deadline."));
-                    }
+                    var error = new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build did not begin before the request deadline.");
+                    if (!activeRootCreated && ActiveRootDefinitelyAbsent(request.RequestId, digest))
+                        return FinishBuildPreRootFault(request.RequestId, digest, error);
                     return FinishBuildTerminalAfterRootFault(request.RequestId, digest, ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Build did not complete before the request deadline.", null, new[] { "Inspect editor.state and retry." }));
                 }
                 catch (BridgeCommandException ex)
                 {
-                    if (!activeRootCreated && !ActiveRootMayExist(request.RequestId, digest))
-                    {
-                        UnityCliSessionMutationLease.Release(request.RequestId, digest);
-                        return SerializeBridgeExceptionEnvelope(request.RequestId, ex);
-                    }
-                    return FinishBuildTerminalAfterRootFault(request.RequestId, digest, SerializeBridgeException(request.RequestId, ex));
+                    if (!activeRootCreated && ActiveRootDefinitelyAbsent(request.RequestId, digest))
+                        return FinishBuildPreRootFault(request.RequestId, digest, ex);
+                    return FinishBuildTerminalAfterRootFault(request.RequestId, digest, BridgeExceptionTerminal(request.RequestId, ex));
                 }
                 catch (Exception ex)
                 {
-                    if (!activeRootCreated && !ActiveRootMayExist(request.RequestId, digest))
-                    {
-                        UnityCliSessionMutationLease.Release(request.RequestId, digest);
-                        return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException("E_BRIDGE_COMMAND_FAILED", ex.Message, "Check Unity Console and UnityCliBridge.log."));
-                    }
+                    var error = new BridgeCommandException("E_BRIDGE_COMMAND_FAILED", ex.Message, "Check Unity Console and UnityCliBridge.log.");
+                    if (!activeRootCreated && ActiveRootDefinitelyAbsent(request.RequestId, digest))
+                        return FinishBuildPreRootFault(request.RequestId, digest, error);
                     return FinishBuildTerminalAfterRootFault(request.RequestId, digest, SerializeException(request.RequestId, ex));
                 }
                 finally
@@ -169,15 +162,25 @@ namespace UnityCli
             private static Dictionary<string, object> NewActive(BridgeRequest request, string digest, Args args) { return new Dictionary<string, object> { { "requestId", request.RequestId }, { "requestDigest", digest }, { "editorSessionId", EditorSessionId() }, { "phase", "accepted" }, { "startedAt", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture) }, { "targets", args.Targets.Select(x => (object)new Dictionary<string, object> { { "target", x.Target }, { "outputPath", x.OutputPath } }).ToList() } }; }
             private static string Value(IDictionary<string, object> value, string key) { object item; return value != null && value.TryGetValue(key, out item) ? item as string : null; }
             private static string Busy(string id) { return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(id, "E_UNITY_BUSY", "Another mutation owns the selected Unity instance.", null, new[] { "Wait for the current mutation to reach its terminal result, then retry." }, true, 250)); }
-            private static bool ActiveRootMayExist(string id, string digest)
+            private static bool ActiveRootDefinitelyAbsent(string id, string digest)
             {
                 try
                 {
                     var root = UnityCliActiveOperation.Load(Scope);
-                    return root != null && string.Equals(Value(root, "requestId"), id, StringComparison.Ordinal)
-                        && string.Equals(Value(root, "requestDigest"), digest, StringComparison.Ordinal);
+                    if (root != null) return false;
+                    return !UnityCliActiveOperation.Exists(Scope);
                 }
-                catch { return UnityCliActiveOperation.Exists(Scope); }
+                catch { return false; }
+            }
+
+            private static string FinishBuildPreRootFault(string id, string digest, BridgeCommandException error)
+            {
+                try { UnityCliSessionMutationLease.Release(id, digest); } catch { }
+                bool isOwned;
+                if (UnityCliSessionMutationLease.TryIsOwnedBy(id, digest, out isOwned) && !isOwned)
+                    return SerializeBridgeExceptionEnvelope(id, error);
+                try { UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, id, digest); } catch { }
+                return SerializeBridgeExceptionEnvelope(id, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build was rejected before its durable root, but exact lease cleanup remains pending."));
             }
 
             private static string FinishBuildTerminalAfterRootFault(string id, string digest, object envelope)
@@ -188,6 +191,12 @@ namespace UnityCli
                     return SerializeBridgeExceptionEnvelope(id, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Build terminal cleanup remains pending after a post-root failure: " + exception.GetType().Name + "."));
                 }
             }
+
+            private static object BridgeExceptionTerminal(string id, BridgeCommandException exception)
+            {
+                return UnityCliSerializer.Parse(SerializeBridgeExceptionEnvelope(id, exception));
+            }
+
             private static string FinishTerminal(string id, string digest, object envelope)
             {
                 bool isOwned;
@@ -248,8 +257,10 @@ namespace UnityCli
                 internal List<object> Messages;
             }
 
-            internal static Func<Prepared, BuildEffectResult> BuildEffectExecutorForTests;
-            internal static Dictionary<string, object> BuildPreparedForTests(Prepared prepared) { return Build(prepared); }
+            internal static Dictionary<string, object> ValidateBuildEffectForTests(Prepared prepared, BuildEffectResult effect)
+            {
+                return BuildResultData(prepared, effect, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+            }
 
             private static Prepared Prepare(TargetArgs input)
             {
@@ -263,12 +274,25 @@ namespace UnityCli
             private static BuildOptions ParseOptions(List<string> values) { var result = BuildOptions.None; foreach (var value in values ?? new List<string>()) { BuildOptions option; if (string.IsNullOrWhiteSpace(value) || !Enum.TryParse(value, false, out option)) throw new BridgeCommandException("E_SCHEMA_INVALID", "Unsupported BuildOptions value: " + value); result |= option; } return result; }
             private static Dictionary<string, object> Build(Prepared p)
             {
-                var started = DateTimeOffset.UtcNow; var parent = Path.GetDirectoryName(p.OutputPath); if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
-                var effect = BuildEffectExecutorForTests == null ? RunBuildEffect(p) : BuildEffectExecutorForTests(p);
-                var finished = DateTimeOffset.UtcNow;
-                if (effect == null) throw new InvalidOperationException("Build effect executor returned no result.");
-                if (effect.Result == BuildResult.Succeeded.ToString() && !SuccessfulArtifactProof(effect.Artifact)) throw new BridgeCommandException("E_BUILD_ARTIFACT_MISSING", "BuildReport succeeded but its fresh output artifact has no non-empty SHA-256 proof.");
-                return new Dictionary<string, object> { { "target", p.TargetName }, { "result", effect.Result }, { "outputPath", p.PublicOutputPath }, { "totalSize", effect.TotalSize }, { "totalErrors", effect.TotalErrors }, { "totalWarnings", effect.TotalWarnings }, { "startedAt", started.ToString("O", CultureInfo.InvariantCulture) }, { "finishedAt", finished.ToString("O", CultureInfo.InvariantCulture) }, { "durationMs", (long)(finished - started).TotalMilliseconds }, { "messages", effect.Messages ?? new List<object>() }, { "artifact", effect.Artifact } };
+                var started = DateTimeOffset.UtcNow;
+                var parent = Path.GetDirectoryName(p.OutputPath);
+                if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                var effect = RunBuildEffect(p);
+                return BuildResultData(p, effect, started, DateTimeOffset.UtcNow);
+            }
+
+            private static Dictionary<string, object> BuildResultData(Prepared prepared, BuildEffectResult effect, DateTimeOffset started, DateTimeOffset finished)
+            {
+                if (effect == null) throw new InvalidOperationException("Build effect returned no result.");
+                if (effect.Result == BuildResult.Succeeded.ToString() && !SuccessfulArtifactProof(effect.Artifact))
+                    throw new BridgeCommandException("E_BUILD_ARTIFACT_MISSING", "BuildReport succeeded but its fresh output artifact has no non-empty SHA-256 proof.");
+                return new Dictionary<string, object>
+                {
+                    { "target", prepared.TargetName }, { "result", effect.Result }, { "outputPath", prepared.PublicOutputPath },
+                    { "totalSize", effect.TotalSize }, { "totalErrors", effect.TotalErrors }, { "totalWarnings", effect.TotalWarnings },
+                    { "startedAt", started.ToString("O", CultureInfo.InvariantCulture) }, { "finishedAt", finished.ToString("O", CultureInfo.InvariantCulture) },
+                    { "durationMs", (long)(finished - started).TotalMilliseconds }, { "messages", effect.Messages ?? new List<object>() }, { "artifact", effect.Artifact }
+                };
             }
 
             private static BuildEffectResult RunBuildEffect(Prepared p)
@@ -279,7 +303,7 @@ namespace UnityCli
                 return new BuildEffectResult { Result = report.summary.result.ToString(), TotalSize = checked((long)report.summary.totalSize), TotalErrors = report.summary.totalErrors, TotalWarnings = report.summary.totalWarnings, Artifact = artifact, Messages = messages };
             }
             private static Dictionary<string, object> ReadArtifact(string path, string publicPath) { var roots = new List<string>(); if (File.Exists(path)) roots.Add(path); if (Directory.Exists(path)) roots.Add(path); var sidecar = Path.Combine(Path.GetDirectoryName(path) ?? string.Empty, Path.GetFileNameWithoutExtension(path) + "_Data"); if (Directory.Exists(sidecar)) roots.Add(sidecar); var files = roots.SelectMany(root => File.Exists(root) ? new[] { root } : Directory.GetFiles(root, "*", SearchOption.AllDirectories)).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray(); var size = files.Sum(x => new FileInfo(x).Length); var treeRoot = Path.GetDirectoryName(path) ?? path; return new Dictionary<string, object> { { "outputPath", publicPath }, { "exists", files.Length > 0 }, { "hash", File.Exists(path) ? HashFile(path) : null }, { "treeHash", files.Length > 0 ? HashTree(files, treeRoot) : null }, { "fileCount", (long)files.Length }, { "size", size } }; }
-            private static bool SuccessfulArtifactProof(Dictionary<string, object> artifact) { object exists; object count; object size; object hash; object treeHash; artifact.TryGetValue("exists", out exists); artifact.TryGetValue("fileCount", out count); artifact.TryGetValue("size", out size); artifact.TryGetValue("hash", out hash); artifact.TryGetValue("treeHash", out treeHash); return exists is bool && (bool)exists && count is long && (long)count > 0 && size is long && (long)size > 0 && (IsSha256(hash as string) || IsSha256(treeHash as string)); }
+            private static bool SuccessfulArtifactProof(Dictionary<string, object> artifact) { object exists; object count; object size; object hash; object treeHash; return artifact != null && artifact.TryGetValue("exists", out exists) && artifact.TryGetValue("fileCount", out count) && artifact.TryGetValue("size", out size) && artifact.TryGetValue("hash", out hash) && artifact.TryGetValue("treeHash", out treeHash) && exists is bool && (bool)exists && count is long && (long)count > 0 && size is long && (long)size > 0 && (IsSha256(hash as string) || IsSha256(treeHash as string)); }
             private static string HashFile(string path) { using (var sha = SHA256.Create()) using (var stream = File.OpenRead(path)) return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant(); }
             private static string HashTree(IEnumerable<string> files, string root) { using (var sha = SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(string.Join("\n", files.Select(x => Path.GetRelativePath(root, x).Replace('\\', '/') + "\0" + HashFile(x)))))).Replace("-", "").ToLowerInvariant(); }
             private static void Validate(Args args) { if (args == null || string.IsNullOrWhiteSpace(args.ExpectedEditorSessionId) || args.Targets == null || args.Targets.Count == 0) throw new BridgeCommandException("E_SCHEMA_INVALID", "Build targets and expectedEditorSessionId are required."); if (args.Targets.Any(x => x == null || string.IsNullOrWhiteSpace(x.Target) || string.IsNullOrWhiteSpace(x.OutputPath))) throw new BridgeCommandException("E_SCHEMA_INVALID", "Each build target requires target and outputPath."); if (args.Targets.Select(x => x.Target).Distinct(StringComparer.Ordinal).Count() != args.Targets.Count) throw new BridgeCommandException("E_SCHEMA_INVALID", "Build targets must not contain duplicates."); if (args.Targets.Select(x => x.OutputPath.Replace('\\', '/')).Distinct(StringComparer.OrdinalIgnoreCase).Count() != args.Targets.Count) throw new BridgeCommandException("E_SCHEMA_INVALID", "Build output paths must not conflict."); if (!string.Equals(args.ExpectedEditorSessionId, EditorSessionId(), StringComparison.Ordinal)) throw new BridgeCommandException("E_EDITOR_SESSION_REPLACED", "The selected Editor session changed before build execution."); if (EditorApplication.isPlaying || IsPlayModeChanging()) throw new BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "build.run is editor-only and requires stable Edit Mode.", new Dictionary<string, object> { { "toolName", "build.run" }, { "playModeSupport", "editor-only" } }, new[] { "Exit Play Mode before running build.run." }); if (EditorUtility.scriptCompilationFailed) throw new BridgeCommandException("E_UNITY_COMPILE_FAILED", "Unity has unresolved script compilation errors and cannot start BuildPlayer.", "Run editor.compile and fix all diagnostics before retrying build.run."); }

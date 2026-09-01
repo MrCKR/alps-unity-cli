@@ -382,40 +382,35 @@ namespace UnityCli
         {
             var markerOwner = ReadAdmissionOwnerFields(marker, requestId);
             if (!AdmissionMarkerHasImmutableIdentity(marker, markerOwner, AdmissionTopDigest(markerOwner)))
+            {
+                if (admissionPool != null) admissionPool.BlockRecovery();
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker identity is invalid.");
+            }
             var exact = admissionPool.InspectExactIdentityFields(ToPoolIdentity(markerOwner));
             if (exact == UnityCliAdmissionPool.ExactIdentityOutcome.DefinitelyAbsent)
             {
-                bool rootReadable;
-                var rootExists = HasExactAdmissionMarkerRoot(markerScope, markerOwner, out rootReadable);
-                if (!rootReadable) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker root cannot be verified.");
-                bool leaseOwned;
-                if (!UnityCliSessionMutationLease.TryIsOwnedBy(markerOwner.RequestId, markerOwner.RequestDigest, out leaseOwned))
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker lease ownership cannot be verified.");
-                if (rootExists || leaseOwned)
+                try
                 {
-                    if (!rootExists || !leaseOwned) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker root and lease are not an exact pair.");
-                    var intended = (UnityCliAdmissionPool.AdmissionOwnerState)AdmissionLong(marker, "admissionIntendedOwnerState");
-                    if (!admissionPool.RestoreConsumed(ToPoolIdentity(markerOwner), intended, AdmissionBool(marker, "admissionTransferCommitted")))
-                        throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker could not rebuild its exact consumed owner.");
-                    PersistAdmissionPoolState();
+                    if (!RestoreAbsentAdmissionOwner(markerScope, marker, markerOwner)) return null;
                     exact = UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent;
                 }
-                else
+                catch
                 {
-                    UnityCliActiveOperation.Clear(markerScope);
-                    if (UnityCliActiveOperation.Exists(markerScope)) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Completed admission cleanup marker could not be cleared.");
-                    return null;
+                    admissionPool.BlockRecovery();
+                    throw;
                 }
             }
             if (exact != UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent)
+            {
+                admissionPool.BlockRecovery();
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker conflicts with the current requestId owner.");
+            }
             var current = CaptureAdmissionOwner(requestId, markerOwner.RequestDigest);
             current.TopRequestDigest = AdmissionText(marker, "requestDigest");
             current.EditorSessionId = AdmissionText(marker, "editorSessionId");
             var intended = (UnityCliAdmissionPool.AdmissionOwnerState)AdmissionLong(marker, "admissionIntendedOwnerState");
             if (current.OwnerState != intended) return PersistAdmissionOwnerTransfer(markerScope, marker, current, intended);
-            marker["admissionTransferCommitted"] = true;
+            WriteAdmissionOwnerFields(marker, current, intended, true);
             UnityCliActiveOperation.Save(markerScope, marker);
             PersistAdmissionPoolState();
             return current;
@@ -446,26 +441,51 @@ namespace UnityCli
                 var exact = pool.InspectExactIdentityFields(ToPoolIdentity(markerOwner));
                 if (exact == UnityCliAdmissionPool.ExactIdentityOutcome.IdentityMismatchOrBlocked) { pool.BlockRecovery(); return; }
                 if (exact != UnityCliAdmissionPool.ExactIdentityOutcome.DefinitelyAbsent) continue;
-                bool rootReadable;
-                var rootExists = HasExactAdmissionMarkerRoot(markerScope, markerOwner, out rootReadable);
-                if (!rootReadable) { pool.BlockRecovery(); return; }
-                bool leaseOwned;
-                if (!UnityCliSessionMutationLease.TryIsOwnedBy(markerOwner.RequestId, markerOwner.RequestDigest, out leaseOwned)) { pool.BlockRecovery(); return; }
-                try
-                {
-                    if (rootExists || leaseOwned)
-                    {
-                        if (!rootExists || !leaseOwned) { pool.BlockRecovery(); return; }
-                        var intended = (UnityCliAdmissionPool.AdmissionOwnerState)AdmissionLong(marker, "admissionIntendedOwnerState");
-                        if (!pool.RestoreConsumed(ToPoolIdentity(markerOwner), intended, AdmissionBool(marker, "admissionTransferCommitted"))) { pool.BlockRecovery(); return; }
-                        PersistAdmissionPoolState();
-                        continue;
-                    }
-                    UnityCliActiveOperation.Clear(markerScope);
-                    if (UnityCliActiveOperation.Exists(markerScope)) { pool.BlockRecovery(); return; }
-                }
+                try { RestoreAbsentAdmissionOwner(markerScope, marker, markerOwner); }
                 catch { pool.BlockRecovery(); return; }
             }
+        }
+
+        /// <summary>pool缺失时，cleanup marker可覆盖root/lease清理窗口；普通owner marker只接受完整root+lease重建。</summary>
+        private static bool RestoreAbsentAdmissionOwner(string markerScope, Dictionary<string, object> marker, AdmissionOwnerIdentity markerOwner)
+        {
+            bool rootReadable;
+            var rootExists = HasExactAdmissionMarkerRoot(markerScope, markerOwner, out rootReadable);
+            if (!rootReadable) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker root cannot be verified.");
+            bool leaseOwned;
+            if (!UnityCliSessionMutationLease.TryIsOwnedBy(markerOwner.RequestId, markerOwner.RequestDigest, out leaseOwned))
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker lease ownership cannot be verified.");
+            var cleanupMarker = markerScope.EndsWith("-terminal-cleanup", StringComparison.Ordinal)
+                || markerScope.EndsWith("-pre-effect-cleanup", StringComparison.Ordinal);
+            if (rootExists || leaseOwned)
+            {
+                if (!cleanupMarker && (!rootExists || !leaseOwned))
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission owner marker has only a partial root and lease proof.");
+                var intended = (UnityCliAdmissionPool.AdmissionOwnerState)AdmissionLong(marker, "admissionIntendedOwnerState");
+                if (!admissionPool.RestoreConsumed(ToPoolIdentity(markerOwner), intended, AdmissionBool(marker, "admissionTransferCommitted")))
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker could not rebuild its exact consumed owner.");
+                PersistAdmissionPoolState();
+                return true;
+            }
+            if (!cleanupMarker && !AdmissionOwnerTerminalExists(markerScope, markerOwner))
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission owner marker has no exact cleanup completion proof.");
+            UnityCliActiveOperation.Clear(markerScope);
+            if (UnityCliActiveOperation.Exists(markerScope))
+                throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Completed admission cleanup marker could not be cleared.");
+            return false;
+        }
+
+        private static bool AdmissionOwnerTerminalExists(string markerScope, AdmissionOwnerIdentity owner)
+        {
+            try
+            {
+                var terminalScope = markerScope.EndsWith("-admission-owner", StringComparison.Ordinal)
+                    ? markerScope.Substring(0, markerScope.Length - "-admission-owner".Length)
+                    : markerScope;
+                object terminal;
+                return UnityCliActiveOperation.TryGetTerminal(terminalScope, owner.RequestId, owner.RequestDigest, out terminal);
+            }
+            catch { return false; }
         }
 
         private static bool HasExactAdmissionMarkerRoot(string markerScope, AdmissionOwnerIdentity owner, out bool readable)
@@ -620,7 +640,7 @@ namespace UnityCli
             }
             current.TopRequestDigest = AdmissionText(marker, "requestDigest");
             current.EditorSessionId = AdmissionText(marker, "editorSessionId");
-            marker["admissionTransferCommitted"] = true;
+            WriteAdmissionOwnerFields(marker, current, intended, true);
             UnityCliActiveOperation.Save(markerScope, marker);
             PersistAdmissionPoolState();
         }
@@ -655,8 +675,6 @@ namespace UnityCli
                 || !string.Equals(AdmissionText(marker, "admissionRootFingerprint"), record.RootFingerprint, StringComparison.Ordinal)
                 || !string.Equals(AdmissionText(marker, "admissionToken"), record.Token, StringComparison.Ordinal)
                 || !string.Equals(AdmissionText(marker, "admissionSessionId"), record.SessionId, StringComparison.Ordinal)
-                || !string.Equals(AdmissionText(marker, "admissionListenerId"), record.ListenerId, StringComparison.Ordinal)
-                || AdmissionLong(marker, "admissionListenerGeneration") != record.ListenerGeneration
                 || AdmissionLong(marker, "admissionExecutionDeadlineMs") != record.ExecutionDeadlineMs
                 || !string.Equals(AdmissionText(marker, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal)) return false;
             var sourceCommitted = record.TransferCommitted && record.OwnerState == source && record.IntendedOwnerState == source;
@@ -693,8 +711,6 @@ namespace UnityCli
                 && string.Equals(AdmissionText(marker, "admissionRootFingerprint"), identity.RootFingerprint, StringComparison.Ordinal)
                 && string.Equals(AdmissionText(marker, "admissionToken"), identity.Token, StringComparison.Ordinal)
                 && string.Equals(AdmissionText(marker, "admissionSessionId"), identity.SessionId, StringComparison.Ordinal)
-                && string.Equals(AdmissionText(marker, "admissionListenerId"), identity.ListenerId, StringComparison.Ordinal)
-                && AdmissionLong(marker, "admissionListenerGeneration") == identity.ListenerGeneration
                 && AdmissionLong(marker, "admissionExecutionDeadlineMs") == identity.ExecutionDeadlineMs
                 && string.Equals(AdmissionText(marker, "editorSessionId"), identity.EditorSessionId ?? EditorSessionId(), StringComparison.Ordinal);
         }
@@ -721,34 +737,29 @@ namespace UnityCli
         {
             if (identity == null) return AdmissionTransferResult.NotAccepted;
             var directMutation = command == "project-tool.run" || command == "code.exec";
-            var durableCancelRoot = false;
-            var cancelRootReadable = command != "internal.test.run.cancel" || TryHasExactDurableBusinessRoot("test-run", command, identity, out durableCancelRoot);
-            if (command == "internal.test.run.cancel" && !cancelRootReadable) return AdmissionTransferResult.TransferPending;
-            var cancelAccepted = command == "internal.test.run.cancel" && durableCancelRoot;
-            var coordinatorAccepted = AdmissionDurableRootCommand(command) && (AdmissionResponseIsCoordinatorAccepted(response) || cancelAccepted);
-            if (!coordinatorAccepted && !directMutation) return AdmissionTransferResult.NotAccepted;
+            if (!AdmissionDurableRootCommand(command) && !directMutation) return AdmissionTransferResult.NotAccepted;
             string markerScope;
             string rootScope;
             AdmissionOwnerScopes(command, out markerScope, out rootScope);
-            identity.TopRequestDigest = coordinatorAccepted ? AdmissionAcceptedTopDigest(response, identity, command) : identity.RequestDigest;
             try
             {
+                var current = CaptureAdmissionOwner(identity.RequestId, identity.RequestDigest);
+                if (current.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.WorkItem)
+                {
+                    identity.OwnerState = current.OwnerState;
+                    identity.TopRequestDigest = current.TopRequestDigest;
+                    return AdmissionTransferResult.Transferred;
+                }
                 bool durable;
                 var readable = TryHasExactDurableBusinessRoot(rootScope, command, identity, out durable);
-                if (directMutation && readable && !durable) return AdmissionTransferResult.NotAccepted;
-                if (command == "internal.test.run.cancel")
-                {
-                    var current = CaptureAdmissionOwner(identity.RequestId, identity.RequestDigest);
-                    if (current.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
-                    {
-                        identity.OwnerState = current.OwnerState;
-                        return AdmissionTransferResult.Transferred;
-                    }
-                }
+                if (!readable) return AdmissionTransferResult.TransferPending;
+                var accepted = AdmissionResponseIsCoordinatorAccepted(response) || durable;
+                if (!accepted) return AdmissionTransferResult.NotAccepted;
+                identity.TopRequestDigest = AdmissionAcceptedTopDigest(response, identity, command);
                 var target = command == "internal.test.run.cancel"
                     ? UnityCliAdmissionPool.AdmissionOwnerState.Continuation
                     : UnityCliAdmissionPool.AdmissionOwnerState.Coordinator;
-                var intended = readable && durable ? target : UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
+                var intended = durable ? target : UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
                 if (directMutation) intended = UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
                 var marker = new Dictionary<string, object>
                 {
@@ -775,13 +786,15 @@ namespace UnityCli
                 if (state == null)
                 {
                     if (command == "internal.test.run.cancel") return false;
+                    bool ownsLease;
+                    if (!UnityCliSessionMutationLease.TryIsOwnedBy(identity.RequestId, identity.RequestDigest, out ownsLease)) return false;
                     if (command == "project-tool.run" || command == "code.exec")
                     {
-                        bool ownsLease;
-                        if (!UnityCliSessionMutationLease.TryIsOwnedBy(identity.RequestId, identity.RequestDigest, out ownsLease)) return false;
                         durable = ownsLease;
+                        return true;
                     }
-                    return true;
+                    // durable coordinator无root但仍持有exact lease时，不能把错误响应归约为未接受。
+                    return !ownsLease;
                 }
                 if (!string.Equals(AdmissionText(state, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal)) return true;
                 if (command == "internal.test.run.cancel")
@@ -927,7 +940,6 @@ namespace UnityCli
                 case "internal.package.files.fail":
                 case "internal.test.run.status":
                 case "internal.test.run.cancel.plan":
-                case "internal.test.run.cancel":
                 case "internal.test.run.cancel.status":
                 case "internal.navmesh.bake.status":
                 case "internal.navmesh.bake.plan":
@@ -1026,16 +1038,21 @@ namespace UnityCli
 
         private static UnityCliAdmissionPool queueTestPreviousPool;
         private static long queueTestPreviousListenerGeneration;
+        private static string queueTestPreviousAdmissionState;
+        private static bool queueTestScopeActive;
 
         internal static void BeginQueueTestScope(UnityCliAdmissionPool pool)
         {
             if (pool == null) throw new ArgumentNullException("pool");
+            var previousAdmissionState = SessionState.GetString(AdmissionSessionStateKey, string.Empty);
             lock (QueueLock)
             {
-                if (WorkQueue.Count != 0 || RunningWork.Count != 0 || ActiveRequestWork.Count != 0)
+                if (queueTestScopeActive || WorkQueue.Count != 0 || RunningWork.Count != 0 || ActiveRequestWork.Count != 0)
                     throw new InvalidOperationException("Queue test scope requires an idle production queue.");
+                queueTestScopeActive = true;
                 queueTestPreviousPool = admissionPool;
                 queueTestPreviousListenerGeneration = listenerGeneration;
+                queueTestPreviousAdmissionState = previousAdmissionState;
                 if (listenerGeneration < 1) listenerGeneration = 1;
                 admissionPool = pool;
                 queuePublicationOpen = true;
@@ -1045,8 +1062,10 @@ namespace UnityCli
 
         internal static void EndQueueTestScope()
         {
+            string previousAdmissionState;
             lock (QueueLock)
             {
+                if (!queueTestScopeActive) return;
                 WorkQueue.Clear();
                 RunningWork.Clear();
                 ActiveRequestWork.Clear();
@@ -1056,7 +1075,12 @@ namespace UnityCli
                 listenerGeneration = queueTestPreviousListenerGeneration;
                 queueTestPreviousListenerGeneration = 0;
                 queuePublicationOpen = started;
+                previousAdmissionState = queueTestPreviousAdmissionState;
+                queueTestPreviousAdmissionState = null;
+                queueTestScopeActive = false;
             }
+            if (string.IsNullOrEmpty(previousAdmissionState)) SessionState.EraseString(AdmissionSessionStateKey);
+            else SessionState.SetString(AdmissionSessionStateKey, previousAdmissionState);
         }
 
         internal static void ReconcileAdmissionMarkersForTests()
