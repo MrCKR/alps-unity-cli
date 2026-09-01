@@ -267,17 +267,25 @@ namespace UnityCli
             if (reservation != null) reservation.QueuePublished = true;
         }
 
+        /// <summary>publication前补偿只修改pool内存；持久化与日志由QueueLock外调用方完成。</summary>
         internal static bool CompensateAdmissionBeforeQueuePublication(AdmissionQueueReservation reservation)
         {
             if (reservation == null || reservation.QueuePublished || !reservation.NewlyConsumed || reservation.Owner == null) return true;
             var pool = admissionPool;
             var compensated = pool != null && pool.CompensateAuthorization(ToPoolIdentity(reservation.Owner));
-            if (compensated)
-            {
-                reservation.NewlyConsumed = false;
-                WriteLog("admission_prequeue_compensated requestId=" + reservation.Owner.RequestId + " active=" + pool.Capture().Active.ToString(CultureInfo.InvariantCulture));
-            }
+            if (compensated) reservation.NewlyConsumed = false;
             return compensated;
+        }
+
+        /// <summary>只按当前pool中的完整digest冻结exact owner；缺失与identity冲突保持不同结果。</summary>
+        internal static bool TryCaptureExactAdmissionOwner(string requestId, string requestDigest, out AdmissionOwnerIdentity identity)
+        {
+            identity = null;
+            UnityCliAdmissionPool.ConsumedIdentity current;
+            var pool = admissionPool;
+            if (pool == null || !pool.TryGetConsumedIdentity(requestId, out current)) return false;
+            identity = ToAdmissionOwner(current, requestDigest);
+            return true;
         }
 
         internal static AdmissionOwnerIdentity CaptureAdmissionOwner(string requestId, string requestDigest = null)
@@ -507,7 +515,7 @@ namespace UnityCli
                     var operation = root.TryGetValue("testOperation", out rawOperation) ? AsDictionary(rawOperation) : null;
                     return operation != null && string.Equals(AdmissionText(operation, "cancelRequestId"), owner.RequestId, StringComparison.Ordinal)
                         && string.Equals(AdmissionText(operation, "cancelRequestDigest"), owner.RequestDigest, StringComparison.Ordinal)
-                        && string.Equals(AdmissionText(operation, "cancelRootRequestDigest"), root.RequestDigest, StringComparison.Ordinal);
+                        && string.Equals(AdmissionText(operation, "cancelRootRequestDigest"), AdmissionText(root, "requestDigest"), StringComparison.Ordinal);
                 }
                 return string.Equals(AdmissionText(root, "requestId"), owner.RequestId, StringComparison.Ordinal)
                     && string.Equals(AdmissionText(root, "requestDigest"), owner.RequestDigest, StringComparison.Ordinal);
@@ -715,11 +723,13 @@ namespace UnityCli
                 && string.Equals(AdmissionText(marker, "editorSessionId"), identity.EditorSessionId ?? EditorSessionId(), StringComparison.Ordinal);
         }
 
-        /// <summary>accepted durable transfer失败时返回Pending；普通WorkItem的pool completion留给QueueLock边界。</summary>
+        /// <summary>accepted durable transfer失败时先用WorkItem冻结身份建立Recovery marker；marker失败则保留WorkItem等待重试。</summary>
         private static AdmissionTransferResult SettleAdmissionAfterWorkItem(AdmissionOwnerIdentity identity, string command, string response)
         {
             if (identity == null || string.IsNullOrEmpty(identity.RequestId)) return AdmissionTransferResult.NotAccepted;
             var transfer = TransferAdmissionAfterAcceptedWork(identity, command, response);
+            if (transfer == AdmissionTransferResult.TransferPending)
+                transfer = PersistWorkItemRecoveryAfterTransferFailure(identity, command, response);
             if (transfer == AdmissionTransferResult.TransferPending) return transfer;
             var pool = admissionPool;
             UnityCliAdmissionPool.ConsumedIdentity current;
@@ -730,6 +740,40 @@ namespace UnityCli
             if (!SameAdmissionImmutableIdentity(frozen, identity)) return AdmissionTransferResult.TransferPending;
             identity.OwnerState = frozen.OwnerState;
             return transfer;
+        }
+
+        /// <summary>root观察不确定时用队列冻结身份建立可执行Recovery marker，不从Unity场景或半字段重建。</summary>
+        private static AdmissionTransferResult PersistWorkItemRecoveryAfterTransferFailure(AdmissionOwnerIdentity identity, string command, string response)
+        {
+            if (identity == null || (!AdmissionDurableRootCommand(command) && command != "project-tool.run" && command != "code.exec"))
+                return AdmissionTransferResult.TransferPending;
+            try
+            {
+                var current = CaptureAdmissionOwner(identity.RequestId, identity.RequestDigest);
+                if (current.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.WorkItem)
+                {
+                    identity.OwnerState = current.OwnerState;
+                    identity.TopRequestDigest = current.TopRequestDigest;
+                    return AdmissionTransferResult.Transferred;
+                }
+                string markerScope;
+                string rootScope;
+                AdmissionOwnerScopes(command, out markerScope, out rootScope);
+                current.TopRequestDigest = AdmissionAcceptedTopDigest(response, current, command);
+                var marker = new Dictionary<string, object>
+                {
+                    { "requestId", current.RequestId }, { "requestDigest", AdmissionTopDigest(current) }, { "editorSessionId", EditorSessionId() }
+                };
+                var recovered = PersistAdmissionOwnerTransfer(markerScope + "-admission-owner", marker, current, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+                identity.OwnerState = recovered.OwnerState;
+                identity.TopRequestDigest = recovered.TopRequestDigest;
+                return AdmissionTransferResult.Transferred;
+            }
+            catch (Exception exception)
+            {
+                WriteLog("admission_workitem_recovery_pending requestId=" + identity.RequestId + " " + exception.GetType().Name + ": " + exception.Message);
+                return AdmissionTransferResult.TransferPending;
+            }
         }
 
         /// <summary>accepted coordinator/cancel及仍持有exact direct durable root的请求只通过固定marker移交owner。</summary>
@@ -1039,6 +1083,7 @@ namespace UnityCli
         private static UnityCliAdmissionPool queueTestPreviousPool;
         private static long queueTestPreviousListenerGeneration;
         private static string queueTestPreviousAdmissionState;
+        private static Action<string> queueTestPreviousBoundary;
         private static bool queueTestScopeActive;
 
         internal static void BeginQueueTestScope(UnityCliAdmissionPool pool)
@@ -1053,6 +1098,7 @@ namespace UnityCli
                 queueTestPreviousPool = admissionPool;
                 queueTestPreviousListenerGeneration = listenerGeneration;
                 queueTestPreviousAdmissionState = previousAdmissionState;
+                queueTestPreviousBoundary = QueueTestBoundary;
                 if (listenerGeneration < 1) listenerGeneration = 1;
                 admissionPool = pool;
                 queuePublicationOpen = true;
@@ -1068,8 +1114,10 @@ namespace UnityCli
                 if (!queueTestScopeActive) return;
                 WorkQueue.Clear();
                 RunningWork.Clear();
+                PendingSettlementWork.Clear();
                 ActiveRequestWork.Clear();
-                QueueTestBoundary = null;
+                QueueTestBoundary = queueTestPreviousBoundary;
+                queueTestPreviousBoundary = null;
                 admissionPool = queueTestPreviousPool;
                 queueTestPreviousPool = null;
                 listenerGeneration = queueTestPreviousListenerGeneration;

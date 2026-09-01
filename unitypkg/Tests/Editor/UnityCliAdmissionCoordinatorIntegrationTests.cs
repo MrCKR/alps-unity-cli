@@ -1,11 +1,13 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
 using UnityCli.Protocol;
 
 namespace UnityCli.Tests
@@ -15,85 +17,199 @@ namespace UnityCli.Tests
     {
         private const string InstanceId = "test-instance";
         private const string Fingerprint = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        private static readonly string[] TrackedScopes =
+        {
+            "build", "build-terminal-cleanup", "build-admission-owner", "package-resolve",
+            "package-resolve-terminal-cleanup", "package-resolve-admission-owner", "test-run",
+            "test-run-terminal-cleanup", "test-run-admission-owner", "test-cancel-admission-owner",
+            "direct-mutation", "direct-mutation-terminal-cleanup", "direct-mutation-admission-owner"
+        };
+        private Dictionary<string, byte[]> fileSnapshots;
+        private string identityPrefix;
+        private string originalLeaseRequestId;
+        private string originalLeaseRequestDigest;
+        private Action<string> originalPackageStartBoundary;
+        private Action<string> originalPackageEffectBoundary;
+        private Action<string> originalCancelBoundary;
+        private bool originalBuildReloadRecoveryPending;
+
+        [SetUp]
+        public void SetUp()
+        {
+            identityPrefix = "admission-" + Guid.NewGuid().ToString("N") + "-";
+            originalPackageStartBoundary = UnityCliBridge.UnityCliPackageResolveCoordinator.PackageStartTestBoundary;
+            originalPackageEffectBoundary = UnityCliBridge.UnityCliPackageResolveCoordinator.PackageResolveEffectTestBoundary;
+            originalCancelBoundary = UnityCliBridge.UnityCliTestRunCoordinator.CancelFinalizerTestBoundary;
+            originalBuildReloadRecoveryPending = UnityCliBridge.UnityCliLiveBuildCoordinator.ReloadRecoveryPendingForTests;
+            Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryGetCurrentOwner(out originalLeaseRequestId, out originalLeaseRequestDigest), Is.True, "parent lease must be readable before isolation");
+            fileSnapshots = TrackedPaths().ToDictionary(path => path, path => File.Exists(path) ? File.ReadAllBytes(path) : null, StringComparer.Ordinal);
+            foreach (var path in fileSnapshots.Keys) if (File.Exists(path)) File.Delete(path);
+            UnityCliBridge.UnityCliSessionMutationLease.Initialize();
+        }
 
         [TearDown]
         public void TearDown()
         {
-            UnityCliBridge.UnityCliPackageResolveCoordinator.PackageStartTestBoundary = null;
-            UnityCliBridge.UnityCliPackageResolveCoordinator.PackageResolveEffectTestBoundary = null;
-            UnityCliBridge.UnityCliTestRunCoordinator.CancelFinalizerTestBoundary = null;
+            var failures = new List<string>();
+            try { UnityCliBridge.EndQueueTestScope(); } catch (Exception exception) { failures.Add("queue scope: " + exception.Message); }
+            UnityCliBridge.UnityCliPackageResolveCoordinator.PackageStartTestBoundary = originalPackageStartBoundary;
+            UnityCliBridge.UnityCliPackageResolveCoordinator.PackageResolveEffectTestBoundary = originalPackageEffectBoundary;
+            UnityCliBridge.UnityCliTestRunCoordinator.CancelFinalizerTestBoundary = originalCancelBoundary;
+            UnityCliBridge.UnityCliLiveBuildCoordinator.ReloadRecoveryPendingForTests = originalBuildReloadRecoveryPending;
+            foreach (var snapshot in fileSnapshots ?? new Dictionary<string, byte[]>())
+            {
+                try
+                {
+                    if (File.Exists(snapshot.Key)) File.Delete(snapshot.Key);
+                    if (snapshot.Value != null)
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(snapshot.Key));
+                        File.WriteAllBytes(snapshot.Key, snapshot.Value);
+                    }
+                    var restored = File.Exists(snapshot.Key) ? File.ReadAllBytes(snapshot.Key) : null;
+                    if ((snapshot.Value == null) != (restored == null) || snapshot.Value != null && !snapshot.Value.SequenceEqual(restored))
+                        failures.Add("snapshot mismatch: " + snapshot.Key);
+                }
+                catch (Exception exception) { failures.Add(snapshot.Key + ": " + exception.Message); }
+            }
             try
             {
-                string leaseRequestId;
-                string leaseRequestDigest;
-                if (UnityCliBridge.UnityCliSessionMutationLease.TryGetCurrentOwner(out leaseRequestId, out leaseRequestDigest)
-                    && !string.IsNullOrEmpty(leaseRequestId) && !string.IsNullOrEmpty(leaseRequestDigest))
-                    UnityCliBridge.UnityCliSessionMutationLease.Release(leaseRequestId, leaseRequestDigest);
+                UnityCliBridge.UnityCliSessionMutationLease.Initialize();
+                string requestId;
+                string requestDigest;
+                if (!UnityCliBridge.UnityCliSessionMutationLease.TryGetCurrentOwner(out requestId, out requestDigest)
+                    || !string.Equals(requestId, originalLeaseRequestId, StringComparison.Ordinal)
+                    || !string.Equals(requestDigest, originalLeaseRequestDigest, StringComparison.Ordinal))
+                    failures.Add("parent lease identity was not restored exactly");
             }
-            catch { }
-            try { UnityCliBridge.EndQueueTestScope(); } catch { }
-            foreach (var scope in new[]
-            {
-                "build", "build-terminal-cleanup", "build-admission-owner", "package-resolve",
-                "package-resolve-terminal-cleanup", "package-resolve-admission-owner", "test-run",
-                "test-run-terminal-cleanup", "test-run-admission-owner", "test-cancel-admission-owner"
-            })
-            {
-                try { UnityCliActiveOperation.Clear(scope); } catch { }
-            }
+            catch (Exception exception) { failures.Add("lease restore: " + exception.Message); }
+            Assert.That(failures, Is.Empty, string.Join("\n", failures));
         }
 
         [Test]
-        public void BuildArtifactProofFaultUsesProductionResultValidation()
+        public void BuildArtifactFaultRunsExecuteRootTerminalAndQueueSettlement()
         {
-            var exception = Assert.Throws<UnityCliBridge.BridgeCommandException>(() =>
-                UnityCliBridge.UnityCliLiveBuildCoordinator.ValidateBuildEffectForTests(
-                    new UnityCliBridge.UnityCliLiveBuildCoordinator.Prepared
-                    {
-                        Target = BuildTarget.StandaloneWindows64,
-                        TargetName = "StandaloneWindows64",
-                        OutputPath = Application.dataPath,
-                        PublicOutputPath = "Assets/test-build",
-                        Scenes = new string[0],
-                        Options = BuildOptions.None
-                    },
-                    new UnityCliBridge.UnityCliLiveBuildCoordinator.BuildEffectResult
-                    {
-                        Result = "Succeeded",
-                        Artifact = new Dictionary<string, object>
-                        {
-                            { "exists", false }, { "fileCount", (long)0 }, { "size", (long)0 },
-                            { "hash", null }, { "treeHash", null }
-                        }
-                    }));
-            Assert.That(exception.Code, Is.EqualTo("E_BUILD_ARTIFACT_MISSING"));
-        }
-
-        [Test]
-        public void BuildPostRootFaultDefersAdmissionUntilQueueCompletion()
-        {
-            var request = Request("build-post-root-fault", "internal.build.run.start", new Dictionary<string, object>());
+            var request = BuildRequest(Unique("build-artifact-fault"));
             var raw = RequestBytes(request);
             var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
             var deadline = Deadline(request);
-            var pool = new UnityCliAdmissionPool(InstanceId, "build-test-session", 4, 1);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("build-artifact-session"), 4, 1);
             UnityCliBridge.BeginQueueTestScope(pool);
             Consume(pool, request.RequestId, digest, deadline);
             bool created;
             var item = Enqueue(request, raw, Fingerprint, deadline, pool, out created);
             Assert.That(created, Is.True);
-            Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryAcquire(request.RequestId, digest, out _), Is.True);
-            UnityCliActiveOperation.Save("build", Root(request.RequestId, digest, "running"));
+            var dependencies = BuildDependencies(prepared => new UnityCliBridge.UnityCliLiveBuildCoordinator.BuildEffectResult
+            {
+                Result = "Succeeded",
+                Artifact = new Dictionary<string, object>
+                {
+                    { "exists", false }, { "fileCount", (long)0 }, { "size", (long)0 },
+                    { "hash", null }, { "treeHash", null }
+                }
+            });
 
-            var response = UnityCliBridge.UnityCliLiveBuildCoordinator.FinishPostRootFaultForTests(request.RequestId, digest, "E_BUILD_ARTIFACT_MISSING");
+            var response = UnityCliBridge.UnityCliLiveBuildCoordinator.Execute(request, raw, () => true, CancellationToken.None, dependencies).GetAwaiter().GetResult();
 
             Assert.That(response, Does.Contain("E_BUILD_ARTIFACT_MISSING"));
+            Assert.That(response, Does.Contain("terminal"));
+            object terminal;
+            Assert.That(UnityCliActiveOperation.TryGetTerminal("build", request.RequestId, digest, out terminal), Is.True);
+            Assert.That(UnityCliSerializer.Serialize(terminal), Does.Contain("E_BUILD_ARTIFACT_MISSING"));
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, response), Is.True);
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+            UnityCliBridge.UnityCliLiveBuildCoordinator.Tick();
+            AssertBuildSettled(pool, request.RequestId, digest);
+        }
+
+        [TestCase("root-read")]
+        [TestCase("terminal-store")]
+        public void BuildPostRootFaultUsesFrozenRecoveryAndTickConverges(string fault)
+        {
+            var request = BuildRequest(Unique("build-post-root-" + fault));
+            var raw = RequestBytes(request);
+            var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
+            var deadline = Deadline(request);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("build-recovery-session"), 4, 1);
+            UnityCliBridge.BeginQueueTestScope(pool);
+            Consume(pool, request.RequestId, digest, deadline);
+            bool created;
+            var item = Enqueue(request, raw, Fingerprint, deadline, pool, out created);
+            Assert.That(created, Is.True);
+            var dependencies = BuildDependencies(prepared => { throw new UnityCliBridge.BridgeCommandException("E_BUILD_EFFECT_TEST_FAULT", "Injected build effect fault."); });
+            dependencies.Boundary = name =>
+            {
+                if (fault == "root-read" && name == "before-build-terminal-root-read") throw new IOException("injected active root read fault");
+                if (fault == "terminal-store" && name == "before-build-terminal-store") throw new IOException("injected terminal store fault");
+            };
+
+            var response = UnityCliBridge.UnityCliLiveBuildCoordinator.Execute(request, raw, () => true, CancellationToken.None, dependencies).GetAwaiter().GetResult();
+
+            Assert.That(response, Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(pool.Capture().Records.Any(record => record.RequestId == request.RequestId
+                && (record.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Recovery
+                    || record.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)), Is.True);
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, response), Is.True);
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+
+            UnityCliBridge.UnityCliLiveBuildCoordinator.Tick();
+
+            object terminal;
+            Assert.That(UnityCliActiveOperation.TryGetTerminal("build", request.RequestId, digest, out terminal), Is.True);
+            Assert.That(UnityCliSerializer.Serialize(terminal), Does.Contain("E_EXECUTION_TIMEOUT"));
+            AssertBuildSettled(pool, request.RequestId, digest);
+        }
+
+        [Test]
+        public void DirectSuccessRetainsPendingWorkAndCompletesExactOwnerAfterCleanupRetry()
+        {
+            var request = Request(Unique("direct-success-recovery"), "project-tool.run", new Dictionary<string, object>());
+            var raw = RequestBytes(request);
+            var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
+            var deadline = Deadline(request);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("direct-success-session"), 4, 1);
+            UnityCliBridge.BeginQueueTestScope(pool);
+            Consume(pool, request.RequestId, digest, deadline);
+            bool created;
+            var item = Enqueue(request, raw, Fingerprint, deadline, pool, out created);
+            Assert.That(created, Is.True);
+            Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryAcquire(request.RequestId, digest, out var newlyAcquired), Is.True);
+            Assert.That(newlyAcquired, Is.True);
+            UnityCliActiveOperation.Save("direct-mutation", Root(request.RequestId, digest, "terminal_pending"));
+            var success = ProtocolEnvelopeFactory.Success(request.RequestId, new Dictionary<string, object> { { "result", new Dictionary<string, object> { { "applied", true } } } });
+            UnityCliActiveOperation.StoreTerminalFirst("direct-mutation", request.RequestId, digest, success);
+            UnityCliActiveOperation.Save("direct-mutation-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", Unique("conflicting-owner") }, { "requestDigest", new string('f', 64) }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            });
+
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, UnityCliSerializer.Serialize(success)), Is.False);
+            Assert.That(item.Completed.IsSet, Is.False);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(1));
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+
+            UnityCliActiveOperation.Clear("direct-mutation-admission-owner");
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests();
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+            Assert.That(pool.Capture().Records.Single().OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+
+            UnityCliBridge.CleanupPublishedDirectMutationForTests(request.RequestId, digest, scope =>
+            {
+                if (scope == "direct-mutation") throw new IOException("injected direct root clear fault");
+            });
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(UnityCliActiveOperation.Exists("direct-mutation"), Is.True);
+            Assert.That(UnityCliActiveOperation.Exists("direct-mutation-terminal-cleanup"), Is.True);
+
+            UnityCliBridge.CleanupPublishedDirectMutationForTests(request.RequestId, digest);
+
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
-            UnityCliActiveOperation.RetryExactTerminalCleanup("build");
-            Assert.That(UnityCliActiveOperation.Exists("build"), Is.False);
-            Assert.That(UnityCliActiveOperation.Exists("build-terminal-cleanup"), Is.False);
+            Assert.That(UnityCliActiveOperation.Exists("direct-mutation"), Is.False);
+            Assert.That(UnityCliActiveOperation.Exists("direct-mutation-terminal-cleanup"), Is.False);
             Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(request.RequestId, digest, out var owned), Is.True);
             Assert.That(owned, Is.False);
         }
@@ -101,7 +217,7 @@ namespace UnityCli.Tests
         [Test]
         public void PackageRootCreatedBridgeFaultUsesFirstTerminalAndExactCleanup()
         {
-            var request = Request("package-root-created-fault", "internal.package.resolve.start", new Dictionary<string, object>
+            var request = Request(Unique("package-root-created-fault"), "internal.package.resolve.start", new Dictionary<string, object>
             {
                 { "expectedEditorSessionId", UnityCliBridge.EditorSessionId() },
                 { "operation", "resolve" },
@@ -110,7 +226,7 @@ namespace UnityCli.Tests
             var raw = RequestBytes(request);
             var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
             var deadline = Deadline(request);
-            var pool = new UnityCliAdmissionPool(InstanceId, "package-test-session", 4, 1);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("package-test-session"), 4, 1);
             UnityCliBridge.BeginQueueTestScope(pool);
             Consume(pool, request.RequestId, digest, deadline);
             bool created;
@@ -138,7 +254,7 @@ namespace UnityCli.Tests
         [Test]
         public void PackagePostEffectBridgeFaultUsesFirstTerminalAndExactCleanup()
         {
-            var request = Request("package-post-effect-fault", "internal.package.resolve.start", new Dictionary<string, object>
+            var request = Request(Unique("package-post-effect-fault"), "internal.package.resolve.start", new Dictionary<string, object>
             {
                 { "expectedEditorSessionId", UnityCliBridge.EditorSessionId() },
                 { "operation", "resolve" },
@@ -147,7 +263,7 @@ namespace UnityCli.Tests
             var raw = RequestBytes(request);
             var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
             var deadline = Deadline(request);
-            var pool = new UnityCliAdmissionPool(InstanceId, "package-effect-session", 4, 1);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("package-effect-session"), 4, 1);
             UnityCliBridge.BeginQueueTestScope(pool);
             Consume(pool, request.RequestId, digest, deadline);
             bool created;
@@ -176,9 +292,9 @@ namespace UnityCli.Tests
         [Test]
         public void CancelNotInvokedAndOutcomeUnknownUseOneExactFinalizer()
         {
-            var pool = new UnityCliAdmissionPool(InstanceId, "cancel-test-session", 4, 1);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("cancel-test-session"), 4, 1);
             UnityCliBridge.BeginQueueTestScope(pool);
-            var notInvoked = PrepareCancel(pool, "cancel-parent-a", new string('a', 64), "11111111-1111-1111-1111-111111111111", "cancel-not-invoked");
+            var notInvoked = PrepareCancel(pool, Unique("cancel-parent-a"), new string('a', 64), Guid.NewGuid().ToString(), Unique("cancel-not-invoked"));
 
             Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(notInvoked.ParentId, notInvoked.ParentDigest, notInvoked.RunId, notInvoked.CancelId, notInvoked.CancelDigest, "not_invoked"), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
@@ -188,7 +304,7 @@ namespace UnityCli.Tests
             CompleteParent(notInvoked);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
 
-            var unknown = PrepareCancel(pool, "cancel-parent-b", new string('b', 64), "22222222-2222-2222-2222-222222222222", "cancel-unknown");
+            var unknown = PrepareCancel(pool, Unique("cancel-parent-b"), new string('b', 64), Guid.NewGuid().ToString(), Unique("cancel-unknown"));
             Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelForTests(unknown.ParentId, unknown.ParentDigest, unknown.RunId, unknown.CancelId, unknown.CancelDigest, "outcome_unknown"), Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
             Assert.That(UnityCliActiveOperation.Exists("test-run"), Is.False);
@@ -197,14 +313,15 @@ namespace UnityCli.Tests
         [Test]
         public void CancelReturnedTransfersToContinuationBeforeTerminalCompletion()
         {
-            var pool = new UnityCliAdmissionPool(InstanceId, "cancel-returned-session", 4, 1);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("cancel-returned-session"), 4, 1);
             UnityCliBridge.BeginQueueTestScope(pool);
             var deadline = DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds();
-            var request = Request("cancel-returned", "internal.test.run.cancel", new Dictionary<string, object>());
+            var cancelId = Unique("cancel-returned");
+            var request = Request(cancelId, "internal.test.run.cancel", new Dictionary<string, object>());
             request.Execution.AbsoluteDeadlineUtc = DateTimeOffset.FromUnixTimeMilliseconds(deadline).ToString("O");
             var raw = RequestBytes(request);
             var cancelDigest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
-            var fixture = PrepareCancel(pool, "cancel-parent-returned", new string('e', 64), "44444444-4444-4444-4444-444444444444", "cancel-returned", cancelDigest, deadline);
+            var fixture = PrepareCancel(pool, Unique("cancel-parent-returned"), new string('e', 64), Guid.NewGuid().ToString(), cancelId, cancelDigest, deadline);
             var root = UnityCliActiveOperation.Load("test-run");
             var operation = (Dictionary<string, object>)root["testOperation"];
             operation["cancelEffectState"] = "dispatched";
@@ -236,9 +353,9 @@ namespace UnityCli.Tests
         [Test]
         public void CancelDispatchSaveFaultRetainsRecoveryUntilRetryConverges()
         {
-            var pool = new UnityCliAdmissionPool(InstanceId, "cancel-save-fault-session", 4, 1);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("cancel-save-fault-session"), 4, 1);
             UnityCliBridge.BeginQueueTestScope(pool);
-            var fixture = PrepareCancel(pool, "cancel-parent-save", new string('c', 64), "33333333-3333-3333-3333-333333333333", "cancel-save-fault");
+            var fixture = PrepareCancel(pool, Unique("cancel-parent-save"), new string('c', 64), Guid.NewGuid().ToString(), Unique("cancel-save-fault"));
             UnityCliBridge.UnityCliTestRunCoordinator.CancelFinalizerTestBoundary = name =>
             {
                 if (name == "before-cancel-root-save") throw new InvalidOperationException("injected save fault");
@@ -258,10 +375,11 @@ namespace UnityCli.Tests
         [TestCase(false, false)]
         public void CleanupMarkerReconcilesAllRootLeaseWindows(bool rootExists, bool leaseOwned)
         {
-            var requestId = "marker-window-" + (rootExists ? "root" : "no-root") + "-" + (leaseOwned ? "lease" : "no-lease");
+            var requestId = Unique("marker-window-" + (rootExists ? "root" : "no-root") + "-" + (leaseOwned ? "lease" : "no-lease"));
             var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
-            var original = new UnityCliAdmissionPool(InstanceId, "marker-window-session", 4, 1);
-            var restored = new UnityCliAdmissionPool(InstanceId, "marker-window-session", 4, 1);
+            var markerSession = Unique("marker-window-session");
+            var original = new UnityCliAdmissionPool(InstanceId, markerSession, 4, 1);
+            var restored = new UnityCliAdmissionPool(InstanceId, markerSession, 4, 1);
             UnityCliBridge.BeginQueueTestScope(original);
             var owner = Consume(original, requestId, digest, DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds());
             if (leaseOwned) Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryAcquire(requestId, digest, out _), Is.True);
@@ -284,10 +402,10 @@ namespace UnityCli.Tests
         [Test]
         public void ReconciledMarkerRefreshesTheRecoveredListenerBinding()
         {
-            var requestId = "marker-listener-rebind";
+            var requestId = Unique("marker-listener-rebind");
             var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
             var deadline = DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds();
-            var pool = new UnityCliAdmissionPool(InstanceId, "marker-listener-session", 4, 1);
+            var pool = new UnityCliAdmissionPool(InstanceId, Unique("marker-listener-session"), 4, 1);
             UnityCliBridge.BeginQueueTestScope(pool);
             var owner = Consume(pool, requestId, digest, deadline);
             var marker = new Dictionary<string, object>
@@ -310,11 +428,12 @@ namespace UnityCli.Tests
         [Test]
         public void CleanupMarkerIdentityMismatchBlocksRecovery()
         {
-            var requestId = "marker-identity-mismatch";
+            var requestId = Unique("marker-identity-mismatch");
             var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
             var deadline = DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds();
-            var original = new UnityCliAdmissionPool(InstanceId, "marker-mismatch-session", 4, 1);
-            var restored = new UnityCliAdmissionPool(InstanceId, "marker-mismatch-session", 4, 1);
+            var mismatchSession = Unique("marker-mismatch-session");
+            var original = new UnityCliAdmissionPool(InstanceId, mismatchSession, 4, 1);
+            var restored = new UnityCliAdmissionPool(InstanceId, mismatchSession, 4, 1);
             UnityCliBridge.BeginQueueTestScope(original);
             var owner = Consume(original, requestId, digest, deadline);
             var marker = new Dictionary<string, object>
@@ -418,6 +537,63 @@ namespace UnityCli.Tests
             {
                 { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", phase }
             };
+        }
+
+        private string Unique(string suffix) { return identityPrefix + suffix; }
+
+        private static IEnumerable<string> TrackedPaths()
+        {
+            var projectRoot = Path.GetDirectoryName(Application.dataPath);
+            var stateRoot = Path.Combine(projectRoot, "Library", "UnityCli");
+            foreach (var scope in TrackedScopes) yield return Path.Combine(stateRoot, "active-" + scope + ".json");
+            yield return Path.Combine(stateRoot, "terminal-cache.json");
+            var lease = UnityCliBridge.UnityCliSessionMutationLease.LeasePathForTests();
+            yield return lease;
+            yield return lease + ".recovery";
+            yield return lease + ".quarantine";
+        }
+
+        private BridgeRequest BuildRequest(string requestId)
+        {
+            return Request(requestId, "internal.build.run.start", new Dictionary<string, object>
+            {
+                { "expectedEditorSessionId", UnityCliBridge.EditorSessionId() },
+                { "targets", new List<object>
+                    {
+                        new Dictionary<string, object>
+                        {
+                            { "target", "StandaloneWindows64" }, { "outputPath", "Builds/test-player.exe" }
+                        }
+                    }
+                }
+            });
+        }
+
+        private static UnityCliBridge.UnityCliLiveBuildCoordinator.BuildExecutionDependencies BuildDependencies(Func<UnityCliBridge.UnityCliLiveBuildCoordinator.Prepared, UnityCliBridge.UnityCliLiveBuildCoordinator.BuildEffectResult> effect)
+        {
+            return new UnityCliBridge.UnityCliLiveBuildCoordinator.BuildExecutionDependencies
+            {
+                PrepareTarget = (target, outputPath, options) => new UnityCliBridge.UnityCliLiveBuildCoordinator.Prepared
+                {
+                    Target = BuildTarget.StandaloneWindows64,
+                    TargetName = target,
+                    OutputPath = Application.dataPath,
+                    PublicOutputPath = outputPath,
+                    Scenes = new string[0],
+                    Options = BuildOptions.None
+                },
+                RunEffect = effect
+            };
+        }
+
+        private static void AssertBuildSettled(UnityCliAdmissionPool pool, string requestId, string digest)
+        {
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(UnityCliActiveOperation.Exists("build"), Is.False);
+            Assert.That(UnityCliActiveOperation.Exists("build-terminal-cleanup"), Is.False);
+            Assert.That(UnityCliActiveOperation.Exists("build-admission-owner"), Is.False);
+            Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, digest, out var owned), Is.True);
+            Assert.That(owned, Is.False);
         }
 
         private sealed class CancelFixture

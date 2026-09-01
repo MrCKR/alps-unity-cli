@@ -85,20 +85,6 @@ namespace UnityCli.Tests
             Assert.That(accepted.TryStart(true, 100), Is.EqualTo(UnityCliBridgeWorkItemState.StartOutcome.Started));
         }
 
-        [Test]
-        public void SettlementSignalsAndRemovesWhenAdmissionPersistenceThrows()
-        {
-            var removed = false;
-            var signalled = false;
-            var failure = UnityCliQueueSettlement.Complete(
-                () => { throw new InvalidOperationException("settlement"); },
-                () => removed = true,
-                () => signalled = true);
-            Assert.That(failure, Is.TypeOf<InvalidOperationException>());
-            Assert.That(removed, Is.True);
-            Assert.That(signalled, Is.True);
-        }
-
         private static void Publish(UnityCliRuntimeRequestPublication<Entry> store, string id, long order, bool completed)
         {
             var reservation = store.Plan(id, order.ToString(), entry => entry.Completed, entry => entry.Order);

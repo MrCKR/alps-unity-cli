@@ -81,7 +81,7 @@ namespace UnityCli
         private static volatile bool cachedIsBuilding;
         private static volatile bool cachedIsPlayModeChanging;
         private static volatile bool playModeChanging = EditorApplication.isPlaying != EditorApplication.isPlayingOrWillChangePlaymode;
-        private static bool queuePublicationOpen = true;
+        private static bool queuePublicationOpen;
         internal static Action<string> QueueTestBoundary;
 
         internal static void HitQueueTestBoundary(string name)
@@ -118,7 +118,7 @@ namespace UnityCli
             EditorApplication.quitting += UnregisterAndStop;
             EditorApplication.playModeStateChanged += OnBridgePlayModeStateChanged;
             domainReloading = false;
-            lock (QueueLock) queuePublicationOpen = true;
+            lock (QueueLock) queuePublicationOpen = false;
             ScheduleBridgeStartup();
         }
 
@@ -203,12 +203,14 @@ namespace UnityCli
 
             try
             {
+                PrepareListenerGenerationForStart();
+                if (string.IsNullOrWhiteSpace(ListenerId)) throw new InvalidOperationException("Listener identity is unavailable.");
                 listener = new HttpListener();
                 port = StartHttpListener(listener);
-                lock (QueueLock) queuePublicationOpen = true;
                 started = true;
+                if (!RegisterInstance("transitioning")) throw new InvalidOperationException("Initial listener registry claim could not be published.");
+                lock (QueueLock) queuePublicationOpen = true;
                 Task.Run(ListenLoop);
-                RegisterInstance("transitioning");
                 readyPublicationPending = true;
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
                 WriteRuntimeLoadDiagnostics("listener_started");
@@ -255,7 +257,7 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
-            lock (QueueLock) queuePublicationOpen = true;
+            lock (QueueLock) queuePublicationOpen = false;
             InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();

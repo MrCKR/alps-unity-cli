@@ -19,6 +19,14 @@ async function sources(): Promise<Record<keyof typeof RUNTIME_FILES, string>> {
   return Object.fromEntries(entries) as Record<keyof typeof RUNTIME_FILES, string>;
 }
 
+function assertBefore(source: string, first: string, second: string): void {
+  const firstIndex = source.indexOf(first);
+  const secondIndex = source.indexOf(second);
+  assert.ok(firstIndex >= 0, `missing source anchor: ${first}`);
+  assert.ok(secondIndex >= 0, `missing source anchor: ${second}`);
+  assert.ok(firstIndex < secondIndex, `${first} must precede ${second}`);
+}
+
 test("development Player runtime assembly stays UnityEditor-independent and testable", async () => {
   const source = await sources();
   const asmdef = JSON.parse(source.asmdef) as { name: string; includePlatforms: string[]; references: string[] };
@@ -133,7 +141,7 @@ test("Runtime controls stay session-only and package-gated", async () => {
   assert.match(tools, /phasesProven/);
   assert.match(tools, /observed\.Count == 2/);
   assert.equal(tools.match(/if \(!dryRun\) facade\.Update\(\);/g)?.length, 2);
-  assert.ok(tools.indexOf("if (!dryRun) facade.Update();") < tools.indexOf("var before = facade.IsPressed(control);"));
+  assertBefore(tools, "if (!dryRun) facade.Update();", "var before = facade.IsPressed(control);");
   assert.match(tools, /beforePressed/);
   assert.match(tools, /afterPressed/);
   assert.doesNotMatch(tools, /DeltaStateEvent/);
@@ -167,18 +175,15 @@ test("runtime security, cache, artifacts, and shutdown remain bounded", async ()
   const tools = await readFile("unitypkg/Runtime/Tools/UnityCliRuntimeTools.cs", "utf8");
   assert.match(bridge, /MaxQueueItems = 128/);
   assert.match(bridge, /Completion\.Task\.IsCompleted/);
-  assert.match(bridge, /Interlocked\.CompareExchange\(ref work\.ExecutionState, 2, 0\)/);
-  assert.match(bridge, /Interlocked\.CompareExchange\(ref pendingRequest\.ExecutionState, 1, 0\)/);
-  assert.match(bridge, /while \(!work\.Completion\.Task\.IsCompleted\)/);
-  assert.match(bridge, /stopping\.IsCancellationRequested/);
-  assert.match(bridge, /private void StopBridge\(\)[\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.Cancel\(\)/);
-  assert.match(bridge, /if \(immediate == null && enqueue\) pending\.Enqueue\(work\);/);
-  assert.match(bridge, /if \(immediate != null\) \{ Write\(context, immediate\); return; \}/);
-  assert.match(bridge, /work\.Completion\.Task\.Wait\(\)/);
-  assert.match(bridge, /DateTimeOffset\.UtcNow\.ToUnixTimeMilliseconds\(\) >= deadline/);
+  assert.match(bridge, /private static bool FinalizeRuntimeRequest\([\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 2, expectedState\)[\s\S]*?pool\.CompleteTrusted\(identity\)[\s\S]*?request\.Completion\.TrySetResult\(terminal\)/);
+  assert.match(bridge, /private bool TryTakeNextRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.IsCancellationRequested[\s\S]*?pending\.TryDequeue\(out request\)[\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 1, 0\)/);
+  assert.match(bridge, /internal RuntimePublicationResult PublishRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?requestCache\.TryGet\(requestId, out existing\)[\s\S]*?absoluteDeadlineMs <= DateTimeOffset\.UtcNow\.ToUnixTimeMilliseconds\(\)[\s\S]*?AuthorizeRuntimeAdmission[\s\S]*?PublishPreparedRequestLocked/);
+  assert.match(bridge, /internal void StopRuntimeRequestsLocked\(\)[\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.Cancel\(\)[\s\S]*?FinalizeRuntimeRequest[\s\S]*?pending\.TryDequeue[\s\S]*?requestCache\.Clear\(\)/);
+  assert.match(bridge, /while \(!work\.Completion\.Task\.IsCompleted\)[\s\S]*?FinalizeRuntimeRequest\(work, timeout, 0\)[\s\S]*?work\.Completion\.Task\.Wait\(\)/);
   assert.match(bridge, /E_RUNTIME_QUEUE_FULL/);
   assert.match(bridge, /E_REQUEST_REPLAY_MISMATCH/);
-  assert.ok(bridge.indexOf("requestCache.TryGet(requestId, out work)") < bridge.indexOf("var deadline = ValidateRequest(envelope)"));
+  assertBefore(bridge, "requestCache.TryGet(requestId, out existing)", "absoluteDeadlineMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()");
+  assertBefore(bridge, "absoluteDeadlineMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()", "AuthorizeRuntimeAdmission(pool, admission, request, requestDigest");
   assert.match(bridge, /E_RUNTIME_SESSION_STALE/);
   assert.match(bridge, /requestCache\.Clear\(\)/);
   assert.match(bridge, /UnityCliRuntimeTools\.Shutdown\(\)/);

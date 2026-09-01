@@ -97,7 +97,7 @@ namespace UnityCli
                 object durableTerminal;
                 if (UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, request.RequestId, requestDigest, out durableTerminal))
                 {
-                    CleanupPublishedDirectMutation(request.RequestId, requestDigest, AdmissionTerminalIsOutcomeUnknown(durableTerminal));
+                    CleanupPublishedDirectMutation(request.RequestId, requestDigest);
                     return UnityCliSerializer.Serialize(durableTerminal);
                 }
             }
@@ -289,30 +289,27 @@ namespace UnityCli
                 ? pending
                 : (object)ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Direct mutation effect was interrupted before a terminal was frozen; outcome is unknown.");
             var result = PersistDirectMutationTerminal(requestId, requestDigest, UnityCliSerializer.Serialize(envelope));
-            CleanupPublishedDirectMutation(requestId, requestDigest, AdmissionTerminalIsOutcomeUnknown(envelope));
+            CleanupPublishedDirectMutation(requestId, requestDigest);
             return result;
         }
 
-        private static void CleanupPublishedDirectMutation(string requestId, string requestDigest, bool completeAdmission)
+        /// <summary>terminal类型不决定slot释放；只要exact owner仍存在就必须转TerminalCleanup并完成。</summary>
+        private static void CleanupPublishedDirectMutation(string requestId, string requestDigest, Action<string> cleanupBoundary = null)
         {
             try
             {
                 object terminal;
                 if (!UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out terminal)) return;
-                UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, completeAdmission);
+                AdmissionOwnerIdentity owner;
+                var completeAdmission = TryCaptureExactAdmissionOwner(requestId, requestDigest, out owner);
+                UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, completeAdmission, cleanupBoundary);
             }
             catch { }
         }
 
-        private static bool AdmissionTerminalIsOutcomeUnknown(object envelope)
+        internal static void CleanupPublishedDirectMutationForTests(string requestId, string requestDigest, Action<string> cleanupBoundary = null)
         {
-            var value = envelope as IDictionary<string, object>;
-            object ok;
-            if (value == null || !value.TryGetValue("ok", out ok) || !(ok is bool) || (bool)ok) return false;
-            object rawError;
-            var error = value.TryGetValue("error", out rawError) ? rawError as IDictionary<string, object> : null;
-            object code;
-            return error != null && error.TryGetValue("code", out code) && string.Equals(code as string, "E_EXECUTION_TIMEOUT", StringComparison.Ordinal);
+            CleanupPublishedDirectMutation(requestId, requestDigest, cleanupBoundary);
         }
 
         private static void FinalizeDirectMutationExecution(string requestId, string requestDigest)
@@ -611,28 +608,34 @@ namespace UnityCli
             return request == null ? null : request.Command;
         }
 
-        /// <summary>由实际注册表先裁决内部命令；未知或解析失败的effectful请求统一按Mutation fail closed。</summary>
+        /// <summary>HTTP worker只读取immutable request与已冻结registry；未知或依赖场景现状的分类显式按Mutation关闭。</summary>
         internal static UnityCliBridgeQueuePolicy.WorkClass QueueRequestWorkClass(BridgeRequest request)
         {
-            try
-            {
-                if (request == null) return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
-                UnityCliBridgeQueuePolicy.WorkClass registered;
-                if (CommandRegistry.TryGetQueueClass(request.Command, out registered)) return registered;
-                var contract = ResolveRequestCompletionContract(request);
-                if (contract == null)
-                    return IsReadOnlyBridgeCommand(request.Command)
-                        ? UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead
-                        : UnityCliBridgeQueuePolicy.WorkClass.Mutation;
-                if (request.Execution != null && request.Execution.DryRun == true) return UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
-                return RequestRequiresMutation(request, contract)
-                    ? UnityCliBridgeQueuePolicy.WorkClass.Mutation
-                    : UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
-            }
-            catch
-            {
-                return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
-            }
+            if (request == null) return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+            UnityCliBridgeQueuePolicy.WorkClass registered;
+            if (CommandRegistry.TryGetQueueClass(request.Command, out registered)) return registered;
+            var contract = ResolveQueueCompletionContract(request);
+            if (contract == null)
+                return IsReadOnlyBridgeCommand(request.Command)
+                    ? UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead
+                    : UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+            if (request.Execution != null && request.Execution.DryRun == true) return UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
+            if (!contract.Mutation) return UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
+            bool requiresSceneState;
+            var inputMutation = RequestMutationFromImmutableInput(contract.ToolName, RequestBusinessInput(request), out requiresSceneState);
+            return requiresSceneState || inputMutation
+                ? UnityCliBridgeQueuePolicy.WorkClass.Mutation
+                : UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
+        }
+
+        /// <summary>worker只读取内置冻结contract；项目自定义Tool未知时由调用方保守归Mutation。</summary>
+        private static UnityCliToolCompletionContract ResolveQueueCompletionContract(BridgeRequest request)
+        {
+            var toolName = RequestToolName(request);
+            if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
+            UnityCliToolCompletionContract contract;
+            if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
+            return string.Equals(toolName, "code.exec", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
         }
 
         /// <summary>durable mutation lease读取失败、被占用与空闲分别投影为queue policy三态。</summary>
@@ -647,14 +650,36 @@ namespace UnityCli
                 : UnityCliBridgeQueuePolicy.DurableMutationBarrier.Held;
         }
 
-        /// <summary>descriptor 表示潜在风险；本次 input 没有 setter/action 时按 read 执行。</summary>
+        /// <summary>主线程在pure input裁决后，仅对真正依赖场景现状的幂等分支读取Unity对象。</summary>
         private static bool RequestRequiresMutation(BridgeRequest request, UnityCliToolCompletionContract contract)
         {
             if (request == null || contract == null || !contract.Mutation || (request.Execution != null && request.Execution.DryRun == true)) return false;
-            var name = contract.ToolName;
             var input = RequestBusinessInput(request);
-            if (name == "graphics.reflection-probe") return HasAnyMeaningfulInput(input, "mode", "resolution", "bounces", "hdr", "boxSize", "boxOffset") || CreateProbeNeedsMutation(input, true);
-            if (name == "graphics.light-probe-group") return HasAnyMeaningfulInput(input, "positions") || CreateProbeNeedsMutation(input, false);
+            bool requiresSceneState;
+            var inputMutation = RequestMutationFromImmutableInput(contract.ToolName, input, out requiresSceneState);
+            if (!requiresSceneState) return inputMutation;
+            if (contract.ToolName == "physics.rigidbody") return RigidbodyNeedsMutation(input);
+            if (contract.ToolName == "graphics.reflection-probe") return CreateProbeNeedsMutation(input, true);
+            if (contract.ToolName == "graphics.light-probe-group") return CreateProbeNeedsMutation(input, false);
+            return true;
+        }
+
+        /// <summary>只按immutable JSON字段判断；需要场景现状的幂等分支通过requiresSceneState显式上报。</summary>
+        private static bool RequestMutationFromImmutableInput(string name, IDictionary<string, object> input, out bool requiresSceneState)
+        {
+            requiresSceneState = false;
+            if (name == "graphics.reflection-probe")
+            {
+                if (HasAnyMeaningfulInput(input, "mode", "resolution", "bounces", "hdr", "boxSize", "boxOffset")) return true;
+                requiresSceneState = InputBoolean(input, "create");
+                return false;
+            }
+            if (name == "graphics.light-probe-group")
+            {
+                if (HasAnyMeaningfulInput(input, "positions")) return true;
+                requiresSceneState = InputBoolean(input, "create");
+                return false;
+            }
             if (name == "graphics.skybox-set-properties") return HasAllMeaningfulInput(input, "property", "value");
             if (name == "build.settings.set") return HasAnyInput(input, "apiCompatibilityLevel", "applicationIdentifier", "bundleVersion", "companyId", "productName", "scriptingBackend");
             if (name == "graphics.bake-settings") return HasAnyInput(input, "bakedGI", "bounces", "directSamples", "environmentSamples", "filtering", "indirectSamples", "lightingMode", "realtimeGI");
@@ -669,7 +694,13 @@ namespace UnityCli
             if (name == "graphics.scene-debug") return HasAnyInput(input, "drawMode", "shadingMode");
             if (name == "physics.collision-matrix") return HasAllInput(input, "layerA", "layerB", "ignore");
             if (name == "physics.settings") return HasAnyInput(input, "autoSimulation", "bounceThreshold", "defaultContactOffset", "defaultSolverIterations", "defaultSolverVelocityIterations", "gravity", "gravity2d", "property", "queriesHitBackfaces", "queriesHitTriggers", "queriesStartInColliders", "value");
-            if (name == "physics.rigidbody") return !InputBoolean(input, "validate") && (HasAnyMeaningfulInput(input, "angularDrag", "drag", "isKinematic", "mass", "useGravity") || RigidbodyNeedsMutation(input));
+            if (name == "physics.rigidbody")
+            {
+                if (InputBoolean(input, "validate")) return false;
+                if (HasAnyMeaningfulInput(input, "angularDrag", "drag", "isKinematic", "mass", "useGravity")) return true;
+                requiresSceneState = true;
+                return false;
+            }
             if (name == "physics.simulation") return InputBoolean(input, "simulate");
             if (name == "texture.import-settings") return HasAnyInput(input, "alphaIsTransparency", "compression", "filterMode", "maxTextureSize", "mipmap", "readable", "sRGB", "textureType", "type", "wrapMode");
             if (name == "profiler.deep") return HasAnyInput(input, "enabled");

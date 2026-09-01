@@ -190,8 +190,8 @@ namespace UnityCli
                     Write(context, Error(requestId, "E_INSTANCE_IDENTITY_MISMATCH", attestationError, new[] { "Resolve the runtime target again through --instance." }));
                     return;
                 }
+                var deadline = ValidateRequestStructure(envelope);
                 var digest = Sha256(body);
-                var deadline = ValidateRequest(envelope);
                 var publication = PublishRuntimeRequest(envelope, deadline, digest, ReadRuntimeAdmission(context.Request));
                 var work = publication.Work;
                 if (publication.Error != null) { Write(context, publication.Error); return; }
@@ -423,8 +423,8 @@ namespace UnityCli
             finally { try { context.Response.Close(); } catch { } }
         }
 
-        /// <summary>严格校验BridgeRequest v2，并把嵌套execution deadline冻结为Unix毫秒。</summary>
-        private static long ValidateRequest(Dictionary<string, object> request)
+        /// <summary>严格校验BridgeRequest v2并解析deadline；freshness只在cache miss的publication锁内裁决。</summary>
+        private static long ValidateRequestStructure(Dictionary<string, object> request)
         {
             if (!HasOnlyKeys(request, "protocolVersion", "instanceId", "command", "requestId", "input", "execution")) throw new FormatException("Runtime request contains an unknown field.");
             if (ReadLong(request, "protocolVersion") != ProtocolVersion) throw new FormatException("Runtime request protocolVersion must be 2.");
@@ -440,9 +440,7 @@ namespace UnityCli
             var deadlineText = RequiredString(execution, "absoluteDeadlineUtc", 128);
             DateTimeOffset deadline;
             if (!DateTimeOffset.TryParse(deadlineText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline)) throw new FormatException("Runtime request execution.absoluteDeadlineUtc is invalid.");
-            var deadlineMs = deadline.ToUnixTimeMilliseconds();
-            if (deadlineMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) throw new FormatException("Runtime request execution.absoluteDeadlineUtc must be in the future.");
-            return deadlineMs;
+            return deadline.ToUnixTimeMilliseconds();
         }
 
         /// <summary>health与execute都必须绑定同一target/session；execute额外冻结listener generation。</summary>
@@ -596,6 +594,8 @@ namespace UnityCli
                         return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_REQUEST_REPLAY_MISMATCH", "requestId was reused with different immutable request bytes.", new[] { "Submit a new requestId for different Runtime Tool input." }));
                     return Publication(RuntimePublicationOutcome.Existing, existing, null);
                 }
+                if (absoluteDeadlineMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                    return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_SCHEMA_INVALID", "Runtime request execution.absoluteDeadlineUtc must be in the future for a cache miss.", new[] { "Submit a new request with a future immutable deadline." }));
                 var pool = admissionPool;
                 UnityCliAdmissionPool.ConsumedIdentity admissionOwner;
                 bool newlyConsumed;

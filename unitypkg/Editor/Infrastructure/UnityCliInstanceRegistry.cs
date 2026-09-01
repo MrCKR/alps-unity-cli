@@ -496,13 +496,35 @@ namespace UnityCli
                 && string.Equals(ReadString(identity, "canonicalProjectPath"), ProjectIdentity().CanonicalProjectPath, StringComparison.Ordinal);
         }
 
+        /// <summary>端口监听前冻结本domain唯一generation；网络接收与queue publication都只能发生在其后。</summary>
+        private static void PrepareListenerGenerationForStart()
+        {
+            if (listenerGeneration > 0) return;
+            WithRegistryMutex(() =>
+            {
+                string ignored;
+                EnsureListenerGeneration(ReadCurrentRegistryForPublication(out ignored));
+            });
+            if (listenerGeneration <= 0) throw new InvalidOperationException("Listener generation could not be established before startup.");
+        }
+
         /// <summary>读取当前 session 上一次 listener 代次；domain reload 后严格递增。</summary>
         private static void EnsureListenerGeneration(Dictionary<string, object> registry)
         {
             if (listenerGeneration > 0) return;
             var previous = ReadSessions(registry).FirstOrDefault(IsCurrentSession);
             var listener = ReadDictionary(previous, "listener");
-            listenerGeneration = Math.Max(1L, ReadLong(listener, "generation") + 1L);
+            listenerGeneration = ComputeListenerGeneration(listenerGeneration, ReadLong(listener, "generation"));
+        }
+
+        private static long ComputeListenerGeneration(long currentGeneration, long previousGeneration)
+        {
+            return currentGeneration > 0 ? currentGeneration : Math.Max(1L, previousGeneration + 1L);
+        }
+
+        internal static long ComputeListenerGenerationForTests(long currentGeneration, long previousGeneration)
+        {
+            return ComputeListenerGeneration(currentGeneration, previousGeneration);
         }
 
         /// <summary>供 deterministic port 选择读取本 session 的 previous actual port。</summary>

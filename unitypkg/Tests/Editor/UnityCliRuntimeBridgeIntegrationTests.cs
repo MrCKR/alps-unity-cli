@@ -133,6 +133,36 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void ExpiredReplayIsLinearizedBeforeCacheMissFreshness()
+        {
+            var requestId = "runtime-expired-replay";
+            var digest = DigestFor(requestId);
+            var originalDeadline = DateTimeOffset.UtcNow.AddMilliseconds(500).ToUnixTimeMilliseconds();
+            var originalRequest = Request(requestId, "runtime-tool.list", originalDeadline);
+            var seeded = bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput());
+            Assert.That(seeded.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
+            var remaining = Math.Max(1L, originalDeadline - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 20L);
+            Thread.Sleep((int)remaining);
+            Assert.That(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Is.GreaterThanOrEqualTo(originalDeadline));
+
+            var exactTask = Task.Run(() => bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput()));
+            var mismatchTask = Task.Run(() => bridge.PublishRuntimeRequest(originalRequest, originalDeadline, Digest('f'), new UnityCliRuntimeBridge.RuntimeAdmissionInput()));
+
+            Assert.That(Task.WaitAll(new Task[] { exactTask, mismatchTask }, 5000), Is.True);
+            Assert.That(exactTask.Result.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
+            Assert.That(exactTask.Result.Work, Is.SameAs(seeded.Work));
+            Assert.That(mismatchTask.Result.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
+            Assert.That(mismatchTask.Result.Error, Does.Contain("E_REQUEST_REPLAY_MISMATCH"));
+
+            var expired = DateTimeOffset.UtcNow.AddMinutes(-1).ToUnixTimeMilliseconds();
+            var miss = bridge.PublishRuntimeRequest(Request("runtime-expired-miss", "runtime-tool.list", expired), expired, DigestFor("runtime-expired-miss"), new UnityCliRuntimeBridge.RuntimeAdmissionInput());
+            Assert.That(miss.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
+            Assert.That(miss.Error, Does.Contain("E_SCHEMA_INVALID"));
+            Assert.That(bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput()).Outcome,
+                Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
+        }
+
+        [Test]
         public void RunningRequestCompletesAgainstCapturedPoolAfterShutdown()
         {
             var request = Request("runtime-running-shutdown", "runtime-tool.run");
@@ -196,13 +226,18 @@ namespace UnityCli.Tests
 
         private static Dictionary<string, object> Request(string requestId, string command)
         {
+            return Request(requestId, command, Deadline());
+        }
+
+        private static Dictionary<string, object> Request(string requestId, string command, long absoluteDeadlineMs)
+        {
             return new Dictionary<string, object>
             {
                 { "protocolVersion", (long)2 }, { "instanceId", "runtime-test-instance" }, { "command", command },
                 { "requestId", requestId }, { "input", new Dictionary<string, object>() },
                 { "execution", new Dictionary<string, object>
                     {
-                        { "absoluteDeadlineUtc", DateTimeOffset.UtcNow.AddMinutes(1).ToString("O") },
+                        { "absoluteDeadlineUtc", DateTimeOffset.FromUnixTimeMilliseconds(absoluteDeadlineMs).ToString("O") },
                         { "completionContractVersion", (long)1 }, { "requestDigestVersion", (long)1 }
                     }
                 }

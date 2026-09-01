@@ -132,6 +132,87 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void PublicationCompensationPersistsAndLogsOutsideQueueLock()
+        {
+            var request = Request("queue-publication-fault");
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
+            var persistOutside = false;
+            var logOutside = false;
+            UnityCliBridge.QueueTestBoundary = name =>
+            {
+                if (name == "before-queue-publication") throw new InvalidOperationException("injected publication fault");
+                if (name == "before-admission-compensation-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests;
+                if (name == "before-admission-compensation-log") logOutside = !UnityCliBridge.QueueLockHeldForTests;
+            };
+
+            Assert.Throws<InvalidOperationException>(() => { bool created; Enqueue(request, raw, grant.Token, deadline, out created); });
+
+            Assert.That(persistOutside, Is.True);
+            Assert.That(logOutside, Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void CompletionBoundaryFaultLogsAndPersistsOutsideQueueLock()
+        {
+            var request = Request("queue-completion-fault");
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, UnityCliBridge.ListenerIdForTests, UnityCliBridge.ListenerGenerationForTests);
+            bool created;
+            var item = Enqueue(request, raw, grant.Token, deadline, out created);
+            var faultObservedInside = false;
+            var persistOutside = false;
+            var logOutside = false;
+            UnityCliBridge.QueueTestBoundary = name =>
+            {
+                if (name == "before-completion-memory")
+                {
+                    faultObservedInside = UnityCliBridge.QueueLockHeldForTests;
+                    throw new InvalidOperationException("injected completion boundary fault");
+                }
+                if (name == "before-admission-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests;
+                if (name == "before-queue-boundary-fault-log") logOutside = !UnityCliBridge.QueueLockHeldForTests;
+            };
+
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.True);
+
+            Assert.That(faultObservedInside, Is.True);
+            Assert.That(persistOutside, Is.True);
+            Assert.That(logOutside, Is.True);
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void WorkerClassificationUsesOnlyImmutableInput()
+        {
+            var requests = new[]
+            {
+                ProjectToolRequest("worker-rigidbody", "physics.rigidbody", new Dictionary<string, object> { { "target", "MissingTarget" } }),
+                ProjectToolRequest("worker-reflection", "graphics.reflection-probe", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } }),
+                ProjectToolRequest("worker-light-probes", "graphics.light-probe-group", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } })
+            };
+
+            var task = Task.Run(() => requests.Select(UnityCliBridge.QueueRequestWorkClass).ToArray());
+
+            Assert.That(task.Wait(5000), Is.True);
+            Assert.That(task.Result, Is.All.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation));
+        }
+
+        [Test]
+        public void ListenerGenerationNeverStartsAtZeroAndDoesNotFork()
+        {
+            Assert.That(UnityCliBridge.ComputeListenerGenerationForTests(0, 0), Is.EqualTo(1));
+            Assert.That(UnityCliBridge.ComputeListenerGenerationForTests(0, 7), Is.EqualTo(8));
+            Assert.That(UnityCliBridge.ComputeListenerGenerationForTests(9, 99), Is.EqualTo(9));
+        }
+
+        [Test]
         public void RegisteredInternalCommandsUseTheClosedProductionClassification()
         {
             var classes = UnityCliBridge.InternalQueueClassesForTests();
@@ -183,6 +264,14 @@ namespace UnityCli.Tests
             };
             int depth;
             return UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, out created, out depth);
+        }
+
+        private static BridgeRequest ProjectToolRequest(string requestId, string toolName, Dictionary<string, object> input)
+        {
+            var request = Request(requestId);
+            request.Command = "project-tool.run";
+            request.Input = new Dictionary<string, object> { { "name", toolName }, { "input", input } };
+            return request;
         }
 
         private static BridgeRequest Request(string requestId)

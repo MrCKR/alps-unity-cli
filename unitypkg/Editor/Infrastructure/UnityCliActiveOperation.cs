@@ -53,7 +53,7 @@ namespace UnityCli
         }
 
         /// <summary>terminal已durable后以三段式transfer取得TerminalCleanup owner，再清root与lease。</summary>
-        internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest, bool completeAdmission = true)
+        internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest, bool completeAdmission = true, Action<string> cleanupBoundary = null)
         {
             ValidateTerminalIdentity(scope, requestId, requestDigest);
             var cleanupScope = scope + "-terminal-cleanup";
@@ -61,7 +61,7 @@ namespace UnityCli
             if (existing != null && (!string.Equals(Text(existing, "requestId"), requestId, StringComparison.Ordinal)
                 || !string.Equals(Text(existing, "requestDigest"), requestDigest, StringComparison.Ordinal)))
             {
-                if (RetryExactTerminalCleanup(scope)) return;
+                if (RetryExactTerminalCleanup(scope, cleanupBoundary)) return;
                 existing = null;
             }
             if (existing == null)
@@ -92,11 +92,11 @@ namespace UnityCli
                     Save(cleanupScope, existing);
                 }
             }
-            RetryExactTerminalCleanup(scope);
+            RetryExactTerminalCleanup(scope, cleanupBoundary);
         }
 
         /// <summary>只有确认exact owner已不存在才删除cleanup marker；读取不确定时保持原状。</summary>
-        internal static bool RetryExactTerminalCleanup(string scope)
+        internal static bool RetryExactTerminalCleanup(string scope, Action<string> cleanupBoundary = null)
         {
             var cleanupScope = scope + "-terminal-cleanup";
             var marker = Load(cleanupScope);
@@ -110,7 +110,7 @@ namespace UnityCli
             ValidateTerminalIdentity(scope, requestId, requestDigest);
             if (!string.Equals(editorSessionId, UnityCliBridge.EditorSessionId(), StringComparison.Ordinal))
             {
-                Clear(cleanupScope);
+                ClearForTerminalCleanup(cleanupScope, cleanupBoundary);
                 return false;
             }
             UnityCliBridge.AdmissionOwnerIdentity admissionOwner = null;
@@ -129,24 +129,30 @@ namespace UnityCli
                 if (!markerOwnsLease)
                 {
                     if (completeAdmission && !UnityCliBridge.CompleteAdmissionRoot(admissionOwner)) return true;
-                    Clear(cleanupScope);
+                    ClearForTerminalCleanup(cleanupScope, cleanupBoundary);
                     return false;
                 }
-                try { Clear(scope); active = null; }
+                try { ClearForTerminalCleanup(scope, cleanupBoundary); active = null; }
                 catch { return true; }
             }
             if (active != null && string.Equals(Text(active, "requestId"), requestId, StringComparison.Ordinal)
                 && string.Equals(Text(active, "requestDigest"), requestDigest, StringComparison.Ordinal))
             {
-                try { Clear(scope); }
+                try { ClearForTerminalCleanup(scope, cleanupBoundary); }
                 catch { return true; }
             }
             UnityCliBridge.UnityCliSessionMutationLease.Release(requestId, requestDigest);
             bool isOwned;
             if (!UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned) || isOwned) return true;
             if (completeAdmission && !UnityCliBridge.CompleteAdmissionRoot(admissionOwner)) return true;
-            Clear(cleanupScope);
+            ClearForTerminalCleanup(cleanupScope, cleanupBoundary);
             return false;
+        }
+
+        private static void ClearForTerminalCleanup(string scope, Action<string> cleanupBoundary)
+        {
+            if (cleanupBoundary != null) cleanupBoundary(scope);
+            Clear(scope);
         }
 
         private const int MaxTerminalCacheBytes = 8 * 1024 * 1024;

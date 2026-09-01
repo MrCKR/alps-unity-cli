@@ -560,6 +560,7 @@ namespace UnityCli
 
             // 钥匙是机制临时状态，位于用户级临时区 .temp/requests/<实例>/ 下。
             private static string LeasePath() { return Path.Combine(DataDir(), ".temp", "requests", InstanceId(), ".instance-resource.lock"); }
+            internal static string LeasePathForTests() { return LeasePath(); }
             private static long CurrentProcessId() { return Process.GetCurrentProcess().Id; }
             private static string CurrentProcessStartIdentity() { using (var process = Process.GetCurrentProcess()) return "win32:" + process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture); }
         }
