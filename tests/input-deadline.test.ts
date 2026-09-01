@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import type { RootAdmissionLease, RootAdmissionRequest } from "../src/bridge/index.js";
 import { dispatchTool } from "../src/tools/dispatcher.js";
+import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -64,9 +65,53 @@ test("ordinary Tool input parsing passes one finite absolute admission deadline"
   }
 });
 
+test("resolved live descriptor owns the default input and admission deadline", async () => {
+  const root = await mkdtemp(join(tmpdir(), "unity-cli-resolved-input-deadline-"));
+  const inputPath = join(root, "input.json");
+  await writeFile(inputPath, "{}", "utf8");
+  const tool = makeLiveTool({
+    name: "fixture.resolved-timeout",
+    summary: "Read a resolved fixture.",
+    description: "Read a resolved fixture through one live descriptor.",
+    group: "fixture",
+    timeoutMs: 750,
+    completionContract: {
+      executionClass: "atomic",
+      journalPolicy: "none",
+      mutation: false,
+      completionPredicate: "typed-result-schema-v1",
+      proofSource: "typed-handler-result",
+      reloadPolicy: "fail-before-effect",
+      timeoutError: "E_EXECUTION_TIMEOUT",
+      outcomeUnknownPolicy: "not-applicable-read-only",
+      completionDriverId: "direct-typed-result-v1",
+    },
+  });
+  let admissionRequest: RootAdmissionRequest | undefined;
+  const supervisor = {
+    acquireRootAdmission: async (request: RootAdmissionRequest): Promise<RootAdmissionLease> => {
+      admissionRequest = request;
+      return lease(request);
+    },
+    completeRootAdmission: async (): Promise<void> => undefined,
+  };
+  try {
+    const result = await dispatchTool(tool.name, undefined, { "input-file": inputPath }, {
+      bridgeExecute: async (payload) => ({ ok: true, requestId: payload.requestId, data: { result: {} } }),
+      createSessionSupervisor: () => supervisor as never,
+    }, "req_resolved_input_deadline", {}, tool);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.ok(admissionRequest);
+    assert.equal(admissionRequest!.timeoutMs, 750);
+    assert.equal(Number.isFinite(admissionRequest!.admissionAbsoluteDeadlineMs), true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("dispatcher keeps the non-code input deadline before live descriptor resolution", async () => {
   const source = await readFile("src/tools/dispatcher.ts", "utf8");
-  assert.match(source, /const localMetadata = findToolByName\(name\);[\s\S]*const defaultTimeoutMs = name === "code\.exec" \? 60_000 : 30_000;[\s\S]*const admissionTimeoutMs = Math\.max\(1, executionFromFlags\(flags\)\.timeoutMs \?\? localMetadata\?\.timeoutMs \?\? defaultTimeoutMs\);[\s\S]*const admissionAbsoluteDeadlineMs = dispatchStartedAtMs \+ admissionTimeoutMs;[\s\S]*parseTypedInput\(flags, requestId, name === "code\.exec" \? 1024 \* 1024 : undefined, admissionAbsoluteDeadlineMs\)/);
+  assert.match(source, /const localMetadata = findToolByName\(name\);[\s\S]*const timeoutMetadata = resolvedTool \?\? localMetadata;[\s\S]*const defaultTimeoutMs = name === "code\.exec" \? 60_000 : 30_000;[\s\S]*const admissionTimeoutMs = Math\.max\(1, executionFromFlags\(flags\)\.timeoutMs \?\? timeoutMetadata\?\.timeoutMs \?\? defaultTimeoutMs\);[\s\S]*const admissionAbsoluteDeadlineMs = dispatchStartedAtMs \+ admissionTimeoutMs;[\s\S]*parseTypedInput\(flags, requestId, name === "code\.exec" \? 1024 \* 1024 : undefined, admissionAbsoluteDeadlineMs\)/);
   assert.match(source, /resolveCatalogTool\(name, catalogFlags, runtime, requestId, admissionAbsoluteDeadlineMs\)/);
 });
 

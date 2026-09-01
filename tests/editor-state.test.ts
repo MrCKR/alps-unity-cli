@@ -156,7 +156,7 @@ test("editor.state fallback performs zero UI probes for unverified, duplicate, o
   }
 });
 
-test("readEditorState lets a verified exact modal override a raw unverifiable observation", async () => {
+test("readEditorState lets an exact modal override raw uncertainty but does not trust unverified active claims", async () => {
   const fixture = await stateFixture();
   const rawUnverifiable = reduceObservationRegistryRecord(makeRegistry(fixture.identity, [fixture.session]), new Map([[fixture.session.processId, {
     processId: fixture.session.processId,
@@ -214,23 +214,19 @@ test("readEditorState lets a verified exact modal override a raw unverifiable ob
     }]]));
     assert.ok(active.activeSession);
     const unverifiedClaims: ProjectProcessClaimInspection = { verification: "unverifiable", processIds: [] };
-    const fallbackBlocked = await readEditorState({ ...context, requestId: "state-active-fallback-blocked" }, {
+    let fallbackObserverCalls = 0;
+    const fallbackUnverifiable = await readEditorState({ ...context, requestId: "state-active-fallback-unverifiable" }, {
       selectObservation: async () => ({ instance: active, matchedBy: "instanceId" as const }),
       verifySession: async () => "verified",
       inspectClaims: async () => unverifiedClaims,
-      observer: { observe: async () => ({ outcome: "observed-blocked" as const, blockers: [{
-        type: "dialog" as const,
-        dialogId: "dialog_fallback",
-        title: "Fallback Modal",
-        message: "Fallback Modal",
-        buttons: ["Close"],
-        requiresUserAction: true as const,
-        source: "windows-ui" as const,
-        confidence: "exact" as const,
-      }] }) },
+      observer: { observe: async () => {
+        fallbackObserverCalls += 1;
+        return { outcome: "observed-blocked" as const, blockers: [] };
+      } },
     });
-    assert.equal(fallbackBlocked.status, "blocked");
-    assert.deepEqual(fallbackBlocked.blockers.map((blocker) => blocker.title), ["Fallback Modal"]);
+    assert.equal(fallbackUnverifiable.status, "unverifiable");
+    assert.deepEqual(fallbackUnverifiable.blockers, []);
+    assert.equal(fallbackObserverCalls, 0);
 
     const fallbackEmpty = await readEditorState({ ...context, requestId: "state-active-fallback-empty" }, {
       selectObservation: async () => ({ instance: active, matchedBy: "instanceId" as const }),

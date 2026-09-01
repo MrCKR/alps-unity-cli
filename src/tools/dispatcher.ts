@@ -66,10 +66,14 @@ export async function dispatchTool(
   if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
   const executionFlagError = validateExecutionTimeoutFlags(flags, requestId);
   if (executionFlagError) return executionFlagError;
+  if (resolvedTool && resolvedTool.name !== name) return failure(requestId, "E_TOOL_SCHEMA_CONFLICT", `Resolved Tool name ${resolvedTool.name} does not match requested name ${name}.`, [
+    "Refresh the selected Unity instance catalog and retry the same command."
+  ], { requestedName: name, resolvedName: resolvedTool.name });
 
   const localMetadata = findToolByName(name);
+  const timeoutMetadata = resolvedTool ?? localMetadata;
   const defaultTimeoutMs = name === "code.exec" ? 60_000 : 30_000;
-  const admissionTimeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? localMetadata?.timeoutMs ?? defaultTimeoutMs);
+  const admissionTimeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? timeoutMetadata?.timeoutMs ?? defaultTimeoutMs);
   const admissionAbsoluteDeadlineMs = dispatchStartedAtMs + admissionTimeoutMs;
   const parsed = await parseTypedInput(flags, requestId, name === "code.exec" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
   if (!parsed.ok) return parsed.error;
@@ -77,9 +81,6 @@ export async function dispatchTool(
   const dispatchResolved = (tool: ToolMetadata, input: Record<string, unknown>): Promise<CliResult> => dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs);
   // command入口已从同一次live catalog读取schema；直接使用该descriptor，避免二次发现改变绑定。
   if (resolvedTool) {
-    if (resolvedTool.name !== name) return failure(requestId, "E_TOOL_SCHEMA_CONFLICT", `Resolved Tool name ${resolvedTool.name} does not match requested name ${name}.`, [
-      "Refresh the selected Unity instance catalog and retry the same command."
-    ], { requestedName: name, resolvedName: resolvedTool.name });
     const input = requestFromInput(resolvedTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
     return dispatchResolved(resolvedTool, input);
   }

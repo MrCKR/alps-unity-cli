@@ -1,6 +1,6 @@
 import { failure, success } from "../output.js";
 import type { CliResult } from "../types.js";
-import { loadToolCatalog, publicToolDescriptor } from "../tools/catalog.js";
+import { loadToolCatalog, publicToolDescriptor, resolveCatalogIndependentOperabilityTool } from "../tools/catalog.js";
 import { dispatchCatalogProjection, dispatchTool, type ToolsRuntime } from "../tools/dispatcher.js";
 import { StructuredToolError } from "../tools/errors.js";
 import type { ToolMetadata } from "../tools/metadata/index.js";
