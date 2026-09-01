@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 
 namespace UnityCli
 {
-    /// <summary>Bridge主线程队列的纯分类、容量与启动选择策略。</summary>
+    /// <summary>Bridge主线程队列的纯分类、容量与启动选择策略；BridgeWorkQueue集成待完成。</summary>
     public static class UnityCliBridgeQueuePolicy
     {
         public const int MaxBypassIdentities = 128;
@@ -120,6 +120,7 @@ namespace UnityCli
             {
                 case "internal.editor.compile.status":
                 case "internal.editor.refresh.status":
+                case "internal.editor.state.snapshot":
                 case "internal.asset.refresh.status":
                 case "internal.package.embed.status":
                 case "internal.package.resolve.status":
@@ -172,7 +173,9 @@ namespace UnityCli
             ValidateEnum(durableMutationBarrier, "durableMutationBarrier");
 
             var examined = Math.Min(queued.Count, MaxNodesExaminedPerTick);
+            var examinedNodes = new List<QueueNode>(examined);
             var firstMutationIndex = -1;
+            var earlierOrdinaryReadIndices = new List<int>();
             var safeStatusIndices = new List<int>(MaxSafeStatusStartsPerTick);
             var nodeIds = new HashSet<string>(StringComparer.Ordinal);
             for (var index = 0; index < examined; index++)
@@ -180,9 +183,13 @@ namespace UnityCli
                 var node = queued[index];
                 if (node == null) throw new ArgumentException("Examined queue prefix contains null.", "queued");
                 if (!nodeIds.Add(node.NodeId)) throw new ArgumentException("Examined queue prefix contains duplicate nodeId.", "queued");
-                if (firstMutationIndex < 0 && node.Class == WorkClass.Mutation) firstMutationIndex = index;
+                examinedNodes.Add(node);
+                if (firstMutationIndex < 0 && node.Class == WorkClass.Mutation)
+                    firstMutationIndex = index;
                 if (node.Class == WorkClass.SafeStatus && safeStatusIndices.Count < MaxSafeStatusStartsPerTick)
                     safeStatusIndices.Add(index);
+                if (firstMutationIndex < 0 && node.Class == WorkClass.OrdinaryRead)
+                    earlierOrdinaryReadIndices.Add(index);
             }
 
             var selected = new bool[examined];
@@ -192,22 +199,19 @@ namespace UnityCli
 
             if (regularBarrierClear && remainingStarts > 0)
             {
-                if (firstMutationIndex < 0)
+                if (firstMutationIndex < 0 || earlierOrdinaryReadIndices.Count > 0)
                 {
-                    remainingStarts = SelectOrdinaryReads(queued, selected, examined, remainingStarts);
-                }
-                else
-                {
-                    var earlierOrdinaryReads = CountOrdinaryReads(queued, firstMutationIndex);
-                    if (earlierOrdinaryReads > 0)
+                    foreach (var index in earlierOrdinaryReadIndices)
                     {
-                        remainingStarts = SelectOrdinaryReads(queued, selected, firstMutationIndex, remainingStarts);
-                    }
-                    else if (runningOrdinaryReads == 0)
-                    {
-                        selected[firstMutationIndex] = true;
+                        if (remainingStarts == 0) break;
+                        selected[index] = true;
                         remainingStarts -= 1;
                     }
+                }
+                else if (runningOrdinaryReads == 0)
+                {
+                    selected[firstMutationIndex] = true;
+                    remainingStarts -= 1;
                 }
             }
 
@@ -215,36 +219,16 @@ namespace UnityCli
             for (var index = 0; index < examined; index++)
             {
                 if (!selected[index]) continue;
-                var node = queued[index];
+                var node = examinedNodes[index];
                 starts.Add(new StartDecision(node.NodeId, index, node.Class));
             }
             return new TickSelection(starts, examined);
         }
 
-        /// <summary>普通读取只从首个mutation之前或无mutation的已扫描前缀选择。</summary>
-        private static int SelectOrdinaryReads(IReadOnlyList<QueueNode> queued, bool[] selected, int exclusiveEnd, int remainingStarts)
-        {
-            for (var index = 0; index < exclusiveEnd && remainingStarts > 0; index++)
-            {
-                if (queued[index].Class != WorkClass.OrdinaryRead) continue;
-                selected[index] = true;
-                remainingStarts -= 1;
-            }
-            return remainingStarts;
-        }
-
-        private static int CountOrdinaryReads(IReadOnlyList<QueueNode> queued, int exclusiveEnd)
-        {
-            var count = 0;
-            for (var index = 0; index < exclusiveEnd; index++)
-                if (queued[index].Class == WorkClass.OrdinaryRead) count += 1;
-            return count;
-        }
-
         private static void ValidateCommand(string command)
         {
-            if (string.IsNullOrWhiteSpace(command) || command.Length > 200 || !string.Equals(command, command.Trim(), StringComparison.Ordinal))
-                throw new ArgumentException("Bridge command must be a non-empty exact value of at most 200 characters.", "command");
+            if (string.IsNullOrWhiteSpace(command) || command.Length > 256 || !string.Equals(command, command.Trim(), StringComparison.Ordinal))
+                throw new ArgumentException("Bridge command must be a non-empty exact value of at most 256 characters.", "command");
         }
 
         private static void ValidateNodeId(string nodeId)

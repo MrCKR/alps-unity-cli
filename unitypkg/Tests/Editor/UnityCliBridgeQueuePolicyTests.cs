@@ -5,6 +5,7 @@ using NUnit.Framework;
 
 namespace UnityCli.Tests
 {
+    /// <summary>仅验证纯队列策略；BridgeWorkQueue集成待完成。</summary>
     public sealed class UnityCliBridgeQueuePolicyTests
     {
         private const string SafeStatusCommand = "internal.editor.compile.status";
@@ -118,6 +119,23 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void NodeScanBoundCountsActualIndexerVisits()
+        {
+            var queued = new CountingQueue(Enumerable.Range(0, UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick - 1)
+                .Select(index => Node("read-" + index.ToString(), UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead))
+                .Concat(new[] { Node("mutation-last", UnityCliBridgeQueuePolicy.WorkClass.Mutation) })
+                .ToArray());
+
+            var result = UnityCliBridgeQueuePolicy.SelectStarts(
+                queued, 0, false, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear);
+
+            Assert.That(queued.IndexerVisits, Is.LessThanOrEqualTo(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+            Assert.That(queued.IndexerVisits, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+            Assert.That(result.NodesExamined, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+            Assert.That(result.Starts.Count, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxStartsPerTick));
+        }
+
+        [Test]
         public void EligibleNodeBeyondScanBoundDoesNotStart()
         {
             var queued = Enumerable.Range(0, UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
@@ -149,8 +167,8 @@ namespace UnityCli.Tests
             var result = UnityCliBridgeQueuePolicy.SelectStarts(
                 queued, 0, false, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable);
 
-            Assert.That(Ids(result), Is.EqualTo(new[] { "exact-status" }));
-            Assert.That(result.Starts.Single().Class, Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.SafeStatus));
+            Assert.That(Ids(result), Is.EqualTo(new[] { "exact-status", "snapshot" }));
+            Assert.That(result.Starts.All(item => item.Class == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus), Is.True);
         }
 
         [Test]
@@ -187,6 +205,7 @@ namespace UnityCli.Tests
             {
                 "internal.editor.compile.status",
                 "internal.editor.refresh.status",
+                "internal.editor.state.snapshot",
                 "internal.asset.refresh.status",
                 "internal.package.embed.status",
                 "internal.package.resolve.status",
@@ -202,11 +221,11 @@ namespace UnityCli.Tests
             var excluded = new[]
             {
                 "internal.editor.compile.Status",
+                "internal.editor.state.snapshot.extra",
                 "internal.unknown.status",
                 "project-tool.run",
                 "profiler.status",
                 "extension.status",
-                "internal.editor.state.snapshot",
                 "internal.navmesh.bake.plan",
                 "internal.navmesh.bake.snapshot",
                 "internal.navmesh.bake.cancel",
@@ -222,6 +241,37 @@ namespace UnityCli.Tests
             Assert.That(UnityCliBridgeQueuePolicy.Classify("project-tool.run", true),
                 Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation));
             Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(SafeStatusCommand, true));
+        }
+
+        [Test]
+        public void EditorStateSnapshotProgressesWhenMutationOrDurableBarrierBlocksRegularWork()
+        {
+            var queued = new[]
+            {
+                Node("mutation", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
+                Node("ordinary", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
+                Classified("snapshot", "internal.editor.state.snapshot", false)
+            };
+
+            var mutationRunning = UnityCliBridgeQueuePolicy.SelectStarts(
+                queued, 0, true, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear);
+            Assert.That(Ids(mutationRunning), Is.EqualTo(new[] { "snapshot" }));
+
+            var held = UnityCliBridgeQueuePolicy.SelectStarts(
+                queued, 0, false, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Held);
+            Assert.That(Ids(held), Is.EqualTo(new[] { "snapshot" }));
+
+            var unreadable = UnityCliBridgeQueuePolicy.SelectStarts(
+                queued, 0, false, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable);
+            Assert.That(Ids(unreadable), Is.EqualTo(new[] { "snapshot" }));
+        }
+
+        [Test]
+        public void CommandLengthMatchesCanonicalAdmissionBoundary()
+        {
+            Assert.That(UnityCliBridgeQueuePolicy.Classify(new string('c', 256), false),
+                Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead));
+            Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(new string('c', 257), false));
         }
 
         private static UnityCliBridgeQueuePolicy.TickSelection Select(IReadOnlyList<UnityCliBridgeQueuePolicy.QueueNode> queued)
@@ -257,6 +307,42 @@ namespace UnityCli.Tests
         private static string[] Ids(UnityCliBridgeQueuePolicy.TickSelection selection)
         {
             return selection.Starts.Select(item => item.NodeId).ToArray();
+        }
+
+        private sealed class CountingQueue : IReadOnlyList<UnityCliBridgeQueuePolicy.QueueNode>
+        {
+            private readonly UnityCliBridgeQueuePolicy.QueueNode[] _nodes;
+
+            public CountingQueue(UnityCliBridgeQueuePolicy.QueueNode[] nodes)
+            {
+                _nodes = nodes;
+            }
+
+            public int IndexerVisits { get; private set; }
+
+            public int Count
+            {
+                get { return _nodes.Length; }
+            }
+
+            public UnityCliBridgeQueuePolicy.QueueNode this[int index]
+            {
+                get
+                {
+                    IndexerVisits += 1;
+                    return _nodes[index];
+                }
+            }
+
+            public IEnumerator<UnityCliBridgeQueuePolicy.QueueNode> GetEnumerator()
+            {
+                return ((IEnumerable<UnityCliBridgeQueuePolicy.QueueNode>)_nodes).GetEnumerator();
+            }
+
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
         }
     }
 }
