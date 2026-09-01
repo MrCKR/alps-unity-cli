@@ -46,7 +46,7 @@ unitycli tools run camera.screenshot --input '{}'
 
 ## 调用进程预算
 
-外层命令host必须等待`unitycli`进程退出，不能在CLI仍运行时把调用报告为完成。`--timeout-ms T`分别提供最多`T`的Unity任务池准入等待，以及放行后最多`T`的业务执行；因此host等待预算至少为`2 * T + 5000`毫秒。未显式传timeout时，先从`tools describe`的example execution或Tool边界选择`T`。CLI在任一内部deadline到达后输出一个完整JSON envelope；stdout完成后立即退出，stdout未完成时最多再等待1秒。CLI timeout只结束调用方等待，不会强停Unity中已经开始的effect；host提前退出同样不能作为effect停止证明。
+外层命令host必须等待`unitycli`进程退出，不能在CLI仍运行时把调用报告为完成。`--timeout-ms T`分别提供最多`T`的Unity任务池准入等待，以及放行后最多`T`的业务执行；因此host等待预算至少为`2 * T + 5000`毫秒。未显式传timeout时，先从`tools describe`的example execution或Tool边界选择`T`。CLI在任一内部deadline到达后输出一个完整JSON envelope；stdout完成且已注册的local owner都settle后退出，或在唯一的1000ms宽限期到达时退出。CLI timeout只结束调用方等待，不会强停Unity中已经开始的effect；host提前退出同样不能作为effect停止证明。
 
 ## Unity 任务池准入
 
@@ -62,7 +62,7 @@ Bridge-backed Tool由Unity Editor主线程执行。业务请求发送前，sessi
 
 首次mutation POST后若Editor session改变，CLI禁止向新session再次POST，并返回`E_EXECUTION_TIMEOUT`、`outcome:unknown`。其他超时或终态前断连同样表示没有可信终态；调用方应先用业务读取或`editor.state`收集证据，再决定是否提交全新请求。`editor.state`使用frozen本地descriptor绕过被阻断的Live catalog和strict ordinary selector，再读取Registry/Health v3、内存主线程pulse、Bridge和Windows modal证据；它唯一可发出一次无admission的private `internal.editor.state.snapshot` observeNow POST。两个dialog recovery Tool保持同一观察lane，其他Tool不建立静态fallback。
 
-一次调用的selector、Bridge、Windows观察和错误blocker补充都消费适用的同一absolute deadline；10秒诊断上限只能缩短它，剩余时间为零时不再观察，主错误保持不变。本地Tool的公开deadline先到后只返回一个固定`E_EXECUTION_TIMEOUT` envelope；迟到Promise不能改变terminal或重放effect，且首次effect barrier已关闭。迟到清理只处理未消费lease，并与stdout共用现有最多1秒退出宽限；Unity已消费root仍由WorkItem、coordinator或recovery owner收敛。
+一次调用的selector、Bridge、Windows观察和错误blocker补充都消费适用的同一absolute deadline；10秒诊断上限只能缩短它，剩余时间为零时不再观察，主错误保持不变。本地Tool的公开deadline先到后只返回一个固定`E_EXECUTION_TIMEOUT` envelope；迟到Promise不能改变terminal或重放effect，且首次effect barrier已关闭。每次settlement的精确清理只处理未消费lease，并与stdout共用现有最多1秒退出宽限；Unity已消费root仍由WorkItem、coordinator或recovery owner收敛。
 
 ### `editor.compile`
 

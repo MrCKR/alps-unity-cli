@@ -3,7 +3,6 @@ import { readEditorState, type EditorStateResult } from "./state.js";
 interface EditorReadinessContext {
   flags?: Record<string, string | boolean>;
   dataDir?: string;
-  rootAdmission?: unknown;
   bridgeExecute?: unknown;
 }
 
@@ -21,7 +20,6 @@ export async function waitForEditorTransitionEnd(
       requestId,
       flags: context.flags,
       dataDir: context.dataDir,
-      rootAdmission: context.rootAdmission,
       bridgeExecute: context.bridgeExecute,
       absoluteDeadlineMs: deadlineMs,
     } as never);

@@ -89,10 +89,8 @@ export async function dispatchTool(
     ? { ...dispatchFlags, project: parsed.input.project }
     : dispatchFlags;
   // exact 弹窗恢复及其 describe 学习入口不依赖被同一 modal 阻断的 Live catalog。
-  const catalogIndependentTool = resolveCatalogIndependentInvocationTool(
-    name,
-    typeof seed.name === "string" ? seed.name : undefined,
-  );
+  const describedName = seed.name ?? parsed.input.name;
+  const catalogIndependentTool = resolveCatalogIndependentInvocationTool(name, typeof describedName === "string" ? describedName : undefined);
   if (catalogIndependentTool) {
     const input = requestFromInput(catalogIndependentTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
     return dispatchResolvedTool(catalogIndependentTool, input, dispatchFlags, runtime, requestId, dispatchStartedAtMs);
@@ -307,9 +305,7 @@ async function executeDefinition(
   const cleanup = async (): Promise<void> => {
     await releaseUnconsumedCatalogAdmissions({ admissions, supervisors, executionAbsoluteDeadlineMs });
   };
-  const result = await executeLocalDefinition(tool, completion, definition, input, flags, rootRuntime, requestId, projectPath, execution, executionAbsoluteDeadlineMs, cleanup);
-  if (rootResultHasTrustedTerminal(result)) await cleanup();
-  return result;
+  return executeLocalDefinition(tool, completion, definition, input, flags, rootRuntime, requestId, projectPath, execution, executionAbsoluteDeadlineMs, cleanup);
 }
 
 /** exact owner判定只接受三个公开名及其精确describe目标。 */
@@ -332,7 +328,7 @@ async function executeLocalDefinition(
   absoluteDeadlineMs: number,
   cleanupAfterLateSettlement?: () => Promise<void>,
 ): Promise<CliResult> {
-  const barrier = new LocalEffectBarrier(tool.name);
+  const barrier = new LocalEffectBarrier(tool.name, absoluteDeadlineMs);
   const run = async (): Promise<CliResult> => {
     try {
       const data = await definition.execute(input, {
@@ -395,11 +391,15 @@ export class LocalEffectBarrier {
   private closed = false;
   private committed = false;
 
-  public constructor(private readonly toolName: string) {}
+  public constructor(
+    private readonly toolName: string,
+    private readonly absoluteDeadlineMs: number,
+    private readonly now: () => number = Date.now,
+  ) {}
 
   public readonly commitEffect = async (): Promise<void> => {
     if (this.committed) return;
-    if (this.closed) throw new StructuredToolError("E_EXECUTION_TIMEOUT", `Tool ${this.toolName} cannot start its first effect after the public deadline.`, [
+    if (this.closed || this.now() >= this.absoluteDeadlineMs) throw new StructuredToolError("E_EXECUTION_TIMEOUT", `Tool ${this.toolName} cannot start its first effect after the public deadline.`, [
       "Inspect editor.state and the affected business state before deciding whether to submit a new request."
     ], { reason: "post-deadline-effect-barrier" });
     this.committed = true;
@@ -411,9 +411,10 @@ export class LocalEffectBarrier {
 export interface LocalExecutionDeadlineHooks {
   closeEffectBarrier?: () => void;
   cleanupAfterLateSettlement?: () => Promise<void>;
+  now?: () => number;
 }
 
-/** Tool自己的wait未按时settle时只关闭公开terminal；迟到settlement仅执行一次精确cleanup。 */
+/** Tool自己的wait未按时settle时只关闭公开terminal；每次settlement只执行一次精确cleanup。 */
 export async function settleToolExecutionAtDeadline(
   toolName: string,
   requestId: string,
@@ -422,41 +423,51 @@ export async function settleToolExecutionAtDeadline(
   run: () => Promise<CliResult>,
   hooks: LocalExecutionDeadlineHooks = {},
 ): Promise<CliResult> {
-  const remainingMs = absoluteDeadlineMs - Date.now();
+  const now = hooks.now ?? Date.now;
+  let cleanupStarted = false;
+  const cleanup = async (): Promise<void> => {
+    if (cleanupStarted || !hooks.cleanupAfterLateSettlement) return;
+    cleanupStarted = true;
+    try { await hooks.cleanupAfterLateSettlement(); }
+    catch { /* cleanup不能重写已返回的terminal。 */ }
+  };
+  const remainingMs = absoluteDeadlineMs - now();
   if (remainingMs <= 0) {
     hooks.closeEffectBarrier?.();
+    trackCliProcessOwner(cleanup());
     return toolDeadlineFailure(toolName, requestId, mutation);
   }
 
-  let deadlineWon = false;
-  let cleanupStarted = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let resolveTimer: ((value: { kind: "deadline" }) => void) | undefined;
+  const markDeadline = (): { kind: "deadline" } => {
+    hooks.closeEffectBarrier?.();
+    return { kind: "deadline" };
+  };
   const runPromise = Promise.resolve().then(run);
   const settlement = runPromise.then(
-    (value) => ({ fulfilled: true as const, value }),
-    (reason: unknown) => ({ fulfilled: false as const, reason }),
+    (value) => now() >= absoluteDeadlineMs ? markDeadline() : { kind: "result" as const, value },
+    (reason: unknown) => now() >= absoluteDeadlineMs ? markDeadline() : { kind: "rejected" as const, reason },
   );
-  const owner = settlement.then(async () => {
-    if (!deadlineWon || cleanupStarted || !hooks.cleanupAfterLateSettlement) return;
-    cleanupStarted = true;
-    try { await hooks.cleanupAfterLateSettlement(); }
-    catch { /* cleanup不能重写已返回的timeout terminal。 */ }
-  });
+  const owner = settlement.then(() => cleanup());
   trackCliProcessOwner(owner);
 
-  const winner = await Promise.race([
-    settlement,
-    new Promise<undefined>((resolveTimeout) => {
-      timer = setTimeout(() => {
-        deadlineWon = true;
-        hooks.closeEffectBarrier?.();
-        resolveTimeout(undefined);
-      }, remainingMs);
-    }),
-  ]);
+  const scheduleDeadline = (): void => {
+    const remaining = absoluteDeadlineMs - now();
+    if (remaining > 0) {
+      timer = setTimeout(scheduleDeadline, Math.max(1, remaining));
+      return;
+    }
+    resolveTimer?.(markDeadline());
+  };
+  const timerPromise = new Promise<{ kind: "deadline" }>((resolveTimeout) => {
+    resolveTimer = resolveTimeout;
+    timer = setTimeout(scheduleDeadline, Math.max(1, remainingMs));
+  });
+  const winner = await Promise.race([settlement, timerPromise]);
   if (timer) clearTimeout(timer);
-  if (winner === undefined) return toolDeadlineFailure(toolName, requestId, mutation);
-  if (winner.fulfilled) return winner.value;
+  if (winner.kind === "deadline") return toolDeadlineFailure(toolName, requestId, mutation);
+  if (winner.kind === "result") return winner.value;
   throw winner.reason;
 }
 

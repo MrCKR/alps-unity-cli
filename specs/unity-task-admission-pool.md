@@ -52,7 +52,7 @@
 - domain reload、listener generation 交接和 session shutdown 清理。
 - exact观察 lane 的 Registry/PID/start/Windows UI读取，以及`editor.state`唯一一次 private `internal.editor.state.snapshot` observeNow POST。
 
-除上述三个 exact观察定义外，公开读取即使纯只读也不因只读属性或`handler: offline`绕过任务池。private observeNow 必须在 POST 前同时证明 command exact、`mutation=false`、target=editor 且没有`rootAdmission`；任一条件不满足返回稳定内部调用错误。
+除上述三个 exact观察定义外，公开读取即使纯只读也不因只读属性或`handler: offline`绕过任务池。`editor.state`的private observeNow请求只由该exact观察实现构造为`internal.editor.state.snapshot`、`mutation=false`、target=editor且不带`rootAdmission`；Bridge端在POST前执行精确allowlist，其他内部形态不得成为公开路径。
 
 ### 2.4 Grant、Consumed root 与 Active
 
@@ -254,7 +254,7 @@ granted -> expired|revoked -> removed
 
 ### 7.4 CLI 断开
 
-HTTP client 断开不释放已消费 root，也不取消 coordinator 已接受的 mutation。未被消费的 grant按 TTL 清理。CLI 退出后，Unity terminal owner继续完成、持久化终态并释放槽。本地`run()`只调用一次；公开deadline获胜后terminal固定为`E_EXECUTION_TIMEOUT`，底层Promise仅由exactly-once迟到continuation收敛。该continuation只清理仍未消费的本地lease，`completeRootAdmission`自己的1秒cleanup预算不得改写公开terminal。pending owner与stdout共用唯一`CLI_OUTPUT_FLUSH_GRACE_MS=1000`退出authority；不允许第二个或无界退出timer，永不settle的Promise不能延长该宽限。
+HTTP client 断开不释放已消费 root，也不取消 coordinator 已接受的 mutation。未被消费的 grant按 TTL 清理。CLI 退出后，Unity terminal owner继续完成、持久化终态并释放槽。本地`run()`只调用一次；每次settlement都注册一个exactly-once continuation清理仍未消费的本地lease，公开deadline获胜后terminal固定为`E_EXECUTION_TIMEOUT`，迟到continuation不能改写它。`completeRootAdmission`自己的1秒cleanup预算不得改写公开terminal。pending owner与stdout共用唯一`CLI_OUTPUT_FLUSH_GRACE_MS=1000`退出authority；不允许第二个或无界退出timer，永不settle的Promise不能延长该宽限。
 
 ## 8. Session、reload 与机制状态
 

@@ -11,7 +11,7 @@ import { access, stat } from "node:fs/promises";
 import { discoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { instanceSelectionFailure, obsoleteLocalStatePaths, readInstances, readInstancesWithRegistryDiagnostics, selectInstanceForFlags, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-
+import { EDITOR_STATE_OBSERVATION_BUDGET_MS } from "./bridge/session-supervisor.js";
 import { builtinToolMetadata } from "./tools/metadata/index.js";
 import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
 import { ExtensionRegistry, extensionAvailabilitySummary } from "./extensions/index.js";
@@ -19,8 +19,6 @@ import { extensionAvailabilityFlags } from "./extension-availability.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
-
-const DOCTOR_BRIDGE_CONNECTIVITY_BUDGET_MS = 10_000;
 
 export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime {
   dataDir: string;
@@ -207,11 +205,11 @@ async function checkBridgeConnectivity(
       requestId,
       "project-tool.run",
       { name: "diagnose.preflight", input: {} },
-      { instance: instanceId, "timeout-ms": String(DOCTOR_BRIDGE_CONNECTIVITY_BUDGET_MS) },
+      { instance: instanceId, "timeout-ms": String(EDITOR_STATE_OBSERVATION_BUDGET_MS) },
       runtime,
       undefined,
-      // doctor连通性是普通有界读取，不拥有private editor.state observeNow能力。
-      { mode: "read", mutation: false, defaultTimeoutMs: DOCTOR_BRIDGE_CONNECTIVITY_BUDGET_MS }
+      // connectivity probe 与 editor.state 共享同一即时观察预算，由 supervisor 将 Bridge POST 限制为 3500ms。
+      { mode: "observeNow", mutation: false, defaultTimeoutMs: EDITOR_STATE_OBSERVATION_BUDGET_MS }
     );
 
     if (result.ok) {

@@ -568,41 +568,6 @@ test("missing registry does not wait when no matching Unity process is running",
   assert.equal(sleeps, 0);
 });
 
-test("observeNow rejects every command, mutation, and admission shape outside the private snapshot before selection or POST", async () => {
-  let selections = 0;
-  let posts = 0;
-  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
-    selectObservation: async () => { selections += 1; return selection("ready", 1); },
-    post: async () => { posts += 1; throw new Error("must not post"); },
-  });
-  const admission = {
-    requestId: "req_observe_guard",
-    command: "editor.state",
-    rootFingerprint: "f".repeat(64),
-    completionContractIdentity: "atomic-read-v1",
-    target: "editor" as const,
-    instanceId: INSTANCE_ID,
-    canonicalProjectPath: "c:\\repo\\project",
-    sessionId: SESSION_ID,
-    token: "a".repeat(64),
-    consumed: false,
-    grantExpiresAtMs: Date.now() + 1_000,
-    executionAbsoluteDeadlineMs: Date.now() + 1_000,
-    injected: false,
-  };
-  for (const template of [
-    { requestId: "req_project", command: "project-tool.run", input: {}, mutation: false },
-    { requestId: "req_runtime", command: "runtime-tool.run", input: {}, mutation: false },
-    { requestId: "req_missing_read_guard", command: "internal.editor.state.snapshot", input: {} },
-    { requestId: "req_mutation", command: "internal.editor.state.snapshot", input: {}, mutation: true },
-    { requestId: "req_admitted", command: "internal.editor.state.snapshot", input: {}, mutation: false, rootAdmission: admission },
-  ]) {
-    await assert.rejects(() => supervisor.observeNow(template), (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_INTERNAL_INVOCATION_INVALID");
-  }
-  assert.equal(selections, 0);
-  assert.equal(posts, 0);
-});
-
 test("observeNow binds and posts once during a transitioning session without waiting or rebinding", async () => {
   let sleeps = 0;
   let posts = 0;

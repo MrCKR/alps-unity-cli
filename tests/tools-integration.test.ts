@@ -26,6 +26,15 @@ test("tools group, search, and describe use one connected instance catalog", asy
     assert.equal(Object.hasOwn(describe.data as object, field), false, field);
 });
 
+test("canonical tools run tools.describe resolves its typed input without live catalog discovery", async () => {
+  const result = await execute(["tools", "run", "tools.describe", "--input", '{"name":"editor.state"}'], disconnected as never);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  if (result.ok) {
+    assert.equal((result.data as { name: string }).name, "editor.state");
+    assert.ok((result.data as { inputSchema?: unknown }).inputSchema);
+  }
+});
+
 test("tools search returns sorted routing-only pages without input or source echoes", async () => {
   const result = await execute(["tools", "search", "hierarchy|console|screenshot", "--page-size", "100"], connected as never);
   assert.ok(result.ok, JSON.stringify(result));
@@ -263,6 +272,41 @@ test("shared Tool deadline settles a non-returning mutation without claiming can
   assert.ok(Date.now() - startedAt < 1_000);
 });
 
+test("tool-owned timeout result revokes an unconsumed lease exactly once before the framework timer", async () => {
+  let cleanupCalls = 0;
+  let revokes = 0;
+  const admission = {
+    requestId: "req_tool_timeout_cleanup",
+    command: "fixture.local",
+    rootFingerprint: "f".repeat(64),
+    completionContractIdentity: "atomic-mutation-v1",
+    target: "editor",
+    instanceId: `unity-${"a".repeat(64)}`,
+    canonicalProjectPath: "c:\\repo\\project",
+    sessionId: `session-${"b".repeat(64)}`,
+    token: "a".repeat(64),
+    consumed: false,
+    grantExpiresAtMs: Date.now() + 2_000,
+    executionAbsoluteDeadlineMs: Date.now() + 1_000,
+    injected: false,
+  } as RootAdmissionLease;
+  const result = await settleToolExecutionAtDeadline("fixture.local", admission.requestId, true, admission.executionAbsoluteDeadlineMs, async () => ({
+    ok: false,
+    requestId: admission.requestId,
+    error: { code: "E_EXECUTION_TIMEOUT", message: "tool-owned timeout", nextActions: [], transient: false, retryAfterMs: 0 },
+  }), {
+    cleanupAfterLateSettlement: async () => {
+      cleanupCalls += 1;
+      await completeUnconsumedRootAdmission(admission, { completeRootAdmission: async () => { revokes += 1; } });
+    },
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(cleanupCalls, 1);
+  assert.equal(revokes, 1);
+});
+
 test("late local settlement cleans an unconsumed lease exactly once without changing the timeout terminal", async () => {
   let settle: (() => void) | undefined;
   let cleanupCalls = 0;
@@ -342,7 +386,7 @@ test("late cleanup never revokes a lease consumed before local settlement", asyn
 
 test("public timeout closes the first local effect barrier and absorbs late rejection", async () => {
   let continueRun: (() => void) | undefined;
-  const barrier = new LocalEffectBarrier("fixture.effect");
+  const barrier = new LocalEffectBarrier("fixture.effect", Date.now() + 100);
   const deferred = new Promise<void>((resolve) => { continueRun = resolve; });
   const unhandled: unknown[] = [];
   const onUnhandled = (reason: unknown): void => { unhandled.push(reason); };
@@ -362,6 +406,50 @@ test("public timeout closes the first local effect barrier and absorbs late reje
   } finally {
     process.off("unhandledRejection", onUnhandled);
   }
+});
+
+test("settlement rechecks the wall-clock deadline before accepting a late success", async () => {
+  let now = 10_000;
+  let continueRun: (() => void) | undefined;
+  let started: (() => void) | undefined;
+  let effects = 0;
+  const barrier = new LocalEffectBarrier("fixture.clock", 10_100, () => now);
+  const ready = new Promise<void>((resolve) => { started = resolve; });
+  const deferred = new Promise<void>((resolve) => { continueRun = resolve; });
+  const pending = settleToolExecutionAtDeadline("fixture.clock", "req_clock_deadline", true, 10_100, async () => {
+    started?.();
+    await deferred;
+    await barrier.commitEffect();
+    effects += 1;
+    return { ok: true, requestId: "req_clock_deadline", data: { late: true } };
+  }, { now: () => now, closeEffectBarrier: barrier.close });
+  await ready;
+  now = 10_100;
+  continueRun?.();
+  const result = await pending;
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
+  assert.equal(effects, 0);
+  await assert.rejects(() => barrier.commitEffect(), (error: unknown) => error instanceof Error && (error as { code?: string }).code === "E_EXECUTION_TIMEOUT");
+});
+
+test("settlement rejects a late success before the timer callback and does not run its effect", async () => {
+  let now = 20_000;
+  let continueRun: (() => void) | undefined;
+  let started: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => { started = resolve; });
+  const deferred = new Promise<void>((resolve) => { continueRun = resolve; });
+  const pending = settleToolExecutionAtDeadline("fixture.late", "req_late_success", true, 20_100, async () => {
+    started?.();
+    await deferred;
+    return { ok: true, requestId: "req_late_success", data: { late: true } };
+  }, { now: () => now });
+  await ready;
+  now = 20_100;
+  continueRun?.();
+  const result = await pending;
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
 });
 
 test("shared Tool deadline preserves a terminal returned before the deadline", async () => {

@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { execute } from "../src/cli.js";
 import "../src/tools/.generated-registry.js";
 import editorStateTool, { observeVerifiedRegistrySession, readEditorState, rejectUnavailableEditorState } from "../src/tools/editor/state.js";
 import { defineToolMetadata } from "../src/tools/define.js";
@@ -284,6 +285,50 @@ test("readEditorState uses one live bounded bridge observation and sanitizes sen
     assert.ok(observationDeadlines[0] >= startedAt);
     assert.ok(observationDeadlines[0] <= startedAt + 2_050);
     assert.doesNotMatch(JSON.stringify(direct), /secret|bridgeEndpoint/i);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("an admitted hybrid Tool posts one admission-independent snapshot then continues its business path", async () => {
+  const fixture = await stateFixture();
+  const requests: Array<{ command: string; input: unknown }> = [];
+  const snapshotValue = snapshot(fixture.session);
+  snapshotValue.fields.playMode = { known: true, value: "edit" };
+  const bridgeExecute = async (payload: { requestId: string; command: string; input: unknown }) => {
+    requests.push({ command: payload.command, input: payload.input });
+    if (payload.command === "internal.editor.state.snapshot") {
+      return { ok: true as const, requestId: payload.requestId, data: { snapshot: snapshotValue, progress: [], blockers: [] } };
+    }
+    if (payload.command === "internal.asset.refresh.start") {
+      return {
+        ok: true as const,
+        requestId: payload.requestId,
+        data: {
+          terminal: true,
+          rootEnvelope: {
+            requestId: payload.requestId,
+            ok: true,
+            data: { path: "Assets/Test.asset", options: "Default", refreshed: true, plannedEffects: [{ type: "asset.import", path: "Assets/Test.asset" }] },
+          },
+        },
+      };
+    }
+    throw new Error(`unexpected ${payload.command}`);
+  };
+  try {
+    const result = await execute(["tools", "run", "asset.refresh", "--input", '{"path":"Assets/Test.asset"}', "--instance", fixture.project], {
+      dataDir: fixture.dataDir,
+      bridgeExecute,
+    } as never);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.deepEqual(requests.map((request) => request.command), ["internal.editor.state.snapshot", "internal.asset.refresh.start"]);
+    assert.deepEqual(requests[0]?.input, {});
+    assert.equal((result.data as { refreshed: boolean }).refreshed, true);
+    const source = await readFile("src/tools/editor/state.ts", "utf8");
+    assert.doesNotMatch(source, /rootAdmission:\s*context\.rootAdmission/);
+    const businessSource = await readFile("src/tools/asset/refresh.ts", "utf8");
+    assert.match(businessSource, /rootAdmission:\s*context\.rootAdmission/);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }

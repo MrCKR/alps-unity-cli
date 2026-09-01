@@ -52,7 +52,7 @@ Tool descriptor 常用字段：
 
 `E_EXECUTION_TIMEOUT`、放行后的transport丢失、进程中断或没有可信terminal envelope时，只能确定本次调用没有返回可信终态，不能据此判断mutation是否发生。先读取对象、场景、Package、build/test状态或artifact manifest；只有形成新的业务决策后才提交新请求，不把outcome unknown自动重放。
 
-调用公开CLI的命令host必须等待进程退出；传入`--timeout-ms T`时至少等待`2 * T + 5000`毫秒，不得后台分离。CLI只输出一个terminal envelope，并在stdout与本地迟到清理完成或最多1秒后退出；永不settle的本地Promise不能延长该宽限。CLI timeout不会强停Unity中已开始的effect，host提前退出也不能作为停止证明。
+调用公开CLI的命令host必须等待进程退出；传入`--timeout-ms T`时至少等待`2 * T + 5000`毫秒，不得后台分离。CLI只输出一个terminal envelope，并在stdout完成且已注册的local owner都settle后退出，或在唯一的1000ms宽限期到达时退出；local settlement cleanup只处理仍未消费的lease，永不settle的本地Promise不能延长该宽限。CLI timeout不会强停Unity中已开始的effect，host提前退出也不能作为停止证明。
 
 compile、import、domain reload和listener generation交接由session supervisor在同一execution absolute deadline内处理。同一次调用仅在`editorSessionId`未改变时，才能用完全相同的request bytes续接durable terminal；首次mutation POST后若session改变，CLI禁止向新session再次POST并返回`E_EXECUTION_TIMEOUT`。
 

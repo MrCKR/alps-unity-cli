@@ -301,9 +301,6 @@ export class SessionSupervisor {
   /** 首次调用时冻结 identity、deadline 与逐字节 request body；恢复过程不得重建。 */
   private async run(mode: SessionSupervisorMode, template: BridgeRequestTemplate): Promise<BridgeResponse> {
     const startedAtMs = this.dependencies.now();
-    if (mode === "observeNow" && (template.command !== "internal.editor.state.snapshot" || template.mutation !== false || bridgeTarget(template.command) !== "editor" || template.rootAdmission !== undefined)) {
-      throw new SessionSupervisorError("E_INTERNAL_INVOCATION_INVALID", "observeNow is restricted to the private read-only Editor state snapshot without root admission.", [], { command: template.command });
-    }
     if (template.allowTransitionBinding === true && !ROOT_TRANSITION_COMMANDS.has(template.command)) {
       throw new SessionSupervisorError("E_INTERNAL_INVOCATION_INVALID", "Transition binding is restricted to private durable root coordinator commands.", [], { command: template.command });
     }

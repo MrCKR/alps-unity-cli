@@ -1,6 +1,6 @@
 import { failure, success } from "../output.js";
 import type { CliResult } from "../types.js";
-import { loadToolCatalog, publicToolDescriptor, resolveCatalogIndependentOperabilityTool } from "../tools/catalog.js";
+import { loadToolCatalog, publicToolDescriptor } from "../tools/catalog.js";
 import { dispatchCatalogProjection, dispatchTool, type ToolsRuntime } from "../tools/dispatcher.js";
 import { StructuredToolError } from "../tools/errors.js";
 import type { ToolMetadata } from "../tools/metadata/index.js";
@@ -91,13 +91,17 @@ export async function handleCommand(
   }
 
   if (flags.help === true || flags.help === "true") {
-    const operabilityTool = resolveCatalogIndependentOperabilityTool(commandName);
-    if (operabilityTool) return commandHelpResult(requestId, commandName, operabilityTool);
     return dispatchCatalogProjection("command.describe", { commandName }, flags, runtime, requestId, async (rootRuntime) => {
       const catalog = await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
       if (!catalog.ok) return catalog;
       const tool = resolveCommandTool(catalog.tools, commandName);
-      return tool ? commandHelpResult(requestId, commandName, tool) : commandNotFound(requestId, commandName);
+      if (!tool) return commandNotFound(requestId, commandName);
+      const descriptor = commandDescriptor(tool, commandName);
+      return success(requestId, {
+        usage: `unitycli command ${commandName} [business-args]`,
+        command: { name: descriptor.name, summary: descriptor.summary, parameters: descriptor.parameters },
+        tool: publicToolDescriptor(tool),
+      });
     });
   }
 
@@ -112,16 +116,6 @@ export async function handleCommand(
   if (!input.ok) return input.result;
 
   return dispatchTool(tool.name, undefined, flags, runtime, requestId, input.value, tool);
-}
-
-/** exact观察descriptor的command help不依赖live catalog或业务准入。 */
-function commandHelpResult(requestId: string, commandName: string, tool: ToolMetadata): CliResult {
-  const descriptor = commandDescriptor(tool, commandName);
-  return success(requestId, {
-    usage: `unitycli command ${commandName} [business-args]`,
-    command: { name: descriptor.name, summary: descriptor.summary, parameters: descriptor.parameters },
-    tool: publicToolDescriptor(tool),
-  });
 }
 
 /** 分离command级控制项与业务token；选择实例的控制项在catalog加载前冻结。 */

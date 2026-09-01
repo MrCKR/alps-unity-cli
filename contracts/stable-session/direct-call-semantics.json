@@ -74,7 +74,7 @@
   "directCall": {
     "terminal": "each direct call returns a proven terminal business result or terminal structured failure",
     "oneDeadline": "selectors, Bridge requests, Windows observations and blocker enrichment consume the applicable existing absolute deadline; blocker diagnosis may shorten it to 10 seconds but never creates another budget",
-    "localTimeoutOwnership": "run is invoked once; when the public deadline wins its E_EXECUTION_TIMEOUT envelope is immutable, the first local effect barrier closes, and one late-settlement continuation may clean only locally unconsumed leases",
+    "localTimeoutOwnership": "run is invoked once; every settlement gets one cleanup continuation for still-unconsumed local leases, and when the public deadline wins its E_EXECUTION_TIMEOUT envelope is immutable and the first local effect barrier closes",
     "localProcessExit": "pending local cleanup shares the single 1000ms stdout flush grace; a never-settling Promise cannot add another timer or keep the CLI alive beyond it",
     "admissionBusy": "E_UNITY_BUSY before business POST proves no effect started and permits a later new root",
     "timeout": "after grant or POST, timeout, disconnect or cross-session mutation fence returns E_EXECUTION_TIMEOUT with unknown outcome; observe business state before a new submission decision",

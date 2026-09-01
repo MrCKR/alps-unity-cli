@@ -3,7 +3,6 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { handleCommand } from "../src/cli-commands/command.js";
 import { SessionSupervisor, SessionSupervisorError } from "../src/bridge/session-supervisor.js";
 import { EditorBlockerObserver } from "../src/editor-blocker-observer.js";
 import { failure } from "../src/output.js";
@@ -167,25 +166,4 @@ test("dialog click keeps its minimum pre-effect reserve before commitEffect", as
   const commit = source.indexOf("await context.commitEffect?.()");
   assert.ok(reserve >= 0);
   assert.ok(commit > reserve);
-});
-
-test("command help and execution reuse Editor operability descriptors without a live catalog", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-dialog-recovery-command-"));
-  try {
-    for (const name of OPERABILITY_TOOLS) {
-      const help = await handleCommand([name], { help: true }, { dataDir }, `req_help_${name.replaceAll(".", "_")}`);
-      assert.equal(help.ok, true, JSON.stringify(help));
-      if (help.ok) {
-        const data = help.data as { command: { name: string }; tool: { inputSchema?: unknown } };
-        assert.equal(data.command.name, name);
-        assert.ok(data.tool.inputSchema);
-      }
-      const businessTokens = name === "editor.dialog.click" ? ["--dialogId", "dialog_test", "--button", "Close"] : [];
-      const execution = await handleCommand([name, ...businessTokens], { "dry-run": true }, { dataDir }, `req_command_${name.replaceAll(".", "_")}`);
-      assert.equal(execution.ok, false, name);
-      if (!execution.ok) assert.equal(execution.error.code, "E_DRY_RUN_UNSUPPORTED", name);
-    }
-  } finally {
-    await rm(dataDir, { recursive: true, force: true });
-  }
 });
