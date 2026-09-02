@@ -268,17 +268,28 @@ namespace UnityCli.Tests
             }
         }
 
-        [Test]
-        public void PendingTransferCannotCompleteTheWorkItemOwner()
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.Coordinator)]
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.Continuation)]
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.Recovery)]
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)]
+        public void PendingTransferCannotCompleteOrDeleteTheWorkItemOwner(UnityCliAdmissionPool.AdmissionOwnerState intended)
         {
             var pool = Pool();
             var owner = Consume(pool, 0);
-            Assert.That(pool.PrepareOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery), Is.True);
+            Assert.That(pool.PrepareOwnerTransfer(owner, intended), Is.True);
             Assert.That(pool.CompleteTrusted(owner), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked));
-            Assert.That(pool.Capture().Records.Single().OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
-            UnityCliAdmissionPool.ConsumedIdentity recovery;
-            Assert.That(pool.CommitOwnerTransfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery, out recovery), Is.True);
-            Assert.That(recovery.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+            var pending = pool.Capture().Records.Single();
+            Assert.That(pending.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+            Assert.That(pending.IntendedOwnerState, Is.EqualTo(intended));
+            Assert.That(pending.TransferCommitted, Is.False);
+            UnityCliAdmissionPool.ConsumedIdentity successor;
+            Assert.That(pool.CommitOwnerTransfer(owner, intended, out successor), Is.True);
+            Assert.That(successor.OwnerState, Is.EqualTo(intended));
+            var expected = intended == UnityCliAdmissionPool.AdmissionOwnerState.Continuation
+                || intended == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup
+                ? UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
+                : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+            Assert.That(pool.CompleteTrusted(successor), Is.EqualTo(expected));
         }
 
         [Test]

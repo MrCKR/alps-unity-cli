@@ -40,8 +40,8 @@ namespace UnityCli.Tests
         {
             if (bridge != null)
             {
-                bridge.RuntimeTestBoundary = null;
                 bridge.StopRuntimeRequestsLocked();
+                bridge.AssertRuntimeBoundariesDrainedForTests();
             }
             if (host != null) UnityEngine.Object.DestroyImmediate(host);
             bridge = null;
@@ -54,12 +54,11 @@ namespace UnityCli.Tests
         {
             var entered = new ManualResetEventSlim(false);
             var release = new ManualResetEventSlim(false);
-            bridge.RuntimeTestBoundary = name =>
+            bridge.ExpectRuntimeBoundaryForTests("before-runtime-publish", () =>
             {
-                if (name != "before-runtime-publish") return;
                 entered.Set();
                 release.Wait();
-            };
+            });
             UnityCliRuntimeBridge.RuntimePublicationResult publication = null;
             var publishTask = Task.Run(() => publication = PublishBypass("runtime-race"));
             Task stopTask = null;
@@ -93,12 +92,8 @@ namespace UnityCli.Tests
             var faultRequest = Request("runtime-publication-fault", "runtime-tool.run");
             var faultDigest = Digest('c');
             var faultAdmission = Admission(faultRequest["requestId"] as string, faultDigest, Deadline());
-            bridge.RuntimeTestBoundary = name =>
-            {
-                if (name == "before-runtime-publish") throw new InvalidOperationException("injected publication fault");
-            };
+            bridge.ExpectRuntimeBoundaryForTests("before-runtime-publish", () => { throw new InvalidOperationException("injected publication fault"); });
             Assert.Throws<InvalidOperationException>(() => bridge.PublishRuntimeRequest(faultRequest, Deadline(), faultDigest, faultAdmission));
-            bridge.RuntimeTestBoundary = null;
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
             Assert.That(PublishBypass("runtime-first").Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
 
@@ -123,12 +118,8 @@ namespace UnityCli.Tests
                 Assert.That(running, Is.SameAs(publication.Work));
                 Assert.That(Finalize(running, "terminal-" + index, 1), Is.True);
             }
-            bridge.RuntimeTestBoundary = name =>
-            {
-                if (name == "before-runtime-publish") throw new InvalidOperationException("injected eviction publication fault");
-            };
+            bridge.ExpectRuntimeBoundaryForTests("before-runtime-publish", () => { throw new InvalidOperationException("injected eviction publication fault"); });
             Assert.Throws<InvalidOperationException>(() => PublishBypass("runtime-cache-new"));
-            bridge.RuntimeTestBoundary = null;
             Assert.That(PublishBypass("runtime-cache-0").Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
 
             Assert.That(PublishBypass("runtime-cache-new").Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
@@ -166,6 +157,30 @@ namespace UnityCli.Tests
             Assert.That(miss.Error, Does.Contain("E_SCHEMA_INVALID"));
             Assert.That(bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput()).Outcome,
                 Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
+        }
+
+        [Test]
+        public void RunningRequestDeadlineReturnsTimeoutWithoutWaitingForTerminalOwner()
+        {
+            var deadline = utcNowMs + 10L;
+            var request = Request("runtime-running-deadline", "runtime-tool.run", deadline);
+            var digest = Digest('g');
+            var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission("runtime-running-deadline", digest, deadline));
+            Assert.That(publication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
+            var running = TakeNext();
+            var waits = 0;
+            var response = bridge.AwaitRuntimeResponseForTests(running, new UnityCliRuntimeBridge.RuntimeWaitDependencies(
+                () => utcNowMs,
+                (completion, timeoutMs) => { waits++; utcNowMs = deadline + 1L; return false; },
+                () => false));
+
+            Assert.That(response, Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(waits, Is.EqualTo(1));
+            Assert.That(running.Completion.Task.IsCompleted, Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(Finalize(running, "running-deadline-terminal", 1), Is.True);
+            Assert.That(running.Completion.Task.Result, Is.EqualTo("running-deadline-terminal"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
         }
 
         [Test]

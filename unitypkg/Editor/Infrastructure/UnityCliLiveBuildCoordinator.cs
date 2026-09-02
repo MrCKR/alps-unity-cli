@@ -29,21 +29,62 @@ namespace UnityCli
             {
                 internal Func<string, string, List<string>, Prepared> PrepareTarget;
                 internal Func<Prepared, BuildEffectResult> RunEffect;
-                internal Action<string> Boundary;
+                internal readonly BuildTestBoundary Boundary;
+
+                internal BuildExecutionDependencies(bool testMode)
+                {
+                    Boundary = new BuildTestBoundary(testMode);
+                }
 
                 internal static BuildExecutionDependencies Production()
                 {
-                    return new BuildExecutionDependencies
+                    var dependencies = new BuildExecutionDependencies(false)
                     {
                         PrepareTarget = (target, outputPath, options) => Prepare(new TargetArgs { Target = target, OutputPath = outputPath, Options = options }),
                         RunEffect = RunBuildEffect
                     };
+                    return dependencies;
                 }
 
                 internal void Hit(string name)
                 {
-                    var boundary = Boundary;
-                    if (boundary != null) boundary(name);
+                    Boundary.Hit(name);
+                }
+
+                internal sealed class BuildTestBoundary
+                {
+                    private readonly object sync = new object();
+                    private readonly Dictionary<string, Action> expected = new Dictionary<string, Action>(StringComparer.Ordinal);
+                    private readonly bool enabled;
+
+                    internal BuildTestBoundary(bool enabled) { this.enabled = enabled; }
+                    internal void ExpectOnce(string name, Action action)
+                    {
+                        if (!enabled) throw new InvalidOperationException("Production build dependencies do not accept test boundaries.");
+                        if (string.IsNullOrWhiteSpace(name) || action == null) throw new ArgumentException("Build test boundary is invalid.");
+                        lock (sync)
+                        {
+                            if (expected.ContainsKey(name)) throw new InvalidOperationException("Build test boundary is already registered: " + name);
+                            expected.Add(name, action);
+                        }
+                    }
+                    internal void Hit(string name)
+                    {
+                        Action action;
+                        lock (sync)
+                        {
+                            if (!expected.TryGetValue(name, out action)) return;
+                            expected.Remove(name);
+                        }
+                        action();
+                    }
+                    internal void AssertDrained()
+                    {
+                        lock (sync)
+                        {
+                            if (expected.Count != 0) throw new InvalidOperationException("Build test boundaries were not consumed: " + string.Join(",", expected.Keys));
+                        }
+                    }
                 }
             }
 

@@ -62,13 +62,16 @@ function invocationArgumentCounts(text: string, marker: string): number[] {
 }
 
 test("C# mutation execution uses the shared instance lease owner protocol", async () => {
-  const [lease, bridge, operation, reloadOperation, workQueue, activeOperation] = await Promise.all([
+  const [lease, bridge, operation, reloadOperation, workQueue, activeOperation, queueState, admission, testRun] = await Promise.all([
     source("unitypkg/Editor/Infrastructure/UnityCliSessionMutationLease.cs"),
     source("unitypkg/Editor/UnityCliBridge.cs"),
     source("unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs"),
     source("unitypkg/Editor/Infrastructure/UnityCliReloadOperation.cs"),
     source("unitypkg/Editor/Bridge/BridgeWorkQueue.cs"),
     source("unitypkg/Editor/Infrastructure/UnityCliActiveOperation.cs"),
+    source("unitypkg/Editor/Bridge/BridgeQueueState.cs"),
+    source("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs"),
+    source("unitypkg/Editor/Infrastructure/UnityCliTestRunCoordinator.cs"),
   ]);
   for (const field of ["pid", "token", "processStartIdentity", "requestId"]) assert.match(lease, new RegExp(`\\b${field}\\b`, "i"));
   assert.match(lease, /TryAcquire\(string requestId, string requestDigest, out bool newlyAcquired\)/);
@@ -99,14 +102,18 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(operation, /SaveDirectMutationAcceptedRoot[\s\S]*accepted_before_effect/);
   assert.match(operation, /MarkDirectMutationEffectStarted[\s\S]*effect_started/);
   assert.match(operation, /terminal_pending[\s\S]*StoreTerminalFirst\(DirectMutationTerminalScope/);
-  assert.match(operation, /CleanupPublishedDirectMutation[\s\S]*TryGetTerminal\(DirectMutationTerminalScope[\s\S]*Clear\(DirectMutationTerminalScope\)[\s\S]*ReleaseDirectMutationLease/);
+  assert.match(operation, /PublishDirectMutationTerminal[\s\S]*StoreTerminalFirst[\s\S]*CleanupPublishedDirectMutation/);
+  assert.match(operation, /CleanupPublishedDirectMutation[\s\S]*TryGetTerminal\(DirectMutationTerminalScope[\s\S]*BeginExactTerminalCleanup\(DirectMutationTerminalScope/);
   assert.match(operation, /CommitToolEffect[\s\S]*DirectMutationBindingMatches\(request\.RequestId, requestDigest\)[\s\S]*IsOwnedBy\(request\.RequestId, requestDigest\)/);
   assert.match(operation, /TryFinalizeRecoveredPlayModeRoot[\s\S]*DirectMutationCleanupPendingSessionKey[\s\S]*DirectMutationBindingMatches\(requestId, requestDigest\)[\s\S]*ReleaseDirectMutationLease\(requestId, requestDigest\)/);
   assert.match(operation, /ReleaseDirectMutationLease[\s\S]*SetBool\(DirectMutationCleanupPendingSessionKey, true\)[\s\S]*TryIsOwnedBy\(requestId, requestDigest, out isOwned\)[\s\S]*SetBool\(DirectMutationCleanupPendingSessionKey, false\)/);
   assert.match(bridge, /OnBeforeAssemblyReload\(\)[\s\S]*ReleaseActiveDirectMutationLease\(\)/);
   assert.match(workQueue, /RetryDirectMutationTerminalCleanup\(\);[\s\S]*RetryPendingWorkItemSettlements\(\);/);
-  const admission = await source("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs");
+  assert.match(queueState, /BridgeQueueSinks[\s\S]*BridgeQueueTestHooks[\s\S]*AssertDrained/);
+  assert.match(workQueue, /PendingSettlementWork\.Remove\(item\)[\s\S]*RemoveActiveWorkItem\(state, item\)[\s\S]*CompleteAndLogWorkItem\(item\)/);
   assert.match(admission, /TryConfirmDurableTransferredOwner[\s\S]*ReconcileAdmissionTransferForLiveMarker/);
+  assert.match(admission, /test-cancel-admission-owner[\s\S]*parentRequestDigest|TryConfirmCancelTransferredOwner[\s\S]*CancelTerminalProofExists/);
+  assert.match(testRun, /Continuation本身是legal terminal owner[\s\S]*CompleteAdmissionRoot/);
   assert.match(admission, /ReconcileAdmissionTransferForLiveMarker\(BridgeQueueState state[\s\S]*PersistAdmissionPoolState\(state\)/);
   assert.match(operation, /RetryDirectMutationTerminalCleanup[\s\S]*RetryExactTerminalCleanup\(DirectMutationTerminalScope\)/);
   assertBefore(operation, "if (!mutation)", "TryAcquire(request.RequestId, requestDigest");

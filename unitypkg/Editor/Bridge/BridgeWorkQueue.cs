@@ -28,23 +28,41 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static readonly BridgeQueueState ProductionQueueState = new BridgeQueueState();
+        private static readonly BridgeQueueState ProductionQueueState = CreateProductionQueueState();
+
+        private static BridgeQueueState CreateProductionQueueState()
+        {
+            return new BridgeQueueState(
+                null,
+                null,
+                new BridgeQueueSinks(WriteLog, UnityCliTransactionLog.Append, true),
+                new BridgeQueueTestHooks(false),
+                PersistProductionAdmissionPoolState,
+                identity => PersistProductionAdmissionCompletionIntent(identity, "admission-completion"),
+                HasProductionAdmissionCompletionIntent,
+                ClearProductionAdmissionCompletionIntent,
+                null);
+        }
 
         internal static BridgeQueueState CreateQueueStateForTests(UnityCliAdmissionPool pool, Func<long> monotonicNowMs = null)
         {
             if (pool == null) throw new ArgumentNullException("pool");
-            var state = new BridgeQueueState(pool, monotonicNowMs)
+            var intents = new HashSet<string>(StringComparer.Ordinal);
+            var state = new BridgeQueueState(
+                pool,
+                monotonicNowMs,
+                new BridgeQueueSinks(_ => { }, (_, __, ___, ____) => { }, false),
+                new BridgeQueueTestHooks(true),
+                () => true,
+                identity => intents.Add(CompletionIntentKey(identity)),
+                identity => intents.Contains(CompletionIntentKey(identity)),
+                identity => intents.Remove(CompletionIntentKey(identity)),
+                new BridgeIsolatedExecutionState())
             {
                 QueuePublicationOpen = true,
                 ListenerId = "test-listener-" + Guid.NewGuid().ToString("N"),
-                ListenerGeneration = 1,
-                PersistPoolState = () => true,
-                IsolatedExecution = new BridgeIsolatedExecutionState()
+                ListenerGeneration = 1
             };
-            var intents = new HashSet<string>(StringComparer.Ordinal);
-            state.PersistCompletionIntent = identity => intents.Add(CompletionIntentKey(identity));
-            state.HasCompletionIntent = identity => intents.Contains(CompletionIntentKey(identity));
-            state.ClearCompletionIntent = identity => intents.Remove(CompletionIntentKey(identity));
             return state;
         }
 
@@ -158,10 +176,10 @@ namespace UnityCli
 
             foreach (var item in selected)
             {
-                WriteLog("bridge_request_dequeued requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
+                state.Sinks.WriteLog("bridge_request_dequeued requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
                 if (!item.TryStart())
                 {
-                    WriteLog("bridge_request_skipped_expired requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
+                    state.Sinks.WriteLog("bridge_request_skipped_expired requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
                     item.Response = item.Response ?? UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                         item.Request.RequestId,
                         "E_EXECUTION_TIMEOUT",
@@ -179,9 +197,9 @@ namespace UnityCli
         {
             try
             {
-                WriteLog("bridge_request_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
+                item.QueueState.Sinks.WriteLog("bridge_request_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
                 item.Response = await ExecuteCoordinatedRequest(item.Request, item.RawRequestBytes, item.TryAccept, item.Token);
-                WriteLog("bridge_request_finished requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " ok=" + Bool(item.Response != null && item.Response.Contains("\"ok\":true")));
+                item.QueueState.Sinks.WriteLog("bridge_request_finished requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " ok=" + Bool(item.Response != null && item.Response.Contains("\"ok\":true")));
             }
             catch (BridgeCommandException exception)
             {
@@ -242,7 +260,8 @@ namespace UnityCli
                     {
                         if (!string.Equals(existing.RequestDigest, digest, StringComparison.Ordinal))
                             throw new BridgeCommandException("E_REQUEST_ID_REUSED", "requestId is already bound to different request bytes.", "Generate a new requestId before retrying this command.");
-                        AuthorizeAdmissionForQueue(state, reservation, request);
+                        if (!TryAuthorizeCompletionPendingAttach(state, reservation, existing))
+                            AuthorizeAdmissionForQueue(state, reservation, request);
                         if (!SameAdmissionOwner(existing.AdmissionOwner, reservation.Owner))
                             throw new BridgeCommandException("E_ADMISSION_IDENTITY_MISMATCH", "requestId is already attached to another admission root.");
                         MarkAdmissionQueuePublished(reservation);
@@ -293,13 +312,13 @@ namespace UnityCli
                         HitQueueTestBoundary(state, "before-admission-compensation-persist");
                         if (!PersistAdmissionPoolState(state)) throw new IOException("Admission pool compensation persistence was not confirmed.");
                         HitQueueTestBoundary(state, "before-admission-compensation-log");
-                        WriteLog("admission_prequeue_compensated requestId=" + reservation.Owner.RequestId + " active=" + state.AdmissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                        state.Sinks.WriteLog("admission_prequeue_compensated requestId=" + reservation.Owner.RequestId + " active=" + state.AdmissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
                     }
                     catch (Exception exception)
                     {
                         var pool = state.AdmissionPool;
                         if (pool != null) pool.BlockRecovery();
-                        WriteLog("admission_prequeue_compensation_failed requestId=" + reservation.Owner.RequestId + " " + exception.GetType().Name);
+                        state.Sinks.WriteLog("admission_prequeue_compensation_failed requestId=" + reservation.Owner.RequestId + " " + exception.GetType().Name);
                         throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission compensation could not be durably recorded after queue publication failed.");
                     }
                 }
@@ -414,7 +433,7 @@ namespace UnityCli
                         HoldPendingSettlement(state, item, "completion-owner-changed");
                         return false;
                     }
-                    if (!PersistAdmissionCompletionIntent(state, frozen, item.Request.Command))
+                    if (!PersistAdmissionCompletionIntent(state, frozen))
                     {
                         HoldPendingSettlement(state, item, "completion-intent-pending");
                         return false;
@@ -472,7 +491,7 @@ namespace UnityCli
                 if (!item.SettlementFailureLogged)
                 {
                     try { HitQueueTestBoundary(state, "before-queue-boundary-fault-log"); } catch { }
-                    WriteLog("queue_test_boundary_failed " + boundaryException.GetType().Name);
+                    state.Sinks.WriteLog("queue_test_boundary_failed " + boundaryException.GetType().Name);
                 }
                 HoldPendingSettlement(state, item, boundaryException.GetType().Name);
                 return false;
@@ -516,7 +535,7 @@ namespace UnityCli
             item.AllowCompletionRetry();
             if (item.SettlementFailureLogged) return;
             item.SettlementFailureLogged = true;
-            WriteLog("admission_settlement_deferred requestId=" + item.Request.RequestId + " reason=" + reason);
+            state.Sinks.WriteLog("admission_settlement_deferred requestId=" + item.Request.RequestId + " reason=" + reason);
         }
 
         private static void RemoveActiveWorkItem(BridgeQueueState state, BridgeWorkItem item)
@@ -536,10 +555,10 @@ namespace UnityCli
             item.Completed.Set();
             try
             {
-                UnityCliTransactionLog.Append(item.Request.RequestId, item.Request.Command, Encoding.UTF8.GetString(item.RawRequestBytes), item.Response ?? UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                item.QueueState.Sinks.AppendTransaction(item.Request.RequestId, item.Request.Command, Encoding.UTF8.GetString(item.RawRequestBytes), item.Response ?? UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
                     item.Request.RequestId, "E_BRIDGE_COMMAND_FAILED", "Bridge request completed without a response.")));
             }
-            catch (Exception exception) { WriteLog("transaction_log_append_failed requestId=" + item.Request.RequestId + " " + exception.GetType().Name); }
+            catch (Exception exception) { item.QueueState.Sinks.WriteLog("transaction_log_append_failed requestId=" + item.Request.RequestId + " " + exception.GetType().Name); }
         }
 
         internal sealed class BridgeWorkItem
@@ -548,7 +567,6 @@ namespace UnityCli
             private bool cancelled;
             private bool started;
             private bool completionStarted;
-            private int settlementRetryAttempt;
             private readonly UnityCliBridgeWorkItemState lifecycle = new UnityCliBridgeWorkItemState();
             private readonly CancellationTokenSource cancellation;
 
@@ -597,9 +615,7 @@ namespace UnityCli
 
             internal void ScheduleSettlementRetry(long nowMs)
             {
-                settlementRetryAttempt = Math.Min(settlementRetryAttempt + 1, 6);
-                var delay = Math.Min(5000L, 100L << (settlementRetryAttempt - 1));
-                NextSettlementRetryAtMs = checked(nowMs + delay);
+                NextSettlementRetryAtMs = checked(nowMs + 100L);
             }
 
             internal bool TryBeginCompletion()

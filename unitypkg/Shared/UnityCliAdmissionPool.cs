@@ -380,10 +380,8 @@ namespace UnityCli
                 if (identity == null || recoveryBlocked) return CompletionOutcome.IdentityMismatchOrBlocked;
                 AdmissionRecord entry;
                 if (!records.TryGetValue(identity.RequestId, out entry)) return CompletionOutcome.DefinitelyAbsent;
-                if (!ValidConsumedRecord(entry) || !Matches(entry, identity) || !CanComplete(entry.OwnerState))
-                    return CompletionOutcome.IdentityMismatchOrBlocked;
-                if (entry.OwnerState != AdmissionOwnerState.WorkItem
-                    && (!entry.TransferCommitted || entry.IntendedOwnerState != entry.OwnerState))
+                if (!ValidConsumedRecord(entry) || !Matches(entry, identity) || !CanComplete(entry.OwnerState)
+                    || !entry.TransferCommitted || entry.IntendedOwnerState != entry.OwnerState)
                     return CompletionOutcome.IdentityMismatchOrBlocked;
                 records.Remove(identity.RequestId);
                 UpdateGateAfterRemoval();

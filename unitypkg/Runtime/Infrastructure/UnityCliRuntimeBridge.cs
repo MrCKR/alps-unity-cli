@@ -46,12 +46,21 @@ namespace UnityCli
         private float nextRegistryRefreshAt;
         private bool previousRunInBackground;
         private bool runInBackgroundCaptured;
-        internal Action<string> RuntimeTestBoundary;
+        private readonly RuntimeOneShotTestHooks runtimeTestHooks = new RuntimeOneShotTestHooks();
 
         private void HitRuntimeTestBoundary(string name)
         {
-            var boundary = RuntimeTestBoundary;
-            if (boundary != null) boundary(name);
+            runtimeTestHooks.Hit(name);
+        }
+
+        internal void ExpectRuntimeBoundaryForTests(string name, Action action)
+        {
+            runtimeTestHooks.ExpectOnce(name, action);
+        }
+
+        internal void AssertRuntimeBoundariesDrainedForTests()
+        {
+            runtimeTestHooks.AssertDrained();
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -196,22 +205,43 @@ namespace UnityCli
                 var publication = PublishRuntimeRequest(envelope, deadline, digest, ReadRuntimeAdmission(context.Request));
                 var work = publication.Work;
                 if (publication.Error != null) { Write(context, publication.Error); return; }
-                while (!work.Completion.Task.IsCompleted)
-                {
-                    var remaining = work.AbsoluteDeadlineMs - UtcNowMs();
-                    if (remaining > 0L)
-                    {
-                        if (work.Completion.Task.Wait((int)Math.Min(remaining, int.MaxValue))) break;
-                        continue;
-                    }
-                    var timeout = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request did not reach the effect barrier before its immutable deadline.", new[] { "Inspect runtime.state before submitting a new request." }, true, 100);
-                    // deadline与main thread只允许一个owner；effect已开始时必须等待同一terminal，不能伪报timeout。
-                    if (!FinalizeRuntimeRequest(work, timeout, 0)) work.Completion.Task.Wait();
-                }
-                Write(context, work.Completion.Task.Result);
+                Write(context, AwaitRuntimeResponse(work, requestId));
             }
             catch (FormatException exception) { Write(context, Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Send protocolVersion 2 with a complete Runtime bridge request." })); }
             catch (Exception exception) { Write(context, Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime bridge could not process the request.", new[] { "Inspect Player logs and retry after the runtime is ready." })); Debug.LogWarning("UnityCli runtime request failed: " + exception.GetType().Name); }
+        }
+
+        /// <summary>HTTP只等待到immutable deadline或shutdown；running owner继续由主线程提交唯一terminal。</summary>
+        private string AwaitRuntimeResponse(PendingRequest work, string requestId)
+        {
+            return AwaitRuntimeResponse(work, requestId, new RuntimeWaitDependencies(
+                UtcNowMs,
+                (completion, timeoutMs) => Task.WaitAny(completion, Task.Delay(timeoutMs, stopping.Token)) == 0,
+                () => stopping.IsCancellationRequested));
+        }
+
+        internal string AwaitRuntimeResponseForTests(PendingRequest work, RuntimeWaitDependencies dependencies)
+        {
+            if (work == null) throw new ArgumentNullException("work");
+            return AwaitRuntimeResponse(work, work.RequestId, dependencies);
+        }
+
+        private static string AwaitRuntimeResponse(PendingRequest work, string requestId, RuntimeWaitDependencies dependencies)
+        {
+            if (work == null || dependencies == null) throw new ArgumentNullException("Runtime wait dependencies must be explicit.");
+            while (!work.Completion.Task.IsCompleted)
+            {
+                var remaining = work.AbsoluteDeadlineMs - dependencies.UtcNowMs();
+                if (remaining <= 0L || dependencies.IsStopping())
+                {
+                    var timeout = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request did not reach a proven terminal before its immutable deadline or session shutdown.", new[] { "Inspect runtime.state before submitting a new request." }, true, 100);
+                    if (FinalizeRuntimeRequest(work, timeout, 0)) return work.Completion.Task.Result;
+                    return timeout;
+                }
+                var waitMs = checked((int)Math.Min(remaining, int.MaxValue));
+                dependencies.WaitForCompletion(work.Completion.Task, Math.Max(1, waitMs));
+            }
+            return work.Completion.Task.Result;
         }
 
         /// <summary>admission route只操作有界内存，不进入Player主线程队列。</summary>
@@ -574,6 +604,62 @@ namespace UnityCli
         }
 
         internal enum RuntimePublicationOutcome { Published, Existing, Stopping, CacheFull, QueueFull, Rejected }
+
+        private sealed class RuntimeOneShotTestHooks
+        {
+            private readonly object sync = new object();
+            private readonly Dictionary<string, Action> expected = new Dictionary<string, Action>(StringComparer.Ordinal);
+
+            internal void ExpectOnce(string name, Action action)
+            {
+                if (string.IsNullOrWhiteSpace(name) || action == null) throw new ArgumentException("Runtime one-shot test hook is invalid.");
+                lock (sync)
+                {
+                    if (expected.ContainsKey(name)) throw new InvalidOperationException("Runtime one-shot test hook is already registered: " + name);
+                    expected.Add(name, action);
+                }
+            }
+
+            internal void Hit(string name)
+            {
+                Action action;
+                lock (sync)
+                {
+                    if (!expected.TryGetValue(name, out action)) return;
+                    expected.Remove(name);
+                }
+                action();
+            }
+
+            internal void AssertDrained()
+            {
+                lock (sync)
+                {
+                    if (expected.Count != 0)
+                        throw new InvalidOperationException("Runtime one-shot test hooks were not consumed: " + string.Join(",", expected.Keys));
+                }
+            }
+        }
+
+        internal sealed class RuntimeWaitDependencies
+        {
+            private readonly Func<long> utcNowMs;
+            private readonly Func<Task<string>, int, bool> waitForCompletion;
+            private readonly Func<bool> isStopping;
+
+            internal RuntimeWaitDependencies(Func<long> utcNowMs, Func<Task<string>, int, bool> waitForCompletion, Func<bool> isStopping)
+            {
+                if (utcNowMs == null || waitForCompletion == null || isStopping == null)
+                    throw new ArgumentNullException("Runtime wait dependencies must be explicit.");
+                this.utcNowMs = utcNowMs;
+                this.waitForCompletion = waitForCompletion;
+                this.isStopping = isStopping;
+            }
+
+            internal long UtcNowMs() { return utcNowMs(); }
+            internal bool WaitForCompletion(Task<string> completion, int timeoutMs) { return waitForCompletion(completion, timeoutMs); }
+            internal bool IsStopping() { return isStopping(); }
+        }
 
         internal sealed class RuntimeAdmissionInput
         {

@@ -192,26 +192,37 @@ namespace UnityCli
             try { UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest); } catch { }
         }
 
-        /// <summary>effect后的direct terminal先做字节admission，再进入active root与共享cache；超限统一替换为紧凑终态。</summary>
+        /// <summary>effect后的direct terminal先冻结first terminal，再由exact cleanup marker驱动root、lease与admission收敛。</summary>
         private static string PersistDirectMutationTerminal(string requestId, string requestDigest, string serializedEnvelope)
+        {
+            return PublishDirectMutationTerminal(ProductionQueueState, requestId, requestDigest, serializedEnvelope);
+        }
+
+        internal static string PublishDirectMutationTerminalForTests(BridgeQueueState state, string requestId, string requestDigest, string serializedEnvelope)
+        {
+            if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Direct mutation test state must be isolated.", "state");
+            return PublishDirectMutationTerminal(state, requestId, requestDigest, serializedEnvelope);
+        }
+
+        private static string PublishDirectMutationTerminal(BridgeQueueState state, string requestId, string requestDigest, string serializedEnvelope)
         {
             try
             {
                 bool isOwned;
-                if (!UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned) || !isOwned)
+                if (!state.TryIsLeaseOwned(requestId, requestDigest, out isOwned) || !isOwned)
                     serializedEnvelope = ExecutionTimeoutEnvelope(requestId, "The direct mutation lost its exact lease after effect; outcome is unknown. Inspect the affected business state.");
                 if (Encoding.UTF8.GetByteCount(serializedEnvelope ?? string.Empty) > MaxDirectMutationTerminalBytes)
                     serializedEnvelope = ExecutionTimeoutEnvelope(requestId, "The direct mutation completed, but its terminal exceeded the durable byte budget; inspect the affected business state.");
                 object envelope = UnityCliSerializer.Parse(serializedEnvelope) as Dictionary<string, object>;
                 if (envelope == null)
                     envelope = ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "The direct mutation terminal could not be decoded after effect; outcome is unknown.");
-                var root = LoadDirectMutationRoot();
+                var root = LoadDirectMutationRoot(state);
                 RequireDirectMutationRoot(root, requestId, requestDigest);
                 root["phase"] = "terminal_pending";
                 root["terminalEnvelope"] = envelope;
-                UnityCliActiveOperation.Save(DirectMutationTerminalScope, root);
-                var first = UnityCliActiveOperation.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, envelope);
-                UnityCliActiveOperation.Clear(DirectMutationTerminalScope);
+                state.SaveOperation(DirectMutationTerminalScope, root);
+                var first = state.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, envelope);
+                CleanupPublishedDirectMutation(state, requestId, requestDigest);
                 return UnityCliSerializer.Serialize(first);
             }
             catch (BridgeCommandException exception) { return SerializeBridgeExceptionEnvelope(requestId, exception); }
@@ -239,9 +250,14 @@ namespace UnityCli
 
         private static Dictionary<string, object> LoadDirectMutationRoot()
         {
+            return LoadDirectMutationRoot(ProductionQueueState);
+        }
+
+        private static Dictionary<string, object> LoadDirectMutationRoot(BridgeQueueState state)
+        {
             try
             {
-                var root = UnityCliActiveOperation.Load(DirectMutationTerminalScope);
+                var root = state.LoadOperation(DirectMutationTerminalScope);
                 if (root == null) return null;
                 object requestId; object requestDigest; object editorSessionId; object phase;
                 if (!root.TryGetValue("requestId", out requestId) || !root.TryGetValue("requestDigest", out requestDigest)
@@ -296,22 +312,46 @@ namespace UnityCli
         /// <summary>主循环重试已发布direct terminal的exact cleanup；失败保留固定marker等待下一帧。</summary>
         private static void RetryDirectMutationTerminalCleanup()
         {
-            try { UnityCliActiveOperation.RetryExactTerminalCleanup(DirectMutationTerminalScope); }
-            catch (Exception exception) { WriteLog("direct_mutation_cleanup_retry_failed " + exception.GetType().Name); }
+            RetryDirectMutationTerminalCleanup(ProductionQueueState);
         }
 
-        /// <summary>terminal类型不决定slot释放；只要exact owner仍存在就必须转TerminalCleanup并完成。</summary>
-        private static void CleanupPublishedDirectMutation(string requestId, string requestDigest, Action<string> cleanupBoundary = null)
+        internal static void RetryDirectMutationTerminalCleanupForTests(BridgeQueueState state)
+        {
+            if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Direct mutation test state must be isolated.", "state");
+            RetryDirectMutationTerminalCleanup(state);
+        }
+
+        private static void RetryDirectMutationTerminalCleanup(BridgeQueueState state)
+        {
+            try { UnityCliActiveOperation.RetryExactTerminalCleanup(DirectMutationTerminalScope, state); }
+            catch (Exception exception) { state.Sinks.WriteLog("direct_mutation_cleanup_retry_failed " + exception.GetType().Name); }
+        }
+
+        /// <summary>terminal类型不决定slot释放；exact marker必须在root清理前durable存在。</summary>
+        private static void CleanupPublishedDirectMutation(string requestId, string requestDigest)
+        {
+            CleanupPublishedDirectMutation(ProductionQueueState, requestId, requestDigest);
+        }
+
+        private static void CleanupPublishedDirectMutation(BridgeQueueState state, string requestId, string requestDigest)
         {
             try
             {
                 object terminal;
-                if (!UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out terminal)) return;
+                if (!state.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out terminal)) return;
                 AdmissionOwnerIdentity owner;
-                var completeAdmission = TryCaptureExactAdmissionOwner(requestId, requestDigest, out owner);
-                UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, completeAdmission, cleanupBoundary);
+                var completeAdmission = TryCaptureExactAdmissionOwner(state, requestId, requestDigest, out owner);
+                UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, state, completeAdmission);
             }
             catch { }
+        }
+
+        internal static string RecoverPublishedDirectMutationForTests(BridgeQueueState state, string requestId, string requestDigest)
+        {
+            object terminal;
+            if (state == null || state.IsolatedExecution == null || !state.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out terminal)) return null;
+            CleanupPublishedDirectMutation(state, requestId, requestDigest);
+            return UnityCliSerializer.Serialize(terminal);
         }
 
         private static void FinalizeDirectMutationExecution(string requestId, string requestDigest)

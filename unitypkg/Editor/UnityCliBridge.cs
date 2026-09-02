@@ -82,8 +82,8 @@ namespace UnityCli
         private static volatile bool playModeChanging = EditorApplication.isPlaying != EditorApplication.isPlayingOrWillChangePlaymode;
         internal static void HitQueueTestBoundary(BridgeQueueState state, string name)
         {
-            var boundary = state == null ? null : state.Boundary;
-            if (boundary != null) boundary(name);
+            if (state == null) throw new ArgumentNullException("state");
+            state.TestHooks.Hit(name);
         }
 
         static UnityCliBridge()

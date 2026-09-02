@@ -43,6 +43,184 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void DirectTerminalRootClearFaultReplaysCleanupUntilAllRecoveryStateIsGone()
+        {
+            var requestId = Unique("direct-root-clear");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("direct-root-clear-session");
+            Consume(pool, requestId, digest, TestDeadline());
+            bool acquired;
+            Assert.That(queueState.TryAcquireLease(requestId, digest, out acquired), Is.True);
+            Assert.That(acquired, Is.True);
+            queueState.SaveOperation("direct-mutation", new Dictionary<string, object>
+            {
+                { "requestId", requestId }, { "requestDigest", digest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", "effect_started" }
+            });
+            stateHookClearDirectRootOnce();
+
+            var terminal = UnityCliBridge.PublishDirectMutationTerminalForTests(queueState, requestId, digest,
+                UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Success(requestId, new Dictionary<string, object> { { "changed", true } })));
+
+            Assert.That(terminal, Does.Contain("\"changed\":true"));
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.True);
+            Assert.That(queueState.OperationExists("direct-mutation-terminal-cleanup"), Is.True);
+            var directMarker = queueState.LoadOperation("direct-mutation-terminal-cleanup");
+            Assert.That(directMarker["requestId"], Is.EqualTo(requestId));
+            Assert.That(directMarker["requestDigest"], Is.EqualTo(digest));
+            Assert.That(directMarker["admissionRequestDigest"], Is.EqualTo(digest));
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(queueState.TryIsLeaseOwned(requestId, digest, out var owned), Is.True);
+            Assert.That(owned, Is.True);
+
+            var replay = UnityCliBridge.RecoverPublishedDirectMutationForTests(queueState, requestId, digest);
+            Assert.That(replay, Is.EqualTo(terminal));
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.False);
+            Assert.That(queueState.OperationExists("direct-mutation-terminal-cleanup"), Is.False);
+            Assert.That(queueState.OperationExists("direct-mutation-admission-owner"), Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.TryIsLeaseOwned(requestId, digest, out owned), Is.True);
+            Assert.That(owned, Is.False);
+        }
+
+        [Test]
+        public void CancelContinuationCompletesExactCancelOwnerWithoutIllegalTerminalTransfer()
+        {
+            var parentRequestId = Unique("test-parent");
+            var parentDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(parentRequestId), InstanceId);
+            var cancelRequestId = Unique("test-cancel");
+            var cancelDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(cancelRequestId), InstanceId);
+            var runId = Guid.NewGuid().ToString();
+            var deadline = TestDeadline();
+            var pool = CreatePool("cancel-continuation-session");
+            var cancelOwner = Consume(pool, cancelRequestId, cancelDigest, deadline);
+            queueState.SaveOperation("test-run", new Dictionary<string, object>
+            {
+                { "requestId", parentRequestId }, { "requestDigest", parentDigest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() },
+                { "absoluteDeadlineUtc", DateTimeOffset.FromUnixTimeMilliseconds(deadline).ToString("O") },
+                { "testOperation", new Dictionary<string, object>
+                    {
+                        { "phase", "running" }, { "runId", runId }, { "cancelRunId", runId },
+                        { "cancelRequestId", cancelRequestId }, { "cancelRequestDigest", cancelDigest },
+                        { "cancelRootRequestDigest", parentDigest }, { "cancelEffectState", "dispatched" },
+                        { "cancelRequested", true }
+                    }
+                }
+            });
+            bool acquired;
+            Assert.That(queueState.TryAcquireLease(parentRequestId, parentDigest, out acquired), Is.True);
+            Assert.That(acquired, Is.True);
+            cancelOwner.TopRequestDigest = parentDigest;
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "test-cancel-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", cancelRequestId }, { "requestDigest", parentDigest },
+                { "rootRequestId", parentRequestId }, { "rootRequestDigest", parentDigest },
+                { "runId", runId }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, cancelOwner, UnityCliAdmissionPool.AdmissionOwnerState.Continuation);
+
+            queueState.TestHooks.ExpectOnce("before-state-clear-markers", () =>
+            {
+                throw new IOException("injected cancel marker clear fault");
+            });
+            var result = UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelTerminalForTests(queueState,
+                parentRequestId, parentDigest, runId, cancelRequestId, cancelDigest,
+                ProtocolEnvelopeFactory.Success(cancelRequestId, new Dictionary<string, object> { { "cancelled", true } }), "cancelled");
+
+            Assert.That(result, Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("test-cancel-admission-owner"), Is.True);
+            var cancelMarker = queueState.LoadOperation("test-cancel-admission-owner");
+            Assert.That(cancelMarker["requestId"], Is.EqualTo(cancelRequestId));
+            Assert.That(cancelMarker["requestDigest"], Is.EqualTo(parentDigest));
+            Assert.That(cancelMarker["admissionRequestDigest"], Is.EqualTo(cancelDigest));
+            Assert.That(cancelMarker["rootRequestDigest"], Is.EqualTo(parentDigest));
+            Assert.That(stateHasCompletionIntent(cancelOwner), Is.True);
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.RetryCancelAdmissionOwnerMarkerForTests(queueState), Is.False);
+            Assert.That(queueState.OperationExists("test-cancel-admission-owner"), Is.False);
+            Assert.That(queueState.OperationExists("test-run"), Is.True);
+            Assert.That(queueState.TryIsLeaseOwned(parentRequestId, parentDigest, out var parentOwned), Is.True);
+            Assert.That(parentOwned, Is.True);
+            Assert.That(queueState.TryGetTerminal("test-cancel", cancelRequestId, cancelDigest, out var exactTerminal), Is.True);
+            Assert.That(queueState.TryGetTerminalBySelector("test-cancel", cancelRequestId, parentDigest, out var selectedTerminal), Is.True);
+            Assert.That(UnityCliSerializer.Serialize(exactTerminal), Is.EqualTo(UnityCliSerializer.Serialize(selectedTerminal)));
+            Assert.That(pool.Capture().RecoveryBlocked, Is.False);
+            queueState.ClearOperation("test-run");
+            queueState.ReleaseLease(parentRequestId, parentDigest);
+        }
+
+        [Test]
+        public void CancelMarkerReloadRestoresExactPoolOwnerBeforeDedicatedCleanup()
+        {
+            var parentRequestId = Unique("reload-parent");
+            var parentDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(parentRequestId), InstanceId);
+            var cancelRequestId = Unique("reload-cancel");
+            var cancelDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(cancelRequestId), InstanceId);
+            var runId = Guid.NewGuid().ToString();
+            var deadline = TestDeadline();
+            var original = CreatePool("cancel-reload-session");
+            var owner = Consume(original, cancelRequestId, cancelDigest, deadline);
+            queueState.SaveOperation("test-run", new Dictionary<string, object>
+            {
+                { "requestId", parentRequestId }, { "requestDigest", parentDigest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() },
+                { "absoluteDeadlineUtc", DateTimeOffset.FromUnixTimeMilliseconds(deadline).ToString("O") },
+                { "testOperation", new Dictionary<string, object>
+                    {
+                        { "phase", "running" }, { "runId", runId }, { "cancelRunId", runId },
+                        { "cancelRequestId", cancelRequestId }, { "cancelRequestDigest", cancelDigest },
+                        { "cancelRootRequestDigest", parentDigest }, { "cancelEffectState", "dispatched" },
+                        { "cancelRequested", true }
+                    }
+                }
+            });
+            Assert.That(queueState.TryAcquireLease(parentRequestId, parentDigest, out var parentAcquired), Is.True);
+            Assert.That(parentAcquired, Is.True);
+            owner.TopRequestDigest = parentDigest;
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "test-cancel-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", cancelRequestId }, { "requestDigest", parentDigest },
+                { "rootRequestId", parentRequestId }, { "rootRequestDigest", parentDigest },
+                { "runId", runId }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, owner, UnityCliAdmissionPool.AdmissionOwnerState.Continuation);
+            queueState.StoreTerminalFirst("test-cancel", cancelRequestId, cancelDigest, parentDigest,
+                ProtocolEnvelopeFactory.Success(cancelRequestId, new Dictionary<string, object> { { "cancelled", true } }));
+            var validCancelMarker = queueState.LoadOperation("test-cancel-admission-owner");
+            var mismatchedCancelMarker = new Dictionary<string, object>(validCancelMarker)
+            {
+                ["rootRequestDigest"] = new string('b', 64)
+            };
+            queueState.SaveOperation("test-cancel-admission-owner", mismatchedCancelMarker);
+            queueState.AdmissionPool = new UnityCliAdmissionPool(InstanceId, original.Capture().Records.Single().SessionId, 4, 1);
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.RetryCancelAdmissionOwnerMarkerForTests(queueState), Is.True);
+            Assert.That(queueState.AdmissionPool.Capture().RecoveryBlocked, Is.False);
+            queueState.SaveOperation("test-cancel-admission-owner", validCancelMarker);
+
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.RetryCancelAdmissionOwnerMarkerForTests(queueState), Is.False);
+            Assert.That(queueState.AdmissionPool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.AdmissionPool.Capture().RecoveryBlocked, Is.False);
+            Assert.That(queueState.OperationExists("test-cancel-admission-owner"), Is.False);
+            Assert.That(queueState.OperationExists("test-run"), Is.True);
+            Assert.That(queueState.TryIsLeaseOwned(parentRequestId, parentDigest, out var parentOwned), Is.True);
+            Assert.That(parentOwned, Is.True);
+            queueState.ClearOperation("test-run");
+            queueState.ReleaseLease(parentRequestId, parentDigest);
+        }
+
+        private bool stateHasCompletionIntent(UnityCliBridge.AdmissionOwnerIdentity owner)
+        {
+            return state != null && state.HasIntent(owner);
+        }
+
+        private void stateHookClearDirectRootOnce()
+        {
+            queueState.TestHooks.ExpectOnce("before-operation-clear:direct-mutation", () =>
+            {
+                throw new IOException("injected direct root clear fault");
+            });
+        }
+
+        [Test]
         public void BuildArtifactFaultRunsRealExecuteAndExactQueueSettlement()
         {
             var request = BuildRequest(Unique("build-artifact-fault"));
@@ -90,15 +268,13 @@ namespace UnityCli.Tests
             var item = Enqueue(request, raw, pool, out created);
             Assert.That(created, Is.True);
             var dependencies = BuildDependencies(prepared => { throw new UnityCliBridge.BridgeCommandException("E_BUILD_EFFECT_TEST_FAULT", "Injected build effect fault."); });
-            dependencies.Boundary = name =>
-            {
-                if (fault == "root-read" && name == "before-build-terminal-root-read") throw new IOException("injected active root read fault");
-                if (fault == "terminal-store" && name == "before-build-terminal-store") throw new IOException("injected terminal store fault");
-            };
+            dependencies.Boundary.ExpectOnce(fault == "root-read" ? "before-build-terminal-root-read" : "before-build-terminal-store",
+                () => { throw new IOException(fault == "root-read" ? "injected active root read fault" : "injected terminal store fault"); });
 
             var response = UnityCliBridge.UnityCliLiveBuildCoordinator.Execute(queueState, request, raw, () => true, CancellationToken.None, dependencies).GetAwaiter().GetResult();
 
             Assert.That(response, Does.Contain("E_EXECUTION_TIMEOUT"));
+            dependencies.Boundary.AssertDrained();
             Assert.That(pool.Capture().Records.Any(record => record.RequestId == request.RequestId
                 && (record.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Recovery
                     || record.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)), Is.True);
@@ -256,7 +432,7 @@ namespace UnityCli.Tests
 
         private static UnityCliBridge.UnityCliLiveBuildCoordinator.BuildExecutionDependencies BuildDependencies(Func<UnityCliBridge.UnityCliLiveBuildCoordinator.Prepared, UnityCliBridge.UnityCliLiveBuildCoordinator.BuildEffectResult> effect)
         {
-            return new UnityCliBridge.UnityCliLiveBuildCoordinator.BuildExecutionDependencies
+            return new UnityCliBridge.UnityCliLiveBuildCoordinator.BuildExecutionDependencies(true)
             {
                 PrepareTarget = (target, outputPath, options) => new UnityCliBridge.UnityCliLiveBuildCoordinator.Prepared
                 {

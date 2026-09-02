@@ -1,6 +1,8 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 
 namespace UnityCli
 {
@@ -16,67 +18,91 @@ namespace UnityCli
         internal bool QueuePublicationOpen;
         internal string ListenerId;
         internal long ListenerGeneration;
-        internal Action<string> Boundary;
-        internal Func<long> MonotonicNowMs;
-        internal Func<bool> PersistPoolState;
-        internal Func<UnityCliBridge.AdmissionOwnerIdentity, bool> ClearOwnerMarkers;
-        internal Func<UnityCliBridge.AdmissionOwnerIdentity, bool> PersistCompletionIntent;
-        internal Func<UnityCliBridge.AdmissionOwnerIdentity, bool> HasCompletionIntent;
-        internal Func<UnityCliBridge.AdmissionOwnerIdentity, bool> ClearCompletionIntent;
-        internal BridgeIsolatedExecutionState IsolatedExecution;
+        internal readonly BridgeQueueSinks Sinks;
+        internal readonly BridgeQueueTestHooks TestHooks;
+        internal readonly BridgeIsolatedExecutionState IsolatedExecution;
+        private readonly Func<long> monotonicNowMs;
+        private readonly Func<bool> persistPoolState;
+        private readonly Func<UnityCliBridge.AdmissionOwnerIdentity, bool> persistCompletionIntent;
+        private readonly Func<UnityCliBridge.AdmissionOwnerIdentity, bool> hasCompletionIntent;
+        private readonly Func<UnityCliBridge.AdmissionOwnerIdentity, bool> clearCompletionIntent;
 
-        internal BridgeQueueState(UnityCliAdmissionPool admissionPool = null, Func<long> monotonicNowMs = null)
+        internal BridgeQueueState(
+            UnityCliAdmissionPool admissionPool,
+            Func<long> monotonicNowMs,
+            BridgeQueueSinks sinks,
+            BridgeQueueTestHooks testHooks,
+            Func<bool> persistPoolState,
+            Func<UnityCliBridge.AdmissionOwnerIdentity, bool> persistCompletionIntent,
+            Func<UnityCliBridge.AdmissionOwnerIdentity, bool> hasCompletionIntent,
+            Func<UnityCliBridge.AdmissionOwnerIdentity, bool> clearCompletionIntent,
+            BridgeIsolatedExecutionState isolatedExecution)
         {
+            if (sinks == null || testHooks == null || persistPoolState == null || persistCompletionIntent == null
+                || hasCompletionIntent == null || clearCompletionIntent == null)
+                throw new ArgumentNullException("BridgeQueueState dependencies must be explicit.");
             AdmissionPool = admissionPool;
-            MonotonicNowMs = monotonicNowMs ?? DefaultMonotonicMilliseconds;
+            this.monotonicNowMs = monotonicNowMs ?? DefaultMonotonicMilliseconds;
+            Sinks = sinks;
+            TestHooks = testHooks;
+            this.persistPoolState = persistPoolState;
+            this.persistCompletionIntent = persistCompletionIntent;
+            this.hasCompletionIntent = hasCompletionIntent;
+            this.clearCompletionIntent = clearCompletionIntent;
+            IsolatedExecution = isolatedExecution;
             ListenerGeneration = 1;
         }
 
         internal long NowMs()
         {
-            return MonotonicNowMs();
+            return monotonicNowMs();
         }
 
         internal bool PersistPool()
         {
-            return PersistPoolState == null || PersistPoolState();
+            TestHooks.Hit("before-state-persist-pool");
+            return persistPoolState();
         }
 
         internal bool ClearMarkers(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
-            return ClearOwnerMarkers == null
-                ? UnityCliBridge.ClearExactAdmissionOwnerMarkers(this, identity)
-                : ClearOwnerMarkers(identity);
+            TestHooks.Hit("before-state-clear-markers");
+            return UnityCliBridge.ClearAdmissionOwnerMarkersForState(this, identity);
         }
 
         internal bool PersistIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
-            return PersistCompletionIntent == null || PersistCompletionIntent(identity);
+            TestHooks.Hit("before-state-persist-intent");
+            return persistCompletionIntent(identity);
         }
 
         internal bool HasIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
-            return HasCompletionIntent != null && HasCompletionIntent(identity);
+            return hasCompletionIntent(identity);
         }
 
         internal bool ClearIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
-            return ClearCompletionIntent == null || ClearCompletionIntent(identity);
+            TestHooks.Hit("before-state-clear-intent");
+            return clearCompletionIntent(identity);
         }
 
         internal Dictionary<string, object> LoadOperation(string scope)
         {
+            TestHooks.Hit("before-operation-load:" + scope);
             return IsolatedExecution == null ? UnityCliActiveOperation.Load(scope) : IsolatedExecution.Load(scope);
         }
 
         internal void SaveOperation(string scope, Dictionary<string, object> value)
         {
+            TestHooks.Hit("before-operation-save:" + scope);
             if (IsolatedExecution == null) UnityCliActiveOperation.Save(scope, value);
             else IsolatedExecution.Save(scope, value);
         }
 
         internal void ClearOperation(string scope)
         {
+            TestHooks.Hit("before-operation-clear:" + scope);
             if (IsolatedExecution == null) UnityCliActiveOperation.Clear(scope);
             else IsolatedExecution.Clear(scope);
         }
@@ -95,9 +121,22 @@ namespace UnityCli
 
         internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, object envelope)
         {
+            return StoreTerminalFirst(scope, requestId, requestDigest, null, envelope);
+        }
+
+        internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, object envelope)
+        {
+            TestHooks.Hit("before-terminal-store:" + scope);
             return IsolatedExecution == null
-                ? UnityCliActiveOperation.StoreTerminalFirst(scope, requestId, requestDigest, envelope)
-                : IsolatedExecution.StoreTerminalFirst(scope, requestId, requestDigest, envelope);
+                ? UnityCliActiveOperation.StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, envelope)
+                : IsolatedExecution.StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, envelope);
+        }
+
+        internal bool TryGetTerminalBySelector(string scope, string requestId, string selectorDigest, out object envelope)
+        {
+            return IsolatedExecution == null
+                ? UnityCliActiveOperation.TryGetTerminalBySelector(scope, requestId, selectorDigest, out envelope)
+                : IsolatedExecution.TryGetTerminalBySelector(scope, requestId, selectorDigest, out envelope);
         }
 
         internal bool TryAcquireLease(string requestId, string requestDigest, out bool newlyAcquired)
@@ -128,6 +167,7 @@ namespace UnityCli
                     throw new InvalidOperationException("Local BridgeQueueState still owns work.");
             }
             if (IsolatedExecution != null) IsolatedExecution.AssertEmpty();
+            TestHooks.AssertDrained();
         }
 
         private static long DefaultMonotonicMilliseconds()
@@ -136,12 +176,88 @@ namespace UnityCli
         }
     }
 
+    /// <summary>每个queue state显式持有日志与transaction输出；测试sink不触碰Library/UnityCli。</summary>
+    internal sealed class BridgeQueueSinks
+    {
+        private readonly Action<string> log;
+        private readonly Action<string, string, string, string> appendTransaction;
+        internal bool Production { get; private set; }
+        private int logCount;
+        private int transactionCount;
+        internal int LogCount { get { return Volatile.Read(ref logCount); } }
+        internal int TransactionCount { get { return Volatile.Read(ref transactionCount); } }
+
+        internal BridgeQueueSinks(Action<string> log, Action<string, string, string, string> appendTransaction, bool production)
+        {
+            if (log == null || appendTransaction == null) throw new ArgumentNullException("Bridge queue sinks must be explicit.");
+            this.log = log;
+            this.appendTransaction = appendTransaction;
+            Production = production;
+        }
+
+        internal void WriteLog(string line)
+        {
+            log(line);
+            Interlocked.Increment(ref logCount);
+        }
+
+        internal void AppendTransaction(string requestId, string command, string request, string response)
+        {
+            appendTransaction(requestId, command, request, response);
+            Interlocked.Increment(ref transactionCount);
+        }
+    }
+
+    /// <summary>测试边界按名称注册且只消费一次；未消费的故障点在TearDown硬失败。</summary>
+    internal sealed class BridgeQueueTestHooks
+    {
+        private readonly object sync = new object();
+        private readonly Dictionary<string, Action> expected = new Dictionary<string, Action>(StringComparer.Ordinal);
+        private readonly bool enabled;
+
+        internal BridgeQueueTestHooks(bool enabled)
+        {
+            this.enabled = enabled;
+        }
+
+        internal void ExpectOnce(string name, Action action)
+        {
+            if (!enabled) throw new InvalidOperationException("Production queue state does not accept test hooks.");
+            if (string.IsNullOrWhiteSpace(name) || action == null) throw new ArgumentException("One-shot test hook is invalid.");
+            lock (sync)
+            {
+                if (expected.ContainsKey(name)) throw new InvalidOperationException("One-shot test hook is already registered: " + name);
+                expected.Add(name, action);
+            }
+        }
+
+        internal void Hit(string name)
+        {
+            Action action;
+            lock (sync)
+            {
+                if (!expected.TryGetValue(name, out action)) return;
+                expected.Remove(name);
+            }
+            action();
+        }
+
+        internal void AssertDrained()
+        {
+            lock (sync)
+            {
+                if (expected.Count != 0)
+                    throw new InvalidOperationException("One-shot queue test hooks were not consumed: " + string.Join(",", expected.Keys));
+            }
+        }
+    }
+
     /// <summary>显式测试state的内存journal；不读取或修改production固定文件与全局mutation lease。</summary>
     internal sealed class BridgeIsolatedExecutionState
     {
         private readonly object sync = new object();
         private readonly Dictionary<string, Dictionary<string, object>> operations = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
-        private readonly Dictionary<string, object> terminals = new Dictionary<string, object>(StringComparer.Ordinal);
+        private readonly Dictionary<string, TerminalEntry> terminals = new Dictionary<string, TerminalEntry>(StringComparer.Ordinal);
         private string leaseRequestId;
         private string leaseRequestDigest;
 
@@ -174,29 +290,55 @@ namespace UnityCli
         {
             lock (sync)
             {
-                object value;
+                TerminalEntry value;
                 if (!terminals.TryGetValue(TerminalKey(scope, requestId, requestDigest), out value))
                 {
                     envelope = null;
                     return false;
                 }
-                envelope = CloneObject(value);
+                envelope = CloneObject(value.Envelope);
                 return true;
             }
         }
 
-        internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, object envelope)
+        internal bool TryGetTerminalBySelector(string scope, string requestId, string selectorDigest, out object envelope)
+        {
+            lock (sync)
+            {
+                var value = terminals.Values.FirstOrDefault(entry => string.Equals(entry.Scope, scope, StringComparison.Ordinal)
+                    && string.Equals(entry.RequestId, requestId, StringComparison.Ordinal));
+                if (value == null || !string.Equals(value.SelectorDigest, selectorDigest, StringComparison.Ordinal))
+                {
+                    envelope = null;
+                    return false;
+                }
+                envelope = CloneObject(value.Envelope);
+                return true;
+            }
+        }
+
+        internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, object envelope)
         {
             lock (sync)
             {
                 var key = TerminalKey(scope, requestId, requestDigest);
-                object current;
+                TerminalEntry current;
                 if (!terminals.TryGetValue(key, out current))
                 {
-                    current = CloneObject(envelope);
+                    current = new TerminalEntry
+                    {
+                        Scope = scope,
+                        RequestId = requestId,
+                        SelectorDigest = selectorDigest,
+                        Envelope = CloneObject(envelope)
+                    };
                     terminals.Add(key, current);
                 }
-                return CloneObject(current);
+                else if (!string.Equals(current.SelectorDigest, selectorDigest, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("Isolated terminal selector identity changed.");
+                }
+                return CloneObject(current.Envelope);
             }
         }
 
@@ -243,6 +385,14 @@ namespace UnityCli
                 if (operations.Count != 0 || leaseRequestId != null)
                     throw new InvalidOperationException("Isolated execution state still owns an operation or lease.");
             }
+        }
+
+        private sealed class TerminalEntry
+        {
+            internal string Scope;
+            internal string RequestId;
+            internal string SelectorDigest;
+            internal object Envelope;
         }
 
         private static string TerminalKey(string scope, string requestId, string requestDigest)

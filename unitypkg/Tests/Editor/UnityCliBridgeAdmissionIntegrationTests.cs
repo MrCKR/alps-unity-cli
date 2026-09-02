@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,8 +30,8 @@ namespace UnityCli.Tests
         [TearDown]
         public void TearDown()
         {
-            state.Boundary = null;
             state.AssertEmptyForTests();
+            Assert.That(state.Sinks.Production, Is.False);
         }
 
         [Test]
@@ -46,12 +47,11 @@ namespace UnityCli.Tests
             Assert.That(firstCreated, Is.True);
             var entered = new ManualResetEventSlim(false);
             var release = new ManualResetEventSlim(false);
-            state.Boundary = name =>
+            state.TestHooks.ExpectOnce("before-existing-lookup", () =>
             {
-                if (name != "before-existing-lookup") return;
                 entered.Set();
                 release.Wait();
-            };
+            });
 
             UnityCliBridge.BridgeWorkItem attached = null;
             var attachedCreated = true;
@@ -84,12 +84,11 @@ namespace UnityCli.Tests
             var first = Enqueue(request, raw, grant.Token, deadline, out ignoredCreated);
             var entered = new ManualResetEventSlim(false);
             var release = new ManualResetEventSlim(false);
-            state.Boundary = name =>
+            state.TestHooks.ExpectOnce("before-completion-memory", () =>
             {
-                if (name != "before-completion-memory") return;
                 entered.Set();
                 release.Wait();
-            };
+            });
 
             var completionTask = Task.Run(() => UnityCliBridge.CompleteWorkItemForTests(first, Success(request.RequestId)));
             UnityCliBridge.BridgeCommandException failure = null;
@@ -144,12 +143,9 @@ namespace UnityCli.Tests
             var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
             var persistOutside = false;
             var logOutside = false;
-            state.Boundary = name =>
-            {
-                if (name == "before-queue-publication") throw new InvalidOperationException("injected publication fault");
-                if (name == "before-admission-compensation-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests(state);
-                if (name == "before-admission-compensation-log") logOutside = !UnityCliBridge.QueueLockHeldForTests(state);
-            };
+            state.TestHooks.ExpectOnce("before-queue-publication", () => { throw new InvalidOperationException("injected publication fault"); });
+            state.TestHooks.ExpectOnce("before-admission-compensation-persist", () => persistOutside = !UnityCliBridge.QueueLockHeldForTests(state));
+            state.TestHooks.ExpectOnce("before-admission-compensation-log", () => logOutside = !UnityCliBridge.QueueLockHeldForTests(state));
 
             Assert.Throws<InvalidOperationException>(() => { bool created; Enqueue(request, raw, grant.Token, deadline, out created); });
 
@@ -171,16 +167,12 @@ namespace UnityCli.Tests
             var faultObservedInside = false;
             var persistOutside = false;
             var logOutside = false;
-            state.Boundary = name =>
+            state.TestHooks.ExpectOnce("before-completion-memory", () =>
             {
-                if (name == "before-completion-memory")
-                {
-                    faultObservedInside = UnityCliBridge.QueueLockHeldForTests(state);
-                    throw new InvalidOperationException("injected completion boundary fault");
-                }
-                if (name == "before-admission-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests(state);
-                if (name == "before-queue-boundary-fault-log") logOutside = !UnityCliBridge.QueueLockHeldForTests(state);
-            };
+                faultObservedInside = UnityCliBridge.QueueLockHeldForTests(state);
+                throw new InvalidOperationException("injected completion boundary fault");
+            });
+            state.TestHooks.ExpectOnce("before-queue-boundary-fault-log", () => logOutside = !UnityCliBridge.QueueLockHeldForTests(state));
 
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.False);
 
@@ -190,10 +182,7 @@ namespace UnityCli.Tests
             Assert.That(pool.Capture().Active, Is.EqualTo(1));
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
 
-            state.Boundary = name =>
-            {
-                if (name == "before-admission-persist") persistOutside = !UnityCliBridge.QueueLockHeldForTests(state);
-            };
+            state.TestHooks.ExpectOnce("before-admission-persist", () => persistOutside = !UnityCliBridge.QueueLockHeldForTests(state));
             monotonicNowMs += 100L;
             UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
 
@@ -214,22 +203,27 @@ namespace UnityCli.Tests
             bool created;
             var item = Enqueue(request, raw, grant.Token, deadline, out created);
             Assert.That(created, Is.True);
-            if (fault == "persist") state.PersistPoolState = () => false;
-            else state.ClearOwnerMarkers = identity => false;
+            state.TestHooks.ExpectOnce(fault == "persist" ? "before-state-persist-pool" : "before-state-clear-markers",
+                () => { throw new IOException("injected durable settlement fault"); });
 
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.False);
 
             Assert.That(item.Completed.IsSet, Is.False);
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.Sinks.TransactionCount, Is.EqualTo(0));
+            bool duplicateCreated;
+            var duplicate = Enqueue(request, raw, grant.Token, deadline, out duplicateCreated);
+            Assert.That(duplicate, Is.SameAs(item));
+            Assert.That(duplicateCreated, Is.False);
+            Assert.That(item.Completed.IsSet, Is.False);
 
-            state.PersistPoolState = () => true;
-            state.ClearOwnerMarkers = null;
             monotonicNowMs += 100L;
             UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
 
             Assert.That(item.Completed.IsSet, Is.True);
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+            Assert.That(state.Sinks.TransactionCount, Is.EqualTo(1));
         }
 
         [Test]
@@ -244,10 +238,8 @@ namespace UnityCli.Tests
             var item = Enqueue(request, raw, grant.Token, deadline, out created);
             Assert.That(created, Is.True);
             UnityCliAdmissionPool.ConsumedIdentity successor = null;
-            state.Boundary = name =>
+            state.TestHooks.ExpectOnce("before-completion-memory", () =>
             {
-                if (name != "before-completion-memory") return;
-                state.Boundary = null;
                 UnityCliAdmissionPool.ConsumedIdentity current;
                 Assert.That(pool.TryGetConsumedIdentity(request.RequestId, out current), Is.True);
                 Assert.That(pool.CompleteTrusted(current), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
@@ -256,7 +248,7 @@ namespace UnityCli.Tests
                 var authorized = pool.AuthorizeAndCapture(request.RequestId, fingerprint, digest, nextGrant.Token, state.ListenerId, state.ListenerGeneration, deadline);
                 Assert.That(authorized.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
                 successor = authorized.Identity;
-            };
+            });
 
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.False);
 
