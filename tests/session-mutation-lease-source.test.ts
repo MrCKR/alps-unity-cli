@@ -83,7 +83,7 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(lease, /WriteDurableNew\(path, ownerText\);[\s\S]*newlyAcquired = true;[\s\S]*return true;/);
   assert.match(lease, /TryReadOwnerSnapshot[\s\S]*catch \(FileNotFoundException\) \{ return true; \}[\s\S]*catch \(DirectoryNotFoundException\) \{ return true; \}[\s\S]*owner = ParseOwner\(raw\);[\s\S]*return owner != null/);
   assert.match(lease, /ParseOwner[\s\S]*!IsSafeId\(requestId\) \|\| !IsSha256\(requestDigest\)[\s\S]*return null/);
-  assert.match(lease, /recoveryBlocked[\s\S]*asset-refresh[\s\S]*package-embed[\s\S]*navmesh-bake[\s\S]*occlusion-bake[\s\S]*catch \{ recoveryBlocked = true; return; \}/);
+  assert.match(lease, /RestoreValidatedActiveRootLease[\s\S]*asset-refresh[\s\S]*package-embed[\s\S]*navmesh-bake[\s\S]*occlusion-bake[\s\S]*catch \{ return false; \}/);
   assert.match(lease, /var claim = path \+ "\.recovery"[\s\S]*var quarantine = path \+ "\.quarantine"/);
   assert.doesNotMatch(lease, /\.create-/);
   assert.match(lease, /TryIsOwnedBy\(string requestId, string requestDigest, out bool isOwned\)[\s\S]*owner\.RequestDigest, requestDigest[\s\S]*return true/);
@@ -92,7 +92,9 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(lease, /WriteDurableNew\(path, ownerText\)[\s\S]*catch \(Exception\)[\s\S]*QuarantineObservedOwner\(expected, raw\)[\s\S]*!OwnerInvalid\(observed\)[\s\S]*return false[\s\S]*E_EXECUTION_TIMEOUT/);
   assert.match(lease, /TryGetCurrentOwner\(out string requestId, out string requestDigest\)[\s\S]*TryReadOwnerSnapshot[\s\S]*requestId = owner\.RequestId[\s\S]*requestDigest = owner\.RequestDigest/);
   assert.doesNotMatch(lease, /CurrentOwnerRequest(?:Id|Digest)/);
-  assert.match(lease, /UnityCliActiveOperation\.Exists\(scope\)[\s\S]*UnityCliActiveOperation\.Load\(scope\)/);
+  assert.match(lease, /state\.OperationExists\(scope\)[\s\S]*state\.LoadOperation\(scope\)/);
+  assertBefore(lease, "ReconcileAcceptedDirectMutationBeforeLeaseRestore(ProductionQueueState)", "RestoreValidatedActiveRootLease(ProductionQueueState)");
+  assert.match(lease, /InitializeRecoveryOrderForTests[\s\S]*ReconcileAcceptedDirectMutationBeforeLeaseRestore\(state\)[\s\S]*RestoreValidatedActiveRootLease\(state\)/);
   assert.match(bridge, /UnityCliSessionMutationLease\.Initialize\(\);\s*UnityCliCompilationEventBroker\.Initialize\(\);/s);
   assert.match(workQueue, /UnityCliSessionMutationLease\.TryFinalizeOwnedPlayModeRoot\(\);/);
   assert.match(operation, /var requestDigest = UnityCliRequestDigest\.Compute\(rawRequestBytes, request\.InstanceId\)/);
@@ -152,7 +154,10 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(retryCleanup, /TerminalCleanupDecision\.Retry\) return true/);
   assert.match(reloadOperation, /PreEffectCleanupScope[\s\S]*BeginPreEffectCleanup[\s\S]*RetryPreEffectCleanup[\s\S]*CanCleanupAbandonedPreEffectRoot/);
   assert.match(reloadOperation, /RetryPreEffectCleanup[\s\S]*markerMatchesActive[\s\S]*UnityCliActiveOperation\.Clear\(Scope\)[\s\S]*FinalizeAbandonedPreEffectState\(requestId, requestDigest\)[\s\S]*Release\(requestId, requestDigest\)/);
-  assert.match(reloadOperation, /internal virtual void Tick\(\)[\s\S]*RetryPreEffectCleanup\(\)[\s\S]*RetryTerminalCleanup\(\)[\s\S]*TryResumePublishedTerminal\(root\)[\s\S]*deadline/);
+  assert.match(reloadOperation, /UnityCliReloadTickSchedule[\s\S]*Stopwatch\.GetTimestamp\(\)[\s\S]*Stopwatch\.Frequency/);
+  assert.match(reloadOperation, /utcNow \?\? \(\(\) => DateTimeOffset\.UtcNow\)/);
+  assert.match(reloadOperation, /internal virtual void Tick\(\)[\s\S]*tickSchedule\.TryEnter\(\)[\s\S]*RetryPreEffectCleanup\(\)[\s\S]*RetryTerminalCleanup\(\)[\s\S]*TryResumePublishedTerminal\(root\)[\s\S]*tickSchedule\.UtcNow >= Time\(root, "deadline"\)/);
+  assert.doesNotMatch(reloadOperation, /nextTickUtc|DateTime\.UtcNow < nextTick/);
   assert.match(activeOperation, /TryGetTerminal\(string scope, string requestId, string requestDigest, out object envelope\)/);
   assert.match(activeOperation, /StoreTerminalFirst[\s\S]*MaxTerminalEntryBytes[\s\S]*while \(cache\.Entries\.Count > 100 \|\| Encoding\.UTF8\.GetByteCount\(serialized\) > MaxTerminalCacheBytes\)[\s\S]*RetiredIdentities\.Add\(TerminalIdentityHash[\s\S]*DurableWriteText\(TerminalCachePath\(\), serialized\)/);
   assert.match(activeOperation, /retiredIdentities[\s\S]*RejectRetiredTerminal[\s\S]*TerminalIdentityHash[\s\S]*SHA256\.Create/);

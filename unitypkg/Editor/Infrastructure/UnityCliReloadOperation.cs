@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Threading;
@@ -9,6 +10,35 @@ using UnityCli.Protocol;
 
 namespace UnityCli
 {
+    /// <summary>每个reload operation独占的单调tick节流；绝对业务deadline仍由UTC判定。</summary>
+    internal sealed class UnityCliReloadTickSchedule
+    {
+        private readonly Func<long> monotonicNowMs;
+        private readonly Func<DateTimeOffset> utcNow;
+        private long nextTickAtMs;
+
+        internal UnityCliReloadTickSchedule(Func<long> monotonicNowMs = null, Func<DateTimeOffset> utcNow = null)
+        {
+            this.monotonicNowMs = monotonicNowMs ?? DefaultMonotonicMilliseconds;
+            this.utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
+        }
+
+        internal DateTimeOffset UtcNow { get { return utcNow(); } }
+
+        internal bool TryEnter()
+        {
+            var now = monotonicNowMs();
+            if (now < nextTickAtMs) return false;
+            nextTickAtMs = checked(now + 100L);
+            return true;
+        }
+
+        private static long DefaultMonotonicMilliseconds()
+        {
+            return checked((long)(Stopwatch.GetTimestamp() * (1000d / Stopwatch.Frequency)));
+        }
+    }
+
     public static partial class UnityCliBridge
     {
         /// <summary>跨 domain reload 的 dictionary journal 操作公共协调骨架。</summary>
@@ -197,7 +227,7 @@ namespace UnityCli
 
             private string TerminalCleanupScope { get { return Scope + "-terminal-cleanup"; } }
             private string PreEffectCleanupScope { get { return Scope + "-pre-effect-cleanup"; } }
-            private DateTime nextTickUtc;
+            private readonly UnityCliReloadTickSchedule tickSchedule = new UnityCliReloadTickSchedule();
             private string lastTerminalRequestId;
             private string lastTerminalRequestDigest;
             private object lastTerminalEnvelope;
@@ -312,15 +342,14 @@ namespace UnityCli
             internal virtual void Tick()
             {
                 if (RetryAdmissionOwnerRecoveryMarker()) return;
-                if (DateTime.UtcNow < nextTickUtc) return;
-                nextTickUtc = DateTime.UtcNow.AddMilliseconds(100);
+                if (!tickSchedule.TryEnter()) return;
                 if (RetryPreEffectCleanup()) return;
                 if (RetryTerminalCleanup()) return;
                 var root = Load();
                 if (root == null || !UnityCliSessionMutationLease.IsOwnedBy(Text(root, "requestId"), Text(root, "requestDigest"))) return;
                 if (TryResumePublishedTerminal(root)) return;
                 if (!string.Equals(Text(root, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal)) { Fail(root, "E_EXECUTION_TIMEOUT", SessionChangedMessage); return; }
-                if (DateTimeOffset.UtcNow >= Time(root, "deadline")) { Fail(root, "E_EXECUTION_TIMEOUT", DeadlineMessage); return; }
+                if (tickSchedule.UtcNow >= Time(root, "deadline")) { Fail(root, "E_EXECUTION_TIMEOUT", DeadlineMessage); return; }
                 OnTick(root);
             }
 

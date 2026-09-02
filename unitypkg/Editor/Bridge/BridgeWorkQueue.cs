@@ -368,6 +368,7 @@ namespace UnityCli
                     : deadlineElapsed ? "Control request deadline elapsed before exact parent authorization."
                     : "Control request parent is no longer active.",
                 nextActions: new[] { "Inspect the exact parent status before submitting another control request." }));
+            item.MarkNoEffectRejected();
             CompleteWorkItem(item);
         }
 
@@ -606,7 +607,8 @@ namespace UnityCli
             Exception boundaryException = null;
             try
             {
-                if (item.CompletionIntentReady)
+                // selection 已证明该 WorkItem 未启动时，禁止按命令名推断 durable coordinator 接管。
+                if (item.CompletionIntentReady || item.NoEffectRejected)
                     transfer = AdmissionTransferResult.NotAccepted;
                 else
                     transfer = SettleAdmissionAfterWorkItem(state, item.AdmissionOwner, item.Request.Command, item.Response);
@@ -830,9 +832,20 @@ namespace UnityCli
             internal long NextSettlementRetryAtMs { get; private set; }
             internal bool SettlementFailureLogged { get; set; }
             internal bool CompletionIntentReady { get; set; }
+            internal bool NoEffectRejected { get; private set; }
 
             internal string RequestDigestValue { get { return RequestDigest; } }
             internal void SetResponseForTests(string response) { Response = response; }
+
+            /// <summary>只允许已取消且从未启动的 selection reject 冻结 no-effect settlement。</summary>
+            internal void MarkNoEffectRejected()
+            {
+                lock (StateLock)
+                {
+                    if (started || !cancelled) throw new InvalidOperationException("No-effect rejection requires a cancelled, unstarted WorkItem.");
+                    NoEffectRejected = true;
+                }
+            }
 
             internal void ScheduleSettlementRetry(long nowMs)
             {

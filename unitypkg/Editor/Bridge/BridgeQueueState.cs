@@ -295,6 +295,15 @@ namespace UnityCli
                 : IsolatedExecution.TryAcquireLease(requestId, requestDigest, out newlyAcquired);
         }
 
+        internal bool TryRecoverLease(string requestId, string requestDigest, out bool newlyAcquired)
+        {
+            AssertIoOutsideQueueLock();
+            Interlocked.Increment(ref ioCallbackCount);
+            return IsolatedExecution == null
+                ? UnityCliBridge.UnityCliSessionMutationLease.TryRecoverExact(requestId, requestDigest, out newlyAcquired)
+                : IsolatedExecution.TryAcquireLease(requestId, requestDigest, out newlyAcquired);
+        }
+
         internal void ReleaseLease(string requestId, string requestDigest)
         {
             AssertIoOutsideQueueLock();

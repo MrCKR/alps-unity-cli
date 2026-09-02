@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -382,11 +383,86 @@ namespace UnityCli.Tests
             Assert.That(starts, Is.EqualTo(new[] { exact.RequestId }));
             Assert.That(rejectedIds, Is.EqualTo(new[] { rejected.RequestId }));
             Assert.That(rejectedItem.Completed.IsSet, Is.True);
+            Assert.That(rejectedItem.NoEffectRejected, Is.True);
             Assert.That(rejectedItem.Response, Does.Contain("E_ADMISSION_IDENTITY_MISMATCH"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(command == "internal.test.run.cancel" ? 1 : 0));
+            Assert.That(state.PendingSettlementWork, Is.Empty);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
             Assert.That(UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state), Is.EqualTo(new[] { exact.RequestId }));
             Assert.That(state.LastQueueNodesExamined, Is.EqualTo(1));
             UnityCliBridge.ShutdownQueuedWorkForTests(state);
             state.ClearOperation(scope);
+            state.ReleaseLease(parentRequestId, parentDigest);
+        }
+
+        [Test]
+        public void RejectedTestCancelIdentityMismatchUsesExactNoEffectSettlement()
+        {
+            var parentRequestId = "parent-no-effect-" + Guid.NewGuid().ToString("N");
+            var parentDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(parentRequestId), "test-instance");
+            var root = new Dictionary<string, object>
+            {
+                { "requestId", parentRequestId }, { "requestDigest", parentDigest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() },
+                { "testOperation", new Dictionary<string, object>
+                    {
+                        { "phase", "running" }, { "runId", Guid.NewGuid().ToString() }
+                    }
+                }
+            };
+            state.SaveOperation("test-run", root);
+            Assert.That(state.TryAcquireLease(parentRequestId, parentDigest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+            var rejected = Request("control-no-effect-mismatch");
+            rejected.Command = "internal.test.run.cancel";
+            rejected.Input = new Dictionary<string, object> { { "expectedEditorSessionId", "mismatch" } };
+            var raw = RequestBytes(rejected);
+            var grant = pool.Acquire(rejected.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            bool created;
+            var item = Enqueue(rejected, raw, grant.Token, Deadline(rejected), out created);
+            Assert.That(created, Is.True);
+            var settlementOrder = new List<string>();
+            state.TestHooks.ExpectOnce("before-state-persist-intent", () => settlementOrder.Add("intent"));
+            state.TestHooks.ExpectOnce("before-completion-memory", () =>
+            {
+                Assert.That(state.HasIntentInMemory(item.AdmissionOwner), Is.True);
+                Assert.That(pool.TryGetConsumedIdentity(rejected.RequestId, out var exactOwner), Is.True);
+                Assert.That(exactOwner.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+                settlementOrder.Add("complete");
+            });
+            state.TestHooks.ExpectOnce("before-admission-persist", () =>
+            {
+                Assert.That(pool.Capture().Active, Is.EqualTo(0));
+                settlementOrder.Add("persist");
+            });
+            state.TestHooks.ExpectOnce("before-state-clear-markers", () =>
+            {
+                Assert.That(state.HasIntentInMemory(item.AdmissionOwner), Is.True);
+                settlementOrder.Add("markers");
+            });
+            state.TestHooks.ExpectOnce("before-state-clear-intent", () =>
+            {
+                Assert.That(state.HasIntentInMemory(item.AdmissionOwner), Is.True);
+                settlementOrder.Add("intent-cleanup");
+            });
+
+            var rejectedIds = UnityCliBridge.RejectTerminalControlWorkForTests(state);
+
+            Assert.That(rejectedIds, Is.EqualTo(new[] { rejected.RequestId }));
+            Assert.That(settlementOrder, Is.EqualTo(new[] { "intent", "complete", "persist", "markers", "intent-cleanup" }));
+            Assert.That(item.NoEffectRejected, Is.True);
+            Assert.That(item.HasStarted, Is.False);
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.PendingSettlementWork, Is.Empty);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+            Assert.That(state.OperationExists("test-cancel-admission-owner"), Is.False);
+            Assert.That(state.OperationExists("test-run"), Is.True);
+            Assert.That(state.TryIsLeaseOwned(parentRequestId, parentDigest, out var parentOwned), Is.True);
+            Assert.That(parentOwned, Is.True);
+            state.ClearOperation("test-run");
             state.ReleaseLease(parentRequestId, parentDigest);
         }
 
@@ -425,9 +501,48 @@ namespace UnityCli.Tests
 
             Assert.That(rejected, Is.EqualTo(new[] { stale.RequestId }));
             Assert.That(staleItem.Completed.IsSet, Is.True);
+            Assert.That(staleItem.NoEffectRejected, Is.True);
+            Assert.That(staleItem.HasStarted, Is.False);
             Assert.That(staleItem.Response, Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.PendingSettlementWork, Is.Empty);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
+            Assert.That(state.OperationExists("test-cancel-admission-owner"), Is.False);
             Assert.That(UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state), Is.EqualTo(new[] { ordinary.RequestId }));
             UnityCliBridge.ShutdownQueuedWorkForTests(state);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ExpiredTestCancelSettlesWithoutReadableParentOrPendingSlot()
+        {
+            var stale = Request("expired-test-cancel-unreadable");
+            stale.Command = "internal.test.run.cancel";
+            stale.Input = new Dictionary<string, object> { { "expectedEditorSessionId", UnityCliBridge.EditorSessionId() } };
+            var raw = RequestBytes(stale);
+            var deadline = Deadline(stale);
+            var grant = pool.Acquire(stale.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            bool created;
+            var item = Enqueue(stale, raw, grant.Token, deadline, out created);
+            Assert.That(created, Is.True);
+            // publication后只推进测试持有的request时钟视图，确定性模拟排队期间deadline流逝。
+            stale.Execution.AbsoluteDeadlineUtc = DateTimeOffset.FromUnixTimeMilliseconds(0).ToString("O");
+            state.TestHooks.ExpectOnce("before-operation-load:test-run", () => { throw new IOException("injected unreadable parent"); });
+
+            var rejected = UnityCliBridge.RejectTerminalControlWorkForTests(state);
+
+            Assert.That(rejected, Is.EqualTo(new[] { stale.RequestId }));
+            Assert.That(item.Response, Does.Contain("deadline elapsed"));
+            Assert.That(item.NoEffectRejected, Is.True);
+            Assert.That(item.HasStarted, Is.False);
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.PendingSettlementWork, Is.Empty);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+            Assert.That(state.OperationExists("test-cancel-admission-owner"), Is.False);
         }
 
         [Test]
@@ -446,7 +561,11 @@ namespace UnityCli.Tests
 
             Assert.That(rejected, Is.EqualTo(new[] { stale.RequestId }));
             Assert.That(staleItem.Completed.IsSet, Is.True);
+            Assert.That(staleItem.NoEffectRejected, Is.True);
             Assert.That(staleItem.Response, Does.Contain("deadline elapsed"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.PendingSettlementWork, Is.Empty);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
         }
 
         [Test]

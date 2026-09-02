@@ -21,13 +21,23 @@ test("Bridge main-thread scheduler advances every durable coordinator before que
   const ticks = [
     'TickCoordinator("compilation-events", UnityCliCompilationEventBroker.Tick);',
     'TickCoordinator("editor.compile", UnityCliBridge.UnityCliCompileCoordinator.Tick);',
+    'TickCoordinator("build.run", UnityCliBridge.UnityCliLiveBuildCoordinator.Tick);',
     'TickCoordinator("editor.refresh", UnityCliBridge.UnityCliLiveRefreshCoordinator.Tick);',
+    'TickCoordinator("asset.refresh", UnityCliBridge.UnityCliAssetRefreshCoordinator.Tick);',
+    'TickCoordinator("package.embed", UnityCliBridge.UnityCliPackageEmbedCoordinator.Tick);',
     'TickCoordinator("package.resolve", UnityCliBridge.UnityCliPackageResolveCoordinator.Tick);',
     'TickCoordinator("test.run", UnityCliBridge.UnityCliTestRunCoordinator.Tick);',
+    'TickCoordinator("navmesh.bake", UnityCliBridge.UnityCliNavMeshBakeCoordinator.Tick);',
+    'TickCoordinator("occlusion.bake", UnityCliBridge.UnityCliOcclusionBakeCoordinator.Tick);',
   ];
+  const productionCoordinatorTicks = [...durableScheduler.matchAll(/TickCoordinator\("[^"]+", [^;]+\);/g)]
+    .map((match) => match[0])
+    .filter((tick) => !tick.startsWith('TickCoordinator("editor.autotick",'));
+  assert.deepEqual(productionCoordinatorTicks, ticks, "the assertion list must equal every production durable coordinator tick");
   let previous = -1;
   for (const tick of ticks) {
     const index = durableScheduler.indexOf(tick);
+    assert.ok(index >= 0, `${tick} must have a production scheduler anchor`);
     assert.ok(index > previous, `${tick} must be called once in scheduler order`);
     assert.equal(durableScheduler.indexOf(tick, index + 1), -1, `${tick} must not have a duplicate scheduler owner`);
     assert.equal(bridgeScheduler.includes(tick), false, `${tick} must not be called again by BridgeWorkQueue`);

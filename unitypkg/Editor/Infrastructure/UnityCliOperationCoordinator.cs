@@ -311,12 +311,6 @@ namespace UnityCli
             return DirectMutationReloadOutcome.SettledEffectBefore;
         }
 
-        internal static string ReconcileAcceptedDirectMutationAfterReloadForTests(BridgeQueueState state, string requestId, string requestDigest)
-        {
-            if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Direct reload reconciliation test state must be isolated.", "state");
-            return ReconcileAcceptedDirectMutationAfterReload(state, requestId, requestDigest).ToString();
-        }
-
         private static string TryResumeDirectMutation(string requestId, string requestDigest)
         {
             Dictionary<string, object> root;

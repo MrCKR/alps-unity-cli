@@ -18,8 +18,6 @@ namespace UnityCli.Tests
         private const string InstanceId = "test-instance";
         private const string Fingerprint = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         private string identityPrefix;
-        private string parentLeaseRequestId;
-        private string parentLeaseRequestDigest;
         private BridgeQueueState queueState;
         private long monotonicNowMs;
 
@@ -27,7 +25,6 @@ namespace UnityCli.Tests
         public void SetUp()
         {
             identityPrefix = "admission-" + Guid.NewGuid().ToString("N") + "-";
-            Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryGetCurrentOwner(out parentLeaseRequestId, out parentLeaseRequestDigest), Is.True);
             monotonicNowMs = 1000L;
         }
 
@@ -35,11 +32,6 @@ namespace UnityCli.Tests
         public void TearDown()
         {
             if (queueState != null) queueState.AssertEmptyForTests();
-            string currentRequestId;
-            string currentRequestDigest;
-            Assert.That(UnityCliBridge.UnityCliSessionMutationLease.TryGetCurrentOwner(out currentRequestId, out currentRequestDigest), Is.True);
-            Assert.That(currentRequestId, Is.EqualTo(parentLeaseRequestId));
-            Assert.That(currentRequestDigest, Is.EqualTo(parentLeaseRequestDigest));
         }
 
         [Test]
@@ -96,7 +88,7 @@ namespace UnityCli.Tests
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", "accepted_before_effect" }
             });
 
-            var outcome = UnityCliBridge.ReconcileAcceptedDirectMutationAfterReloadForTests(queueState, requestId, digest);
+            var outcome = UnityCliBridge.UnityCliSessionMutationLease.InitializeRecoveryOrderForTests(queueState);
             var replay = UnityCliBridge.RecoverPublishedDirectMutationForTests(queueState, requestId, digest);
 
             Assert.That(outcome, Is.EqualTo("SettledEffectBefore"));
@@ -106,6 +98,8 @@ namespace UnityCli.Tests
             Assert.That(queueState.OperationExists("direct-mutation"), Is.False);
             Assert.That(queueState.OperationExists("direct-mutation-terminal-cleanup"), Is.False);
             Assert.That(queueState.OperationExists("direct-mutation-admission-owner"), Is.False);
+            Assert.That(queueState.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(queueState), Is.EqualTo(0));
             Assert.That(queueState.TryIsLeaseOwned(requestId, digest, out var owned), Is.True);
             Assert.That(owned, Is.False);
         }
@@ -120,16 +114,41 @@ namespace UnityCli.Tests
             queueState.SaveOperation("direct-mutation", Root(requestId, digest, "accepted_before_effect"));
             Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
             Assert.That(acquired, Is.True);
-            Assert.That(UnityCliBridge.ReconcileAcceptedDirectMutationAfterReloadForTests(queueState, requestId, digest), Is.EqualTo("WaitingExactOwner"));
+            Assert.That(UnityCliBridge.UnityCliSessionMutationLease.InitializeRecoveryOrderForTests(queueState), Is.EqualTo("WaitingExactOwner"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.True);
+            Assert.That(queueState.OperationExists("direct-mutation-terminal-cleanup"), Is.False);
+            Assert.That(queueState.OperationExists("direct-mutation-admission-owner"), Is.False);
+            Assert.That(queueState.TryGetTerminal("direct-mutation", requestId, digest, out var terminal), Is.False);
+            Assert.That(queueState.TryIsLeaseOwned(requestId, digest, out var exactOwned), Is.True);
+            Assert.That(exactOwned, Is.True);
             queueState.ReleaseLease(requestId, digest);
             var otherRequestId = Unique("direct-other-owner");
             var otherDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(otherRequestId), InstanceId);
             Assert.That(queueState.TryAcquireLease(otherRequestId, otherDigest, out acquired), Is.True);
             Assert.That(acquired, Is.True);
-            Assert.That(UnityCliBridge.ReconcileAcceptedDirectMutationAfterReloadForTests(queueState, requestId, digest), Is.EqualTo("IdentityBlocked"));
+            Assert.That(UnityCliBridge.UnityCliSessionMutationLease.InitializeRecoveryOrderForTests(queueState), Is.EqualTo("IdentityBlocked"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.True);
             queueState.ReleaseLease(otherRequestId, otherDigest);
             queueState.ClearOperation("direct-mutation");
             pool.Reset();
+        }
+
+        [Test]
+        public void ReloadTickScheduleUsesMonotonicTimeAcrossUtcRollback()
+        {
+            var monotonic = 5000L;
+            var utcNow = DateTimeOffset.UtcNow;
+            var schedule = new UnityCliReloadTickSchedule(() => monotonic, () => utcNow);
+
+            Assert.That(schedule.TryEnter(), Is.True);
+            utcNow = utcNow.AddHours(-8);
+            monotonic += 99L;
+            Assert.That(schedule.TryEnter(), Is.False);
+            monotonic += 1L;
+            Assert.That(schedule.TryEnter(), Is.True);
+            Assert.That(schedule.UtcNow, Is.EqualTo(utcNow));
         }
 
         [Test]
