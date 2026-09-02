@@ -35,7 +35,7 @@ test("connected tools group summaries cover package-local and instance groups", 
   }
 
   assert.match(groups.get("docs") ?? "", /offline|documentation/i);
-  assert.match(groups.get("tools") ?? "", /describe|search|group/i);
+  assert.equal(groups.has("tools"), false);
   assert.match(groups.get("package") ?? "", /package/i);
   assertRouteSummary("group scene", groups.get("scene") ?? "");
   assertRouteSummary("group probuilder", groups.get("probuilder") ?? "");
@@ -74,7 +74,6 @@ test("package-local Tool summaries stay concise and route-specific", () => {
   assert.match(tools.find((tool) => tool.name === "reflect.search")!.summary, /search|paged/i);
   assert.match(tools.find((tool) => tool.name === "code.exec")!.summary, /execute|live|Editor/i);
   assert.doesNotMatch(tools.find((tool) => tool.name === "code.exec")!.summary, /batch|job|headless/i);
-  assert.match(tools.find((tool) => tool.name === "tools.describe")!.summary, /schema|examples/i);
 });
 
 test("local read Tool descriptions are route-specific", () => {

@@ -6,7 +6,6 @@ import { codeBridgeSpecs } from "./domains/code.js";
 import { consoleBridgeSpecs } from "./domains/console.js";
 import { diagnoseBridgeSpecs } from "./domains/diagnose.js";
 import { editorBridgeSpecs } from "./domains/editor.js";
-import { extensionBridgeSpecs } from "./domains/extension.js";
 import { gameObjectBridgeSpecs } from "./domains/game-object.js";
 import { graphicsBridgeSpecs } from "./domains/graphics.js";
 import { materialBridgeSpecs } from "./domains/material.js";
@@ -61,8 +60,7 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...packageBridgeSpecs,
   ...buildBridgeSpecs,
   ...runtimeToolBridgeSpecs,
-  ...projectToolBridgeSpecs,
-  ...extensionBridgeSpecs
+  ...projectToolBridgeSpecs
 ];
 
 export class BridgeCommandRegistry {

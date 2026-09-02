@@ -820,7 +820,7 @@ function admissionBusy(instanceId: string, timeoutMs: number): SessionSupervisor
 
 /** runtime-tool namespace 始终绑定独立 development Player；其余命令绑定 Editor。 */
 function bridgeTarget(command: string): InstanceTarget {
-  return command === "runtime-tool.list" || command === "runtime-tool.run" ? "runtime" : "editor";
+  return command.startsWith("runtime-tool.") ? "runtime" : "editor";
 }
 
 function normalizeTimeoutMs(value: number | undefined, mode: SessionSupervisorMode): number {

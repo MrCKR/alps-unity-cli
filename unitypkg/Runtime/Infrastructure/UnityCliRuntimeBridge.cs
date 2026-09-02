@@ -317,7 +317,7 @@ namespace UnityCli
             var command = ReadString(request, "command");
             if (!any)
             {
-                if (string.Equals(command, "runtime-tool.list", StringComparison.Ordinal)) { rootId = null; return null; }
+                if (RuntimeCatalogReadCommand(command)) { rootId = null; return null; }
                 return Error(requestId, "E_ADMISSION_REQUIRED", "A valid Unity task-pool admission is required before this Runtime business request can enter the queue.", new[] { "Use the current unitycli to submit the Runtime Tool." });
             }
             if (string.IsNullOrEmpty(rootId) || string.IsNullOrEmpty(fingerprint) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(deadlineText))
@@ -347,8 +347,30 @@ namespace UnityCli
                 var deadline = pendingRequest.AbsoluteDeadlineMs;
                 if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= deadline) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request deadline elapsed before execution.", new[] { "Retry only after the Player is responsive." }, true, 100)); return; }
                 var command = RequiredString(request, "command", 128);
-                if (string.Equals(command, "runtime-tool.list", StringComparison.Ordinal))
+                if (RuntimeCatalogReadCommand(command))
                 {
+                    var input = ReadObject(request, "input") ?? new Dictionary<string, object>();
+                    var generation = Sha256(sessionId + "\0" + buildId);
+                    var expectedGeneration = ReadString(input, "expectedCatalogGeneration");
+                    if (!string.IsNullOrEmpty(expectedGeneration) && !string.Equals(expectedGeneration, generation, StringComparison.Ordinal))
+                    {
+                        pendingRequest.Completion.TrySetResult(Error(requestId, "E_TOOL_CATALOG_CHANGED", "The Tool catalog generation changed before this continuation page was read.", new[] { "Restart this discovery query from its first page against the current Runtime generation." })); return;
+                    }
+                    if (string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal))
+                    {
+                        pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "groups", new List<object>() } })); return;
+                    }
+                    if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
+                    {
+                        var limit = ReadLong(input, "limit");
+                        if (limit < 1L || limit > 101L) throw new FormatException("Catalog summary limit must be an integer in [1,101].");
+                        pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "total", 0L }, { "hasMore", false }, { "tools", new List<object>() } })); return;
+                    }
+                    if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
+                    {
+                        RequiredString(input, "name", 128);
+                        pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", false } })); return;
+                    }
                     pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "tools", new List<object>() }, { "target", "runtime" }, { "runtimeSessionId", sessionId } })); return;
                 }
                 if (string.Equals(command, "runtime-tool.run", StringComparison.Ordinal))
@@ -371,6 +393,14 @@ namespace UnityCli
             catch (FormatException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Use the Runtime bridge request schema." })); }
             catch (Exception exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime command failed before a terminal result was proven.", new[] { "Inspect Player logs and retry after the runtime is ready." })); Debug.LogWarning("UnityCli runtime main-thread command failed: " + exception.GetType().Name); }
             finally { if (pendingRequest.AdmissionOwner != null) CompleteRuntimeAdmissionRoot(pendingRequest.AdmissionOwner); }
+        }
+
+        private static bool RuntimeCatalogReadCommand(string command)
+        {
+            return string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.list", StringComparison.Ordinal);
         }
 
         private void CompleteRuntimeAdmissionRoot(UnityCliAdmissionPool.ConsumedIdentity identity)

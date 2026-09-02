@@ -260,6 +260,17 @@ test("C# registry emits and fingerprints native profiles without partial custom 
   assert.doesNotMatch(source, /custom_tool_registration_rejected|diagnostics\.Contains\("E_TOOL_COMPLETION_CONTRACT_REQUIRED"\)/);
 });
 
+test("Bridge catalog summary bounds main-thread projection before descriptor serialization", () => {
+  const source = readFileSync("unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", "utf8");
+  const start = source.indexOf("private static object ProjectToolCatalogSummary");
+  const end = source.indexOf("private static bool ProjectToolCatalogMatches", start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(block.indexOf("Take(args.Limit)") < block.indexOf("ProjectToolRoutingSummaryData"));
+  assert.match(block, /args\.Limit < 1 \|\| args\.Limit > 101/);
+  assert.doesNotMatch(block, /ProjectToolDescriptorData|InputSchema|OutputSchema|Permissions|CompletionContractData/);
+});
+
 test("project Tool discovery fails closed on malformed registry entries", async () => {
   const result = await discoverProjectTools({}, {
     bridgeExecute: async (payload) => ({

@@ -59,7 +59,7 @@ unitycli tools run diagnose.preflight
 unitycli extensions list --project <path>          # 列出扩展状态
 unitycli extensions install <name> --project <path> # 安装已满足依赖的 Unity 侧扩展目录
 unitycli extensions remove <name> --project <path>  # 只移除 manifest 管理的 bundle 文件
-unitycli extensions doctor --project <path>         # 扩展诊断
+unitycli extensions doctor --project <path>         # 深度校验全部 source/managed-file hash
 ```
 
 ### init 自动检测
@@ -93,6 +93,8 @@ unitycli extensions doctor --project <path>         # 扩展诊断
 当扩展依赖的 Unity Package 未安装或不满足 manifest 的精确版本时：
 
 - 扩展工具通过 `tools group/list/describe/run` 暴露；缺依赖时 `tools describe` 返回 `available: false`、`unavailableReason` 和 `requiresPackages`
+- 每次调用冻结一份packages-lock/install manifest输入；group页对每个distinct extension最多做一次target proof，普通扩展Tool执行只检查所选extension
+- `extensions list`读取浅安装状态并返回`integrity:"shallow"`，不计算source/managed-file hash；完整全extension hash只由显式`extensions doctor`执行并返回`integrity:"full"`
 - 执行时返回错误，`error.nextActions` 指向手动安装 Unity Package 与随后运行 `extensions install <id>`
 - 不自动安装 Unity Package，不产生静默失败
 

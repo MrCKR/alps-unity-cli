@@ -52,9 +52,8 @@ namespace UnityCli
         private static readonly string[] EditorCommands = { "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.console", "project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove" };
         private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify" };
         private static readonly string[] CodeCommands = { "code.exec" };
-        private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
-        private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };
-        private static readonly string[] ExtensionCommands = { "extension.status" };
+        private static readonly string[] ProjectToolCommands = { "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run" };
+        private static readonly string[] RuntimeToolCommands = { "runtime-tool.groups", "runtime-tool.summary", "runtime-tool.describe", "runtime-tool.list", "runtime-tool.run" };
         private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = "listener-" + Guid.NewGuid().ToString("N");
@@ -402,11 +401,9 @@ namespace UnityCli
                     || request.Command == "editor.console"
                     || request.Command == "editor.pause"
                     || request.Command == "editor.stop"
-                    || request.Command == "runtime-tool.list"
+                    || IsProjectToolCatalogReadCommand(request.Command)
                     || request.Command == "runtime-tool.run"
-                    || request.Command == "project-tool.list"
-                    || request.Command == "diagnose.preflight"
-                    || request.Command == "extension.status";
+                    || request.Command == "diagnose.preflight";
 
                 if (!allowedDuringPlayModeTransition)
                 {

@@ -4,6 +4,7 @@ import {
   projectDescriptorToToolMetadata,
   type ProjectToolRuntime
 } from "../project-tool-discovery.js";
+import { readEditorCatalogDescriptor, readRuntimeCatalogDescriptor } from "../catalog-protocol.js";
 import { staticCapabilityCatalog } from "../static-capability-catalog.js";
 import { failure } from "../output.js";
 import type { CliResult } from "../types.js";
@@ -30,13 +31,9 @@ export function resolveCatalogIndependentOperabilityTool(name: string): ToolMeta
   return tool?.handler === "offline" ? tool : undefined;
 }
 
-/** 只允许exact operability调用及其describe学习入口使用本地descriptor。 */
-export function resolveCatalogIndependentInvocationTool(name: string, describedName?: string): ToolMetadata | undefined {
-  const operabilityTool = resolveCatalogIndependentOperabilityTool(name);
-  if (operabilityTool) return operabilityTool;
-  if (name !== "tools.describe" || !describedName || !resolveCatalogIndependentOperabilityTool(describedName)) return undefined;
-  const describeTool = findToolByName("tools.describe");
-  return describeTool?.handler === "offline" ? describeTool : undefined;
+/** 只有三个 exact operability Tool 可绕过 live catalog。 */
+export function resolveCatalogIndependentInvocationTool(name: string): ToolMetadata | undefined {
+  return resolveCatalogIndependentOperabilityTool(name);
 }
 
 /** package snapshot 中的 C# built-in/Extension descriptor，仅供生成、契约和离线审计使用。 */
@@ -53,10 +50,10 @@ export function staticBridgeToolMetadata(): ToolMetadata[] {
 }
 
 /**
- * 读取当前实例的唯一完整 Tool catalog。
+ * 显式诊断聚合使用的完整 Tool catalog；公开discovery与执行解析禁止调用。
  * project-tool.list 返回全部注册能力；runtime-tool.list 只补充同一注册在当前 PlayMode 下的 availability。
  */
-export async function loadToolCatalog(
+export async function loadFullToolCatalogForDiagnostics(
   flags: Record<string, string | boolean>,
   runtime: ToolCatalogRuntime,
   requestId: string,
@@ -80,7 +77,7 @@ export async function loadToolCatalog(
   return mergeLiveToolCatalog(requestId, builtinToolMetadata(), editor.ok ? editor.tools : [], runtimeCatalog.ok ? runtimeCatalog.tools : []);
 }
 
-/** 按名称解析Tool；只有exact operability能力能在transition/modal下使用frozen本地descriptor。 */
+/** exact-name resolution 每个 target 只读取一份 full descriptor，不构造完整 descriptor graph。 */
 export async function resolveCatalogTool(
   name: string,
   flags: Record<string, string | boolean>,
@@ -90,8 +87,25 @@ export async function resolveCatalogTool(
 ): Promise<{ ok: true; tool?: ToolMetadata } | (CliResult & { ok: false })> {
   const operabilityTool = resolveCatalogIndependentOperabilityTool(name);
   if (operabilityTool) return { ok: true, tool: operabilityTool };
-  const catalog = await loadToolCatalog(flags, runtime, requestId, absoluteDeadlineMs);
-  return catalog.ok ? { ok: true, tool: catalog.tools.find((tool) => tool.name === name) } : catalog;
+
+  const localTool = findToolByName(name);
+  const editorAdmission = runtime.rootAdmissions?.editor ?? (runtime.rootAdmission?.target === "editor" ? runtime.rootAdmission : undefined);
+  const runtimeAdmission = runtime.rootAdmissions?.runtime ?? (runtime.rootAdmission?.target === "runtime" ? runtime.rootAdmission : undefined);
+  const editorRuntime = { ...runtime, rootAdmission: editorAdmission };
+  const runtimeTargetRuntime = { ...runtime, rootAdmission: runtimeAdmission };
+  const editor = await readEditorCatalogDescriptor(flags, editorRuntime, editorAdmission?.requestId ?? `${requestId}_editor_descriptor`, name, absoluteDeadlineMs);
+  if (!editor.ok && editor.error.code !== "E_INSTANCE_NOT_RUNNING") return editor;
+  const runtimeDescriptor = await readRuntimeCatalogDescriptor(flags, runtimeTargetRuntime, runtimeAdmission?.requestId ?? `${requestId}_runtime_descriptor`, name, absoluteDeadlineMs);
+  if (!runtimeDescriptor.ok && runtimeDescriptor.error.code !== "E_RUNTIME_NOT_RUNNING") return runtimeDescriptor;
+  if (!editor.ok && !runtimeDescriptor.ok) return editor;
+
+  const merged = mergeLiveToolCatalog(
+    requestId,
+    localTool ? [localTool] : [],
+    editor.ok && editor.tool ? [editor.tool] : [],
+    runtimeDescriptor.ok && runtimeDescriptor.tool ? [runtimeDescriptor.tool] : [],
+  );
+  return merged.ok ? { ok: true, tool: merged.tools[0] } : merged;
 }
 
 /**

@@ -7,6 +7,7 @@ import { validateSchema } from "./schema/validator.js";
 
 export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
   projectTools?: ToolMetadata[];
+  runtimeTools?: ToolMetadata[];
 }
 
 export type ProjectToolDiscovery = { ok: true; tools: ResolvedToolMetadata[]; mode: "runtime" | "bridge" } | (CliResult & { ok: false });
@@ -265,8 +266,8 @@ export async function discoverRuntimeTools(
   requestId: string,
   options: { requireBridge?: boolean; absoluteDeadlineMs?: number } = {}
 ): Promise<ProjectToolDiscovery> {
-  if (runtime.projectTools) {
-    const runtimeTools = runtime.projectTools
+  if (runtime.runtimeTools ?? runtime.projectTools) {
+    const runtimeTools = (runtime.runtimeTools ?? runtime.projectTools ?? [])
       .map(ensureProjectToolDefaults)
       .filter((tool) => tool.target === "runtime" || tool.target === "both");
     return { ok: true, tools: runtimeTools, mode: "runtime" };

@@ -1,17 +1,20 @@
 import { getString } from "../args.js";
 import { failure } from "../output.js";
 import type { CliResult } from "../types.js";
-import { dispatchTool, type ToolsRuntime } from "./dispatcher.js";
+import { resolveCatalogIndependentOperabilityTool } from "./catalog.js";
+import { projectCatalogDescribe, projectCatalogGroups, projectCatalogPage, type CatalogPageRequest } from "./catalog-control.js";
+import { groupSummary } from "./tools/group-summaries.js";
+import { dispatchCatalogProjection, dispatchTool, type ToolsRuntime } from "./dispatcher.js";
 
 export type { ToolsRuntime } from "./dispatcher.js";
 
-/** 解析 tools 子命令形态后统一交给 dispatcher，避免发现命令形成第二套路由。 */
+/** tools discovery 属于直接控制面；只有 tools run 进入公开 Tool dispatcher。 */
 export async function handleToolsCommand(
   command: string | undefined,
   positional: string[],
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
-  requestId: string
+  requestId: string,
 ): Promise<CliResult> {
   const flagError = rejectUnknownToolFlags(command, positional, flags, requestId);
   if (flagError) return flagError;
@@ -21,30 +24,54 @@ export async function handleToolsCommand(
   }
   if (command === "group") {
     if (positional[0] === "list") {
-      return dispatchTool("tools.group-list", positional[1], flags, runtime, requestId, { group: positional[1], ...pageSeed(flags) });
+      const group = positional[1];
+      if (!group) return failure(requestId, "TOOLS_GROUP_LIST_NAME_REQUIRED", "Pass a group name: unitycli tools group list <group>.", ["Run unitycli tools group to see all tool groups."]);
+      const page = pageSeed(flags);
+      return dispatchCatalogProjection("tools.group-list", { group, ...page }, flags, runtime, requestId, (rootRuntime) =>
+        projectCatalogPage(`tools.group-list:${group}`, page, flags, rootRuntime, requestId, {
+          group,
+          includeExtensionAvailability: true,
+          extraData: { summary: groupSummary(group) },
+          projectItem: (tool) => ({ name: tool.name, summary: tool.summary, ...(tool.available === false ? { available: false } : {}) }),
+        }, catalogDeadline(rootRuntime)));
     }
-    return dispatchTool("tools.group", undefined, flags, runtime, requestId);
+    return dispatchCatalogProjection("tools.group", {}, flags, runtime, requestId, (rootRuntime) =>
+      projectCatalogGroups(flags, rootRuntime, requestId, catalogDeadline(rootRuntime)));
   }
   if (command === "search") {
     const keyword = positional[0] ?? getString(flags, "keyword") ?? getString(flags, "query");
-    return dispatchTool("tools.search", undefined, flags, runtime, requestId, { keyword, ...pageSeed(flags) });
+    const tokens = (keyword ?? "").split("|").map((token) => token.trim()).filter(Boolean);
+    if (tokens.length === 0) return failure(requestId, "TOOLS_SEARCH_KEYWORD_REQUIRED", "Pass one or more `|`-separated keywords: unitycli tools search <k1|k2|...>.", ["Run unitycli tools group to see tool groups."]);
+    if (tokens.length > 16 || tokens.some((token) => token.length > 128)) return failure(requestId, "E_SCHEMA_INVALID", "tools search accepts at most 16 keywords of at most 128 characters each.", [
+      "Reduce the number or length of search keywords before retrying."
+    ], { path: "$.keyword", expected: "1..16 keywords, each 1..128 characters", actual: keyword });
+    const normalizedKeyword = tokens.join("|");
+    const page = pageSeed(flags);
+    return dispatchCatalogProjection("tools.search", { keyword: normalizedKeyword, ...page }, flags, runtime, requestId, (rootRuntime) =>
+      projectCatalogPage(`tools.search:${normalizedKeyword.toLowerCase()}`, page, flags, rootRuntime, requestId, {
+        keyword: normalizedKeyword,
+        projectItem: (tool) => ({ name: tool.name, summary: tool.summary, group: tool.group }),
+      }, catalogDeadline(rootRuntime)));
   }
   if (command === "describe") {
-    const name = positional[0] ?? getString(flags, "name") ?? getString(flags, "tool");
-    return dispatchTool("tools.describe", undefined, flags, runtime, requestId, { name });
+    const name = positional[0] ?? getString(flags, "name") ?? getString(flags, "tool") ?? "";
+    if (!name) return failure(requestId, "TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unitycli tools describe <tool>.", ["Run unitycli tools group to see tool groups."]);
+    if (resolveCatalogIndependentOperabilityTool(name)) return projectCatalogDescribe(name, flags, runtime, requestId);
+    return dispatchCatalogProjection("tools.describe", { name }, flags, runtime, requestId, (rootRuntime) =>
+      projectCatalogDescribe(name, flags, rootRuntime, requestId, catalogDeadline(rootRuntime)));
   }
   return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools group, tools group list <group>, tools describe <tool>, tools run <tool>, or tools search <k1|k2|...>.", [
     "Run unitycli tools group to see tool categories.",
-    "Run unitycli tools describe <tool> for full metadata."
+    "Run unitycli tools describe <tool> for full metadata.",
   ]);
 }
 
-/** 公开 Tool 参数只允许 JSON input 与明确命令控制项，未知 flag 不进入业务 schema。 */
+/** 公开 Tool 参数只允许 JSON input 与明确命令控制项。 */
 function rejectUnknownToolFlags(
   command: string | undefined,
   positional: string[],
   flags: Record<string, string | boolean>,
-  requestId: string
+  requestId: string,
 ): CliResult | undefined {
   const common = ["instance", "pretty"];
   const pagedDiscovery = command === "search" || command === "group" && positional[0] === "list";
@@ -54,13 +81,19 @@ function rejectUnknownToolFlags(
   const unknown = Object.keys(flags).find((flag) => !allowed.includes(flag));
   if (!unknown) return undefined;
   return failure(requestId, "E_UNKNOWN_OPTION", `Unknown option for tools ${command ?? ""}: --${unknown}.`, [
-    command === "run" ? "Put business fields inside --input <json>." : "Run unitycli --help for the supported options."
+    command === "run" ? "Put business fields inside --input <json>." : "Run unitycli --help for the supported options.",
   ], { option: `--${unknown}`, command: `tools ${command ?? ""}`.trim(), positional });
 }
 
-function pageSeed(flags: Record<string, string | boolean>): Record<string, unknown> {
+function pageSeed(flags: Record<string, string | boolean>): CatalogPageRequest {
   return {
     ...(flags["page-size"] !== undefined ? { pageSize: Number(flags["page-size"]) } : {}),
-    ...(flags.cursor !== undefined ? { cursor: Number(flags.cursor) } : {}),
+    ...(typeof flags.cursor === "string" ? { cursor: flags.cursor } : {}),
   };
+}
+
+function catalogDeadline(runtime: ToolsRuntime): number | undefined {
+  return runtime.rootAdmissions?.editor?.executionAbsoluteDeadlineMs
+    ?? runtime.rootAdmissions?.runtime?.executionAbsoluteDeadlineMs
+    ?? runtime.rootAdmission?.executionAbsoluteDeadlineMs;
 }

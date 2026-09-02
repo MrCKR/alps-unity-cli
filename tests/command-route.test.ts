@@ -75,7 +75,7 @@ test("command help结构化声明native优先、attribute显式名与零映射",
     similarNameMapping: false,
   });
   assert.deepEqual((result.data as { catalogDiscovery: unknown }).catalogDiscovery, {
-    commandListing: "unitycli command --project-path <path> [--page-size <n>] [--cursor <n>]",
+    commandListing: "unitycli command --project-path <path> [--page-size <n>] [--cursor <nextCursor>]",
     toolSearch: "unitycli tools search <k1|k2|...> --instance <id|projectPath|alias>",
     toolDescribe: "unitycli tools describe <tool> --instance <id|projectPath|alias>",
   });
@@ -93,8 +93,8 @@ test("command help复用精简Tool descriptor且不公开结果schema", async ()
 test("command省略name时投影分页路由摘要", async () => {
   const result = await execute(["command", "--page-size", "100"], runtimeFor([attributeEvalTool()], []) as never);
   assert.ok(result.ok, JSON.stringify(result));
-  const data = result.data as { commands: Array<Record<string, unknown>>; pageInfo: { cursor: number; pageSize: number; total: number; nextCursor?: number } };
-  assert.equal(data.pageInfo.cursor, 0);
+  const data = result.data as { commands: Array<Record<string, unknown>>; pageInfo: { cursor: string; pageSize: number; total: number; nextCursor?: string } };
+  assert.equal(data.pageInfo.cursor, "start");
   assert.equal(data.pageInfo.pageSize, 100);
   assert.equal(data.pageInfo.total, builtinToolMetadata().length + 1);
   assert.equal(data.pageInfo.nextCursor, undefined);
@@ -111,10 +111,15 @@ test("command listing paginates stable summaries and validates bounds", async ()
   }));
   const runtime = runtimeFor(tools, []);
   const expectedNames = [...builtinToolMetadata().map((tool) => tool.name), ...tools.map((tool) => tool.name)].sort();
-  const page = await execute(["command", "--page-size", "10", "--cursor", "10"], runtime as never);
+  const first = await execute(["command", "--page-size", "10"], runtime as never);
+  assert.ok(first.ok, JSON.stringify(first));
+  const firstData = first.data as { pageInfo: { nextCursor?: string } };
+  const page = await execute(["command", "--page-size", "10", "--cursor", firstData.pageInfo.nextCursor!], runtime as never);
   assert.ok(page.ok, JSON.stringify(page));
   const data = page.data as { commands: Array<Record<string, unknown>>; pageInfo: Record<string, unknown> };
-  assert.deepEqual(data.pageInfo, { cursor: 10, pageSize: 10, total: expectedNames.length, nextCursor: 20 });
+  assert.equal(data.pageInfo.cursor, firstData.pageInfo.nextCursor);
+  assert.equal(data.pageInfo.pageSize, 10);
+  assert.equal(data.pageInfo.total, expectedNames.length);
   assert.deepEqual(data.commands.map((item) => item.name), expectedNames.slice(10, 20));
   assert.ok(data.commands.every((item) => !Object.hasOwn(item, "parameters") && !Object.hasOwn(item, "available")));
 
@@ -124,11 +129,12 @@ test("command listing paginates stable summaries and validates bounds", async ()
   assert.equal(unavailable?.available, false);
   assert.equal(unavailable?.unavailableReason, "fixture unavailable");
 
-  for (const argv of [["command", "--page-size", "0"], ["command", "--cursor", "-1"]]) {
-    const invalid = await execute(argv, runtime as never);
-    assert.equal(invalid.ok, false, JSON.stringify(invalid));
-    if (!invalid.ok) assert.equal(invalid.error.code, "E_SCHEMA_INVALID");
-  }
+  const invalidSize = await execute(["command", "--page-size", "0"], runtime as never);
+  assert.equal(invalidSize.ok, false, JSON.stringify(invalidSize));
+  if (!invalidSize.ok) assert.equal(invalidSize.error.code, "E_SCHEMA_INVALID");
+  const invalidCursor = await execute(["command", "--cursor", "-1"], runtime as never);
+  assert.equal(invalidCursor.ok, false, JSON.stringify(invalidCursor));
+  if (!invalidCursor.ok) assert.equal(invalidCursor.error.code, "E_DISCOVERY_CURSOR_INVALID");
 });
 
 test("command按live schema解析positional、named、bare boolean与AnyJSON并只分发一次", async () => {

@@ -29,9 +29,11 @@ import {
 import { readInstalledUnityPackages } from "../extensions/project-resolver.js";
 import {
   checkExtensionBundles,
+  listExtensionBundles,
   installExtensionBundleUnchecked,
   removeExtensionBundle,
   readExtensionInstallManifest,
+  readExtensionStateSnapshot,
   resolveInstallAvailability,
   ExtensionInstallerError,
   type ExtensionStatusCheck
@@ -116,14 +118,13 @@ async function handleExtensionsList(
 ): Promise<CliResult> {
   const projectPath = resolveProject(flags);
   const registry = new ExtensionRegistry();
-  const installedPackages = projectPath
-    ? await readInstalledUnityPackages(projectPath)
-    : undefined;
+  const stateSnapshot = projectPath ? await readExtensionStateSnapshot(projectPath) : undefined;
+  const installedPackages = stateSnapshot?.installedPackages;
   const enabledExtensions = projectPath
     ? await readInstalledExtensions(projectPath)
     : new Set<ExtensionId>();
-  const physicalChecks = projectPath
-    ? await checkExtensionBundles(projectPath)
+  const physicalChecks = projectPath && stateSnapshot
+    ? await listExtensionBundles(projectPath, stateSnapshot)
     : [];
 
   const descriptors = registry.extensionIds().map((id) =>
@@ -142,6 +143,7 @@ async function handleExtensionsList(
       enabled: enabledExtensions.has(desc.manifest.id),
       installed: physical?.installed ?? enabledExtensions.has(desc.manifest.id),
       status: physical?.status ?? (availability.status === "available" ? "available_not_installed" : "missing_dependency"),
+      integrity: physical?.integrity ?? "unresolved",
       dependencyInstalled: availability.status === "available",
       availability: availability.status,
       unityPackages: desc.manifest.unityPackages.map((pkg) => ({
@@ -336,11 +338,13 @@ async function handleExtensionsDoctor(
     ]);
   }
 
-  const installedPackages = await readInstalledUnityPackages(projectPath);
+  const absoluteDeadlineMs = Date.now() + Math.max(1, Number(getString(flags, "timeout-ms")) || 60_000);
+  const stateSnapshot = await readExtensionStateSnapshot(projectPath);
+  const installedPackages = stateSnapshot.installedPackages;
   const enabledExtensions = await readInstalledExtensions(projectPath);
 
   const summary = extensionAvailabilitySummary(registry, installedPackages);
-  const physicalChecks = await checkExtensionBundles(projectPath);
+  const physicalChecks = await checkExtensionBundles(projectPath, { snapshot: stateSnapshot, absoluteDeadlineMs });
 
   const checks = registry.extensionIds().map((id) => {
     const desc = loadExtensionDescriptor(registry, id, installedPackages);
@@ -371,6 +375,7 @@ async function handleExtensionsDoctor(
       enabled,
       installed: physical.installed,
       status: physical.status,
+      integrity: physical.integrity,
       dependencyInstalled: physical.dependencyInstalled,
       availability: availability.status,
       missingPackageIds: availability.missingPackageIds,

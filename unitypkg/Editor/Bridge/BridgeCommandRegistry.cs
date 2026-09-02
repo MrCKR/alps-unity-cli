@@ -1,7 +1,6 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -83,7 +82,6 @@ namespace UnityCli
         private static BridgeCommandRegistry CreateCommandRegistry()
         {
             var registry = new BridgeCommandRegistry();
-            RegisterInstalledExtensionCommands(registry);
             RegisterCodeExecCommand(registry);
             RegisterEditorStateSnapshotCommand(registry);
             RegisterInstanceCleanupCommand(registry);
@@ -158,16 +156,6 @@ namespace UnityCli
             return result;
         }
 
-        private static void RegisterInstalledExtensionCommands(BridgeCommandRegistry registry)
-        {
-            var methodNames = Array.Empty<string>();
-            foreach (var methodName in methodNames)
-            {
-                var method = typeof(UnityCliBridge).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic);
-                if (method == null) throw new InvalidOperationException("Installed extension bridge registration method is missing: " + methodName);
-                method.Invoke(null, new object[] { registry });
-            }
-        }
     }
 }
 #endif

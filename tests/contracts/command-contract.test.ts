@@ -65,7 +65,10 @@ test("command contract inventory agrees with metadata, bridge registry and exten
 test("command contract keeps representative TS-local, C# built-in, and extension entries", () => {
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
 
-  assert.equal(contracts.get("tools.group")?.handler_type, "offline");
+  assert.equal(contracts.get("tools.group"), undefined);
+  assert.equal(contracts.get("extension.status"), undefined);
+  assert.equal(contracts.get("project-tool.summary")?.handler_type, "bridge");
+  assert.equal(contracts.get("runtime-tool.describe")?.handler_type, "bridge");
   assert.equal(contracts.get("build.run")?.handler_type, "hybrid");
   assert.equal(contracts.get("scene.hierarchy")?.handler_type, "bridge");
   assert.equal(contracts.get("probuilder.ping")?.handler_type, "bridge");
