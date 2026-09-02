@@ -108,6 +108,41 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void CompensationFaultRetainsExactOwnerUntilBoundedOnlineRecovery()
+        {
+            var requestId = "runtime-compensation-fault";
+            var request = Request(requestId, "runtime-tool.run");
+            var digest = Digest('7');
+            var deadline = Deadline();
+            var admission = Admission(requestId, digest, deadline);
+            bridge.ExpectRuntimeBoundaryForTests("before-runtime-publish", () => { throw new InvalidOperationException("injected publication fault"); });
+            bridge.ExpectRuntimeBoundaryForTests("before-runtime-compensation", () =>
+            {
+                pool.BlockRecovery();
+                throw new InvalidOperationException("injected compensation fault");
+            });
+
+            var publication = bridge.PublishRuntimeRequest(request, deadline, digest, admission);
+
+            Assert.That(publication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
+            Assert.That(publication.Work, Is.Not.Null);
+            Assert.That(publication.Work.Completion.Task.IsCompleted, Is.False);
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(1));
+            var duplicate = bridge.PublishRuntimeRequest(request, deadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput());
+            Assert.That(duplicate.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
+            Assert.That(duplicate.Work, Is.SameAs(publication.Work));
+
+            pool.Reset();
+            utcNowMs += 100L;
+            bridge.RetryPendingRuntimeSettlementsForTests();
+
+            Assert.That(publication.Work.Completion.Task.IsCompleted, Is.True);
+            Assert.That(publication.Work.Completion.Task.Result, Does.Contain("E_RUNTIME_BRIDGE_FAILED"));
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(0));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+        }
+
+        [Test]
         public void CompletedCacheEvictionCommitsOnlyAfterProductionEnqueue()
         {
             for (var index = 0; index < 160; index++)
@@ -164,7 +199,7 @@ namespace UnityCli.Tests
         {
             var deadline = utcNowMs + 10L;
             var request = Request("runtime-running-deadline", "runtime-tool.run", deadline);
-            var digest = Digest('g');
+            var digest = Digest('9');
             var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission("runtime-running-deadline", digest, deadline));
             Assert.That(publication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
             var running = TakeNext();
@@ -184,15 +219,48 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void ShutdownFinalizesQueuedRequestBeforeAnyDequeueEffectOwnership()
+        public void BlockedCompletionRetainsTerminalAndExactDuplicateUntilOwnerIsDefinitelyAbsent()
         {
-            var publication = PublishBypass("runtime-queued-shutdown");
+            var requestId = "runtime-blocked-completion";
+            var request = Request(requestId, "runtime-tool.run");
+            var digest = Digest('8');
+            var deadline = Deadline();
+            var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission(requestId, digest, deadline));
+            var running = TakeNext();
+            pool.BlockRecovery();
+
+            Assert.That(Finalize(running, "blocked-terminal", 1), Is.False);
+            Assert.That(running.Completion.Task.IsCompleted, Is.False);
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(1));
+            var duplicate = bridge.PublishRuntimeRequest(request, deadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput());
+            Assert.That(duplicate.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
+            Assert.That(duplicate.Work, Is.SameAs(running));
+
+            pool.Reset();
+            utcNowMs += 100L;
+            bridge.RetryPendingRuntimeSettlementsForTests();
+
+            Assert.That(running.Completion.Task.Result, Is.EqualTo("blocked-terminal"));
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ShutdownFinalizesQueuedAdmissionOwnerBeforeAnyDequeueEffectOwnership()
+        {
+            var requestId = "runtime-queued-shutdown";
+            var request = Request(requestId, "runtime-tool.run");
+            var digest = Digest('6');
+            var deadline = Deadline();
+            var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission(requestId, digest, deadline));
             Assert.That(publication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
 
             bridge.StopRuntimeRequestsLocked();
 
             Assert.That(publication.Work.Completion.Task.IsCompleted, Is.True);
             Assert.That(publication.Work.Completion.Task.Result, Does.Contain("E_RUNTIME_SESSION_STALE"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(0));
             UnityCliRuntimeBridge.PendingRequest ignored;
             Assert.That(TryTake(out ignored), Is.False);
             Assert.That(ignored, Is.Null);
@@ -254,11 +322,11 @@ namespace UnityCli.Tests
             return result;
         }
 
-        private static bool Finalize(UnityCliRuntimeBridge.PendingRequest request, string terminal, int expectedState)
+        private bool Finalize(UnityCliRuntimeBridge.PendingRequest request, string terminal, int expectedState)
         {
-            var method = typeof(UnityCliRuntimeBridge).GetMethod("FinalizeRuntimeRequest", BindingFlags.Static | BindingFlags.NonPublic);
+            var method = typeof(UnityCliRuntimeBridge).GetMethod("FinalizeRuntimeRequest", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null);
-            return (bool)method.Invoke(null, new object[] { request, terminal, expectedState });
+            return (bool)method.Invoke(bridge, new object[] { request, terminal, expectedState });
         }
 
         private void SetField(string name, object value)

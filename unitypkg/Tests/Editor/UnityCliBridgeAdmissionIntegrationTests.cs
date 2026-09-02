@@ -212,8 +212,10 @@ namespace UnityCli.Tests
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
             Assert.That(state.Sinks.TransactionCount, Is.EqualTo(0));
+            var ioBeforeAttach = state.IoCallbackCount;
             bool duplicateCreated;
             var duplicate = Enqueue(request, raw, grant.Token, deadline, out duplicateCreated);
+            Assert.That(state.IoCallbackCount, Is.EqualTo(ioBeforeAttach), "completion-pending attach must not invoke state I/O while QueueLock is held");
             Assert.That(duplicate, Is.SameAs(item));
             Assert.That(duplicateCreated, Is.False);
             Assert.That(item.Completed.IsSet, Is.False);
@@ -224,6 +226,145 @@ namespace UnityCli.Tests
             Assert.That(item.Completed.IsSet, Is.True);
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
             Assert.That(state.Sinks.TransactionCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void CompletionIntentWithoutWorkItemRetriesOnlineAtFixedBackoff()
+        {
+            var request = Request("queue-intent-online");
+            var raw = RequestBytes(request);
+            var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            var authorized = pool.AuthorizeAndCapture(request.RequestId, fingerprint, digest, grant.Token, state.ListenerId, state.ListenerGeneration, deadline);
+            Assert.That(authorized.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+            var owner = UnityCliBridge.CaptureAdmissionOwner(state, request.RequestId, digest);
+            Assert.That(state.PersistIntent(owner), Is.True);
+            Assert.That(pool.CompleteTrusted(authorized.Identity), Is.EqualTo(UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted));
+            state.TestHooks.ExpectOnce("before-state-clear-intent", () => { throw new IOException("injected intent cleanup fault"); });
+
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+            var logsAfterFailure = state.Sinks.LogCount;
+            monotonicNowMs += 99L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+            Assert.That(state.Sinks.LogCount, Is.EqualTo(logsAfterFailure));
+            monotonicNowMs += 1L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void QueuedShutdownUsesCapturedPoolAndSignalsTerminalExactlyOnce()
+        {
+            var request = Request("queue-shutdown-owner");
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            bool created;
+            var item = Enqueue(request, raw, grant.Token, deadline, out created);
+            Assert.That(created, Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            pool.BlockRecovery();
+
+            UnityCliBridge.ShutdownQueuedWorkForTests(state);
+
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(item.Response, Does.Contain("E_UNITY_QUITTING"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+            Assert.That(state.PendingSettlementWork, Is.Empty);
+            Assert.That(state.Sinks.TransactionCount, Is.EqualTo(1));
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.False);
+            Assert.That(state.Sinks.TransactionCount, Is.EqualTo(1));
+        }
+
+        [TestCase("internal.test.run.cancel.plan", "test-run", "expectedEditorSessionId")]
+        [TestCase("internal.test.run.cancel", "test-run", "expectedEditorSessionId")]
+        [TestCase("internal.package.files.claim", "package-resolve", "rootRequestId")]
+        [TestCase("internal.navmesh.bake.cancel", "navmesh-bake", "operationId")]
+        [TestCase("internal.occlusion.bake.cancel", "occlusion-bake", "operationId")]
+        public void DurableControlLaneStartsOnlyExactVerifiedParent(string command, string scope, string selectorKey)
+        {
+            var parentRequestId = "parent-" + Guid.NewGuid().ToString("N");
+            var parentDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(parentRequestId), "test-instance");
+            var operationId = "operation-" + Guid.NewGuid().ToString("N");
+            var root = new Dictionary<string, object>
+            {
+                { "requestId", parentRequestId }, { "requestDigest", parentDigest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "operationId", operationId }
+            };
+            if (scope == "test-run") root["testOperation"] = new Dictionary<string, object>
+            {
+                { "phase", "running" }, { "runId", Guid.NewGuid().ToString() }
+            };
+            state.SaveOperation(scope, root);
+            Assert.That(state.TryAcquireLease(parentRequestId, parentDigest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+            var exactValue = selectorKey == "expectedEditorSessionId" ? UnityCliBridge.EditorSessionId()
+                : selectorKey == "rootRequestId" ? parentRequestId : operationId;
+            var rejected = Request("control-rejected-" + command.Replace('.', '-'));
+            rejected.Command = command;
+            rejected.Input = new Dictionary<string, object> { { selectorKey, "mismatch" } };
+            var exact = Request("control-exact-" + command.Replace('.', '-'));
+            exact.Command = command;
+            exact.Input = new Dictionary<string, object> { { selectorKey, exactValue } };
+            bool created;
+            if (command == "internal.test.run.cancel")
+            {
+                var rejectedRaw = RequestBytes(rejected);
+                var rejectedGrant = pool.Acquire(rejected.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+                Enqueue(rejected, rejectedRaw, rejectedGrant.Token, Deadline(rejected), out created);
+                Assert.That(created, Is.True);
+                var exactRaw = RequestBytes(exact);
+                var exactGrant = pool.Acquire(exact.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+                Enqueue(exact, exactRaw, exactGrant.Token, Deadline(exact), out created);
+                Assert.That(created, Is.True);
+            }
+            else
+            {
+                EnqueueBypass(rejected, out created);
+                Assert.That(created, Is.True);
+                EnqueueBypass(exact, out created);
+                Assert.That(created, Is.True);
+            }
+
+            var starts = UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state);
+
+            Assert.That(starts, Is.EqualTo(new[] { exact.RequestId }));
+            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(2));
+            UnityCliBridge.ShutdownQueuedWorkForTests(state);
+            state.ClearOperation(scope);
+            state.ReleaseLease(parentRequestId, parentDigest);
+        }
+
+        [Test]
+        public void ProductionQueueTraversalCountsActualLinkedListNodesWithinHardBound()
+        {
+            for (var index = 0; index < UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick + 1; index++)
+            {
+                var request = Request("actual-queue-scan-" + index.ToString());
+                request.Command = "project-tool.list";
+                var raw = RequestBytes(request);
+                var item = new UnityCliBridge.BridgeWorkItem(state, request, raw,
+                    UnityCliRequestDigest.Compute(raw, request.InstanceId), state.ListenerId, state.ListenerGeneration,
+                    null, UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead, true);
+                lock (state.QueueLock)
+                {
+                    state.ActiveRequestWork.Add(request.RequestId, item);
+                    item.QueueNode = state.WorkQueue.AddLast(item);
+                }
+            }
+
+            var starts = UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state);
+
+            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+            Assert.That(starts.Length, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxStartsPerTick));
+            Assert.That(starts, Does.Not.Contain("actual-queue-scan-128"));
+            UnityCliBridge.ShutdownQueuedWorkForTests(state);
         }
 
         [Test]
@@ -297,12 +438,16 @@ namespace UnityCli.Tests
             {
                 "internal.editor.compile.start", "internal.editor.refresh.start", "internal.asset.refresh.start",
                 "internal.package.embed.start", "internal.package.resolve.start", "internal.test.run.start",
-                "internal.test.run.cancel.plan", "internal.test.run.cancel", "internal.package.files.claim",
-                "internal.package.files.commit", "internal.package.files.prove", "internal.package.files.fail",
-                "internal.navmesh.bake.start", "internal.navmesh.bake.plan", "internal.navmesh.bake.cancel",
-                "internal.occlusion.bake.start", "internal.occlusion.bake.plan", "internal.occlusion.bake.cancel",
+                "internal.navmesh.bake.start", "internal.navmesh.bake.plan",
+                "internal.occlusion.bake.start", "internal.occlusion.bake.plan",
                 "internal.build.run.start", "internal.instances.prune"
             }) AssertClass(classes, command, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+            foreach (var command in new[]
+            {
+                "internal.test.run.cancel.plan", "internal.test.run.cancel", "internal.package.files.claim",
+                "internal.package.files.commit", "internal.package.files.prove", "internal.package.files.fail",
+                "internal.navmesh.bake.cancel", "internal.occlusion.bake.cancel"
+            }) AssertClass(classes, command, UnityCliBridgeQueuePolicy.WorkClass.Control);
             foreach (var command in new[] { "internal.navmesh.bake.snapshot", "internal.occlusion.bake.snapshot" })
                 AssertClass(classes, command, UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
             foreach (var command in new[]
@@ -338,6 +483,20 @@ namespace UnityCli.Tests
                 ExecutionDeadlineMs = deadline,
                 HasAdmissionHeaders = true,
                 IsBypass = false
+            };
+            int depth;
+            return UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, state, out created, out depth);
+        }
+
+        private UnityCliBridge.BridgeWorkItem EnqueueBypass(BridgeRequest request, out bool created)
+        {
+            var raw = RequestBytes(request);
+            var reservation = new UnityCliBridge.AdmissionQueueReservation
+            {
+                RequestId = request.RequestId,
+                RequestDigest = UnityCliRequestDigest.Compute(raw, request.InstanceId),
+                HasAdmissionHeaders = false,
+                IsBypass = true
             };
             int depth;
             return UnityCliBridge.EnqueuePreparedForTests(request, raw, reservation, state, out created, out depth);

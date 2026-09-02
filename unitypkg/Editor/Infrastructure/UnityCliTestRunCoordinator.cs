@@ -57,8 +57,8 @@ namespace UnityCli
                 {
                     get
                     {
-                        yield return (CancelPlanCommand, false, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
-                        yield return (CancelCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+                        yield return (CancelPlanCommand, false, UnityCliBridgeQueuePolicy.WorkClass.Control);
+                        yield return (CancelCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Control);
                         yield return (CancelStatusCommand, false, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
                     }
                 }
@@ -397,29 +397,21 @@ namespace UnityCli
                 var queueState = dispatch.QueueState ?? ProductionQueueState;
                 object first;
                 try { first = queueState.StoreTerminalFirst(CancelTerminalScope, dispatch.CancelRequestId, dispatch.CancelRequestDigest, dispatch.RootRequestDigest, envelope); }
-                catch { RetainCancelAdmissionForRecovery(dispatch); return false; }
+                catch { RetainCancelAdmissionForRecovery(dispatch, effectState); return false; }
                 Root root;
                 try { root = Load(queueState); }
-                catch { RetainCancelAdmissionForRecovery(dispatch); return false; }
+                catch { RetainCancelAdmissionForRecovery(dispatch, effectState); return false; }
                 var parentAlreadyFinalized = root == null && effectState == "outcome_unknown" && CancelParentTerminalExists(dispatch, queueState);
                 if (!parentAlreadyFinalized && !MatchesCancelIdentity(root, dispatch))
                 {
-                    RetainCancelAdmissionForRecovery(dispatch);
+                    RetainCancelAdmissionForRecovery(dispatch, effectState);
                     return false;
                 }
                 if (!parentAlreadyFinalized)
                 {
                     try
                     {
-                        root.TestOperation["cancelEffectState"] = effectState;
-                        root.TestOperation["cancelNeedsContinuation"] = effectState != "not_invoked";
-                        root.TestOperation["cancelRequested"] = effectState != "not_invoked";
-                        root.TestOperation["cancelTerminalEnvelope"] = first;
-                        if (effectState == "not_invoked")
-                        {
-                            foreach (var key in new[] { "cancelRequestId", "cancelRequestDigest", "cancelRootRequestDigest", "cancelRunId", "cancelNeedsContinuation", "admissionRootFingerprint", "admissionToken", "admissionSessionId", "admissionListenerId", "admissionListenerGeneration", "admissionExecutionDeadlineMs", "admissionRequestDigest", "admissionOwnerState", "admissionIntendedOwnerState", "admissionTransferCommitted" })
-                                root.TestOperation.Remove(key);
-                        }
+                        ApplyCancelParentTerminal(root.TestOperation, effectState, first);
                         Save(queueState, root);
                         if (effectState == "outcome_unknown")
                             Finish(queueState, root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_EXECUTION_TIMEOUT", "Test cancellation may have occurred but its exact effect could not be proven.", null, new[] { "Inspect the Unity Test Runner before submitting another mutation." }));
@@ -428,7 +420,7 @@ namespace UnityCli
                     {
                         if (effectState != "outcome_unknown" || !CancelParentTerminalExists(dispatch, queueState))
                         {
-                            RetainCancelAdmissionForRecovery(dispatch);
+                            RetainCancelAdmissionForRecovery(dispatch, effectState);
                             return false;
                         }
                     }
@@ -441,14 +433,21 @@ namespace UnityCli
                         && owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Recovery
                         && owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Continuation
                         && owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup) return false;
+                    var completionMarker = CancelAdmissionMarker(dispatch, owner, effectState, false);
                     if (owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.WorkItem
                         || owner.OwnerState == UnityCliAdmissionPool.AdmissionOwnerState.Recovery)
                         owner = PersistAdmissionOwnerTransfer(
                             queueState,
                             CancelTerminalScope + "-admission-owner",
-                            CancelAdmissionMarker(dispatch, owner),
+                            completionMarker,
                             owner,
                             UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                    else
+                    {
+                        WriteAdmissionOwnerFields(completionMarker, owner, owner.OwnerState, true);
+                        queueState.SaveOperation(CancelTerminalScope + "-admission-owner", completionMarker);
+                        if (!queueState.PersistPool()) return false;
+                    }
                     // Continuation本身是legal terminal owner；completion失败时保留exact marker与intent供Tick重试。
                     if (!CompleteAdmissionRoot(queueState, owner)) return false;
                     return true;
@@ -486,8 +485,8 @@ namespace UnityCli
                 catch { return false; }
             }
 
-            /// <summary>root不可读或保存失败时只把WorkItem推进到Recovery，禁止effect-unknown请求被queue完成。</summary>
-            private static bool RetainCancelAdmissionForRecovery(CancelDispatchIdentity dispatch)
+            /// <summary>root不可读或保存失败时冻结目标parent state并推进Recovery，禁止queue完成cancel owner。</summary>
+            private static bool RetainCancelAdmissionForRecovery(CancelDispatchIdentity dispatch, string effectState)
             {
                 try
                 {
@@ -503,7 +502,7 @@ namespace UnityCli
                     PersistAdmissionOwnerTransfer(
                         dispatch.QueueState ?? ProductionQueueState,
                         CancelTerminalScope + "-admission-owner",
-                        CancelAdmissionMarker(dispatch, owner),
+                        CancelAdmissionMarker(dispatch, owner, effectState, true),
                         owner,
                         target);
                     return true;
@@ -511,14 +510,26 @@ namespace UnityCli
                 catch { return false; }
             }
 
-            private static Dictionary<string, object> CancelAdmissionMarker(CancelDispatchIdentity dispatch, AdmissionOwnerIdentity owner)
+            private static Dictionary<string, object> CancelAdmissionMarker(CancelDispatchIdentity dispatch, AdmissionOwnerIdentity owner, string effectState, bool parentRepairPending)
             {
                 return new Dictionary<string, object>
                 {
                     { "requestId", owner.RequestId }, { "requestDigest", dispatch.RootRequestDigest },
                     { "rootRequestId", dispatch.RootRequestId }, { "rootRequestDigest", dispatch.RootRequestDigest },
-                    { "runId", dispatch.RunId }, { "editorSessionId", EditorSessionId() }
+                    { "runId", dispatch.RunId }, { "editorSessionId", dispatch.EditorSessionId },
+                    { "parentRepairEffectState", effectState }, { "parentRepairPending", parentRepairPending }
                 };
+            }
+
+            private static void ApplyCancelParentTerminal(Dictionary<string, object> operation, string effectState, object terminal)
+            {
+                operation["cancelEffectState"] = effectState;
+                operation["cancelNeedsContinuation"] = effectState != "not_invoked";
+                operation["cancelRequested"] = effectState != "not_invoked";
+                operation["cancelTerminalEnvelope"] = terminal;
+                if (effectState != "not_invoked") return;
+                foreach (var key in new[] { "cancelRequestId", "cancelRequestDigest", "cancelRootRequestDigest", "cancelRunId", "cancelNeedsContinuation", "admissionRootFingerprint", "admissionToken", "admissionSessionId", "admissionListenerId", "admissionListenerGeneration", "admissionExecutionDeadlineMs", "admissionRequestDigest", "admissionOwnerState", "admissionIntendedOwnerState", "admissionTransferCommitted" })
+                    operation.Remove(key);
             }
 
             /// <summary>cancel恢复分别校验父root/lease与cancel terminal；任何mismatch只保留marker，不阻塞整个pool。</summary>
@@ -545,8 +556,12 @@ namespace UnityCli
                 var rootRequestId = Text(marker, "rootRequestId");
                 var rootRequestDigest = Text(marker, "rootRequestDigest");
                 var runId = Text(marker, "runId");
+                var repairEffectState = Text(marker, "parentRepairEffectState");
+                object repairPendingValue;
                 if (!IsSafeId(cancelRequestId) || !IsSha256(cancelRequestDigest)
                     || !IsSafeId(rootRequestId) || !IsSha256(rootRequestDigest) || !Guid.TryParse(runId, out _)
+                    || !marker.TryGetValue("parentRepairPending", out repairPendingValue) || !(repairPendingValue is bool)
+                    || !new[] { "not_invoked", "outcome_unknown", "cancelled" }.Contains(repairEffectState)
                     || !Same(Text(marker, "requestDigest"), rootRequestDigest)
                     || !Same(Text(marker, "editorSessionId"), EditorSessionId())) return true;
                 AdmissionOwnerIdentity markerOwner;
@@ -556,13 +571,14 @@ namespace UnityCli
                 markerOwner.TopRequestDigest = rootRequestDigest;
                 var pool = state.AdmissionPool;
                 if (pool == null) return true;
-                var terminalExists = CancelTerminalProofExists(state, cancelRequestId, cancelRequestDigest, rootRequestDigest);
+                object cancelTerminal;
+                if (!TryReadCancelTerminalProof(state, cancelRequestId, cancelRequestDigest, rootRequestDigest, out cancelTerminal)
+                    || !RepairCancelParentFromMarker(state, rootRequestId, rootRequestDigest, cancelRequestId, cancelRequestDigest, runId, repairEffectState, cancelTerminal)) return true;
                 var exact = pool.InspectExactIdentityFields(ToPoolIdentity(markerOwner));
                 if (exact == UnityCliAdmissionPool.ExactIdentityOutcome.IdentityMismatchOrBlocked) return true;
                 if (exact == UnityCliAdmissionPool.ExactIdentityOutcome.DefinitelyAbsent)
                 {
-                    if (terminalExists && HasAdmissionCompletionIntent(state, markerOwner)
-                        && CancelParentIdentityIsDurable(state, rootRequestId, rootRequestDigest, cancelRequestId, cancelRequestDigest, runId))
+                    if (HasAdmissionCompletionIntent(state, markerOwner))
                     {
                         try
                         {
@@ -572,14 +588,11 @@ namespace UnityCli
                         }
                         catch { return true; }
                     }
-                    if (!CancelParentIdentityIsDurable(state, rootRequestId, rootRequestDigest, cancelRequestId, cancelRequestDigest, runId)) return true;
                     var intended = (UnityCliAdmissionPool.AdmissionOwnerState)AdmissionLong(marker, "admissionIntendedOwnerState");
                     if (!pool.RestoreConsumed(ToPoolIdentity(markerOwner), intended, AdmissionBool(marker, "admissionTransferCommitted"))) return true;
                     try { if (!state.PersistPool()) return true; }
                     catch { return true; }
                 }
-                if (!CancelParentIdentityIsDurable(state, rootRequestId, rootRequestDigest, cancelRequestId, cancelRequestDigest, runId)
-                    || !terminalExists) return true;
                 AdmissionOwnerIdentity owner;
                 try
                 {
@@ -590,6 +603,7 @@ namespace UnityCli
                         owner = PersistAdmissionOwnerTransfer(state, markerScope, marker, owner, intended);
                     else
                     {
+                        marker["parentRepairPending"] = false;
                         WriteAdmissionOwnerFields(marker, owner, intended, true);
                         state.SaveOperation(markerScope, marker);
                         if (!state.PersistPool()) return true;
@@ -604,20 +618,24 @@ namespace UnityCli
                 catch { return true; }
             }
 
-            private static bool CancelTerminalProofExists(BridgeQueueState state, string cancelRequestId, string cancelRequestDigest, string rootRequestDigest)
+            private static bool TryReadCancelTerminalProof(BridgeQueueState state, string cancelRequestId, string cancelRequestDigest, string rootRequestDigest, out object terminal)
             {
+                terminal = null;
                 try
                 {
                     object exact;
                     object selected;
-                    return state.TryGetTerminal(CancelTerminalScope, cancelRequestId, cancelRequestDigest, out exact)
-                        && state.TryGetTerminalBySelector(CancelTerminalScope, cancelRequestId, rootRequestDigest, out selected)
-                        && string.Equals(UnityCliSerializer.Serialize(exact), UnityCliSerializer.Serialize(selected), StringComparison.Ordinal);
+                    if (!state.TryGetTerminal(CancelTerminalScope, cancelRequestId, cancelRequestDigest, out exact)
+                        || !state.TryGetTerminalBySelector(CancelTerminalScope, cancelRequestId, rootRequestDigest, out selected)
+                        || !string.Equals(UnityCliSerializer.Serialize(exact), UnityCliSerializer.Serialize(selected), StringComparison.Ordinal)) return false;
+                    terminal = exact;
+                    return true;
                 }
                 catch { return false; }
             }
 
-            private static bool CancelParentIdentityIsDurable(BridgeQueueState state, string rootRequestId, string rootRequestDigest, string cancelRequestId, string cancelRequestDigest, string runId)
+            /// <summary>cancel terminal存在后先幂等修复父root；重读未证明目标state前绝不释放cancel owner。</summary>
+            private static bool RepairCancelParentFromMarker(BridgeQueueState state, string rootRequestId, string rootRequestDigest, string cancelRequestId, string cancelRequestDigest, string runId, string effectState, object cancelTerminal)
             {
                 bool parentLeaseOwned;
                 if (!state.TryIsLeaseOwned(rootRequestId, rootRequestDigest, out parentLeaseOwned)) return false;
@@ -628,15 +646,48 @@ namespace UnityCli
                 var parentTerminalExists = false;
                 try { parentTerminalExists = state.TryGetTerminal(Scope, rootRequestId, rootRequestDigest, out parentTerminal); }
                 catch { return false; }
-                if (root == null) return parentTerminalExists;
+                if (root == null) return effectState == "outcome_unknown" && parentTerminalExists;
                 if (!Same(root.RequestId, rootRequestId) || !Same(root.RequestDigest, rootRequestDigest)
-                    || !Same(root.EditorSessionId, EditorSessionId()) || (!parentLeaseOwned && !parentTerminalExists)) return false;
-                var markerCancelId = Text(root.TestOperation, "cancelRequestId");
-                return string.IsNullOrEmpty(markerCancelId)
-                    || Same(markerCancelId, cancelRequestId)
-                        && Same(Text(root.TestOperation, "cancelRequestDigest"), cancelRequestDigest)
-                        && Same(Text(root.TestOperation, "cancelRootRequestDigest"), rootRequestDigest)
-                        && Same(Text(root.TestOperation, "cancelRunId"), runId);
+                    || !Same(root.EditorSessionId, EditorSessionId()) || (!parentLeaseOwned && !parentTerminalExists)
+                    || !Same(Text(root.TestOperation, "runId"), runId)) return false;
+                if (CancelParentRepairMatches(root, cancelRequestId, cancelRequestDigest, rootRequestDigest, runId, effectState, cancelTerminal))
+                    return effectState != "outcome_unknown" || parentTerminalExists;
+                if (!Same(Text(root.TestOperation, "cancelRequestId"), cancelRequestId)
+                    || !Same(Text(root.TestOperation, "cancelRequestDigest"), cancelRequestDigest)
+                    || !Same(Text(root.TestOperation, "cancelRootRequestDigest"), rootRequestDigest)
+                    || !Same(Text(root.TestOperation, "cancelRunId"), runId)) return false;
+                try
+                {
+                    ApplyCancelParentTerminal(root.TestOperation, effectState, cancelTerminal);
+                    Save(state, root);
+                    if (effectState == "outcome_unknown")
+                        Finish(state, root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_EXECUTION_TIMEOUT", "Test cancellation may have occurred but its exact effect could not be proven.", null, new[] { "Inspect the Unity Test Runner before submitting another mutation." }));
+                    root = Load(state);
+                    if (root == null) return effectState == "outcome_unknown" && CancelParentTerminalExists(rootRequestId, rootRequestDigest, state);
+                    return CancelParentRepairMatches(root, cancelRequestId, cancelRequestDigest, rootRequestDigest, runId, effectState, cancelTerminal)
+                        && (effectState != "outcome_unknown" || CancelParentTerminalExists(rootRequestId, rootRequestDigest, state));
+                }
+                catch { return false; }
+            }
+
+            private static bool CancelParentRepairMatches(Root root, string cancelRequestId, string cancelRequestDigest, string rootRequestDigest, string runId, string effectState, object cancelTerminal)
+            {
+                object storedTerminal;
+                if (root == null || !Same(Text(root.TestOperation, "cancelEffectState"), effectState)
+                    || Bool(root.TestOperation, "cancelRequested") != (effectState != "not_invoked")
+                    || !root.TestOperation.TryGetValue("cancelTerminalEnvelope", out storedTerminal)
+                    || !string.Equals(UnityCliSerializer.Serialize(storedTerminal), UnityCliSerializer.Serialize(cancelTerminal), StringComparison.Ordinal)) return false;
+                if (effectState == "not_invoked") return string.IsNullOrEmpty(Text(root.TestOperation, "cancelRequestId"));
+                return Same(Text(root.TestOperation, "cancelRequestId"), cancelRequestId)
+                    && Same(Text(root.TestOperation, "cancelRequestDigest"), cancelRequestDigest)
+                    && Same(Text(root.TestOperation, "cancelRootRequestDigest"), rootRequestDigest)
+                    && Same(Text(root.TestOperation, "cancelRunId"), runId);
+            }
+
+            private static bool CancelParentTerminalExists(string rootRequestId, string rootRequestDigest, BridgeQueueState state)
+            {
+                try { object terminal; return state.TryGetTerminal(Scope, rootRequestId, rootRequestDigest, out terminal); }
+                catch { return false; }
             }
 
             private static CancelDispatchIdentity ReadCancelDispatch(Root root)

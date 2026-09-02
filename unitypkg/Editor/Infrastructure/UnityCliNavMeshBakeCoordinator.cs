@@ -83,7 +83,7 @@ namespace UnityCli
                     {
                         yield return (PlanCommand, false, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
                         yield return (SnapshotCommand, false, UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
-                        yield return (CancelCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+                        yield return (CancelCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Control);
                     }
                 }
 

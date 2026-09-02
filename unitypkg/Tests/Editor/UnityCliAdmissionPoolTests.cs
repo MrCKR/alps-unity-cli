@@ -373,17 +373,18 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void ExactRootIdentityKeepsDeadlineWhileRecoveryRebindsListener()
+        public void ExactRootIdentityIncludesListenerRebindingAndDeadline()
         {
             var pool = Pool();
             var owner = Consume(pool, 0);
             var wrongDeadline = UnityCliAdmissionPool.CreateConsumedIdentity(owner.RequestId, owner.RootFingerprint, owner.RequestDigest, owner.Token, owner.SessionId, owner.OwnerState, owner.ListenerId, owner.ListenerGeneration, owner.ExecutionDeadlineMs + 1);
 
             Assert.That(pool.RecoverConsumed(owner.RequestId, owner.RootFingerprint, owner.RequestDigest, "listener-after-reload", 2, owner.ExecutionDeadlineMs), Is.True);
-            Assert.That(pool.InspectExactIdentityFields(owner), Is.EqualTo(UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent));
+            Assert.That(pool.InspectExactIdentityFields(owner), Is.EqualTo(UnityCliAdmissionPool.ExactIdentityOutcome.IdentityMismatchOrBlocked));
             Assert.That(pool.InspectExactIdentityFields(wrongDeadline), Is.EqualTo(UnityCliAdmissionPool.ExactIdentityOutcome.IdentityMismatchOrBlocked));
             UnityCliAdmissionPool.ConsumedIdentity rebound;
             Assert.That(pool.TryGetConsumedIdentity(owner.RequestId, out rebound), Is.True);
+            Assert.That(pool.InspectExactIdentityFields(rebound), Is.EqualTo(UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent));
             Assert.That(rebound.ListenerId, Is.EqualTo("listener-after-reload"));
             Assert.That(rebound.ListenerGeneration, Is.EqualTo(2));
             Assert.That(pool.Capture().Active, Is.EqualTo(1));

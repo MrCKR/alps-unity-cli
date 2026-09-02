@@ -40,10 +40,10 @@ namespace UnityCli
                 {
                     get
                     {
-                        yield return (ClaimFilesCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
-                        yield return (CommitFilesCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
-                        yield return (ProveFilesCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
-                        yield return (FailFilesCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+                        yield return (ClaimFilesCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Control);
+                        yield return (CommitFilesCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Control);
+                        yield return (ProveFilesCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Control);
+                        yield return (FailFilesCommand, true, UnityCliBridgeQueuePolicy.WorkClass.Control);
                     }
                 }
                 protected override object DeserializeStartArgs(BridgeRequest request) { return request.DeserializeArgs<StartArgs>(); }

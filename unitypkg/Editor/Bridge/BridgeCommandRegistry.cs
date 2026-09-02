@@ -31,6 +31,10 @@ namespace UnityCli
                         : UnityCliBridgeQueuePolicy.WorkClass.Mutation;
                 if (registeredQueueClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus && !UnityCliBridgeQueuePolicy.IsSafeStatusCommand(command))
                     throw new InvalidOperationException("Only exact SafeStatus commands may use SafeStatus classification: " + command);
+                if (registeredQueueClass == UnityCliBridgeQueuePolicy.WorkClass.Control && !UnityCliBridgeQueuePolicy.IsDurableControlCommand(command))
+                    throw new InvalidOperationException("Only exact durable control commands may use Control classification: " + command);
+                if (UnityCliBridgeQueuePolicy.IsDurableControlCommand(command) && registeredQueueClass != UnityCliBridgeQueuePolicy.WorkClass.Control)
+                    throw new InvalidOperationException("Durable control command must use Control classification: " + command);
                 if (command.StartsWith("internal.", StringComparison.Ordinal)
                     && registeredQueueClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead
                     && !UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand(command))

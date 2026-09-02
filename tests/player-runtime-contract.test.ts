@@ -21,8 +21,8 @@ async function sources(): Promise<Record<keyof typeof RUNTIME_FILES, string>> {
 
 function assertBefore(source: string, first: string, second: string): void {
   const firstIndex = source.indexOf(first);
-  const secondIndex = source.indexOf(second);
   assert.ok(firstIndex >= 0, `missing source anchor: ${first}`);
+  const secondIndex = source.indexOf(second);
   assert.ok(secondIndex >= 0, `missing source anchor: ${second}`);
   assert.ok(firstIndex < secondIndex, `${first} must precede ${second}`);
 }
@@ -175,12 +175,14 @@ test("runtime security, cache, artifacts, and shutdown remain bounded", async ()
   const tools = await readFile("unitypkg/Runtime/Tools/UnityCliRuntimeTools.cs", "utf8");
   assert.match(bridge, /MaxQueueItems = 128/);
   assert.match(bridge, /Completion\.Task\.IsCompleted/);
-  assert.match(bridge, /private static bool FinalizeRuntimeRequest\([\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 2, expectedState\)[\s\S]*?pool\.CompleteTrusted\(identity\)[\s\S]*?request\.Completion\.TrySetResult\(terminal\)/);
+  assert.match(bridge, /private bool FinalizeRuntimeRequest\([\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 2, expectedState\)[\s\S]*?request\.Terminal = terminal[\s\S]*?TrySettleRuntimeRequest\(request\)/);
+  assert.match(bridge, /TrySettleRuntimeRequest[\s\S]*?pool\.CompleteTrusted\(identity\)[\s\S]*?ExactCurrentCompleted[\s\S]*?DefinitelyAbsent[\s\S]*?request\.Completion\.TrySetResult\(request\.Terminal\)/);
+  assert.match(bridge, /RetryPendingRuntimeSettlements[\s\S]*?MaxSettlementRetriesPerTick[\s\S]*?SettlementRetryDelayMs/);
   assert.match(bridge, /private bool TryTakeNextRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.IsCancellationRequested[\s\S]*?pending\.TryDequeue\(out request\)[\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 1, 0\)/);
   assert.match(bridge, /internal RuntimePublicationResult PublishRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?requestCache\.TryGet\(requestId, out existing\)[\s\S]*?absoluteDeadlineMs <= UtcNowMs\(\)[\s\S]*?AuthorizeRuntimeAdmission[\s\S]*?PublishPreparedRequestLocked/);
   assert.match(bridge, /internal void StopRuntimeRequestsLocked\(\)[\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.Cancel\(\)[\s\S]*?FinalizeRuntimeRequest[\s\S]*?pending\.TryDequeue[\s\S]*?requestCache\.Clear\(\)/);
   assert.match(bridge, /private static string AwaitRuntimeResponse\([\s\S]*?RuntimeWaitDependencies/);
-  assert.match(bridge, /if \(FinalizeRuntimeRequest\(work, timeout, 0\)\) return work\.Completion\.Task\.Result;/);
+  assert.match(bridge, /if \(work\.Owner\.FinalizeRuntimeRequest\(work, timeout, 0\)\) return work\.Completion\.Task\.Result;/);
   assert.doesNotMatch(bridge, /FinalizeRuntimeRequest\(work, timeout, 0\)\) work\.Completion\.Task\.Wait\(\)/);
   assert.match(bridge, /E_RUNTIME_QUEUE_FULL/);
   assert.match(bridge, /E_REQUEST_REPLAY_MISMATCH/);

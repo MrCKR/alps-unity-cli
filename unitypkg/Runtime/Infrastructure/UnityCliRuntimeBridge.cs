@@ -24,10 +24,13 @@ namespace UnityCli
         private const int MaxRequestCacheItems = 160;
         private const int MaxRequestsPerFrame = 16;
         private const int RegistryRefreshSeconds = 30;
+        private const int MaxSettlementRetriesPerTick = 16;
+        private const int SettlementRetryDelayMs = 100;
         private static UnityCliRuntimeBridge current;
         private readonly ConcurrentQueue<PendingRequest> pending = new ConcurrentQueue<PendingRequest>();
         private readonly object requestCacheSync = new object();
         private readonly UnityCliRuntimeRequestPublication<PendingRequest> requestCache = new UnityCliRuntimeRequestPublication<PendingRequest>(MaxRequestCacheItems);
+        private readonly Dictionary<string, PendingRequest> pendingSettlements = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
         private readonly CancellationTokenSource stopping = new CancellationTokenSource();
         private long requestOrder;
         private long mainThreadPulseSequence;
@@ -47,6 +50,7 @@ namespace UnityCli
         private bool previousRunInBackground;
         private bool runInBackgroundCaptured;
         private readonly RuntimeOneShotTestHooks runtimeTestHooks = new RuntimeOneShotTestHooks();
+        private int shutdownSettlementPumpStarted;
 
         private void HitRuntimeTestBoundary(string name)
         {
@@ -116,6 +120,7 @@ namespace UnityCli
             Interlocked.Increment(ref mainThreadPulseSequence);
             PendingRequest request;
             UnityCliRuntimeTools.TickFrame(Time.frameCount);
+            RetryPendingRuntimeSettlements();
             var processed = 0;
             while (processed < MaxRequestsPerFrame)
             {
@@ -235,7 +240,7 @@ namespace UnityCli
                 if (remaining <= 0L || dependencies.IsStopping())
                 {
                     var timeout = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request did not reach a proven terminal before its immutable deadline or session shutdown.", new[] { "Inspect runtime.state before submitting a new request." }, true, 100);
-                    if (FinalizeRuntimeRequest(work, timeout, 0)) return work.Completion.Task.Result;
+                    if (work.Owner.FinalizeRuntimeRequest(work, timeout, 0)) return work.Completion.Task.Result;
                     return timeout;
                 }
                 var waitMs = checked((int)Math.Min(remaining, int.MaxValue));
@@ -386,20 +391,103 @@ namespace UnityCli
             FinalizeRuntimeRequest(pendingRequest, terminal, 1);
         }
 
-        /// <summary>ExecutionState、captured pool completion与Task terminal只允许一个owner提交。</summary>
-        private static bool FinalizeRuntimeRequest(PendingRequest request, string terminal, int expectedState)
+        /// <summary>先冻结terminal，再仅在captured pool证明exact completion或definite absence后公开完成。</summary>
+        private bool FinalizeRuntimeRequest(PendingRequest request, string terminal, int expectedState)
         {
-            if (request == null || Interlocked.CompareExchange(ref request.ExecutionState, 2, expectedState) != expectedState) return false;
+            if (request == null || request.Owner != this) return false;
+            if (Interlocked.CompareExchange(ref request.ExecutionState, 2, expectedState) != expectedState) return false;
+            request.Terminal = terminal;
+            if (TrySettleRuntimeRequest(request)) return true;
+            RetainRuntimeSettlement(request);
+            return false;
+        }
+
+        private bool TrySettleRuntimeRequest(PendingRequest request)
+        {
             var pool = request.AdmissionPool;
             var identity = request.AdmissionOwner;
-            if (pool != null && identity != null)
-            {
-                var outcome = pool.CompleteTrusted(identity);
-                if (outcome == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted)
-                    Debug.Log("UnityCli admission_terminal requestId=" + identity.RequestId + " outcome=" + outcome.ToString() + " active=" + pool.Capture().Active.ToString(CultureInfo.InvariantCulture));
-            }
-            request.Completion.TrySetResult(terminal);
+            var outcome = identity == null
+                ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
+                : pool == null
+                    ? UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked
+                    : pool.CompleteTrusted(identity);
+            if (outcome != UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
+                && outcome != UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent) return false;
+            lock (requestCacheSync) pendingSettlements.Remove(request.RequestId);
+            Interlocked.Exchange(ref request.ExecutionState, 3);
+            request.Completion.TrySetResult(request.Terminal);
+            if (pool != null && identity != null && outcome == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted)
+                Debug.Log("UnityCli admission_terminal requestId=" + identity.RequestId + " outcome=" + outcome.ToString() + " active=" + pool.Capture().Active.ToString(CultureInfo.InvariantCulture));
             return true;
+        }
+
+        private void RetainRuntimeSettlement(PendingRequest request)
+        {
+            request.NextSettlementRetryAtMs = checked(UtcNowMs() + SettlementRetryDelayMs);
+            lock (requestCacheSync)
+            {
+                PendingRequest existing;
+                if (pendingSettlements.TryGetValue(request.RequestId, out existing) && !object.ReferenceEquals(existing, request))
+                    throw new InvalidOperationException("Runtime settlement requestId is already owned by another exact request.");
+                if (pendingSettlements.Count >= MaxRequestCacheItems && !pendingSettlements.ContainsKey(request.RequestId))
+                    throw new InvalidOperationException("Runtime settlement journal reached its fixed bound.");
+                pendingSettlements[request.RequestId] = request;
+            }
+            if (stopping.IsCancellationRequested) EnsureShutdownSettlementPump();
+        }
+
+        /// <summary>每次只推进固定数量且使用固定退避；失败identity保留captured pool与完整owner。</summary>
+        private void RetryPendingRuntimeSettlements()
+        {
+            PendingRequest[] due;
+            var now = UtcNowMs();
+            lock (requestCacheSync)
+            {
+                due = new List<PendingRequest>(pendingSettlements.Values).FindAll(value => value.NextSettlementRetryAtMs <= now)
+                    .ToArray();
+                Array.Sort(due, (left, right) => left.Order.CompareTo(right.Order));
+                if (due.Length > MaxSettlementRetriesPerTick) Array.Resize(ref due, MaxSettlementRetriesPerTick);
+            }
+            foreach (var request in due)
+            {
+                if (TrySettleRuntimeRequest(request)) continue;
+                request.NextSettlementRetryAtMs = checked(UtcNowMs() + SettlementRetryDelayMs);
+                if (request.SettlementFailureLogged) continue;
+                request.SettlementFailureLogged = true;
+                Debug.LogWarning("UnityCli runtime admission settlement deferred requestId=" + request.RequestId);
+            }
+        }
+
+        internal void RetryPendingRuntimeSettlementsForTests()
+        {
+            RetryPendingRuntimeSettlements();
+        }
+
+        internal int PendingRuntimeSettlementCountForTests()
+        {
+            lock (requestCacheSync) return pendingSettlements.Count;
+        }
+
+        private void EnsureShutdownSettlementPump()
+        {
+            if (Interlocked.CompareExchange(ref shutdownSettlementPumpStarted, 1, 0) != 0) return;
+            Task.Run(async delegate
+            {
+                try
+                {
+                    while (true)
+                    {
+                        lock (requestCacheSync) if (pendingSettlements.Count == 0) break;
+                        RetryPendingRuntimeSettlements();
+                        await Task.Delay(SettlementRetryDelayMs);
+                    }
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref shutdownSettlementPumpStarted, 0);
+                    lock (requestCacheSync) if (pendingSettlements.Count > 0) EnsureShutdownSettlementPump();
+                }
+            });
         }
 
         private Dictionary<string, object> HealthData()
@@ -686,6 +774,12 @@ namespace UnityCli
                 if (stopping.IsCancellationRequested)
                     return Publication(RuntimePublicationOutcome.Stopping, null, Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." }));
                 PendingRequest existing;
+                if (pendingSettlements.TryGetValue(requestId, out existing))
+                {
+                    if (!string.Equals(existing.RequestDigest, requestDigest, StringComparison.Ordinal))
+                        return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_REQUEST_REPLAY_MISMATCH", "requestId was reused with different immutable request bytes.", new[] { "Submit a new requestId for different Runtime Tool input." }));
+                    return Publication(RuntimePublicationOutcome.Existing, existing, null);
+                }
                 if (requestCache.TryGet(requestId, out existing))
                 {
                     if (!string.Equals(existing.RequestDigest, requestDigest, StringComparison.Ordinal))
@@ -694,28 +788,50 @@ namespace UnityCli
                 }
                 if (absoluteDeadlineMs <= UtcNowMs())
                     return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_SCHEMA_INVALID", "Runtime request execution.absoluteDeadlineUtc must be in the future for a cache miss.", new[] { "Submit a new request with a future immutable deadline." }));
+                if (pendingSettlements.Count >= MaxRequestCacheItems)
+                    return Publication(RuntimePublicationOutcome.QueueFull, null, Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime admission settlement capacity is full.", new[] { "Wait for exact Runtime admission cleanup before retrying." }, true, SettlementRetryDelayMs));
                 var pool = admissionPool;
                 UnityCliAdmissionPool.ConsumedIdentity admissionOwner;
                 bool newlyConsumed;
                 var admissionError = AuthorizeRuntimeAdmission(pool, admission, request, requestDigest, out admissionOwner, out newlyConsumed);
                 if (admissionError != null) return Publication(RuntimePublicationOutcome.Rejected, null, admissionError);
+                PendingRequest work = null;
                 try
                 {
-                    var work = new PendingRequest(request, absoluteDeadlineMs, requestDigest, ++requestOrder, pool, admissionOwner);
+                    work = new PendingRequest(this, request, absoluteDeadlineMs, requestDigest, ++requestOrder, pool, admissionOwner);
                     var outcome = PublishPreparedRequestLocked(work);
                     if (outcome == RuntimePublicationOutcome.Published) return Publication(outcome, work, null);
-                    if (newlyConsumed && admissionOwner != null && pool != null) pool.CompensateAuthorization(admissionOwner);
                     var error = outcome == RuntimePublicationOutcome.Stopping
                         ? Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." })
                         : Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime bridge capacity is full.", new[] { "Wait for the Player to process active requests and retry." }, true, 100);
+                    if (newlyConsumed && admissionOwner != null && pool != null && !TryCompensateRuntimeAdmission(pool, admissionOwner))
+                    {
+                        FinalizeRuntimeRequest(work, error, 0);
+                        return Publication(outcome, work, null);
+                    }
                     return Publication(outcome, null, error);
                 }
                 catch
                 {
-                    if (newlyConsumed && admissionOwner != null && pool != null) pool.CompensateAuthorization(admissionOwner);
+                    if (newlyConsumed && admissionOwner != null && pool != null && !TryCompensateRuntimeAdmission(pool, admissionOwner))
+                    {
+                        var terminal = Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime queue publication failed and exact admission cleanup is pending.", new[] { "Inspect runtime.state before submitting a new request." });
+                        FinalizeRuntimeRequest(work, terminal, 0);
+                        return Publication(RuntimePublicationOutcome.Rejected, work, null);
+                    }
                     throw;
                 }
             }
+        }
+
+        private bool TryCompensateRuntimeAdmission(UnityCliAdmissionPool pool, UnityCliAdmissionPool.ConsumedIdentity identity)
+        {
+            try
+            {
+                HitRuntimeTestBoundary("before-runtime-compensation");
+                return pool.CompensateAuthorization(identity);
+            }
+            catch { return false; }
         }
 
         private RuntimePublicationOutcome PublishPreparedRequestLocked(PendingRequest work)
@@ -767,14 +883,16 @@ namespace UnityCli
                 requestCache.Clear();
                 var pool = admissionPool;
                 admissionPool = null;
-                if (!hasRunning && pool != null) pool.Reset();
+                if (!hasRunning && pendingSettlements.Count == 0 && pool != null) pool.Reset();
+                if (pendingSettlements.Count > 0) EnsureShutdownSettlementPump();
             }
         }
 
         internal sealed class PendingRequest
         {
-            internal PendingRequest(Dictionary<string, object> request, long absoluteDeadlineMs, string requestDigest, long order, UnityCliAdmissionPool admissionPool, UnityCliAdmissionPool.ConsumedIdentity admissionOwner)
+            internal PendingRequest(UnityCliRuntimeBridge owner, Dictionary<string, object> request, long absoluteDeadlineMs, string requestDigest, long order, UnityCliAdmissionPool admissionPool, UnityCliAdmissionPool.ConsumedIdentity admissionOwner)
             {
+                Owner = owner;
                 Request = request;
                 Completion = new TaskCompletionSource<string>();
                 AbsoluteDeadlineMs = absoluteDeadlineMs;
@@ -783,6 +901,7 @@ namespace UnityCli
                 AdmissionPool = admissionPool;
                 AdmissionOwner = admissionOwner;
             }
+            internal UnityCliRuntimeBridge Owner;
             internal Dictionary<string, object> Request;
             internal string RequestId { get { return ReadString(Request, "requestId") ?? string.Empty; } }
             internal TaskCompletionSource<string> Completion;
@@ -792,6 +911,9 @@ namespace UnityCli
             internal UnityCliAdmissionPool.ConsumedIdentity AdmissionOwner;
             internal long Order;
             internal int ExecutionState;
+            internal string Terminal;
+            internal long NextSettlementRetryAtMs;
+            internal bool SettlementFailureLogged;
         }
         private sealed class RuntimeConfig { internal string InstanceId; internal string CanonicalProjectPath; internal string DisplayProjectPath; internal string BuildId; internal string BuildStamp; internal int TaskPoolMaxActive; internal int TaskPoolReopenAt; }
     }

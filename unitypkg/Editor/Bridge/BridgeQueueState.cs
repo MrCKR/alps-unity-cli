@@ -10,6 +10,7 @@ namespace UnityCli
     internal sealed class BridgeQueueState
     {
         internal readonly object QueueLock = new object();
+        private readonly object SettlementLock = new object();
         internal readonly LinkedList<UnityCliBridge.BridgeWorkItem> WorkQueue = new LinkedList<UnityCliBridge.BridgeWorkItem>();
         internal readonly HashSet<UnityCliBridge.BridgeWorkItem> RunningWork = new HashSet<UnityCliBridge.BridgeWorkItem>();
         internal readonly HashSet<UnityCliBridge.BridgeWorkItem> PendingSettlementWork = new HashSet<UnityCliBridge.BridgeWorkItem>();
@@ -18,6 +19,7 @@ namespace UnityCli
         internal bool QueuePublicationOpen;
         internal string ListenerId;
         internal long ListenerGeneration;
+        internal bool AdmissionPoolShutdownPending;
         internal readonly BridgeQueueSinks Sinks;
         internal readonly BridgeQueueTestHooks TestHooks;
         internal readonly BridgeIsolatedExecutionState IsolatedExecution;
@@ -26,6 +28,11 @@ namespace UnityCli
         private readonly Func<UnityCliBridge.AdmissionOwnerIdentity, bool> persistCompletionIntent;
         private readonly Func<UnityCliBridge.AdmissionOwnerIdentity, bool> hasCompletionIntent;
         private readonly Func<UnityCliBridge.AdmissionOwnerIdentity, bool> clearCompletionIntent;
+        private readonly Dictionary<string, PendingCompletionIntent> pendingCompletionIntents = new Dictionary<string, PendingCompletionIntent>(StringComparer.Ordinal);
+        private int ioCallbackCount;
+        private int lastQueueNodesExamined;
+        internal int IoCallbackCount { get { return Volatile.Read(ref ioCallbackCount); } }
+        internal int LastQueueNodesExamined { get { return Volatile.Read(ref lastQueueNodesExamined); } }
 
         internal BridgeQueueState(
             UnityCliAdmissionPool admissionPool,
@@ -60,60 +67,148 @@ namespace UnityCli
 
         internal bool PersistPool()
         {
+            AssertIoOutsideQueueLock();
             TestHooks.Hit("before-state-persist-pool");
+            Interlocked.Increment(ref ioCallbackCount);
             return persistPoolState();
         }
 
         internal bool ClearMarkers(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
+            AssertIoOutsideQueueLock();
             TestHooks.Hit("before-state-clear-markers");
+            Interlocked.Increment(ref ioCallbackCount);
             return UnityCliBridge.ClearAdmissionOwnerMarkersForState(this, identity);
         }
 
         internal bool PersistIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
+            AssertIoOutsideQueueLock();
+            if (!CanTrackCompletionIntent(identity)) return false;
             TestHooks.Hit("before-state-persist-intent");
-            return persistCompletionIntent(identity);
+            Interlocked.Increment(ref ioCallbackCount);
+            var persisted = persistCompletionIntent(identity);
+            if (persisted) TrackCompletionIntent(identity);
+            return persisted;
         }
 
         internal bool HasIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
-            return hasCompletionIntent(identity);
+            if (HasIntentInMemory(identity)) return true;
+            AssertIoOutsideQueueLock();
+            TestHooks.Hit("before-state-has-intent");
+            Interlocked.Increment(ref ioCallbackCount);
+            var exists = hasCompletionIntent(identity);
+            if (exists) TrackCompletionIntent(identity);
+            return exists;
+        }
+
+        internal bool HasIntentInMemory(UnityCliBridge.AdmissionOwnerIdentity identity)
+        {
+            if (identity == null) return false;
+            lock (SettlementLock) return pendingCompletionIntents.ContainsKey(IntentKey(identity));
         }
 
         internal bool ClearIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
+            AssertIoOutsideQueueLock();
             TestHooks.Hit("before-state-clear-intent");
-            return clearCompletionIntent(identity);
+            Interlocked.Increment(ref ioCallbackCount);
+            var cleared = clearCompletionIntent(identity);
+            if (cleared)
+            {
+                lock (SettlementLock) pendingCompletionIntents.Remove(IntentKey(identity));
+            }
+            return cleared;
+        }
+
+        private bool CanTrackCompletionIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
+        {
+            if (identity == null) return false;
+            var key = IntentKey(identity);
+            lock (SettlementLock) return pendingCompletionIntents.ContainsKey(key) || pendingCompletionIntents.Count < 256;
+        }
+
+        internal void TrackCompletionIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
+        {
+            if (identity == null) throw new ArgumentNullException("identity");
+            var key = IntentKey(identity);
+            lock (SettlementLock)
+            {
+                if (pendingCompletionIntents.ContainsKey(key)) return;
+                if (pendingCompletionIntents.Count >= 256) throw new InvalidOperationException("Admission completion intent journal reached its fixed bound.");
+                pendingCompletionIntents.Add(key, new PendingCompletionIntent { Owner = CloneIdentity(identity) });
+            }
+        }
+
+        internal PendingCompletionIntent[] DueCompletionIntents(long nowMs, int limit)
+        {
+            lock (SettlementLock)
+            {
+                return pendingCompletionIntents.Values.Where(value => value.NextRetryAtMs <= nowMs)
+                    .OrderBy(value => value.Owner.RequestId, StringComparer.Ordinal).Take(Math.Max(0, limit)).ToArray();
+            }
+        }
+
+        internal void DeferCompletionIntent(PendingCompletionIntent intent, long nowMs)
+        {
+            if (intent == null) return;
+            lock (SettlementLock)
+            {
+                PendingCompletionIntent current;
+                if (!pendingCompletionIntents.TryGetValue(IntentKey(intent.Owner), out current) || !object.ReferenceEquals(current, intent)) return;
+                current.NextRetryAtMs = checked(nowMs + 100L);
+            }
+        }
+
+        internal void MarkCompletionIntentFailureLogged(PendingCompletionIntent intent)
+        {
+            if (intent == null) return;
+            lock (SettlementLock) intent.FailureLogged = true;
+        }
+
+        internal int PendingCompletionIntentCount
+        {
+            get { lock (SettlementLock) return pendingCompletionIntents.Count; }
         }
 
         internal Dictionary<string, object> LoadOperation(string scope)
         {
+            AssertIoOutsideQueueLock();
             TestHooks.Hit("before-operation-load:" + scope);
+            Interlocked.Increment(ref ioCallbackCount);
             return IsolatedExecution == null ? UnityCliActiveOperation.Load(scope) : IsolatedExecution.Load(scope);
         }
 
         internal void SaveOperation(string scope, Dictionary<string, object> value)
         {
+            AssertIoOutsideQueueLock();
             TestHooks.Hit("before-operation-save:" + scope);
+            Interlocked.Increment(ref ioCallbackCount);
             if (IsolatedExecution == null) UnityCliActiveOperation.Save(scope, value);
             else IsolatedExecution.Save(scope, value);
         }
 
         internal void ClearOperation(string scope)
         {
+            AssertIoOutsideQueueLock();
             TestHooks.Hit("before-operation-clear:" + scope);
+            Interlocked.Increment(ref ioCallbackCount);
             if (IsolatedExecution == null) UnityCliActiveOperation.Clear(scope);
             else IsolatedExecution.Clear(scope);
         }
 
         internal bool OperationExists(string scope)
         {
+            AssertIoOutsideQueueLock();
+            Interlocked.Increment(ref ioCallbackCount);
             return IsolatedExecution == null ? UnityCliActiveOperation.Exists(scope) : IsolatedExecution.Exists(scope);
         }
 
         internal bool TryGetTerminal(string scope, string requestId, string requestDigest, out object envelope)
         {
+            AssertIoOutsideQueueLock();
+            Interlocked.Increment(ref ioCallbackCount);
             return IsolatedExecution == null
                 ? UnityCliActiveOperation.TryGetTerminal(scope, requestId, requestDigest, out envelope)
                 : IsolatedExecution.TryGetTerminal(scope, requestId, requestDigest, out envelope);
@@ -126,7 +221,9 @@ namespace UnityCli
 
         internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, object envelope)
         {
+            AssertIoOutsideQueueLock();
             TestHooks.Hit("before-terminal-store:" + scope);
+            Interlocked.Increment(ref ioCallbackCount);
             return IsolatedExecution == null
                 ? UnityCliActiveOperation.StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, envelope)
                 : IsolatedExecution.StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, envelope);
@@ -134,6 +231,8 @@ namespace UnityCli
 
         internal bool TryGetTerminalBySelector(string scope, string requestId, string selectorDigest, out object envelope)
         {
+            AssertIoOutsideQueueLock();
+            Interlocked.Increment(ref ioCallbackCount);
             return IsolatedExecution == null
                 ? UnityCliActiveOperation.TryGetTerminalBySelector(scope, requestId, selectorDigest, out envelope)
                 : IsolatedExecution.TryGetTerminalBySelector(scope, requestId, selectorDigest, out envelope);
@@ -141,6 +240,8 @@ namespace UnityCli
 
         internal bool TryAcquireLease(string requestId, string requestDigest, out bool newlyAcquired)
         {
+            AssertIoOutsideQueueLock();
+            Interlocked.Increment(ref ioCallbackCount);
             return IsolatedExecution == null
                 ? UnityCliBridge.UnityCliSessionMutationLease.TryAcquire(requestId, requestDigest, out newlyAcquired)
                 : IsolatedExecution.TryAcquireLease(requestId, requestDigest, out newlyAcquired);
@@ -148,15 +249,35 @@ namespace UnityCli
 
         internal void ReleaseLease(string requestId, string requestDigest)
         {
+            AssertIoOutsideQueueLock();
+            Interlocked.Increment(ref ioCallbackCount);
             if (IsolatedExecution == null) UnityCliBridge.UnityCliSessionMutationLease.Release(requestId, requestDigest);
             else IsolatedExecution.ReleaseLease(requestId, requestDigest);
         }
 
         internal bool TryIsLeaseOwned(string requestId, string requestDigest, out bool isOwned)
         {
+            AssertIoOutsideQueueLock();
+            Interlocked.Increment(ref ioCallbackCount);
             return IsolatedExecution == null
                 ? UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned)
                 : IsolatedExecution.TryIsLeaseOwned(requestId, requestDigest, out isOwned);
+        }
+
+        internal bool TryGetCurrentLeaseOwner(out string requestId, out string requestDigest)
+        {
+            AssertIoOutsideQueueLock();
+            Interlocked.Increment(ref ioCallbackCount);
+            return IsolatedExecution == null
+                ? UnityCliBridge.UnityCliSessionMutationLease.TryGetCurrentOwner(out requestId, out requestDigest)
+                : IsolatedExecution.TryGetCurrentOwner(out requestId, out requestDigest);
+        }
+
+        internal void RecordQueueNodesExamined(int count)
+        {
+            if (count < 0 || count > UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
+                throw new InvalidOperationException("Bridge queue scan exceeded its fixed production bound.");
+            Volatile.Write(ref lastQueueNodesExamined, count);
         }
 
         internal void AssertEmptyForTests()
@@ -166,8 +287,42 @@ namespace UnityCli
                 if (WorkQueue.Count != 0 || RunningWork.Count != 0 || PendingSettlementWork.Count != 0 || ActiveRequestWork.Count != 0)
                     throw new InvalidOperationException("Local BridgeQueueState still owns work.");
             }
+            if (PendingCompletionIntentCount != 0)
+                throw new InvalidOperationException("Local BridgeQueueState still owns admission completion intents.");
             if (IsolatedExecution != null) IsolatedExecution.AssertEmpty();
             TestHooks.AssertDrained();
+        }
+
+        private void AssertIoOutsideQueueLock()
+        {
+            if (Monitor.IsEntered(QueueLock)) throw new InvalidOperationException("Bridge queue state I/O is forbidden while QueueLock is held.");
+        }
+
+        private static string IntentKey(UnityCliBridge.AdmissionOwnerIdentity identity)
+        {
+            return identity.RequestId + "\0" + identity.RequestDigest + "\0" + (identity.TopRequestDigest ?? string.Empty)
+                + "\0" + identity.RootFingerprint + "\0" + identity.Token + "\0" + identity.SessionId
+                + "\0" + identity.ListenerId + "\0" + identity.ListenerGeneration.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "\0" + identity.ExecutionDeadlineMs.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "\0" + ((int)identity.OwnerState).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private static UnityCliBridge.AdmissionOwnerIdentity CloneIdentity(UnityCliBridge.AdmissionOwnerIdentity identity)
+        {
+            return new UnityCliBridge.AdmissionOwnerIdentity
+            {
+                RequestId = identity.RequestId, RequestDigest = identity.RequestDigest, TopRequestDigest = identity.TopRequestDigest,
+                RootFingerprint = identity.RootFingerprint, Token = identity.Token, SessionId = identity.SessionId,
+                ListenerId = identity.ListenerId, ListenerGeneration = identity.ListenerGeneration,
+                ExecutionDeadlineMs = identity.ExecutionDeadlineMs, EditorSessionId = identity.EditorSessionId, OwnerState = identity.OwnerState
+            };
+        }
+
+        internal sealed class PendingCompletionIntent
+        {
+            internal UnityCliBridge.AdmissionOwnerIdentity Owner;
+            internal long NextRetryAtMs;
+            internal bool FailureLogged;
         }
 
         private static long DefaultMonotonicMilliseconds()
@@ -374,6 +529,16 @@ namespace UnityCli
             {
                 isOwned = string.Equals(leaseRequestId, requestId, StringComparison.Ordinal)
                     && string.Equals(leaseRequestDigest, requestDigest, StringComparison.Ordinal);
+                return true;
+            }
+        }
+
+        internal bool TryGetCurrentOwner(out string requestId, out string requestDigest)
+        {
+            lock (sync)
+            {
+                requestId = leaseRequestId;
+                requestDigest = leaseRequestDigest;
                 return true;
             }
         }

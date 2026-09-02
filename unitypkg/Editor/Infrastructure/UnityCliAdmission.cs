@@ -161,7 +161,7 @@ namespace UnityCli
             return true;
         }
 
-        /// <summary>重启后只重放已落盘completion intent；该路径只完成准入，不重新执行WorkItem effect。</summary>
+        /// <summary>重启后把固定journal恢复进同session在线settlement；只完成准入，不重新执行业务effect。</summary>
         private static void ReconcilePendingAdmissionSettlements()
         {
             if (admissionPool == null) return;
@@ -170,31 +170,63 @@ namespace UnityCli
             catch { admissionPool.BlockRecovery(); return; }
             if (root == null) return;
             var entries = root.ContainsKey("entries") ? root["entries"] as List<object> : null;
-            if (!string.Equals(AdmissionText(root, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal) || entries == null)
+            if (!string.Equals(AdmissionText(root, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal))
+            {
+                try { UnityCliActiveOperation.Clear(AdmissionSettlementScope); }
+                catch { admissionPool.BlockRecovery(); }
+                return;
+            }
+            if (entries == null || entries.Count > 256)
             {
                 admissionPool.BlockRecovery();
                 return;
             }
             foreach (var raw in entries.ToArray())
             {
-                var entry = AsDictionary(raw);
-                var requestId = AdmissionText(entry, "requestId");
-                var owner = ReadCompletionIntentOwner(entry);
-                if (owner == null || !HasAdmissionCompletionIntent(ProductionQueueState, owner)) { admissionPool.BlockRecovery(); return; }
-                var exact = admissionPool.InspectExactIdentityFields(ToPoolIdentity(owner));
-                if (exact == UnityCliAdmissionPool.ExactIdentityOutcome.IdentityMismatchOrBlocked) { admissionPool.BlockRecovery(); return; }
-                var outcome = exact == UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent
-                    ? admissionPool.CompleteTrusted(ToPoolIdentity(owner))
-                    : UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent;
-                if (outcome != UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted && outcome != UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent)
-                { admissionPool.BlockRecovery(); return; }
-                try
+                var owner = ReadCompletionIntentOwner(AsDictionary(raw));
+                if (owner == null || !HasAdmissionCompletionIntent(ProductionQueueState, owner))
                 {
-                    if (!PersistProductionAdmissionPoolState() || !ClearProductionAdmissionOwnerMarkers(owner) || !ClearProductionAdmissionCompletionIntent(owner))
-                    { admissionPool.BlockRecovery(); return; }
+                    admissionPool.BlockRecovery();
+                    return;
                 }
-                catch { admissionPool.BlockRecovery(); return; }
-                WriteLog("admission_settlement_replayed requestId=" + requestId);
+                ProductionQueueState.TrackCompletionIntent(owner);
+            }
+            RetryPendingAdmissionCompletionIntents(ProductionQueueState);
+        }
+
+        /// <summary>同session每tick固定批次推进pool、marker与intent三者收敛；失败保持journal并固定退避。</summary>
+        internal static void RetryPendingAdmissionCompletionIntents(BridgeQueueState state)
+        {
+            if (state == null || state.AdmissionPool == null) return;
+            var now = state.NowMs();
+            var due = state.DueCompletionIntents(now, UnityCliBridgeQueuePolicy.MaxStartsPerTick);
+            foreach (var pending in due)
+            {
+                var owner = pending.Owner;
+                var pool = state.AdmissionPool;
+                var exact = pool.InspectExactIdentityFields(ToPoolIdentity(owner));
+                var outcome = exact == UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent
+                    ? pool.CompleteTrusted(ToPoolIdentity(owner))
+                    : exact == UnityCliAdmissionPool.ExactIdentityOutcome.DefinitelyAbsent
+                        ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
+                        : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                if (outcome == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
+                    || outcome == UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent)
+                {
+                    try
+                    {
+                        if (state.PersistPool() && state.ClearMarkers(owner) && ClearAdmissionCompletionIntent(state, owner))
+                        {
+                            state.Sinks.WriteLog("admission_settlement_replayed requestId=" + owner.RequestId + " outcome=" + outcome.ToString());
+                            continue;
+                        }
+                    }
+                    catch { }
+                }
+                state.DeferCompletionIntent(pending, now);
+                if (pending.FailureLogged) continue;
+                state.MarkCompletionIntentFailureLogged(pending);
+                state.Sinks.WriteLog("admission_settlement_retry_pending requestId=" + owner.RequestId);
             }
         }
 
@@ -203,20 +235,55 @@ namespace UnityCli
             if (entry == null || !AdmissionDigestIsValid(AdmissionText(entry, "requestDigest"))) return null;
             var source = (UnityCliAdmissionPool.AdmissionOwnerState)AdmissionLong(entry, "admissionOwnerState");
             if (!Enum.IsDefined(typeof(UnityCliAdmissionPool.AdmissionOwnerState), source) || source == UnityCliAdmissionPool.AdmissionOwnerState.Granted) return null;
-            return new AdmissionOwnerIdentity
+            var owner = new AdmissionOwnerIdentity
             {
                 RequestId = AdmissionText(entry, "requestId"), RequestDigest = AdmissionText(entry, "admissionRequestDigest"), TopRequestDigest = AdmissionText(entry, "requestDigest"),
                 RootFingerprint = AdmissionText(entry, "admissionRootFingerprint"), Token = AdmissionText(entry, "admissionToken"), SessionId = AdmissionText(entry, "admissionSessionId"),
                 ListenerId = AdmissionText(entry, "admissionListenerId"), ListenerGeneration = AdmissionLong(entry, "admissionListenerGeneration"),
                 ExecutionDeadlineMs = AdmissionLong(entry, "admissionExecutionDeadlineMs"), EditorSessionId = AdmissionText(entry, "editorSessionId"), OwnerState = source
             };
+            if (!string.Equals(owner.EditorSessionId, EditorSessionId(), StringComparison.Ordinal)) return null;
+            try { ToPoolIdentity(owner); }
+            catch { return null; }
+            return owner;
         }
 
         private static void ShutdownAdmissionPool()
         {
-            if (admissionPool != null) admissionPool.Reset();
-            admissionPool = null;
-            SessionState.EraseString(AdmissionSessionStateKey);
+            var state = ProductionQueueState;
+            lock (state.QueueLock)
+            {
+                if (state.RunningWork.Count != 0 || state.PendingSettlementWork.Count != 0)
+                {
+                    state.AdmissionPoolShutdownPending = true;
+                    return;
+                }
+            }
+            FinalizeAdmissionPoolShutdown(state);
+        }
+
+        internal static void TryFinalizeAdmissionPoolShutdown(BridgeQueueState state)
+        {
+            if (state == null || !state.AdmissionPoolShutdownPending) return;
+            lock (state.QueueLock)
+            {
+                if (state.RunningWork.Count != 0 || state.PendingSettlementWork.Count != 0) return;
+            }
+            FinalizeAdmissionPoolShutdown(state);
+        }
+
+        private static void FinalizeAdmissionPoolShutdown(BridgeQueueState state)
+        {
+            var pool = state.AdmissionPool;
+            if (pool != null && pool.Capture().Active != 0)
+            {
+                state.AdmissionPoolShutdownPending = true;
+                return;
+            }
+            if (pool != null) pool.Reset();
+            state.AdmissionPool = null;
+            state.AdmissionPoolShutdownPending = false;
+            if (object.ReferenceEquals(state, ProductionQueueState)) SessionState.EraseString(AdmissionSessionStateKey);
         }
 
         /// <summary>HTTP后台线程原子发grant；不进入主线程或transaction log。</summary>
@@ -344,7 +411,7 @@ namespace UnityCli
         {
             var owner = existing == null ? null : existing.AdmissionOwner;
             if (state == null || reservation == null || owner == null || !existing.CompletionIntentReady
-                || !HasAdmissionCompletionIntent(state, owner) || !reservation.HasAdmissionHeaders
+                || !reservation.HasAdmissionHeaders
                 || !string.Equals(reservation.RequestId, owner.RequestId, StringComparison.Ordinal)
                 || !string.Equals(reservation.RequestDigest, owner.RequestDigest, StringComparison.Ordinal)
                 || !string.Equals(reservation.RootFingerprint, owner.RootFingerprint, StringComparison.Ordinal)
@@ -436,6 +503,7 @@ namespace UnityCli
             }
             catch { return false; }
             state.Sinks.WriteLog("admission_terminal requestId=" + identity.RequestId + " outcome=" + outcome.ToString() + " active=" + pool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+            TryFinalizeAdmissionPoolShutdown(state);
             return true;
         }
 
@@ -544,7 +612,25 @@ namespace UnityCli
                     throw;
                 }
             }
-            if (exact != UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent)
+            if (exact == UnityCliAdmissionPool.ExactIdentityOutcome.IdentityMismatchOrBlocked)
+            {
+                UnityCliAdmissionPool.ConsumedIdentity rebound;
+                if (!pool.TryGetConsumedIdentity(requestId, out rebound))
+                {
+                    pool.BlockRecovery();
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker conflicts with the current requestId owner.");
+                }
+                var reboundOwner = ToAdmissionOwner(rebound, markerOwner.RequestDigest);
+                reboundOwner.TopRequestDigest = AdmissionText(marker, "requestDigest");
+                reboundOwner.EditorSessionId = AdmissionText(marker, "editorSessionId");
+                if (!SameAdmissionIdentityExceptListener(reboundOwner, markerOwner))
+                {
+                    pool.BlockRecovery();
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker conflicts with the current requestId owner.");
+                }
+                markerOwner = reboundOwner;
+            }
+            else if (exact != UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent)
             {
                 pool.BlockRecovery();
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker conflicts with the current requestId owner.");
@@ -664,7 +750,13 @@ namespace UnityCli
             foreach (var captured in admissionPool.Capture().Records)
             {
                 var record = captured;
-                if (DedicatedCancelMarkerOwnsRecord(record)) continue;
+                var cancelOwnership = DedicatedCancelMarkerOwnershipForState(ProductionQueueState, record);
+                if (cancelOwnership == DedicatedCancelMarkerOwnership.ExactOwner) continue;
+                if (cancelOwnership == DedicatedCancelMarkerOwnership.Blocked)
+                {
+                    admissionPool.BlockRecovery();
+                    return;
+                }
                 Dictionary<string, object> marker;
                 string markerScope;
                 try
@@ -707,16 +799,78 @@ namespace UnityCli
             }
         }
 
-        private static bool DedicatedCancelMarkerOwnsRecord(UnityCliAdmissionPool.AdmissionRecord record)
+        private enum DedicatedCancelMarkerOwnership { NoMarkerOrDifferentOwner, ExactOwner, Blocked }
+
+        /// <summary>cancel owner只有marker、parent root与run identity全部精确一致时才从通用recovery分流。</summary>
+        private static DedicatedCancelMarkerOwnership DedicatedCancelMarkerOwnershipForState(BridgeQueueState state, UnityCliAdmissionPool.AdmissionRecord record)
         {
             const string markerScope = "test-cancel-admission-owner";
-            if (record == null || !UnityCliActiveOperation.Exists(markerScope)) return false;
+            if (state == null || record == null) return DedicatedCancelMarkerOwnership.NoMarkerOrDifferentOwner;
             try
             {
-                var marker = UnityCliActiveOperation.Load(markerScope);
-                return marker != null && string.Equals(AdmissionText(marker, "requestId"), record.RequestId, StringComparison.Ordinal);
+                if (!state.OperationExists(markerScope)) return DedicatedCancelMarkerOwnership.NoMarkerOrDifferentOwner;
+                var marker = state.LoadOperation(markerScope);
+                if (marker == null) return DedicatedCancelMarkerOwnership.Blocked;
+                if (!string.Equals(AdmissionText(marker, "requestId"), record.RequestId, StringComparison.Ordinal))
+                    return DedicatedCancelMarkerOwnership.NoMarkerOrDifferentOwner;
+                var rootRequestId = AdmissionText(marker, "rootRequestId");
+                var rootRequestDigest = AdmissionText(marker, "rootRequestDigest");
+                var runId = AdmissionText(marker, "runId");
+                if (!AdmissionMarkerMatchesRecord(marker, record)
+                    || !IsSafeId(rootRequestId) || !AdmissionDigestIsValid(rootRequestDigest) || !Guid.TryParse(runId, out _)
+                    || !string.Equals(AdmissionText(marker, "requestDigest"), rootRequestDigest, StringComparison.Ordinal))
+                    return DedicatedCancelMarkerOwnership.Blocked;
+                var parent = state.LoadOperation("test-run");
+                if (parent == null)
+                {
+                    object parentTerminal;
+                    object cancelTerminal;
+                    object selectedCancelTerminal;
+                    return state.TryGetTerminal("test-run", rootRequestId, rootRequestDigest, out parentTerminal)
+                        && state.TryGetTerminal("test-cancel", record.RequestId, record.RequestDigest, out cancelTerminal)
+                        && state.TryGetTerminalBySelector("test-cancel", record.RequestId, rootRequestDigest, out selectedCancelTerminal)
+                        && string.Equals(UnityCliSerializer.Serialize(cancelTerminal), UnityCliSerializer.Serialize(selectedCancelTerminal), StringComparison.Ordinal)
+                        ? DedicatedCancelMarkerOwnership.ExactOwner
+                        : DedicatedCancelMarkerOwnership.Blocked;
+                }
+                object rawOperation;
+                var operation = parent.TryGetValue("testOperation", out rawOperation) ? AsDictionary(rawOperation) : null;
+                if (operation == null
+                    || !string.Equals(AdmissionText(parent, "requestId"), rootRequestId, StringComparison.Ordinal)
+                    || !string.Equals(AdmissionText(parent, "requestDigest"), rootRequestDigest, StringComparison.Ordinal)
+                    || !string.Equals(AdmissionText(parent, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal)
+                    || !string.Equals(AdmissionText(operation, "runId"), runId, StringComparison.Ordinal))
+                    return DedicatedCancelMarkerOwnership.Blocked;
+                var repairEffectState = AdmissionText(marker, "parentRepairEffectState");
+                if (string.Equals(repairEffectState, "not_invoked", StringComparison.Ordinal))
+                {
+                    object exact;
+                    object selected;
+                    object stored;
+                    return !AdmissionBool(operation, "cancelRequested")
+                        && string.Equals(AdmissionText(operation, "cancelEffectState"), "not_invoked", StringComparison.Ordinal)
+                        && string.IsNullOrEmpty(AdmissionText(operation, "cancelRequestId"))
+                        && operation.TryGetValue("cancelTerminalEnvelope", out stored)
+                        && state.TryGetTerminal("test-cancel", record.RequestId, record.RequestDigest, out exact)
+                        && state.TryGetTerminalBySelector("test-cancel", record.RequestId, rootRequestDigest, out selected)
+                        && string.Equals(UnityCliSerializer.Serialize(exact), UnityCliSerializer.Serialize(selected), StringComparison.Ordinal)
+                        && string.Equals(UnityCliSerializer.Serialize(exact), UnityCliSerializer.Serialize(stored), StringComparison.Ordinal)
+                        ? DedicatedCancelMarkerOwnership.ExactOwner
+                        : DedicatedCancelMarkerOwnership.Blocked;
+                }
+                if (!string.Equals(AdmissionText(operation, "cancelRunId"), runId, StringComparison.Ordinal)
+                    || !string.Equals(AdmissionText(operation, "cancelRequestId"), record.RequestId, StringComparison.Ordinal)
+                    || !string.Equals(AdmissionText(operation, "cancelRequestDigest"), record.RequestDigest, StringComparison.Ordinal)
+                    || !string.Equals(AdmissionText(operation, "cancelRootRequestDigest"), rootRequestDigest, StringComparison.Ordinal))
+                    return DedicatedCancelMarkerOwnership.Blocked;
+                return DedicatedCancelMarkerOwnership.ExactOwner;
             }
-            catch { return true; }
+            catch { return DedicatedCancelMarkerOwnership.Blocked; }
+        }
+
+        internal static string DedicatedCancelMarkerOwnershipForTests(BridgeQueueState state, UnityCliAdmissionPool.AdmissionRecord record)
+        {
+            return DedicatedCancelMarkerOwnershipForState(state, record).ToString();
         }
 
         private static AdmissionOwnerIdentity TransitionWithoutMarker(AdmissionOwnerIdentity identity, UnityCliAdmissionPool.AdmissionOwnerState target)
@@ -821,6 +975,8 @@ namespace UnityCli
                 || !string.Equals(AdmissionText(marker, "admissionRootFingerprint"), record.RootFingerprint, StringComparison.Ordinal)
                 || !string.Equals(AdmissionText(marker, "admissionToken"), record.Token, StringComparison.Ordinal)
                 || !string.Equals(AdmissionText(marker, "admissionSessionId"), record.SessionId, StringComparison.Ordinal)
+                || !string.Equals(AdmissionText(marker, "admissionListenerId"), record.ListenerId, StringComparison.Ordinal)
+                || AdmissionLong(marker, "admissionListenerGeneration") != record.ListenerGeneration
                 || AdmissionLong(marker, "admissionExecutionDeadlineMs") != record.ExecutionDeadlineMs
                 || !string.Equals(AdmissionText(marker, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal)) return false;
             var sourceCommitted = record.TransferCommitted && record.OwnerState == source && record.IntendedOwnerState == source;
@@ -891,9 +1047,10 @@ namespace UnityCli
                     root = new Dictionary<string, object> { { "editorSessionId", EditorSessionId() }, { "entries", new List<object>() } };
                 }
                 var entries = root["entries"] as List<object>;
-                if (entries == null || entries.Count > 256) return false;
+                if (entries == null) return false;
                 if (entries.Cast<object>().Select(AsDictionary).Any(value => value == null)) return false;
                 if (entries.Cast<object>().Select(AsDictionary).Any(value => CompletionIntentMatches(value, identity))) return true;
+                if (entries.Count >= 256) return false;
                 entries.Add(CompletionIntent(identity, kind));
                 UnityCliActiveOperation.Save(AdmissionSettlementScope, root);
                 return true;
@@ -954,6 +1111,7 @@ namespace UnityCli
                 && string.Equals(AdmissionText(entry, "admissionListenerId"), identity.ListenerId, StringComparison.Ordinal)
                 && AdmissionLong(entry, "admissionListenerGeneration") == identity.ListenerGeneration
                 && AdmissionLong(entry, "admissionExecutionDeadlineMs") == identity.ExecutionDeadlineMs
+                && AdmissionLong(entry, "admissionOwnerState") == (long)identity.OwnerState
                 && string.Equals(AdmissionText(entry, "editorSessionId"), identity.EditorSessionId ?? EditorSessionId(), StringComparison.Ordinal);
         }
 
@@ -1362,6 +1520,19 @@ namespace UnityCli
         private static AdmissionOwnerIdentity RecordIdentity(UnityCliAdmissionPool.AdmissionRecord record)
         {
             return new AdmissionOwnerIdentity { RequestId = record.RequestId, RequestDigest = record.RequestDigest, TopRequestDigest = record.RequestDigest, RootFingerprint = record.RootFingerprint, Token = record.Token, SessionId = record.SessionId, ListenerId = record.ListenerId, ListenerGeneration = record.ListenerGeneration, ExecutionDeadlineMs = record.ExecutionDeadlineMs, EditorSessionId = EditorSessionId(), OwnerState = record.OwnerState };
+        }
+
+        private static bool SameAdmissionIdentityExceptListener(AdmissionOwnerIdentity left, AdmissionOwnerIdentity right)
+        {
+            return left != null && right != null
+                && string.Equals(left.RequestId, right.RequestId, StringComparison.Ordinal)
+                && string.Equals(left.RequestDigest, right.RequestDigest, StringComparison.Ordinal)
+                && string.Equals(left.RootFingerprint, right.RootFingerprint, StringComparison.Ordinal)
+                && string.Equals(left.Token, right.Token, StringComparison.Ordinal)
+                && string.Equals(left.SessionId, right.SessionId, StringComparison.Ordinal)
+                && left.ExecutionDeadlineMs == right.ExecutionDeadlineMs
+                && left.OwnerState == right.OwnerState
+                && string.Equals(left.EditorSessionId ?? EditorSessionId(), right.EditorSessionId ?? EditorSessionId(), StringComparison.Ordinal);
         }
 
         private static bool SameAdmissionImmutableIdentity(AdmissionOwnerIdentity left, AdmissionOwnerIdentity right)

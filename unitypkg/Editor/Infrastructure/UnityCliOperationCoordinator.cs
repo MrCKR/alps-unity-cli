@@ -683,16 +683,30 @@ namespace UnityCli
             return string.Equals(toolName, "code.exec", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
         }
 
-        /// <summary>durable mutation lease读取失败、被占用与空闲分别投影为queue policy三态。</summary>
-        private static UnityCliBridgeQueuePolicy.DurableMutationBarrier CurrentDurableMutationBarrier()
+        private sealed class DurableMutationBarrierProof
+        {
+            internal UnityCliBridgeQueuePolicy.DurableMutationBarrier State;
+            internal string RequestId;
+            internal string RequestDigest;
+        }
+
+        /// <summary>durable lease三态同时冻结当前owner identity，供锁外control root proof精确绑定。</summary>
+        private static DurableMutationBarrierProof CurrentDurableMutationBarrier(BridgeQueueState state)
         {
             string requestId;
             string requestDigest;
-            if (!UnityCliSessionMutationLease.TryGetCurrentOwner(out requestId, out requestDigest))
-                return UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable;
-            return string.IsNullOrEmpty(requestId) && string.IsNullOrEmpty(requestDigest)
-                ? UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear
-                : UnityCliBridgeQueuePolicy.DurableMutationBarrier.Held;
+            if (state == null || !state.TryGetCurrentLeaseOwner(out requestId, out requestDigest))
+                return new DurableMutationBarrierProof { State = UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable };
+            if (string.IsNullOrEmpty(requestId) && string.IsNullOrEmpty(requestDigest))
+                return new DurableMutationBarrierProof { State = UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear };
+            if (!IsSafeId(requestId) || !IsSha256(requestDigest))
+                return new DurableMutationBarrierProof { State = UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable };
+            return new DurableMutationBarrierProof
+            {
+                State = UnityCliBridgeQueuePolicy.DurableMutationBarrier.Held,
+                RequestId = requestId,
+                RequestDigest = requestDigest
+            };
         }
 
         /// <summary>主线程在pure input裁决后，仅对真正依赖场景现状的幂等分支读取Unity对象。</summary>

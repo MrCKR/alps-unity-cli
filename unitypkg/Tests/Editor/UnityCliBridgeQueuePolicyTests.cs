@@ -161,7 +161,7 @@ namespace UnityCli.Tests
                 Classified("generic-status", "internal.unknown.status", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
                 Classified("snapshot", "internal.navmesh.bake.snapshot", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
                 Classified("plan", "internal.navmesh.bake.plan", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
-                Classified("cancel", "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Mutation)
+                Classified("cancel", "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control)
             };
 
             var result = UnityCliBridgeQueuePolicy.SelectStarts(
@@ -234,9 +234,14 @@ namespace UnityCli.Tests
                     Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead), command);
             }
 
-            foreach (var command in new[] { "internal.navmesh.bake.plan", "internal.navmesh.bake.cancel", "internal.test.run.cancel" })
-                Assert.That(UnityCliBridgeQueuePolicy.Classify(command, UnityCliBridgeQueuePolicy.WorkClass.Mutation),
-                    Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation), command);
+            Assert.That(UnityCliBridgeQueuePolicy.Classify("internal.navmesh.bake.plan", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
+                Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation));
+            foreach (var command in new[] { "internal.navmesh.bake.cancel", "internal.test.run.cancel", "internal.package.files.claim" })
+            {
+                Assert.That(UnityCliBridgeQueuePolicy.IsDurableControlCommand(command), Is.True, command);
+                Assert.That(UnityCliBridgeQueuePolicy.Classify(command, UnityCliBridgeQueuePolicy.WorkClass.Control),
+                    Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Control), command);
+            }
             Assert.That(UnityCliBridgeQueuePolicy.Classify("internal.navmesh.bake.snapshot", UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead),
                 Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead));
             Assert.That(UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand("internal.navmesh.bake.snapshot"), Is.True);
@@ -245,6 +250,28 @@ namespace UnityCli.Tests
             Assert.That(UnityCliBridgeQueuePolicy.Classify("project-tool.run", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
                 Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation));
             Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(SafeStatusCommand, UnityCliBridgeQueuePolicy.WorkClass.Mutation));
+        }
+
+        [Test]
+        public void HeldBarrierStartsOnlyOneExplicitlyAuthorizedControl()
+        {
+            var rejected = Classified("control-rejected", "internal.package.files.claim", UnityCliBridgeQueuePolicy.WorkClass.Control);
+            var exact = Classified("control-exact", "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control)
+                .WithControlAuthorization(true);
+            var later = Classified("control-later", "internal.occlusion.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control)
+                .WithControlAuthorization(true);
+
+            var held = UnityCliBridgeQueuePolicy.SelectStarts(
+                new[] { rejected, exact, later }, 0, false, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Held);
+            var unreadable = UnityCliBridgeQueuePolicy.SelectStarts(
+                new[] { exact }, 0, false, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable);
+            var clear = UnityCliBridgeQueuePolicy.SelectStarts(
+                new[] { exact }, 0, false, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear);
+
+            Assert.That(Ids(held), Is.EqualTo(new[] { "control-exact" }));
+            Assert.That(held.Starts.Single().Class, Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Control));
+            Assert.That(unreadable.Starts, Is.Empty);
+            Assert.That(clear.Starts, Is.Empty);
         }
 
         [Test]

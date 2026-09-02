@@ -7,8 +7,8 @@ async function source(path: string): Promise<string> { return readFile(new URL(p
 
 function assertBefore(text: string, first: string, second: string): void {
   const firstIndex = text.indexOf(first);
-  const secondIndex = text.indexOf(second);
   assert.ok(firstIndex >= 0, `missing source anchor: ${first}`);
+  const secondIndex = text.indexOf(second);
   assert.ok(secondIndex >= 0, `missing source anchor: ${second}`);
   assert.ok(firstIndex < secondIndex, `${first} must precede ${second}`);
 }
@@ -112,14 +112,14 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(queueState, /BridgeQueueSinks[\s\S]*BridgeQueueTestHooks[\s\S]*AssertDrained/);
   assert.match(workQueue, /PendingSettlementWork\.Remove\(item\)[\s\S]*RemoveActiveWorkItem\(state, item\)[\s\S]*CompleteAndLogWorkItem\(item\)/);
   assert.match(admission, /TryConfirmDurableTransferredOwner[\s\S]*ReconcileAdmissionTransferForLiveMarker/);
-  assert.match(admission, /test-cancel-admission-owner[\s\S]*parentRequestDigest|TryConfirmCancelTransferredOwner[\s\S]*CancelTerminalProofExists/);
+  assert.match(admission, /test-cancel-admission-owner[\s\S]*rootRequestDigest|TryConfirmCancelTransferredOwner[\s\S]*AdmissionMarkerMatchesIdentity/);
   assert.match(testRun, /Continuation本身是legal terminal owner[\s\S]*CompleteAdmissionRoot/);
   assert.match(admission, /ReconcileAdmissionTransferForLiveMarker\(BridgeQueueState state[\s\S]*PersistAdmissionPoolState\(state\)/);
   assert.match(operation, /RetryDirectMutationTerminalCleanup[\s\S]*RetryExactTerminalCleanup\(DirectMutationTerminalScope\)/);
   assertBefore(operation, "if (!mutation)", "TryAcquire(request.RequestId, requestDigest");
   const acquireIndex = operation.indexOf("TryAcquire(request.RequestId, requestDigest");
-  const executeIndex = operation.indexOf("var response = await Execute(request, cancellationToken)", acquireIndex);
   assert.ok(acquireIndex >= 0, "missing direct mutation lease acquisition");
+  const executeIndex = operation.indexOf("var response = await Execute(request, cancellationToken)", acquireIndex);
   assert.ok(executeIndex >= 0, "missing direct mutation execution");
   assert.ok(acquireIndex < executeIndex, "lease acquisition must precede direct mutation execution");
   assert.match(reloadOperation, /TryGetCurrentOwner\(out currentOwnerRequestId, out currentOwnerRequestDigest\)[\s\S]*E_EXECUTION_TIMEOUT[\s\S]*E_REQUEST_ID_REUSED[\s\S]*var root = Load\(\)[\s\S]*TryRecoverExact\(request\.RequestId, digest[\s\S]*TryAcquire\(request\.RequestId, digest/);
@@ -136,13 +136,13 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(reloadOperation, /LeaseDefinitelyNotOwned[\s\S]*TryIsOwnedBy\(requestId, requestDigest, out isOwned\) && !isOwned/);
   assert.match(reloadOperation, /terminal active root read failed[\s\S]*IsOwnedBy\(requestId, requestDigest\)[\s\S]*UnityCliActiveOperation\.Clear\(Scope\)/s);
   const retryCleanupStart = reloadOperation.indexOf("private bool RetryTerminalCleanup");
-  const retryCleanupEnd = reloadOperation.indexOf("internal bool Update", retryCleanupStart);
   assert.ok(retryCleanupStart >= 0, "missing terminal cleanup retry");
+  const retryCleanupEnd = reloadOperation.indexOf("internal bool Update", retryCleanupStart);
   assert.ok(retryCleanupEnd > retryCleanupStart, "missing terminal cleanup retry boundary");
   const retryCleanup = reloadOperation.slice(retryCleanupStart, retryCleanupEnd);
   const activeCleanupStart = retryCleanup.indexOf("if (active != null)");
-  const activeCleanupEnd = retryCleanup.indexOf("UnityCliSessionMutationLease.Release(requestId, requestDigest)", activeCleanupStart);
   assert.ok(activeCleanupStart >= 0, "missing active cleanup branch");
+  const activeCleanupEnd = retryCleanup.indexOf("UnityCliSessionMutationLease.Release(requestId, requestDigest)", activeCleanupStart);
   assert.ok(activeCleanupEnd > activeCleanupStart, "missing active cleanup release boundary");
   const normalActiveCleanup = retryCleanup.slice(activeCleanupStart, activeCleanupEnd);
   assertBefore(normalActiveCleanup, "if (!markerMatchesActive)", "UnityCliActiveOperation.Clear(Scope)");
@@ -248,7 +248,7 @@ test("TestRunner attribution persists dispatch, returned identity, callback iden
   assert.match(testCoordinator, /internal static void Tick\(\) \{ operation\.Tick\(\); \}/);
   assert.match(testCoordinator, /RetryAdmissionOwnerRecoveryMarker\(\) \|\| RetryCancelAdmissionOwnerMarker\(\)/);
   assert.match(testCoordinator, /CancelAdmissionMarker[\s\S]*rootRequestId[\s\S]*rootRequestDigest[\s\S]*runId/);
-  assert.match(testCoordinator, /RetryCancelAdmissionOwnerMarker[\s\S]*TryGetTerminal\(CancelTerminalScope, cancelRequestId, cancelRequestDigest[\s\S]*TryIsOwnedBy\(rootRequestId, rootRequestDigest[\s\S]*CompleteAdmissionRoot\(owner\)/);
+  assert.match(testCoordinator, /RetryCancelAdmissionOwnerMarker[\s\S]*TryReadCancelTerminalProof[\s\S]*RepairCancelParentFromMarker[\s\S]*CompleteAdmissionRoot\(state, owner\)/);
   for (const field of ["execute_dispatching", "run_identity_pending", "returnedRunId", "observedRunId", "pendingFinished", "CompletePending"])
     assert.match(testCoordinator, new RegExp(field));
   assert.match(testCoordinator, /TryGetTerminal\(Scope, request\.RequestId, digest, out durableTerminal\)[\s\S]*terminalRequestDigest = digest/);
@@ -262,8 +262,8 @@ test("TestRunner attribution persists dispatch, returned identity, callback iden
   assert.match(testCoordinator, /catch \(Exception\) \{ return; \}/);
   assert.match(testCoordinator, /Finish\(Root root, object envelope\)[\s\S]*StoreTerminalFirst\(Scope, root\.RequestId, root\.RequestDigest, envelope\)[\s\S]*BeginExactTerminalCleanup\(Scope, root\.RequestId, root\.RequestDigest\)/);
   const deadlineRecoveryStart = testCoordinator.indexOf("private static void RecoverAfterDeadline");
-  const deadlineRecoveryEnd = testCoordinator.indexOf("private static void RecoverRunIdentity", deadlineRecoveryStart);
   assert.ok(deadlineRecoveryStart >= 0, "missing test deadline recovery");
+  const deadlineRecoveryEnd = testCoordinator.indexOf("private static void RecoverRunIdentity", deadlineRecoveryStart);
   assert.ok(deadlineRecoveryEnd > deadlineRecoveryStart, "missing test deadline recovery boundary");
   const deadlineRecovery = testCoordinator.slice(deadlineRecoveryStart, deadlineRecoveryEnd);
   assert.match(deadlineRecovery, /ids\.Length == 1 && Same\(ids\[0\], runId\)\) return/);

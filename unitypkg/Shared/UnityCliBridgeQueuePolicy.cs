@@ -16,7 +16,8 @@ namespace UnityCli
         {
             Mutation,
             OrdinaryRead,
-            SafeStatus
+            SafeStatus,
+            Control
         }
 
         public enum DurableMutationBarrier
@@ -37,14 +38,28 @@ namespace UnityCli
         public sealed class QueueNode
         {
             public QueueNode(string nodeId, string command, WorkClass workClass)
+                : this(nodeId, command, workClass, false) { }
+
+            private QueueNode(string nodeId, string command, WorkClass workClass, bool controlAuthorized)
             {
                 ValidateNodeId(nodeId);
                 NodeId = nodeId;
+                Command = command;
                 Class = Classify(command, workClass);
+                ControlAuthorized = Class == WorkClass.Control && controlAuthorized;
             }
 
             public string NodeId { get; }
+            public string Command { get; }
             public WorkClass Class { get; }
+            public bool ControlAuthorized { get; }
+
+            public QueueNode WithControlAuthorization(bool authorized)
+            {
+                if (Class != WorkClass.Control && authorized)
+                    throw new InvalidOperationException("Only a durable control node can receive parent authorization.");
+                return new QueueNode(NodeId, Command, Class, authorized);
+            }
         }
 
         public sealed class BypassIdentity
@@ -105,10 +120,15 @@ namespace UnityCli
             ValidateCommand(command);
             ValidateEnum(workClass, "workClass");
             var safeStatus = IsSafeStatusCommand(command);
+            var durableControl = IsDurableControlCommand(command);
             if (safeStatus && workClass != WorkClass.SafeStatus)
                 throw new ArgumentException("SafeStatus command must use SafeStatus classification.", "workClass");
             if (!safeStatus && workClass == WorkClass.SafeStatus)
                 throw new ArgumentException("Only the exact SafeStatus allowlist may use SafeStatus classification.", "workClass");
+            if (durableControl && workClass != WorkClass.Control)
+                throw new ArgumentException("Durable control command must use Control classification.", "workClass");
+            if (!durableControl && workClass == WorkClass.Control)
+                throw new ArgumentException("Only the exact durable control allowlist may use Control classification.", "workClass");
             return workClass;
         }
 
@@ -127,6 +147,25 @@ namespace UnityCli
                 case "internal.test.run.cancel.status":
                 case "internal.navmesh.bake.status":
                 case "internal.occlusion.bake.status":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>只有绑定当前durable parent的私有命令可进入受限control lane。</summary>
+        public static bool IsDurableControlCommand(string command)
+        {
+            switch (command)
+            {
+                case "internal.test.run.cancel.plan":
+                case "internal.test.run.cancel":
+                case "internal.package.files.claim":
+                case "internal.package.files.commit":
+                case "internal.package.files.prove":
+                case "internal.package.files.fail":
+                case "internal.navmesh.bake.cancel":
+                case "internal.occlusion.bake.cancel":
                     return true;
                 default:
                     return false;
@@ -190,7 +229,7 @@ namespace UnityCli
                 if (node == null) throw new ArgumentException("Examined queue prefix contains null.", "queued");
                 if (!nodeIds.Add(node.NodeId)) throw new ArgumentException("Examined queue prefix contains duplicate nodeId.", "queued");
                 examinedNodes.Add(node);
-                if (firstMutationIndex < 0 && node.Class == WorkClass.Mutation)
+                if (firstMutationIndex < 0 && (node.Class == WorkClass.Mutation || node.Class == WorkClass.Control))
                     firstMutationIndex = index;
                 if (node.Class == WorkClass.SafeStatus && safeStatusIndices.Count < MaxSafeStatusStartsPerTick)
                     safeStatusIndices.Add(index);
@@ -202,6 +241,17 @@ namespace UnityCli
             foreach (var index in safeStatusIndices) selected[index] = true;
             var remainingStarts = MaxStartsPerTick - safeStatusIndices.Count;
             var regularBarrierClear = !mutationRunning && durableMutationBarrier == DurableMutationBarrier.Clear;
+            if (!mutationRunning && durableMutationBarrier == DurableMutationBarrier.Held && remainingStarts > 0)
+            {
+                for (var index = 0; index < examined && remainingStarts > 0; index++)
+                {
+                    var node = examinedNodes[index];
+                    if (node.Class != WorkClass.Control || !node.ControlAuthorized) continue;
+                    selected[index] = true;
+                    remainingStarts -= 1;
+                    break;
+                }
+            }
 
             if (regularBarrierClear && remainingStarts > 0)
             {
@@ -214,7 +264,7 @@ namespace UnityCli
                         remainingStarts -= 1;
                     }
                 }
-                else if (runningOrdinaryReads == 0)
+                else if (runningOrdinaryReads == 0 && examinedNodes[firstMutationIndex].Class == WorkClass.Mutation)
                 {
                     selected[firstMutationIndex] = true;
                     remainingStarts -= 1;

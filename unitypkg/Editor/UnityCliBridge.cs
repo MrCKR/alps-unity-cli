@@ -278,6 +278,7 @@ namespace UnityCli
         private static void UnregisterAndStop()
         {
             var queuedBeforeShutdown = CloseQueuePublicationAndTakeQueuedWork();
+            CancelQueuedWorkForShutdown(queuedBeforeShutdown);
             ShutdownAdmissionPool();
             ReleaseActiveDirectMutationLease();
             StartupState.Reset();
@@ -292,7 +293,6 @@ namespace UnityCli
             UnityCliNavMeshBakeCoordinator.Shutdown();
             UnityCliOcclusionBakeCoordinator.Shutdown();
             BridgeLifetime.Cancel();
-            CancelQueuedWork(queuedBeforeShutdown);
             CancelPendingWaits("E_UNITY_QUITTING", "Unity Editor is quitting.", "Restart Unity and retry the request.", 5000);
             DeleteInstanceRegistration();
             StopListener();

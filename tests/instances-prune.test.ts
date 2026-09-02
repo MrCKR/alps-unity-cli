@@ -121,7 +121,7 @@ test("Editor registry publication uses one bounded same-domain retry chain", asy
   assert.match(registry, /instance_publication_retry_succeeded attempts=/);
   assert.match(bridge, /PrepareListenerGenerationForStart\(\);[\s\S]*?if \(!RegisterInstance\("transitioning"\)\) throw[\s\S]*?ProductionQueueState\.QueuePublicationOpen = true[\s\S]*?Task\.Run\(ListenLoop\);[\s\S]*?readyPublicationPending = true/);
   assert.match(bridge, /started = false;[\s\S]*?readyPublicationPending = false;[\s\S]*?CancelInstancePublicationRetry\(\)/);
-  assert.match(workQueue, /RetryPendingWorkItemSettlements\(\);[\s\S]*?TickInstancePublicationRetry\(\);[\s\S]*?CurrentDurableMutationBarrier\(\)[\s\S]*?UnityCliBridgeQueuePolicy\.SelectStarts/);
+  assert.match(workQueue, /RetryPendingWorkItemSettlements\(\);[\s\S]*?TickInstancePublicationRetry\(\);[\s\S]*?CurrentDurableMutationBarrier\(state\)[\s\S]*?UnityCliBridgeQueuePolicy\.SelectStarts/);
   assert.match(unityTests, /new FileStream\(paths\.Temporary[\s\S]*?register\.Invoke[\s\S]*?Thread\.Sleep\(300\)[\s\S]*?tick\.Invoke/);
   assert.match(unityTests, /PersistentWriteFailureStopsAtFourAndDoesNotStartAnotherChain[\s\S]*?attemptCount[\s\S]*?Is\.EqualTo\(4\)[\s\S]*?exhausted[\s\S]*?Is\.True/);
   assert.match(unityTests, /CancelClearsExhaustionForTheNextDomainOwner[\s\S]*?register\.Invoke[\s\S]*?Is\.True/);
