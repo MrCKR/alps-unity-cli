@@ -9,8 +9,8 @@ test("public help exposes only the frozen top-level command surface", async () =
   assert.match(data.note, /Top-level commands are: tools, command, extensions, init, target, instances, doctor\./);
   assert.match(data.note, /CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`/);
   assert.match(data.note, /Tool names returned by group list\/search are exact; groups are filters and are never prepended/);
-  assert.equal(data.commands.some(command => command.startsWith("command ") && command.includes("--page-size <n>") && command.includes("--cursor <n>")), true);
-  assert.equal(data.commands.some(command => command.startsWith("tools search ") && command.includes("--page-size <n>") && command.includes("--cursor <n>")), true);
+  assert.equal(data.commands.some(command => command.startsWith("command ") && command.includes("--page-size <n>") && command.includes("--cursor <nextCursor>")), true);
+  assert.equal(data.commands.some(command => command.startsWith("tools search ") && command.includes("--page-size <n>") && command.includes("--cursor <nextCursor>")), true);
   const initCommands = data.commands.filter(command => command.startsWith("init "));
   assert.deepEqual(initCommands, [
     "init help",

@@ -75,8 +75,7 @@ test("TS-local descriptor registry owns exactly the current package-local tools"
     "package.scoped-registry.list", "package.scoped-registry.remove", "package.search", "package.status",
     "reflect.member", "reflect.search", "reflect.type", "runtime.console", "runtime.input.key", "runtime.input.pointer",
     "runtime.log", "runtime.state", "runtime.target-framerate.set", "runtime.time-scale.set", "runtime.ui.capture-element",
-    "test.cancel", "test.run", "tools.describe", "tools.group",
-    "tools.group-list", "tools.search"
+    "test.cancel", "test.run"
   ]);
   assert.equal(findToolByName("asset.refresh")?.handler, "hybrid");
 });

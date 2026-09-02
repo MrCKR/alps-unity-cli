@@ -1,10 +1,11 @@
 import { failure, success } from "../output.js";
+import { checkToolExtensionAvailability, extensionIdForToolName, freezeExtensionAvailability } from "../extension-availability.js";
+import { ExtensionInstallerError } from "../extensions/installer.js";
 import type { CliResult } from "../types.js";
-import { loadToolCatalog, publicToolDescriptor, resolveCatalogIndependentOperabilityTool } from "../tools/catalog.js";
+import { publicToolDescriptor, resolveCatalogIndependentOperabilityTool, resolveCatalogTool } from "../tools/catalog.js";
+import { projectCatalogPage, type CatalogPageRequest } from "../tools/catalog-control.js";
 import { dispatchCatalogProjection, dispatchTool, type ToolsRuntime } from "../tools/dispatcher.js";
-import { StructuredToolError } from "../tools/errors.js";
 import type { ToolMetadata } from "../tools/metadata/index.js";
-import { paginateDiscovery, type DiscoveryPageRequest } from "../tools/tools/pagination.js";
 
 const ATTRIBUTE_PREFIX = "UnityPipeline_";
 const ATTRIBUTE_GROUP = "UnityPipeline";
@@ -57,7 +58,7 @@ export async function handleCommand(
   const { commandName, businessTokens, flags } = invocation.value;
   if (!commandName && (flags.help === true || flags.help === "true")) {
     return success(requestId, {
-      usage: "unitycli command [--project-path <path>] [--page-size <n>] [--cursor <n>] [name] [--field <value>|<positional>...]",
+      usage: "unitycli command [--project-path <path>] [--page-size <n>] [--cursor <nextCursor>] [name] [--field <value>|<positional>...]",
       inputForms: ["--field value", "--field=value", "--boolean-field", "<positional>"],
       nameResolution: {
         nativeExactFirst: true,
@@ -66,7 +67,7 @@ export async function handleCommand(
         similarNameMapping: false,
       },
       catalogDiscovery: {
-        commandListing: "unitycli command --project-path <path> [--page-size <n>] [--cursor <n>]",
+        commandListing: "unitycli command --project-path <path> [--page-size <n>] [--cursor <nextCursor>]",
         toolSearch: "unitycli tools search <k1|k2|...> --instance <id|projectPath|alias>",
         toolDescribe: "unitycli tools describe <tool> --instance <id|projectPath|alias>",
       },
@@ -76,40 +77,29 @@ export async function handleCommand(
 
   if (!commandName) {
     const pageRequest = commandPageRequest(flags);
-    try {
-      paginateDiscovery([], pageRequest, "command.list");
-    } catch (error) {
-      if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
-      throw error;
-    }
-    return dispatchCatalogProjection("command.list", pageRequest as Record<string, unknown>, flags, runtime, requestId, async (rootRuntime) => {
-      const catalog = await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
-      if (!catalog.ok) return catalog;
-      const page = paginateDiscovery(commandSummaries(catalog.tools), pageRequest, "command.list");
-      return success(requestId, { commands: page.items, pageInfo: page.pageInfo });
-    });
+    return dispatchCatalogProjection("command.list", pageRequest as Record<string, unknown>, flags, runtime, requestId, (rootRuntime) =>
+      projectCatalogPage("command.list", pageRequest, flags, rootRuntime, requestId, {
+        collectionName: "commands",
+        includeExtensionAvailability: true,
+        projectItem: (tool) => ({
+          name: tool.commandName ?? tool.name,
+          summary: tool.summary,
+          group: tool.group,
+          ...(tool.available === false ? { available: false, unavailableReason: tool.unavailableReason } : {}),
+        }),
+      }, catalogDeadline(rootRuntime)));
   }
 
   if (flags.help === true || flags.help === "true") {
-    return dispatchCatalogProjection("command.describe", { commandName }, flags, runtime, requestId, async (rootRuntime) => {
-      const catalog = await loadToolCatalog(flags, rootRuntime, `${requestId}_command_catalog`);
-      if (!catalog.ok) return catalog;
-      const tool = resolveCommandTool(catalog.tools, commandName);
-      if (!tool) return commandNotFound(requestId, commandName);
-      const descriptor = commandDescriptor(tool, commandName);
-      return success(requestId, {
-        usage: `unitycli command ${commandName} [business-args]`,
-        command: { name: descriptor.name, summary: descriptor.summary, parameters: descriptor.parameters },
-        tool: publicToolDescriptor(tool),
-      });
-    });
+    if (resolveCatalogIndependentOperabilityTool(commandName)) return commandHelp(commandName, flags, runtime, requestId);
+    return dispatchCatalogProjection("command.describe", { commandName }, flags, runtime, requestId, (rootRuntime) =>
+      commandHelp(commandName, flags, rootRuntime, requestId, catalogDeadline(rootRuntime)));
   }
 
-  // 实际执行前的schema catalog只服务同一root参数解析，不成为公开结果。
-  const operabilityTool = resolveCatalogIndependentOperabilityTool(commandName);
-  const catalog = operabilityTool ? { ok: true as const, tools: [operabilityTool] } : await loadToolCatalog(flags, runtime, `${requestId}_command_catalog`);
-  if (!catalog.ok) return catalog;
-  const tool = resolveCommandTool(catalog.tools, commandName);
+  // 实际执行只读取 native exact name，必要时再读取 sealed attribute exact fallback。
+  const resolved = await resolveCommandCatalogTool(commandName, flags, runtime, requestId);
+  if (!resolved.ok) return resolved;
+  const tool = resolved.tool;
   if (!tool) return commandNotFound(requestId, commandName);
 
   const input = parseCommandInput(tool, businessTokens, requestId);
@@ -482,12 +472,52 @@ function schemaType(schema: unknown, rootSchema: Record<string, unknown>): strin
   return typeof type === "string" ? type : undefined;
 }
 
-/** official attribute只在command名称投影中使用attribute原名；tools始终保留完整Tool名。 */
-function resolveCommandTool(tools: ToolMetadata[], name: string): ToolMetadata | undefined {
-  const exact = tools.find((tool) => tool.name === name);
-  if (exact) return exact;
-  const attributeName = `${ATTRIBUTE_PREFIX}${name}`;
-  return tools.find((tool) => isOfficialAttributeTool(tool) && tool.name === attributeName);
+/** command 保持 native exact 优先；attribute fallback 只读取第二个精确名称。 */
+async function resolveCommandCatalogTool(
+  name: string,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string,
+  absoluteDeadlineMs?: number,
+): Promise<{ ok: true; tool?: ToolMetadata } | (CliResult & { ok: false })> {
+  const operability = resolveCatalogIndependentOperabilityTool(name);
+  const exact = operability ? { ok: true as const, tool: operability } : await resolveCatalogTool(name, flags, runtime, requestId, absoluteDeadlineMs);
+  if (!exact.ok || exact.tool || name.startsWith(ATTRIBUTE_PREFIX)) return exact;
+  const attribute = await resolveCatalogTool(`${ATTRIBUTE_PREFIX}${name}`, flags, runtime, requestId, absoluteDeadlineMs);
+  if (!attribute.ok || !attribute.tool || !isOfficialAttributeTool(attribute.tool)) return attribute.ok ? { ok: true } : attribute;
+  return attribute;
+}
+
+async function commandHelp(
+  commandName: string,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string,
+  absoluteDeadlineMs?: number,
+): Promise<CliResult> {
+  const resolved = await resolveCommandCatalogTool(commandName, flags, runtime, requestId, absoluteDeadlineMs);
+  if (!resolved.ok) return resolved;
+  if (!resolved.tool) return commandNotFound(requestId, commandName);
+  const descriptor = commandDescriptor(resolved.tool, commandName);
+  const published = publicToolDescriptor(resolved.tool);
+  if (extensionIdForToolName(resolved.tool.name)) {
+    try {
+      const snapshot = await freezeExtensionAvailability(flags, runtime);
+      const availability = await checkToolExtensionAvailability(resolved.tool, snapshot, absoluteDeadlineMs);
+      if (!availability.available) {
+        published.available = false;
+        published.unavailableReason = `${availability.errorCode}: ${availability.message}`;
+      }
+    } catch (error) {
+      if (error instanceof ExtensionInstallerError) return failure(requestId, error.code, error.message, error.nextActions);
+      throw error;
+    }
+  }
+  return success(requestId, {
+    usage: `unitycli command ${commandName} [business-args]`,
+    command: { name: descriptor.name, summary: descriptor.summary, parameters: descriptor.parameters },
+    tool: published,
+  });
 }
 
 function commandNotFound(requestId: string, commandName: string): CliResult {
@@ -497,22 +527,17 @@ function commandNotFound(requestId: string, commandName: string): CliResult {
   ], { commandName });
 }
 
-/** 省略name时只返回分页所需的最小路由摘要。 */
-function commandSummaries(tools: ToolMetadata[]): Record<string, unknown>[] {
-  const nativeNames = new Set(tools.filter((tool) => !isOfficialAttributeTool(tool)).map((tool) => tool.name));
-  return tools.map((tool) => {
-    const attributeName = isOfficialAttributeTool(tool) ? tool.name.slice(ATTRIBUTE_PREFIX.length) : tool.name;
-    const name = isOfficialAttributeTool(tool) && !nativeNames.has(attributeName) ? attributeName : tool.name;
-    const available = tool.available ?? true;
-    return { name, summary: tool.summary, group: tool.group, ...(!available ? { available: false, unavailableReason: tool.unavailableReason } : {}) };
-  }).sort((left, right) => String(left.name).localeCompare(String(right.name)));
-}
-
-function commandPageRequest(flags: Record<string, string | boolean>): DiscoveryPageRequest {
+function commandPageRequest(flags: Record<string, string | boolean>): CatalogPageRequest {
   return {
     ...(flags["page-size"] !== undefined ? { pageSize: Number(flags["page-size"]) } : {}),
-    ...(flags.cursor !== undefined ? { cursor: Number(flags.cursor) } : {}),
+    ...(typeof flags.cursor === "string" ? { cursor: flags.cursor } : {}),
   };
+}
+
+function catalogDeadline(runtime: ToolsRuntime): number | undefined {
+  return runtime.rootAdmissions?.editor?.executionAbsoluteDeadlineMs
+    ?? runtime.rootAdmissions?.runtime?.executionAbsoluteDeadlineMs
+    ?? runtime.rootAdmission?.executionAbsoluteDeadlineMs;
 }
 
 /** 构造稳定command descriptor，并保留其唯一公开Tool身份。 */

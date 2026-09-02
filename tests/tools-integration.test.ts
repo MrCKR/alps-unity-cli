@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { BridgeRequest, RootAdmissionLease } from "../src/bridge/index.js";
+import type { BridgeRequest, RootAdmissionLease, RootAdmissionRequest } from "../src/bridge/index.js";
+import { readEditorCatalogDescriptor, readEditorCatalogSummary } from "../src/catalog-protocol.js";
 import { execute } from "../src/cli.js";
 import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
@@ -11,6 +12,32 @@ process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 const disconnected = { dataDir: "Z:/definitely-missing-unity-cli-data" } as const;
 const injectedBridge = async (payload: BridgeRequest) => ({ ok: true as const, requestId: payload.requestId, data: {} });
 const connected = { ...disconnected, projectTools: staticBridgeToolMetadata(), runtimeTools: [], bridgeExecute: injectedBridge } as const;
+
+function bridgeDescriptor(tool: ReturnType<typeof staticBridgeToolMetadata>[number]): Record<string, unknown> {
+  return {
+    name: tool.name,
+    summary: tool.summary,
+    description: tool.description,
+    group: tool.group,
+    source: tool.source,
+    inputSchema: tool.inputSchema,
+    outputSchema: tool.outputSchema,
+    destructiveHint: tool.destructiveHint,
+    ...(tool.sideEffects?.length ? { sideEffects: tool.sideEffects } : {}),
+    supportsDryRun: tool.supportsDryRun ?? false,
+    ...(tool.permissions?.length ? { permissions: tool.permissions } : {}),
+    ...(tool.requiresPackages?.length ? { requiresPackages: tool.requiresPackages } : {}),
+    examples: tool.examples,
+    target: tool.target ?? "editor",
+    availabilityScope: tool.availabilityScope ?? "editorSession",
+    playModeSupport: tool.playModeSupport ?? "supported",
+    contractProfile: tool.contractProfile ?? "native",
+    defaultTimeoutMs: tool.timeoutMs ?? 30_000,
+    completionContract: tool.completionContract,
+    available: tool.available ?? true,
+    ...((tool.available ?? true) === false ? { unavailableReason: tool.unavailableReason } : {}),
+  };
+}
 
 test("tools group, search, and describe use one connected instance catalog", async () => {
   const group = await execute(["tools", "group"], connected as never);
@@ -26,20 +53,178 @@ test("tools group, search, and describe use one connected instance catalog", asy
     assert.equal(Object.hasOwn(describe.data as object, field), false, field);
 });
 
-test("canonical tools run tools.describe resolves its typed input without live catalog discovery", async () => {
-  const result = await execute(["tools", "run", "tools.describe", "--input", '{"name":"editor.state"}'], disconnected as never);
+test("each discovery root performs one bounded catalog transport per target", async () => {
+  const live = staticBridgeToolMetadata().find((tool) => tool.name === "scene.hierarchy")!;
+  const descriptorPayload = { ...bridgeDescriptor(live), outputSchema: { ...live.outputSchema, description: "x".repeat(4_096) } };
+  const summary = {
+    name: live.name,
+    summary: live.summary,
+    group: live.group,
+    target: live.target ?? "editor",
+    contractProfile: live.contractProfile ?? "native",
+    commandName: live.name,
+  };
+  const calls = new Map<string, number>();
+  const acquisitions: Array<RootAdmissionRequest["target"]> = [];
+  const runtime = {
+    ...disconnected,
+    createSessionSupervisor: () => ({
+      acquireRootAdmission: async (request: RootAdmissionRequest): Promise<RootAdmissionLease> => {
+        acquisitions.push(request.target);
+        return {
+          requestId: request.requestId,
+          command: request.command,
+          rootFingerprint: `${request.target === "editor" ? "e" : "f"}`.repeat(64),
+          completionContractIdentity: request.completionContractIdentity,
+          target: request.target,
+          instanceId: `unity-${(request.target === "editor" ? "a" : "b").repeat(64)}`,
+          canonicalProjectPath: "c:\\fixture",
+          sessionId: `session-${request.target}`,
+          token: `${request.target === "editor" ? "c" : "d"}`.repeat(64),
+          consumed: false,
+          grantExpiresAtMs: Date.now() + 30_000,
+          executionAbsoluteDeadlineMs: 0,
+          injected: true,
+        };
+      },
+      completeRootAdmission: async () => undefined,
+    }),
+    bridgeExecute: async (payload: BridgeRequest) => {
+      calls.set(payload.command, (calls.get(payload.command) ?? 0) + 1);
+      if (payload.command.endsWith(".groups")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, groups: payload.command.startsWith("project") ? [{ name: live.group, toolCount: 1 }] : [] } };
+      if (payload.command.endsWith(".summary")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, total: payload.command.startsWith("project") ? 1 : 0, hasMore: false, tools: payload.command.startsWith("project") ? [summary] : [] } };
+      if (payload.command.endsWith(".describe")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, found: payload.command.startsWith("project"), ...(payload.command.startsWith("project") ? { descriptor: descriptorPayload } : {}) } };
+      throw new Error(`unexpected catalog command ${payload.command}`);
+    },
+  };
+
+  for (const argv of [
+    ["tools", "group"],
+    ["tools", "group", "list", "scene"],
+    ["tools", "search", "hierarchy"],
+    ["tools", "describe", "scene.hierarchy"],
+  ]) {
+    const before = acquisitions.length;
+    assert.equal((await execute(argv, runtime as never)).ok, true, argv.join(" "));
+    assert.deepEqual(acquisitions.slice(before), ["editor", "runtime"], argv.join(" "));
+  }
+
+  for (const command of ["project-tool.groups", "runtime-tool.groups", "project-tool.describe", "runtime-tool.describe"])
+    assert.equal(calls.get(command), 1, command);
+  assert.equal(calls.get("project-tool.summary"), 2);
+  assert.equal(calls.get("runtime-tool.summary"), 2);
+  assert.equal(calls.get("project-tool.list") ?? 0, 0);
+  assert.equal(calls.get("runtime-tool.list") ?? 0, 0);
+  assert.deepEqual(acquisitions, ["editor", "runtime", "editor", "runtime", "editor", "runtime", "editor", "runtime"]);
+  const summaryBytes = Buffer.byteLength(JSON.stringify(summary), "utf8");
+  const descriptorBytes = Buffer.byteLength(JSON.stringify(descriptorPayload), "utf8");
+  assert.ok(summaryBytes < descriptorBytes * 0.2, `summary=${summaryBytes}, descriptor=${descriptorBytes}`);
+  for (const field of ["inputSchema", "outputSchema", "permissions", "completionContract", "examples"])
+    assert.equal(Object.hasOwn(summary, field), false, field);
+});
+
+test("summary protocol bounds a large catalog before transport projection", async () => {
+  const projectTools = Array.from({ length: 5_000 }, (_, index) => makeLiveTool({
+    name: `large.tool-${String(index).padStart(5, "0")}`,
+    summary: "s".repeat(512),
+    description: `Searchable large description ${index}.`,
+    group: "g".repeat(200),
+    outputSchema: { type: "object", properties: { payload: { type: "string", description: "x".repeat(4_096) } } },
+  }));
+  const result = await readEditorCatalogSummary({}, { projectTools }, "req_large_summary", {
+    keyword: "searchable",
+    limit: 101,
+    reservedNames: [],
+  });
   assert.equal(result.ok, true, JSON.stringify(result));
-  if (result.ok) {
-    assert.equal((result.data as { name: string }).name, "editor.state");
-    assert.ok((result.data as { inputSchema?: unknown }).inputSchema);
+  if (!result.ok) return;
+  assert.equal(result.total, 5_000);
+  assert.equal(result.tools.length, 101);
+  assert.equal(result.hasMore, true);
+  assert.ok(Buffer.byteLength(JSON.stringify(result.tools), "utf8") < 128 * 1024);
+  assert.ok(result.tools.every((tool) => !Object.hasOwn(tool, "outputSchema") && !Object.hasOwn(tool, "inputSchema")));
+});
+
+test("private summary and exact protocols fail closed on extra payload and wrong identity", async () => {
+  const live = staticBridgeToolMetadata().find((tool) => tool.name === "scene.hierarchy")!;
+  const malformedSummary = await readEditorCatalogSummary({}, {
+    bridgeExecute: async (payload: BridgeRequest) => ({
+      ok: true,
+      requestId: payload.requestId,
+      data: {
+        catalogGeneration: "g".repeat(64),
+        total: 1,
+        hasMore: false,
+        tools: [{
+          name: live.name,
+          summary: live.summary,
+          group: live.group,
+          target: live.target ?? "editor",
+          contractProfile: live.contractProfile ?? "native",
+          commandName: live.name,
+          outputSchema: live.outputSchema,
+        }],
+      },
+    }),
+  }, "req_malformed_summary", { limit: 20, reservedNames: [] });
+  assert.equal(malformedSummary.ok, false);
+  if (!malformedSummary.ok) assert.equal(malformedSummary.error.code, "E_TOOL_REGISTRY_UNHEALTHY");
+
+  const wrongExact = await readEditorCatalogDescriptor({}, {
+    bridgeExecute: async (payload: BridgeRequest) => ({
+      ok: true,
+      requestId: payload.requestId,
+      data: { catalogGeneration: "g".repeat(64), found: true, descriptor: bridgeDescriptor(live) },
+    }),
+  }, "req_wrong_exact", "scene.active");
+  assert.equal(wrongExact.ok, false);
+  if (!wrongExact.ok) assert.equal(wrongExact.error.code, "E_TOOL_REGISTRY_UNHEALTHY");
+});
+
+test("generation-bound cursor rejects a changed catalog and multi-target output remains ordinal", async () => {
+  const editorTools = [
+    makeLiveTool({ name: "fixture.zulu", summary: "Order hit zulu.", group: "fixture" }),
+    makeLiveTool({ name: "fixture.runtime", summary: "Order hit runtime.", group: "fixture", target: "runtime" }),
+    makeLiveTool({ name: "fixture.alpha", summary: "Order hit alpha.", group: "fixture" }),
+  ];
+  const runtimeOverlay = { ...editorTools[1], available: false as const, unavailableReason: "E_RUNTIME_NOT_READY: Enter Play Mode." };
+  const runtime = { ...connected, projectTools: editorTools, runtimeTools: [runtimeOverlay] };
+  const first = await execute(["tools", "search", "order hit", "--page-size", "1"], runtime as never);
+  assert.equal(first.ok, true, JSON.stringify(first));
+  const firstData = first.data as { tools: Array<{ name: string }>; pageInfo: { nextCursor?: string } };
+  assert.deepEqual(firstData.tools.map((tool) => tool.name), ["fixture.alpha"]);
+  runtime.projectTools = [...editorTools, makeLiveTool({ name: "fixture.beta", summary: "Order hit beta.", group: "fixture" })];
+  const changed = await execute(["tools", "search", "order hit", "--page-size", "1", "--cursor", firstData.pageInfo.nextCursor!], runtime as never);
+  assert.equal(changed.ok, false);
+  if (!changed.ok) assert.equal(changed.error.code, "E_TOOL_CATALOG_CHANGED");
+  const fresh = await execute(["tools", "search", "order hit", "--page-size", "10"], runtime as never);
+  assert.equal(fresh.ok, true, JSON.stringify(fresh));
+  assert.deepEqual((fresh.data as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name), ["fixture.alpha", "fixture.beta", "fixture.runtime", "fixture.zulu"]);
+});
+
+test("former discovery Tool identities are unavailable through tools run", async () => {
+  for (const name of ["tools.describe", "tools.group", "tools.group-list", "tools.search"]) {
+    const result = await execute(["tools", "run", name, "--input", "{}"], connected as never);
+    assert.equal(result.ok, false, name);
+    if (!result.ok) assert.equal(result.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET", name);
+  }
+});
+
+test("unknown exact name returns one stable not-found terminal", async () => {
+  const result = await execute(["tools", "describe", "missing.exact-tool"], { ...connected, projectTools: [], runtimeTools: [] } as never);
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+    assert.equal(result.error.transient, false);
+    assert.equal(result.error.retryAfterMs, 0);
   }
 });
 
 test("tools search returns sorted routing-only pages without input or source echoes", async () => {
   const result = await execute(["tools", "search", "hierarchy|console|screenshot", "--page-size", "100"], connected as never);
   assert.ok(result.ok, JSON.stringify(result));
-  const data = result.data as { pageInfo: { cursor: number; pageSize: number; total: number; nextCursor?: number }; tools: Array<Record<string, unknown>> };
-  assert.equal(data.pageInfo.cursor, 0);
+  const data = result.data as { pageInfo: { cursor: string; pageSize: number; total: number; nextCursor?: string }; tools: Array<Record<string, unknown>> };
+  assert.equal(data.pageInfo.cursor, "start");
   assert.equal(data.pageInfo.pageSize, 100);
   assert.equal(data.pageInfo.total, data.tools.length);
   assert.equal(data.pageInfo.nextCursor, undefined);
@@ -74,7 +259,7 @@ test("tools search trims and filters tokens, matches every routing field case-in
 
   const noMatch = await execute(["tools", "search", "definitely-absent-search-token"], runtime as never);
   assert.ok(noMatch.ok, JSON.stringify(noMatch));
-  assert.deepEqual(noMatch.data, { pageInfo: { cursor: 0, pageSize: 20, total: 0 }, tools: [] });
+  assert.deepEqual(noMatch.data, { pageInfo: { cursor: "start", pageSize: 20, total: 0 }, tools: [] });
 
   const empty = await execute(["tools", "search", "||  |"], runtime as never);
   assert.ok(!empty.ok);
@@ -103,35 +288,44 @@ test("discovery pagination returns stable continuation pages and rejects invalid
 
   const first = await execute(["tools", "search", "page-hit"], runtime as never);
   assert.ok(first.ok, JSON.stringify(first));
-  const firstData = first.data as { pageInfo: { cursor: number; pageSize: number; total: number; nextCursor?: number }; tools: Array<{ name: string }> };
-  assert.deepEqual(firstData.pageInfo, { cursor: 0, pageSize: 20, total: 25, nextCursor: 20 });
+  const firstData = first.data as { pageInfo: { cursor: string; pageSize: number; total: number; nextCursor?: string }; tools: Array<{ name: string }> };
+  assert.equal(firstData.pageInfo.cursor, "start");
+  assert.equal(firstData.pageInfo.pageSize, 20);
+  assert.equal(firstData.pageInfo.total, 25);
+  assert.match(firstData.pageInfo.nextCursor ?? "", /^v1\./);
   assert.equal(firstData.tools.length, 20);
 
-  const second = await execute(["tools", "search", "page-hit", "--cursor", "20"], runtime as never);
+  const second = await execute(["tools", "search", "page-hit", "--cursor", firstData.pageInfo.nextCursor!], runtime as never);
   assert.ok(second.ok, JSON.stringify(second));
-  const secondData = second.data as { pageInfo: { cursor: number; pageSize: number; total: number }; tools: Array<{ name: string }> };
-  assert.deepEqual(secondData.pageInfo, { cursor: 20, pageSize: 20, total: 25 });
+  const secondData = second.data as { pageInfo: { cursor: string; pageSize: number; total: number }; tools: Array<{ name: string }> };
+  assert.equal(secondData.pageInfo.cursor, firstData.pageInfo.nextCursor);
+  assert.equal(secondData.pageInfo.total, 25);
   assert.deepEqual(secondData.tools.map((tool) => tool.name), projectTools.slice(20).map((tool) => tool.name));
 
-  const group = await execute(["tools", "group", "list", "page-fixture", "--page-size", "10", "--cursor", "20"], runtime as never);
+  const groupFirst = await execute(["tools", "group", "list", "page-fixture", "--page-size", "20"], runtime as never);
+  assert.ok(groupFirst.ok, JSON.stringify(groupFirst));
+  const groupCursor = (groupFirst.data as { pageInfo: { nextCursor?: string } }).pageInfo.nextCursor;
+  const group = await execute(["tools", "group", "list", "page-fixture", "--page-size", "10", "--cursor", groupCursor!], runtime as never);
   assert.ok(group.ok, JSON.stringify(group));
-  const groupData = group.data as { pageInfo: { cursor: number; pageSize: number; total: number }; tools: Array<{ name: string; available?: false }> };
-  assert.deepEqual(groupData.pageInfo, { cursor: 20, pageSize: 10, total: 25 });
+  const groupData = group.data as { pageInfo: { cursor: string; pageSize: number; total: number }; tools: Array<{ name: string; available?: false }> };
+  assert.equal(groupData.pageInfo.cursor, groupCursor);
+  assert.equal(groupData.pageInfo.total, 25);
   assert.equal(groupData.tools.length, 5);
   assert.equal(groupData.tools.at(-1)?.available, false);
 
-  const beyond = await execute(["tools", "search", "page-hit", "--cursor", "100"], runtime as never);
-  assert.ok(beyond.ok, JSON.stringify(beyond));
-  assert.deepEqual(beyond.data, { pageInfo: { cursor: 100, pageSize: 20, total: 25 }, tools: [] });
+  const wrongQuery = await execute(["tools", "search", "different", "--cursor", firstData.pageInfo.nextCursor!], runtime as never);
+  assert.equal(wrongQuery.ok, false);
+  if (!wrongQuery.ok) assert.equal(wrongQuery.error.code, "E_DISCOVERY_CURSOR_INVALID");
 
-  for (const argv of [
-    ["tools", "search", "page-hit", "--page-size", "101"],
-    ["tools", "group", "list", "page-fixture", "--cursor", "-1"],
-  ]) {
-    const invalid = await execute(argv, runtime as never);
-    assert.equal(invalid.ok, false, JSON.stringify(invalid));
-    if (!invalid.ok) assert.equal(invalid.error.code, "E_SCHEMA_INVALID");
-  }
+  const invalidSize = await execute(["tools", "search", "page-hit", "--page-size", "101"], runtime as never);
+  assert.equal(invalidSize.ok, false, JSON.stringify(invalidSize));
+  if (!invalidSize.ok) assert.equal(invalidSize.error.code, "E_SCHEMA_INVALID");
+  const invalidCursor = await execute(["tools", "group", "list", "page-fixture", "--cursor", "-1"], runtime as never);
+  assert.equal(invalidCursor.ok, false, JSON.stringify(invalidCursor));
+  if (!invalidCursor.ok) assert.equal(invalidCursor.error.code, "E_DISCOVERY_CURSOR_INVALID");
+  const oversizedCursor = await execute(["tools", "search", "page-hit", "--cursor", `v1.${"a".repeat(8193)}`], runtime as never);
+  assert.equal(oversizedCursor.ok, false, JSON.stringify(oversizedCursor));
+  if (!oversizedCursor.ok) assert.equal(oversizedCursor.error.code, "E_DISCOVERY_CURSOR_INVALID");
 });
 
 test("target both keeps default editor availability when runtime is not ready", async () => {
@@ -218,7 +412,7 @@ test("重复official attribute原名使整个live catalog fail closed", async ()
 });
 
 test("tools run fails closed on a local and live ownership conflict", async () => {
-  for (const name of ["tools.group", "code.exec"]) {
+  for (const name of ["code.exec"]) {
     const conflicting = makeLiveTool({
       name,
       summary: "Conflicting live owner.",
@@ -238,8 +432,8 @@ test("tools run fails closed on a local and live ownership conflict", async () =
   }
 });
 
-test("TS-local Tool returns one validated direct business terminal", async () => {
-  const result = await execute(["tools", "run", "tools.group", "--input", "{}"], connected as never);
+test("top-level tools group returns a direct control-plane terminal", async () => {
+  const result = await execute(["tools", "group"], connected as never);
   assert.ok(result.ok, JSON.stringify(result));
   assert.ok(Array.isArray((result.data as { groups?: unknown[] }).groups));
   assert.equal(Object.hasOwn(result.data as object, "command"), false);

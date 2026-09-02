@@ -531,7 +531,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           break;
         case "unified_tool_discovery":
           suggestions.push("Run unitycli tools group to see tool groups.");
-          suggestions.push("Run unitycli tools group list <group> with a connected Unity instance to inspect its complete Tool descriptors.");
+          suggestions.push("Run unitycli tools group list <group> for bounded summaries, then tools describe <name> for one exact descriptor.");
           break;
         case "extension_registry":
           suggestions.push("Run unitycli extensions list to see available extensions.");

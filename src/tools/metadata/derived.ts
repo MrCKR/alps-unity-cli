@@ -3,15 +3,8 @@ import type { ToolContractProfile, ToolMetadata, ToolRiskLevel, ToolSource } fro
 
 const TOOL_MUTATION_CONTRACTS = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((contract) => [contract.toolName, contract.mutation]));
 
-const TOOL_PUBLIC_ROUTE_OVERRIDES = new Map<string, string>([
-  ["tools.group", "tools group"],
-  ["tools.group-list", "tools group list"],
-  ["tools.search", "tools search"],
-  ["tools.describe", "tools describe"]
-]);
-
 export function toolPublicRoute(tool: { name: string }): string {
-  return TOOL_PUBLIC_ROUTE_OVERRIDES.get(tool.name) ?? `tools run ${tool.name}`;
+  return `tools run ${tool.name}`;
 }
 
 const DOCS_TOPIC_OVERRIDES = new Map<string, string>([

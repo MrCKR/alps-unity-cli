@@ -20,7 +20,8 @@ import { trackCliProcessOwner } from "../cli-process-owners.js";
 import type { ProjectToolRuntime } from "../project-tool-discovery.js";
 import { validateSchema } from "../schema/validator.js";
 import type { CliResult } from "../types.js";
-import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../extension-availability.js";
+import { checkToolExtensionAvailability, extensionIdForToolName, freezeExtensionAvailability } from "../extension-availability.js";
+import { ExtensionInstallerError } from "../extensions/installer.js";
 import { resolveCatalogIndependentInvocationTool, resolveCatalogIndependentOperabilityTool, resolveCatalogTool } from "./catalog.js";
 import { generatedToolCompletionContract, type GeneratedToolCompletionContract } from "./.generated-completion-registry.js";
 import { findDefineTool, type ToolContext } from "./define.js";
@@ -41,7 +42,7 @@ function createSessionSupervisor(flags: Record<string, string | boolean>, runtim
   return runtime.createSessionSupervisor?.(flags, runtime) ?? new SessionSupervisor(flags, runtime);
 }
 
-const MULTI_TARGET_CATALOG_TOOLS = new Set(["tools.group", "tools.group-list", "tools.search", "tools.describe", "diagnose.capabilities"]);
+const MULTI_TARGET_CATALOG_TOOLS = new Set(["diagnose.capabilities"]);
 type TargetAdmissionContext = {
   admissions: Partial<Record<InstanceTarget, RootAdmissionLease>>;
   supervisors: Partial<Record<InstanceTarget, SessionSupervisor>>;
@@ -89,9 +90,8 @@ export async function dispatchTool(
     && typeof parsed.input.project === "string" && dispatchFlags.project === undefined
     ? { ...dispatchFlags, project: parsed.input.project }
     : dispatchFlags;
-  // exact 弹窗恢复及其 describe 学习入口不依赖被同一 modal 阻断的 Live catalog。
-  const describedName = seed.name ?? parsed.input.name;
-  const catalogIndependentTool = resolveCatalogIndependentInvocationTool(name, typeof describedName === "string" ? describedName : undefined);
+  // exact 弹窗观察与恢复不依赖被同一 modal 阻断的 Live catalog。
+  const catalogIndependentTool = resolveCatalogIndependentInvocationTool(name);
   if (catalogIndependentTool) {
     const input = requestFromInput(catalogIndependentTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
     return dispatchResolved(catalogIndependentTool, input);
@@ -129,14 +129,17 @@ export async function dispatchCatalogProjection(
   requestId: string,
   execute: (rootRuntime: ToolsRuntime) => Promise<CliResult>,
 ): Promise<CliResult> {
+  if (runtime.projectTools) return execute(runtime);
   const startedAtMs = Date.now();
   const timeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? 30_000);
   const acquired = await acquireCatalogAdmissions(command, input, flags, runtime, requestId, timeoutMs, startedAtMs + timeoutMs, "catalog-projection-v1");
   if ("result" in acquired) return acquired.result;
   const primary = acquired.admissions.editor ?? acquired.admissions.runtime!;
-  const result = await execute({ ...runtime, rootAdmission: primary, rootAdmissions: acquired.admissions });
-  await releaseUnconsumedCatalogAdmissions(acquired);
-  return result;
+  try {
+    return await execute({ ...runtime, rootAdmission: primary, rootAdmissions: acquired.admissions });
+  } finally {
+    await releaseUnconsumedCatalogAdmissions(acquired);
+  }
 }
 
 async function acquireCatalogAdmissions(
@@ -216,9 +219,16 @@ async function dispatchResolvedTool(
   if (completion.mutation !== descriptorMutation) return failure(requestId, "E_TOOL_COMPLETION_CONTRACT_MISMATCH", `Tool ${executionTool.name} completion contract disagrees with its descriptor mutation signals.`, [
     `Run unitycli tools describe ${executionTool.name} and fix the descriptor or completion contract before execution.`
   ], { toolName: executionTool.name, contractMutation: completion.mutation, descriptorMutation });
-  const availabilityFlags = await extensionAvailabilityFlags(flags, runtime);
-  const availability = await checkToolExtensionAvailability(executionTool, availabilityFlags);
-  if (!availability.available) return failure(requestId, availability.errorCode, availability.message, availability.nextActions, { extensionId: availability.extensionId, missingPackageIds: availability.availabilityResult?.missingPackageIds ?? executionTool.requiresPackages ?? [] });
+  if (extensionIdForToolName(executionTool.name)) {
+    try {
+      const extensionSnapshot = await freezeExtensionAvailability(flags, runtime);
+      const availability = await checkToolExtensionAvailability(executionTool, extensionSnapshot, admissionAbsoluteDeadlineMs);
+      if (!availability.available) return failure(requestId, availability.errorCode, availability.message, availability.nextActions, { extensionId: availability.extensionId, missingPackageIds: availability.availabilityResult?.missingPackageIds ?? executionTool.requiresPackages ?? [] });
+    } catch (error) {
+      if (error instanceof ExtensionInstallerError) return failure(requestId, error.code, error.message, error.nextActions);
+      throw error;
+    }
+  }
   if (getBoolean(flags, "dry-run") && !executionTool.supportsDryRun) return failure(requestId, "E_DRY_RUN_UNSUPPORTED", `Tool ${executionTool.name} does not support dry-run.`, [
     "Remove --dry-run and invoke the Tool only when its declared side effects are acceptable.",
   ], { toolName: executionTool.name });
@@ -305,10 +315,9 @@ async function executeDefinition(
   return executeLocalDefinition(tool, completion, definition, input, flags, rootRuntime, requestId, projectPath, execution, executionAbsoluteDeadlineMs, cleanup);
 }
 
-/** exact owner判定只接受三个公开名及其精确describe目标。 */
-function isAdmissionIndependentLocalDefinition(tool: ToolMetadata, input: Record<string, unknown>): boolean {
-  if (resolveCatalogIndependentOperabilityTool(tool.name)) return true;
-  return tool.name === "tools.describe" && typeof input.name === "string" && !!resolveCatalogIndependentOperabilityTool(input.name);
+/** exact owner判定只接受三个公开观察/恢复 Tool。 */
+function isAdmissionIndependentLocalDefinition(tool: ToolMetadata, _input: Record<string, unknown>): boolean {
+  return !!resolveCatalogIndependentOperabilityTool(tool.name);
 }
 
 /** 本地定义统一执行输出校验、effect barrier和deadline terminal。 */

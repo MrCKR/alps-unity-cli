@@ -17,11 +17,7 @@ const OFFLINE_TOOL_NAMES = new Set([
   "package.scoped-registry.list",
   "package.scoped-registry.remove",
   "package.search",
-  "package.status",
-  "tools.describe",
-  "tools.group",
-  "tools.group-list",
-  "tools.search"
+  "package.status"
 ]);
 const HYBRID_TOOL_NAMES = new Set([
   "package.install",

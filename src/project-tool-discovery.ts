@@ -1,5 +1,5 @@
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
-import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolContractProfile, type ToolHandler, type ToolMetadata } from "./tools/metadata/index.js";
+import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolContractProfile, type ToolMetadata } from "./tools/metadata/index.js";
 import { failure } from "./output.js";
 import type { CliResult } from "./types.js";
 import type { AnyJson } from "./schema/any-json.js";
@@ -7,9 +7,17 @@ import { validateSchema } from "./schema/validator.js";
 
 export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
   projectTools?: ToolMetadata[];
+  runtimeTools?: ToolMetadata[];
 }
 
 export type ProjectToolDiscovery = { ok: true; tools: ResolvedToolMetadata[]; mode: "runtime" | "bridge" } | (CliResult & { ok: false });
+
+const LIVE_DESCRIPTOR_FIELDS = new Set([
+  "name", "summary", "description", "group", "source", "inputSchema", "outputSchema",
+  "destructiveHint", "sideEffects", "supportsDryRun", "permissions", "requiresPackages", "examples",
+  "target", "availabilityScope", "playModeSupport", "contractProfile", "defaultTimeoutMs", "timeoutMs",
+  "completionContract", "available", "unavailableReason",
+]);
 
 /** 当前实例是 Tool descriptor 的唯一公开真源；调用 discovery 必须实际读取该实例。 */
 export async function discoverProjectTools(
@@ -36,6 +44,7 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     return undefined;
   }
   const descriptor = value as Record<string, unknown>;
+  if (Object.keys(descriptor).some((field) => !LIVE_DESCRIPTOR_FIELDS.has(field))) return undefined;
   const name = stringProp(descriptor, "name");
   if (!name) {
     return undefined;
@@ -71,7 +80,6 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     permissions: stringArrayProp(descriptor, "permissions"),
     requiresPackages: stringArrayProp(descriptor, "requiresPackages"),
     examples,
-    handler: toolHandlerProp(descriptor, "handler"),
     target,
     availabilityScope,
     available: booleanProp(descriptor, "available") ?? undefined,
@@ -88,6 +96,7 @@ function projectDescriptorInvalidFields(value: unknown): string[] {
   const descriptor = value as Record<string, unknown>;
   const name = stringProp(descriptor, "name");
   const inputSchema = objectProp(descriptor, "inputSchema");
+  const unknownFields = Object.keys(descriptor).filter((field) => !LIVE_DESCRIPTOR_FIELDS.has(field)).map((field) => `unknown:${field}`);
   const checks: Array<[string, boolean]> = [
     ["name", !!name], ["summary", !!stringProp(descriptor, "summary")], ["description", !!stringProp(descriptor, "description")],
     ["group", !!stringProp(descriptor, "group")], ["inputSchema", !!inputSchema], ["outputSchema", !!objectProp(descriptor, "outputSchema")],
@@ -97,7 +106,7 @@ function projectDescriptorInvalidFields(value: unknown): string[] {
     ["contractProfile", !!toolContractProfileProp(descriptor, "contractProfile")],
     ["examples", !!(name && inputSchema && toolExamplesProp(descriptor, "examples", name, inputSchema))],
   ];
-  return [...new Set([...checks.filter(([, valid]) => !valid).map(([field]) => field), ...officialAttributeContractInvalidFields(descriptor)])];
+  return [...new Set([...unknownFields, ...checks.filter(([, valid]) => !valid).map(([field]) => field), ...officialAttributeContractInvalidFields(descriptor)])];
 }
 
 function ensureProjectToolDefaults(tool: ToolMetadata): ResolvedToolMetadata {
@@ -184,12 +193,6 @@ function officialAttributeContractInvalidFields(descriptor: Record<string, unkno
   return [...invalid];
 }
 
-/** 读取 Unity descriptor 已给出的执行路由，避免 runtime 工具被误归类为普通 bridge。 */
-function toolHandlerProp(record: Record<string, unknown>, key: string): ToolHandler | undefined {
-  const value = record[key];
-  return value === "bridge" || value === "bridge-runtime" || value === "offline" || value === "hybrid" ? value : undefined;
-}
-
 function completionContractProp(record: Record<string, unknown>, key: string): ToolMetadata["completionContract"] {
   const value = objectProp(record, key);
   if (!value) return undefined;
@@ -264,8 +267,8 @@ export async function discoverRuntimeTools(
   requestId: string,
   options: { requireBridge?: boolean; absoluteDeadlineMs?: number } = {}
 ): Promise<ProjectToolDiscovery> {
-  if (runtime.projectTools) {
-    const runtimeTools = runtime.projectTools
+  if (runtime.runtimeTools ?? runtime.projectTools) {
+    const runtimeTools = (runtime.runtimeTools ?? runtime.projectTools ?? [])
       .map(ensureProjectToolDefaults)
       .filter((tool) => tool.target === "runtime" || tool.target === "both");
     return { ok: true, tools: runtimeTools, mode: "runtime" };

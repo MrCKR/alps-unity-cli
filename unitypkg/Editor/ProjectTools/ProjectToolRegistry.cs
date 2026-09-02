@@ -335,6 +335,186 @@ namespace UnityCli
             return dot > 0 ? name.Substring(0, dot) : "custom";
         }
 
+        private sealed class ProjectToolCatalogArgs
+        {
+            public string Group { get; set; }
+            public string Keyword { get; set; }
+            public string AfterName { get; set; }
+            public int Limit { get; set; }
+            public string ExpectedCatalogGeneration { get; set; }
+            public string[] ReservedNames { get; set; }
+            public string Name { get; set; }
+        }
+
+        /// <summary>continuation只绑定transport session与listener generation；Tool级identifier不参与stale判定。</summary>
+        private static string ProjectToolCatalogGeneration()
+        {
+            return Sha256Hex(EditorSessionId() + "\n" + CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture));
+        }
+
+        /// <summary>generation变化时 continuation 必须稳定失败，不能混合两代目录。</summary>
+        private static void RequireProjectToolCatalogGeneration(ProjectToolCatalogArgs args, string generation)
+        {
+            if (args != null && (args.ExpectedCatalogGeneration ?? string.Empty).Length > 128)
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog generation exceeds its bounded string limit.");
+            if (args != null && !string.IsNullOrEmpty(args.ExpectedCatalogGeneration)
+                && !string.Equals(args.ExpectedCatalogGeneration, generation, StringComparison.Ordinal))
+                throw new BridgeCommandException("E_TOOL_CATALOG_CHANGED", "The Tool catalog generation changed before this continuation page was read.", null,
+                    new[] { "Restart this discovery query from its first page against the current Unity generation." });
+        }
+
+        /// <summary>package-local names由CLI冻结并传入，Bridge在筛选前执行全registry ownership检查。</summary>
+        private static void RequireNoReservedProjectToolNames(UnityCliToolCatalogSnapshot catalog, ProjectToolCatalogArgs args)
+        {
+            var reservedNames = (args == null ? null : args.ReservedNames) ?? new string[0];
+            if (reservedNames.Length > 4096 || reservedNames.Any(name => string.IsNullOrWhiteSpace(name) || name.Length > 256))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog reserved names exceed their bounded item or string limits.");
+            var reserved = new HashSet<string>(reservedNames, StringComparer.Ordinal);
+            var conflict = catalog.Tools.Keys.OrderBy(name => name, StringComparer.Ordinal).FirstOrDefault(reserved.Contains);
+            if (conflict != null)
+                throw new BridgeCommandException("E_TOOL_SCHEMA_CONFLICT", "Tool catalog conflict for " + conflict + ": package-local and live registrations use the same name.",
+                    new Dictionary<string, object> { { "toolName", conflict }, { "reason", "package-local and live registrations use the same name" } },
+                    new[] { "Fix the duplicate Tool registration in the selected Unity project, then retry discovery." });
+        }
+
+        private static IEnumerable<RegisteredTool> ProjectToolCatalogDefinitions(UnityCliToolCatalogSnapshot catalog, bool runtimeOnly)
+        {
+            return catalog.Tools.Values.Where(definition => !runtimeOnly || definition.Target == "runtime" || definition.Target == "both");
+        }
+
+        private static void RequireProjectToolCatalogInputKeys(UnityCli.Protocol.BridgeRequest request, params string[] allowed)
+        {
+            var input = request.Input as IDictionary<string, object>;
+            if (input == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog input must be an object.");
+            var keys = new HashSet<string>(allowed, StringComparer.Ordinal);
+            var unknown = input.Keys.FirstOrDefault(key => !keys.Contains(key));
+            if (unknown != null) throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog input contains unknown field " + unknown + ".");
+        }
+
+        /// <summary>groups只读取一次published snapshot并返回group/count，不物化descriptor图。</summary>
+        private static object ProjectToolCatalogGroups(UnityCli.Protocol.BridgeRequest request, bool runtimeOnly)
+        {
+            RequireProjectToolCatalogInputKeys(request, "expectedCatalogGeneration", "reservedNames");
+            var catalog = ProjectToolCatalogSnapshotReader.Read();
+            var args = request.DeserializeArgs<ProjectToolCatalogArgs>() ?? new ProjectToolCatalogArgs();
+            RequireNoReservedProjectToolNames(catalog, args);
+            var generation = ProjectToolCatalogGeneration();
+            RequireProjectToolCatalogGeneration(args, generation);
+            var groups = ProjectToolCatalogDefinitions(catalog, runtimeOnly)
+                .GroupBy(definition => definition.Group, StringComparer.Ordinal)
+                .OrderBy(group => group.Key, StringComparer.Ordinal)
+                .Select(group => (object)new Dictionary<string, object> { { "name", group.Key }, { "toolCount", (long)group.Count() } })
+                .ToList();
+            return new Dictionary<string, object> { { "catalogGeneration", generation }, { "groups", groups } };
+        }
+
+        /// <summary>summary只读取一次published snapshot，先筛选和裁剪再构造有界路由字段。</summary>
+        private static object ProjectToolCatalogSummary(UnityCli.Protocol.BridgeRequest request, bool runtimeOnly)
+        {
+            RequireProjectToolCatalogInputKeys(request, "group", "keyword", "afterName", "limit", "expectedCatalogGeneration", "reservedNames");
+            var catalog = ProjectToolCatalogSnapshotReader.Read();
+            var args = request.DeserializeArgs<ProjectToolCatalogArgs>() ?? new ProjectToolCatalogArgs();
+            if (args.Limit < 1 || args.Limit > 101)
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog summary limit must be an integer in [1,101].");
+            RequireNoReservedProjectToolNames(catalog, args);
+            var generation = ProjectToolCatalogGeneration();
+            RequireProjectToolCatalogGeneration(args, generation);
+            if ((args.Group ?? string.Empty).Length > 256 || (args.AfterName ?? string.Empty).Length > 256
+                || (args.Keyword ?? string.Empty).Length > 2048)
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog summary filters exceed their bounded string limits.");
+            var tokens = (args.Keyword ?? string.Empty).Split('|').Select(token => token.Trim()).Where(token => token.Length > 0).ToArray();
+            if (tokens.Length > 16 || tokens.Any(token => token.Length > 128))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog search accepts at most 16 keywords of at most 128 characters each.");
+            var matches = ProjectToolCatalogDefinitions(catalog, runtimeOnly)
+                .Where(definition => string.IsNullOrEmpty(args.Group) || string.Equals(definition.Group, args.Group, StringComparison.Ordinal))
+                .Where(definition => tokens.Length == 0 || tokens.Any(token => ProjectToolCatalogMatches(definition, token)))
+                .OrderBy(definition => definition.Name, StringComparer.Ordinal)
+                .ToList();
+            var remaining = matches.Where(definition => string.IsNullOrEmpty(args.AfterName) || string.CompareOrdinal(definition.Name, args.AfterName) > 0).ToList();
+            var nativeNames = new HashSet<string>(catalog.Tools.Values.Where(definition => definition.ContractProfile != "official-attribute").Select(definition => definition.Name), StringComparer.Ordinal);
+            foreach (var reservedName in args.ReservedNames ?? new string[0]) nativeNames.Add(reservedName);
+            var tools = remaining.Take(args.Limit).Select(definition => (object)ProjectToolRoutingSummaryData(definition, runtimeOnly, nativeNames)).ToList();
+            return new Dictionary<string, object>
+            {
+                { "catalogGeneration", generation }, { "total", (long)matches.Count },
+                { "hasMore", remaining.Count > args.Limit }, { "tools", tools }
+            };
+        }
+
+        private static bool ProjectToolCatalogMatches(RegisteredTool definition, string token)
+        {
+            return (definition.Name ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0
+                || (definition.Summary ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0
+                || (definition.Description ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0
+                || (definition.Group ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>exact describe只读取一次published snapshot，并且至多传输指定name的一份完整descriptor。</summary>
+        private static object ProjectToolCatalogDescribe(UnityCli.Protocol.BridgeRequest request, bool runtimeOnly)
+        {
+            RequireProjectToolCatalogInputKeys(request, "name");
+            var catalog = ProjectToolCatalogSnapshotReader.Read();
+            var args = request.DeserializeArgs<ProjectToolCatalogArgs>() ?? new ProjectToolCatalogArgs();
+            if (string.IsNullOrWhiteSpace(args.Name) || args.Name.Length > 256)
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe name is required and must not exceed 256 characters.");
+            var generation = ProjectToolCatalogGeneration();
+            RegisteredTool definition;
+            var found = catalog.Tools.TryGetValue(args.Name, out definition)
+                && (!runtimeOnly || definition.Target == "runtime" || definition.Target == "both");
+            var result = new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", found } };
+            if (found) result["descriptor"] = ProjectToolDescriptorData(definition);
+            return result;
+        }
+
+        private static Dictionary<string, object> ProjectToolRoutingSummaryData(RegisteredTool definition, bool runtimeOnly, HashSet<string> nativeNames)
+        {
+            var commandName = definition.Name;
+            if (definition.ContractProfile == "official-attribute" && definition.Name.StartsWith(OfficialAttributeToolPrefix, StringComparison.Ordinal))
+            {
+                var originalName = definition.Name.Substring(OfficialAttributeToolPrefix.Length);
+                if (!nativeNames.Contains(originalName)) commandName = originalName;
+            }
+            var available = ProjectToolAvailableForCatalog(definition, runtimeOnly);
+            var data = new Dictionary<string, object>
+            {
+                { "name", definition.Name }, { "summary", definition.Summary }, { "group", definition.Group },
+                { "target", definition.Target }, { "contractProfile", definition.ContractProfile },
+                { "commandName", commandName }
+            };
+            if (!available)
+            {
+                data["available"] = false;
+                data["unavailableReason"] = ProjectToolUnavailableForCatalog(definition, runtimeOnly);
+            }
+            return data;
+        }
+
+        private static bool ProjectToolAvailableForCatalog(RegisteredTool definition, bool runtimeOnly)
+        {
+            return runtimeOnly ? playModeReady : ToolAvailableNow(definition);
+        }
+
+        private static string ProjectToolUnavailableForCatalog(RegisteredTool definition, bool runtimeOnly)
+        {
+            return runtimeOnly && !playModeReady
+                ? "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool."
+                : ToolUnavailableReason(definition);
+        }
+
+        private static bool IsProjectToolCatalogReadCommand(string command)
+        {
+            return command == "project-tool.groups" || command == "project-tool.summary" || command == "project-tool.describe" || command == "project-tool.list"
+                || command == "runtime-tool.groups" || command == "runtime-tool.summary" || command == "runtime-tool.describe" || command == "runtime-tool.list";
+        }
+
+        private static object ProjectToolGroups(UnityCli.Protocol.BridgeRequest request) { return ProjectToolCatalogGroups(request, false); }
+        private static object ProjectToolSummary(UnityCli.Protocol.BridgeRequest request) { return ProjectToolCatalogSummary(request, false); }
+        private static object ProjectToolDescribe(UnityCli.Protocol.BridgeRequest request) { return ProjectToolCatalogDescribe(request, false); }
+        private static object RuntimeToolGroups(UnityCli.Protocol.BridgeRequest request) { InitializeRuntimeExecutor(); return ProjectToolCatalogGroups(request, true); }
+        private static object RuntimeToolSummary(UnityCli.Protocol.BridgeRequest request) { InitializeRuntimeExecutor(); return ProjectToolCatalogSummary(request, true); }
+        private static object RuntimeToolDescribe(UnityCli.Protocol.BridgeRequest request) { InitializeRuntimeExecutor(); return ProjectToolCatalogDescribe(request, true); }
+
+        /// <summary>完整descriptor导出仅供显式doctor/static capture，不进入公开discovery。</summary>
         private static object ProjectToolList(UnityCli.Protocol.BridgeRequest request)
         {
             var catalog = ReadPublishedProjectToolCatalog();

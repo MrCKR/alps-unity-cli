@@ -41,7 +41,9 @@ export {
 } from "./project-resolver.js";
 export {
   checkExtensionBundles,
-  readExtensionPhysicalStates
+  checkSelectedExtensionBundle,
+  listExtensionBundles,
+  readExtensionStateSnapshot
 } from "./installer.js";
 export {
   registerBuiltinExtensionContributions,

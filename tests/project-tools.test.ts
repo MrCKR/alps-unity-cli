@@ -259,6 +259,17 @@ test("C# registry publishes native profiles only after complete pending-table va
   assert.match(builder, /faulted[\s\S]*Duplicate tool registration/);
 });
 
+test("Bridge catalog summary bounds main-thread projection before descriptor serialization", () => {
+  const source = readFileSync("unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", "utf8");
+  const start = source.indexOf("private static object ProjectToolCatalogSummary");
+  const end = source.indexOf("private static bool ProjectToolCatalogMatches", start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(block.indexOf("Take(args.Limit)") < block.indexOf("ProjectToolRoutingSummaryData"));
+  assert.match(block, /args\.Limit < 1 \|\| args\.Limit > 101/);
+  assert.doesNotMatch(block, /ProjectToolDescriptorData|InputSchema|OutputSchema|Permissions|CompletionContractData/);
+});
+
 test("project Tool discovery fails closed on malformed registry entries", async () => {
   const result = await discoverProjectTools({}, {
     bridgeExecute: async (payload) => ({

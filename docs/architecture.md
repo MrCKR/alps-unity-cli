@@ -39,8 +39,8 @@ Every public process writes one JSON envelope and exits. Tool calls are direct a
 A normal AI flow is:
 
 ```text
-tools group/search
-tools describe <tool>
+tools group/search       # direct catalog control plane
+tools describe <tool>    # exact-name descriptor projection
 tools run <tool> --input <json>
 ```
 

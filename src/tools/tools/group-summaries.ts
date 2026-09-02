@@ -1,4 +1,4 @@
-// 每个公开 Tool group 的路由级一句话摘要，供 tools.group 与 tools.group-list 复用。
+// 每个公开 Tool group 的路由级一句话摘要，供顶层 tools group/list 控制面复用。
 // 覆盖当前全部公开组；新增组未登记时回退到组名兜底，避免空泛 capability 文案。
 
 export const GROUP_SUMMARIES: Record<string, string> = {
@@ -40,7 +40,6 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   tests: "List Unity test runner tests and their results.",
   texture: "Create, modify, import, generate, and inspect textures and sprites.",
   timeline: "Create and edit Timeline assets, tracks, and clips.",
-  tools: "Tool catalog grouping, search, describe, and execution.",
   ui: "UI Toolkit documents, panels, styles, and visual element creation and inspection.",
   urp: "Universal Render Pipeline settings, renderer features, and volume effects.",
   vfx: "Visual Effect Graph control, effects, particles, and templates.",

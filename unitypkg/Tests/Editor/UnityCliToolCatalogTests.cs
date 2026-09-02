@@ -40,9 +40,9 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void MetadataOnlyBuilderPublishesThreeHundredProjectToolsWithProviderCountParity()
+        public void MetadataOnlyBuilderPublishesThreeHundredProviderCatalogWithCountParity()
         {
-            var builder = NewBuilder(400, 20);
+            var builder = NewBuilder(400, 301);
             for (var index = 0; index < 301; index++)
                 Add(builder, Definition("fixture.project." + index, "project", "native", "fixture"), "ProjectInterface");
             for (var index = 0; index < 2; index++)
@@ -53,6 +53,7 @@ namespace UnityCli.Tests
                 Add(builder, Definition("UnityPipeline_fixture_" + index, "project", "official-attribute", "UnityPipeline"), "OfficialAttribute");
 
             var snapshot = Invoke(builder, "Publish", 12L);
+            Assert.That(Int(snapshot, "ProviderAssemblyCount"), Is.EqualTo(301));
             Assert.That(Int(snapshot, "ProjectInterfaceToolCount"), Is.EqualTo(301));
             Assert.That(Int(snapshot, "BuiltInToolCount"), Is.EqualTo(2));
             Assert.That(Int(snapshot, "ExtensionToolCount"), Is.EqualTo(3));
@@ -94,7 +95,24 @@ namespace UnityCli.Tests
             Property(completionDefinition, "CompletionContract").SetValue(completionDefinition, null);
             Assert.That(() => Add(invalidCompletion, completionDefinition, "ProjectInterface"), Throws.TypeOf<TargetInvocationException>());
             Assert.That(() => Invoke(invalidCompletion, "Publish", 1L), Throws.TypeOf<TargetInvocationException>());
+
+            var oversizedRouting = NewBuilder(10, 2);
+            var oversizedDefinition = Definition("fixture." + new string('n', 249), "project", "native", "fixture");
+            Assert.That(() => Add(oversizedRouting, oversizedDefinition, "ProjectInterface"), Throws.TypeOf<TargetInvocationException>());
+            Assert.That(() => Invoke(oversizedRouting, "Publish", 1L), Throws.TypeOf<TargetInvocationException>());
             Assert.That(ReadPublishedSnapshot(), Is.SameAs(publishedBefore));
+        }
+
+        [Test]
+        public void PrivateCatalogReadersRejectUnknownInputBeforeSnapshotProjection()
+        {
+            var request = new UnityCli.Protocol.BridgeRequest
+            {
+                Input = new Dictionary<string, object> { { "limit", 20L }, { "unknown", true } }
+            };
+            var summary = bridgeType.GetMethod("ProjectToolCatalogSummary", BindingFlags.NonPublic | BindingFlags.Static);
+            var exception = Assert.Throws<TargetInvocationException>(() => summary.Invoke(null, new object[] { request, false }));
+            Assert.That(((UnityCliBridge.BridgeCommandException)exception.InnerException).Code, Is.EqualTo("E_SCHEMA_INVALID"));
         }
 
         [Test]

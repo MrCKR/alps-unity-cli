@@ -8,11 +8,18 @@ import { handleToolsCommand, type ToolsRuntime } from "../src/tools/commands.js"
 import { handleDoctorCommand, type DoctorRuntime } from "../src/doctor.js";
 import { handleCapabilitiesCommand } from "../src/capabilities.js";
 import { ExtensionRegistry, BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
-import { checkExtensionBundles, installExtensionBundle, readExtensionInstallManifest } from "../src/extensions/installer.js";
+import {
+  checkExtensionBundles,
+  installExtensionBundle,
+  listExtensionBundles,
+  readExtensionInstallManifest,
+  setExtensionFilesystemClockForTest,
+  setExtensionFilesystemOperationObserverForTest,
+} from "../src/extensions/installer.js";
 import { readInstalledUnityPackages } from "../src/extensions/project-resolver.js";
 import { validateExtensionManifestContracts } from "../src/contracts/command-contract.js";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
-import { checkToolExtensionAvailability, extensionAvailabilityFlags } from "../src/extension-availability.js";
+import { checkToolExtensionAvailability, extensionAvailabilityFlags, freezeExtensionAvailability } from "../src/extension-availability.js";
 import { builtinToolMetadata, builtinToolGroups, EXTENSION_GROUPS } from "../src/tools/metadata/index.js";
 import { builtinExtensionMetadata } from "../src/extensions/metadata/index.js";
 import { builtinExtensionToolContributions, findBuiltinExtensionToolContribution, requiredPackagesForContribution } from "../src/extensions/tool-manifest.js";
@@ -195,20 +202,107 @@ test("checkToolExtensionAvailability works with constructed live descriptors", a
   const missingProject = await makeFakeProject();
   const availableProject = await makeFakeProject({ "com.unity.probuilder": "5.2.4" });
 
-  const unavailable = await checkToolExtensionAvailability(probuilderPingTool(), { project: missingProject });
-  const packageOnly = await checkToolExtensionAvailability(probuilderPingTool(), { project: availableProject });
+  const unavailable = await checkToolExtensionAvailability(probuilderPingTool(), await freezeExtensionAvailability({ project: missingProject }, {}));
+  const packageOnly = await checkToolExtensionAvailability(probuilderPingTool(), await freezeExtensionAvailability({ project: availableProject }, {}));
   assert.equal(packageOnly.errorCode, "E_EXTENSION_NOT_INSTALLED");
   assert.equal(unavailable.available, false);
   assert.equal(unavailable.extensionId, "probuilder");
 
   const registry = new ExtensionRegistry();
   await installExtensionBundle(availableProject, registry.getExtension("probuilder")!.manifest);
-  const available = await checkToolExtensionAvailability(probuilderPingTool(), { project: availableProject });
+  const available = await checkToolExtensionAvailability(probuilderPingTool(), await freezeExtensionAvailability({ project: availableProject }, {}));
   assert.equal(available.available, true);
   assert.equal(available.extensionId, "probuilder");
 
-  const plain = await checkToolExtensionAvailability(sceneHierarchyTool(), { project: missingProject });
+  const plain = await checkToolExtensionAvailability(sceneHierarchyTool(), await freezeExtensionAvailability({ project: missingProject }, {}));
   assert.equal(plain.available, true);
+});
+
+test("group discovery freezes one snapshot and proves each distinct extension once", async () => {
+  const projectPath = await makeFakeProject({ "com.unity.probuilder": "5.2.4" });
+  const registry = new ExtensionRegistry();
+  await installExtensionBundle(projectPath, registry.getExtension("probuilder")!.manifest);
+  const selected = await selectedProject(projectPath, [probuilderPingTool(), probuilderDeleteFacesTool()]);
+  const operations: Array<{ operation: string; extensionId?: string }> = [];
+  setExtensionFilesystemOperationObserverForTest((operation, extensionId) => operations.push({ operation, extensionId }));
+  try {
+    const result = await handleToolsCommand("group", ["list", "probuilder"], selected.flags, selected.runtime, "req_extension_page_proof");
+    assert.equal(result.ok, true, JSON.stringify(result));
+    const installed = (await readExtensionInstallManifest(projectPath)).extensions.find((entry) => entry.extensionId === "probuilder")!;
+    assert.equal(operations.filter((item) => item.operation === "snapshot").length, 1);
+    assert.deepEqual(operations.filter((item) => item.operation === "target-proof").map((item) => item.extensionId), ["probuilder"]);
+    assert.equal(operations.filter((item) => item.operation === "managed-file-hash").length, installed.files.length);
+    assert.equal(operations.filter((item) => item.operation === "source-proof").length, 0);
+    assert.equal(operations.filter((item) => item.operation === "source-file-hash").length, 0);
+  } finally {
+    setExtensionFilesystemOperationObserverForTest(undefined);
+  }
+});
+
+test("ordinary extension execution does not trigger all-extension source hashing", async () => {
+  const projectPath = await makeFakeProject({ "com.unity.probuilder": "5.2.4" });
+  const registry = new ExtensionRegistry();
+  await installExtensionBundle(projectPath, registry.getExtension("probuilder")!.manifest);
+  const selected = await selectedProject(projectPath, [probuilderPingTool()]);
+  selected.runtime.runtimeTools = [];
+  selected.runtime.bridgeExecute = async (payload) => ({ ok: true, requestId: payload.requestId, data: { result: {} } });
+  const operations: Array<{ operation: string; extensionId?: string }> = [];
+  setExtensionFilesystemOperationObserverForTest((operation, extensionId) => operations.push({ operation, extensionId }));
+  try {
+    const result = await handleToolsCommand("run", ["probuilder.ping"], { ...selected.flags, input: "{}" }, selected.runtime, "req_extension_execute_proof");
+    assert.equal(result.ok, true, JSON.stringify(result));
+    const installed = (await readExtensionInstallManifest(projectPath)).extensions.find((entry) => entry.extensionId === "probuilder")!;
+    assert.deepEqual(operations.filter((item) => item.operation === "target-proof").map((item) => item.extensionId), ["probuilder"]);
+    assert.equal(operations.filter((item) => item.operation === "managed-file-hash").length, installed.files.length);
+    assert.equal(operations.filter((item) => item.operation === "source-proof").length, 0);
+    assert.equal(operations.filter((item) => item.operation === "source-file-hash").length, 0);
+  } finally {
+    setExtensionFilesystemOperationObserverForTest(undefined);
+  }
+});
+
+test("extensions list stays shallow while doctor owns all-extension deep hashes", async () => {
+  const projectPath = await makeFakeProject({ "com.unity.probuilder": "5.2.4" });
+  const operations: Array<{ operation: string; extensionId?: string }> = [];
+  setExtensionFilesystemOperationObserverForTest((operation, extensionId) => operations.push({ operation, extensionId }));
+  try {
+    const listed = await listExtensionBundles(projectPath);
+    assert.ok(listed.every((item) => item.integrity === "shallow"));
+    assert.equal(operations.filter((item) => item.operation === "source-proof").length, 0);
+    assert.equal(operations.filter((item) => item.operation === "target-proof").length, 0);
+    operations.length = 0;
+    const diagnosed = await checkExtensionBundles(projectPath, { absoluteDeadlineMs: Date.now() + 30_000 });
+    assert.ok(diagnosed.every((item) => item.integrity === "full"));
+    assert.equal(operations.filter((item) => item.operation === "source-proof").length, registryExtensionCount());
+    assert.equal(operations.filter((item) => item.operation === "target-proof").length, registryExtensionCount());
+    assert.ok(operations.filter((item) => item.operation === "source-file-hash").length > 0);
+    assert.ok(operations.filter((item) => item.operation === "managed-file-hash").length > 0);
+  } finally {
+    setExtensionFilesystemOperationObserverForTest(undefined);
+  }
+});
+
+test("deep extension inspection stops before traversing a large unknown tree after deadline", async () => {
+  const projectPath = await makeFakeProject();
+  const unknownRoot = join(projectPath, "Packages", "com.alpsckr.unitycli", "Extensions", "cinemachine", "unknown");
+  await mkdir(unknownRoot, { recursive: true });
+  await Promise.all(Array.from({ length: 512 }, (_, index) => writeFile(join(unknownRoot, `file-${index}.txt`), "unknown")));
+  const operations: string[] = [];
+  let now = 1_000;
+  setExtensionFilesystemClockForTest(() => now);
+  setExtensionFilesystemOperationObserverForTest((operation) => {
+    operations.push(operation);
+    if (operation === "unknown-tree-entry") now += 1;
+  });
+  try {
+    await assert.rejects(() => checkExtensionBundles(projectPath, { absoluteDeadlineMs: 1_004 }), (error: unknown) =>
+      error instanceof Error && (error as { code?: string }).code === "E_EXTENSION_SCAN_TIMEOUT");
+    assert.equal(operations.filter((operation) => operation === "unknown-tree-entry").length, 4);
+    assert.ok(operations.filter((operation) => operation === "unknown-tree-entry").length < 512);
+  } finally {
+    setExtensionFilesystemClockForTest(undefined);
+    setExtensionFilesystemOperationObserverForTest(undefined);
+  }
 });
 
 test("extension availability keeps explicit project and unresolved strict instance remains unknown", async () => {
@@ -219,9 +313,13 @@ test("extension availability keeps explicit project and unresolved strict instan
   assert.equal(explicit.project, explicitProject);
 
   const unresolvedFlags = await extensionAvailabilityFlags({ instance: `unity-${"f".repeat(64)}` }, { dataDir });
-  const unresolved = await checkToolExtensionAvailability(probuilderPingTool(), unresolvedFlags);
+  const unresolved = await checkToolExtensionAvailability(probuilderPingTool(), await freezeExtensionAvailability(unresolvedFlags, { dataDir }));
   assert.equal(unresolved.errorCode, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN");
 });
+
+function registryExtensionCount(): number {
+  return new ExtensionRegistry().extensionIds().length;
+}
 
 test("probuilder.scene is exposed only as a Tool contribution", () => {
   const probuilder = BUILTIN_EXTENSION_MANIFESTS.find((manifest) => manifest.id === "probuilder");

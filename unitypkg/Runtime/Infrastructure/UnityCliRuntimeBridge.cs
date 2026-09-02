@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Process = System.Diagnostics.Process;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -317,7 +318,7 @@ namespace UnityCli
             var command = ReadString(request, "command");
             if (!any)
             {
-                if (string.Equals(command, "runtime-tool.list", StringComparison.Ordinal)) { rootId = null; return null; }
+                if (RuntimeCatalogReadCommand(command)) { rootId = null; return null; }
                 return Error(requestId, "E_ADMISSION_REQUIRED", "A valid Unity task-pool admission is required before this Runtime business request can enter the queue.", new[] { "Use the current unitycli to submit the Runtime Tool." });
             }
             if (string.IsNullOrEmpty(rootId) || string.IsNullOrEmpty(fingerprint) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(deadlineText))
@@ -347,15 +348,36 @@ namespace UnityCli
                 var deadline = pendingRequest.AbsoluteDeadlineMs;
                 if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= deadline) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request deadline elapsed before execution.", new[] { "Retry only after the Player is responsive." }, true, 100)); return; }
                 var command = RequiredString(request, "command", 128);
-                if (string.Equals(command, "runtime-tool.list", StringComparison.Ordinal))
+                if (RuntimeCatalogReadCommand(command))
                 {
+                    var input = ReadObject(request, "input") ?? new Dictionary<string, object>();
+                    ValidateRuntimeCatalogInput(command, input);
+                    // Catalog continuation只绑定当前Runtime session与唯一listener generation。
+                    var generation = Sha256(sessionId + "\0" + "1");
+                    var expectedGeneration = ReadString(input, "expectedCatalogGeneration");
+                    if (!string.IsNullOrEmpty(expectedGeneration) && !string.Equals(expectedGeneration, generation, StringComparison.Ordinal))
+                    {
+                        pendingRequest.Completion.TrySetResult(Error(requestId, "E_TOOL_CATALOG_CHANGED", "The Tool catalog generation changed before this continuation page was read.", new[] { "Restart this discovery query from its first page against the current Runtime generation." })); return;
+                    }
+                    if (string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal))
+                    {
+                        pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "groups", new List<object>() } })); return;
+                    }
+                    if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
+                    {
+                        pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "total", 0L }, { "hasMore", false }, { "tools", new List<object>() } })); return;
+                    }
+                    if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
+                    {
+                        pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", false } })); return;
+                    }
                     pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "tools", new List<object>() }, { "target", "runtime" }, { "runtimeSessionId", sessionId } })); return;
                 }
                 if (string.Equals(command, "runtime-tool.run", StringComparison.Ordinal))
                 {
                     var wrapper = ReadObject(request, "input");
                     if (wrapper == null || !HasOnlyKeys(wrapper, "name", "input", "artifactDir", "playModeSessionId")) throw new FormatException("runtime-tool.run wrapper is invalid.");
-                    var name = RequiredString(wrapper, "name", 128);
+                    var name = RequiredString(wrapper, "name", 256);
                     var toolInput = ReadObject(wrapper, "input");
                     if (toolInput == null) throw new FormatException("runtime-tool.run input must be an object.");
                     var execution = ReadObject(request, "execution");
@@ -371,6 +393,63 @@ namespace UnityCli
             catch (FormatException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Use the Runtime bridge request schema." })); }
             catch (Exception exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime command failed before a terminal result was proven.", new[] { "Inspect Player logs and retry after the runtime is ready." })); Debug.LogWarning("UnityCli runtime main-thread command failed: " + exception.GetType().Name); }
             finally { if (pendingRequest.AdmissionOwner != null) CompleteRuntimeAdmissionRoot(pendingRequest.AdmissionOwner); }
+        }
+
+        private static bool RuntimeCatalogReadCommand(string command)
+        {
+            return string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.list", StringComparison.Ordinal);
+        }
+
+        /// <summary>Runtime catalog是私有闭集协议；空执行器也必须拒绝畸形或无界输入。</summary>
+        private static void ValidateRuntimeCatalogInput(string command, Dictionary<string, object> input)
+        {
+            var expected = ReadString(input, "expectedCatalogGeneration");
+            if (expected != null && expected.Length > 128) throw new FormatException("Catalog generation exceeds its bounded string limit.");
+            object reservedValue;
+            if (input.TryGetValue("reservedNames", out reservedValue))
+            {
+                var reserved = reservedValue as List<object>;
+                if (reserved == null || reserved.Count > 4096 || reserved.Any(value => !(value is string) || string.IsNullOrWhiteSpace((string)value) || ((string)value).Length > 256))
+                    throw new FormatException("Catalog reserved names exceed their bounded item or string limits.");
+            }
+            if (string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal))
+            {
+                if (!HasOnlyKeys(input, "expectedCatalogGeneration", "reservedNames")) throw new FormatException("Runtime catalog groups input contains an unknown field.");
+                return;
+            }
+            if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
+            {
+                if (!HasOnlyKeys(input, "group", "keyword", "afterName", "limit", "expectedCatalogGeneration", "reservedNames"))
+                    throw new FormatException("Runtime catalog summary input contains an unknown field.");
+                var limit = ReadLong(input, "limit");
+                if (limit < 1L || limit > 101L) throw new FormatException("Catalog summary limit must be an integer in [1,101].");
+                OptionalRuntimeCatalogString(input, "group", 256);
+                OptionalRuntimeCatalogString(input, "afterName", 256);
+                OptionalRuntimeCatalogString(input, "keyword", 2048);
+                var keyword = ReadString(input, "keyword") ?? string.Empty;
+                var tokens = keyword.Split('|').Select(token => token.Trim()).Where(token => token.Length > 0).ToArray();
+                if (tokens.Length > 16 || tokens.Any(token => token.Length > 128))
+                    throw new FormatException("Catalog search accepts at most 16 keywords of at most 128 characters each.");
+                return;
+            }
+            if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
+            {
+                if (!HasOnlyKeys(input, "name")) throw new FormatException("Runtime catalog describe input contains an unknown field.");
+                RequiredString(input, "name", 256);
+                return;
+            }
+            if (!HasOnlyKeys(input)) throw new FormatException("Runtime catalog list input contains an unknown field.");
+        }
+
+        private static void OptionalRuntimeCatalogString(Dictionary<string, object> input, string key, int maximum)
+        {
+            object value;
+            if (!input.TryGetValue(key, out value)) return;
+            var text = value as string;
+            if (text == null || text.Length > maximum) throw new FormatException("Runtime catalog field " + key + " is invalid.");
         }
 
         private void CompleteRuntimeAdmissionRoot(UnityCliAdmissionPool.ConsumedIdentity identity)

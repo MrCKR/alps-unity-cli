@@ -165,6 +165,8 @@ namespace UnityCli
                 || string.IsNullOrWhiteSpace(definition.Description) || string.IsNullOrWhiteSpace(definition.Group)
                 || definition.Examples == null || definition.InvokeAsync == null)
                 throw new ArgumentException("Tool registration requires name, summary, description, group, and a typed async invoker.");
+            if (definition.Name.Length > 256 || definition.Summary.Length > 512 || definition.Group.Length > 256)
+                throw new ArgumentException("Tool name, summary, or group exceeds the catalog transport bound: " + definition.Name);
             if (definition.RequestType == null || definition.ResultType == null
                 || string.IsNullOrWhiteSpace(definition.InputSchema) || string.IsNullOrWhiteSpace(definition.OutputSchema)
                 || !(UnityCliSerializer.Parse(definition.InputSchema) is IDictionary<string, object>)

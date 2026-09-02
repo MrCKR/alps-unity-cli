@@ -81,9 +81,12 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search <k1|k2|...>` |
+| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录或已删除的控制面identity | 重新运行 `tools group` / `tools search <k1|k2|...>`；discovery使用顶层`tools`子命令，不通过`tools run` |
 | `E_TOOL_REGISTRY_UNHEALTHY` | 当前实例 Tool catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
+| `E_DISCOVERY_CURSOR_INVALID` | discovery cursor损坏或属于其他查询 | 从当前查询第一页重新读取 |
+| `E_TOOL_CATALOG_CHANGED` | continuation绑定的catalog generation已变化 | 从当前查询第一页重新读取，不复用旧cursor |
 | `E_SCHEMA_INVALID` | 输入不符合 schema | 查看对应 `tools describe` 的 inputSchema |
+| `E_EXTENSION_SCAN_TIMEOUT` | `extensions doctor`未在immutable deadline内完成有界文件树检查 | 清理异常文件树或在文件系统稳定后增大`--timeout-ms`重新诊断 |
 
 ### 可选预览错误
 

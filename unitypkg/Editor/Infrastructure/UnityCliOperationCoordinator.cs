@@ -741,8 +741,7 @@ namespace UnityCli
         private static bool IsReadOnlyBridgeCommand(string command)
         {
             if (IsEditorStateSnapshotCommand(command)) return true;
-            return string.Equals(command, "project-tool.list", StringComparison.Ordinal)
-                || string.Equals(command, "runtime-tool.list", StringComparison.Ordinal);
+            return IsProjectToolCatalogReadCommand(command);
         }
 
         private static Dictionary<string, object> ValidateCoordinatedTerminal(string response, string requestId)
