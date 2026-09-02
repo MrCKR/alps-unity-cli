@@ -374,17 +374,18 @@ namespace UnityCli
                     if (owner == null || !string.Equals(owner.TopRequestDigest, topRequestDigest, StringComparison.Ordinal)) return;
                     bool leaseOwned;
                     if (!state.TryIsLeaseOwned(owner.RequestId, owner.RequestDigest, out leaseOwned)) return;
-                    if (!leaseOwned)
-                    {
-                        if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
-                            owner = PersistAdmissionOwnerTransfer(state, markerScope, marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
-                        CompleteAdmissionRoot(state, owner);
-                        return;
-                    }
                     object terminal;
                     if (!state.TryGetTerminal(Scope, requestId, topRequestDigest, out terminal))
-                        terminal = state.StoreTerminalFirst(Scope, requestId, topRequestDigest, UnknownLeaseTerminal(requestId));
-                    if (terminal != null) UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, topRequestDigest, state);
+                    {
+                        var recoveryTerminal = leaseOwned
+                            ? ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Build active root disappeared while its exact lease was retained; outcome is unknown.", null, new[] { "Inspect build artifacts before submitting another mutation." })
+                            : UnknownLeaseTerminal(requestId);
+                        terminal = state.StoreTerminalFirst(Scope, requestId, topRequestDigest, recoveryTerminal);
+                    }
+                    object confirmed;
+                    if (terminal == null || !state.TryGetTerminal(Scope, requestId, topRequestDigest, out confirmed)
+                        || !string.Equals(UnityCliSerializer.Serialize(terminal), UnityCliSerializer.Serialize(confirmed), StringComparison.Ordinal)) return;
+                    UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, topRequestDigest, state);
                 }
                 catch { }
             }

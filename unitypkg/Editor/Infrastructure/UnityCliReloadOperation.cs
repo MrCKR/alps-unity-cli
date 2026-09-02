@@ -149,18 +149,24 @@ namespace UnityCli
             /// <summary>每tick先消费scope准入marker；只有root与lease的exact状态都可证明时才推进或清理owner。</summary>
             protected bool RetryAdmissionOwnerRecoveryMarker()
             {
-                var markerScope = Scope + "-admission-owner";
-                if (UnityCliActiveOperation.Exists(Scope + "-terminal-cleanup"))
+                return RetryAdmissionOwnerRecoveryMarker(ProductionQueueState, Scope, OperationDisplayName);
+            }
+
+            /// <summary>production与隔离测试共用同一root-missing保守终态算法，任何写入失败都保留原marker。</summary>
+            private static bool RetryAdmissionOwnerRecoveryMarker(BridgeQueueState state, string scope, string displayName)
+            {
+                var markerScope = scope + "-admission-owner";
+                if (state.OperationExists(scope + "-terminal-cleanup"))
                 {
                     try
                     {
-                        if (UnityCliActiveOperation.RetryExactTerminalCleanup(Scope)) return true;
+                        if (UnityCliActiveOperation.RetryExactTerminalCleanup(scope, state)) return true;
                     }
                     catch { return true; }
                 }
-                if (!UnityCliActiveOperation.Exists(markerScope)) return false;
+                if (!state.OperationExists(markerScope)) return false;
                 Dictionary<string, object> marker;
-                try { marker = UnityCliActiveOperation.Load(markerScope); }
+                try { marker = state.LoadOperation(markerScope); }
                 catch { return true; }
                 if (marker == null) return true;
                 var requestId = Text(marker, "requestId");
@@ -168,12 +174,12 @@ namespace UnityCli
                 var topRequestDigest = Text(marker, "requestDigest");
                 if (!IsSafeId(requestId) || !IsSha256(ownerRequestDigest) || !IsSha256(topRequestDigest)) return true;
                 AdmissionOwnerIdentity owner;
-                try { owner = ReconcileAdmissionTransferForLiveMarker(markerScope, marker, requestId, ownerRequestDigest); }
+                try { owner = ReconcileAdmissionTransferForLiveMarker(state, markerScope, marker, requestId, ownerRequestDigest); }
                 catch { return true; }
                 if (owner == null || !string.Equals(owner.TopRequestDigest, topRequestDigest, StringComparison.Ordinal)) return true;
 
                 Dictionary<string, object> root;
-                try { root = UnityCliActiveOperation.Load(Scope); }
+                try { root = state.LoadOperation(scope); }
                 catch { return true; }
                 if (root != null)
                 {
@@ -184,29 +190,28 @@ namespace UnityCli
                 }
 
                 bool leaseOwned;
-                if (!UnityCliSessionMutationLease.TryIsOwnedBy(owner.RequestId, owner.RequestDigest, out leaseOwned)) return true;
-                if (leaseOwned)
-                {
-                    try
-                    {
-                        var terminal = ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", OperationDisplayName + " active root disappeared while its admission owner was retained; outcome is unknown.", null, new[] { "Inspect the affected business state before submitting another mutation." });
-                        UnityCliActiveOperation.StoreTerminalFirst(Scope, requestId, topRequestDigest, terminal);
-                        UnityCliActiveOperation.BeginExactTerminalCleanup(Scope, requestId, topRequestDigest);
-                    }
-                    catch { return true; }
-                    return true;
-                }
-
+                if (!state.TryIsLeaseOwned(owner.RequestId, owner.RequestDigest, out leaseOwned)) return true;
                 try
                 {
-                    if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
+                    object first;
+                    if (!state.TryGetTerminal(scope, requestId, topRequestDigest, out first))
                     {
-                        var cleanupMarker = new Dictionary<string, object>(marker);
-                        owner = PersistAdmissionOwnerTransfer(markerScope, cleanupMarker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                        var terminal = ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", displayName + (leaseOwned ? " active root disappeared while its exact lease was retained; outcome is unknown." : " active root disappeared after its exact lease was released; outcome is unknown."), null, new[] { "Inspect the affected business state before submitting another mutation." });
+                        first = state.StoreTerminalFirst(scope, requestId, topRequestDigest, terminal);
                     }
-                    return !CompleteAdmissionRoot(owner);
+                    object confirmed;
+                    if (!state.TryGetTerminal(scope, requestId, topRequestDigest, out confirmed)
+                        || !string.Equals(UnityCliSerializer.Serialize(first), UnityCliSerializer.Serialize(confirmed), StringComparison.Ordinal)) return true;
+                    UnityCliActiveOperation.BeginExactTerminalCleanup(scope, requestId, topRequestDigest, state);
                 }
                 catch { return true; }
+                return true;
+            }
+
+            internal static bool RetryAdmissionOwnerRecoveryMarkerForTests(BridgeQueueState state, string scope, string displayName)
+            {
+                if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Reload recovery test state must be isolated.", "state");
+                return RetryAdmissionOwnerRecoveryMarker(state, scope, displayName);
             }
             /// <summary>effect前放弃只能清理同identity且由业务证明从未越过effect barrier的root。</summary>
             protected virtual bool CanCleanupAbandonedPreEffectRoot(Dictionary<string, object> root, string requestId, string requestDigest) { return false; }

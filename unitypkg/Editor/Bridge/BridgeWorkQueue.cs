@@ -47,6 +47,7 @@ namespace UnityCli
         internal static BridgeQueueState CreateQueueStateForTests(UnityCliAdmissionPool pool, Func<long> monotonicNowMs = null)
         {
             if (pool == null) throw new ArgumentNullException("pool");
+            var intentSync = new object();
             var intents = new HashSet<string>(StringComparer.Ordinal);
             var state = new BridgeQueueState(
                 pool,
@@ -54,12 +55,13 @@ namespace UnityCli
                 new BridgeQueueSinks(_ => { }, (_, __, ___, ____) => { }, false),
                 new BridgeQueueTestHooks(true),
                 () => true,
-                identity => intents.Add(CompletionIntentKey(identity)),
-                identity => intents.Contains(CompletionIntentKey(identity)),
-                identity => intents.Remove(CompletionIntentKey(identity)),
+                identity => { lock (intentSync) return intents.Add(CompletionIntentKey(identity)); },
+                identity => { lock (intentSync) return intents.Contains(CompletionIntentKey(identity)); },
+                identity => { lock (intentSync) return intents.Remove(CompletionIntentKey(identity)); },
                 new BridgeIsolatedExecutionState())
             {
                 QueuePublicationOpen = true,
+                QueueSessionStopping = false,
                 ListenerId = "test-listener-" + Guid.NewGuid().ToString("N"),
                 ListenerGeneration = 1
             };
@@ -67,16 +69,18 @@ namespace UnityCli
         }
 
         /// <summary>关闭publication与摘除全部未启动WorkItem共享同一状态锁线性化点。</summary>
-        private static List<BridgeWorkItem> CloseQueuePublicationAndTakeQueuedWork()
+        private static List<BridgeWorkItem> CloseQueuePublicationAndTakeQueuedWork(bool sessionStopping = false)
         {
-            return CloseQueuePublicationAndTakeQueuedWork(ProductionQueueState);
+            return CloseQueuePublicationAndTakeQueuedWork(ProductionQueueState, sessionStopping);
         }
 
-        private static List<BridgeWorkItem> CloseQueuePublicationAndTakeQueuedWork(BridgeQueueState state)
+        private static List<BridgeWorkItem> CloseQueuePublicationAndTakeQueuedWork(BridgeQueueState state, bool sessionStopping)
         {
             lock (state.QueueLock)
             {
+                if (sessionStopping) state.TestHooks.Hit("before-queue-shutdown-close");
                 state.QueuePublicationOpen = false;
+                if (sessionStopping) state.QueueSessionStopping = true;
                 var pending = new List<BridgeWorkItem>(state.WorkQueue);
                 state.WorkQueue.Clear();
                 return pending;
@@ -142,13 +146,14 @@ namespace UnityCli
         internal static void SweepQueuedWorkForTests(BridgeQueueState state)
         {
             if (state == null) throw new ArgumentNullException("state");
-            CancelQueuedWork(CloseQueuePublicationAndTakeQueuedWork(state));
+            CancelQueuedWork(CloseQueuePublicationAndTakeQueuedWork(state, false));
         }
 
         internal static void ShutdownQueuedWorkForTests(BridgeQueueState state)
         {
             if (state == null) throw new ArgumentNullException("state");
-            CancelQueuedWorkForShutdown(CloseQueuePublicationAndTakeQueuedWork(state));
+            CancelQueuedWorkForShutdown(CloseQueuePublicationAndTakeQueuedWork(state, true));
+            ShutdownAdmissionPool(state);
         }
 
         private static void ProcessQueuedWork()
@@ -440,8 +445,6 @@ namespace UnityCli
         private static BridgeWorkItem EnqueueOrAttach(HttpListenerRequest httpRequest, UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string admissionListenerId, long admissionGeneration, out bool created, out int queueDepth)
         {
             var reservation = PrepareAdmissionForQueue(httpRequest, request, rawRequestBytes);
-            if (reservation.HasAdmissionHeaders) EnsureAdmissionPool();
-            ProductionQueueState.AdmissionPool = admissionPool;
             return EnqueuePrepared(ProductionQueueState, request, rawRequestBytes, admissionListenerId, admissionGeneration, reservation, out created, out queueDepth);
         }
 
@@ -462,7 +465,12 @@ namespace UnityCli
             {
                 lock (state.QueueLock)
                 {
-                    if (!state.QueuePublicationOpen) throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Bridge queue admission is closed for the current Unity lifecycle.", null, new[] { "Wait for Unity to finish reloading and retry." }, true, 1000);
+                    if (!state.QueuePublicationOpen)
+                    {
+                        if (state.QueueSessionStopping)
+                            throw new BridgeCommandException("E_RUNTIME_SESSION_STALE", "The Unity session is stopping and no longer accepts admission or business work.", null, new[] { "Start a new Unity session and submit a new request." });
+                        throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Bridge queue admission is closed for the current Unity lifecycle.", null, new[] { "Wait for Unity to finish reloading and retry." }, true, 1000);
+                    }
                     HitQueueTestBoundary(state, "before-existing-lookup");
                     BridgeWorkItem existing;
                     if (state.ActiveRequestWork.TryGetValue(request.RequestId, out existing))
@@ -549,7 +557,18 @@ namespace UnityCli
         /// <summary>completion只作为production算法入口；WorkItem携带其所属state，测试不替换production state。</summary>
         internal static bool CompleteWorkItemForTests(BridgeWorkItem item, string response)
         {
-            if (item == null) throw new ArgumentNullException("item");
+            if (item == null || item.QueueState == null || item.QueueState.IsolatedExecution == null)
+                throw new ArgumentException("WorkItem completion test state must be isolated.", "item");
+            if (item.Completed.IsSet) return false;
+            lock (item.QueueState.QueueLock)
+            {
+                if (item.QueueNode != null && item.QueueNode.List == item.QueueState.WorkQueue)
+                {
+                    item.QueueState.WorkQueue.Remove(item.QueueNode);
+                    item.QueueNode = null;
+                }
+                item.QueueState.RunningWork.Add(item);
+            }
             item.SetResponseForTests(response);
             return CompleteWorkItem(item);
         }

@@ -283,6 +283,92 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void CancelOutcomeUnknownDualPersistenceFaultFreezesWorkItemUntilParentFirstRepair()
+        {
+            var parentRequestId = Unique("dual-fault-parent");
+            var parentDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(parentRequestId), InstanceId);
+            var cancelRequestId = Unique("dual-fault-cancel");
+            var cancelRequest = Request(cancelRequestId, "internal.test.run.cancel", new Dictionary<string, object>
+            {
+                { "expectedEditorSessionId", UnityCliBridge.EditorSessionId() }
+            });
+            var cancelRaw = RequestBytes(cancelRequest);
+            var cancelDigest = UnityCliRequestDigest.Compute(cancelRaw, InstanceId);
+            var runId = Guid.NewGuid().ToString();
+            var deadline = Deadline(cancelRequest);
+            var pool = CreatePool("cancel-dual-fault-session");
+            var parentOwner = Consume(pool, parentRequestId, parentDigest, deadline);
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "test-run-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", parentRequestId }, { "requestDigest", parentDigest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, parentOwner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator);
+            Consume(pool, cancelRequestId, cancelDigest, deadline);
+            queueState.SaveOperation("test-run", new Dictionary<string, object>
+            {
+                { "requestId", parentRequestId }, { "requestDigest", parentDigest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() },
+                { "absoluteDeadlineUtc", DateTimeOffset.FromUnixTimeMilliseconds(deadline).ToString("O") },
+                { "testOperation", new Dictionary<string, object>
+                    {
+                        { "phase", "running" }, { "runId", runId }, { "cancelRunId", runId },
+                        { "cancelRequestId", cancelRequestId }, { "cancelRequestDigest", cancelDigest },
+                        { "cancelRootRequestDigest", parentDigest }, { "cancelEffectState", "dispatching" },
+                        { "cancelRequested", true }
+                    }
+                }
+            });
+            Assert.That(queueState.TryAcquireLease(parentRequestId, parentDigest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+            bool created;
+            var item = Enqueue(cancelRequest, cancelRaw, pool, out created);
+            Assert.That(created, Is.True);
+            queueState.TestHooks.ExpectOnce("before-terminal-store:test-cancel", () => { throw new IOException("injected cancel terminal fault"); });
+            queueState.TestHooks.ExpectOnce("before-operation-save:test-cancel-admission-owner", () => { throw new IOException("injected cancel recovery marker fault"); });
+
+            var finalized = UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelTerminalForTests(queueState,
+                parentRequestId, parentDigest, runId, cancelRequestId, cancelDigest,
+                ProtocolEnvelopeFactory.Error(cancelRequestId, "E_EXECUTION_TIMEOUT", "Cancellation outcome is unknown."), "outcome_unknown");
+
+            Assert.That(finalized, Is.False);
+            Assert.That(queueState.OperationExists("test-cancel-admission-owner"), Is.False);
+            Assert.That(pool.Capture().Records.Single(record => record.RequestId == cancelRequestId).OwnerState,
+                Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+            var remainingMarkerFaults = 2;
+            Action markerFault = null;
+            markerFault = () =>
+            {
+                remainingMarkerFaults--;
+                if (remainingMarkerFaults > 0)
+                    queueState.TestHooks.ExpectOnce("before-operation-save:test-cancel-admission-owner", markerFault);
+                throw new IOException("injected outer settlement marker fault");
+            };
+            queueState.TestHooks.ExpectOnce("before-operation-save:test-cancel-admission-owner", markerFault);
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item,
+                UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(cancelRequestId, "E_EXECUTION_TIMEOUT", "Cancellation outcome is unknown."))), Is.False);
+            Assert.That(item.Completed.IsSet, Is.False);
+            Assert.That(queueState.PendingSettlementWork, Does.Contain(item));
+            Assert.That(pool.Capture().Records.Single(record => record.RequestId == cancelRequestId).OwnerState,
+                Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(queueState);
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(pool.Capture().Records.Single(record => record.RequestId == cancelRequestId).OwnerState,
+                Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Continuation));
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelTerminalForTests(queueState,
+                parentRequestId, parentDigest, runId, cancelRequestId, cancelDigest,
+                ProtocolEnvelopeFactory.Error(cancelRequestId, "E_EXECUTION_TIMEOUT", "Cancellation outcome is unknown."), "outcome_unknown"), Is.True);
+            Assert.That(queueState.TryGetTerminal("test-run", parentRequestId, parentDigest, out var parentTerminal), Is.True);
+            Assert.That(UnityCliSerializer.Serialize(parentTerminal), Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("test-cancel-admission-owner"), Is.False);
+            Assert.That(queueState.OperationExists("test-run-admission-owner"), Is.False);
+            Assert.That(queueState.TryIsLeaseOwned(parentRequestId, parentDigest, out var parentOwned), Is.True);
+            Assert.That(parentOwned, Is.False);
+        }
+
+        [Test]
         public void CancelMarkerReloadRestoresExactPoolOwnerBeforeDedicatedCleanup()
         {
             var parentRequestId = Unique("reload-parent");
@@ -325,7 +411,9 @@ namespace UnityCli.Tests
                 ["rootRequestDigest"] = new string('b', 64)
             };
             queueState.SaveOperation("test-cancel-admission-owner", mismatchedCancelMarker);
-            queueState.AdmissionPool = new UnityCliAdmissionPool(InstanceId, original.Capture().Records.Single().SessionId, 4, 1);
+            var restoredSessionId = original.Capture().Records.Single().SessionId;
+            original.Reset();
+            queueState.AdmissionPool = new UnityCliAdmissionPool(InstanceId, restoredSessionId, 4, 1);
             Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.RetryCancelAdmissionOwnerMarkerForTests(queueState), Is.True);
             Assert.That(queueState.AdmissionPool.Capture().RecoveryBlocked, Is.False);
             queueState.SaveOperation("test-cancel-admission-owner", validCancelMarker);
@@ -490,6 +578,175 @@ namespace UnityCli.Tests
             AssertBuildSettled(pool, request.RequestId, digest);
         }
 
+        [Test]
+        public void MissingBuildRootTerminalFaultRetainsRecoveryOwnerUntilRetry()
+        {
+            var requestId = Unique("missing-build-root");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("missing-build-root-session");
+            var owner = Consume(pool, requestId, digest, TestDeadline());
+            owner.TopRequestDigest = digest;
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "build-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+            queueState.TestHooks.ExpectOnce("before-terminal-store:build", () => { throw new IOException("injected build recovery terminal fault"); });
+
+            UnityCliBridge.UnityCliLiveBuildCoordinator.Tick(queueState);
+            Assert.That(queueState.TryGetTerminal("build", requestId, digest, out var missing), Is.False);
+            Assert.That(queueState.OperationExists("build-admission-owner"), Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+
+            UnityCliBridge.UnityCliLiveBuildCoordinator.Tick(queueState);
+            Assert.That(queueState.TryGetTerminal("build", requestId, digest, out var terminal), Is.True);
+            Assert.That(UnityCliSerializer.Serialize(terminal), Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("build-admission-owner"), Is.False);
+            Assert.That(queueState.OperationExists("build-terminal-cleanup"), Is.False);
+        }
+
+        [Test]
+        public void MissingReloadRootPublishesExactTimeoutBeforeOwnerCleanup()
+        {
+            var requestId = Unique("missing-reload-root");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("missing-reload-root-session");
+            var owner = Consume(pool, requestId, digest, TestDeadline());
+            owner.TopRequestDigest = digest;
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "refresh-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+
+            Assert.That(UnityCliBridge.UnityCliReloadOperation.RetryAdmissionOwnerRecoveryMarkerForTests(queueState, "refresh", "Refresh"), Is.True);
+
+            Assert.That(queueState.TryGetTerminal("refresh", requestId, digest, out var terminal), Is.True);
+            Assert.That(UnityCliSerializer.Serialize(terminal), Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("refresh-admission-owner"), Is.False);
+            Assert.That(queueState.OperationExists("refresh-terminal-cleanup"), Is.False);
+        }
+
+        [Test]
+        public void MissingReloadRootTerminalFaultRetainsMarkerUntilExactRetry()
+        {
+            var requestId = Unique("missing-reload-terminal-fault");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("missing-reload-terminal-fault-session");
+            var owner = Consume(pool, requestId, digest, TestDeadline());
+            owner.TopRequestDigest = digest;
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "refresh-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+            queueState.TestHooks.ExpectOnce("before-terminal-store:refresh", () => { throw new IOException("injected recovery terminal fault"); });
+
+            Assert.That(UnityCliBridge.UnityCliReloadOperation.RetryAdmissionOwnerRecoveryMarkerForTests(queueState, "refresh", "Refresh"), Is.True);
+            Assert.That(queueState.TryGetTerminal("refresh", requestId, digest, out var missing), Is.False);
+            Assert.That(queueState.OperationExists("refresh-admission-owner"), Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+
+            Assert.That(UnityCliBridge.UnityCliReloadOperation.RetryAdmissionOwnerRecoveryMarkerForTests(queueState, "refresh", "Refresh"), Is.True);
+            Assert.That(queueState.TryGetTerminal("refresh", requestId, digest, out var terminal), Is.True);
+            Assert.That(UnityCliSerializer.Serialize(terminal), Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("refresh-admission-owner"), Is.False);
+        }
+
+        [Test]
+        public void NewPoolAndNewStoreRestoreExactCommittedTransferFromMarker()
+        {
+            var requestId = Unique("new-pool-new-store");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var original = CreatePool("new-pool-new-store-session");
+            var owner = Consume(original, requestId, digest, TestDeadline());
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "build-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+            var marker = queueState.LoadOperation("build-admission-owner");
+            var sessionId = original.Capture().Records.Single().SessionId;
+            queueState.ClearOperation("build-admission-owner");
+            original.Reset();
+            var restored = new UnityCliAdmissionPool(InstanceId, sessionId, 4, 1);
+            queueState = UnityCliBridge.CreateQueueStateForTests(restored, () => monotonicNowMs);
+            queueState.SaveOperation("build-admission-owner", marker);
+            queueState.SaveOperation("build", Root(requestId, digest, "terminal_pending"));
+            Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+
+            var reconciled = UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(queueState, "build-admission-owner", marker, requestId, digest);
+
+            Assert.That(reconciled.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+            Assert.That(restored.Capture().Active, Is.EqualTo(1));
+            queueState.StoreTerminalFirst("build", requestId, digest,
+                ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "New store recovery terminal."));
+            UnityCliActiveOperation.BeginExactTerminalCleanup("build", requestId, digest, queueState);
+            Assert.That(restored.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("build-admission-owner"), Is.False);
+            Assert.That(queueState.OperationExists("build"), Is.False);
+            Assert.That(queueState.TryIsLeaseOwned(requestId, digest, out var owned), Is.True);
+            Assert.That(owned, Is.False);
+        }
+
+        [TestCase(false, 0)]
+        [TestCase(false, 1)]
+        [TestCase(false, 2)]
+        [TestCase(true, 1)]
+        [TestCase(true, 2)]
+        public void TransferMarkerAndReloadedPoolWindowsConvergeExactly(bool markerCommitted, int poolWindow)
+        {
+            var requestId = Unique("transfer-reload-window");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var original = CreatePool("transfer-reload-window-session");
+            var owner = Consume(original, requestId, digest, TestDeadline());
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "build-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", requestId }, { "requestDigest", digest }, { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+            var marker = queueState.LoadOperation("build-admission-owner");
+            marker["admissionTransferCommitted"] = markerCommitted;
+            queueState.SaveOperation("build-admission-owner", marker);
+            var source = UnityCliAdmissionPool.CreateConsumedIdentity(
+                requestId,
+                marker["admissionRootFingerprint"] as string,
+                marker["admissionRequestDigest"] as string,
+                marker["admissionToken"] as string,
+                marker["admissionSessionId"] as string,
+                UnityCliAdmissionPool.AdmissionOwnerState.WorkItem,
+                marker["admissionListenerId"] as string,
+                (long)marker["admissionListenerGeneration"],
+                (long)marker["admissionExecutionDeadlineMs"]);
+            var restored = new UnityCliAdmissionPool(InstanceId, source.SessionId, 4, 1);
+            if (poolWindow == 0)
+                Assert.That(restored.RestoreConsumed(source, UnityCliAdmissionPool.AdmissionOwnerState.WorkItem, true), Is.True);
+            else if (poolWindow == 1)
+                Assert.That(restored.RestoreConsumed(source, UnityCliAdmissionPool.AdmissionOwnerState.Recovery, false), Is.True);
+            else
+            {
+                var intended = UnityCliAdmissionPool.CreateConsumedIdentity(
+                    source.RequestId, source.RootFingerprint, source.RequestDigest, source.Token, source.SessionId,
+                    UnityCliAdmissionPool.AdmissionOwnerState.Recovery, source.ListenerId, source.ListenerGeneration, source.ExecutionDeadlineMs);
+                Assert.That(restored.RestoreConsumed(intended, UnityCliAdmissionPool.AdmissionOwnerState.Recovery, true), Is.True);
+            }
+            original.Reset();
+            queueState.AdmissionPool = restored;
+
+            var reconciled = UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(queueState, "build-admission-owner", marker, requestId, digest);
+
+            Assert.That(reconciled.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+            var record = restored.Capture().Records.Single();
+            Assert.That(record.OwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+            Assert.That(record.IntendedOwnerState, Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+            Assert.That(record.TransferCommitted, Is.True);
+            Assert.That(queueState.LoadOperation("build-admission-owner")["admissionTransferCommitted"], Is.EqualTo(true));
+            queueState.StoreTerminalFirst("build", requestId, digest,
+                ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Transfer reload test terminal."));
+            UnityCliActiveOperation.BeginExactTerminalCleanup("build", requestId, digest, queueState);
+            Assert.That(restored.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("build-admission-owner"), Is.False);
+        }
+
         [TestCase(true, true)]
         [TestCase(false, true)]
         [TestCase(false, false)]
@@ -512,7 +769,11 @@ namespace UnityCli.Tests
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "completeAdmission", true }
             };
             UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "build-terminal-cleanup", marker, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
-            queueState.AdmissionPool = new UnityCliAdmissionPool(InstanceId, original.Capture().Records.Single().SessionId, 4, 1);
+            queueState.StoreTerminalFirst("build", requestId, digest,
+                ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Cleanup window test terminal."));
+            var sessionId = original.Capture().Records.Single().SessionId;
+            original.Reset();
+            queueState.AdmissionPool = new UnityCliAdmissionPool(InstanceId, sessionId, 4, 1);
 
             Assert.That(UnityCliActiveOperation.RetryExactTerminalCleanup("build", queueState), Is.False);
             Assert.That(queueState.AdmissionPool.Capture().Active, Is.EqualTo(0));

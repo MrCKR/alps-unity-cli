@@ -17,6 +17,7 @@ namespace UnityCli
         internal readonly Dictionary<string, UnityCliBridge.BridgeWorkItem> ActiveRequestWork = new Dictionary<string, UnityCliBridge.BridgeWorkItem>(StringComparer.Ordinal);
         internal UnityCliAdmissionPool AdmissionPool;
         internal bool QueuePublicationOpen;
+        internal bool QueueSessionStopping;
         internal string ListenerId;
         internal long ListenerGeneration;
         internal bool AdmissionPoolShutdownPending;

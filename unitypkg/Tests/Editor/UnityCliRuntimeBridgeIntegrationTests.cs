@@ -82,6 +82,91 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void RuntimeAdmissionAcquireAndStopShareThePublicationBoundary()
+        {
+            var entered = new ManualResetEventSlim(false);
+            var release = new ManualResetEventSlim(false);
+            bridge.ExpectRuntimeBoundaryForTests("before-runtime-admission-acquire", () =>
+            {
+                entered.Set();
+                release.Wait();
+            });
+            UnityCliAdmissionPool.AcquireResult acquired = null;
+            var acquireResult = false;
+            var acquireTask = Task.Run(() =>
+            {
+                UnityCliAdmissionPool.AcquireResult local;
+                acquireResult = bridge.TryAcquireRuntimeAdmissionForTests("runtime-admission-stop", Fingerprint, out local);
+                acquired = local;
+            });
+            Task stopTask = null;
+            try
+            {
+                Assert.That(entered.Wait(5000), Is.True);
+                stopTask = Task.Run(() => bridge.StopRuntimeRequestsLocked());
+            }
+            finally { release.Set(); }
+
+            Assert.That(acquireTask.Wait(5000), Is.True);
+            Assert.That(stopTask.Wait(5000), Is.True);
+            Assert.That(acquireResult, Is.True);
+            Assert.That(acquired.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(bridge.TryAcquireRuntimeAdmissionForTests("runtime-admission-after-stop", Fingerprint, out acquired), Is.False);
+            Assert.That(acquired, Is.Null);
+        }
+
+        [Test]
+        public void RuntimeStopWinningAdmissionRaceReturnsOnlySessionStale()
+        {
+            var entered = new ManualResetEventSlim(false);
+            var release = new ManualResetEventSlim(false);
+            bridge.ExpectRuntimeBoundaryForTests("before-runtime-stop", () =>
+            {
+                entered.Set();
+                release.Wait();
+            });
+            var stopTask = Task.Run(() => bridge.StopRuntimeRequestsLocked());
+            var acquireResult = true;
+            UnityCliAdmissionPool.AcquireResult acquired = null;
+            Task acquireTask = null;
+            try
+            {
+                Assert.That(entered.Wait(5000), Is.True);
+                acquireTask = Task.Run(() =>
+                {
+                    UnityCliAdmissionPool.AcquireResult local;
+                    acquireResult = bridge.TryAcquireRuntimeAdmissionForTests("runtime-stop-wins", Fingerprint, out local);
+                    acquired = local;
+                });
+            }
+            finally { release.Set(); }
+
+            Assert.That(stopTask.Wait(5000), Is.True);
+            Assert.That(acquireTask.Wait(5000), Is.True);
+            Assert.That(acquireResult, Is.False);
+            Assert.That(acquired, Is.Null);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void RecoveryBlockedAuthorizationRevokesItsExactUnconsumedGrant()
+        {
+            var requestId = "runtime-blocked-authorization";
+            var request = Request(requestId, "runtime-tool.run");
+            var digest = Digest('2');
+            var deadline = Deadline();
+            var admission = Admission(requestId, digest, deadline);
+            pool.BlockRecovery();
+
+            var publication = bridge.PublishRuntimeRequest(request, deadline, digest, admission);
+
+            Assert.That(publication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
+            Assert.That(publication.Error, Does.Contain("E_ADMISSION_IDENTITY_MISMATCH"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+        }
+
+        [Test]
         public void UnauthorizedCapacityAndPublicationFaultDoNotLeakAdmissionOrLoseExistingCache()
         {
             var first = PublishBypass("runtime-first");

@@ -111,7 +111,11 @@ namespace UnityCli
             EditorApplication.quitting += UnregisterAndStop;
             EditorApplication.playModeStateChanged += OnBridgePlayModeStateChanged;
             domainReloading = false;
-            lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = false;
+            lock (ProductionQueueState.QueueLock)
+            {
+                ProductionQueueState.QueuePublicationOpen = false;
+                ProductionQueueState.QueueSessionStopping = false;
+            }
             ScheduleBridgeStartup();
         }
 
@@ -204,7 +208,11 @@ namespace UnityCli
                 if (!RegisterInstance("transitioning")) throw new InvalidOperationException("Initial listener registry claim could not be published.");
                 ProductionQueueState.ListenerId = ListenerId;
                 ProductionQueueState.ListenerGeneration = Math.Max(1, CurrentListenerGeneration());
-                lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = true;
+                lock (ProductionQueueState.QueueLock)
+                {
+                    ProductionQueueState.QueueSessionStopping = false;
+                    ProductionQueueState.QueuePublicationOpen = true;
+                }
                 Task.Run(ListenLoop);
                 readyPublicationPending = true;
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
@@ -252,7 +260,11 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
-            lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = false;
+            lock (ProductionQueueState.QueueLock)
+            {
+                ProductionQueueState.QueuePublicationOpen = false;
+                ProductionQueueState.QueueSessionStopping = false;
+            }
             InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
@@ -277,7 +289,7 @@ namespace UnityCli
 
         private static void UnregisterAndStop()
         {
-            var queuedBeforeShutdown = CloseQueuePublicationAndTakeQueuedWork();
+            var queuedBeforeShutdown = CloseQueuePublicationAndTakeQueuedWork(true);
             CancelQueuedWorkForShutdown(queuedBeforeShutdown);
             ShutdownAdmissionPool();
             ReleaseActiveDirectMutationLease();

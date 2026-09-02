@@ -136,6 +136,106 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void AdmissionAcquireAndShutdownShareQueuePublicationLinearization()
+        {
+            var entered = new ManualResetEventSlim(false);
+            var release = new ManualResetEventSlim(false);
+            state.TestHooks.ExpectOnce("before-admission-endpoint-acquire", () =>
+            {
+                entered.Set();
+                release.Wait();
+            });
+            UnityCliAdmissionPool.AcquireResult acquired = null;
+            var acquireTask = Task.Run(() => acquired = UnityCliBridge.AcquireAdmissionForTests(state, "endpoint-stop-race", fingerprint));
+            Task shutdownTask = null;
+            try
+            {
+                Assert.That(entered.Wait(5000), Is.True);
+                shutdownTask = Task.Run(() => UnityCliBridge.ShutdownQueuedWorkForTests(state));
+            }
+            finally { release.Set(); }
+
+            Assert.That(acquireTask.Wait(5000), Is.True);
+            Assert.That(shutdownTask.Wait(5000), Is.True);
+            Assert.That(acquired.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            var stale = Assert.Throws<UnityCliBridge.BridgeCommandException>(() =>
+                UnityCliBridge.AcquireAdmissionForTests(state, "endpoint-after-stop", fingerprint));
+            Assert.That(stale.Code, Is.EqualTo("E_RUNTIME_SESSION_STALE"));
+        }
+
+        [Test]
+        public void AdmissionShutdownWinningTheRaceReturnsOnlySessionStale()
+        {
+            var entered = new ManualResetEventSlim(false);
+            var release = new ManualResetEventSlim(false);
+            state.TestHooks.ExpectOnce("before-queue-shutdown-close", () =>
+            {
+                entered.Set();
+                release.Wait();
+            });
+            var shutdownTask = Task.Run(() => UnityCliBridge.ShutdownQueuedWorkForTests(state));
+            Task<UnityCliBridge.BridgeCommandException> acquireTask = null;
+            try
+            {
+                Assert.That(entered.Wait(5000), Is.True);
+                acquireTask = Task.Run(() =>
+                {
+                    try
+                    {
+                        UnityCliBridge.AcquireAdmissionForTests(state, "endpoint-stop-wins", fingerprint);
+                        return null;
+                    }
+                    catch (UnityCliBridge.BridgeCommandException exception) { return exception; }
+                });
+            }
+            finally { release.Set(); }
+
+            Assert.That(shutdownTask.Wait(5000), Is.True);
+            Assert.That(acquireTask.Wait(5000), Is.True);
+            Assert.That(acquireTask.Result, Is.Not.Null);
+            Assert.That(acquireTask.Result.Code, Is.EqualTo("E_RUNTIME_SESSION_STALE"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void DistinctCompletionIntentsSettleConcurrentlyWithoutLostUpdateOrResurrection()
+        {
+            var firstRequest = Request("journal-concurrent-first");
+            var secondRequest = Request("journal-concurrent-second");
+            var firstRaw = RequestBytes(firstRequest);
+            var secondRaw = RequestBytes(secondRequest);
+            var firstDigest = UnityCliRequestDigest.Compute(firstRaw, firstRequest.InstanceId);
+            var secondDigest = UnityCliRequestDigest.Compute(secondRaw, secondRequest.InstanceId);
+            var firstGrant = pool.Acquire(firstRequest.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            var secondGrant = pool.Acquire(secondRequest.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(pool.AuthorizeAndCapture(firstRequest.RequestId, fingerprint, firstDigest, firstGrant.Token, state.ListenerId, state.ListenerGeneration, Deadline(firstRequest)).Outcome,
+                Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+            Assert.That(pool.AuthorizeAndCapture(secondRequest.RequestId, fingerprint, secondDigest, secondGrant.Token, state.ListenerId, state.ListenerGeneration, Deadline(secondRequest)).Outcome,
+                Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+            var firstOwner = UnityCliBridge.CaptureAdmissionOwner(state, firstRequest.RequestId, firstDigest);
+            var secondOwner = UnityCliBridge.CaptureAdmissionOwner(state, secondRequest.RequestId, secondDigest);
+
+            var firstPersist = Task.Run(() => state.PersistIntent(firstOwner));
+            var secondPersist = Task.Run(() => state.PersistIntent(secondOwner));
+            Assert.That(Task.WaitAll(new Task[] { firstPersist, secondPersist }, 5000), Is.True);
+            Assert.That(firstPersist.Result, Is.True);
+            Assert.That(secondPersist.Result, Is.True);
+            Assert.That(state.HasIntent(firstOwner), Is.True);
+            Assert.That(state.HasIntent(secondOwner), Is.True);
+
+            var firstComplete = Task.Run(() => UnityCliBridge.CompleteAdmissionRoot(state, firstOwner));
+            var secondComplete = Task.Run(() => UnityCliBridge.CompleteAdmissionRoot(state, secondOwner));
+            Assert.That(Task.WaitAll(new Task[] { firstComplete, secondComplete }, 5000), Is.True);
+            Assert.That(firstComplete.Result, Is.True);
+            Assert.That(secondComplete.Result, Is.True);
+            Assert.That(state.HasIntent(firstOwner), Is.False);
+            Assert.That(state.HasIntent(secondOwner), Is.False);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+        }
+
+        [Test]
         public void PublicationCompensationPersistsAndLogsOutsideQueueLock()
         {
             var request = Request("queue-publication-fault");
@@ -154,6 +254,29 @@ namespace UnityCli.Tests
             Assert.That(logOutside, Is.True);
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void RecoveryBlockedAuthorizationRevokesItsExactGrantBeforeQueueRejection()
+        {
+            var request = Request("queue-recovery-blocked-authorization");
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            pool.BlockRecovery();
+
+            var failure = Assert.Throws<UnityCliBridge.BridgeCommandException>(() =>
+            {
+                bool created;
+                Enqueue(request, raw, grant.Token, deadline, out created);
+            });
+
+            Assert.That(failure.Code, Is.EqualTo("E_ADMISSION_IDENTITY_MISMATCH"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            pool.Reset();
         }
 
         [Test]

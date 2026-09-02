@@ -264,7 +264,13 @@ namespace UnityCli
                         || RequiredString(value, "target", 16) != "runtime") throw new FormatException("Runtime admission acquire identity is invalid.");
                     RequiredString(value, "command", 256);
                     var acquireFingerprint = RequiredString(value, "rootFingerprint", 64);
-                    var result = admissionPool.Acquire(requestId, acquireFingerprint, listenerId, 1L);
+                    UnityCliAdmissionPool.AcquireResult result;
+                    int active;
+                    if (!TryAcquireRuntimeAdmission(requestId, acquireFingerprint, out result, out active))
+                    {
+                        Write(context, Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." }));
+                        return;
+                    }
                     if (result.Outcome == UnityCliAdmissionPool.AcquireOutcome.Invalid) throw new FormatException("Runtime admission acquire fields are invalid.");
                     if (result.Outcome == UnityCliAdmissionPool.AcquireOutcome.IdentityMismatch)
                     {
@@ -280,7 +286,7 @@ namespace UnityCli
                     if (granted)
                     {
                         context.Response.Headers["x-unity-cli-admission-token"] = result.Token;
-                        Debug.Log("UnityCli " + (result.NewlyGranted ? "admission_granted" : "admission_attached") + " requestId=" + requestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                        Debug.Log("UnityCli " + (result.NewlyGranted ? "admission_granted" : "admission_attached") + " requestId=" + requestId + " active=" + active.ToString(CultureInfo.InvariantCulture));
                     }
                     Write(context, Success(requestId, new Dictionary<string, object>
                     {
@@ -301,13 +307,53 @@ namespace UnityCli
                 var token = context.Request.Headers["x-unity-cli-admission-token"];
                 if (string.IsNullOrEmpty(token) || token.Length > 256) throw new FormatException("Runtime admission token header is missing or invalid.");
                 if (!string.Equals(route, "/bridge/admission/revoke", StringComparison.Ordinal)) throw new FormatException("Runtime admission release route is invalid.");
-                var revoked = admissionPool.Revoke(requestId, fingerprint, token);
-                if (revoked) Debug.Log("UnityCli admission_revoked requestId=" + requestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                bool revoked;
+                int remainingActive;
+                if (!TryRevokeRuntimeAdmission(requestId, fingerprint, token, out revoked, out remainingActive))
+                {
+                    Write(context, Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." }));
+                    return;
+                }
+                if (revoked) Debug.Log("UnityCli admission_revoked requestId=" + requestId + " active=" + remainingActive.ToString(CultureInfo.InvariantCulture));
                 if (!revoked) { Write(context, Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Admission revoke identity does not match an unconsumed Runtime root.", new[] { "Inspect the selected Runtime session before retrying." })); return; }
                 Write(context, Success(requestId, new Dictionary<string, object> { { "revoked", true } }));
             }
             catch (FormatException exception) { Write(context, Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Use the internal admission protocol schema." })); }
             catch (Exception exception) { Write(context, Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime admission failed: " + exception.GetType().Name + ".", new[] { "Inspect the Player session before retrying." })); }
+        }
+
+        /// <summary>admission端点与execute publication、dequeue和stop共享requestCacheSync。</summary>
+        private bool TryAcquireRuntimeAdmission(string requestId, string fingerprint, out UnityCliAdmissionPool.AcquireResult result, out int active)
+        {
+            lock (requestCacheSync)
+            {
+                result = null;
+                active = 0;
+                if (stopping.IsCancellationRequested || admissionPool == null) return false;
+                HitRuntimeTestBoundary("before-runtime-admission-acquire");
+                result = admissionPool.Acquire(requestId, fingerprint, listenerId, 1L);
+                active = admissionPool.Capture().Active;
+                return true;
+            }
+        }
+
+        private bool TryRevokeRuntimeAdmission(string requestId, string fingerprint, string token, out bool revoked, out int active)
+        {
+            lock (requestCacheSync)
+            {
+                revoked = false;
+                active = 0;
+                if (stopping.IsCancellationRequested || admissionPool == null) return false;
+                revoked = admissionPool.Revoke(requestId, fingerprint, token);
+                active = admissionPool.Capture().Active;
+                return true;
+            }
+        }
+
+        internal bool TryAcquireRuntimeAdmissionForTests(string requestId, string fingerprint, out UnityCliAdmissionPool.AcquireResult result)
+        {
+            int active;
+            return TryAcquireRuntimeAdmission(requestId, fingerprint, out result, out active);
         }
 
         private static RuntimeAdmissionInput ReadRuntimeAdmission(HttpListenerRequest request)
@@ -347,7 +393,13 @@ namespace UnityCli
             if (pool == null) return Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session ended before admission completed.", new[] { "Launch a new development Player and submit a new request." });
             var result = pool.AuthorizeAndCapture(admission.RootId, admission.Fingerprint, requestDigest, admission.Token, listenerId, 1L, deadline.ToUnixTimeMilliseconds());
             if (result.Outcome != UnityCliAdmissionPool.AuthorizeOutcome.Authorized || result.Identity == null)
+            {
+                if ((result.Outcome == UnityCliAdmissionPool.AuthorizeOutcome.Invalid
+                    || result.Outcome == UnityCliAdmissionPool.AuthorizeOutcome.RecoveryBlocked)
+                    && !pool.Revoke(admission.RootId, admission.Fingerprint, admission.Token))
+                    return Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime admission rejection could not prove exact unconsumed cleanup.", new[] { "Launch a new development Player before submitting more work." });
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission token is missing, expired, or bound to another root.", new[] { "Wait for a fresh Runtime admission before submitting business work." });
+            }
             admissionOwner = result.Identity;
             newlyConsumed = result.NewlyConsumed;
             return null;
@@ -890,12 +942,17 @@ namespace UnityCli
                 PendingRequest ignored;
                 while (pending.TryDequeue(out ignored)) { }
                 requestCache.Clear();
-                var pool = admissionPool;
-                admissionPool = null;
-                if (pool != null) pool.Reset();
+                var unresolved = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
                 foreach (var entry in entries.Values)
-                    if (Volatile.Read(ref entry.ExecutionState) != 3) FinalizeRuntimeRequestForShutdown(entry, entry.Terminal);
+                    if (Volatile.Read(ref entry.ExecutionState) != 3) unresolved[entry.RequestId] = entry;
                 pendingSettlements.Clear();
+                foreach (var entry in unresolved.Values) pendingSettlements[entry.RequestId] = entry;
+                if (unresolved.Count == 0)
+                {
+                    var pool = admissionPool;
+                    admissionPool = null;
+                    if (pool != null) pool.Reset();
+                }
             }
         }
 

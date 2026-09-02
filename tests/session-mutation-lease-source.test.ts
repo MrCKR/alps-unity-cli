@@ -117,7 +117,7 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(admission, /test-cancel-admission-owner[\s\S]*rootRequestDigest|TryConfirmCancelTransferredOwner[\s\S]*AdmissionMarkerMatchesIdentity/);
   assert.match(testRun, /Continuation本身是legal terminal owner[\s\S]*CompleteAdmissionRoot/);
   assert.match(admission, /ReconcileAdmissionTransferForLiveMarker\(BridgeQueueState state[\s\S]*PersistAdmissionPoolState\(state\)/);
-  assert.match(operation, /RetryDirectMutationTerminalCleanup[\s\S]*RetryExactTerminalCleanup\(DirectMutationTerminalScope\)/);
+  assert.match(operation, /RetryDirectMutationTerminalCleanup[\s\S]*RetryExactTerminalCleanup\(DirectMutationTerminalScope, state\)/);
   assertBefore(operation, "if (!mutation)", "TryAcquire(request.RequestId, requestDigest");
   const acquireIndex = operation.indexOf("TryAcquire(request.RequestId, requestDigest");
   assert.ok(acquireIndex >= 0, "missing direct mutation lease acquisition");
