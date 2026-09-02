@@ -156,6 +156,46 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void FirstCompensationIntentWriteFailureRetriesWithoutLosingTheExactOwner()
+        {
+            var request = Request("queue-compensation-intent-first-write");
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            state.TestHooks.ExpectOnce("before-queue-publication", () => { throw new InvalidOperationException("injected publication fault"); });
+            state.TestHooks.ExpectOnce("before-state-persist-intent", () => { throw new IOException("injected first intent write fault"); });
+
+            var failure = Assert.Throws<UnityCliBridge.BridgeCommandException>(() =>
+            {
+                bool created;
+                Enqueue(request, raw, grant.Token, deadline, out created);
+            });
+
+            Assert.That(failure.Code, Is.EqualTo("E_EXECUTION_TIMEOUT"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+            var logsAfterFailure = state.Sinks.LogCount;
+            Assert.Throws<UnityCliBridge.BridgeCommandException>(() =>
+            {
+                bool created;
+                Enqueue(request, raw, grant.Token, deadline, out created);
+            });
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+
+            monotonicNowMs += 99L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+            Assert.That(state.Sinks.LogCount, Is.EqualTo(logsAfterFailure));
+            monotonicNowMs += 1L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(state.Sinks.TransactionCount, Is.EqualTo(0));
+        }
+
+        [Test]
         public void CompletionBoundaryFaultLogsAndPersistsOutsideQueueLock()
         {
             var request = Request("queue-completion-fault");
@@ -285,6 +325,9 @@ namespace UnityCli.Tests
         [TestCase("internal.test.run.cancel.plan", "test-run", "expectedEditorSessionId")]
         [TestCase("internal.test.run.cancel", "test-run", "expectedEditorSessionId")]
         [TestCase("internal.package.files.claim", "package-resolve", "rootRequestId")]
+        [TestCase("internal.package.files.commit", "package-resolve", "rootRequestId")]
+        [TestCase("internal.package.files.prove", "package-resolve", "rootRequestId")]
+        [TestCase("internal.package.files.fail", "package-resolve", "rootRequestId")]
         [TestCase("internal.navmesh.bake.cancel", "navmesh-bake", "operationId")]
         [TestCase("internal.occlusion.bake.cancel", "occlusion-bake", "operationId")]
         public void DurableControlLaneStartsOnlyExactVerifiedParent(string command, string scope, string selectorKey)
@@ -313,11 +356,12 @@ namespace UnityCli.Tests
             exact.Command = command;
             exact.Input = new Dictionary<string, object> { { selectorKey, exactValue } };
             bool created;
+            UnityCliBridge.BridgeWorkItem rejectedItem;
             if (command == "internal.test.run.cancel")
             {
                 var rejectedRaw = RequestBytes(rejected);
                 var rejectedGrant = pool.Acquire(rejected.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
-                Enqueue(rejected, rejectedRaw, rejectedGrant.Token, Deadline(rejected), out created);
+                rejectedItem = Enqueue(rejected, rejectedRaw, rejectedGrant.Token, Deadline(rejected), out created);
                 Assert.That(created, Is.True);
                 var exactRaw = RequestBytes(exact);
                 var exactGrant = pool.Acquire(exact.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
@@ -326,19 +370,83 @@ namespace UnityCli.Tests
             }
             else
             {
-                EnqueueBypass(rejected, out created);
+                rejectedItem = EnqueueBypass(rejected, out created);
                 Assert.That(created, Is.True);
                 EnqueueBypass(exact, out created);
                 Assert.That(created, Is.True);
             }
 
             var starts = UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state);
+            var rejectedIds = UnityCliBridge.RejectTerminalControlWorkForTests(state);
 
             Assert.That(starts, Is.EqualTo(new[] { exact.RequestId }));
-            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(2));
+            Assert.That(rejectedIds, Is.EqualTo(new[] { rejected.RequestId }));
+            Assert.That(rejectedItem.Completed.IsSet, Is.True);
+            Assert.That(rejectedItem.Response, Does.Contain("E_ADMISSION_IDENTITY_MISMATCH"));
+            Assert.That(UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state), Is.EqualTo(new[] { exact.RequestId }));
+            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(1));
             UnityCliBridge.ShutdownQueuedWorkForTests(state);
             state.ClearOperation(scope);
             state.ReleaseLease(parentRequestId, parentDigest);
+        }
+
+        [TestCase("internal.test.run.cancel")]
+        [TestCase("internal.package.files.claim")]
+        [TestCase("internal.package.files.commit")]
+        [TestCase("internal.package.files.prove")]
+        [TestCase("internal.package.files.fail")]
+        [TestCase("internal.navmesh.bake.cancel")]
+        [TestCase("internal.occlusion.bake.cancel")]
+        public void MissingOrExpiredControlReachesTerminalAndAllowsQueueProgress(string command)
+        {
+            var stale = Request("stale-control-" + command.Replace('.', '-'));
+            stale.Command = command;
+            stale.Input = new Dictionary<string, object>
+            {
+                { command.StartsWith("internal.package.files", StringComparison.Ordinal) ? "rootRequestId"
+                    : command.StartsWith("internal.test.run", StringComparison.Ordinal) ? "expectedEditorSessionId" : "operationId", "missing-parent" }
+            };
+            bool created;
+            UnityCliBridge.BridgeWorkItem staleItem;
+            if (command == "internal.test.run.cancel")
+            {
+                var raw = RequestBytes(stale);
+                var grant = pool.Acquire(stale.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+                staleItem = Enqueue(stale, raw, grant.Token, Deadline(stale), out created);
+            }
+            else staleItem = EnqueueBypass(stale, out created);
+            Assert.That(created, Is.True);
+            var ordinary = Request("ordinary-after-stale-" + command.Replace('.', '-'));
+            ordinary.Command = "project-tool.list";
+            EnqueueBypass(ordinary, out created);
+            Assert.That(created, Is.True);
+
+            var rejected = UnityCliBridge.RejectTerminalControlWorkForTests(state);
+
+            Assert.That(rejected, Is.EqualTo(new[] { stale.RequestId }));
+            Assert.That(staleItem.Completed.IsSet, Is.True);
+            Assert.That(staleItem.Response, Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state), Is.EqualTo(new[] { ordinary.RequestId }));
+            UnityCliBridge.ShutdownQueuedWorkForTests(state);
+        }
+
+        [Test]
+        public void ExpiredControlTerminatesEvenWhenItsParentStateIsUnreadable()
+        {
+            var stale = Request("expired-control-unreadable");
+            stale.Command = "internal.navmesh.bake.cancel";
+            stale.Input = new Dictionary<string, object> { { "operationId", "expired-operation" } };
+            stale.Execution.AbsoluteDeadlineUtc = DateTimeOffset.FromUnixTimeMilliseconds(0).ToString("O");
+            bool created;
+            var staleItem = EnqueueBypass(stale, out created);
+            Assert.That(created, Is.True);
+            state.TestHooks.ExpectOnce("before-operation-load:navmesh-bake", () => { throw new IOException("injected unreadable parent"); });
+
+            var rejected = UnityCliBridge.RejectTerminalControlWorkForTests(state);
+
+            Assert.That(rejected, Is.EqualTo(new[] { stale.RequestId }));
+            Assert.That(staleItem.Completed.IsSet, Is.True);
+            Assert.That(staleItem.Response, Does.Contain("deadline elapsed"));
         }
 
         [Test]

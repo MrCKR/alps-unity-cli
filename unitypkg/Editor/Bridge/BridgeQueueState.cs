@@ -106,7 +106,21 @@ namespace UnityCli
         internal bool HasIntentInMemory(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
             if (identity == null) return false;
-            lock (SettlementLock) return pendingCompletionIntents.ContainsKey(IntentKey(identity));
+            lock (SettlementLock)
+            {
+                PendingCompletionIntent pending;
+                return pendingCompletionIntents.TryGetValue(IntentKey(identity), out pending) && pending.IntentPersisted;
+            }
+        }
+
+        internal bool HasCompensationContinuation(UnityCliBridge.AdmissionOwnerIdentity identity)
+        {
+            if (identity == null) return false;
+            lock (SettlementLock)
+            {
+                PendingCompletionIntent pending;
+                return pendingCompletionIntents.TryGetValue(IntentKey(identity), out pending) && pending.Compensation;
+            }
         }
 
         internal bool ClearIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
@@ -131,13 +145,33 @@ namespace UnityCli
 
         internal void TrackCompletionIntent(UnityCliBridge.AdmissionOwnerIdentity identity)
         {
+            TrackIntent(identity, false, true);
+        }
+
+        /// <summary>publication失败后先登记内存continuation，再尝试首次durable intent写入。</summary>
+        internal void TrackCompensationContinuation(UnityCliBridge.AdmissionOwnerIdentity identity)
+        {
+            TrackIntent(identity, true, false);
+        }
+
+        private void TrackIntent(UnityCliBridge.AdmissionOwnerIdentity identity, bool compensation, bool persisted)
+        {
             if (identity == null) throw new ArgumentNullException("identity");
             var key = IntentKey(identity);
             lock (SettlementLock)
             {
-                if (pendingCompletionIntents.ContainsKey(key)) return;
+                PendingCompletionIntent current;
+                if (pendingCompletionIntents.TryGetValue(key, out current))
+                {
+                    if (compensation) current.Compensation = true;
+                    if (persisted) current.IntentPersisted = true;
+                    return;
+                }
                 if (pendingCompletionIntents.Count >= 256) throw new InvalidOperationException("Admission completion intent journal reached its fixed bound.");
-                pendingCompletionIntents.Add(key, new PendingCompletionIntent { Owner = CloneIdentity(identity) });
+                pendingCompletionIntents.Add(key, new PendingCompletionIntent
+                {
+                    Owner = CloneIdentity(identity), Compensation = compensation, IntentPersisted = persisted
+                });
             }
         }
 
@@ -165,6 +199,20 @@ namespace UnityCli
         {
             if (intent == null) return;
             lock (SettlementLock) intent.FailureLogged = true;
+        }
+
+        internal bool DeferTrackedCompletionIntent(UnityCliBridge.AdmissionOwnerIdentity identity, long nowMs)
+        {
+            if (identity == null) return false;
+            lock (SettlementLock)
+            {
+                PendingCompletionIntent pending;
+                if (!pendingCompletionIntents.TryGetValue(IntentKey(identity), out pending)) return false;
+                pending.NextRetryAtMs = checked(nowMs + 100L);
+                if (pending.FailureLogged) return false;
+                pending.FailureLogged = true;
+                return true;
+            }
         }
 
         internal int PendingCompletionIntentCount
@@ -323,6 +371,8 @@ namespace UnityCli
             internal UnityCliBridge.AdmissionOwnerIdentity Owner;
             internal long NextRetryAtMs;
             internal bool FailureLogged;
+            internal bool Compensation;
+            internal bool IntentPersisted;
         }
 
         private static long DefaultMonotonicMilliseconds()

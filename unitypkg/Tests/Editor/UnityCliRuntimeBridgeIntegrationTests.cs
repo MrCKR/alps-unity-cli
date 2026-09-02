@@ -20,6 +20,7 @@ namespace UnityCli.Tests
         private UnityCliRuntimeBridge bridge;
         private UnityCliAdmissionPool pool;
         private long utcNowMs;
+        private long monotonicNowMs;
 
         [SetUp]
         public void SetUp()
@@ -28,7 +29,9 @@ namespace UnityCli.Tests
             bridge = host.AddComponent<UnityCliRuntimeBridge>();
             bridge.enabled = false;
             utcNowMs = 1000000L;
+            monotonicNowMs = 5000L;
             bridge.InjectUtcNowProviderForTests(() => utcNowMs);
+            bridge.InjectMonotonicNowProviderForTests(() => monotonicNowMs);
             pool = new UnityCliAdmissionPool("runtime-test-instance", "runtime-test-session", 256, 64, null, () => utcNowMs);
             SetField("admissionPool", pool);
             SetField("listenerId", ListenerId);
@@ -42,6 +45,7 @@ namespace UnityCli.Tests
             {
                 bridge.StopRuntimeRequestsLocked();
                 bridge.AssertRuntimeBoundariesDrainedForTests();
+                bridge.ResetClockProvidersForTests();
             }
             if (host != null) UnityEngine.Object.DestroyImmediate(host);
             bridge = null;
@@ -133,7 +137,7 @@ namespace UnityCli.Tests
             Assert.That(duplicate.Work, Is.SameAs(publication.Work));
 
             pool.Reset();
-            utcNowMs += 100L;
+            monotonicNowMs += 100L;
             bridge.RetryPendingRuntimeSettlementsForTests();
 
             Assert.That(publication.Work.Completion.Task.IsCompleted, Is.True);
@@ -237,10 +241,31 @@ namespace UnityCli.Tests
             Assert.That(duplicate.Work, Is.SameAs(running));
 
             pool.Reset();
-            utcNowMs += 100L;
+            monotonicNowMs += 100L;
             bridge.RetryPendingRuntimeSettlementsForTests();
 
             Assert.That(running.Completion.Task.Result, Is.EqualTo("blocked-terminal"));
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void RecoveryBlockedFrozenTerminalSettlesDuringShutdownWithoutAPump()
+        {
+            var requestId = "runtime-blocked-frozen-shutdown";
+            var request = Request(requestId, "runtime-tool.run");
+            var digest = Digest('3');
+            var deadline = Deadline();
+            var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission(requestId, digest, deadline));
+            var running = TakeNext();
+            pool.BlockRecovery();
+            Assert.That(Finalize(running, "frozen-shutdown-terminal", 1), Is.False);
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(1));
+
+            bridge.StopRuntimeRequestsLocked();
+
+            Assert.That(publication.Work.Completion.Task.IsCompleted, Is.True);
+            Assert.That(publication.Work.Completion.Task.Result, Is.EqualTo("frozen-shutdown-terminal"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
             Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(0));
         }
 
@@ -267,24 +292,64 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void RunningRequestCompletesAgainstCapturedPoolAfterShutdown()
+        public void RecoveryBlockedShutdownSettlesQueuedAndRunningAgainstCapturedPoolExactlyOnce()
         {
-            var request = Request("runtime-running-shutdown", "runtime-tool.run");
-            var digest = Digest('e');
-            var publication = bridge.PublishRuntimeRequest(request, Deadline(), digest, Admission("runtime-running-shutdown", digest, Deadline()));
-            Assert.That(publication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
+            var runningRequest = Request("runtime-running-shutdown", "runtime-tool.run");
+            var runningDigest = Digest('e');
+            var runningPublication = bridge.PublishRuntimeRequest(runningRequest, Deadline(), runningDigest,
+                Admission("runtime-running-shutdown", runningDigest, Deadline()));
+            Assert.That(runningPublication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
             var running = TakeNext();
-            Assert.That(running, Is.SameAs(publication.Work));
-            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            var queuedRequest = Request("runtime-blocked-queued-shutdown", "runtime-tool.run");
+            var queuedDigest = Digest('5');
+            var queuedPublication = bridge.PublishRuntimeRequest(queuedRequest, Deadline(), queuedDigest,
+                Admission("runtime-blocked-queued-shutdown", queuedDigest, Deadline()));
+            Assert.That(queuedPublication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
+            pool.BlockRecovery();
+            Assert.That(pool.Capture().Active, Is.EqualTo(2));
 
             bridge.StopRuntimeRequestsLocked();
 
-            Assert.That(running.Completion.Task.IsCompleted, Is.False);
-            Assert.That(pool.Capture().Active, Is.EqualTo(1));
-            Assert.That(Finalize(running, "running-terminal", 1), Is.True);
-            Assert.That(running.Completion.Task.Result, Is.EqualTo("running-terminal"));
+            Assert.That(running.Completion.Task.IsCompleted, Is.True);
+            Assert.That(running.Completion.Task.Result, Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(queuedPublication.Work.Completion.Task.IsCompleted, Is.True);
+            Assert.That(queuedPublication.Work.Completion.Task.Result, Does.Contain("E_RUNTIME_SESSION_STALE"));
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(0));
+            Assert.That(Finalize(running, "late-running-terminal", 1), Is.False);
+            Assert.That(Finalize(queuedPublication.Work, "late-queued-terminal", 0), Is.False);
+            Assert.That(running.Completion.Task.Result, Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(queuedPublication.Work.Completion.Task.Result, Does.Contain("E_RUNTIME_SESSION_STALE"));
             Assert.That(PublishBypass("runtime-after-running-stop").Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Stopping));
+        }
+
+        [Test]
+        public void SettlementBackoffUsesMonotonicClockAcrossUtcJumps()
+        {
+            var requestId = "runtime-monotonic-settlement";
+            var request = Request(requestId, "runtime-tool.run");
+            var digest = Digest('4');
+            var deadline = Deadline();
+            var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission(requestId, digest, deadline));
+            var running = TakeNext();
+            pool.BlockRecovery();
+            Assert.That(Finalize(running, "monotonic-terminal", 1), Is.False);
+            pool.Reset();
+
+            utcNowMs += 86400000L;
+            bridge.RetryPendingRuntimeSettlementsForTests();
+            Assert.That(publication.Work.Completion.Task.IsCompleted, Is.False);
+            utcNowMs -= 172800000L;
+            bridge.RetryPendingRuntimeSettlementsForTests();
+            Assert.That(publication.Work.Completion.Task.IsCompleted, Is.False);
+            monotonicNowMs += 99L;
+            bridge.RetryPendingRuntimeSettlementsForTests();
+            Assert.That(publication.Work.Completion.Task.IsCompleted, Is.False);
+            monotonicNowMs += 1L;
+            bridge.RetryPendingRuntimeSettlementsForTests();
+
+            Assert.That(publication.Work.Completion.Task.Result, Is.EqualTo("monotonic-terminal"));
+            Assert.That(bridge.PendingRuntimeSettlementCountForTests(), Is.EqualTo(0));
         }
 
         private UnityCliRuntimeBridge.RuntimePublicationResult PublishBypass(string requestId)

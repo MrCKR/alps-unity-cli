@@ -275,6 +275,29 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void TerminalControlDecisionsShareTheBoundedScanAndDoNotBlockLaterWork()
+        {
+            var missing = Classified("missing-parent", "internal.package.files.claim", UnityCliBridgeQueuePolicy.WorkClass.Control)
+                .WithControlDisposition(UnityCliBridgeQueuePolicy.ControlDisposition.RejectParentUnavailable);
+            var mismatch = Classified("mismatched-parent", "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control)
+                .WithControlDisposition(UnityCliBridgeQueuePolicy.ControlDisposition.RejectIdentityMismatch);
+            var expired = Classified("expired-control", "internal.occlusion.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control)
+                .WithControlDisposition(UnityCliBridgeQueuePolicy.ControlDisposition.ExpireDeadline);
+            var mutation = Node("next-mutation", UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+
+            var clear = UnityCliBridgeQueuePolicy.SelectStarts(new[] { missing, mismatch, expired, mutation }, 0, false,
+                UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear);
+            var unreadable = UnityCliBridgeQueuePolicy.SelectStarts(new[] { expired, mutation }, 0, false,
+                UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable);
+
+            Assert.That(clear.Rejects.Select(value => value.NodeId), Is.EqualTo(new[] { "missing-parent", "mismatched-parent", "expired-control" }));
+            Assert.That(Ids(clear), Is.EqualTo(new[] { "next-mutation" }));
+            Assert.That(clear.NodesExamined, Is.EqualTo(4));
+            Assert.That(unreadable.Rejects.Single().NodeId, Is.EqualTo("expired-control"));
+            Assert.That(unreadable.Starts, Is.Empty);
+        }
+
+        [Test]
         public void EditorStateSnapshotProgressesWhenMutationOrDurableBarrierBlocksRegularWork()
         {
             var queued = new[]

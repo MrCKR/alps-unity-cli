@@ -27,6 +27,15 @@ namespace UnityCli
             Unreadable
         }
 
+        public enum ControlDisposition
+        {
+            Pending,
+            Authorized,
+            RejectParentUnavailable,
+            RejectIdentityMismatch,
+            ExpireDeadline
+        }
+
         public enum BypassAdmissionOutcome
         {
             Enqueue,
@@ -38,27 +47,36 @@ namespace UnityCli
         public sealed class QueueNode
         {
             public QueueNode(string nodeId, string command, WorkClass workClass)
-                : this(nodeId, command, workClass, false) { }
+                : this(nodeId, command, workClass, ControlDisposition.Pending) { }
 
-            private QueueNode(string nodeId, string command, WorkClass workClass, bool controlAuthorized)
+            private QueueNode(string nodeId, string command, WorkClass workClass, ControlDisposition controlDisposition)
             {
                 ValidateNodeId(nodeId);
+                ValidateEnum(controlDisposition, "controlDisposition");
                 NodeId = nodeId;
                 Command = command;
                 Class = Classify(command, workClass);
-                ControlAuthorized = Class == WorkClass.Control && controlAuthorized;
+                if (Class != WorkClass.Control && controlDisposition != ControlDisposition.Pending)
+                    throw new InvalidOperationException("Only a durable control node can receive a control disposition.");
+                ControlDecision = Class == WorkClass.Control ? controlDisposition : ControlDisposition.Pending;
             }
 
             public string NodeId { get; }
             public string Command { get; }
             public WorkClass Class { get; }
-            public bool ControlAuthorized { get; }
+            public ControlDisposition ControlDecision { get; }
+            public bool ControlAuthorized { get { return ControlDecision == ControlDisposition.Authorized; } }
 
             public QueueNode WithControlAuthorization(bool authorized)
             {
-                if (Class != WorkClass.Control && authorized)
-                    throw new InvalidOperationException("Only a durable control node can receive parent authorization.");
-                return new QueueNode(NodeId, Command, Class, authorized);
+                return WithControlDisposition(authorized ? ControlDisposition.Authorized : ControlDisposition.Pending);
+            }
+
+            public QueueNode WithControlDisposition(ControlDisposition disposition)
+            {
+                if (Class != WorkClass.Control && disposition != ControlDisposition.Pending)
+                    throw new InvalidOperationException("Only a durable control node can receive a control disposition.");
+                return new QueueNode(NodeId, Command, Class, disposition);
             }
         }
 
@@ -102,15 +120,31 @@ namespace UnityCli
             public WorkClass Class { get; }
         }
 
+        public sealed class RejectDecision
+        {
+            internal RejectDecision(string nodeId, int queueIndex, ControlDisposition disposition)
+            {
+                NodeId = nodeId;
+                QueueIndex = queueIndex;
+                Disposition = disposition;
+            }
+
+            public string NodeId { get; }
+            public int QueueIndex { get; }
+            public ControlDisposition Disposition { get; }
+        }
+
         public sealed class TickSelection
         {
-            internal TickSelection(List<StartDecision> starts, int nodesExamined)
+            internal TickSelection(List<StartDecision> starts, List<RejectDecision> rejects, int nodesExamined)
             {
                 Starts = new ReadOnlyCollection<StartDecision>(starts.ToArray());
+                Rejects = new ReadOnlyCollection<RejectDecision>(rejects.ToArray());
                 NodesExamined = nodesExamined;
             }
 
             public IReadOnlyList<StartDecision> Starts { get; }
+            public IReadOnlyList<RejectDecision> Rejects { get; }
             public int NodesExamined { get; }
         }
 
@@ -222,6 +256,8 @@ namespace UnityCli
             var firstMutationIndex = -1;
             var earlierOrdinaryReadIndices = new List<int>();
             var safeStatusIndices = new List<int>(MaxSafeStatusStartsPerTick);
+            var rejects = new List<RejectDecision>();
+            var rejected = new bool[examined];
             var nodeIds = new HashSet<string>(StringComparer.Ordinal);
             for (var index = 0; index < examined; index++)
             {
@@ -229,6 +265,12 @@ namespace UnityCli
                 if (node == null) throw new ArgumentException("Examined queue prefix contains null.", "queued");
                 if (!nodeIds.Add(node.NodeId)) throw new ArgumentException("Examined queue prefix contains duplicate nodeId.", "queued");
                 examinedNodes.Add(node);
+                if (node.Class == WorkClass.Control && IsTerminalControlDisposition(node.ControlDecision))
+                {
+                    rejected[index] = true;
+                    rejects.Add(new RejectDecision(node.NodeId, index, node.ControlDecision));
+                    continue;
+                }
                 if (firstMutationIndex < 0 && (node.Class == WorkClass.Mutation || node.Class == WorkClass.Control))
                     firstMutationIndex = index;
                 if (node.Class == WorkClass.SafeStatus && safeStatusIndices.Count < MaxSafeStatusStartsPerTick)
@@ -246,7 +288,7 @@ namespace UnityCli
                 for (var index = 0; index < examined && remainingStarts > 0; index++)
                 {
                     var node = examinedNodes[index];
-                    if (node.Class != WorkClass.Control || !node.ControlAuthorized) continue;
+                    if (rejected[index] || node.Class != WorkClass.Control || !node.ControlAuthorized) continue;
                     selected[index] = true;
                     remainingStarts -= 1;
                     break;
@@ -278,7 +320,14 @@ namespace UnityCli
                 var node = examinedNodes[index];
                 starts.Add(new StartDecision(node.NodeId, index, node.Class));
             }
-            return new TickSelection(starts, examined);
+            return new TickSelection(starts, rejects, examined);
+        }
+
+        private static bool IsTerminalControlDisposition(ControlDisposition disposition)
+        {
+            return disposition == ControlDisposition.RejectParentUnavailable
+                || disposition == ControlDisposition.RejectIdentityMismatch
+                || disposition == ControlDisposition.ExpireDeadline;
         }
 
         private static void ValidateCommand(string command)

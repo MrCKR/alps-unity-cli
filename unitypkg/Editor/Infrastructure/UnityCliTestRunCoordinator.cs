@@ -355,6 +355,14 @@ namespace UnityCli
             private static void TickCancel(Root root)
             {
                 var effectState = Text(root.TestOperation, "cancelEffectState");
+                if (Same(effectState, "cancelled"))
+                {
+                    var dispatch = ReadCancelDispatch(root);
+                    object terminal;
+                    if (dispatch != null && TryReadCancelTerminalProof(ProductionQueueState, dispatch.CancelRequestId, dispatch.CancelRequestDigest, dispatch.RootRequestDigest, out terminal))
+                        FinalizeCancelTerminal(dispatch, terminal, "cancelled");
+                    return;
+                }
                 if (Same(effectState, "dispatching"))
                 {
                     var dispatch = ReadCancelDispatch(root);
@@ -401,7 +409,7 @@ namespace UnityCli
                 Root root;
                 try { root = Load(queueState); }
                 catch { RetainCancelAdmissionForRecovery(dispatch, effectState); return false; }
-                var parentAlreadyFinalized = root == null && effectState == "outcome_unknown" && CancelParentTerminalExists(dispatch, queueState);
+                var parentAlreadyFinalized = root == null && CancelParentTerminalMatches(dispatch.RootRequestId, dispatch.RootRequestDigest, effectState, queueState);
                 if (!parentAlreadyFinalized && !MatchesCancelIdentity(root, dispatch))
                 {
                     RetainCancelAdmissionForRecovery(dispatch, effectState);
@@ -413,17 +421,22 @@ namespace UnityCli
                     {
                         ApplyCancelParentTerminal(root.TestOperation, effectState, first);
                         Save(queueState, root);
-                        if (effectState == "outcome_unknown")
-                            Finish(queueState, root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_EXECUTION_TIMEOUT", "Test cancellation may have occurred but its exact effect could not be proven.", null, new[] { "Inspect the Unity Test Runner before submitting another mutation." }));
+                        FinishCancelParentIfRequired(queueState, root, effectState, first);
                     }
                     catch
                     {
-                        if (effectState != "outcome_unknown" || !CancelParentTerminalExists(dispatch, queueState))
+                        if (!CancelParentTerminalMatches(dispatch.RootRequestId, dispatch.RootRequestDigest, effectState, queueState))
                         {
                             RetainCancelAdmissionForRecovery(dispatch, effectState);
                             return false;
                         }
                     }
+                }
+                if (!CancelParentTerminalMatches(dispatch.RootRequestId, dispatch.RootRequestDigest, effectState, queueState)
+                    && (effectState == "cancelled" || effectState == "outcome_unknown"))
+                {
+                    RetainCancelAdmissionForRecovery(dispatch, effectState);
+                    return false;
                 }
                 try
                 {
@@ -473,16 +486,6 @@ namespace UnityCli
                     AdmissionOwner = owner,
                     QueueState = state
                 }, envelope, effectState);
-            }
-
-            private static bool CancelParentTerminalExists(CancelDispatchIdentity dispatch, BridgeQueueState state)
-            {
-                try
-                {
-                    object terminal;
-                    return state.TryGetTerminal(Scope, dispatch.RootRequestId, dispatch.RootRequestDigest, out terminal);
-                }
-                catch { return false; }
             }
 
             /// <summary>root不可读或保存失败时冻结目标parent state并推进Recovery，禁止queue完成cancel owner。</summary>
@@ -646,12 +649,13 @@ namespace UnityCli
                 var parentTerminalExists = false;
                 try { parentTerminalExists = state.TryGetTerminal(Scope, rootRequestId, rootRequestDigest, out parentTerminal); }
                 catch { return false; }
-                if (root == null) return effectState == "outcome_unknown" && parentTerminalExists;
+                if (root == null) return CancelParentTerminalMatches(rootRequestId, rootRequestDigest, effectState, state);
                 if (!Same(root.RequestId, rootRequestId) || !Same(root.RequestDigest, rootRequestDigest)
                     || !Same(root.EditorSessionId, EditorSessionId()) || (!parentLeaseOwned && !parentTerminalExists)
                     || !Same(Text(root.TestOperation, "runId"), runId)) return false;
                 if (CancelParentRepairMatches(root, cancelRequestId, cancelRequestDigest, rootRequestDigest, runId, effectState, cancelTerminal))
-                    return effectState != "outcome_unknown" || parentTerminalExists;
+                    return (effectState != "cancelled" && effectState != "outcome_unknown")
+                        || CancelParentTerminalMatches(rootRequestId, rootRequestDigest, effectState, state);
                 if (!Same(Text(root.TestOperation, "cancelRequestId"), cancelRequestId)
                     || !Same(Text(root.TestOperation, "cancelRequestDigest"), cancelRequestDigest)
                     || !Same(Text(root.TestOperation, "cancelRootRequestDigest"), rootRequestDigest)
@@ -660,14 +664,14 @@ namespace UnityCli
                 {
                     ApplyCancelParentTerminal(root.TestOperation, effectState, cancelTerminal);
                     Save(state, root);
-                    if (effectState == "outcome_unknown")
-                        Finish(state, root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_EXECUTION_TIMEOUT", "Test cancellation may have occurred but its exact effect could not be proven.", null, new[] { "Inspect the Unity Test Runner before submitting another mutation." }));
+                    FinishCancelParentIfRequired(state, root, effectState, cancelTerminal);
                     root = Load(state);
-                    if (root == null) return effectState == "outcome_unknown" && CancelParentTerminalExists(rootRequestId, rootRequestDigest, state);
+                    if (root == null) return CancelParentTerminalMatches(rootRequestId, rootRequestDigest, effectState, state);
                     return CancelParentRepairMatches(root, cancelRequestId, cancelRequestDigest, rootRequestDigest, runId, effectState, cancelTerminal)
-                        && (effectState != "outcome_unknown" || CancelParentTerminalExists(rootRequestId, rootRequestDigest, state));
+                        && ((effectState != "cancelled" && effectState != "outcome_unknown")
+                            || CancelParentTerminalMatches(rootRequestId, rootRequestDigest, effectState, state));
                 }
-                catch { return false; }
+                catch { return CancelParentTerminalMatches(rootRequestId, rootRequestDigest, effectState, state); }
             }
 
             private static bool CancelParentRepairMatches(Root root, string cancelRequestId, string cancelRequestDigest, string rootRequestDigest, string runId, string effectState, object cancelTerminal)
@@ -684,9 +688,31 @@ namespace UnityCli
                     && Same(Text(root.TestOperation, "cancelRunId"), runId);
             }
 
-            private static bool CancelParentTerminalExists(string rootRequestId, string rootRequestDigest, BridgeQueueState state)
+            private static void FinishCancelParentIfRequired(BridgeQueueState state, Root root, string effectState, object cancelTerminal)
             {
-                try { object terminal; return state.TryGetTerminal(Scope, rootRequestId, rootRequestDigest, out terminal); }
+                if (effectState == "outcome_unknown")
+                {
+                    Finish(state, root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_EXECUTION_TIMEOUT", "Test cancellation may have occurred but its exact effect could not be proven.", null, new[] { "Inspect the Unity Test Runner before submitting another mutation." }));
+                    return;
+                }
+                if (effectState == "cancelled")
+                    Finish(state, root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_TEST_RUN_CANCELLED", "The exact tracked Unity test run was cancelled.", CancelTerminalData(cancelTerminal), new[] { "Inspect the test.cancel proof before starting another test run." }));
+            }
+
+            private static bool CancelParentTerminalMatches(string rootRequestId, string rootRequestDigest, string effectState, BridgeQueueState state)
+            {
+                if (effectState != "cancelled" && effectState != "outcome_unknown") return true;
+                try
+                {
+                    object terminal;
+                    if (!state.TryGetTerminal(Scope, rootRequestId, rootRequestDigest, out terminal)) return false;
+                    var parsed = UnityCliSerializer.Parse(UnityCliSerializer.Serialize(terminal)) as Dictionary<string, object>;
+                    object okValue;
+                    object errorValue;
+                    var error = parsed != null && parsed.TryGetValue("error", out errorValue) ? errorValue as Dictionary<string, object> : null;
+                    return parsed != null && parsed.TryGetValue("ok", out okValue) && okValue is bool && !(bool)okValue
+                        && error != null && Same(Text(error, "code"), effectState == "cancelled" ? "E_TEST_RUN_CANCELLED" : "E_EXECUTION_TIMEOUT");
+                }
                 catch { return false; }
             }
 
@@ -714,8 +740,6 @@ namespace UnityCli
                     throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Test cancellation continuation owner could not be finalized.");
                 cancelTerminalRequestId = dispatch.CancelRequestId;
                 cancelTerminalData = data;
-                root = Required();
-                Finish(root, ProtocolEnvelopeFactory.Error(root.RequestId, "E_TEST_RUN_CANCELLED", "The exact tracked Unity test run was cancelled.", data, new[] { "Inspect the test.cancel proof before starting another test run." }));
             }
 
             private static Dictionary<string, object> CancelAcceptedData(Root root, string runId)

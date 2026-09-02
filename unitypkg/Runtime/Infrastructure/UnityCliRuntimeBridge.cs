@@ -41,6 +41,7 @@ namespace UnityCli
         private UnityCliRuntimeIdentity identity;
         private UnityCliAdmissionPool admissionPool;
         private Func<long> utcNowMsProvider = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        private Func<long> monotonicNowMsProvider = DefaultMonotonicMilliseconds;
         private string sessionId;
         private string listenerId;
         private string buildId;
@@ -50,7 +51,6 @@ namespace UnityCli
         private bool previousRunInBackground;
         private bool runInBackgroundCaptured;
         private readonly RuntimeOneShotTestHooks runtimeTestHooks = new RuntimeOneShotTestHooks();
-        private int shutdownSettlementPumpStarted;
 
         private void HitRuntimeTestBoundary(string name)
         {
@@ -402,17 +402,23 @@ namespace UnityCli
             return false;
         }
 
-        private bool TrySettleRuntimeRequest(PendingRequest request)
+        private bool TrySettleRuntimeRequest(PendingRequest request, bool shutdownOnly = false)
         {
+            if (request == null || Interlocked.CompareExchange(ref request.ExecutionState, 4, 2) != 2)
+                return request != null && Volatile.Read(ref request.ExecutionState) == 3;
             var pool = request.AdmissionPool;
             var identity = request.AdmissionOwner;
             var outcome = identity == null
                 ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
                 : pool == null
                     ? UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked
-                    : pool.CompleteTrusted(identity);
+                    : shutdownOnly ? pool.CompleteWorkItemForShutdown(identity) : pool.CompleteTrusted(identity);
             if (outcome != UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
-                && outcome != UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent) return false;
+                && outcome != UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent)
+            {
+                Interlocked.Exchange(ref request.ExecutionState, 2);
+                return false;
+            }
             lock (requestCacheSync) pendingSettlements.Remove(request.RequestId);
             Interlocked.Exchange(ref request.ExecutionState, 3);
             request.Completion.TrySetResult(request.Terminal);
@@ -423,7 +429,7 @@ namespace UnityCli
 
         private void RetainRuntimeSettlement(PendingRequest request)
         {
-            request.NextSettlementRetryAtMs = checked(UtcNowMs() + SettlementRetryDelayMs);
+            request.NextSettlementRetryAtMs = checked(MonotonicNowMs() + SettlementRetryDelayMs);
             lock (requestCacheSync)
             {
                 PendingRequest existing;
@@ -433,14 +439,13 @@ namespace UnityCli
                     throw new InvalidOperationException("Runtime settlement journal reached its fixed bound.");
                 pendingSettlements[request.RequestId] = request;
             }
-            if (stopping.IsCancellationRequested) EnsureShutdownSettlementPump();
         }
 
-        /// <summary>每次只推进固定数量且使用固定退避；失败identity保留captured pool与完整owner。</summary>
+        /// <summary>每次只推进固定数量且使用固定单调退避；失败identity保留captured pool与完整owner。</summary>
         private void RetryPendingRuntimeSettlements()
         {
             PendingRequest[] due;
-            var now = UtcNowMs();
+            var now = MonotonicNowMs();
             lock (requestCacheSync)
             {
                 due = new List<PendingRequest>(pendingSettlements.Values).FindAll(value => value.NextSettlementRetryAtMs <= now)
@@ -451,7 +456,7 @@ namespace UnityCli
             foreach (var request in due)
             {
                 if (TrySettleRuntimeRequest(request)) continue;
-                request.NextSettlementRetryAtMs = checked(UtcNowMs() + SettlementRetryDelayMs);
+                request.NextSettlementRetryAtMs = checked(MonotonicNowMs() + SettlementRetryDelayMs);
                 if (request.SettlementFailureLogged) continue;
                 request.SettlementFailureLogged = true;
                 Debug.LogWarning("UnityCli runtime admission settlement deferred requestId=" + request.RequestId);
@@ -466,28 +471,6 @@ namespace UnityCli
         internal int PendingRuntimeSettlementCountForTests()
         {
             lock (requestCacheSync) return pendingSettlements.Count;
-        }
-
-        private void EnsureShutdownSettlementPump()
-        {
-            if (Interlocked.CompareExchange(ref shutdownSettlementPumpStarted, 1, 0) != 0) return;
-            Task.Run(async delegate
-            {
-                try
-                {
-                    while (true)
-                    {
-                        lock (requestCacheSync) if (pendingSettlements.Count == 0) break;
-                        RetryPendingRuntimeSettlements();
-                        await Task.Delay(SettlementRetryDelayMs);
-                    }
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref shutdownSettlementPumpStarted, 0);
-                    lock (requestCacheSync) if (pendingSettlements.Count > 0) EnsureShutdownSettlementPump();
-                }
-            });
         }
 
         private Dictionary<string, object> HealthData()
@@ -686,9 +669,31 @@ namespace UnityCli
             utcNowMsProvider = provider;
         }
 
+        internal void InjectMonotonicNowProviderForTests(Func<long> provider)
+        {
+            if (provider == null) throw new ArgumentNullException("provider");
+            monotonicNowMsProvider = provider;
+        }
+
+        internal void ResetClockProvidersForTests()
+        {
+            utcNowMsProvider = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            monotonicNowMsProvider = DefaultMonotonicMilliseconds;
+        }
+
         private long UtcNowMs()
         {
             return utcNowMsProvider();
+        }
+
+        private long MonotonicNowMs()
+        {
+            return monotonicNowMsProvider();
+        }
+
+        private static long DefaultMonotonicMilliseconds()
+        {
+            return checked((long)(System.Diagnostics.Stopwatch.GetTimestamp() * (1000d / System.Diagnostics.Stopwatch.Frequency)));
         }
 
         internal enum RuntimePublicationOutcome { Published, Existing, Stopping, CacheFull, QueueFull, Rejected }
@@ -871,20 +876,44 @@ namespace UnityCli
             {
                 try { HitRuntimeTestBoundary("before-runtime-stop"); } catch { }
                 try { stopping.Cancel(); } catch { }
-                var entries = new List<PendingRequest>(requestCache.Values);
-                var hasRunning = false;
-                foreach (var entry in entries)
+                var entries = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
+                foreach (var entry in requestCache.Values) entries[entry.RequestId] = entry;
+                foreach (var entry in pendingSettlements.Values) entries[entry.RequestId] = entry;
+                foreach (var entry in entries.Values)
                 {
-                    if (Volatile.Read(ref entry.ExecutionState) == 1) { hasRunning = true; continue; }
-                    FinalizeRuntimeRequest(entry, Error(entry.RequestId, "E_RUNTIME_SESSION_STALE", "The development Player session ended before the request completed.", new[] { "Launch a new development Player and submit a new request." }), 0);
+                    var running = Volatile.Read(ref entry.ExecutionState) == 1;
+                    var terminal = running
+                        ? Error(entry.RequestId, "E_EXECUTION_TIMEOUT", "The development Player session ended after Runtime effect ownership began; outcome is unknown.", new[] { "Inspect the affected runtime state before submitting a new request." })
+                        : Error(entry.RequestId, "E_RUNTIME_SESSION_STALE", "The development Player session ended before the request completed.", new[] { "Launch a new development Player and submit a new request." });
+                    FinalizeRuntimeRequestForShutdown(entry, terminal);
                 }
                 PendingRequest ignored;
                 while (pending.TryDequeue(out ignored)) { }
                 requestCache.Clear();
                 var pool = admissionPool;
                 admissionPool = null;
-                if (!hasRunning && pendingSettlements.Count == 0 && pool != null) pool.Reset();
-                if (pendingSettlements.Count > 0) EnsureShutdownSettlementPump();
+                if (pool != null) pool.Reset();
+                foreach (var entry in entries.Values)
+                    if (Volatile.Read(ref entry.ExecutionState) != 3) FinalizeRuntimeRequestForShutdown(entry, entry.Terminal);
+                pendingSettlements.Clear();
+            }
+        }
+
+        private bool FinalizeRuntimeRequestForShutdown(PendingRequest request, string terminal)
+        {
+            if (request == null || request.Owner != this) return false;
+            while (true)
+            {
+                var state = Volatile.Read(ref request.ExecutionState);
+                if (state == 3) return true;
+                if (state == 4) return false;
+                if (state == 0 || state == 1)
+                {
+                    if (Interlocked.CompareExchange(ref request.ExecutionState, 2, state) != state) continue;
+                    request.Terminal = terminal;
+                }
+                else if (state != 2) return false;
+                return TrySettleRuntimeRequest(request, true);
             }
         }
 

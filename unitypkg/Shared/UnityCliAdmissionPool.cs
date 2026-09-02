@@ -389,8 +389,8 @@ namespace UnityCli
             }
         }
 
-        /// <summary>publication已关闭且WorkItem尚未启动时，shutdown可按完整身份隔离回收，即使普通recovery已阻断。</summary>
-        public CompletionOutcome CompleteQueuedForShutdown(ConsumedIdentity identity)
+        /// <summary>session publication关闭后，shutdown可按完整WorkItem身份隔离回收，即使普通recovery已阻断。</summary>
+        public CompletionOutcome CompleteWorkItemForShutdown(ConsumedIdentity identity)
         {
             lock (sync)
             {

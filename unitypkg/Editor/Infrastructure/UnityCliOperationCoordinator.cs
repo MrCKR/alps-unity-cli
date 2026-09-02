@@ -278,6 +278,45 @@ namespace UnityCli
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Direct mutation active identity cannot be proven; outcome is unknown.");
         }
 
+        internal enum DirectMutationReloadOutcome { NotApplicable, WaitingExactOwner, SettledEffectBefore, IdentityBlocked }
+
+        /// <summary>旧domain不再执行effect；无exact lease的accepted root冻结effect-before终态并立即进入TerminalCleanup。</summary>
+        internal static DirectMutationReloadOutcome ReconcileAcceptedDirectMutationAfterReload(BridgeQueueState state, string requestId, string requestDigest)
+        {
+            if (state == null) throw new ArgumentNullException("state");
+            var root = LoadDirectMutationRoot(state);
+            if (root == null) return DirectMutationReloadOutcome.NotApplicable;
+            RequireDirectMutationRoot(root, requestId, requestDigest);
+            if (!string.Equals(root["phase"] as string, "accepted_before_effect", StringComparison.Ordinal))
+                return DirectMutationReloadOutcome.NotApplicable;
+            string leaseRequestId;
+            string leaseRequestDigest;
+            if (!state.TryGetCurrentLeaseOwner(out leaseRequestId, out leaseRequestDigest))
+                return DirectMutationReloadOutcome.IdentityBlocked;
+            if (string.Equals(leaseRequestId, requestId, StringComparison.Ordinal)
+                && string.Equals(leaseRequestDigest, requestDigest, StringComparison.Ordinal))
+                return DirectMutationReloadOutcome.WaitingExactOwner;
+            if (!string.IsNullOrEmpty(leaseRequestId) || !string.IsNullOrEmpty(leaseRequestDigest))
+                return DirectMutationReloadOutcome.IdentityBlocked;
+            var owner = CaptureAdmissionOwner(state, requestId, requestDigest);
+            if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.WorkItem
+                && owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Recovery)
+                return DirectMutationReloadOutcome.IdentityBlocked;
+            var terminal = ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Direct mutation was accepted before domain reload but never crossed its effect barrier; no effect was executed.", null, new[] { "Submit a new request only after inspecting the exact terminal." });
+            root["phase"] = "terminal_pending";
+            root["terminalEnvelope"] = terminal;
+            state.SaveOperation(DirectMutationTerminalScope, root);
+            state.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, terminal);
+            UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, state);
+            return DirectMutationReloadOutcome.SettledEffectBefore;
+        }
+
+        internal static string ReconcileAcceptedDirectMutationAfterReloadForTests(BridgeQueueState state, string requestId, string requestDigest)
+        {
+            if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Direct reload reconciliation test state must be isolated.", "state");
+            return ReconcileAcceptedDirectMutationAfterReload(state, requestId, requestDigest).ToString();
+        }
+
         private static string TryResumeDirectMutation(string requestId, string requestDigest)
         {
             Dictionary<string, object> root;

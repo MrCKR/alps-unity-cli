@@ -84,6 +84,55 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void ReloadedAcceptedDirectMutationWithoutLeaseSettlesEffectBeforeAndReplaysWithoutEffect()
+        {
+            var requestId = Unique("direct-accepted-reload");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("direct-accepted-reload-session");
+            Consume(pool, requestId, digest, TestDeadline());
+            queueState.SaveOperation("direct-mutation", new Dictionary<string, object>
+            {
+                { "requestId", requestId }, { "requestDigest", digest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", "accepted_before_effect" }
+            });
+
+            var outcome = UnityCliBridge.ReconcileAcceptedDirectMutationAfterReloadForTests(queueState, requestId, digest);
+            var replay = UnityCliBridge.RecoverPublishedDirectMutationForTests(queueState, requestId, digest);
+
+            Assert.That(outcome, Is.EqualTo("SettledEffectBefore"));
+            Assert.That(replay, Does.Contain("E_EXECUTION_TIMEOUT"));
+            Assert.That(replay, Does.Contain("no effect was executed"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.False);
+            Assert.That(queueState.OperationExists("direct-mutation-terminal-cleanup"), Is.False);
+            Assert.That(queueState.OperationExists("direct-mutation-admission-owner"), Is.False);
+            Assert.That(queueState.TryIsLeaseOwned(requestId, digest, out var owned), Is.True);
+            Assert.That(owned, Is.False);
+        }
+
+        [Test]
+        public void ReloadedAcceptedDirectMutationWaitsForExactLeaseAndBlocksMismatch()
+        {
+            var requestId = Unique("direct-accepted-owned");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("direct-accepted-owned-session");
+            Consume(pool, requestId, digest, TestDeadline());
+            queueState.SaveOperation("direct-mutation", Root(requestId, digest, "accepted_before_effect"));
+            Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+            Assert.That(UnityCliBridge.ReconcileAcceptedDirectMutationAfterReloadForTests(queueState, requestId, digest), Is.EqualTo("WaitingExactOwner"));
+            queueState.ReleaseLease(requestId, digest);
+            var otherRequestId = Unique("direct-other-owner");
+            var otherDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(otherRequestId), InstanceId);
+            Assert.That(queueState.TryAcquireLease(otherRequestId, otherDigest, out acquired), Is.True);
+            Assert.That(acquired, Is.True);
+            Assert.That(UnityCliBridge.ReconcileAcceptedDirectMutationAfterReloadForTests(queueState, requestId, digest), Is.EqualTo("IdentityBlocked"));
+            queueState.ReleaseLease(otherRequestId, otherDigest);
+            queueState.ClearOperation("direct-mutation");
+            pool.Reset();
+        }
+
+        [Test]
         public void CancelContinuationCompletesExactCancelOwnerWithoutIllegalTerminalTransfer()
         {
             var parentRequestId = Unique("test-parent");
@@ -162,6 +211,12 @@ namespace UnityCli.Tests
             var runId = Guid.NewGuid().ToString();
             var deadline = TestDeadline();
             var pool = CreatePool("cancel-save-fault-session");
+            var parentOwner = Consume(pool, parentRequestId, parentDigest, deadline);
+            UnityCliBridge.PersistAdmissionOwnerTransfer(queueState, "test-run-admission-owner", new Dictionary<string, object>
+            {
+                { "requestId", parentRequestId }, { "requestDigest", parentDigest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() }
+            }, parentOwner, UnityCliAdmissionPool.AdmissionOwnerState.Coordinator);
             Consume(pool, cancelRequestId, cancelDigest, deadline);
             queueState.SaveOperation("test-run", new Dictionary<string, object>
             {
@@ -186,7 +241,7 @@ namespace UnityCli.Tests
                 ProtocolEnvelopeFactory.Success(cancelRequestId, new Dictionary<string, object> { { "cancelled", true } }), "cancelled");
 
             Assert.That(result, Is.False);
-            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(pool.Capture().Active, Is.EqualTo(2));
             var retained = queueState.LoadOperation("test-cancel-admission-owner");
             Assert.That(retained["parentRepairEffectState"], Is.EqualTo("cancelled"));
             Assert.That(retained["parentRepairPending"], Is.EqualTo(true));
@@ -195,16 +250,17 @@ namespace UnityCli.Tests
             Assert.That(staleOperation["cancelEffectState"], Is.EqualTo("dispatching"));
 
             Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.RetryCancelAdmissionOwnerMarkerForTests(queueState), Is.False);
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.RetryCancelAdmissionOwnerMarkerForTests(queueState), Is.False);
 
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
             Assert.That(queueState.OperationExists("test-cancel-admission-owner"), Is.False);
-            var repairedRoot = queueState.LoadOperation("test-run");
-            var repairedOperation = (Dictionary<string, object>)repairedRoot["testOperation"];
-            Assert.That(repairedOperation["cancelEffectState"], Is.EqualTo("cancelled"));
-            Assert.That(repairedOperation["cancelRequested"], Is.EqualTo(true));
-            Assert.That(repairedOperation["cancelTerminalEnvelope"], Is.Not.Null);
-            queueState.ClearOperation("test-run");
-            queueState.ReleaseLease(parentRequestId, parentDigest);
+            Assert.That(queueState.OperationExists("test-run-admission-owner"), Is.False);
+            Assert.That(queueState.OperationExists("test-run"), Is.False);
+            Assert.That(queueState.OperationExists("test-run-terminal-cleanup"), Is.False);
+            Assert.That(queueState.TryGetTerminal("test-run", parentRequestId, parentDigest, out var parentTerminal), Is.True);
+            Assert.That(UnityCliSerializer.Serialize(parentTerminal), Does.Contain("E_TEST_RUN_CANCELLED"));
+            Assert.That(queueState.TryIsLeaseOwned(parentRequestId, parentDigest, out var parentOwned), Is.True);
+            Assert.That(parentOwned, Is.False);
         }
 
         [Test]

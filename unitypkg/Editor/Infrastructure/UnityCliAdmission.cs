@@ -204,24 +204,41 @@ namespace UnityCli
             {
                 var owner = pending.Owner;
                 var pool = state.AdmissionPool;
-                var exact = pool.InspectExactIdentityFields(ToPoolIdentity(owner));
-                var outcome = exact == UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent
-                    ? pool.CompleteTrusted(ToPoolIdentity(owner))
-                    : exact == UnityCliAdmissionPool.ExactIdentityOutcome.DefinitelyAbsent
-                        ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
-                        : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
-                if (outcome == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
-                    || outcome == UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent)
+                if (pending.Compensation)
                 {
                     try
                     {
-                        if (state.PersistPool() && state.ClearMarkers(owner) && ClearAdmissionCompletionIntent(state, owner))
-                        {
-                            state.Sinks.WriteLog("admission_settlement_replayed requestId=" + owner.RequestId + " outcome=" + outcome.ToString());
-                            continue;
-                        }
+                        if ((!pending.IntentPersisted && !PersistAdmissionCompletionIntent(state, owner))
+                            || !pool.CompensateAuthorization(ToPoolIdentity(owner))
+                            || !state.PersistPool()
+                            || !ClearAdmissionCompletionIntent(state, owner))
+                            throw new IOException("Admission compensation continuation is not durable yet.");
+                        state.Sinks.WriteLog("admission_prequeue_compensation_replayed requestId=" + owner.RequestId);
+                        continue;
                     }
                     catch { }
+                }
+                else
+                {
+                    var exact = pool.InspectExactIdentityFields(ToPoolIdentity(owner));
+                    var outcome = exact == UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent
+                        ? pool.CompleteTrusted(ToPoolIdentity(owner))
+                        : exact == UnityCliAdmissionPool.ExactIdentityOutcome.DefinitelyAbsent
+                            ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
+                            : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                    if (outcome == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
+                        || outcome == UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent)
+                    {
+                        try
+                        {
+                            if (state.PersistPool() && state.ClearMarkers(owner) && ClearAdmissionCompletionIntent(state, owner))
+                            {
+                                state.Sinks.WriteLog("admission_settlement_replayed requestId=" + owner.RequestId + " outcome=" + outcome.ToString());
+                                continue;
+                            }
+                        }
+                        catch { }
+                    }
                 }
                 state.DeferCompletionIntent(pending, now);
                 if (pending.FailureLogged) continue;
@@ -777,6 +794,13 @@ namespace UnityCli
                     UnityCliAdmissionPool.AdmissionOwnerState durableOwner;
                     if (TryFindExactDurableBusinessRoot(record, out durableScope, out durableOwner))
                     {
+                        if (durableScope == "direct-mutation")
+                        {
+                            var direct = ReconcileAcceptedDirectMutationAfterReload(ProductionQueueState, record.RequestId, record.RequestDigest);
+                            if (direct == DirectMutationReloadOutcome.SettledEffectBefore) continue;
+                            if (direct == DirectMutationReloadOutcome.IdentityBlocked)
+                                throw new InvalidOperationException("Direct mutation reload identity is blocked.");
+                        }
                         var markerState = new Dictionary<string, object>
                         {
                             { "requestId", record.RequestId }, { "requestDigest", record.RequestDigest }, { "editorSessionId", EditorSessionId() }
