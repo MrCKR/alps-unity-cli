@@ -61,6 +61,7 @@ namespace UnityCli
         private static HttpListener listener;
         private static bool started;
         private static readonly BridgeStartupStateMachine StartupState = new BridgeStartupStateMachine();
+        private static readonly BridgeInitialPublicationGate InitialPublicationGate = new BridgeInitialPublicationGate();
         private static bool projectToolsDiscovered;
         private static volatile bool domainReloading;
         private const double RegistryRefreshSeconds = 30.0;
@@ -205,19 +206,14 @@ namespace UnityCli
                 listener = new HttpListener();
                 port = StartHttpListener(listener);
                 started = true;
-                if (!RegisterInstance("transitioning")) throw new InvalidOperationException("Initial listener registry claim could not be published.");
-                ProductionQueueState.ListenerId = ListenerId;
-                ProductionQueueState.ListenerGeneration = Math.Max(1, CurrentListenerGeneration());
                 lock (ProductionQueueState.QueueLock)
                 {
                     ProductionQueueState.QueueSessionStopping = false;
-                    ProductionQueueState.QueuePublicationOpen = true;
+                    ProductionQueueState.QueuePublicationOpen = false;
                 }
-                Task.Run(ListenLoop);
-                readyPublicationPending = true;
-                nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
-                WriteRuntimeLoadDiagnostics("listener_started");
-                WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
+                StartupState.BeginRegistryPublication();
+                InitialPublicationGate.Start();
+                HandleInitialPublicationOutcome(RegisterInstance("transitioning"));
             }
             catch (Exception exception)
             {
@@ -225,6 +221,40 @@ namespace UnityCli
                 WriteRuntimeLoadDiagnostics("listener_start_failed");
                 WriteLog("bridge_start_failed " + exception.GetType().Name + ": " + exception.Message + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
+        }
+
+        /// <summary>首次registry成功后只开放一次queue并启动一次ListenLoop；永久失败才停止listener。</summary>
+        private static void HandleInitialPublicationOutcome(InstancePublicationRetryOutcome outcome)
+        {
+            if (outcome == InstancePublicationRetryOutcome.None) return;
+            var action = InitialPublicationGate.Apply(outcome);
+            if (action == BridgeInitialPublicationAction.Wait)
+            {
+                WriteRuntimeLoadDiagnostics("listener_registry_pending");
+                return;
+            }
+            if (action == BridgeInitialPublicationAction.StopListener)
+            {
+                StartupState.CompleteRegistryPublication();
+                StopListener();
+                WriteRuntimeLoadDiagnostics("listener_registry_failed");
+                WriteLog("bridge_start_failed initial registry publication exhausted listenerId=" + ListenerId);
+                return;
+            }
+            if (action != BridgeInitialPublicationAction.OpenQueueAndListen) return;
+            StartupState.CompleteRegistryPublication();
+            ProductionQueueState.ListenerId = ListenerId;
+            ProductionQueueState.ListenerGeneration = Math.Max(1, CurrentListenerGeneration());
+            lock (ProductionQueueState.QueueLock)
+            {
+                ProductionQueueState.QueueSessionStopping = false;
+                ProductionQueueState.QueuePublicationOpen = true;
+            }
+            Task.Run(ListenLoop);
+            readyPublicationPending = true;
+            nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
+            WriteRuntimeLoadDiagnostics("listener_started");
+            WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
         }
 
         private static void OnBeforeAssemblyReload()
@@ -322,7 +352,7 @@ namespace UnityCli
             }
             if (state == PlayModeStateChange.EnteredPlayMode || state == PlayModeStateChange.EnteredEditMode)
                 UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
-            if (started)
+            if (started && InitialPublicationGate.Published)
             {
                 RegisterInstance(playModeChanging ? "transitioning" : "ready");
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
@@ -367,6 +397,8 @@ namespace UnityCli
             started = false;
             lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = false;
             readyPublicationPending = false;
+            StartupState.CompleteRegistryPublication();
+            InitialPublicationGate.Reset();
             CancelInstancePublicationRetry();
         }
 

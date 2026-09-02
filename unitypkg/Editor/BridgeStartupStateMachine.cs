@@ -9,7 +9,8 @@ namespace UnityCli
         None,
         Prime,
         DrainPipelineCallbacks,
-        Complete
+        Complete,
+        RegistryPublication
     }
 
     internal enum BridgeStartupTransition
@@ -19,6 +20,7 @@ namespace UnityCli
         PrimeSucceeded,
         PrimeFailed,
         DrainAdvanced,
+        RegistryPublicationPending,
         CompleteSucceeded,
         CompleteFailed
     }
@@ -39,6 +41,18 @@ namespace UnityCli
             return true;
         }
 
+        /// <summary>handoff成功后由首次registry publication继续持有启动状态。</summary>
+        internal void BeginRegistryPublication()
+        {
+            if (Phase != BridgeStartupPhase.None) throw new InvalidOperationException("Bridge startup cannot begin registry publication from the current state.");
+            Phase = BridgeStartupPhase.RegistryPublication;
+        }
+
+        internal void CompleteRegistryPublication()
+        {
+            if (Phase == BridgeStartupPhase.RegistryPublication) Phase = BridgeStartupPhase.None;
+        }
+
         /// <summary>domain reload或退出时清除当前domain的机制状态。</summary>
         internal void Reset()
         {
@@ -51,6 +65,7 @@ namespace UnityCli
         internal BridgeStartupTransition Tick(bool busy, Func<bool> prime, Func<bool> complete)
         {
             if (Phase == BridgeStartupPhase.None) return BridgeStartupTransition.None;
+            if (Phase == BridgeStartupPhase.RegistryPublication) return BridgeStartupTransition.RegistryPublicationPending;
             if (busy) return BridgeStartupTransition.Busy;
 
             if (Phase == BridgeStartupPhase.Prime)
@@ -75,6 +90,49 @@ namespace UnityCli
             return complete()
                 ? BridgeStartupTransition.CompleteSucceeded
                 : BridgeStartupTransition.CompleteFailed;
+        }
+    }
+
+    internal enum BridgeInitialPublicationAction
+    {
+        None,
+        Wait,
+        OpenQueueAndListen,
+        StopListener
+    }
+
+    /// <summary>listener首次registry claim之前保持queue关闭；成功只开放一次，不可恢复失败才停止。</summary>
+    internal sealed class BridgeInitialPublicationGate
+    {
+        private bool waiting;
+        private bool published;
+
+        internal bool Published { get { return published; } }
+
+        internal void Start()
+        {
+            if (waiting || published) throw new InvalidOperationException("Initial Bridge publication gate is already active.");
+            waiting = true;
+        }
+
+        internal BridgeInitialPublicationAction Apply(InstancePublicationRetryOutcome outcome)
+        {
+            if (!waiting) return BridgeInitialPublicationAction.None;
+            if (outcome == InstancePublicationRetryOutcome.Pending || outcome == InstancePublicationRetryOutcome.None)
+                return BridgeInitialPublicationAction.Wait;
+            waiting = false;
+            if (outcome == InstancePublicationRetryOutcome.Published)
+            {
+                published = true;
+                return BridgeInitialPublicationAction.OpenQueueAndListen;
+            }
+            return BridgeInitialPublicationAction.StopListener;
+        }
+
+        internal void Reset()
+        {
+            waiting = false;
+            published = false;
         }
     }
 }

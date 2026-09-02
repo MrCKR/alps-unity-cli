@@ -12,6 +12,7 @@ namespace UnityCli
         internal readonly object QueueLock = new object();
         private readonly object SettlementLock = new object();
         internal readonly LinkedList<UnityCliBridge.BridgeWorkItem> WorkQueue = new LinkedList<UnityCliBridge.BridgeWorkItem>();
+        internal readonly LinkedList<UnityCliBridge.BridgeWorkItem> SafeStatusQueue = new LinkedList<UnityCliBridge.BridgeWorkItem>();
         internal readonly HashSet<UnityCliBridge.BridgeWorkItem> RunningWork = new HashSet<UnityCliBridge.BridgeWorkItem>();
         internal readonly HashSet<UnityCliBridge.BridgeWorkItem> PendingSettlementWork = new HashSet<UnityCliBridge.BridgeWorkItem>();
         internal readonly Dictionary<string, UnityCliBridge.BridgeWorkItem> ActiveRequestWork = new Dictionary<string, UnityCliBridge.BridgeWorkItem>(StringComparer.Ordinal);
@@ -342,7 +343,7 @@ namespace UnityCli
         {
             lock (QueueLock)
             {
-                if (WorkQueue.Count != 0 || RunningWork.Count != 0 || PendingSettlementWork.Count != 0 || ActiveRequestWork.Count != 0)
+                if (WorkQueue.Count != 0 || SafeStatusQueue.Count != 0 || RunningWork.Count != 0 || PendingSettlementWork.Count != 0 || ActiveRequestWork.Count != 0)
                     throw new InvalidOperationException("Local BridgeQueueState still owns work.");
             }
             if (PendingCompletionIntentCount != 0)

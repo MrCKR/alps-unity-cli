@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
 using UnityEditor;
 
 namespace UnityCli
@@ -15,6 +16,7 @@ namespace UnityCli
         private const string AdmissionSessionStateKey = "UnityCli.AdmissionPool.State";
         private const string AdmissionSettlementScope = "admission-settlement";
         private const int AdmissionPublicationMutexTimeoutMs = 5000;
+        private const int MaxCancelRecoveryEnvelopeBytes = 1536 * 1024;
         private static long admissionPoolPublicationRevision;
         private static string admissionPoolPublicationObserved = string.Empty;
         private static readonly string[] AdmissionDurableScopes = { "compile", "package-resolve", "refresh", "asset-refresh", "package-embed", "test-run", "test-cancel", "build", "navmesh-bake", "occlusion-bake", "direct-mutation" };
@@ -796,7 +798,7 @@ namespace UnityCli
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker owner state is outside its exact transfer window.");
             }
             if (current.OwnerState != intended) return PersistAdmissionOwnerTransfer(state, markerScope, marker, current, intended);
-            WriteAdmissionOwnerFields(marker, current, intended, true);
+            marker["admissionTransferCommitted"] = true;
             state.SaveOperation(markerScope, marker);
             if (!PersistAdmissionPoolState(state)) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission marker reconciliation persistence was not confirmed.");
             return current;
@@ -980,9 +982,14 @@ namespace UnityCli
                 var rootRequestId = AdmissionText(marker, "rootRequestId");
                 var rootRequestDigest = AdmissionText(marker, "rootRequestDigest");
                 var runId = AdmissionText(marker, "runId");
+                string continuationState;
+                string repairEffectState;
+                object candidateEnvelope;
                 if (!AdmissionMarkerMatchesRecord(marker, record)
                     || !IsSafeId(rootRequestId) || !AdmissionDigestIsValid(rootRequestDigest) || !Guid.TryParse(runId, out _)
-                    || !string.Equals(AdmissionText(marker, "requestDigest"), rootRequestDigest, StringComparison.Ordinal))
+                    || !string.Equals(AdmissionText(marker, "requestDigest"), rootRequestDigest, StringComparison.Ordinal)
+                    || !TryReadCancelAdmissionMarkerState(marker, record.RequestId, record.RequestDigest, rootRequestDigest, runId,
+                        out continuationState, out repairEffectState, out _, out candidateEnvelope))
                     return DedicatedCancelMarkerOwnership.Blocked;
                 var parent = state.LoadOperation("test-run");
                 if (parent == null)
@@ -994,6 +1001,8 @@ namespace UnityCli
                         && state.TryGetTerminal("test-cancel", record.RequestId, record.RequestDigest, out cancelTerminal)
                         && state.TryGetTerminalBySelector("test-cancel", record.RequestId, rootRequestDigest, out selectedCancelTerminal)
                         && string.Equals(UnityCliSerializer.Serialize(cancelTerminal), UnityCliSerializer.Serialize(selectedCancelTerminal), StringComparison.Ordinal)
+                        && (!string.Equals(continuationState, "continuation_pending", StringComparison.Ordinal)
+                            || string.Equals(UnityCliSerializer.Serialize(cancelTerminal), UnityCliSerializer.Serialize(candidateEnvelope), StringComparison.Ordinal))
                         ? DedicatedCancelMarkerOwnership.ExactOwner
                         : DedicatedCancelMarkerOwnership.Blocked;
                 }
@@ -1005,7 +1014,17 @@ namespace UnityCli
                     || !string.Equals(AdmissionText(parent, "editorSessionId"), EditorSessionId(), StringComparison.Ordinal)
                     || !string.Equals(AdmissionText(operation, "runId"), runId, StringComparison.Ordinal))
                     return DedicatedCancelMarkerOwnership.Blocked;
-                var repairEffectState = AdmissionText(marker, "parentRepairEffectState");
+                if (string.Equals(continuationState, "dispatched", StringComparison.Ordinal))
+                {
+                    return AdmissionBool(operation, "cancelRequested") && AdmissionBool(operation, "cancelNeedsContinuation")
+                        && string.Equals(AdmissionText(operation, "cancelEffectState"), "dispatched", StringComparison.Ordinal)
+                        && string.Equals(AdmissionText(operation, "cancelRunId"), runId, StringComparison.Ordinal)
+                        && string.Equals(AdmissionText(operation, "cancelRequestId"), record.RequestId, StringComparison.Ordinal)
+                        && string.Equals(AdmissionText(operation, "cancelRequestDigest"), record.RequestDigest, StringComparison.Ordinal)
+                        && string.Equals(AdmissionText(operation, "cancelRootRequestDigest"), rootRequestDigest, StringComparison.Ordinal)
+                        ? DedicatedCancelMarkerOwnership.ExactOwner
+                        : DedicatedCancelMarkerOwnership.Blocked;
+                }
                 if (string.Equals(repairEffectState, "not_invoked", StringComparison.Ordinal))
                 {
                     object exact;
@@ -1104,7 +1123,7 @@ namespace UnityCli
             }
             current.TopRequestDigest = AdmissionText(marker, "requestDigest");
             current.EditorSessionId = AdmissionText(marker, "editorSessionId");
-            WriteAdmissionOwnerFields(marker, current, intended, true);
+            marker["admissionTransferCommitted"] = true;
             UnityCliActiveOperation.Save(markerScope, marker);
             PersistAdmissionPoolState();
         }
@@ -1325,18 +1344,16 @@ namespace UnityCli
                 && string.Equals(AdmissionText(entry, "editorSessionId"), identity.EditorSessionId ?? EditorSessionId(), StringComparison.Ordinal);
         }
 
-        /// <summary>accepted durable transfer失败时先用WorkItem冻结身份建立Recovery marker；marker失败则保留WorkItem等待重试。</summary>
-        private static AdmissionTransferResult SettleAdmissionAfterWorkItem(AdmissionOwnerIdentity identity, string command, string response)
+        /// <summary>accepted durable transfer失败时只使用WorkItem冻结的消费角色与cancel候选建立可执行marker。</summary>
+        private static AdmissionTransferResult SettleAdmissionAfterWorkItem(BridgeQueueState state, BridgeWorkItem item)
         {
-            return SettleAdmissionAfterWorkItem(ProductionQueueState, identity, command, response);
-        }
-
-        private static AdmissionTransferResult SettleAdmissionAfterWorkItem(BridgeQueueState state, AdmissionOwnerIdentity identity, string command, string response)
-        {
+            var identity = item == null ? null : item.AdmissionOwner;
+            var command = item == null || item.Request == null ? null : item.Request.Command;
+            var response = item == null ? null : item.Response;
             if (identity == null || string.IsNullOrEmpty(identity.RequestId)) return AdmissionTransferResult.NotAccepted;
-            var transfer = TransferAdmissionAfterAcceptedWork(state, identity, command, response);
+            var transfer = TransferAdmissionAfterAcceptedWork(state, item, identity, command, response);
             if (transfer == AdmissionTransferResult.TransferPending)
-                transfer = PersistWorkItemRecoveryAfterTransferFailure(state, identity, command, response);
+                transfer = PersistWorkItemRecoveryAfterTransferFailure(state, item, identity, command, response);
             if (transfer == AdmissionTransferResult.TransferPending) return transfer;
             var pool = state.AdmissionPool;
             UnityCliAdmissionPool.ConsumedIdentity current;
@@ -1349,8 +1366,8 @@ namespace UnityCli
             return transfer;
         }
 
-        /// <summary>root观察不确定时用队列冻结身份建立可执行Recovery marker，不从Unity场景或半字段重建。</summary>
-        private static AdmissionTransferResult PersistWorkItemRecoveryAfterTransferFailure(BridgeQueueState state, AdmissionOwnerIdentity identity, string command, string response)
+        /// <summary>root观察不确定时用队列冻结身份建立可执行Recovery marker；候选缺失时继续保留WorkItem。</summary>
+        private static AdmissionTransferResult PersistWorkItemRecoveryAfterTransferFailure(BridgeQueueState state, BridgeWorkItem item, AdmissionOwnerIdentity identity, string command, string response)
         {
             if (identity == null || (!AdmissionDurableRootCommand(command) && command != "project-tool.run" && command != "code.exec"))
                 return AdmissionTransferResult.TransferPending;
@@ -1369,9 +1386,12 @@ namespace UnityCli
                 {
                     { "requestId", current.RequestId }, { "requestDigest", AdmissionTopDigest(current) }, { "editorSessionId", EditorSessionId() }
                 };
-                if (command == "internal.test.run.cancel" && !TryAddCancelAdmissionRootIdentity(state, marker, current))
+                var cancelOwner = UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
+                if (command == "internal.test.run.cancel"
+                    && !TryAddCancelAdmissionRootIdentity(state, marker, current, item.CaptureCancelRecoveryCandidate(), out cancelOwner))
                     return AdmissionTransferResult.TransferPending;
-                var recovered = PersistAdmissionOwnerTransfer(state, markerScope + "-admission-owner", marker, current, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+                var recovered = PersistAdmissionOwnerTransfer(state, markerScope + "-admission-owner", marker, current,
+                    command == "internal.test.run.cancel" ? cancelOwner : UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
                 identity.OwnerState = recovered.OwnerState;
                 identity.TopRequestDigest = recovered.TopRequestDigest;
                 return AdmissionTransferResult.Transferred;
@@ -1384,7 +1404,7 @@ namespace UnityCli
         }
 
         /// <summary>accepted coordinator/cancel及仍持有exact direct durable root的请求只通过固定marker移交owner。</summary>
-        private static AdmissionTransferResult TransferAdmissionAfterAcceptedWork(BridgeQueueState state, AdmissionOwnerIdentity identity, string command, string response)
+        private static AdmissionTransferResult TransferAdmissionAfterAcceptedWork(BridgeQueueState state, BridgeWorkItem item, AdmissionOwnerIdentity identity, string command, string response)
         {
             if (identity == null) return AdmissionTransferResult.NotAccepted;
             var directMutation = command == "project-tool.run" || command == "code.exec";
@@ -1405,16 +1425,16 @@ namespace UnityCli
                 var accepted = AdmissionResponseIsCoordinatorAccepted(response) || durable;
                 if (!accepted) return AdmissionTransferResult.NotAccepted;
                 identity.TopRequestDigest = AdmissionAcceptedTopDigest(state, response, identity, command);
-                var target = command == "internal.test.run.cancel"
-                    ? UnityCliAdmissionPool.AdmissionOwnerState.Continuation
-                    : UnityCliAdmissionPool.AdmissionOwnerState.Coordinator;
-                var intended = durable ? target : UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
+                var intended = durable
+                    ? UnityCliAdmissionPool.AdmissionOwnerState.Coordinator
+                    : UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
                 if (directMutation) intended = UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
                 var marker = new Dictionary<string, object>
                 {
                     { "requestId", identity.RequestId }, { "requestDigest", AdmissionTopDigest(identity) }, { "editorSessionId", EditorSessionId() }
                 };
-                if (command == "internal.test.run.cancel" && !TryAddCancelAdmissionRootIdentity(state, marker, identity))
+                if (command == "internal.test.run.cancel"
+                    && !TryAddCancelAdmissionRootIdentity(state, marker, identity, item.CaptureCancelRecoveryCandidate(), out intended))
                     return AdmissionTransferResult.TransferPending;
                 var updated = PersistAdmissionOwnerTransfer(state, markerScope + "-admission-owner", marker, identity, intended);
                 identity.OwnerState = updated.OwnerState;
@@ -1473,7 +1493,9 @@ namespace UnityCli
             var runId = AdmissionText(marker, "runId");
             if (!IsSafeId(rootRequestId) || !AdmissionDigestIsValid(rootRequestDigest) || !Guid.TryParse(runId, out _)
                 || !string.Equals(AdmissionText(marker, "requestId"), current.RequestId, StringComparison.Ordinal)
-                || !string.Equals(AdmissionText(marker, "requestDigest"), rootRequestDigest, StringComparison.Ordinal)) return false;
+                || !string.Equals(AdmissionText(marker, "requestDigest"), rootRequestDigest, StringComparison.Ordinal)
+                || !TryReadCancelAdmissionMarkerState(marker, current.RequestId, current.RequestDigest, rootRequestDigest, runId,
+                    out _, out _, out _, out _)) return false;
             current.TopRequestDigest = rootRequestDigest;
             current.EditorSessionId = AdmissionText(marker, "editorSessionId");
             if (!AdmissionMarkerMatchesIdentity(marker, current)) return false;
@@ -1485,7 +1507,7 @@ namespace UnityCli
                     : PersistAdmissionOwnerTransfer(state, markerScope, marker, current, intended);
                 if (current.OwnerState == intended)
                 {
-                    WriteAdmissionOwnerFields(marker, current, intended, true);
+                    marker["admissionTransferCommitted"] = true;
                     state.SaveOperation(markerScope, marker);
                     if (!state.PersistPool()) return false;
                 }
@@ -1496,9 +1518,15 @@ namespace UnityCli
             catch { return false; }
         }
 
-        /// <summary>cancel marker首次转移即冻结parent root与run identity，reload不依赖finalizer补写。</summary>
-        private static bool TryAddCancelAdmissionRootIdentity(BridgeQueueState state, IDictionary<string, object> marker, AdmissionOwnerIdentity identity)
+        /// <summary>cancel首次转移冻结完整parent、cancel、continuation与repair schema；不可执行的半marker不接管WorkItem。</summary>
+        private static bool TryAddCancelAdmissionRootIdentity(
+            BridgeQueueState state,
+            IDictionary<string, object> marker,
+            AdmissionOwnerIdentity identity,
+            BridgeWorkItem.CancelRecoveryCandidate candidate,
+            out UnityCliAdmissionPool.AdmissionOwnerState intendedOwner)
         {
+            intendedOwner = UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
             try
             {
                 var root = state.LoadOperation("test-run");
@@ -1515,9 +1543,88 @@ namespace UnityCli
                 marker["rootRequestId"] = rootRequestId;
                 marker["rootRequestDigest"] = rootRequestDigest;
                 marker["runId"] = runId;
+                marker["cancelRequestId"] = identity.RequestId;
+                marker["cancelRequestDigest"] = identity.RequestDigest;
+                if (candidate == null)
+                {
+                    if (!string.Equals(AdmissionText(operation, "cancelEffectState"), "dispatched", StringComparison.Ordinal)
+                        || !AdmissionBool(operation, "cancelNeedsContinuation")) return false;
+                    marker["cancelContinuationState"] = "dispatched";
+                    marker["parentRepairEffectState"] = "dispatched";
+                    marker["parentRepairPending"] = false;
+                    intendedOwner = UnityCliAdmissionPool.AdmissionOwnerState.Continuation;
+                    return true;
+                }
+                if (!string.Equals(candidate.RootRequestId, rootRequestId, StringComparison.Ordinal)
+                    || !string.Equals(candidate.RootRequestDigest, rootRequestDigest, StringComparison.Ordinal)
+                    || !string.Equals(candidate.RunId, runId, StringComparison.Ordinal)
+                    || !CancelTerminalEffectState(candidate.EffectState)
+                    || !CancelTerminalCandidateIsValid(candidate.Envelope, identity.RequestId)) return false;
+                marker["cancelContinuationState"] = "continuation_pending";
+                marker["parentRepairEffectState"] = candidate.EffectState;
+                marker["parentRepairPending"] = true;
+                marker["cancelTerminalEnvelope"] = candidate.Envelope;
+                intendedOwner = UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
                 return true;
             }
             catch { return false; }
+        }
+
+        private static bool CancelTerminalEffectState(string value)
+        {
+            return string.Equals(value, "not_invoked", StringComparison.Ordinal)
+                || string.Equals(value, "outcome_unknown", StringComparison.Ordinal)
+                || string.Equals(value, "cancelled", StringComparison.Ordinal);
+        }
+
+        /// <summary>候选terminal必须是exact request envelope且受terminal单条上限约束。</summary>
+        private static bool CancelTerminalCandidateIsValid(object envelope, string cancelRequestId)
+        {
+            try
+            {
+                var serialized = UnityCliSerializer.Serialize(envelope);
+                if (Encoding.UTF8.GetByteCount(serialized) > MaxCancelRecoveryEnvelopeBytes) return false;
+                var value = AsDictionary(UnityCliSerializer.Parse(serialized));
+                object ok;
+                return value != null && string.Equals(AdmissionText(value, "requestId"), cancelRequestId, StringComparison.Ordinal)
+                    && value.TryGetValue("ok", out ok) && ok is bool;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>reload与在线retry共用的cancel marker状态闭集。</summary>
+        private static bool TryReadCancelAdmissionMarkerState(
+            IDictionary<string, object> marker,
+            string cancelRequestId,
+            string cancelRequestDigest,
+            string rootRequestDigest,
+            string runId,
+            out string continuationState,
+            out string repairEffectState,
+            out bool repairPending,
+            out object candidateEnvelope)
+        {
+            continuationState = AdmissionText(marker, "cancelContinuationState");
+            repairEffectState = AdmissionText(marker, "parentRepairEffectState");
+            repairPending = false;
+            candidateEnvelope = null;
+            object repairPendingValue;
+            if (marker == null || !marker.TryGetValue("parentRepairPending", out repairPendingValue) || !(repairPendingValue is bool)
+                || !string.Equals(AdmissionText(marker, "cancelRequestId"), cancelRequestId, StringComparison.Ordinal)
+                || !string.Equals(AdmissionText(marker, "cancelRequestDigest"), cancelRequestDigest, StringComparison.Ordinal)
+                || !string.Equals(AdmissionText(marker, "rootRequestDigest"), rootRequestDigest, StringComparison.Ordinal)
+                || !string.Equals(AdmissionText(marker, "runId"), runId, StringComparison.Ordinal)) return false;
+            repairPending = (bool)repairPendingValue;
+            object rawCandidate;
+            if (string.Equals(continuationState, "dispatched", StringComparison.Ordinal))
+                return string.Equals(repairEffectState, "dispatched", StringComparison.Ordinal) && !repairPending
+                    && !marker.TryGetValue("cancelTerminalEnvelope", out rawCandidate);
+            if (!string.Equals(continuationState, "continuation_pending", StringComparison.Ordinal)
+                || !CancelTerminalEffectState(repairEffectState)
+                || !marker.TryGetValue("cancelTerminalEnvelope", out rawCandidate)
+                || !CancelTerminalCandidateIsValid(rawCandidate, cancelRequestId)) return false;
+            candidateEnvelope = rawCandidate;
+            return true;
         }
 
         private static bool TryHasExactDurableBusinessRoot(BridgeQueueState queueState, string rootScope, string command, AdmissionOwnerIdentity identity, out bool durable)
@@ -1698,6 +1805,27 @@ namespace UnityCli
                 default:
                     return false;
             }
+        }
+
+        /// <summary>已完成transfer的marker更新业务字段时复制原source→intended证据，禁止伪造同态transfer。</summary>
+        private static bool CopyCommittedAdmissionOwnerFields(IDictionary<string, object> source, IDictionary<string, object> target, AdmissionOwnerIdentity current, string topRequestDigest)
+        {
+            if (!AdmissionMarkerHasImmutableIdentity(source, current, topRequestDigest)
+                || (UnityCliAdmissionPool.AdmissionOwnerState)AdmissionLong(source, "admissionIntendedOwnerState") != current.OwnerState)
+                return false;
+            foreach (var key in new[]
+            {
+                "admissionRootFingerprint", "admissionToken", "admissionSessionId", "admissionListenerId",
+                "admissionListenerGeneration", "admissionExecutionDeadlineMs", "admissionRequestDigest",
+                "admissionOwnerState", "admissionIntendedOwnerState"
+            })
+            {
+                object value;
+                if (!source.TryGetValue(key, out value)) return false;
+                target[key] = value;
+            }
+            target["admissionTransferCommitted"] = true;
+            return true;
         }
 
         private static void WriteAdmissionOwnerFields(IDictionary<string, object> state, AdmissionOwnerIdentity identity, UnityCliAdmissionPool.AdmissionOwnerState intendedOwner, bool committed)

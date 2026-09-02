@@ -589,6 +589,58 @@ namespace UnityCli.Tests
             state.ReleaseLease(parentRequestId, parentDigest);
         }
 
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.Continuation, false)]
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.Recovery, false)]
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup, false)]
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.Coordinator, false)]
+        [TestCase(UnityCliAdmissionPool.AdmissionOwnerState.Continuation, true)]
+        public void RejectedOrExpiredAttachToExistingDurableOwnerOnlyCompletesItsLocalWorkItem(UnityCliAdmissionPool.AdmissionOwnerState durableState, bool expire)
+        {
+            var request = Request("attached-durable-no-effect-" + durableState.ToString().ToLowerInvariant());
+            request.Command = "internal.test.run.cancel";
+            request.Input = new Dictionary<string, object> { { "expectedEditorSessionId", "missing-parent" } };
+            var raw = RequestBytes(request);
+            var digest = UnityCliRequestDigest.Compute(raw, request.InstanceId);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            var authorized = pool.AuthorizeAndCapture(request.RequestId, fingerprint, digest, grant.Token,
+                state.ListenerId, state.ListenerGeneration, deadline);
+            Assert.That(authorized.Outcome, Is.EqualTo(UnityCliAdmissionPool.AuthorizeOutcome.Authorized));
+            var owner = authorized.Identity;
+            if (durableState == UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
+            {
+                owner = Transfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
+                owner = Transfer(owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+            }
+            else owner = Transfer(owner, durableState);
+            if (expire) request.Execution.AbsoluteDeadlineUtc = DateTimeOffset.FromUnixTimeMilliseconds(0).ToString("O");
+
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                bool created;
+                var item = Enqueue(request, raw, null, deadline, out created);
+                Assert.That(created, Is.True);
+                Assert.That(item.AdmissionNewlyConsumed, Is.False);
+                Assert.That(item.AdmissionOwnerStateAtPublication, Is.EqualTo(durableState));
+                Assert.That(item.AttachedToExistingDurableOwner, Is.True);
+
+                var rejected = UnityCliBridge.RejectTerminalControlWorkForTests(state);
+
+                Assert.That(rejected, Is.EqualTo(new[] { request.RequestId }));
+                Assert.That(item.Completed.IsSet, Is.True);
+                Assert.That(item.NoEffectRejected, Is.True);
+                Assert.That(item.Response, Does.Contain(expire ? "deadline elapsed" : "parent is no longer active"));
+                Assert.That(item.HasStarted, Is.False);
+                Assert.That(state.PendingSettlementWork, Is.Empty);
+                Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+                Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+                Assert.That(pool.TryGetConsumedIdentity(request.RequestId, out var retained), Is.True);
+                Assert.That(retained.OwnerState, Is.EqualTo(durableState));
+            }
+            Assert.That(state.Sinks.TransactionCount, Is.EqualTo(2));
+            pool.Reset();
+        }
+
         [TestCase("internal.test.run.cancel")]
         [TestCase("internal.package.files.claim")]
         [TestCase("internal.package.files.commit")]
@@ -701,7 +753,7 @@ namespace UnityCli.Tests
                 var raw = RequestBytes(request);
                 var item = new UnityCliBridge.BridgeWorkItem(state, request, raw,
                     UnityCliRequestDigest.Compute(raw, request.InstanceId), state.ListenerId, state.ListenerGeneration,
-                    null, UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead, true);
+                    null, UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead, true, false);
                 lock (state.QueueLock)
                 {
                     state.ActiveRequestWork.Add(request.RequestId, item);
@@ -715,6 +767,45 @@ namespace UnityCli.Tests
             Assert.That(starts.Length, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxStartsPerTick));
             Assert.That(starts, Does.Not.Contain("actual-queue-scan-128"));
             UnityCliBridge.ShutdownQueuedWorkForTests(state);
+        }
+
+        [Test]
+        public void SafeStatusBeyondBlockedPrefixStartsWithinBoundAndIndexSurvivesAttachAndClose()
+        {
+            PublishQueueItem("blocked-mutation", "project-tool.run", UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+            for (var index = 0; index < 127; index++)
+                PublishQueueItem("pending-control-" + index.ToString(), "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control);
+            var safeRequest = Request("safe-status-129");
+            safeRequest.Command = "internal.editor.compile.status";
+            var safeRaw = RequestBytes(safeRequest);
+            var safeGrant = pool.Acquire(safeRequest.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            var safe = Enqueue(safeRequest, safeRaw, safeGrant.Token, Deadline(safeRequest), out var safeCreated);
+            Assert.That(safeCreated, Is.True);
+
+            var firstTick = UnityCliBridge.TakeQueuedStartsForTests(state, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable);
+
+            Assert.That(firstTick.Select(item => item.Request.RequestId), Is.EqualTo(new[] { safe.Request.RequestId }));
+            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+            Assert.That(state.SafeStatusQueue, Is.Empty);
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(safe, Success(safe.Request.RequestId)), Is.True);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(128));
+
+            var attachedRequest = Request("safe-status-attach");
+            attachedRequest.Command = "internal.editor.compile.status";
+            var attachedRaw = RequestBytes(attachedRequest);
+            var attachedGrant = pool.Acquire(attachedRequest.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            var attachedSafe = Enqueue(attachedRequest, attachedRaw, attachedGrant.Token, Deadline(attachedRequest), out var attachedCreated);
+            Assert.That(attachedCreated, Is.True);
+            var duplicate = Enqueue(attachedRequest, attachedRaw, attachedGrant.Token, Deadline(attachedRequest), out var created);
+            Assert.That(created, Is.False);
+            Assert.That(duplicate, Is.SameAs(attachedSafe));
+            Assert.That(state.SafeStatusQueue.Count, Is.EqualTo(1));
+
+            UnityCliBridge.ShutdownQueuedWorkForTests(state);
+
+            Assert.That(state.SafeStatusQueue, Is.Empty);
+            Assert.That(state.WorkQueue, Is.Empty);
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
         }
 
         [Test]
@@ -820,6 +911,33 @@ namespace UnityCli.Tests
             var request = Request("classification-" + command.Replace('.', '-'));
             request.Command = command;
             Assert.That(UnityCliBridge.QueueRequestWorkClass(request), Is.EqualTo(expected), command);
+        }
+
+        private UnityCliAdmissionPool.ConsumedIdentity Transfer(UnityCliAdmissionPool.ConsumedIdentity owner, UnityCliAdmissionPool.AdmissionOwnerState target)
+        {
+            Assert.That(pool.PrepareOwnerTransfer(owner, target), Is.True);
+            Assert.That(pool.CommitOwnerTransfer(owner, target, out var successor), Is.True);
+            return successor;
+        }
+
+        private UnityCliBridge.BridgeWorkItem PublishQueueItem(string requestId, string command, UnityCliBridgeQueuePolicy.WorkClass workClass)
+        {
+            var request = Request(requestId);
+            request.Command = command;
+            if (workClass == UnityCliBridgeQueuePolicy.WorkClass.Control)
+                request.Input = new Dictionary<string, object> { { "operationId", requestId } };
+            var raw = RequestBytes(request);
+            var item = new UnityCliBridge.BridgeWorkItem(state, request, raw,
+                UnityCliRequestDigest.Compute(raw, request.InstanceId), state.ListenerId, state.ListenerGeneration,
+                null, workClass, true, false);
+            lock (state.QueueLock)
+            {
+                state.ActiveRequestWork.Add(request.RequestId, item);
+                item.QueueNode = state.WorkQueue.AddLast(item);
+                if (workClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus)
+                    item.SafeStatusNode = state.SafeStatusQueue.AddLast(item);
+            }
+            return item;
         }
 
         private UnityCliBridge.BridgeWorkItem Enqueue(BridgeRequest request, byte[] raw, string token, long deadline, out bool created)

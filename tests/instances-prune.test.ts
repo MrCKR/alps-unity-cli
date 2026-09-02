@@ -38,6 +38,15 @@ async function project(prefix: string): Promise<string> {
   return root;
 }
 
+/** 两侧anchor都必须存在后才允许比较顺序，避免-1制造静态假阳性。 */
+function assertAnchorsInOrder(text: string, first: string, second: string): void {
+  const firstIndex = text.indexOf(first);
+  const secondIndex = text.indexOf(second);
+  assert.ok(firstIndex >= 0, `missing source anchor: ${first}`);
+  assert.ok(secondIndex >= 0, `missing source anchor: ${second}`);
+  assert.ok(firstIndex < secondIndex, `${first} must precede ${second}`);
+}
+
 /** 写入一个名称合法但内容不属于Registry v3的单文件夹具。 */
 async function writeInvalidRegistry(dataDir: string, instanceId: string, value: unknown = { version: 2 }): Promise<string> {
   const directory = join(dataDir, "instances");
@@ -91,13 +100,26 @@ test("Editor and Runtime publish lifecycle changes immediately with a thirty-sec
     readFile("unitypkg/Runtime/Infrastructure/UnityCliRuntimeBridge.cs", "utf8"),
   ]);
   assert.match(bridge, /private const double RegistryRefreshSeconds = 30\.0/);
-  assert.match(bridge, /PrepareListenerGenerationForStart\(\);[\s\S]*?StartHttpListener\(listener\)[\s\S]*?RegisterInstance\("transitioning"\)[\s\S]*?ProductionQueueState\.ListenerGeneration = Math\.Max\(1, CurrentListenerGeneration\(\)\)[\s\S]*?ProductionQueueState\.QueuePublicationOpen = true[\s\S]*?Task\.Run\(ListenLoop\);[\s\S]*?readyPublicationPending = true/);
+  const startListenerStart = bridge.indexOf("private static void StartListener()");
+  const startListenerEnd = bridge.indexOf("private static void HandleInitialPublicationOutcome", startListenerStart);
+  assert.ok(startListenerStart >= 0, "missing StartListener anchor");
+  assert.ok(startListenerEnd >= 0, "missing initial publication handler anchor");
+  const startListener = bridge.slice(startListenerStart, startListenerEnd);
+  assertAnchorsInOrder(startListener, "StartHttpListener(listener)", "StartupState.BeginRegistryPublication()");
+  assertAnchorsInOrder(startListener, "StartupState.BeginRegistryPublication()", "InitialPublicationGate.Start()");
+  assertAnchorsInOrder(startListener, "InitialPublicationGate.Start()", 'HandleInitialPublicationOutcome(RegisterInstance("transitioning"))');
+  const publicationHandlerEnd = bridge.indexOf("private static void OnBeforeAssemblyReload()", startListenerEnd);
+  assert.ok(publicationHandlerEnd >= 0, "missing initial publication handler end anchor");
+  const publicationHandler = bridge.slice(startListenerEnd, publicationHandlerEnd);
+  assertAnchorsInOrder(publicationHandler, "BridgeInitialPublicationAction.Wait", "BridgeInitialPublicationAction.StopListener");
+  assertAnchorsInOrder(publicationHandler, "ProductionQueueState.QueuePublicationOpen = true", "Task.Run(ListenLoop)");
+  assertAnchorsInOrder(publicationHandler, "Task.Run(ListenLoop)", "readyPublicationPending = true");
   assert.match(bridge, /catch \(Exception exception\)[\s\S]*?StopListener\(\);[\s\S]*?listener_start_failed/);
   assert.match(bridge, /RegisterInstance\(playModeChanging \? "transitioning" : "ready"\)/);
   assert.match(bridge, /nextRegistryRefreshAt = EditorApplication\.timeSinceStartup \+ RegistryRefreshSeconds/);
   assert.match(workQueue, /var listenerWasStarted = started/);
   assert.match(workQueue, /cachedIsCompiling != isCompiling[\s\S]*?cachedIsUpdating != isUpdating[\s\S]*?cachedIsBuilding != isBuilding[\s\S]*?cachedIsPlayModeChanging != isPlayModeChanging/);
-  assert.match(workQueue, /listenerWasStarted && started[\s\S]*?readyPublicationPending \|\| lifecycleChanged \|\| EditorApplication\.timeSinceStartup >= nextRegistryRefreshAt[\s\S]*?readyPublicationPending = false;[\s\S]*?RegisterInstance\("ready"\)/);
+  assert.match(workQueue, /listenerWasStarted && started && InitialPublicationGate\.Published[\s\S]*?readyPublicationPending \|\| lifecycleChanged \|\| EditorApplication\.timeSinceStartup >= nextRegistryRefreshAt[\s\S]*?readyPublicationPending = false;[\s\S]*?RegisterInstance\("ready"\)/);
   assert.match(workQueue, /nextRegistryRefreshAt = EditorApplication\.timeSinceStartup \+ RegistryRefreshSeconds/);
   assert.match(runtime, /private const int RegistryRefreshSeconds = 30/);
   assert.match(runtime, /nextRegistryRefreshAt = Time\.realtimeSinceStartup \+ RegistryRefreshSeconds/);
@@ -112,19 +134,25 @@ test("Editor registry publication uses one bounded same-domain retry chain", asy
     readFile("unitypkg/Tests/Editor/UnityCliInstancePublicationRetryTests.cs", "utf8"),
   ]);
   assert.match(registry, /private const int RegistryPublicationMaxAttempts = 4/);
-  assert.match(registry, /if \(registryPublicationRetryExhausted\) return false;[\s\S]*?if \(registryPublicationRetryPending\)[\s\S]*?pendingRegistryRequestedState = requestedState;[\s\S]*?return false/);
-  assert.match(registry, /!registryPublicationRetryPending \|\| registryPublicationRetryExhausted \|\| !started \|\| domainReloading/);
-  assert.match(registry, /registryPublicationRetryPending = false;[\s\S]*?AttemptInstancePublication\(string\.IsNullOrEmpty\(requestedState\) \? "ready" : requestedState\)/);
-  assert.match(registry, /registryPublicationAttemptCount >= RegistryPublicationMaxAttempts[\s\S]*?registryPublicationRetryExhausted = true[\s\S]*?instance_publication_retry_stopped kind=[\s\S]*?nextAction=restore-data-root-write-access-then-reload-domain/);
+  assert.match(registry, /class UnityCliInstancePublicationRetry[\s\S]*?Func<double> now[\s\S]*?Func<string, InstancePublicationAttempt> publish/);
+  assert.match(registry, /if \(pending\)[\s\S]*?pendingState = requestedState;[\s\S]*?InstancePublicationRetryOutcome\.Pending/);
+  assert.match(registry, /if \(!pending \|\| exhausted \|\| now\(\) < nextRetryAt\) return InstancePublicationRetryOutcome\.None/);
+  assert.match(registry, /attemptCount >= maxAttempts[\s\S]*?exhausted = true[\s\S]*?instance_publication_retry_stopped kind=[\s\S]*?nextAction=restore-data-root-write-access-then-reload-domain/);
   assert.match(registry, /failure is IOException[\s\S]*?failure is UnauthorizedAccessException[\s\S]*?failure is TimeoutException[\s\S]*?failure is Win32Exception/);
   assert.match(registry, /failedAttempts <= 1\) return 0\.25;[\s\S]*?failedAttempts == 2\) return 0\.5;[\s\S]*?return 1\.0/);
   assert.match(registry, /instance_publication_retry_succeeded attempts=/);
-  assert.match(bridge, /PrepareListenerGenerationForStart\(\);[\s\S]*?if \(!RegisterInstance\("transitioning"\)\) throw[\s\S]*?ProductionQueueState\.QueuePublicationOpen = true[\s\S]*?Task\.Run\(ListenLoop\);[\s\S]*?readyPublicationPending = true/);
-  assert.match(bridge, /started = false;[\s\S]*?readyPublicationPending = false;[\s\S]*?CancelInstancePublicationRetry\(\)/);
-  assert.match(workQueue, /RetryPendingWorkItemSettlements\(\);[\s\S]*?TickInstancePublicationRetry\(\);[\s\S]*?CurrentDurableMutationBarrier\(state\)[\s\S]*?UnityCliBridgeQueuePolicy\.SelectStarts/);
-  assert.match(unityTests, /new FileStream\(paths\.Temporary[\s\S]*?register\.Invoke[\s\S]*?Thread\.Sleep\(300\)[\s\S]*?tick\.Invoke/);
-  assert.match(unityTests, /PersistentWriteFailureStopsAtFourAndDoesNotStartAnotherChain[\s\S]*?attemptCount[\s\S]*?Is\.EqualTo\(4\)[\s\S]*?exhausted[\s\S]*?Is\.True/);
-  assert.match(unityTests, /CancelClearsExhaustionForTheNextDomainOwner[\s\S]*?register\.Invoke[\s\S]*?Is\.True/);
+  const startListenerIndex = bridge.indexOf("private static void StartListener()");
+  const initialHandlerIndex = bridge.indexOf("private static void HandleInitialPublicationOutcome");
+  assert.ok(startListenerIndex >= 0, "missing StartListener anchor");
+  assert.ok(initialHandlerIndex >= 0, "missing initial handler anchor");
+  const startListener = bridge.slice(startListenerIndex, initialHandlerIndex);
+  assertAnchorsInOrder(startListener, "InitialPublicationGate.Start()", 'HandleInitialPublicationOutcome(RegisterInstance("transitioning"))');
+  assert.match(bridge, /started = false;[\s\S]*?readyPublicationPending = false;[\s\S]*?InitialPublicationGate\.Reset\(\);[\s\S]*?CancelInstancePublicationRetry\(\)/);
+  assert.match(workQueue, /RetryPendingWorkItemSettlements\(\);[\s\S]*?HandleInitialPublicationOutcome\(TickInstancePublicationRetry\(\)\);[\s\S]*?CurrentDurableMutationBarrier\(state\)[\s\S]*?UnityCliBridgeQueuePolicy\.SelectStarts/);
+  assert.match(unityTests, /UnityCliInstancePublicationRetry[\s\S]*?BridgeInitialPublicationGate[\s\S]*?now = 0\.25[\s\S]*?retry\.Tick\(\)/);
+  assert.match(unityTests, /RetryableFailureStopsListenerOnlyAfterFourthAttempt[\s\S]*?AttemptCount[\s\S]*?Is\.EqualTo\(4\)[\s\S]*?Exhausted[\s\S]*?Is\.True/);
+  assert.match(unityTests, /NonRetryableFailureStopsImmediatelyAndResetCreatesANewDomainChain[\s\S]*?retry\.Reset\(\)[\s\S]*?gate\.Reset\(\)/);
+  assert.doesNotMatch(unityTests, /Thread\.Sleep|FileStream|UNITYCLI_DATA_DIR/);
   assert.doesNotMatch(`${registry}\n${bridge}\n${workQueue}`, /EditorApplication\.update \+=.*Retry|new Timer|Task\.Delay/);
 });
 

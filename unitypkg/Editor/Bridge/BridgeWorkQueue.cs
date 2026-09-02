@@ -82,7 +82,13 @@ namespace UnityCli
                 state.QueuePublicationOpen = false;
                 if (sessionStopping) state.QueueSessionStopping = true;
                 var pending = new List<BridgeWorkItem>(state.WorkQueue);
+                foreach (var item in pending)
+                {
+                    item.QueueNode = null;
+                    item.SafeStatusNode = null;
+                }
                 state.WorkQueue.Clear();
+                state.SafeStatusQueue.Clear();
                 return pending;
             }
         }
@@ -187,14 +193,14 @@ namespace UnityCli
             RetryPendingWorkItemSettlements();
 
             // 新listener先保留至少一个主线程update的transitioning状态；后续生命周期变化即时发布，30秒刷新只修复漏事件。
-            if (listenerWasStarted && started
+            if (listenerWasStarted && started && InitialPublicationGate.Published
                 && (readyPublicationPending || lifecycleChanged || EditorApplication.timeSinceStartup >= nextRegistryRefreshAt))
             {
                 readyPublicationPending = false;
                 RegisterInstance("ready");
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
             }
-            TickInstancePublicationRetry();
+            HandleInitialPublicationOutcome(TickInstancePublicationRetry());
             int queueDepth;
             List<ControlQueueRejection> rejected;
             var selected = SelectQueuedStarts(state, CurrentDurableMutationBarrier(state), true, out queueDepth, out rejected);
@@ -225,21 +231,36 @@ namespace UnityCli
             List<BridgeWorkItem> snapshotItems;
             int runningOrdinaryReads;
             bool mutationRunning;
+            var actualNodeVisits = 0;
             lock (state.QueueLock)
             {
-                snapshotItems = new List<BridgeWorkItem>(Math.Min(state.WorkQueue.Count, UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
-                var cursor = state.WorkQueue.First;
-                while (cursor != null && snapshotItems.Count < UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
+                snapshotItems = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick);
+                var prioritySafeStatus = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxSafeStatusStartsPerTick);
+                var safeCursor = state.SafeStatusQueue.First;
+                while (safeCursor != null && prioritySafeStatus.Count < UnityCliBridgeQueuePolicy.MaxSafeStatusStartsPerTick
+                    && actualNodeVisits < UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
                 {
-                    snapshotItems.Add(cursor.Value);
+                    prioritySafeStatus.Add(safeCursor.Value);
+                    actualNodeVisits += 1;
+                    safeCursor = safeCursor.Next;
+                }
+                var seen = new HashSet<BridgeWorkItem>();
+                var cursor = state.WorkQueue.First;
+                while (cursor != null && actualNodeVisits < UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
+                {
+                    var item = cursor.Value;
+                    if (seen.Add(item)) snapshotItems.Add(item);
+                    actualNodeVisits += 1;
                     cursor = cursor.Next;
                 }
+                foreach (var item in prioritySafeStatus)
+                    if (seen.Add(item)) snapshotItems.Add(item);
                 runningOrdinaryReads = state.RunningWork.Count(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
                 mutationRunning = state.RunningWork.Any(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Mutation
                     || item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Control);
                 queueDepth = state.WorkQueue.Count;
             }
-            state.RecordQueueNodesExamined(snapshotItems.Count);
+            state.RecordQueueNodesExamined(actualNodeVisits);
             rejections = new List<ControlQueueRejection>();
             if (snapshotItems.Count == 0) return new List<BridgeWorkItem>();
 
@@ -258,8 +279,7 @@ namespace UnityCli
                     if (item.QueueNode == null || item.QueueNode.List != state.WorkQueue) continue;
                     rejections.Add(new ControlQueueRejection(item, decision.Disposition));
                     if (!remove) continue;
-                    state.WorkQueue.Remove(item.QueueNode);
-                    item.QueueNode = null;
+                    RemoveQueuedItemUnderLock(state, item);
                 }
                 foreach (var decision in selection.Starts)
                 {
@@ -267,8 +287,7 @@ namespace UnityCli
                     if (item.QueueNode == null || item.QueueNode.List != state.WorkQueue) continue;
                     selected.Add(item);
                     if (!remove) continue;
-                    state.WorkQueue.Remove(item.QueueNode);
-                    item.QueueNode = null;
+                    RemoveQueuedItemUnderLock(state, item);
                 }
                 queueDepth = state.WorkQueue.Count;
             }
@@ -284,6 +303,15 @@ namespace UnityCli
                 .Select(item => item.Request.RequestId).ToArray();
         }
 
+        /// <summary>测试以显式barrier调用production移除算法；不读取production lease或固定状态。</summary>
+        internal static BridgeWorkItem[] TakeQueuedStartsForTests(BridgeQueueState state, UnityCliBridgeQueuePolicy.DurableMutationBarrier barrier)
+        {
+            if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Queue take test state must be isolated.", "state");
+            int queueDepth;
+            List<ControlQueueRejection> ignored;
+            return SelectQueuedStarts(state, new DurableMutationBarrierProof { State = barrier }, true, out queueDepth, out ignored).ToArray();
+        }
+
         internal static string[] RejectTerminalControlWorkForTests(BridgeQueueState state)
         {
             if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Control rejection test state must be isolated.", "state");
@@ -297,8 +325,7 @@ namespace UnityCli
                 {
                     var item = rejection.Item;
                     if (item.QueueNode == null || item.QueueNode.List != state.WorkQueue) continue;
-                    state.WorkQueue.Remove(item.QueueNode);
-                    item.QueueNode = null;
+                    RemoveQueuedItemUnderLock(state, item);
                     removed.Add(rejection);
                 }
             }
@@ -504,13 +531,27 @@ namespace UnityCli
                             throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Admission-bypass attach target disappeared before publication.");
                     }
 
-                    item = new BridgeWorkItem(state, request, rawRequestBytes, digest, admissionListenerId, admissionGeneration, reservation.Owner, workClass, bypass);
+                    item = new BridgeWorkItem(state, request, rawRequestBytes, digest, admissionListenerId, admissionGeneration,
+                        reservation.Owner, workClass, bypass, reservation.NewlyConsumed);
                     HitQueueTestBoundary(state, "before-queue-publication");
                     UnityCliQueuePublication.Publish(
                         () => state.ActiveRequestWork.Add(request.RequestId, item),
-                        () => item.QueueNode = state.WorkQueue.AddLast(item),
+                        () =>
+                        {
+                            item.QueueNode = state.WorkQueue.AddLast(item);
+                            try
+                            {
+                                if (item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus)
+                                    item.SafeStatusNode = state.SafeStatusQueue.AddLast(item);
+                            }
+                            catch
+                            {
+                                RemoveQueuedItemUnderLock(state, item);
+                                throw;
+                            }
+                        },
                         () => { BridgeWorkItem current; if (state.ActiveRequestWork.TryGetValue(request.RequestId, out current) && object.ReferenceEquals(current, item)) state.ActiveRequestWork.Remove(request.RequestId); },
-                        () => { if (item.QueueNode != null && item.QueueNode.List == state.WorkQueue) { state.WorkQueue.Remove(item.QueueNode); item.QueueNode = null; } },
+                        () => RemoveQueuedItemUnderLock(state, item),
                         () => MarkAdmissionQueuePublished(reservation));
                     created = true;
                     queueDepth = state.WorkQueue.Count;
@@ -563,10 +604,7 @@ namespace UnityCli
             lock (item.QueueState.QueueLock)
             {
                 if (item.QueueNode != null && item.QueueNode.List == item.QueueState.WorkQueue)
-                {
-                    item.QueueState.WorkQueue.Remove(item.QueueNode);
-                    item.QueueNode = null;
-                }
+                    RemoveQueuedItemUnderLock(item.QueueState, item);
                 item.QueueState.RunningWork.Add(item);
             }
             item.SetResponseForTests(response);
@@ -621,6 +659,19 @@ namespace UnityCli
             if (item == null) return false;
             var state = item.QueueState;
             if (!item.TryBeginCompletion()) return false;
+            if (item.NoEffectRejected && !item.NoEffectRejectionOwnsAdmission)
+            {
+                lock (state.QueueLock)
+                {
+                    state.RunningWork.Remove(item);
+                    state.PendingSettlementWork.Remove(item);
+                    RemoveActiveWorkItem(state, item);
+                }
+                CompleteAndLogWorkItem(item);
+                TryFinalizeAdmissionPoolShutdown(state);
+                return true;
+            }
+
             var transfer = AdmissionTransferResult.TransferPending;
             Exception settlementException = null;
             Exception boundaryException = null;
@@ -630,7 +681,7 @@ namespace UnityCli
                 if (item.CompletionIntentReady || item.NoEffectRejected)
                     transfer = AdmissionTransferResult.NotAccepted;
                 else
-                    transfer = SettleAdmissionAfterWorkItem(state, item.AdmissionOwner, item.Request.Command, item.Response);
+                    transfer = SettleAdmissionAfterWorkItem(state, item);
             }
             catch (Exception exception) { settlementException = exception; }
 
@@ -775,6 +826,17 @@ namespace UnityCli
             state.Sinks.WriteLog("admission_settlement_deferred requestId=" + item.Request.RequestId + " reason=" + reason);
         }
 
+        /// <summary>QueueLock内同时摘除主FIFO与SafeStatus索引，任何入口都不得留下失效节点。</summary>
+        private static void RemoveQueuedItemUnderLock(BridgeQueueState state, BridgeWorkItem item)
+        {
+            if (item.QueueNode != null && item.QueueNode.List == state.WorkQueue)
+                state.WorkQueue.Remove(item.QueueNode);
+            if (item.SafeStatusNode != null && item.SafeStatusNode.List == state.SafeStatusQueue)
+                state.SafeStatusQueue.Remove(item.SafeStatusNode);
+            item.QueueNode = null;
+            item.SafeStatusNode = null;
+        }
+
         private static void RemoveActiveWorkItem(BridgeQueueState state, BridgeWorkItem item)
         {
             BridgeWorkItem current;
@@ -807,10 +869,11 @@ namespace UnityCli
             private bool cancelled;
             private bool started;
             private bool completionStarted;
+            private CancelRecoveryCandidate cancelRecoveryCandidate;
             private readonly UnityCliBridgeWorkItemState lifecycle = new UnityCliBridgeWorkItemState();
             private readonly CancellationTokenSource cancellation;
 
-            public BridgeWorkItem(BridgeQueueState queueState, UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest, string admissionListenerId, long admissionGeneration, AdmissionOwnerIdentity admissionOwner, UnityCliBridgeQueuePolicy.WorkClass workClass, bool admissionBypass)
+            public BridgeWorkItem(BridgeQueueState queueState, UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes, string requestDigest, string admissionListenerId, long admissionGeneration, AdmissionOwnerIdentity admissionOwner, UnityCliBridgeQueuePolicy.WorkClass workClass, bool admissionBypass, bool admissionNewlyConsumed)
             {
                 QueueState = queueState;
                 Request = request;
@@ -822,6 +885,10 @@ namespace UnityCli
                 CapturedAdmissionPool = queueState == null ? null : queueState.AdmissionPool;
                 WorkClass = workClass;
                 AdmissionBypass = admissionBypass;
+                AdmissionNewlyConsumed = admissionNewlyConsumed;
+                AdmissionOwnerStateAtPublication = admissionOwner == null
+                    ? UnityCliAdmissionPool.AdmissionOwnerState.Granted
+                    : admissionOwner.OwnerState;
                 PolicyNode = new UnityCliBridgeQueuePolicy.QueueNode(request.RequestId, request.Command, workClass);
                 cancellation = CreateExecutionLifetime(request);
             }
@@ -837,7 +904,27 @@ namespace UnityCli
             public UnityCliBridgeQueuePolicy.WorkClass WorkClass { get; private set; }
             public UnityCliBridgeQueuePolicy.QueueNode PolicyNode { get; private set; }
             public bool AdmissionBypass { get; private set; }
+            internal bool AdmissionNewlyConsumed { get; private set; }
+            internal UnityCliAdmissionPool.AdmissionOwnerState AdmissionOwnerStateAtPublication { get; private set; }
+            internal bool NoEffectRejectionOwnsAdmission
+            {
+                get
+                {
+                    return AdmissionOwner != null && AdmissionNewlyConsumed
+                        && AdmissionOwnerStateAtPublication == UnityCliAdmissionPool.AdmissionOwnerState.WorkItem;
+                }
+            }
+            internal bool AttachedToExistingDurableOwner
+            {
+                get
+                {
+                    return AdmissionOwner != null && !AdmissionNewlyConsumed
+                        && AdmissionOwnerStateAtPublication != UnityCliAdmissionPool.AdmissionOwnerState.WorkItem
+                        && AdmissionOwnerStateAtPublication != UnityCliAdmissionPool.AdmissionOwnerState.Granted;
+                }
+            }
             public LinkedListNode<BridgeWorkItem> QueueNode { get; set; }
+            internal LinkedListNode<BridgeWorkItem> SafeStatusNode { get; set; }
             public bool HasStarted { get { lock (StateLock) return started; } }
             public CancellationToken Token { get { return cancellation.Token; } }
             public ManualResetEventSlim Started { get; private set; } = new ManualResetEventSlim(false);
@@ -855,6 +942,61 @@ namespace UnityCli
 
             internal string RequestDigestValue { get { return RequestDigest; } }
             internal void SetResponseForTests(string response) { Response = response; }
+
+            /// <summary>cancel terminal首次持久化双故障时，把有界候选冻结在仍存活的WorkItem供settlement重建marker。</summary>
+            internal void FreezeCancelRecoveryCandidate(string rootRequestId, string rootRequestDigest, string runId, string effectState, object envelope)
+            {
+                var serialized = UnityCliSerializer.Serialize(envelope);
+                if (string.IsNullOrEmpty(rootRequestId) || string.IsNullOrEmpty(rootRequestDigest) || string.IsNullOrEmpty(runId)
+                    || string.IsNullOrEmpty(effectState) || envelope == null || Encoding.UTF8.GetByteCount(serialized) > MaxCancelRecoveryEnvelopeBytes)
+                    throw new InvalidOperationException("Cancel recovery candidate is incomplete or exceeds its fixed bound.");
+                lock (StateLock)
+                {
+                    if (cancelRecoveryCandidate != null)
+                    {
+                        if (!string.Equals(cancelRecoveryCandidate.RootRequestId, rootRequestId, StringComparison.Ordinal)
+                            || !string.Equals(cancelRecoveryCandidate.RootRequestDigest, rootRequestDigest, StringComparison.Ordinal)
+                            || !string.Equals(cancelRecoveryCandidate.RunId, runId, StringComparison.Ordinal)
+                            || !string.Equals(cancelRecoveryCandidate.EffectState, effectState, StringComparison.Ordinal)
+                            || !string.Equals(UnityCliSerializer.Serialize(cancelRecoveryCandidate.Envelope), serialized, StringComparison.Ordinal))
+                            throw new InvalidOperationException("Cancel recovery candidate identity changed after it was frozen.");
+                        return;
+                    }
+                    cancelRecoveryCandidate = new CancelRecoveryCandidate
+                    {
+                        RootRequestId = rootRequestId,
+                        RootRequestDigest = rootRequestDigest,
+                        RunId = runId,
+                        EffectState = effectState,
+                        Envelope = UnityCliSerializer.Parse(serialized)
+                    };
+                }
+            }
+
+            internal CancelRecoveryCandidate CaptureCancelRecoveryCandidate()
+            {
+                lock (StateLock)
+                {
+                    if (cancelRecoveryCandidate == null) return null;
+                    return new CancelRecoveryCandidate
+                    {
+                        RootRequestId = cancelRecoveryCandidate.RootRequestId,
+                        RootRequestDigest = cancelRecoveryCandidate.RootRequestDigest,
+                        RunId = cancelRecoveryCandidate.RunId,
+                        EffectState = cancelRecoveryCandidate.EffectState,
+                        Envelope = UnityCliSerializer.Parse(UnityCliSerializer.Serialize(cancelRecoveryCandidate.Envelope))
+                    };
+                }
+            }
+
+            internal sealed class CancelRecoveryCandidate
+            {
+                internal string RootRequestId;
+                internal string RootRequestDigest;
+                internal string RunId;
+                internal string EffectState;
+                internal object Envelope;
+            }
 
             /// <summary>只允许已取消且从未启动的 selection reject 冻结 no-effect settlement。</summary>
             internal void MarkNoEffectRejected()

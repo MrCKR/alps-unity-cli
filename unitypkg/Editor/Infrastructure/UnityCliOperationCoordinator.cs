@@ -280,8 +280,14 @@ namespace UnityCli
 
         internal enum DirectMutationReloadOutcome { NotApplicable, WaitingExactOwner, SettledEffectBefore, IdentityBlocked }
 
-        /// <summary>旧domain不再执行effect；无exact lease的accepted root冻结effect-before终态并立即进入TerminalCleanup。</summary>
+        /// <summary>旧domain不再执行effect；CleanupPending先释放旧lease，再冻结terminal并执行exact cleanup。</summary>
         internal static DirectMutationReloadOutcome ReconcileAcceptedDirectMutationAfterReload(BridgeQueueState state, string requestId, string requestDigest)
+        {
+            return ReconcileAcceptedDirectMutationAfterReload(state, requestId, requestDigest,
+                DirectMutationCleanupPendingForIdentity(requestId, requestDigest));
+        }
+
+        internal static DirectMutationReloadOutcome ReconcileAcceptedDirectMutationAfterReload(BridgeQueueState state, string requestId, string requestDigest, bool releaseExactOwnerBeforeSettlement)
         {
             if (state == null) throw new ArgumentNullException("state");
             var root = LoadDirectMutationRoot(state);
@@ -295,7 +301,13 @@ namespace UnityCli
                 return DirectMutationReloadOutcome.IdentityBlocked;
             if (string.Equals(leaseRequestId, requestId, StringComparison.Ordinal)
                 && string.Equals(leaseRequestDigest, requestDigest, StringComparison.Ordinal))
-                return DirectMutationReloadOutcome.WaitingExactOwner;
+            {
+                if (!releaseExactOwnerBeforeSettlement) return DirectMutationReloadOutcome.WaitingExactOwner;
+                if (object.ReferenceEquals(state, ProductionQueueState)) ReleaseDirectMutationLease(requestId, requestDigest);
+                else state.ReleaseLease(requestId, requestDigest);
+                if (!state.TryGetCurrentLeaseOwner(out leaseRequestId, out leaseRequestDigest))
+                    return DirectMutationReloadOutcome.IdentityBlocked;
+            }
             if (!string.IsNullOrEmpty(leaseRequestId) || !string.IsNullOrEmpty(leaseRequestDigest))
                 return DirectMutationReloadOutcome.IdentityBlocked;
             var owner = CaptureAdmissionOwner(state, requestId, requestDigest);
@@ -477,6 +489,12 @@ namespace UnityCli
         {
             return string.Equals(SessionState.GetString(DirectMutationRequestIdSessionKey, string.Empty), requestId, StringComparison.Ordinal)
                 && string.Equals(SessionState.GetString(DirectMutationRequestDigestSessionKey, string.Empty), requestDigest, StringComparison.Ordinal);
+        }
+
+        private static bool DirectMutationCleanupPendingForIdentity(string requestId, string requestDigest)
+        {
+            return DirectMutationBindingMatches(requestId, requestDigest)
+                && SessionState.GetBool(DirectMutationCleanupPendingSessionKey, false);
         }
 
         /// <summary>普通 Tool 的 effect 提交只保留 runner 协调语义，不写请求级持久状态。</summary>

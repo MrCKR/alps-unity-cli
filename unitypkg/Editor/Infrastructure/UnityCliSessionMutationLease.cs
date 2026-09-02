@@ -35,29 +35,33 @@ namespace UnityCli
             {
                 recoveryBlocked = false;
                 if (!RecoverStaleOwner()) { recoveryBlocked = true; return; }
-                TryFinalizeOwnedPlayModeRoot();
                 try
                 {
-                    var directOutcome = ReconcileAcceptedDirectMutationBeforeLeaseRestore(ProductionQueueState);
-                    if (directOutcome == DirectMutationReloadOutcome.IdentityBlocked
-                        || !RestoreValidatedActiveRootLease(ProductionQueueState)) recoveryBlocked = true;
+                    var directOutcome = ReconcileAcceptedDirectMutationBeforeLeaseRestore(ProductionQueueState, null);
+                    if (directOutcome == DirectMutationReloadOutcome.IdentityBlocked)
+                    {
+                        recoveryBlocked = true;
+                        return;
+                    }
+                    TryFinalizeOwnedPlayModeRoot();
+                    if (!RestoreValidatedActiveRootLease(ProductionQueueState)) recoveryBlocked = true;
                 }
                 catch { recoveryBlocked = true; }
             }
 
             /// <summary>测试只通过隔离state执行与production相同的direct reconciliation→generic restore顺序。</summary>
-            internal static string InitializeRecoveryOrderForTests(BridgeQueueState state)
+            internal static string InitializeRecoveryOrderForTests(BridgeQueueState state, bool cleanupPending = false)
             {
                 if (state == null || state.IsolatedExecution == null)
                     throw new ArgumentException("Lease recovery order tests require isolated state.", "state");
-                var directOutcome = ReconcileAcceptedDirectMutationBeforeLeaseRestore(state);
+                var directOutcome = ReconcileAcceptedDirectMutationBeforeLeaseRestore(state, (requestId, requestDigest) => cleanupPending);
                 return directOutcome == DirectMutationReloadOutcome.IdentityBlocked || !RestoreValidatedActiveRootLease(state)
                     ? DirectMutationReloadOutcome.IdentityBlocked.ToString()
                     : directOutcome.ToString();
             }
 
-            /// <summary>accepted direct root必须先冻结effect-before终态；generic restore不得先为它重建lease。</summary>
-            private static DirectMutationReloadOutcome ReconcileAcceptedDirectMutationBeforeLeaseRestore(BridgeQueueState state)
+            /// <summary>accepted direct root必须先冻结effect-before终态；显式依赖默认使用production cleanup identity。</summary>
+            private static DirectMutationReloadOutcome ReconcileAcceptedDirectMutationBeforeLeaseRestore(BridgeQueueState state, Func<string, string, bool> cleanupPending)
             {
                 var root = state.LoadOperation("direct-mutation");
                 if (root == null || !string.Equals(root.ContainsKey("phase") ? root["phase"] as string : null, "accepted_before_effect", StringComparison.Ordinal))
@@ -69,7 +73,10 @@ namespace UnityCli
                 }
                 var requestId = root.ContainsKey("requestId") ? root["requestId"] as string : null;
                 var requestDigest = root.ContainsKey("requestDigest") ? root["requestDigest"] as string : null;
-                return ReconcileAcceptedDirectMutationAfterReload(state, requestId, requestDigest);
+                var releaseExactOwner = cleanupPending == null
+                    ? DirectMutationCleanupPendingForIdentity(requestId, requestDigest)
+                    : cleanupPending(requestId, requestDigest);
+                return ReconcileAcceptedDirectMutationAfterReload(state, requestId, requestDigest, releaseExactOwner);
             }
 
             /// <summary>固定scope恢复只接受当前session唯一root；direct reconciliation已经在本方法之前完成。</summary>

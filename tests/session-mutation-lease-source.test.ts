@@ -93,8 +93,9 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(lease, /TryGetCurrentOwner\(out string requestId, out string requestDigest\)[\s\S]*TryReadOwnerSnapshot[\s\S]*requestId = owner\.RequestId[\s\S]*requestDigest = owner\.RequestDigest/);
   assert.doesNotMatch(lease, /CurrentOwnerRequest(?:Id|Digest)/);
   assert.match(lease, /state\.OperationExists\(scope\)[\s\S]*state\.LoadOperation\(scope\)/);
-  assertBefore(lease, "ReconcileAcceptedDirectMutationBeforeLeaseRestore(ProductionQueueState)", "RestoreValidatedActiveRootLease(ProductionQueueState)");
-  assert.match(lease, /InitializeRecoveryOrderForTests[\s\S]*ReconcileAcceptedDirectMutationBeforeLeaseRestore\(state\)[\s\S]*RestoreValidatedActiveRootLease\(state\)/);
+  assertBefore(lease, "ReconcileAcceptedDirectMutationBeforeLeaseRestore(ProductionQueueState, null)", "TryFinalizeOwnedPlayModeRoot()");
+  assertBefore(lease, "TryFinalizeOwnedPlayModeRoot()", "RestoreValidatedActiveRootLease(ProductionQueueState)");
+  assert.match(lease, /InitializeRecoveryOrderForTests\(BridgeQueueState state, bool cleanupPending = false\)[\s\S]*ReconcileAcceptedDirectMutationBeforeLeaseRestore\(state, \(requestId, requestDigest\) => cleanupPending\)[\s\S]*RestoreValidatedActiveRootLease\(state\)/);
   assert.match(bridge, /UnityCliSessionMutationLease\.Initialize\(\);\s*UnityCliCompilationEventBroker\.Initialize\(\);/s);
   assert.match(workQueue, /UnityCliSessionMutationLease\.TryFinalizeOwnedPlayModeRoot\(\);/);
   assert.match(operation, /var requestDigest = UnityCliRequestDigest\.Compute\(rawRequestBytes, request\.InstanceId\)/);
@@ -107,6 +108,7 @@ test("C# mutation execution uses the shared instance lease owner protocol", asyn
   assert.match(operation, /PublishDirectMutationTerminal[\s\S]*StoreTerminalFirst[\s\S]*CleanupPublishedDirectMutation/);
   assert.match(operation, /CleanupPublishedDirectMutation[\s\S]*TryGetTerminal\(DirectMutationTerminalScope[\s\S]*BeginExactTerminalCleanup\(DirectMutationTerminalScope/);
   assert.match(operation, /CommitToolEffect[\s\S]*DirectMutationBindingMatches\(request\.RequestId, requestDigest\)[\s\S]*IsOwnedBy\(request\.RequestId, requestDigest\)/);
+  assert.match(operation, /ReconcileAcceptedDirectMutationAfterReload\(BridgeQueueState state, string requestId, string requestDigest, bool releaseExactOwnerBeforeSettlement\)[\s\S]*if \(!releaseExactOwnerBeforeSettlement\)[\s\S]*ReleaseDirectMutationLease\(requestId, requestDigest\)[\s\S]*StoreTerminalFirst\(DirectMutationTerminalScope[\s\S]*BeginExactTerminalCleanup/);
   assert.match(operation, /TryFinalizeRecoveredPlayModeRoot[\s\S]*DirectMutationCleanupPendingSessionKey[\s\S]*DirectMutationBindingMatches\(requestId, requestDigest\)[\s\S]*ReleaseDirectMutationLease\(requestId, requestDigest\)/);
   assert.match(operation, /ReleaseDirectMutationLease[\s\S]*SetBool\(DirectMutationCleanupPendingSessionKey, true\)[\s\S]*TryIsOwnedBy\(requestId, requestDigest, out isOwned\)[\s\S]*SetBool\(DirectMutationCleanupPendingSessionKey, false\)/);
   assert.match(bridge, /OnBeforeAssemblyReload\(\)[\s\S]*ReleaseActiveDirectMutationLease\(\)/);
