@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { addScopedRegistry, parseScopes, readSnapshot, validatePackageName, validateRegistryUrl } from "../../package-manager.js";
+import { addScopedRegistry, parseScopes, validatePackageName, validateRegistryUrl } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
 
 export interface PackageScopedRegistryAddRequest {

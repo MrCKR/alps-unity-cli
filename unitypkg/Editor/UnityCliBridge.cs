@@ -404,7 +404,6 @@ namespace UnityCli
                     || request.Command == "runtime-tool.list"
                     || request.Command == "runtime-tool.run"
                     || request.Command == "project-tool.list"
-                    || request.Command == "diagnose.preflight"
                     || request.Command == "extension.status";
 
                 if (!allowedDuringPlayModeTransition)

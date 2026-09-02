@@ -393,7 +393,6 @@ namespace UnityCli
             switch (command)
             {
                 case "project-tool.list":
-                case "diagnose.preflight":
                 case "internal.editor.state.snapshot":
                 case "internal.editor.compile.status":
                 case "internal.editor.refresh.status":

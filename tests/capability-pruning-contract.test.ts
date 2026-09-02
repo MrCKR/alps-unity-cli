@@ -1,11 +1,37 @@
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
-import { handleToolsCommand, type ToolsRuntime } from "../src/tools/commands.js";
+import { staticCapabilityCatalog } from "../src/static-capability-catalog.js";
 import { allRegisteredToolMetadata, findToolByName } from "../src/tools/metadata/index.js";
-import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+
+interface InventoryEntry {
+  name: string;
+  descriptorOwner: string;
+  source: string;
+}
+
+interface SchemaNode {
+  $ref?: string;
+  $defs?: Record<string, SchemaNode>;
+  properties?: Record<string, SchemaNode>;
+  required?: string[];
+  type?: string;
+}
+
+interface CanonicalDescriptor {
+  name: string;
+  group: string;
+  inputSchema: SchemaNode;
+  outputSchema: SchemaNode;
+  destructiveHint: boolean;
+  supportsDryRun: boolean;
+  sideEffects?: string[];
+  playModeSupport: string;
+  target: string;
+}
 
 const REMOVED_TOOLS = [
   "instances.list", "editor.console", "scene.build-settings", "go.inspect", "scene.data", "tests.list",
@@ -19,29 +45,6 @@ const REMOVED_ROUTES = [
   ["graphics", "settings"], ["graphics", "pipeline-quality"], ["graphics", "probe-positions"],
   ["graphics", "stats-counters"], ["graphics", "stats-memory"], ["physics", "raycast-all"],
 ] as const;
-
-const replacementTools = [
-  makeLiveTool({ name: "build.scene.list", summary: "List Build Settings scenes.", description: "Read Build Settings scenes in Edit or Play mode.", group: "build", playModeSupport: "supported" }),
-  ...["add", "remove", "enable", "disable"].map((action) => makeLiveTool({ name: `build.scene.${action}`, summary: `${action} one Build Settings scene.`, description: `${action} one exact Build Settings scene with fresh readback.`, group: "build", destructiveHint: true, supportsDryRun: true, sideEffects: ["project-settings-write"], playModeSupport: "supported" })),
-  makeLiveTool({ name: "console.get", summary: "Read bounded Console pages.", description: "Read bounded Console pages with filters and cursor continuation.", group: "console", playModeSupport: "supported" }),
-  makeLiveTool({ name: "console.clear", summary: "Clear Console entries.", description: "Clear Console entries with count readback.", group: "console", supportsDryRun: true, sideEffects: ["editor-console-state"], playModeSupport: "supported" }),
-  makeLiveTool({ name: "scene.gameobject", summary: "Read one GameObject.", description: "Read one GameObject after bounded discovery.", group: "scene", playModeSupport: "supported" }),
-  makeLiveTool({ name: "scene.hierarchy", summary: "Read a bounded hierarchy page.", description: "Read a bounded hierarchy page with numeric continuation.", group: "scene", playModeSupport: "supported" }),
-  makeLiveTool({ name: "go.find", summary: "Find GameObjects in bounded pages.", description: "Find GameObjects with a bounded page size and cursor.", group: "go", playModeSupport: "supported" }),
-  makeLiveTool({ name: "graphics.quality", summary: "Read or write QualitySettings.", description: "Dedicated QualitySettings read/write with fresh readback.", group: "graphics", destructiveHint: true, sideEffects: ["settings-write"], playModeSupport: "session-affecting" }),
-  makeLiveTool({ name: "graphics.pipeline-settings", summary: "Read or write the default render pipeline.", description: "Dedicated render pipeline write with path and GUID readback.", group: "graphics", destructiveHint: true, sideEffects: ["settings-write", "asset-import"], playModeSupport: "session-affecting" }),
-  makeLiveTool({ name: "graphics.light-probe-group", summary: "Read or write one LightProbeGroup.", description: "Dedicated LightProbeGroup positions with fresh readback.", group: "graphics", sideEffects: ["scene-modify"], playModeSupport: "supported" }),
-  makeLiveTool({ name: "graphics.reflection-probe", summary: "Read or write one ReflectionProbe.", description: "Dedicated ReflectionProbe settings with fresh readback.", group: "graphics", sideEffects: ["scene-modify"], playModeSupport: "supported" }),
-  makeLiveTool({ name: "graphics.stats", summary: "Read unified render stats.", description: "Read one bounded counter and memory snapshot.", group: "graphics", playModeSupport: "supported" }),
-  makeLiveTool({ name: "physics.raycast", summary: "Raycast one or all hits.", description: "Use all=true for every sorted 2D or 3D hit.", group: "physics", playModeSupport: "supported" }),
-  makeLiveTool({
-    name: "reflection.method.call", summary: "Call one exact synchronous overload.",
-    description: "Requires exact parameterTypes and an independent completionProbe.", group: "reflection",
-    destructiveHint: true, supportsDryRun: true, sideEffects: ["arbitrary-method-invocation"], playModeSupport: "session-affecting",
-    inputSchema: { type: "object", required: ["typeName", "methodName", "parameterTypes", "completionProbe"], properties: { typeName: { type: "string" }, methodName: { type: "string" }, parameterTypes: { type: "array" }, completionProbe: { type: "object" } } },
-  }),
-];
-const runtime: ToolsRuntime = { projectTools: replacementTools };
 
 const REPLACEMENTS = [
   "editor.state", "console.get", "console.clear",
@@ -57,21 +60,40 @@ for (const name of ["editor.state", "console.get", "console.clear", "build.scene
 for (const name of ["test.run", "graphics.quality", "graphics.pipeline-settings", "reflection.method.call"]) EXPECTED_PLAY_MODE.set(name, "session-affecting");
 for (const name of ["package.install", "package.remove", "package.resolve", "package.deploy", "package.restore"]) EXPECTED_PLAY_MODE.set(name, "editor-only");
 
-test("removed capabilities have no canonical registration, route, or completion contract", async () => {
-  for (const name of REMOVED_TOOLS) assert.equal(findToolByName(name), undefined, name);
-  for (const [group, command] of REMOVED_ROUTES) assert.equal(bridgeCommandRegistry.lookup(group, command), undefined, `${group}.${command}`);
+test("all 18 removed identities are absent from canonical source and every generated contract input", async () => {
+  assert.equal(REMOVED_TOOLS.length, 18);
+  assert.equal(new Set(REMOVED_TOOLS).size, 18);
+
+  const inventory = await publicToolInventory();
+  const inventoryNames = new Set(inventory.map((entry) => entry.name));
+  for (const name of REMOVED_TOOLS) assert.equal(inventoryNames.has(name), false, `source inventory: ${name}`);
+
+  const staticNames = uniqueNames(staticCapabilityCatalog().tools.map((entry) => String(entry.name ?? "")), "static capability catalog");
+  const csharpSourceNames = uniqueNames(inventory
+    .filter((entry) => entry.descriptorOwner === "built-in" || entry.descriptorOwner.startsWith("extension:"))
+    .map((entry) => entry.name), "canonical C# source inventory");
+  assert.deepEqual([...staticNames].sort(), [...csharpSourceNames].sort(), "static catalog must be an exact source snapshot");
+  for (const name of REMOVED_TOOLS) assert.equal(staticNames.has(name), false, `static catalog: ${name}`);
 
   const completion = JSON.parse(await readFile("contracts/tool-completion-contract.json", "utf8")) as { tools: Array<{ toolName: string }> };
-  const commandGenerator = await readFile("scripts/gen-command-contract.mjs", "utf8");
-  assert.match(commandGenerator, /collectPublicToolInventory/);
-  assert.match(commandGenerator, /!publicToolNames\.has\(name\)/);
-  const completionNames = new Set(completion.tools.map((entry) => entry.toolName));
-  for (const name of REMOVED_TOOLS) assert.equal(completionNames.has(name), false, name);
+  const completionNames = uniqueNames(completion.tools.map((entry) => entry.toolName), "completion contract");
+  assert.deepEqual([...completionNames].sort(), [...inventoryNames].sort(), "completion contract must cover the canonical public inventory exactly");
+  for (const name of REMOVED_TOOLS) assert.equal(completionNames.has(name), false, `completion contract: ${name}`);
 
-  const source = (await Promise.all((await sourceFiles("src")).filter((path) => !path.includes(".generated-")).map((path) => readFile(path, "utf8"))))
-    .concat(await Promise.all((await sourceFiles("unitypkg/Editor")).filter((path) => !path.includes(`${join("Editor", "Generated")}`)).map((path) => readFile(path, "utf8"))))
-    .join("\n");
-  for (const name of REMOVED_TOOLS) assert.equal(source.includes(name), false, name);
+  const commandContract = JSON.parse(await readFile("contracts/command-contract.json", "utf8")) as { commands: Array<{ bridgeCommand: string }> };
+  const commandNames = new Set(commandContract.commands.map((entry) => entry.bridgeCommand));
+  for (const name of REMOVED_TOOLS) assert.equal(commandNames.has(name), false, `command contract: ${name}`);
+
+  for (const [group, command] of REMOVED_ROUTES) assert.equal(bridgeCommandRegistry.lookup(group, command), undefined, `${group}.${command}`);
+  const localNames = new Set(allRegisteredToolMetadata().map((tool) => tool.name));
+  for (const name of REMOVED_TOOLS) assert.equal(localNames.has(name), false, `TS metadata: ${name}`);
+
+  const generator = await readFile("scripts/gen-command-contract.mjs", "utf8");
+  assert.match(generator, /assertExactNameSet\(sourceDescriptorNames, staticDescriptorNames\)/);
+  assert.doesNotMatch(generator, /publicToolNames|!publicToolNames\.has/);
+
+  const source = (await Promise.all((await nonGeneratedSourceFiles()).map((path) => readFile(path, "utf8")))).join("\n");
+  for (const name of REMOVED_TOOLS) assert.equal(source.includes(name), false, `non-generated source residual: ${name}`);
 });
 
 test("replacement completion contracts preserve timeout and recovery ownership", async () => {
@@ -89,7 +111,7 @@ test("replacement completion contracts preserve timeout and recovery ownership",
   assert.equal(byName.get("reflection.method.call")?.executionClass, "observed-state");
 });
 
-test("replacement mutations expose fresh readback and fail before unsafe mode or signature effects", async () => {
+test("replacement mutations expose fresh readback without narrowing reflection input", async () => {
   const [buildState, buildAdd, buildRemove, consoleClear, packageLive, reflectionCall, reflectionSupport] = await Promise.all([
     readFile("unitypkg/Editor/Tools/build/BuildSceneStateTool.cs", "utf8"),
     readFile("unitypkg/Editor/Tools/build/scene/add.cs", "utf8"),
@@ -108,35 +130,91 @@ test("replacement mutations expose fresh readback and fail before unsafe mode or
   assert.match(packageLive, /E_TOOL_PLAYMODE_UNAVAILABLE[\s\S]*playModeSupport: "editor-only"/);
   assert.ok(packageLive.indexOf("E_TOOL_PLAYMODE_UNAVAILABLE") < packageLive.indexOf("context.projectPath = state.identity.canonicalProjectPath"));
   assert.match(packageLive, /E_EXECUTION_TIMEOUT[\s\S]*Inspect Package Manager and package files/);
-  assert.match(reflectionCall, /\[UnityCliRequired\][\s\S]*List<string> ParameterTypes/);
-  assert.match(reflectionSupport, /E_METHOD_SIGNATURE_REQUIRED/);
+  assert.doesNotMatch(reflectionCall, /\[UnityCliRequired\]\s*public List<string> ParameterTypes/);
+  assert.match(reflectionSupport, /parameterTypeNames != null/);
+  assert.match(reflectionSupport, /argumentCount/);
   assert.match(reflectionSupport, /E_METHOD_ARGUMENT_REQUIRED/);
   assert.match(reflectionSupport, /E_METHOD_COMPLETION_UNPROVABLE/);
   assert.match(reflectionSupport, /parameter\.ParameterType\.IsByRef \|\| parameter\.IsOut/);
 });
 
-test("replacement families are discoverable through group, search, and self-contained describe", async () => {
-  const groups = await handleToolsCommand("group", [], {}, runtime, "req_pruning_groups");
-  assert.equal(groups.ok, true, JSON.stringify(groups));
-  const groupNames = new Set((groups.data as { groups: Array<{ name: string }> }).groups.map((entry) => entry.name));
-  for (const group of ["editor", "console", "build", "scene", "go", "test", "graphics", "physics", "package", "reflection"]) assert.equal(groupNames.has(group), true, group);
-  assert.equal(groupNames.has("instances"), false);
-  assert.equal(groupNames.has("tests"), false);
-
-  const search = await handleToolsCommand("search", [REPLACEMENTS.join("|")], { "page-size": "100" }, runtime, "req_pruning_search");
-  assert.equal(search.ok, true, JSON.stringify(search));
-  const searchNames = new Set((search.data as { tools: Array<{ name: string }> }).tools.map((entry) => entry.name));
-  for (const name of REPLACEMENTS) assert.equal(searchNames.has(name), true, name);
-
+test("retained schemas and metadata come from canonical descriptor owners", async () => {
+  const inventoryByName = new Map((await publicToolInventory()).map((entry) => [entry.name, entry]));
+  const descriptors = canonicalDescriptors();
   for (const name of REPLACEMENTS) {
-    const described = await handleToolsCommand("describe", [name], {}, runtime, `req_pruning_${name.replaceAll(".", "_")}`);
-    assert.equal(described.ok, true, `${name}: ${JSON.stringify(described)}`);
-    const data = described.data as { name: string; inputSchema: unknown; playModeSupport: string; target: string };
-    assert.equal(data.name, name);
-    assert.ok(data.inputSchema);
-    assert.equal(data.playModeSupport, EXPECTED_PLAY_MODE.get(name), name);
-    assert.equal(data.target, "editor", name);
+    assert.ok(inventoryByName.get(name)?.source, `canonical owner: ${name}`);
+    const descriptor = descriptors.get(name);
+    assert.ok(descriptor, `descriptor input: ${name}`);
+    assert.ok(descriptor.inputSchema, `input schema: ${name}`);
+    assert.ok(descriptor.outputSchema, `output schema: ${name}`);
+    assert.equal(descriptor.playModeSupport, EXPECTED_PLAY_MODE.get(name), `PlayMode: ${name}`);
+    assert.equal(descriptor.target, "editor", `target: ${name}`);
   }
+
+  for (const name of ["build.scene.add", "build.scene.remove", "build.scene.enable", "build.scene.disable"]) {
+    const descriptor = requiredDescriptor(descriptors, name);
+    assert.deepEqual(descriptor.sideEffects, ["project-settings-write"], name);
+    assert.equal(descriptor.destructiveHint, true, name);
+    assert.equal(descriptor.supportsDryRun, true, name);
+    assert.ok(descriptor.inputSchema.required?.includes("path"), name);
+  }
+
+  const quality = requiredDescriptor(descriptors, "graphics.quality");
+  assert.deepEqual(quality.sideEffects, ["settings-write"]);
+  assertProperties(quality.inputSchema, ["qualityLevel", "vSyncCount", "antiAliasing", "shadowDistance", "masterTextureLimit", "lodBias", "maximumLODLevel"]);
+
+  const pipeline = requiredDescriptor(descriptors, "graphics.pipeline-settings");
+  assert.deepEqual(pipeline.sideEffects, ["settings-write", "asset-import", "session-affecting"]);
+  assertProperties(pipeline.inputSchema, ["renderPipeline"]);
+
+  const lightProbe = requiredDescriptor(descriptors, "graphics.light-probe-group");
+  assert.deepEqual(lightProbe.sideEffects, ["scene-modify"]);
+  assertProperties(lightProbe.inputSchema, ["target", "create", "positions"]);
+  assertProperties(lightProbe.outputSchema, ["target", "probeCount", "positions", "plannedEffects"]);
+
+  const reflectionProbe = requiredDescriptor(descriptors, "graphics.reflection-probe");
+  assert.deepEqual(reflectionProbe.sideEffects, ["scene-modify"]);
+  assertProperties(reflectionProbe.outputSchema, ["target", "probe", "plannedEffects"]);
+
+  const raycast = requiredDescriptor(descriptors, "physics.raycast");
+  assert.equal(raycast.destructiveHint, false);
+  assert.equal(raycast.sideEffects, undefined);
+  assertProperties(raycast.inputSchema, ["mode", "originX", "originY", "originZ", "directionX", "directionY", "directionZ", "distance", "layerMask", "all"]);
+  assertProperties(raycast.outputSchema, ["query", "hit", "hitCount", "hits", "nextActions"]);
+
+  const reflection = requiredDescriptor(descriptors, "reflection.method.call");
+  assert.equal(reflection.destructiveHint, true);
+  assert.equal(reflection.supportsDryRun, true);
+  assert.deepEqual(reflection.sideEffects, ["arbitrary-method-invocation"]);
+  assertProperties(reflection.inputSchema, ["typeName", "methodName", "args", "parameterTypes", "instanceRef", "completionProbe"]);
+  const reflectionRequired = new Set(reflection.inputSchema.required ?? []);
+  assert.equal(reflectionRequired.has("parameterTypes"), false, "parameterTypes remains optional");
+  for (const name of ["typeName", "methodName", "completionProbe"]) assert.equal(reflectionRequired.has(name), true, name);
+});
+
+test("console and hierarchy replacements depend on ISSUE-042 bounded continuation schemas", () => {
+  const descriptors = canonicalDescriptors();
+  for (const [name, pageBound] of [["console.get", "count"], ["scene.hierarchy", "pageSize"]] as const) {
+    const descriptor = requiredDescriptor(descriptors, name);
+    assertProperties(descriptor.inputSchema, [pageBound, "cursor"]);
+    const pageInfo = referencedProperty(descriptor.outputSchema, "pageInfo");
+    assertProperties(pageInfo, ["nextCursor", "truncated"]);
+    const pageProperties = schemaProperties(pageInfo);
+    assert.equal(pageProperties.total, undefined, `${name} must not claim an unbounded total`);
+    assert.equal(pageProperties.totalCount, undefined, `${name} must not claim an unbounded totalCount`);
+  }
+});
+
+test("transition allowlists drop removed public diagnostics while retaining the bypass interface", async () => {
+  const [http, bridge, admission] = await Promise.all([
+    readFile("unitypkg/Editor/Bridge/BridgeHttpServer.cs", "utf8"),
+    readFile("unitypkg/Editor/UnityCliBridge.cs", "utf8"),
+    readFile("unitypkg/Editor/Infrastructure/UnityCliAdmission.cs", "utf8"),
+  ]);
+  assert.doesNotMatch(http, /request\.Command == "editor\.console"|request\.Command == "diagnose\.preflight"/);
+  assert.doesNotMatch(bridge, /request\.Command == "editor\.console"|request\.Command == "diagnose\.preflight"/);
+  assert.match(admission, /private static bool AdmissionBypassCommand\(string command\)/);
+  assert.doesNotMatch(admission, /case "diagnose\.preflight"/);
 });
 
 test("retained TS package roots are live EditMode operations, not offline inspection wrappers", () => {
@@ -147,9 +225,62 @@ test("retained TS package roots are live EditMode operations, not offline inspec
     assert.equal(tool.playModeSupport, "editor-only", name);
     assert.match(tool.description, /EditMode only/i, name);
   }
-  const localNames = new Set(allRegisteredToolMetadata().map((tool) => tool.name));
-  for (const name of REMOVED_TOOLS.filter((entry) => entry.startsWith("package."))) assert.equal(localNames.has(name), false, name);
 });
+
+/** 复用生成器的 canonical inventory，而不是在测试中重写 source 识别规则。 */
+async function publicToolInventory(): Promise<InventoryEntry[]> {
+  const moduleUrl = pathToFileURL(join(process.cwd(), "scripts", "lib", "public-tool-inventory.mjs")).href;
+  const inventoryModule = await import(moduleUrl) as { collectPublicToolInventory(root: string): InventoryEntry[] };
+  return inventoryModule.collectPublicToolInventory(process.cwd());
+}
+
+/** C# descriptor 使用 static generator input，TS descriptor 使用 defineTool registry 真源。 */
+function canonicalDescriptors(): Map<string, CanonicalDescriptor> {
+  const descriptors = new Map<string, CanonicalDescriptor>();
+  for (const descriptor of staticCapabilityCatalog().tools) descriptors.set(String(descriptor.name), descriptor as unknown as CanonicalDescriptor);
+  for (const descriptor of allRegisteredToolMetadata()) descriptors.set(descriptor.name, descriptor as unknown as CanonicalDescriptor);
+  return descriptors;
+}
+
+function requiredDescriptor(descriptors: Map<string, CanonicalDescriptor>, name: string): CanonicalDescriptor {
+  const descriptor = descriptors.get(name);
+  assert.ok(descriptor, name);
+  return descriptor;
+}
+
+function uniqueNames(names: string[], owner: string): Set<string> {
+  assert.equal(names.every((name) => name.length > 0), true, `${owner} contains an empty name`);
+  const result = new Set(names);
+  assert.equal(result.size, names.length, `${owner} contains duplicate names`);
+  return result;
+}
+
+function schemaProperties(schema: SchemaNode): Record<string, SchemaNode> {
+  return schema.properties ?? {};
+}
+
+function assertProperties(schema: SchemaNode, expected: readonly string[]): void {
+  const properties = schemaProperties(schema);
+  for (const property of expected) assert.ok(properties[property], property);
+}
+
+/** 解析 static schema 内的本地 $defs 引用。 */
+function referencedProperty(schema: SchemaNode, property: string): SchemaNode {
+  const node = schemaProperties(schema)[property];
+  assert.ok(node, property);
+  if (!node.$ref) return node;
+  const prefix = "#/$defs/";
+  assert.equal(node.$ref.startsWith(prefix), true, node.$ref);
+  const resolved = schema.$defs?.[node.$ref.slice(prefix.length)];
+  assert.ok(resolved, node.$ref);
+  return resolved;
+}
+
+async function nonGeneratedSourceFiles(): Promise<string[]> {
+  const roots = ["src", join("unitypkg", "Editor"), "extensions"];
+  const files = (await Promise.all(roots.map((root) => sourceFiles(root)))).flat();
+  return files.filter((path) => !path.includes(".generated-") && !path.includes(join("Editor", "Generated")));
+}
 
 async function sourceFiles(root: string): Promise<string[]> {
   const result: string[] = [];

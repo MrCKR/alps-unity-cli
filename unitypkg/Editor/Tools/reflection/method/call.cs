@@ -16,7 +16,6 @@ namespace UnityCli
             [UnityCliRequired]
             public string MethodName { get; set; }
             [UnityCliAnyJson] public object Args { get; set; }
-            [UnityCliRequired]
             public List<string> ParameterTypes { get; set; }
             [UnityCliAnyJson] public Dictionary<string, object> InstanceRef { get; set; }
             [UnityCliRequired] public UnityCliCompletionProbe CompletionProbe { get; set; }
@@ -39,8 +38,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "reflection.method.call",
-            Summary = "Call one exact synchronous C# overload and prove its state change through a read Tool.",
-            Description = "Invoke one exact non-generic synchronous overload in Edit or Play mode. parameterTypes is mandatory, uses full type names in declaration order, and may be an empty array only for a zero-parameter method. args must supply every non-optional parameter; unknown or extra arguments fail before the effect. instanceRef is required for instance methods. completionProbe is mandatory and proves declared before/after state through an eligible read Tool in the same Editor turn. Awaitable, iterator, yield, AsyncOperation, ref, and out methods are rejected; return data is never completion proof.",
+            Summary = "Call one synchronous C# overload and prove its state change through a read Tool.",
+            Description = "Invoke one non-generic synchronous overload in Edit or Play mode. Pass parameterTypes with full type names in declaration order for exact selection, or omit it only when the supplied argument count selects one overload; use an empty array for an exact zero-parameter signature. args must supply every non-optional parameter; unknown or extra arguments fail before the effect. instanceRef is required for instance methods. completionProbe is mandatory and proves declared before/after state through an eligible read Tool in the same Editor turn. Awaitable, iterator, yield, AsyncOperation, ref, and out methods are rejected; return data is never completion proof.",
             Group = "reflection",
             DestructiveHint = true,
             SideEffects = new[] { "arbitrary-method-invocation" },

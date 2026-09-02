@@ -58,7 +58,7 @@ test("reflection.method.call supports instanceRef without confirmation state", a
       destructiveHint: true,
       supportsDryRun: true,
       permissions: ["arbitrary-method-invocation"],
-      inputSchema: { type: "object", required: ["typeName", "methodName", "parameterTypes", "completionProbe"], properties: { instanceRef: { type: "string" }, parameterTypes: { type: "array" }, completionProbe: { type: "object" } } }
+      inputSchema: { type: "object", required: ["typeName", "methodName", "completionProbe"], properties: { instanceRef: { type: "string" }, parameterTypes: { type: "array" }, completionProbe: { type: "object" } } }
     })
   );
   const call = tools.get("reflection.method.call")!;
@@ -66,7 +66,7 @@ test("reflection.method.call supports instanceRef without confirmation state", a
   assert.ok(props.instanceRef);
   assert.ok(props.parameterTypes);
   assert.ok(props.completionProbe);
-  assert.deepEqual(call.inputSchema.required, ["typeName", "methodName", "parameterTypes", "completionProbe"]);
+  assert.deepEqual(call.inputSchema.required, ["typeName", "methodName", "completionProbe"]);
   assert.equal(props.security, undefined);
 });
 
@@ -80,8 +80,9 @@ test("reflection.method.call example is executable and overload selection is exp
   assert.match(source, /public List<string> ParameterTypes/);
   assert.match(source, /request\.Args, request\.ParameterTypes, request\.InstanceRef/);
   assert.match(reflection, /private static MethodInfo ResolveCallMethod/);
-  assert.match(reflection, /E_METHOD_SIGNATURE_REQUIRED/);
+  assert.match(reflection, /parameterTypeNames != null/);
   assert.match(reflection, /SequenceEqual\(parameterTypeNames, StringComparer\.Ordinal\)/);
+  assert.match(reflection, /argumentCount[\s\S]*GetParameters\(\)\.Length == argumentCount/);
   assert.match(reflection, /E_METHOD_ARGUMENT_REQUIRED/);
   assert.match(reflection, /E_METHOD_ARGUMENTS_INVALID/);
   assert.match(reflection, /E_METHOD_AMBIGUOUS/);
@@ -90,7 +91,6 @@ test("reflection.method.call example is executable and overload selection is exp
   assert.match(reflection, /E_METHOD_INVOCATION_FAILED/);
   assert.doesNotMatch(reflection, /audit\["ok"\] = false/);
   assert.doesNotMatch(reflection, /type\.GetMethod\(methodName, bindings\)/);
-  assert.doesNotMatch(reflection, /argumentCount|GetParameters\(\)\.Length == argumentCount/);
   const bridge = await readFile(new URL("../src/bridge/domains/reflection.js", import.meta.url), "utf8");
   assert.match(bridge, /parameterTypes: structured\.parameterTypes/);
   assert.match(bridge, /completionProbe: structured\.completionProbe/);

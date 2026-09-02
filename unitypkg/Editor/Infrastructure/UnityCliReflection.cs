@@ -246,7 +246,7 @@ namespace UnityCli
             {
                 var type = TypeSchemaGenerator.ResolveType(typeName);
                 if (type == null) throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Type not found: " + typeName, "Pass a full type name.");
-                var method = ResolveCallMethod(type, methodName, parameterTypes, bindings);
+                var method = ResolveCallMethod(type, methodName, argsValue, parameterTypes, bindings);
                 RequireSynchronousResult(method);
                 var parameters = method.GetParameters();
                 var arguments = ResolveCallArguments(argsValue, parameters);
@@ -315,14 +315,9 @@ namespace UnityCli
             }
 
             // 参数可为位置数组或按参数名索引的对象；值转换复用 ObjectPatch 的 typed conversion。
-            /// <summary>只按调用方提供的完整参数类型序列选择 exact overload，不按参数数量或可转换值猜测。</summary>
-            private static MethodInfo ResolveCallMethod(Type type, string methodName, List<string> parameterTypeNames, BindingFlags bindings)
+            /// <summary>显式签名按完整类型精确选择；未提供时保留按参数数量唯一选择的公开输入语义。</summary>
+            private static MethodInfo ResolveCallMethod(Type type, string methodName, object argsValue, List<string> parameterTypeNames, BindingFlags bindings)
             {
-                if (parameterTypeNames == null)
-                {
-                    throw new BridgeCommandException("E_METHOD_SIGNATURE_REQUIRED", "reflection.method.call requires parameterTypes for exact overload selection.",
-                        "Run reflection.method.find and pass one returned signature's full parameterType values in declaration order; use an empty array for a zero-parameter method.");
-                }
                 var candidates = type.GetMethods(bindings)
                     .Where(method => string.Equals(method.Name, methodName, StringComparison.Ordinal) && !method.ContainsGenericParameters)
                     .ToList();
@@ -332,11 +327,21 @@ namespace UnityCli
                         "Run reflection.method.find to discover available methods.");
                 }
 
-                if (parameterTypeNames.Any(string.IsNullOrWhiteSpace))
-                    throw new BridgeCommandException("E_METHOD_SIGNATURE_REQUIRED", "parameterTypes must contain the exact non-empty full type names returned by reflection.method.find.", "Pass one returned signature's parameterType values in declaration order.");
-                candidates = candidates.Where(method => method.GetParameters()
-                    .Select(parameter => parameter.ParameterType.FullName)
-                    .SequenceEqual(parameterTypeNames, StringComparer.Ordinal)).ToList();
+                if (parameterTypeNames != null)
+                {
+                    if (parameterTypeNames.Any(string.IsNullOrWhiteSpace))
+                        throw new BridgeCommandException("E_METHOD_SIGNATURE_REQUIRED", "parameterTypes must contain the exact non-empty full type names returned by reflection.method.find.", "Pass one returned signature's parameterType values in declaration order.");
+                    candidates = candidates.Where(method => method.GetParameters()
+                        .Select(parameter => parameter.ParameterType.FullName)
+                        .SequenceEqual(parameterTypeNames, StringComparer.Ordinal)).ToList();
+                }
+                else
+                {
+                    var argumentCount = argsValue is List<object> positional ? positional.Count
+                        : argsValue is Dictionary<string, object> named ? named.Count
+                        : 0;
+                    candidates = candidates.Where(method => method.GetParameters().Length == argumentCount).ToList();
+                }
 
                 if (candidates.Count == 1)
                 {
@@ -347,15 +352,15 @@ namespace UnityCli
                 }
                 if (candidates.Count == 0)
                 {
-                    throw new BridgeCommandException("E_METHOD_NOT_FOUND", "No overload matches the supplied reflection method signature: " + type.FullName + "." + methodName,
-                        new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", methodName }, { "parameterTypes", parameterTypeNames } },
+                    throw new BridgeCommandException("E_METHOD_NOT_FOUND", "No overload matches the supplied reflection method arguments or signature: " + type.FullName + "." + methodName,
+                        new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", methodName }, { "parameterTypes", parameterTypeNames ?? new List<string>() } },
                         new[] { "Run reflection.method.find and pass one returned signature's full parameterType values in declaration order." });
                 }
 
                 var signatures = candidates.Select(method => method.Name + "(" + string.Join(",", method.GetParameters().Select(parameter => parameter.ParameterType.FullName).ToArray()) + ")").ToList();
-                throw new BridgeCommandException("E_METHOD_AMBIGUOUS", "Multiple methods expose the same reflected signature: " + type.FullName + "." + methodName,
+                throw new BridgeCommandException("E_METHOD_AMBIGUOUS", "Multiple overloads match: " + type.FullName + "." + methodName,
                     new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", methodName }, { "candidateSignatures", signatures } },
-                    new[] { "Use a dedicated Tool because reflection.method.call cannot select one declaration unambiguously." });
+                    new[] { "Run reflection.method.find and pass one returned signature's full parameterType values in declaration order." });
             }
 
             /// <summary>参数形状必须与 exact overload 闭合；未知、额外或缺失必填参数在 effect 前失败。</summary>
