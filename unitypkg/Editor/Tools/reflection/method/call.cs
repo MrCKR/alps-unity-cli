@@ -97,8 +97,9 @@ namespace UnityCli
                 });
             }
 
+            var readBudget = ctx.UseReadBudget();
             Dictionary<string, object> data = null;
-            var completion = ctx.RunCompletionProbe(request.CompletionProbe, () => data = UnityCliBridge.ReflectionInvoker.InvokePrepared(prepared));
+            var completion = ctx.RunCompletionProbe(request.CompletionProbe, () => data = UnityCliBridge.ReflectionInvoker.InvokePrepared(prepared, readBudget));
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Data = data,

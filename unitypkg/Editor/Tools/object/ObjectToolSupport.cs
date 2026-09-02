@@ -49,8 +49,8 @@ namespace UnityCli
         {
             var options = new UnityCliBridge.ObjectSerializer.Options
             {
-                MaxDepth = request.MaxDepth ?? 4,
-                MaxArrayItems = System.Math.Max(0, System.Math.Min(request.MaxArrayItems ?? 50, 1000)),
+                MaxDepth = request.MaxDepth ?? UnityCliBridge.ObjectSerializer.DefaultMaxDepth,
+                MaxArrayItems = request.MaxArrayItems ?? UnityCliBridge.ObjectSerializer.DefaultMaxArrayItems,
                 IncludeFields = request.IncludeFields ?? true,
                 IncludeProperties = request.IncludeProperties ?? true,
                 DeepSerialization = request.DeepSerialization ?? true
@@ -61,7 +61,7 @@ namespace UnityCli
             }
             if (request.Paths != null)
             {
-                options.Paths = new HashSet<string>(request.Paths.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()));
+                options.Paths = request.Paths.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()).ToList();
             }
             var query = request.ViewQuery as Dictionary<string, object>;
             if (query != null)
@@ -72,7 +72,7 @@ namespace UnityCli
                 object maxDepth;
                 if (query.TryGetValue("maxDepth", out maxDepth) && maxDepth != null)
                 {
-                    options.MaxDepth = System.Math.Max(0, System.Convert.ToInt32(maxDepth, CultureInfo.InvariantCulture));
+                    options.MaxDepth = System.Convert.ToInt32(maxDepth, CultureInfo.InvariantCulture);
                 }
             }
             if (!string.IsNullOrEmpty(request.NamePattern))

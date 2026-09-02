@@ -14,12 +14,14 @@ namespace UnityCli
         {
             [UnityCliRequired] public string Target { get; set; }
             [UnityCliRequired] public string Path { get; set; }
-            public int? Width { get; set; }
-            public int? Height { get; set; }
+            [UnityCliRange(1L, 8192L)] public int? Width { get; set; }
+            [UnityCliRange(1L, 8192L)] public int? Height { get; set; }
             public bool Orthographic { get; set; } = true;
             public float? Size { get; set; }
             public bool Overwrite { get; set; }
             public bool InlineBase64 { get; set; }
+            public ScreenshotBudgetInput Limits { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result : ScreenshotCaptureResult { }
@@ -28,7 +30,7 @@ namespace UnityCli
         {
             Name = "screenshot.isolated-object",
             Summary = "Render a single GameObject in isolation with a temporary camera to a PNG/JPG file.",
-            Description = "Render a single GameObject in isolation using a temporary camera with a solid background. Resolves the target by hierarchy path/name. Editor-only (creates a temporary Camera).",
+            Description = "Render one GameObject with a temporary Camera. Dimensions are 1..8192 with at most 16777216 pixels. Before creating the Camera or textures, the request must fit default ceilings of 33554432 total pixels, 128 MiB temporary memory and 64 MiB artifacts (public maxima 67108864, 256 MiB and 256 MiB). The temporary Camera and texture are released in finally. Editor-only because it creates a temporary scene object.",
             Group = "screenshot",
             DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
@@ -41,17 +43,22 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var go = UnityCliBridge.ObjectRefResolver.FindGameObjectByPath(request.Target);
+            var requestBudget = ctx.UseReadBudget(request.Budget);
+            var go = UnityCliBridge.ObjectRefResolver.FindGameObjectByExactPath(request.Target, requestBudget);
             if (go == null)
                 throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "screenshot.isolated-object requires a target GameObject.", "Pass --target <path>.");
             var outputPath = ScreenshotToolSupport.ResolveScreenshotOutputPath(request.Path);
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Output exists: " + outputPath);
+            var width = request.Width ?? 512;
+            var height = request.Height ?? 512;
+            if (request.Size.HasValue && (float.IsNaN(request.Size.Value) || float.IsInfinity(request.Size.Value) || request.Size.Value <= 0f))
+                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_LIMIT_INVALID", "size must be finite and greater than zero.", "Pass a positive finite orthographic size.");
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, requestBudget);
+            var format = ScreenshotToolSupport.NormalizeFormat(null, outputPath);
+            var bounds = go.GetComponent<Renderer>() != null ? go.GetComponent<Renderer>().bounds : new Bounds(go.transform.position, Vector3.one);
             ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
-            var width = Math.Max(1, request.Width ?? 512);
-            var height = Math.Max(1, request.Height ?? 512);
-            var format = outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
 
             var tempGo = new GameObject("__unitycli_isolated_cam__");
             var cam = tempGo.AddComponent<Camera>();
@@ -59,18 +66,18 @@ namespace UnityCli
             cam.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1f);
             cam.orthographic = request.Orthographic;
             cam.orthographicSize = request.Size ?? 2f;
-            var bounds = go.GetComponent<Renderer>() != null ? go.GetComponent<Renderer>().bounds : new Bounds(go.transform.position, Vector3.one);
             tempGo.transform.position = bounds.center + new Vector3(0, 0, -5);
             tempGo.transform.LookAt(bounds.center);
 
             byte[] bytes;
+            ScreenshotArtifactProof artifact;
             try
             {
-                var texture = ScreenshotToolSupport.RenderScreenshotTexture(cam, width, height);
+                var texture = ScreenshotToolSupport.RenderScreenshotTexture(cam, width, height, captureBudget);
                 try
                 {
                     bytes = format == "jpg" ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
-                    ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes);
+                    artifact = ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes, captureBudget);
                 }
                 finally { UnityEngine.Object.DestroyImmediate(texture); }
             }
@@ -79,11 +86,10 @@ namespace UnityCli
                 UnityEngine.Object.DestroyImmediate(tempGo);
             }
 
-            var artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, format);
             var result = new Result
             {
                 ScreenshotPath = outputPath, ArtifactPath = outputPath, Source = "isolated-object",
-                SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256
+                SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256, CapturePlan = captureBudget.Plan
             };
             ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
             return new System.Threading.Tasks.ValueTask<Result>(result);

@@ -10,7 +10,7 @@ namespace UnityCli
         {
             Name = "screenshot.editor-element",
             Summary = "Capture one bounded Unity Editor UI Toolkit element as a verified PNG artifact.",
-            Description = "Unity 6000.7+ only. Selects an attached EditorWindow by exact type name or title, then resolves a UI Toolkit selector with up to 16 type/#id/.class descendant or child segments. The scan is capped at 10000 elements. Capture dimensions default to 2048x2048 maximum and cannot exceed 4096x4096; PNG bytes default to 8 MiB maximum and cannot exceed 32 MiB. The artifact is written only to the request artifact directory; inline or arbitrary output paths are not accepted.",
+            Description = "Unity 6000.7+ only. Selects an attached EditorWindow by exact type/title and resolves up to 16 type/#id/.class segments without materializing descendant lists. Window/element scans share the request scan/node/reflection/time/UTF-8 budget and remain capped at 10000 elements. maxWidth/maxHeight default 2048 and are 1..4096; maxBytes defaults 8 MiB and is 1024..32 MiB. The complete dimension/pixel/temp/artifact plan is frozen before capture. The artifact is written only to the request artifact directory; Editor-only.",
             Group = "screenshot",
             DestructiveHint = false,
             SupportsDryRun = true,
@@ -31,7 +31,7 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<EditorElementCaptureResult> ExecuteAsync(EditorElementCaptureRequest request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
-            var plan = EditorElementCaptureToolSupport.Prepare(request);
+            var plan = EditorElementCaptureToolSupport.Prepare(request, ctx.UseReadBudget(request.Budget));
             if (ctx.DryRun) return new System.Threading.Tasks.ValueTask<EditorElementCaptureResult>(EditorElementCaptureToolSupport.Preview(plan));
             ctx.CommitEffect();
             return new System.Threading.Tasks.ValueTask<EditorElementCaptureResult>(EditorElementCaptureToolSupport.Capture(plan, ctx));
@@ -44,9 +44,10 @@ namespace UnityCli
         public string Window { get; set; }
         [UnityCliRequired]
         public string Selector { get; set; }
-        public long? MaxWidth { get; set; }
-        public long? MaxHeight { get; set; }
-        public long? MaxBytes { get; set; }
+        [UnityCliRange(1L, 4096L)] public long? MaxWidth { get; set; }
+        [UnityCliRange(1L, 4096L)] public long? MaxHeight { get; set; }
+        [UnityCliRange(1024L, 33554432L)] public long? MaxBytes { get; set; }
+        public UnityCliReadBudgetInput Budget { get; set; }
     }
 
     public sealed class EditorElementWindowIdentity
@@ -71,6 +72,7 @@ namespace UnityCli
         public long Width { get; set; }
         public long Height { get; set; }
         public long MaxBytes { get; set; }
+        public ScreenshotCapturePlan CapturePlan { get; set; }
     }
 
     public sealed class EditorElementCaptureResult

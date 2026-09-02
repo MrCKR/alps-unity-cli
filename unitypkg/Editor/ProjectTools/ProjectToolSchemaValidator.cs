@@ -121,8 +121,8 @@ namespace UnityCli
                     : Failure(path, "single-character string", ActualValue(value));
             }
             if (type == typeof(bool)) return value is bool ? null : Failure(path, "boolean", ActualType(value));
-            if (UnityCliSchemaDeriver.IsInteger(type)) return ValidateInteger(value, type, path);
-            if (UnityCliSchemaDeriver.IsNumber(type)) return ValidateNumber(value, type, path);
+            if (UnityCliSchemaDeriver.IsInteger(type)) return ValidateInteger(value, type, path, member);
+            if (UnityCliSchemaDeriver.IsNumber(type)) return ValidateNumber(value, type, path, member);
             if (type.IsEnum)
             {
                 var text = value as string;
@@ -181,7 +181,7 @@ namespace UnityCli
         }
 
         /// <summary>验证 JSON integer 并检查目标 CLR 整数范围。</summary>
-        private static SchemaValidationFailure ValidateInteger(object value, Type type, string path)
+        private static SchemaValidationFailure ValidateInteger(object value, Type type, string path, MemberInfo member)
         {
             decimal number;
             if (value is long) number = (long)value;
@@ -192,13 +192,15 @@ namespace UnityCli
             decimal minimum;
             decimal maximum;
             UnityCliSchemaDeriver.IntegerRange(type, out minimum, out maximum);
+            var range = NumericRange(member);
+            if (range != null) { minimum = Math.Max(minimum, range.Minimum); maximum = Math.Min(maximum, range.Maximum); }
             return number < minimum || number > maximum
                 ? Failure(path, ExpectedType(type) + " in range " + minimum.ToString(CultureInfo.InvariantCulture) + ".." + maximum.ToString(CultureInfo.InvariantCulture), ActualValue(value))
                 : null;
         }
 
-        /// <summary>验证 JSON number，并拒绝非有限值和目标类型 overflow。</summary>
-        private static SchemaValidationFailure ValidateNumber(object value, Type type, string path)
+        /// <summary>验证 JSON number，并拒绝非有限值、目标类型 overflow 和声明式业务范围。</summary>
+        private static SchemaValidationFailure ValidateNumber(object value, Type type, string path, MemberInfo member)
         {
             double number;
             try { number = Convert.ToDouble(value, CultureInfo.InvariantCulture); }
@@ -214,7 +216,15 @@ namespace UnityCli
             {
                 return Failure(path, "number in decimal range", ActualValue(value));
             }
-            return null;
+            var range = NumericRange(member);
+            return range != null && (number < range.Minimum || number > range.Maximum)
+                ? Failure(path, "number in range " + range.Minimum.ToString(CultureInfo.InvariantCulture) + ".." + range.Maximum.ToString(CultureInfo.InvariantCulture), ActualValue(value))
+                : null;
+        }
+
+        private static UnityCliRangeAttribute NumericRange(MemberInfo member)
+        {
+            return member == null ? null : member.GetCustomAttributes(typeof(UnityCliRangeAttribute), true).Cast<UnityCliRangeAttribute>().SingleOrDefault();
         }
 
         private static SchemaValidationFailure Failure(string path, string expected, string actual, string message = null)

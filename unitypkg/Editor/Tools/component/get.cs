@@ -21,14 +21,15 @@ namespace UnityCli
             public int? ComponentIndex { get; set; }
             public string Component { get; set; }
             public string ComponentType { get; set; }
-            public int? MaxDepth { get; set; }
-            public int? MaxArrayItems { get; set; }
+            [UnityCliRange(0L, 16L)] public int? MaxDepth { get; set; }
+            [UnityCliRange(1L, 1000L)] public int? MaxArrayItems { get; set; }
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
             public List<string> Paths { get; set; }
             [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
@@ -42,7 +43,7 @@ namespace UnityCli
         {
             Name = "component.get",
             Summary = "Deep-read one Component by GameObject and component selector; use paths/viewQuery for token-safe fields.",
-            Description = "Deep-read one Component after selecting a GameObject with go.find/go.inspect or tools run scene.gameobject.components. For token safety, pass exact paths or one viewQuery; they are mutually exclusive and skip full fields/props expansion. Use componentIndex/componentInstanceId when duplicate components exist. Keep maxDepth low before expanding MonoBehaviours.",
+            Description = "Deep-read one Component after selecting it by stable GameObject and component identity. maxDepth is 0..16, maxArrayItems is 1..1000, and paths accepts at most 128 ordered exact reads. Cycle/depth checks happen before expansion; all paths share budget scan/node/getter/reflection/time/UTF-8 ceilings and truncated nodes return nextPath. Defaults are 10000 scans, 4096 nodes, 2048 getters, 4096 reflection calls, 250 main-thread ms and 1 MiB; maxima are 100000/20000/10000/20000/2000 ms/8 MiB. Read-only in Edit and Play Mode.",
             Group = "component",
             DestructiveHint = false,
             Target = "editor",
@@ -60,7 +61,7 @@ namespace UnityCli
         {
             var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request);
             var options = GameObjectToolSupport.BuildSerializerOptions(request);
-            var data = UnityCliBridge.ObjectSerializer.Serialize(component, options);
+            var data = UnityCliBridge.ObjectSerializer.Serialize(component, options, ctx.UseReadBudget(request.Budget));
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 TypeName = component.GetType().FullName,

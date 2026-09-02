@@ -34,8 +34,8 @@ namespace UnityCli
         {
             var options = new UnityCliBridge.ObjectSerializer.Options
             {
-                MaxDepth = request.MaxDepth ?? 4,
-                MaxArrayItems = Math.Max(0, Math.Min(request.MaxArrayItems ?? 50, 1000)),
+                MaxDepth = request.MaxDepth ?? UnityCliBridge.ObjectSerializer.DefaultMaxDepth,
+                MaxArrayItems = request.MaxArrayItems ?? UnityCliBridge.ObjectSerializer.DefaultMaxArrayItems,
                 IncludeFields = request.IncludeFields ?? true,
                 IncludeProperties = request.IncludeProperties ?? true,
                 DeepSerialization = request.DeepSerialization ?? true
@@ -46,7 +46,7 @@ namespace UnityCli
             }
             if (request.Paths != null)
             {
-                options.Paths = new HashSet<string>(request.Paths.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()));
+                options.Paths = request.Paths.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()).ToList();
             }
             var query = request.ViewQuery as Dictionary<string, object>;
             if (query != null)
@@ -55,7 +55,7 @@ namespace UnityCli
                 if (query.TryGetValue("path", out value)) options.ViewPath = value as string;
                 if (query.TryGetValue("namePattern", out value)) options.NamePattern = value as string;
                 if (query.TryGetValue("typeFilter", out value)) options.TypeFilter = value as string;
-                if (query.TryGetValue("maxDepth", out value) && value != null) options.MaxDepth = Math.Max(0, Convert.ToInt32(value, CultureInfo.InvariantCulture));
+                if (query.TryGetValue("maxDepth", out value) && value != null) options.MaxDepth = Convert.ToInt32(value, CultureInfo.InvariantCulture);
             }
             if (!string.IsNullOrEmpty(request.NamePattern))
             {
@@ -297,6 +297,17 @@ namespace UnityCli
                 if (type != null) return type;
             }
             return null;
+        }
+
+        /// <summary>读取型搜索只尝试 exact/full Unity namespaces，避免为短名调用 Assembly.GetTypes 全量扫描。</summary>
+        public static Type ResolveComponentType(string componentName, UnityCliRequestBudget budget)
+        {
+            var type = UnityCliBridge.TypeSchemaGenerator.ResolveType(componentName, budget)
+                ?? UnityCliBridge.TypeSchemaGenerator.ResolveType("UnityEngine." + componentName, budget)
+                ?? UnityCliBridge.TypeSchemaGenerator.ResolveType("UnityEngine.UI." + componentName, budget);
+            if (type == null || !typeof(Component).IsAssignableFrom(type))
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_TYPE_NOT_FOUND", "Component type not found within the bounded exact namespaces: " + componentName, "Pass a full component type name.");
+            return type;
         }
 
         /// <summary>按短名、FullName 或 UnityEngine namespace 名解析 Component Type。</summary>

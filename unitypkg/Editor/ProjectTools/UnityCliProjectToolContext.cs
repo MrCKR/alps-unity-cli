@@ -63,6 +63,27 @@ namespace UnityCli
         /// <summary>当前请求的取消令牌。异步工具应把它继续传给 ctx.Wait.*。</summary>
         public CancellationToken CancellationToken { get; set; }
 
+        /// <summary>受影响读取能力共享的单一请求预算；递归、分页与多路径读取不得自行重置。</summary>
+        internal UnityCliRequestBudget ReadBudget { get; private set; }
+
+        /// <summary>在第一次 Unity 主线程读取前创建预算；后续调用始终复用同一账本。</summary>
+        public UnityCliRequestBudget UseReadBudget(UnityCliReadBudgetInput input = null)
+        {
+            if (ReadBudget != null) return ReadBudget;
+            try
+            {
+                ReadBudget = new UnityCliRequestBudget(input, TimeoutMs, CancellationToken);
+                return ReadBudget;
+            }
+            catch (ArgumentOutOfRangeException exception)
+            {
+                throw new UnityCliBridge.BridgeCommandException(
+                    "E_REQUEST_BUDGET_INVALID",
+                    exception.ParamName + " is outside the documented request-wide budget range.",
+                    "Pass a positive budget value no greater than the maximum shown by tools describe.");
+            }
+        }
+
     }
 }
 #endif

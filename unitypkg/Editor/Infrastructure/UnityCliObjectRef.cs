@@ -34,6 +34,7 @@ namespace UnityCli
         List<string> Paths { get; }
         object ViewQuery { get; }
         string NamePattern { get; }
+        UnityCliReadBudgetInput Budget { get; }
     }
 
     public static partial class UnityCliBridge
@@ -184,6 +185,46 @@ namespace UnityCli
                 throw new BridgeCommandException("E_OBJECTREF_COMPONENT_REQUIRED",
                     "Component reference required: pass componentInstanceId, or (instanceId|path) + componentIndex/component.",
                     "Run component.get --input '{\"instanceId\":123,\"component\":\"Transform\"}'.");
+            }
+
+            /// <summary>按完整大小写敏感路径直接逐段解析；不会在失败时扫描整棵层级树。</summary>
+            public static GameObject FindGameObjectByExactPath(string path, UnityCliRequestBudget budget)
+            {
+                if (string.IsNullOrEmpty(path)) return null;
+                if (budget == null) throw new ArgumentNullException("budget");
+                var segments = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (segments.Length == 0) return null;
+                GameObject match = null;
+                for (var sceneIndex = 0; sceneIndex < SceneManager.sceneCount; sceneIndex++)
+                {
+                    var scene = SceneManager.GetSceneAt(sceneIndex);
+                    if (!scene.isLoaded) continue;
+                    foreach (var root in scene.GetRootGameObjects())
+                    {
+                        if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                        if (!string.Equals(root.name, segments[0], StringComparison.Ordinal)) continue;
+                        var current = root.transform;
+                        var resolved = true;
+                        for (var segmentIndex = 1; segmentIndex < segments.Length; segmentIndex++)
+                        {
+                            Transform childMatch = null;
+                            for (var childIndex = 0; childIndex < current.childCount; childIndex++)
+                            {
+                                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                                var child = current.GetChild(childIndex);
+                                if (!string.Equals(child.name, segments[segmentIndex], StringComparison.Ordinal)) continue;
+                                if (childMatch != null) ThrowAmbiguousPath(path, new List<GameObject> { childMatch.gameObject, child.gameObject });
+                                childMatch = child;
+                            }
+                            if (childMatch == null) { resolved = false; break; }
+                            current = childMatch;
+                        }
+                        if (!resolved) continue;
+                        if (match != null) ThrowAmbiguousPath(path, new List<GameObject> { match, current.gameObject });
+                        match = current.gameObject;
+                    }
+                }
+                return match;
             }
 
             /// <summary>

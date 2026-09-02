@@ -480,6 +480,12 @@ namespace UnityCli
                     throw PostEffectExecutionTimeout(name, "invoke", ProjectToolFailureReason(definition, inner.GetType().Name + ": " + inner.Message));
                 throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
+            catch (UnityCliRequestBudgetExceededException exception)
+            {
+                if (executionContext != null && executionContext.EffectCommitted)
+                    throw PostEffectExecutionTimeout(name, "request-budget", exception.Message);
+                throw RequestBudgetExceeded(name, exception.Dimension);
+            }
             catch (OperationCanceledException)
             {
                 if (executionContext != null && executionContext.EffectCommitted)
@@ -497,6 +503,8 @@ namespace UnityCli
             try
             {
                 var outputJson = UnityCliSerializer.Serialize(result);
+                if (executionContext != null && executionContext.ReadBudget != null)
+                    executionContext.ReadBudget.ObserveFinalSerializedUtf8Bytes(Encoding.UTF8.GetByteCount(outputJson));
                 var outputError = ValidateProjectToolOutput(definition, outputJson);
                 if (outputError != null)
                 {
@@ -516,6 +524,12 @@ namespace UnityCli
                     && (definition.OfficialAttributeBinding != null || exception.Code != "E_EXECUTION_TIMEOUT"))
                     throw PostEffectExecutionTimeout(name, "postcondition", ProjectToolFailureReason(definition, exception.Code + ": " + exception.Message));
                 throw;
+            }
+            catch (UnityCliRequestBudgetExceededException exception)
+            {
+                if (executionContext != null && executionContext.EffectCommitted)
+                    throw PostEffectExecutionTimeout(name, "request-budget", exception.Message);
+                throw RequestBudgetExceeded(name, exception.Dimension);
             }
             catch (Exception exception)
             {
@@ -544,6 +558,15 @@ namespace UnityCli
                 { "journalPolicy", contract.JournalPolicy },
                 { "mutation", contract.Mutation }
             };
+        }
+
+        private static BridgeCommandException RequestBudgetExceeded(string toolName, string dimension)
+        {
+            return new BridgeCommandException(
+                "E_REQUEST_BUDGET_EXCEEDED",
+                "Tool " + toolName + " exhausted its request-wide Unity main-thread budget before a complete result was available.",
+                new Dictionary<string, object> { { "toolName", toolName }, { "dimension", dimension } },
+                new[] { "Retry with a narrower selector or continue from the returned continuation when available." });
         }
 
         /// <summary>effect 后无法确认终态的异常统一收敛为执行超时。</summary>

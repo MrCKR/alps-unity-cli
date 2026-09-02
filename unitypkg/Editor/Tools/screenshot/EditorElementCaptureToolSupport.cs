@@ -26,9 +26,10 @@ namespace UnityCli
             internal List<string> ElementClasses;
             internal long WindowInstanceId, MaxBytes;
             internal int Width, Height;
+            internal ScreenshotCaptureBudget CaptureBudget;
         }
 
-        internal static Plan Prepare(EditorElementCaptureRequest request)
+        internal static Plan Prepare(EditorElementCaptureRequest request, UnityCliRequestBudget requestBudget)
         {
 #if !UNITY_6000_7_OR_NEWER
             throw Unavailable();
@@ -41,20 +42,29 @@ namespace UnityCli
             var maxBytes = request.MaxBytes ?? (8L * 1024L * 1024L);
             if (maxWidth < 1 || maxWidth > MaxDimension || maxHeight < 1 || maxHeight > MaxDimension || maxBytes < 1024 || maxBytes > MaxArtifactBytes)
                 throw Error("E_EDITOR_ELEMENT_LIMIT_INVALID", "maxWidth/maxHeight must be 1..4096 and maxBytes must be 1024..33554432.");
-            var candidates = Resources.FindObjectsOfTypeAll<EditorWindow>()
-                .Where(value => value != null && value.rootVisualElement != null && value.rootVisualElement.panel != null)
-                .Where(value => string.Equals(value.GetType().Name, request.Window, StringComparison.Ordinal) || string.Equals(value.titleContent == null ? null : value.titleContent.text, request.Window, StringComparison.Ordinal))
-                .OrderBy(value => value.GetInstanceID()).Take(257).ToList();
+            var candidates = new List<EditorWindow>();
+            foreach (var value in Resources.FindObjectsOfTypeAll<EditorWindow>())
+            {
+                if (!requestBudget.TryConsumeScannedRecord()) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "window scan exhausted the request-wide budget.");
+                if (value == null || value.rootVisualElement == null || value.rootVisualElement.panel == null) continue;
+                if (!string.Equals(value.GetType().Name, request.Window, StringComparison.Ordinal)
+                    && !string.Equals(value.titleContent == null ? null : value.titleContent.text, request.Window, StringComparison.Ordinal)) continue;
+                candidates.Add(value);
+                if (candidates.Count > 256) break;
+            }
+            candidates.Sort((left, right) => left.GetInstanceID().CompareTo(right.GetInstanceID()));
             if (candidates.Count == 0) throw Error("E_EDITOR_ELEMENT_WINDOW_NOT_FOUND", "No attached EditorWindow exactly matches '" + request.Window + "'.");
             if (candidates.Count > 256) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "More than 256 EditorWindow candidates matched the bounded scan.");
             var window = candidates[0];
-            var element = Resolve(window.rootVisualElement, request.Selector);
+            var element = Resolve(window.rootVisualElement, request.Selector, requestBudget);
             if (element == null) throw Error("E_EDITOR_ELEMENT_NOT_FOUND", "No UI Toolkit element matched selector '" + request.Selector + "'.");
             var width = Mathf.CeilToInt(element.worldBound.width);
             var height = Mathf.CeilToInt(element.worldBound.height);
             if (width < 1 || height < 1 || width > maxWidth || height > maxHeight || (long)width * height > 16777216L)
                 throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "Resolved element dimensions " + width + "x" + height + " exceed the requested capture bounds.");
-            return new Plan { Element = element, WindowType = window.GetType().Name, WindowTitle = window.titleContent == null ? null : window.titleContent.text, WindowInstanceId = window.GetInstanceID(), Selector = request.Selector, ElementType = element.GetType().Name, ElementName = element.name, ElementClasses = element.GetClasses().Take(128).Select(Bound).ToList(), Width = width, Height = height, MaxBytes = maxBytes };
+            var limits = new ScreenshotBudgetInput { MaxArtifactBytes = maxBytes };
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, limits, requestBudget);
+            return new Plan { Element = element, WindowType = window.GetType().Name, WindowTitle = window.titleContent == null ? null : window.titleContent.text, WindowInstanceId = window.GetInstanceID(), Selector = request.Selector, ElementType = element.GetType().Name, ElementName = element.name, ElementClasses = element.GetClasses().Take(128).Select(Bound).ToList(), Width = width, Height = height, MaxBytes = maxBytes, CaptureBudget = captureBudget };
 #endif
         }
 
@@ -65,6 +75,7 @@ namespace UnityCli
             throw Unavailable();
 #else
             if (plan == null || plan.Element == null || plan.Element.panel == null) throw Error("E_EDITOR_ELEMENT_TARGET_CHANGED", "The frozen UI Toolkit element is no longer attached.");
+            plan.CaptureBudget.BeginCapture(plan.Width, plan.Height);
             RenderTexture texture = null;
             Texture2D readable = null;
             var previous = RenderTexture.active;
@@ -91,7 +102,7 @@ namespace UnityCli
             if (string.IsNullOrWhiteSpace(ctx.ArtifactDir)) throw Error("E_EDITOR_ELEMENT_ARTIFACT_UNAVAILABLE", "The request artifact directory is unavailable.");
             Directory.CreateDirectory(ctx.ArtifactDir);
             var output = Path.Combine(ctx.ArtifactDir, "editor-element.png");
-            var artifact = ScreenshotToolSupport.WriteScreenshotBytes(output, png);
+            var artifact = ScreenshotToolSupport.WriteScreenshotBytes(output, png, plan.CaptureBudget);
             if (artifact.SizeBytes > plan.MaxBytes || artifact.SizeBytes != png.LongLength)
             {
                 try { File.Delete(output); } catch { }
@@ -105,12 +116,12 @@ namespace UnityCli
 
         private static EditorElementCaptureResult Result(Plan plan, bool dryRun, ScreenshotArtifactProof artifact)
         {
-            return new EditorElementCaptureResult { Available = true, Element = new EditorElementIdentity { Selector = plan.Selector, Type = plan.ElementType, Name = plan.ElementName, Classes = plan.ElementClasses }, Width = plan.Width, Height = plan.Height, Artifact = artifact, DryRun = dryRun, PlannedEffects = new List<EditorElementCapturePlannedEffect> { new EditorElementCapturePlannedEffect { Type = "screenshot.editor-element", WindowInstanceId = plan.WindowInstanceId, Width = plan.Width, Height = plan.Height, MaxBytes = plan.MaxBytes } } };
+            return new EditorElementCaptureResult { Available = true, Element = new EditorElementIdentity { Selector = plan.Selector, Type = plan.ElementType, Name = plan.ElementName, Classes = plan.ElementClasses }, Width = plan.Width, Height = plan.Height, Artifact = artifact, DryRun = dryRun, PlannedEffects = new List<EditorElementCapturePlannedEffect> { new EditorElementCapturePlannedEffect { Type = "screenshot.editor-element", WindowInstanceId = plan.WindowInstanceId, Width = plan.Width, Height = plan.Height, MaxBytes = plan.MaxBytes, CapturePlan = plan.CaptureBudget.Plan } } };
         }
 
 #if UNITY_6000_7_OR_NEWER
         /// <summary>实现type/#id/.class与descendant/child链；全查询最多16段、10000候选。</summary>
-        private static VisualElement Resolve(VisualElement root, string selector)
+        private static VisualElement Resolve(VisualElement root, string selector, UnityCliRequestBudget budget)
         {
             var tokens = selector.Replace(">", " > ").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             var segments = tokens.Count(token => token != ">");
@@ -124,10 +135,10 @@ namespace UnityCli
                 var next = new List<VisualElement>();
                 foreach (var parent in current)
                 {
-                    var values = direct ? parent.Children() : Descendants(parent, ref visited);
+                    var values = direct ? parent.Children() : Descendants(parent);
                     foreach (var value in values)
                     {
-                        if (++visited > 10000) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "selector scan exceeded 10000 UI elements.");
+                        if (++visited > 10000 || !budget.TryConsumeScannedRecord() || !budget.TryConsumeNode()) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "selector scan exceeded its 10000-element or request-wide budget.");
                         if (Matches(value, token)) next.Add(value);
                         if (next.Count > 256) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "selector produced more than 256 intermediate matches.");
                     }
@@ -139,18 +150,16 @@ namespace UnityCli
             return current.FirstOrDefault();
         }
 
-        private static IEnumerable<VisualElement> Descendants(VisualElement root, ref int visited)
+        private static IEnumerable<VisualElement> Descendants(VisualElement root)
         {
-            var result = new List<VisualElement>();
-            var stack = new Stack<VisualElement>(root.Children().Reverse());
+            var stack = new Stack<VisualElement>();
+            for (var index = root.childCount - 1; index >= 0; index--) stack.Push(root[index]);
             while (stack.Count > 0)
             {
                 var value = stack.Pop();
-                result.Add(value);
-                if (result.Count + visited > 10000) break;
-                foreach (var child in value.Children().Reverse()) stack.Push(child);
+                yield return value;
+                for (var index = value.childCount - 1; index >= 0; index--) stack.Push(value[index]);
             }
-            return result;
         }
 
         private static bool Matches(VisualElement value, string simple)

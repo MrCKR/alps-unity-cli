@@ -698,11 +698,12 @@ function validateKnownLocalTerminal(
   }
   if (toolName === "editor.refresh") {
     const editorState = objectRecord(record.editorState);
-    if (typeof record.changed !== "boolean" || typeof record.compilationTriggered !== "boolean"
-      || typeof record.sourceFileCount !== "number" || !Number.isSafeInteger(record.sourceFileCount) || record.sourceFileCount < 0
-      || !sha256(record.sourceFingerprint) || !sha256(record.dependencyVersion)
+    const generation = objectRecord(record.generation);
+    if (typeof record.changed !== "boolean" || typeof record.importObserved !== "boolean" || typeof record.compilationTriggered !== "boolean"
+      || !generation || !nonnegativeInteger(generation.dependencyBefore) || !nonnegativeInteger(generation.dependencyAfter)
+      || !nonnegativeInteger(generation.processedBefore) || !nonnegativeInteger(generation.processedAfter)
       || !editorState || editorState.status !== "ready" || editorState.compile !== false || editorState.import !== false) {
-      throw invalidCompletionProof(toolName, completion, "did not prove a stable source and dependency refresh readback");
+      throw invalidCompletionProof(toolName, completion, "did not prove stable Unity-owned import generations and ready state");
     }
     return true;
   }

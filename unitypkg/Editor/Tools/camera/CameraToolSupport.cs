@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Security.Cryptography;
 using UnityEditor;
 using UnityEngine;
 
@@ -143,36 +142,14 @@ namespace UnityCli
             }
         }
 
-        /// <summary>写入截图后重新读取字节、校验格式并返回稳定 artifact proof。</summary>
-        public static CameraArtifactProof WriteScreenshotBytes(string outputPath, byte[] bytes)
-        {
-            if (bytes == null || bytes.Length == 0)
-                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_ENCODE_FAILED", "Screenshot encoder returned no bytes.", "Check the Camera render state and retry.");
-            try { File.WriteAllBytes(outputPath, bytes); }
-            catch (Exception exception) { throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to write screenshot output: " + exception.Message); }
-            return VerifyScreenshotArtifact(outputPath, Path.GetExtension(outputPath).TrimStart('.'));
-        }
-
-        /// <summary>artifact proof 必须来自写后 fresh readback，不能只依赖 Exists 或原始编码 bytes。</summary>
-        public static CameraArtifactProof VerifyScreenshotArtifact(string outputPath, string format)
-        {
-            if (!File.Exists(outputPath)) throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_WRITE_PROOF_MISSING", "Screenshot output was not written: " + outputPath, "Check destination path and permissions, then retry.");
-            var bytes = File.ReadAllBytes(outputPath);
-            var normalized = NormalizeFormat(format, outputPath);
-            var valid = normalized == "png"
-                ? bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4e && bytes[3] == 0x47 && bytes[4] == 0x0d && bytes[5] == 0x0a && bytes[6] == 0x1a && bytes[7] == 0x0a
-                : bytes.Length >= 3 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff;
-            if (!valid) throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_WRITE_PROOF_MISSING", "Screenshot output is empty or does not match its requested format: " + outputPath, "Use a .png or .jpg output path and retry.");
-            using (var sha = SHA256.Create()) return new CameraArtifactProof { SizeBytes = bytes.LongLength, Sha256 = string.Concat(Array.ConvertAll(sha.ComputeHash(bytes), value => value.ToString("x2"))) };
-        }
-
-        /// <summary>渲染指定 Camera 到 RenderTexture 并编码为图片字节,返回捕获结果。捕获后恢复相机状态。</summary>
-        public static CameraCapture CaptureCamera(Camera camera, int width, int height, bool transparent, int quality, string outputPath, string format, bool overwrite, bool inlineBase64)
+        /// <summary>按冻结 aggregate plan 渲染、编码与证明单张 Camera artifact，并在 finally 恢复纹理状态。</summary>
+        public static CameraCapture CaptureCamera(Camera camera, int width, int height, bool transparent, int quality, string outputPath, string format, bool overwrite, bool inlineBase64, ScreenshotCaptureBudget budget)
         {
             if (File.Exists(outputPath) && !overwrite)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
             }
+            budget.BeginCapture(width, height);
             CreateScreenshotDirectory(outputPath);
             var previousTarget = camera.targetTexture;
             var previousActive = RenderTexture.active;
@@ -193,14 +170,15 @@ namespace UnityCli
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
                 var bytes = format == "jpg" ? texture.EncodeToJPG(quality) : texture.EncodeToPNG();
-                var artifact = WriteScreenshotBytes(outputPath, bytes);
+                var artifact = ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes, budget);
                 var capture = new CameraCapture
                 {
                     ScreenshotPath = outputPath,
                     ArtifactPath = outputPath,
                     Source = "camera",
                     SizeBytes = artifact.SizeBytes,
-                    Sha256 = artifact.Sha256
+                    Sha256 = artifact.Sha256,
+                    CapturePlan = budget.Plan
                 };
                 // inlineBase64 仅在图片字节小于内联上限时附带,避免大 base64 撑爆 JSON 响应
                 const int InlineImageMaxBytes = 512 * 1024;
@@ -275,9 +253,8 @@ namespace UnityCli
         public string ImageMimeType { get; set; }
         public long SizeBytes { get; set; }
         public string Sha256 { get; set; }
+        public ScreenshotCapturePlan CapturePlan { get; set; }
     }
-
-    public sealed class CameraArtifactProof { public long SizeBytes { get; set; } public string Sha256 { get; set; } }
 
     /// <summary>计划副作用项,camera 域 mutation 工具 Result 共享。</summary>
     public sealed class CameraPlannedEffect

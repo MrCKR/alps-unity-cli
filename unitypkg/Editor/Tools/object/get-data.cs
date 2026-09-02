@@ -20,14 +20,15 @@ namespace UnityCli
             public int? ComponentIndex { get; set; }
             public string Component { get; set; }
             public string ComponentType { get; set; }
-            public int? MaxDepth { get; set; }
-            public int? MaxArrayItems { get; set; }
+            [UnityCliRange(0L, 16L)] public int? MaxDepth { get; set; }
+            [UnityCliRange(1L, 1000L)] public int? MaxArrayItems { get; set; }
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
             public List<string> Paths { get; set; }
             [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
@@ -40,7 +41,7 @@ namespace UnityCli
         {
             Name = "object.get-data",
             Summary = "Read deep serialized data from any Unity Object by instanceId, assetPath, guid or path.",
-            Description = "Read deep serialized data from any UnityEngine.Object. Resolves the target by instanceId, assetPath/guid, or path/name. Supports maxDepth, maxArrayItems, includeFields, includeProperties, deepSerialization, paths (exact member reads) and viewQuery (filtered subtree). Read-only.",
+            Description = "Read deep serialized data from any UnityEngine.Object. maxDepth is 0..16 and maxArrayItems is 1..1000. paths accepts at most 128 ordered exact reads; all paths and recursive branches share one budget (10000 scans, 4096 nodes, 2048 getters, 4096 reflection calls, 250 main-thread ms, 1 MiB UTF-8 by default; public maxima are 100000/20000/10000/20000/2000 ms/8 MiB). Truncated nodes return nextPath. Read-only in Edit and Play Mode.",
             Group = "object",
             DestructiveHint = false,
             Target = "editor",
@@ -57,7 +58,7 @@ namespace UnityCli
         {
             var target = UnityCliBridge.ObjectRefResolver.ResolveObject(request);
             var options = ObjectToolSupport.BuildSerializerOptions(request);
-            var data = UnityCliBridge.ObjectSerializer.Serialize(target, options);
+            var data = UnityCliBridge.ObjectSerializer.Serialize(target, options, ctx.UseReadBudget(request.Budget));
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 TypeName = target.GetType().FullName,

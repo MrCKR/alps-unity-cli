@@ -24,8 +24,9 @@ namespace UnityCli
             public int? ComponentIndex { get; set; }
             public string Component { get; set; }
             public string ComponentType { get; set; }
-            public int? MaxDepth { get; set; }
+            [UnityCliRange(0L, 16L)] public int? MaxDepth { get; set; }
             [UnityCliAnyJson] public List<object> PathPatches { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
@@ -63,6 +64,7 @@ namespace UnityCli
             if (request.PathPatches == null || request.PathPatches.Count == 0)
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PATCH_REQUIRED", "component.modify requires non-empty pathPatches.", "Pass direct replace pathPatches for writable serialized properties.");
             UnityCliBridge.ObjectPatch.ValidateOnly(component, request.PathPatches, null);
+            var readBudget = ctx.UseReadBudget(request.Budget);
             if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
@@ -90,7 +92,7 @@ namespace UnityCli
             observedSerializedObject.Update();
             UnityCliBridge.ObjectPatch.VerifyFreshSerializedProperties(observedComponent, request.PathPatches);
             var maxDepth = request.MaxDepth ?? 2;
-            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedComponent, new UnityCliBridge.ObjectSerializer.Options { MaxDepth = maxDepth, IncludeFields = true, IncludeProperties = true, DeepSerialization = false });
+            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedComponent, new UnityCliBridge.ObjectSerializer.Options { MaxDepth = maxDepth, IncludeFields = true, IncludeProperties = true, DeepSerialization = false }, readBudget);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 TypeName = component.GetType().FullName,

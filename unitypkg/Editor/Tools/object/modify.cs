@@ -23,14 +23,15 @@ namespace UnityCli
             public string Component { get; set; }
             public string ComponentType { get; set; }
             [UnityCliAnyJson] public List<object> PathPatches { get; set; }
-            public int? MaxDepth { get; set; }
-            public int? MaxArrayItems { get; set; }
+            [UnityCliRange(0L, 16L)] public int? MaxDepth { get; set; }
+            [UnityCliRange(1L, 1000L)] public int? MaxArrayItems { get; set; }
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
             public List<string> Paths { get; set; }
             [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
@@ -82,6 +83,7 @@ namespace UnityCli
 
             var hasPathPatches = true;
             UnityCliBridge.ObjectPatch.ValidateOnly(target, request.PathPatches, null);
+            var readBudget = ctx.UseReadBudget(request.Budget);
 
             // dry-run 预览:不修改对象
             if (ctx.DryRun)
@@ -112,7 +114,7 @@ namespace UnityCli
             if (observedTarget == null) throw new UnityCliBridge.BridgeCommandException("E_OBJECT_MODIFY_STATE_MISMATCH", "Target could not be fresh-resolved after patch.", "Retry after the Editor is idle.");
             UnityCliBridge.ObjectPatch.VerifyFreshSerializedProperties(observedTarget, request.PathPatches);
             var options = ObjectToolSupport.BuildSerializerOptions(request);
-            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedTarget, options);
+            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedTarget, options, readBudget);
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
