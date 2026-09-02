@@ -13,11 +13,9 @@ const extensionsUrl = new URL("../../../extensions/", import.meta.url);
 
 const filledCsharpHandlerCommands = [
   "scene.active",
-  "scene.build-settings",
   "scene.create",
   "scene.load",
   "scene.save",
-  "go.inspect",
   "go.create",
   "go.modify",
   "go.duplicate",

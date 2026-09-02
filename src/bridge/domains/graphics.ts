@@ -3,7 +3,6 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const graphicsBridgeSpecs: BridgeCommandSpec[] = [
   { group: "graphics", command: "quality", bridgeCommand: "project-tool.run", toolName: "graphics.quality", buildArgs: graphicsArgs, destructiveHint: true },
-  { group: "graphics", command: "settings", bridgeCommand: "project-tool.run", toolName: "graphics.settings", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "volume", bridgeCommand: "project-tool.run", toolName: "graphics.volume", buildArgs: graphicsArgs },
   { group: "graphics", command: "bake-start", bridgeCommand: "project-tool.run", toolName: "graphics.bake-start", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "bake-cancel", bridgeCommand: "project-tool.run", toolName: "graphics.bake-cancel", buildArgs: graphicsArgs },
@@ -13,10 +12,7 @@ export const graphicsBridgeSpecs: BridgeCommandSpec[] = [
   { group: "graphics", command: "bake-settings", bridgeCommand: "project-tool.run", toolName: "graphics.bake-settings", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "light-probe-group", bridgeCommand: "project-tool.run", toolName: "graphics.light-probe-group", buildArgs: graphicsArgs },
   { group: "graphics", command: "reflection-probe", bridgeCommand: "project-tool.run", toolName: "graphics.reflection-probe", buildArgs: graphicsArgs },
-  { group: "graphics", command: "probe-positions", bridgeCommand: "project-tool.run", toolName: "graphics.probe-positions", buildArgs: graphicsArgs },
   { group: "graphics", command: "stats", bridgeCommand: "project-tool.run", toolName: "graphics.stats", buildArgs: graphicsArgs },
-  { group: "graphics", command: "stats-counters", bridgeCommand: "project-tool.run", toolName: "graphics.stats-counters", buildArgs: graphicsArgs },
-  { group: "graphics", command: "stats-memory", bridgeCommand: "project-tool.run", toolName: "graphics.stats-memory", buildArgs: graphicsArgs },
   { group: "graphics", command: "scene-debug", bridgeCommand: "project-tool.run", toolName: "graphics.scene-debug", buildArgs: graphicsArgs },
   { group: "graphics", command: "skybox-get", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-get", buildArgs: graphicsArgs },
   { group: "graphics", command: "skybox-set-material", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-material", buildArgs: graphicsArgs },
@@ -26,7 +22,6 @@ export const graphicsBridgeSpecs: BridgeCommandSpec[] = [
   { group: "graphics", command: "skybox-set-reflection", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-reflection", buildArgs: graphicsArgs },
   { group: "graphics", command: "skybox-set-sun", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-sun", buildArgs: graphicsArgs },
   { group: "graphics", command: "pipeline-settings", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline-settings", buildArgs: graphicsArgs, destructiveHint: true },
-  { group: "graphics", command: "pipeline-quality", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline-quality", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "pipeline-info", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline-info", buildArgs: graphicsArgs }
 ];
 
@@ -35,7 +30,7 @@ function graphicsArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
   if (command === "graphics.volume") {
     return compactArgs({ ...queryArgs(flags), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringField(s, "target") });
   }
-  if (command === "graphics.stats" || command === "graphics.stats-counters" || command === "graphics.stats-memory" || command === "graphics.pipeline-info" || command === "graphics.bake-status") {
+  if (command === "graphics.stats" || command === "graphics.pipeline-info" || command === "graphics.bake-status") {
     return queryArgs(flags);
   }
   if (command === "graphics.bake-start" || command === "graphics.bake-cancel") {
@@ -77,13 +72,6 @@ function graphicsArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       hdr: boolFlag(flags, "hdr") ?? boolField(s, "hdr"),
       boxSize: stringFlag(flags, "box-size") ?? stringField(s, "boxSize"),
       boxOffset: stringFlag(flags, "box-offset") ?? stringField(s, "boxOffset")
-    });
-  }
-  if (command === "graphics.probe-positions") {
-    return compactArgs({
-      target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(s, "target"),
-      type: stringFlag(flags, "type") ?? stringField(s, "type"),
-      positions: stringFlag(flags, "positions") ?? stringField(s, "positions")
     });
   }
   if (command === "graphics.scene-debug") {
@@ -134,9 +122,6 @@ function graphicsArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
   }
   if (command === "graphics.pipeline-settings") {
     return compactArgs({ renderPipeline: stringFlag(flags, "render-pipeline") ?? stringField(s, "renderPipeline") });
-  }
-  if (command === "graphics.pipeline-quality") {
-    return compactArgs({ qualityLevel: qualityLevelArg(flags) ?? stringField(s, "qualityLevel") ?? numberField(s, "qualityLevel") });
   }
   return compactArgs({
     ...queryArgs(flags),

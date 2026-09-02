@@ -437,7 +437,6 @@ namespace UnityCli
                 // 这里必须与 UnityCliBridge.Execute() 的切换期 allowlist 保持一致。
                 var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command)
                     || IsEditorStateSnapshotCommand(request.Command)
-                    || request.Command == "editor.console"
                     || request.Command == "editor.pause"
                     || request.Command == "editor.stop"
                     || request.Command == "runtime-tool.list"

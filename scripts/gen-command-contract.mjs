@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
 
 process.env.UNITY_CLI_GENERATING_CONTRACT = "1";
 
@@ -8,6 +9,7 @@ const distRoot = existsSync("dist/bridge/index.js") ? "dist" : "dist/src";
 const { bridgeCommandRegistry } = await importFromDist("bridge/index.js");
 const { allRegisteredToolMetadata } = await importFromDist("tools/metadata/index.js");
 const staticCatalog = JSON.parse(await readFile("contracts/static-capability-catalog.json", "utf8"));
+const publicToolNames = new Set(collectPublicToolInventory(process.cwd()).map((tool) => tool.name));
 await importFromDist("extensions/index.js");
 
 const OUTPUT_PATH = "contracts/command-contract.json";
@@ -38,7 +40,8 @@ for (const tool of allRegisteredToolMetadata()) {
 
 for (const descriptor of staticCatalog.tools) {
   const name = String(descriptor.name);
-  if (entries.has(name)) continue;
+  // Live snapshot 可以滞后于源码删除；生成 public contract 时只接受当前 canonical inventory。
+  if (!publicToolNames.has(name) || entries.has(name)) continue;
   const group = String(descriptor.group);
   entries.set(name, {
     bridgeCommand: name,

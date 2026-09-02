@@ -638,11 +638,8 @@ namespace UnityCli
             if (name == "graphics.skybox-set-properties") return HasAllMeaningfulInput(input, "property", "value");
             if (name == "build.settings.set") return HasAnyInput(input, "apiCompatibilityLevel", "applicationIdentifier", "bundleVersion", "companyId", "productName", "scriptingBackend");
             if (name == "graphics.bake-settings") return HasAnyInput(input, "bakedGI", "bounces", "directSamples", "environmentSamples", "filtering", "indirectSamples", "lightingMode", "realtimeGI");
-            if (name == "graphics.probe-positions") return HasAnyInput(input, "positions");
             if (name == "graphics.quality") return HasAnyInput(input, "anisotropicFiltering", "antiAliasing", "lodBias", "masterTextureLimit", "maximumLODLevel", "qualityLevel", "realtimeReflectionProbes", "shadowDistance", "shadowResolution", "shadows", "softParticles", "vSyncCount");
-            if (name == "graphics.settings") return HasAnyInput(input, "antiAliasing", "lodBias", "masterTextureLimit", "maximumLODLevel", "property", "renderPipeline", "shadowDistance", "vSyncCount", "value");
             if (name == "graphics.pipeline-settings") return HasAnyInput(input, "renderPipeline");
-            if (name == "graphics.pipeline-quality") return HasAnyInput(input, "qualityLevel");
             if (name == "graphics.skybox-set-ambient") return HasAnyMeaningfulInput(input, "ambientEquatorColor", "ambientGroundColor", "ambientSkyColor", "color", "intensity", "mode");
             if (name == "graphics.skybox-set-fog") return HasAnyMeaningfulInput(input, "color", "density", "enabled", "endDistance", "mode", "startDistance");
             if (name == "graphics.skybox-set-reflection") return HasAnyMeaningfulInput(input, "bounces", "intensity", "mode", "resolution");

@@ -675,7 +675,7 @@ test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
   // HandleHttpCore 的切换期 allowlist 需要与 Execute 保持一致。
   assert.match(httpBlock, /IsEditorStateSnapshotCommand\(request\.Command\)/, "HandleHttpCore must allow the private state snapshot during Play Mode transitions");
   assert.doesNotMatch(httpBlock, /request\.Command == "editor\.state"/, "The removed public editor.state command must not stay in the transition allowlist");
-  assert.match(httpBlock, /request\.Command == "editor\.console"/, "HandleHttpCore must allow editor.console during Play Mode transitions");
+  assert.doesNotMatch(httpBlock, /request\.Command == "editor\.console"/, "removed Console bridge route must not stay in the transition allowlist");
   assert.match(httpBlock, /request\.Command == "editor\.pause"/, "HandleHttpCore must allow editor.pause during Play Mode transitions");
   assert.match(httpBlock, /request\.Command == "editor\.stop"/, "HandleHttpCore must allow editor.stop during Play Mode transitions");
   assert.match(httpBlock, /request\.Command == "runtime-tool\.list"/, "HandleHttpCore must allow runtime-tool.list during Play Mode transitions");

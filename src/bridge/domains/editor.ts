@@ -2,7 +2,6 @@ import { boolFlag, compactArgs, numberFlag, queryArgs, stringFlag } from "../arg
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const editorBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "editor", command: "console", bridgeCommand: "project-tool.run", toolName: "editor.console", buildArgs: editorArgs },
   { group: "editor", command: "play", bridgeCommand: "project-tool.run", toolName: "editor.play", buildArgs: editorArgs },
   { group: "editor", command: "pause", bridgeCommand: "project-tool.run", toolName: "editor.pause", buildArgs: editorArgs },
   { group: "editor", command: "stop", bridgeCommand: "project-tool.run", toolName: "editor.stop", buildArgs: editorArgs },
@@ -41,9 +40,6 @@ function numberField(flags: BridgeFlags, key: string): number | undefined {
 }
 
 function editorArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  if (command === "editor.console") {
-    return compactArgs({ ...queryArgs(flags), type: stringFlag(flags, "type"), count: numberFlag(flags, "count") ?? numberFlag(flags, "limit"), clear: boolFlag(flags, "clear") });
-  }
   if (command === "editor.undo" || command === "editor.redo") {
     return compactArgs({ completionProbe: structuredInput(flags).completionProbe });
   }

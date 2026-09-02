@@ -20,7 +20,7 @@ test("only exact Editor operability tools own catalog-independent descriptors", 
     assert.deepEqual(resolved, findToolByName(name));
     assert.equal(resolved?.handler, "offline");
   }
-  for (const name of ["dialogs", "editor.compile", "docs.get", "package.list"])
+  for (const name of ["dialogs", "editor.compile", "docs.get", "package.registry.set"])
     assert.equal(resolveCatalogIndependentOperabilityTool(name), undefined, name);
 });
 

@@ -12,11 +12,11 @@ import { dispatchTool } from "../src/tools/dispatcher.js";
 import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
 import { createUnityProject } from "./helpers/instance-registry-v3.js";
 
-const LOCAL_PACKAGE_COMMANDS = ["package.bridge-remove", "package.deploy", "package.embed", "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get", "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.list", "package.scoped-registry.remove", "package.search", "package.status"];
+const LOCAL_PACKAGE_COMMANDS = ["package.bridge-remove", "package.deploy", "package.embed", "package.install", "package.registry.clear", "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove"];
 
-/** Package 域契约测试：TS 本地 package.* 保持离线可见。 */
+/** Package 域只保留文件 mutation、真实 Unity resolve 与明确 registry mutation。 */
 
-test("package group exposes the 17 TS-local package tools", () => {
+test("package group exposes only retained mutation and live resolve tools", () => {
   const tools = filterToolsByGroup("package").map((tool) => tool.name).sort();
   assert.deepEqual(tools, [...LOCAL_PACKAGE_COMMANDS].sort());
   assert.equal(findToolByName("package.embed")?.handler, "hybrid");
@@ -29,19 +29,9 @@ test("core Unity package declares its uGUI compile dependency", async () => {
   assert.ok(assembly.references?.includes("Unity.ugui"));
 });
 
-test("package read tools are offline/non-destructive/supported", () => {
-  for (const name of ["package.list", "package.status", "package.info", "package.search"]) {
-    const tool = findToolByName(name)!;
-    assert.equal(tool.destructiveHint, false);
-    assert.equal(tool.handler, "offline");
-    assert.equal(tool.playModeSupport, "supported");
-    assert.ok(tool.examples?.length);
-  }
-});
-
 test("package install/remove/resolve expose play mode + risk metadata", () => {
   const install = findToolByName("package.install")!;
-  assert.equal(install.playModeSupport, "session-affecting");
+  assert.equal(install.playModeSupport, "editor-only");
   assert.equal(install.destructiveHint, true);
   assert.equal(install.riskLevel, "high");
   assert.ok(install.sideEffects?.includes("manifest-change"));
@@ -58,7 +48,7 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   assert.equal(remove.destructiveHint, true);
   assert.equal(remove.supportsDryRun, true);
   assert.equal(remove.riskLevel, "high");
-  assert.equal(remove.playModeSupport, "session-affecting");
+  assert.equal(remove.playModeSupport, "editor-only");
   assert.equal(remove.supportStatus, "live-bridge");
   assert.equal(remove.timeoutMs, 120_000);
   assert.match(JSON.stringify(remove.inputSchema), /force/);
@@ -82,7 +72,7 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   assert.equal(deploy.timeoutMs, 120_000);
   assert.doesNotMatch(JSON.stringify(deploy.inputSchema), /project/i);
   assert.equal(deploy.riskLevel, "high");
-  assert.equal(deploy.playModeSupport, "session-affecting");
+  assert.equal(deploy.playModeSupport, "editor-only");
   assert.match(deploy.description, /package\.json/);
   assert.match(JSON.stringify(deploy.inputSchema), /source/);
   assert.match(JSON.stringify(deploy.outputSchema), /backupCreated/);
@@ -96,14 +86,14 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   assert.equal(restore.timeoutMs, 120_000);
   assert.doesNotMatch(JSON.stringify(restore.inputSchema), /project/i);
   assert.equal(restore.riskLevel, "high");
-  assert.equal(restore.playModeSupport, "session-affecting");
+  assert.equal(restore.playModeSupport, "editor-only");
   assert.match(restore.description, /package\.deploy/);
   assert.match(JSON.stringify(restore.inputSchema), /packageName/);
   assert.match(JSON.stringify(restore.outputSchema), /restoredFromBackup/);
   assert.doesNotMatch(JSON.stringify(restore.outputSchema), /projectPath/);
 
   const resolve = findToolByName("package.resolve")!;
-  assert.equal(resolve.playModeSupport, "session-affecting");
+  assert.equal(resolve.playModeSupport, "editor-only");
   assert.equal(resolve.supportStatus, "live-bridge");
   assert.equal(resolve.timeoutMs, 120_000);
   assert.doesNotMatch(JSON.stringify(resolve.inputSchema), /project|unity/i);
@@ -139,13 +129,7 @@ test("contract entries exist for all package tools", () => {
   }
 });
 
-test("package registry tools expose single-action metadata and security", () => {
-  for (const name of ["package.registry.get", "package.scoped-registry.list"]) {
-    const tool = findToolByName(name)!;
-    assert.equal(tool.handler, "offline");
-    assert.equal(tool.destructiveHint, false);
-    assert.equal(tool.supportsDryRun, undefined);
-  }
+test("retained package registry mutations expose single-action metadata and security", () => {
   for (const name of ["package.registry.set", "package.registry.clear", "package.scoped-registry.add", "package.scoped-registry.remove"]) {
     const tool = findToolByName(name)!;
     assert.equal(tool.handler, "offline");
@@ -189,10 +173,10 @@ test("local package manifest mutations reject an input project outside the selec
   }
 });
 
-test("package error recovery hints use current tools run forms", async () => {
+test("package error recovery points to live resolve or manifest state", async () => {
   const pm = await readFile(new URL("../src/package-manager.js", import.meta.url), "utf8");
   const init = await readFile(new URL("../src/cli-commands/package.js", import.meta.url), "utf8");
-  assert.match(pm, /tools run package\.list/);
+  assert.match(pm, /Packages\/manifest\.json or run package\.resolve/);
   assert.doesNotMatch(init, /handlePackage|bridge\.package\.refresh|batchmode|--job/);
 });
 

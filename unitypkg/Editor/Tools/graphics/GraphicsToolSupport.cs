@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using UnityEditor;
@@ -181,6 +182,23 @@ namespace UnityCli
             return null;
         }
 
+        /// <summary>构造探针所属 GameObject 的 fresh identity。</summary>
+        public static GraphicsProbeTarget BuildProbeTarget(GameObject gameObject)
+        {
+            return new GraphicsProbeTarget
+            {
+                Id = gameObject.GetInstanceID(),
+                Name = gameObject.name,
+                Path = GameObjectToolSupport.HierarchyPath(gameObject)
+            };
+        }
+
+        /// <summary>将探针位置投影为 typed DTO，避免返回请求字符串。</summary>
+        public static List<Vector3Data> BuildProbePositions(IEnumerable<Vector3> positions)
+        {
+            return (positions ?? Enumerable.Empty<Vector3>()).Select(position => new Vector3Data(position)).ToList();
+        }
+
         /// <summary>构造 ReflectionProbe 摘要 DTO。</summary>
         public static ReflectionProbeInfo BuildReflectionProbeInfo(ReflectionProbe probe)
         {
@@ -324,6 +342,13 @@ namespace UnityCli
     {
         public string LightingMode { get; set; }
         public long GiWorkflowMode { get; set; }
+    }
+
+    public sealed class GraphicsProbeTarget
+    {
+        public long Id { get; set; }
+        public string Name { get; set; }
+        public string Path { get; set; }
     }
 
     public sealed class ReflectionProbeInfo

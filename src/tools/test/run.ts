@@ -13,10 +13,13 @@ export interface TestRunSummary { platform: "EditMode" | "PlayMode"; status: "pa
 export interface TestRunResult { summary: TestRunSummary; failures: TestFailure[]; xml?: TestXmlArtifact; }
 
 export default defineTool<TestRunRequest, TestRunResult>({
-  name: "test.run", summary: "Run tests in the open Unity Editor and return the final test result.",
-  description: "Runs EditMode or PlayMode tests through the open Unity Editor Test Runner. The same requestId resumes a completed callback terminal after a lost response; a running test run is never replayed.",
+  name: "test.run", summary: "Run filtered EditMode or PlayMode tests and return a durable terminal result.",
+  description: "Runs EditMode or PlayMode tests through the open Unity Test Runner. Filter directly with exact testNames, groupNames, categoryNames, or assemblyNames; omit filters to run the selected platform suite. The same requestId resumes a completed RunFinished terminal after response loss, while an accepted run is never replayed. xml=true adds a bounded NUnit XML artifact with hash and size proof.",
   group: "test", target: "editor", destructiveHint: false, timeoutMs: 600_000, sideEffects: ["session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge",
-  examples: [{ description: "Run EditMode tests in the open Editor.", argv: ["tools", "run", "test.run", "--input", "{\"platform\":\"EditMode\"}"] }],
+  examples: [
+    { description: "Run all EditMode tests in the open Editor.", argv: ["tools", "run", "test.run", "--input", "{\"platform\":\"EditMode\"}"] },
+    { description: "Run one exact PlayMode test with XML proof.", argv: ["tools", "run", "test.run", "--input", "{\"platform\":\"PlayMode\",\"testNames\":[\"Game.Tests.SpawnTest\"],\"xml\":true}"] },
+  ],
   async execute(request, context) {
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
     const state = await waitForEditorTransitionEnd(context, childId(context.requestId, "_test_state"), deadline);

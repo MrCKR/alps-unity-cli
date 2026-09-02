@@ -10,9 +10,9 @@ async function runPackageResolve(_request: PackageResolveRequest, context: ToolC
 }
 
 export default defineTool<PackageResolveRequest, PackageResolveResult>({
-  name: "package.resolve", summary: "Resolve packages in the open Unity Editor and return PackageInfo proof.",
-  description: "Resolves the selected open Unity project through Unity PackageManager and returns only a terminal PackageInfo readback. This operation requires one verified live Editor session.",
-  group: "package", destructiveHint: true, sideEffects: ["session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
+  name: "package.resolve", summary: "Resolve packages in the live EditMode Editor and return durable PackageInfo proof.",
+  description: "EditMode only. Dispatches Unity PackageManager Resolve once, waits for an explicit List fence, then requires fresh PackageInfo, manifest, and packages-lock snapshots to remain stable before returning. Response loss reattaches to the same durable root without replaying Resolve; timeout returns E_EXECUTION_TIMEOUT and requires business-state inspection.",
+  group: "package", destructiveHint: true, sideEffects: ["package-resolve", "asset-import", "session-affecting"], playModeSupport: "editor-only", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
   examples: [{ description: "Resolve packages in the open Editor.", argv: ["tools", "run", "package.resolve"] }],
   async execute(request, context) { return runPackageResolve(request, context); }
 });

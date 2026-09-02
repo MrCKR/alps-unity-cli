@@ -8,9 +8,7 @@ import { contractToolNames, discoverLiveTools, readCsSources, readEditorCsSource
 
 const SCENE_COMMANDS = [
   "scene.active",
-  "scene.build-settings",
   "scene.create",
-  "scene.data",
   "scene.gameobject",
   "scene.gameobject.component",
   "scene.gameobject.components",
@@ -25,23 +23,23 @@ const SCENE_COMMANDS = [
   "scene.view-frame"
 ];
 
-test("scene group is contract-discovered with 16 tools", () => {
+test("scene group is contract-discovered without duplicate deep-read or Build Settings entries", () => {
   assert.deepEqual(contractToolNames("scene"), [...SCENE_COMMANDS].sort());
 });
 
 test("scene live descriptors expose expected read/write semantics", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "scene.active", summary: "Read active scene.", description: "Read active scene.", group: "scene", outputSchema: { type: "object", properties: { scene: { type: "object" } } } }),
-    makeLiveTool({ name: "scene.build-settings", summary: "Read build settings.", description: "Read build settings.", group: "scene", outputSchema: { type: "object", properties: { scenes: { type: "array" } } } }),
     makeLiveTool({ name: "scene.list-opened", summary: "List opened scenes.", description: "List opened scenes.", group: "scene", outputSchema: { type: "object", properties: { scenes: { type: "array" } } } }),
-    makeLiveTool({ name: "scene.data", summary: "Read scene data.", description: "Read scene data.", group: "scene", outputSchema: { type: "object", properties: { nodes: { type: "array" } } } }),
+    makeLiveTool({ name: "scene.gameobject", summary: "Read one GameObject summary.", description: "Read one selected GameObject after bounded hierarchy discovery.", group: "scene", outputSchema: { type: "object", properties: { gameObject: { type: "object" } } } }),
+    makeLiveTool({ name: "scene.hierarchy", summary: "Read a bounded hierarchy page.", description: "Read a bounded hierarchy page with numeric continuation.", group: "scene", outputSchema: { type: "object", properties: { items: { type: "array" } } } }),
     makeLiveTool({ name: "scene.create", summary: "Create a scene.", description: "Create a scene.", group: "scene", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
     makeLiveTool({ name: "scene.save", summary: "Save a scene.", description: "Save a scene.", group: "scene", destructiveHint: true, supportsDryRun: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "scene.unload", summary: "Unload a scene.", description: "Unload a scene.", group: "scene", supportsDryRun: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "scene.view-frame", summary: "Frame the Scene view.", description: "Frame the Scene view.", group: "scene", playModeSupport: "editor-only" })
   );
 
-  for (const name of ["scene.active", "scene.build-settings", "scene.list-opened", "scene.data"]) {
+  for (const name of ["scene.active", "scene.list-opened", "scene.gameobject", "scene.hierarchy"]) {
     const tool = tools.get(name)!;
     assert.equal(tool.destructiveHint, false, `${name} non-destructive`);
     assert.equal(tool.playModeSupport, "supported", `${name} play mode supported`);
@@ -65,7 +63,7 @@ test("scene live descriptors expose expected read/write semantics", async () => 
 });
 
 test("bridge specs resolve for scene tools", () => {
-  for (const [cmd, toolName] of [["active", "scene.active"], ["build-settings", "scene.build-settings"], ["create", "scene.create"], ["load", "scene.load"], ["save", "scene.save"], ["unload", "scene.unload"], ["set-active", "scene.set-active"], ["list-opened", "scene.list-opened"], ["data", "scene.data"], ["view-frame", "scene.view-frame"]] as const) {
+  for (const [cmd, toolName] of [["active", "scene.active"], ["create", "scene.create"], ["load", "scene.load"], ["save", "scene.save"], ["unload", "scene.unload"], ["set-active", "scene.set-active"], ["list-opened", "scene.list-opened"], ["gameobject", "scene.gameobject"], ["hierarchy", "scene.hierarchy"], ["view-frame", "scene.view-frame"]] as const) {
     const spec = bridgeCommandRegistry.lookup("scene", cmd);
     assert.equal(spec?.bridgeCommand, "project-tool.run", `scene ${cmd} should route via project-tool.run`);
     assert.equal(spec?.toolName, toolName, `scene ${cmd} toolName should match`);
@@ -108,18 +106,23 @@ test("scene.load resolves a unique scene asset name before opening", async () =>
   assert.match(load, /Input = new Request \{ Name = "Main" \}/);
 });
 
-test("scene.list-opened and scene.data are IUnityCliTool returning typed Result", async () => {
+test("scene.gameobject and bounded hierarchy are the retained typed readers", async () => {
   const listSource = await readFile(new URL("../unitypkg/Editor/Tools/scene/list-opened.cs", import.meta.url), "utf8");
-  assert.match(listSource, /class SceneListOpenedTool : IUnityCliTool</, "SceneListOpened should be an IUnityCliTool");
-  assert.match(listSource, /Name = "scene\.list-opened"/, "list-opened tool name");
-  const dataSource = await readFile(new URL("../unitypkg/Editor/Tools/scene/data.cs", import.meta.url), "utf8");
-  assert.match(dataSource, /class SceneDataTool : IUnityCliTool</, "SceneData should be an IUnityCliTool");
-  assert.match(dataSource, /Name = "scene\.data"/, "data tool name");
+  const gameObjectSource = await readFile(new URL("../unitypkg/Editor/Tools/scene/gameobject.cs", import.meta.url), "utf8");
+  const hierarchySource = await readFile(new URL("../unitypkg/Editor/Tools/scene/hierarchy.cs", import.meta.url), "utf8");
+  assert.match(listSource, /class SceneListOpenedTool : IUnityCliTool</);
+  assert.match(gameObjectSource, /Name = "scene\.gameobject"[\s\S]*PlayModeSupport = "supported"/);
+  assert.match(gameObjectSource, /bounded scene\.hierarchy or go\.find discovery/);
+  assert.match(hierarchySource, /Math\.Min\(request\.MaxDepth \?\? 1, 16\)/);
+  assert.match(hierarchySource, /Math\.Min\(request\.PageSize \?\? 50, 500\)/);
+  assert.match(hierarchySource, /NextCursor = next/);
 });
 
-test("scene bridge spec forwards structured --input fields for file ops and data", async () => {
+test("scene bridge spec forwards structured file, GameObject, and bounded hierarchy input", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/scene.js", import.meta.url), "utf8");
   assert.match(spec, /stringValue\(structured\.path\)/, "sceneFileArgs should forward structured path");
-  assert.match(spec, /numberValue\(structured\.maxDepth\)/, "sceneDataArgs should forward structured maxDepth");
+  assert.match(spec, /numberValue\(structured\.maxDepth\)/, "sceneHierarchyArgs should forward structured maxDepth");
+  assert.match(spec, /numberValue\(structured\.pageSize\)/, "sceneHierarchyArgs should forward structured pageSize");
+  assert.match(spec, /sceneGameObjectReadArgs/);
   assert.match(spec, /boolValue\(s\.frameAll\)/, "view-frame should forward structured frameAll");
 });

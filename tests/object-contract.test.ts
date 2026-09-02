@@ -166,13 +166,14 @@ test("C# paged capabilities return nextCursor in the same numeric domain as curs
   assert.match(source, /long\? NextCursor\s*\{/);
 });
 
-test("no duplicate main entry: go.inspect stays lightweight, object.get-data is the deep reader", async () => {
+test("scene.gameobject stays lightweight while object.get-data owns deep reads", async () => {
   const tools = await discoverLiveTools(
-    makeLiveTool({ name: "go.inspect", summary: "Inspect a GameObject.", description: "Inspect a GameObject with a lightweight summary.", group: "go" }),
+    makeLiveTool({ name: "scene.gameobject", summary: "Read one GameObject summary.", description: "Read one lightweight GameObject summary.", group: "scene" }),
     makeLiveTool({ name: "object.get-data", summary: "Read serialized object data.", description: "Read deep serialized object data.", group: "object" })
   );
-  const inspect = tools.get("go.inspect")!;
+  const gameObject = tools.get("scene.gameobject")!;
   const getData = tools.get("object.get-data")!;
-  assert.notEqual(inspect.name, getData.name);
-  assert.ok(getData.description.toLowerCase().includes("deep"));
+  assert.notEqual(gameObject.name, getData.name);
+  assert.match(gameObject.description, /lightweight/i);
+  assert.match(getData.description, /deep/i);
 });

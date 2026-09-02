@@ -151,8 +151,8 @@ async function hash(path: string): Promise<string> { return createHash("sha256")
 
 export default defineTool<PackageDeployRequest, PackageDeployResult>({
   name: "package.deploy", summary: "Deploy a local Unity package source folder into Packages/<packageName> with an automatic restore backup.",
-  description: "Deploy a local Unity package source folder into the target project's Packages/<packageName> directory. The source folder must contain package.json with name/version and must be outside the target project's Packages directory. If a package directory already exists, package.deploy backs it up under Packages/.unitycli_deploy_backups before copying the source. Destructive: writes project package files and can trigger Unity import/compile. Supports --dry-run to preview backup/copy effects without writing.",
-  group: "package", destructiveHint: true, supportsDryRun: true, sideEffects: ["project-file-write", "project-file-delete", "session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
+  description: "EditMode only. Deploy one local folder containing package.json into Packages/<packageName>, preserving one bounded restore backup when a target exists. The file tree is written once by the durable worker, then Unity PackageManager Resolve, PackageInfo, path, and tree-hash readback prove the imported package. dryRun previews backup/copy effects; timeout never authorizes replay.",
+  group: "package", destructiveHint: true, supportsDryRun: true, sideEffects: ["project-file-write", "project-file-delete", "asset-import", "session-affecting"], playModeSupport: "editor-only", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
   examples: [{ description: "Preview deploying a local package", argv: ["tools", "run", "package.deploy", "--input", "{\"source\":\"./Packages/my-package\"}", "--dry-run"] }],
   async execute(request, context) { return runPackageDeploy(request, context); }
 });

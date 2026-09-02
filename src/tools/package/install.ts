@@ -62,9 +62,9 @@ function installPlan(value: Record<string, unknown>): InstallPlan {
 async function hash(path: string): Promise<string> { return createHash("sha256").update(await readFile(path)).digest("hex"); }
 
 export default defineTool<PackageInstallRequest, PackageInstallResult>({
-  name: "package.install", summary: "Install a package and prove it through the open Unity Editor.",
-  description: "Writes a prevalidated manifest dependency once, then requires a terminal live PackageInfo resolve proof.",
-  group: "package", destructiveHint: true, sideEffects: ["manifest-change", "session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
+  name: "package.install", summary: "Install one exact package version in EditMode and return durable Unity resolve proof.",
+  description: "EditMode only. Prevalidates one exact package name/version, writes Packages/manifest.json once under the durable root, then dispatches Unity PackageManager Resolve and returns only after fresh manifest, lock, and PackageInfo readback prove the installed version. Timeout never implies rollback or replay.",
+  group: "package", destructiveHint: true, sideEffects: ["manifest-change", "asset-import", "session-affecting"], playModeSupport: "editor-only", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
   examples: [{ description: "Install a package.", argv: ["tools", "run", "package.install", "--input", "{\"name\":\"com.unity.textmeshpro\",\"version\":\"3.0.7\"}"] }],
   async execute(request, context) { return runPackageInstall(request, context); }
 });

@@ -25,7 +25,7 @@ namespace UnityCli
             public ToolDescriptor Describe() => new()
             {
                 Name = "scene.gameobject", Summary = "Read one GameObject summary by id, hierarchy path, or name without modifying the scene.",
-                Description = "Read one GameObject's lightweight scene summary by id, hierarchy path, or name. Use this before go.inspect, component.get, object.get-data, or mutation tools to confirm the stable path/id. Does not modify the scene; set includeComponents=false when only the reusable GameObject reference is needed.",
+                Description = "Read one GameObject's lightweight scene summary by id, hierarchy path, or name in Edit or Play mode. Use this after bounded scene.hierarchy or go.find discovery and before component.get, object.get-data, or mutation Tools to confirm a stable path/id. Does not modify the scene; set includeComponents=false when only the reusable reference is needed.",
                 DestructiveHint = false,
                 Group = "scene", Target = "editor", PlayModeSupport = "supported",
                 Examples = new[] { new ToolExample { Description = "Read the main camera object", Input = new Request { Target = "Main Camera", IncludeComponents = true } }, new ToolExample { Description = "Read only the reusable object reference", Input = new Request { Target = "Main Camera", IncludeComponents = false } } }

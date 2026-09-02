@@ -1062,8 +1062,8 @@ export function routeCapabilityFixtureInput(input, name, options) {
   if (["reflect.member", "reflect.search", "reflect.type"].includes(name) && typeof options?.reflect_cache_dir === "string")
     return { ...input, reflectDir: options.reflect_cache_dir };
   if ([
-    "package.registry.clear", "package.registry.get", "package.registry.set",
-    "package.scoped-registry.add", "package.scoped-registry.list", "package.scoped-registry.remove"
+    "package.registry.clear", "package.registry.set",
+    "package.scoped-registry.add", "package.scoped-registry.remove"
   ].includes(name) && typeof options?.project === "string" && !Object.hasOwn(input, "project")) return { ...input, project: options.project };
   return input;
 }
@@ -1777,14 +1777,7 @@ async function cleanupOwnedPackageCase(m, caseId, name, record, flags, project) 
     }, { cleanup: { sourceCase: caseId, packageId: target.packageId, packageState: true }, retryAssertion: true }, project);
     stopAfterTerminalFailure(ready);
 
-    const infoDescriptor = await getDescriptor(m, "tool", "package.info");
-    return m.call(`${caseId}.cleanup.package.info`, argvFor("tool", "package.info", { name: target.packageId, project }, []), (e, r) => {
-      const issue = r.exitCode === 0 ? assertPositiveSuccess(e, infoDescriptor?.resultSchema ?? {}) : `package.info cleanup readback exited ${r.exitCode}.`;
-      if (issue) return issue;
-      return e?.data?.package?.name === target.packageId && e.data.package.source === "registry"
-        ? null
-        : `package.info did not prove ${target.packageId} restored to registry source.`;
-    }, { cleanup: { sourceCase: caseId, capability: "package.info", packageId: target.packageId, packageState: true } }, project);
+    return ready;
   }
 
   const cleanups = {

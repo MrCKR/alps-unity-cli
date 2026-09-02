@@ -288,6 +288,8 @@ export async function bindLivePackageProject(context: ToolContext, operation: st
   const state = await waitForEditorTransitionEnd(context, childRequestId(context.requestId, "package-state"), deadline);
   if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", `package.${operation} cannot start while the Editor is blocked.`, ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
   rejectUnavailableEditorState(state, `package.${operation}`);
+  if (state.state.playMode.known !== true || state.state.playMode.value !== "edit")
+    throw new StructuredToolError("E_TOOL_PLAYMODE_UNAVAILABLE", `package.${operation} requires Edit Mode because Unity PackageManager Resolve cannot be dispatched safely in Play Mode.`, ["Exit Play Mode, wait for editor.state to report ready with playMode=edit, then submit a new request."], { toolName: `package.${operation}`, playModeSupport: "editor-only" });
   if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", `package.${operation} could not bind one verified Editor session.`, ["Inspect editor.state and retry after the session is stable."]);
   context.projectPath = state.identity.canonicalProjectPath;
   return { instanceId: state.identity.instanceId, expectedEditorSessionId: state.session.editorSessionId };

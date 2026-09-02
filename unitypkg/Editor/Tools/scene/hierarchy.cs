@@ -71,7 +71,7 @@ namespace UnityCli
         {
             Name = "scene.hierarchy",
             Summary = "Read a lightweight, paged hierarchy of active scene GameObjects.",
-            Description = "Read a lightweight, paged hierarchy of active scene GameObjects. Use parent to list a subtree, maxDepth to bound recursion, nameFilter/filter to narrow results, and includeComponents only when component previews are needed. For deep object or component fields, use go.inspect, object.get-data, or component.get after selecting a stable path/id.",
+            Description = "Read a lightweight, paged hierarchy in Edit or Play mode. Use parent for one subtree, clamp maxDepth to 0..16, filter by query/name/component, and request component previews only when needed. pageSize is clamped to 1..500 with numeric nextCursor. Read one selected object with scene.gameobject; use object.get-data or component.get for deep fields.",
             Group = "scene",
             DestructiveHint = false,
             Target = "editor",

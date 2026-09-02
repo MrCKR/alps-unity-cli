@@ -65,9 +65,9 @@ function removePlan(value: Record<string, unknown>): RemovePlan {
 async function hash(path: string): Promise<string> { return createHash("sha256").update(await readFile(path)).digest("hex"); }
 
 export default defineTool<PackageRemoveRequest, PackageRemoveResult | PackageRemoveDryRunResult>({
-  name: "package.remove", summary: "Remove a package and prove it absent through the open Unity Editor.",
-  description: "Writes a prevalidated manifest removal once, then requires a terminal live PackageInfo resolve proof.",
-  group: "package", destructiveHint: true, supportsDryRun: true, sideEffects: ["manifest-change", "session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
+  name: "package.remove", summary: "Remove one manifest package in EditMode and return durable Unity absence proof.",
+  description: "EditMode only. Prevalidates dependents, optionally previews with dryRun, removes the exact manifest dependency once, then dispatches Unity PackageManager Resolve and returns only after fresh manifest, lock, and PackageInfo readback prove absence. Timeout never implies rollback or replay.",
+  group: "package", destructiveHint: true, supportsDryRun: true, sideEffects: ["manifest-change", "asset-import", "session-affecting"], playModeSupport: "editor-only", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
   examples: [{ description: "Remove a package.", argv: ["tools", "run", "package.remove", "--input", "{\"name\":\"com.unity.textmeshpro\"}"] }],
   async execute(request, context) { return runPackageRemove(request, context); }
 });
