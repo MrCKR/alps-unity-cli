@@ -153,9 +153,8 @@ namespace UnityCli
             var command = FindAttribute(method, OfficialCliCommandAttribute);
             var name = ConstructorString(command, 0, "name", method);
             var description = ConstructorString(command, 1, "description", method);
-            if (string.IsNullOrWhiteSpace(name) || !string.Equals(name, name.Trim(), StringComparison.Ordinal) || name.Any(char.IsWhiteSpace))
-                throw new InvalidOperationException("Official CLI command name must be one non-empty token without whitespace: " + MethodIdentity(method) + ".");
-            var toolName = OfficialAttributeToolPrefix + name;
+            var toolName = OfficialAttributeToolPrefix + (name ?? string.Empty);
+            ValidateProjectToolName(toolName);
             if (string.IsNullOrWhiteSpace(description))
                 throw new InvalidOperationException("Official CLI command description is required: " + MethodIdentity(method) + ".");
 

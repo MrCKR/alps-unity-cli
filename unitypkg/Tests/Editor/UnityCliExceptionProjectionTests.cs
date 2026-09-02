@@ -33,6 +33,11 @@ namespace UnityCli.Tests
             var deepResult = UnityCliExceptionProjection.Project(deep);
             Assert.That(deepResult.Causes, Has.Count.EqualTo(UnityCliExceptionProjection.MaxCauseDepth));
             Assert.That(deepResult.CauseTextBytes, Is.LessThanOrEqualTo(UnityCliExceptionProjection.MaxCauseTextBytes));
+            Assert.That(deepResult.CauseTraversalCount, Is.EqualTo(UnityCliExceptionProjection.MaxCauseDepth + 5));
+            Assert.That(deepResult.PublicMessage, Is.EqualTo(new string('z', 4096)));
+            Assert.That(deepResult.DeepestMessage, Is.EqualTo(new string('z', 4096)));
+            Assert.That(deepResult.Causes[UnityCliExceptionProjection.MaxCauseDepth - 1]["depth"], Is.EqualTo((long)(UnityCliExceptionProjection.MaxCauseDepth + 4)));
+            Assert.That(deepResult.Causes[UnityCliExceptionProjection.MaxCauseDepth - 1]["message"], Is.EqualTo(new string('z', 4096)));
             Assert.That(deepResult.Truncated, Is.True);
 
             var first = new InvalidOperationException("first");
@@ -46,6 +51,22 @@ namespace UnityCli.Tests
             Assert.That(cycleResult.Causes, Has.Count.EqualTo(2));
             Assert.That(cycleResult.Truncated, Is.True);
             Assert.That(cycleResult.PublicMessage, Is.EqualTo("second"));
+            Assert.That(cycleResult.CauseTraversalCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void TraversalWorkRemainsHardBoundedBeyondThePublishedCauseDepth()
+        {
+            Exception deep = new Exception("terminal-beyond-traversal-budget");
+            for (var index = 0; index < UnityCliExceptionProjection.MaxCauseTraversal + 20; index++)
+                deep = new InvalidOperationException("wrapper-" + index, deep);
+
+            var result = UnityCliExceptionProjection.Project(deep);
+
+            Assert.That(result.CauseTraversalCount, Is.EqualTo(UnityCliExceptionProjection.MaxCauseTraversal));
+            Assert.That(result.Causes, Has.Count.EqualTo(UnityCliExceptionProjection.MaxCauseDepth));
+            Assert.That(result.CauseTextBytes, Is.LessThanOrEqualTo(UnityCliExceptionProjection.MaxCauseTextBytes));
+            Assert.That(result.Truncated, Is.True);
         }
     }
 }

@@ -4,6 +4,7 @@ import { failure } from "./output.js";
 import type { CliResult } from "./types.js";
 import type { AnyJson } from "./schema/any-json.js";
 import { validateSchema } from "./schema/validator.js";
+import { isRegisteredToolName } from "./tool-name.js";
 
 export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
   projectTools?: ToolMetadata[];
@@ -37,7 +38,7 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
   }
   const descriptor = value as Record<string, unknown>;
   const name = stringProp(descriptor, "name");
-  if (!name) {
+  if (!isRegisteredToolName(name)) {
     return undefined;
   }
   const summary = stringProp(descriptor, "summary");
@@ -90,7 +91,7 @@ function projectDescriptorInvalidFields(value: unknown): string[] {
   const name = stringProp(descriptor, "name");
   const inputSchema = objectProp(descriptor, "inputSchema");
   const checks: Array<[string, boolean]> = [
-    ["name", !!name], ["summary", !!stringProp(descriptor, "summary")], ["description", !!stringProp(descriptor, "description")],
+    ["name", isRegisteredToolName(name)], ["summary", !!stringProp(descriptor, "summary")], ["description", !!stringProp(descriptor, "description")],
     ["group", !!stringProp(descriptor, "group")], ["inputSchema", !!inputSchema], ["outputSchema", !!objectProp(descriptor, "outputSchema")],
     ["destructiveHint", booleanProp(descriptor, "destructiveHint") !== undefined], ["supportsDryRun", booleanProp(descriptor, "supportsDryRun") !== undefined],
     ["playModeSupport", !!playModeSupportProp(descriptor, "playModeSupport")], ["target", !!toolTargetProp(descriptor, "target")],

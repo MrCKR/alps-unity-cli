@@ -59,14 +59,21 @@ namespace UnityCli
 
             var result = ExecuteCodeSource(request, source, cancellationToken);
             WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
-            object envelope = result.Ok
-                ? (object)UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, result.Data)
-                : UnityCli.Protocol.ProtocolEnvelopeFactory.Error(request.RequestId, result.ErrorCode, BoundedText(result.ErrorMessage, 4096), result.Details, result.NextActions);
-            var serialized = UnityCliSerializer.Serialize(envelope);
-            if (Encoding.UTF8.GetByteCount(serialized) > MaxCodeTerminalBytes)
-                return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Runtime Code completed, but its bounded terminal could not be represented safely.", null, new[] { "Inspect the affected business state before submitting another mutation." }));
+            var serialized = SerializeCodeExecutionResult(request.RequestId, result);
             if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "code.exec", ResolveRequestCompletionContract(request), result.Data);
             return serialized;
+        }
+
+        /// <summary>所有 code.exec terminal 统一经过同一 Bridge envelope 与总 byte 上限。</summary>
+        private static string SerializeCodeExecutionResult(string requestId, CodeExecutionResult result)
+        {
+            object envelope = result.Ok
+                ? (object)UnityCli.Protocol.ProtocolEnvelopeFactory.Success(requestId, result.Data)
+                : UnityCli.Protocol.ProtocolEnvelopeFactory.Error(requestId, result.ErrorCode, BoundedText(result.ErrorMessage, 4096), result.Details, result.NextActions);
+            var serialized = UnityCliSerializer.Serialize(envelope);
+            return Encoding.UTF8.GetByteCount(serialized) <= MaxCodeTerminalBytes
+                ? serialized
+                : UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime Code completed, but its bounded terminal could not be represented safely.", null, new[] { "Inspect the affected business state before submitting another mutation." }));
         }
 
         // 编译源码并执行约定的 Run 方法，收集编译诊断、输出和运行时异常。

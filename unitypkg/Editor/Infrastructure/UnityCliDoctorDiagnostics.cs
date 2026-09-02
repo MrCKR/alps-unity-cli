@@ -43,12 +43,11 @@ namespace UnityCli
             };
         }
 
-        /// <summary>只读取 registration 时冻结的 catalog 摘要，不刷新 fingerprint 或重建 descriptor。</summary>
+        /// <summary>只复制 registration 时冻结的 catalog 摘要；缺失时立即 fail closed。</summary>
         private static object DoctorCatalogDiagnostic(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            DiscoverProjectTools();
-            return ProjectToolCatalogDiagnosticSnapshot();
+            return CatalogSnapshotReader.Read();
         }
 
         /// <summary>编译诊断独立于 catalog 和业务 admission，并保持条目、时间与字节上限。</summary>

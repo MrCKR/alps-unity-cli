@@ -174,11 +174,23 @@ namespace UnityCli
             StartListener();
         }
 
-        /// <summary>状态机调用的handoff attempt；返回后由调用方发布listener或fail closed。</summary>
+        /// <summary>handoff 与 Tool snapshot 均完成后才允许发布 listener；失败时整个 startup fail closed。</summary>
         private static bool CompleteBridgeStartup(out string handoffState, out string handoffError)
         {
             WriteLog("bridge_pipeline_handoff_started");
-            return UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError);
+            if (!UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError)) return false;
+            try
+            {
+                DiscoverProjectTools();
+                if (projectToolCatalogDiagnostics == null) throw new InvalidOperationException("Tool catalog snapshot was not published.");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                handoffState = "tool-registry-unhealthy";
+                handoffError = exception.GetType().Name + ": " + exception.Message;
+                return false;
+            }
         }
 
         private static void StartListener()

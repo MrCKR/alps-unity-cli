@@ -172,7 +172,7 @@ test("catalog and compile checks validate bounded business fields and stable cod
   const bridge = healthyDoctorBridge(fixture);
   const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, await doctorRuntime(fixture, async (payload) => {
     if (payload.command === "internal.doctor.catalog") {
-      return { ok: true, requestId: payload.requestId, data: { algorithm: "unity-cli-project-tool-fingerprint-v2", catalogFingerprint: "b".repeat(64), toolCount: 327, blockedCount: 1, blockedToolsTruncated: false, blockedTools: [{ name: "project.audit", message: "fingerprint changed", rePinValue: "sha256:abc" }] } };
+      return { ok: true, requestId: payload.requestId, data: { algorithm: "unity-cli-project-tool-fingerprint-v2", catalogFingerprint: "b".repeat(64), toolCount: 327, blockedCount: 1, blockedToolsTruncated: false, blockedTools: [{ name: "project.audit", message: "fingerprint changed", rePinValue: `unity-cli-project-tool-fingerprint-v2:${"c".repeat(64)}` }] } };
     }
     if (payload.command === "internal.doctor.compile") {
       return { ok: true, requestId: payload.requestId, data: { compiling: false, scanComplete: true, hasCompileErrors: true, compileErrorCount: 1, compileErrorsTruncated: false, compileErrors: ["Assets/Broken.cs(1,1): error CS1002"], nextActions: ["Fix the compiler error."] } };
@@ -190,6 +190,69 @@ test("catalog and compile checks validate bounded business fields and stable cod
   assert.equal(compile?.details?.code, "E_UNITY_COMPILE_FAILED");
   assert.equal(compile?.details?.compileErrorCount, 1);
   assert.deepEqual(compile?.details?.nextActions, ["Fix the compiler error."]);
+});
+
+test("doctor accepts a consistent bounded blocked Tool sample", async (t) => {
+  const fixture = await doctorFixture();
+  t.after(() => fixture.health.close());
+  const bridge = healthyDoctorBridge(fixture);
+  const blockedTools = Array.from({ length: 32 }, (_, index) => ({
+    name: `project.tool-${index}`,
+    message: "fingerprint changed",
+    rePinValue: `unity-cli-project-tool-fingerprint-v2:${index.toString(16).padStart(64, "0")}`,
+  }));
+  const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, await doctorRuntime(fixture, async (payload) => {
+    if (payload.command === "internal.doctor.catalog") {
+      return { ok: true, requestId: payload.requestId, data: { algorithm: "unity-cli-project-tool-fingerprint-v2", catalogFingerprint: "b".repeat(64), toolCount: 327, blockedCount: 33, blockedToolsTruncated: true, blockedTools } };
+    }
+    return bridge(payload);
+  }), "req_doctor_truncated_catalog");
+  const catalog = checks(result).find((check) => check.name === "catalog_integrity");
+  assert.equal(catalog?.status, "fail");
+  assert.equal(catalog?.details?.blockedCount, 33);
+  assert.equal(catalog?.details?.blockedToolsTruncated, true);
+  assert.equal((catalog?.details?.blockedTools as unknown[]).length, 32);
+});
+
+test("doctor rejects catalog DTO field, byte, name, and aggregate boundary violations", async (t) => {
+  const fixture = await doctorFixture();
+  t.after(() => fixture.health.close());
+  const bridge = healthyDoctorBridge(fixture);
+  const validBlocked = {
+    name: "project.audit",
+    message: "fingerprint changed",
+    rePinValue: `unity-cli-project-tool-fingerprint-v2:${"c".repeat(64)}`,
+  };
+  const base = {
+    algorithm: "unity-cli-project-tool-fingerprint-v2",
+    catalogFingerprint: "b".repeat(64),
+    toolCount: 327,
+    blockedCount: 1,
+    blockedToolsTruncated: false,
+    blockedTools: [validBlocked],
+  };
+  const invalidCatalogs = [
+    { ...base, internalPath: "forbidden" },
+    { ...base, blockedTools: [{ ...validBlocked, internalPath: "forbidden" }] },
+    { ...base, blockedTools: [{ ...validBlocked, name: "project.数据" }] },
+    { ...base, blockedTools: [{ ...validBlocked, name: `project.${"a".repeat(129)}` }] },
+    { ...base, blockedTools: [{ ...validBlocked, message: "m".repeat(1025) }] },
+    { ...base, blockedToolsTruncated: true },
+    { ...base, blockedCount: 2 },
+    { ...base, toolCount: 10_001 },
+    { ...base, blockedTools: Array.from({ length: 32 }, (_, index) => ({ ...validBlocked, name: `project.tool-${index}`, message: "\u0001".repeat(1024) })), blockedCount: 32 },
+  ];
+
+  for (const [index, catalog] of invalidCatalogs.entries()) {
+    const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, await doctorRuntime(fixture, async (payload) => {
+      if (payload.command === "internal.doctor.catalog") return { ok: true, requestId: payload.requestId, data: catalog };
+      return bridge(payload);
+    }), `req_doctor_invalid_catalog_${index}`);
+    const catalogCheck = checks(result).find((check) => check.name === "catalog_integrity");
+    assert.equal(catalogCheck?.status, "fail");
+    assert.equal(catalogCheck?.details?.code, "E_BRIDGE_RESPONSE_INVALID");
+    assert.doesNotMatch(JSON.stringify(catalogCheck), /forbidden|数据/);
+  }
 });
 
 test("doctor warns about invalid registry records while preserving a valid strict identity", async (t) => {

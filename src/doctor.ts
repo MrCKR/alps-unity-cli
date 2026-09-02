@@ -6,6 +6,7 @@
  */
 
 import { getString } from "./args.js";
+import { Buffer } from "node:buffer";
 import { access, stat } from "node:fs/promises";
 import {
   inspectInstanceHealth,
@@ -30,9 +31,30 @@ import { readInstalledExtensions } from "./cli-commands/extensions.js";
 import { checkExtensionBundles, readExtensionInstallManifest, type ExtensionStatusCheck } from "./extensions/installer.js";
 import { failure, success } from "./output.js";
 import type { CliError, CliResult } from "./types.js";
+import { isRegisteredToolName } from "./tool-name.js";
 
 const DOCTOR_BUSINESS_TIMEOUT_MS = 10_000;
 const DOCTOR_BUSINESS_COMPLETION = "doctor-business-read-v1";
+const DOCTOR_CATALOG_ALGORITHM = "unity-cli-project-tool-fingerprint-v2";
+const MAX_DOCTOR_CATALOG_TOOLS = 10_000;
+const MAX_DOCTOR_BLOCKED_TOOLS = 32;
+const MAX_DOCTOR_BLOCKED_MESSAGE_BYTES = 1024;
+const MAX_DOCTOR_CATALOG_RESPONSE_BYTES = 64 * 1024;
+
+interface DoctorBlockedTool {
+  name: string;
+  message: string;
+  rePinValue: string;
+}
+
+interface DoctorCatalogData {
+  algorithm: typeof DOCTOR_CATALOG_ALGORITHM;
+  catalogFingerprint: string;
+  toolCount: number;
+  blockedCount: number;
+  blockedToolsTruncated: boolean;
+  blockedTools: DoctorBlockedTool[];
+}
 
 export interface DoctorRuntime extends BridgeRuntime {
   dataDir: string;
@@ -256,14 +278,9 @@ async function checkCatalogIntegrity(
 ): Promise<DoctorCheck> {
   const result = await privateDoctorRead("catalog_integrity", "internal.doctor.catalog", flags, runtime, requestId, selected);
   if (isDoctorCheck(result)) return result;
-  const data = record(result.data);
-  const blockedTools = Array.isArray(data?.blockedTools) ? data.blockedTools : undefined;
-  if (!data || !isNonNegativeInteger(data.toolCount) || !isNonNegativeInteger(data.blockedCount)
-    || typeof data.catalogFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(data.catalogFingerprint)
-    || typeof data.blockedToolsTruncated !== "boolean" || !blockedTools || blockedTools.length > 32) {
-    return invalidLiveCheck("catalog_integrity", "Catalog integrity read returned an invalid bounded DTO.");
-  }
-  const blockedCount = data.blockedCount as number;
+  const data = doctorCatalogData(result.data);
+  if (!data) return invalidLiveCheck("catalog_integrity", "Catalog integrity read returned an invalid bounded DTO.");
+  const blockedCount = data.blockedCount;
   return {
     name: "catalog_integrity",
     status: blockedCount > 0 ? "fail" : "pass",
@@ -277,7 +294,7 @@ async function checkCatalogIntegrity(
       toolCount: data.toolCount,
       blockedCount,
       blockedToolsTruncated: data.blockedToolsTruncated,
-      blockedTools,
+      blockedTools: data.blockedTools,
     },
   };
 }
@@ -516,7 +533,54 @@ function isDoctorCheck(value: PrivateDoctorRead): value is DoctorCheck {
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** catalog DTO 是闭集；sample、aggregate、字段与总 UTF-8 bytes 必须同时一致。 */
+function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
+  const data = exactRecord(value, ["algorithm", "catalogFingerprint", "toolCount", "blockedCount", "blockedToolsTruncated", "blockedTools"]);
+  if (!data) return undefined;
+  const serialized = JSON.stringify(data);
+  if (serialized === undefined || Buffer.byteLength(serialized, "utf8") > MAX_DOCTOR_CATALOG_RESPONSE_BYTES
+    || data.algorithm !== DOCTOR_CATALOG_ALGORITHM
+    || typeof data.catalogFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(data.catalogFingerprint)
+    || !isNonNegativeInteger(data.toolCount) || data.toolCount > MAX_DOCTOR_CATALOG_TOOLS
+    || !isNonNegativeInteger(data.blockedCount) || data.blockedCount > data.toolCount
+    || typeof data.blockedToolsTruncated !== "boolean" || !Array.isArray(data.blockedTools)) return undefined;
+
+  const expectedSampleCount = Math.min(data.blockedCount, MAX_DOCTOR_BLOCKED_TOOLS);
+  if (data.blockedTools.length !== expectedSampleCount
+    || data.blockedToolsTruncated !== (data.blockedCount > MAX_DOCTOR_BLOCKED_TOOLS)) return undefined;
+
+  const blockedTools: DoctorBlockedTool[] = [];
+  const names = new Set<string>();
+  for (const value of data.blockedTools) {
+    const item = exactRecord(value, ["name", "message", "rePinValue"]);
+    if (!item || !isRegisteredToolName(item.name) || names.has(item.name)
+      || typeof item.message !== "string" || item.message.length === 0
+      || Buffer.byteLength(item.message, "utf8") > MAX_DOCTOR_BLOCKED_MESSAGE_BYTES
+      || typeof item.rePinValue !== "string"
+      || !/^unity-cli-project-tool-fingerprint-v2:[a-f0-9]{64}$/.test(item.rePinValue)) return undefined;
+    names.add(item.name);
+    blockedTools.push({ name: item.name, message: item.message, rePinValue: item.rePinValue });
+  }
+
+  return {
+    algorithm: DOCTOR_CATALOG_ALGORITHM,
+    catalogFingerprint: data.catalogFingerprint,
+    toolCount: data.toolCount,
+    blockedCount: data.blockedCount,
+    blockedToolsTruncated: data.blockedToolsTruncated,
+    blockedTools,
+  };
+}
+
+function exactRecord(value: unknown, fields: readonly string[]): Record<string, unknown> | undefined {
+  const item = record(value);
+  if (!item) return undefined;
+  const allowed = new Set(fields);
+  const keys = Object.keys(item);
+  return keys.length === fields.length && keys.every((key) => allowed.has(key)) ? item : undefined;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
