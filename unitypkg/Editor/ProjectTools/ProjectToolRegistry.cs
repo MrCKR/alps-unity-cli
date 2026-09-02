@@ -3,13 +3,9 @@ using System;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CSharp;
@@ -29,45 +25,30 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private const string ProjectToolFingerprintAlgorithm = "unity-cli-project-tool-fingerprint-v2";
         private const string OfficialAttributeToolPrefix = "UnityPipeline_";
         private const string OfficialAttributeToolGroup = "UnityPipeline";
-        private static readonly Dictionary<string, RegisteredTool> ProjectTools = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
-        private static Dictionary<string, RegisteredTool> discoveryTools;
-        private static RegistryOwnershipResolver registryOwnership;
+        private static UnityCliToolCatalogSnapshot publishedProjectToolCatalog;
+        private static string projectToolCatalogFailure;
+        private static int projectToolCatalogConstructionCount;
+        internal static IUnityCliToolCatalogSnapshotReader ProjectToolCatalogSnapshotReader { get; } = new PublishedToolCatalogSnapshotReader();
 
-        private static void RegisterProjectTool(RegisteredTool definition)
+        private sealed class PublishedToolCatalogSnapshotReader : IUnityCliToolCatalogSnapshotReader
         {
-            if (definition == null || string.IsNullOrWhiteSpace(definition.Name) || string.IsNullOrWhiteSpace(definition.Summary) || definition.InvokeAsync == null)
-            {
-                throw new ArgumentException("Tool registration requires name, summary, and a typed async invoker.");
-            }
-            var target = discoveryTools ?? ProjectTools;
-            if (target.ContainsKey(definition.Name)) throw new InvalidOperationException("Duplicate tool registration: " + definition.Name);
-            if (definition.RequestType == null || definition.ResultType == null || string.IsNullOrWhiteSpace(definition.InputSchema) || string.IsNullOrWhiteSpace(definition.OutputSchema))
-            {
-                throw new ArgumentException("Tool registration requires request/result types and derived schemas: " + definition.Name);
-            }
-            if (definition.RequiredInput == null)
-            {
-                definition.RequiredInput = new string[0];
-            }
+            public UnityCliToolCatalogSnapshot Read() { return ReadPublishedProjectToolCatalog(); }
+        }
+
+        private static void RegisterProjectTool(UnityCliToolCatalogBuilder builder, RegisteredTool definition, UnityCliToolProviderKind providerKind)
+        {
+            if (builder == null) throw new ArgumentNullException("builder");
+            if (definition == null) throw new ArgumentNullException("definition");
             definition.Group = string.IsNullOrEmpty(definition.Group) ? ProjectToolGroupFromName(definition.Name) : definition.Group;
             definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
             definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
             definition.PlayModeSupport = NormalizeProjectToolPlayModeSupport(definition.PlayModeSupport, definition.Target);
-            if (!string.Equals(definition.ContractProfile, "native", StringComparison.Ordinal)
-                && !string.Equals(definition.ContractProfile, "official-attribute", StringComparison.Ordinal))
-            {
-                throw new ArgumentException("Tool registration requires a known contract profile: " + definition.Name);
-            }
-            ValidateOfficialAttributeNamespace(definition);
             definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
-            definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
-            definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "runtime-registration" : definition.DescriptorSource;
-            RefreshProjectToolFingerprint(definition);
-            target.Add(definition.Name, definition);
+            ValidateOfficialAttributeNamespace(definition);
+            builder.Add(definition, providerKind);
         }
 
         /// <summary>保留namespace只属于official attribute投影；任一owner违规使整轮pending registry作废。</summary>
@@ -82,20 +63,20 @@ namespace UnityCli
                 throw new InvalidOperationException("Native Tool cannot use the reserved UnityPipeline_ name prefix or UnityPipeline group: " + definition.Name + ".");
         }
 
-        private static void DiscoverProjectTools()
+        /// <summary>InitializeOnLoad静态构造函数调用一次；局部pending完整成功后才原子发布。</summary>
+        private static void InitializeProjectToolCatalog()
         {
-            if (projectToolsDiscovered) return;
-
-            var pending = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
+            if (projectToolCatalogConstructionCount != 0) return;
+            projectToolCatalogConstructionCount = 1;
+            var startedAt = DateTime.UtcNow;
+            var builder = new UnityCliToolCatalogBuilder();
             try
             {
-                discoveryTools = pending;
                 var assemblies = AppDomain.CurrentDomain.GetAssemblies();
                 var officialRoots = ConfigureOfficialAuthoringApi(assemblies);
                 var candidates = ToolProviderAssemblies(assemblies, officialRoots);
-                registryOwnership = RegistryOwnershipResolver.Load(candidates);
-                WriteLog("tool_discovery_started assemblies=" + assemblies.Length.ToString(CultureInfo.InvariantCulture)
-                    + " candidates=" + candidates.Count.ToString(CultureInfo.InvariantCulture));
+                builder.BeginDiscovery(assemblies.Length, candidates.Count);
+                var ownership = RegistryOwnershipResolver.Load(candidates);
                 foreach (var assembly in candidates)
                 {
                     Type[] types;
@@ -105,28 +86,54 @@ namespace UnityCli
                     foreach (var type in types)
                     {
                         if (type == null) continue;
-                        TryRegisterInterfaceProjectTool(assembly, type);
-                        TryRegisterOfficialAttributeTools(assembly, type);
+                        TryRegisterInterfaceProjectTool(builder, ownership, assembly, type);
+                        TryRegisterOfficialAttributeTools(builder, ownership, assembly, type);
                     }
                 }
-                WriteLog("tool_discovery_completed candidates=" + candidates.Count.ToString(CultureInfo.InvariantCulture)
-                    + " tools=" + pending.Count.ToString(CultureInfo.InvariantCulture));
 
-                ProjectTools.Clear();
-                foreach (var item in pending) ProjectTools.Add(item.Key, item.Value);
-                projectToolsDiscovered = true;
+                var snapshot = builder.Publish((long)Math.Ceiling((DateTime.UtcNow - startedAt).TotalMilliseconds));
+                Volatile.Write(ref publishedProjectToolCatalog, snapshot);
+                WriteLog("tool_catalog_initialized assemblies=" + snapshot.AssemblyCount.ToString(CultureInfo.InvariantCulture)
+                    + " providers=" + snapshot.ProviderAssemblyCount.ToString(CultureInfo.InvariantCulture)
+                    + " tools=" + snapshot.ToolCount.ToString(CultureInfo.InvariantCulture)
+                    + " builtIn=" + snapshot.BuiltInToolCount.ToString(CultureInfo.InvariantCulture)
+                    + " extension=" + snapshot.ExtensionToolCount.ToString(CultureInfo.InvariantCulture)
+                    + " projectInterface=" + snapshot.ProjectInterfaceToolCount.ToString(CultureInfo.InvariantCulture)
+                    + " officialAttribute=" + snapshot.OfficialAttributeToolCount.ToString(CultureInfo.InvariantCulture)
+                    + " elapsedMs=" + snapshot.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
             }
             catch (Exception exception)
             {
-                // 失败前从未写入公开 registry；下一次请求可在 Unity reload 后重新发现。
-                throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool registry discovery failed: " + exception.Message,
-                    new Dictionary<string, object> { { "registry", "tools" } },
-                    new[] { "Fix the extension manifest or capability implementation, then retry discovery.", "Run unitycli extensions doctor --project <path> to inspect extension installation state." }, true, 1000);
+                builder.Abort();
+                projectToolCatalogFailure = BoundedCatalogDiagnostic(ExceptionChain(exception));
+                WriteLog("tool_catalog_initialization_failed error=" + projectToolCatalogFailure);
             }
-            finally
-            {
-                discoveryTools = null;
-            }
+        }
+
+        private static bool ProjectToolCatalogReady()
+        {
+            return Volatile.Read(ref publishedProjectToolCatalog) != null;
+        }
+
+        /// <summary>所有后续入口只返回同一个published snapshot；失败domain内绝不重试或重建。</summary>
+        private static UnityCliToolCatalogSnapshot ReadPublishedProjectToolCatalog()
+        {
+            var snapshot = Volatile.Read(ref publishedProjectToolCatalog);
+            if (snapshot != null) return snapshot;
+            throw new BridgeCommandException(
+                "E_TOOL_REGISTRY_UNHEALTHY",
+                "Tool catalog initialization failed in the current Unity domain: " + (projectToolCatalogFailure ?? "catalog was not initialized"),
+                new Dictionary<string, object> { { "registry", "tools" } },
+                new[] { "Fix the Tool definition, then let Unity compile and reload the domain before retrying." },
+                true,
+                1000);
+        }
+
+        private static string BoundedCatalogDiagnostic(string value)
+        {
+            const int maxChars = 4096;
+            if (string.IsNullOrEmpty(value) || value.Length <= maxChars) return value ?? string.Empty;
+            return value.Substring(0, maxChars) + " [truncated]";
         }
 
         /// <summary>
@@ -161,7 +168,7 @@ namespace UnityCli
             return assemblies.Where(assembly => reachable.Contains(assembly.GetName().FullName)).ToList();
         }
 
-        private static void TryRegisterInterfaceProjectTool(Assembly assembly, Type type)
+        private static void TryRegisterInterfaceProjectTool(UnityCliToolCatalogBuilder builder, RegistryOwnershipResolver ownershipResolver, Assembly assembly, Type type)
         {
             if (type == null || type.IsAbstract || type.IsInterface) return;
 
@@ -207,12 +214,12 @@ namespace UnityCli
                 throw new InvalidOperationException("Tool descriptor is incomplete: " + type.FullName + ".");
 
             RegisteredTool definition;
-            var ownership = registryOwnership.Resolve(type);
+            var ownership = ownershipResolver.Resolve(type, descriptor.Name);
             try
             {
                 var factory = typeof(UnityCliBridge).GetMethod("CreateRegisteredTool", BindingFlags.Static | BindingFlags.NonPublic)
                     .MakeGenericMethod(reqType, resType);
-                definition = (RegisteredTool)factory.Invoke(null, new[] { instance, descriptor, assembly, type });
+                definition = (RegisteredTool)factory.Invoke(null, new object[] { instance, descriptor, ownership });
             }
             catch (Exception exception)
             {
@@ -220,25 +227,29 @@ namespace UnityCli
                 WriteLog("custom_tool_registration_failed type=" + type.FullName + " error=" + diagnostics);
                 throw new InvalidOperationException("Tool registration failed: " + type.FullName + ": " + diagnostics, exception);
             }
-            RegisterProjectTool(definition);
-            WriteLog("custom_tool_registered name=" + descriptor.Name + " source=IUnityCliTool type=" + type.FullName);
+            var providerKind = string.Equals(ownership, "built-in", StringComparison.Ordinal)
+                ? UnityCliToolProviderKind.BuiltIn
+                : string.Equals(ownership, "extension", StringComparison.Ordinal)
+                    ? UnityCliToolProviderKind.Extension
+                    : UnityCliToolProviderKind.ProjectInterface;
+            RegisterProjectTool(builder, definition, providerKind);
         }
 
         // 展开反射包装异常，确保 registry 失败能指向具体 schema/descriptor 根因。
         private static string ExceptionChain(Exception exception)
         {
+            const int maxDepth = 8;
             var messages = new List<string>();
-            for (var current = exception; current != null; current = current.InnerException)
+            for (var current = exception; current != null && messages.Count < maxDepth; current = current.InnerException)
             {
                 messages.Add(current.GetType().Name + ": " + current.Message);
             }
-            return string.Join(" -> ", messages.ToArray());
+            return BoundedCatalogDiagnostic(string.Join(" -> ", messages.ToArray()));
         }
 
-        private static RegisteredTool CreateRegisteredTool<TReq, TRes>(object instance, ToolDescriptor descriptor, Assembly assembly, Type implementationType)
+        private static RegisteredTool CreateRegisteredTool<TReq, TRes>(object instance, ToolDescriptor descriptor, string ownership)
         {
             var tool = (IUnityCliTool<TReq, TRes>)instance;
-            var ownership = registryOwnership.Resolve(implementationType);
             var completion = ResolveToolCompletionContract(descriptor, ownership);
             return new RegisteredTool
             {
@@ -246,30 +257,20 @@ namespace UnityCli
                 Summary = descriptor.Summary,
                 Description = descriptor.Description,
                 Group = string.IsNullOrEmpty(descriptor.Group) ? "custom" : descriptor.Group,
-                Descriptor = descriptor,
                 Source = ownership,
-                Ownership = ownership,
                 InputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
                 OutputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
                 DestructiveHint = descriptor.DestructiveHint,
-                SideEffects = descriptor.SideEffects ?? Array.Empty<string>(),
+                SideEffects = (descriptor.SideEffects ?? Array.Empty<string>()).ToArray(),
                 SupportsDryRun = descriptor.SupportsDryRun,
-                Permissions = descriptor.Permissions ?? Array.Empty<string>(),
-                RequiresPackages = descriptor.RequiresPackages ?? Array.Empty<string>(),
-                Examples = descriptor.Examples ?? Array.Empty<ToolExample>(),
+                Permissions = (descriptor.Permissions ?? Array.Empty<string>()).ToArray(),
+                RequiresPackages = (descriptor.RequiresPackages ?? Array.Empty<string>()).ToArray(),
+                Examples = UnityCliSerializer.Parse(UnityCliSerializer.Serialize(descriptor.Examples ?? Array.Empty<ToolExample>())),
                 Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
                 PlayModeSupport = string.IsNullOrEmpty(descriptor.PlayModeSupport) ? "editor-only" : descriptor.PlayModeSupport,
                 ContractProfile = "native",
                 DefaultTimeoutMs = descriptor.DefaultTimeoutMs <= 0 ? 30000 : descriptor.DefaultTimeoutMs,
                 MaxTimeoutMs = descriptor.MaxTimeoutMs <= 0 ? 600000 : descriptor.MaxTimeoutMs,
-                RequiredInput = Array.Empty<string>(),
-                RegisteredBy = "unity-editor-package",
-                DescriptorSource = "IUnityCliTool",
-                Assembly = assembly.GetName().Name,
-                Method = implementationType.FullName + ".ExecuteAsync",
-                Fingerprint = descriptor.Fingerprint,
-                PinnedFingerprint = descriptor.Fingerprint,
-                ExpectedFingerprint = descriptor.Fingerprint,
                 RequestType = typeof(TReq),
                 ResultType = typeof(TRes),
                 CompletionContract = completion,
@@ -323,9 +324,8 @@ namespace UnityCli
         private static UnityCliToolCompletionContract ResolveRegisteredCustomToolCompletionContract(string toolName)
         {
             if (string.IsNullOrWhiteSpace(toolName)) return null;
-            DiscoverProjectTools();
             RegisteredTool definition;
-            return ProjectTools.TryGetValue(toolName, out definition) ? definition.CompletionContract : null;
+            return ReadPublishedProjectToolCatalog().Tools.TryGetValue(toolName, out definition) ? definition.CompletionContract : null;
         }
 
         private static string ProjectToolGroupFromName(string name)
@@ -337,10 +337,10 @@ namespace UnityCli
 
         private static object ProjectToolList(UnityCli.Protocol.BridgeRequest request)
         {
-            DiscoverProjectTools();
+            var catalog = ReadPublishedProjectToolCatalog();
             return new Dictionary<string, object>
             {
-                { "tools", ProjectTools.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal).Select(ProjectToolDescriptorData).ToList() },
+                { "tools", catalog.Tools.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal).Select(ProjectToolDescriptorData).ToList() },
                 { "logPath", LogPath() }
             };
         }
@@ -349,33 +349,21 @@ namespace UnityCli
         {
             public string Name { get; set; }
             [UnityCliAnyJson] public object Input { get; set; }
-            public string ExpectedDescriptorFingerprint { get; set; }
             public string ArtifactDir { get; set; }
             public string ProjectPath { get; set; }
         }
 
         private static async ValueTask<object> ProjectToolRun(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
-            DiscoverProjectTools();
+            var catalog = ReadPublishedProjectToolCatalog();
             var args = request.DeserializeArgs<ProjectToolRunArgs>();
             var name = args.Name;
-            if (string.IsNullOrEmpty(name) || !ProjectTools.ContainsKey(name))
+            if (string.IsNullOrEmpty(name) || !catalog.Tools.ContainsKey(name))
             {
                 throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unitycli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 
-            var definition = ProjectTools[name];
-            // 门禁前刷新 live handler+descriptor 指纹，旧 discovery proof 在 domain reload/descriptor 变化后必须失效。
-            var fingerprintCheck = RefreshProjectToolFingerprint(definition);
-            if (!string.IsNullOrEmpty(args.ExpectedDescriptorFingerprint)
-                && !string.Equals(args.ExpectedDescriptorFingerprint, definition.Fingerprint, StringComparison.Ordinal))
-            {
-                throw new BridgeCommandException(
-                    "E_TOOL_DESCRIPTOR_CHANGED",
-                    "The Tool descriptor changed after discovery: " + name,
-                    new Dictionary<string, object> { { "toolName", name }, { "expectedFingerprint", args.ExpectedDescriptorFingerprint }, { "actualFingerprint", definition.Fingerprint } },
-                    new[] { "Run tools describe again against the selected Unity generation before constructing a new request." });
-            }
+            var definition = catalog.Tools[name];
             if (EditorApplication.isPlaying && string.Equals(definition.PlayModeSupport, "editor-only", StringComparison.OrdinalIgnoreCase))
             {
                 throw new BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE",
@@ -410,11 +398,6 @@ namespace UnityCli
                     new[] { "Use runtime-tool.run <name> or tools run <name> with a runtime target to execute this tool in Play Mode." });
             }
             var dryRun = request.Execution != null && request.Execution.DryRun == true;
-            if (fingerprintCheck.Blocked)
-            {
-                WriteLog("custom_tool_fingerprint_blocked requestId=" + request.RequestId + " name=" + name + " expected=" + fingerprintCheck.Expected + " actual=" + fingerprintCheck.Actual);
-                throw new BridgeCommandException("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message, ProjectToolFingerprintDetails(definition), ProjectToolFingerprintRePinSteps(definition));
-            }
             var timeoutMs = request.ExecutionTimeoutMs(definition.DefaultTimeoutMs, definition.MaxTimeoutMs);
 
             var inputJson = request.RawJsonArg("input") ?? "{}";
@@ -570,7 +553,6 @@ namespace UnityCli
                 { "examples", definition.Examples },
                 { "defaultTimeoutMs", definition.DefaultTimeoutMs },
                 { "completionContract", CompletionContractData(definition.CompletionContract) },
-                { "internalDescriptorFingerprint", definition.Fingerprint },
                 { "available", ToolAvailableNow(definition) }
             };
             if (!(bool)data["available"])
@@ -638,174 +620,6 @@ namespace UnityCli
             return new Dictionary<string, object> { { "result", result } };
         }
 
-        private sealed class ProjectToolFingerprintCheck
-        {
-            public bool Blocked;
-            public string Expected;
-            public string Actual;
-            public string Message;
-        }
-
-        private sealed class ProjectToolPinnedFingerprint
-        {
-            public string Owner;
-            public string Value;
-            public string Algorithm;
-            public string Format;
-            public string Sha256;
-            public bool HardMismatch;
-        }
-
-        private static ProjectToolFingerprintCheck RefreshProjectToolFingerprint(RegisteredTool definition)
-        {
-            var descriptor = ProjectToolDescriptorFingerprintMaterial(definition);
-            definition.DescriptorSha256 = Sha256Hex(descriptor);
-            definition.HandlerSha256 = Sha256Hex(ProjectToolHandlerFingerprintMaterial(definition));
-            definition.Fingerprint = Sha256Hex(ProjectToolFingerprintAlgorithm + "\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
-
-            ProjectToolPinnedFingerprint pin;
-            if (string.Equals(definition.Ownership, "project", StringComparison.Ordinal) && !string.IsNullOrEmpty(definition.PinnedFingerprint))
-            {
-                pin = ParseProjectToolPinnedFingerprint("descriptor", definition.PinnedFingerprint);
-            }
-            else if (string.Equals(definition.Ownership, "project", StringComparison.Ordinal))
-            {
-                var baseline = LoadProjectToolExpectedFingerprint(definition.Name);
-                if (string.IsNullOrEmpty(baseline))
-                {
-                    // 首次 project baseline 只能写入携带算法的 v2 pin，无算法 pin 绝不生成。
-                    baseline = FormatProjectToolFingerprint(definition.Fingerprint);
-                    SaveProjectToolExpectedFingerprint(definition.Name, baseline);
-                }
-                pin = ParseProjectToolPinnedFingerprint("project-baseline", baseline);
-            }
-            else
-            {
-                // Built-in 与 Extension 的 expected 由当前安装包生成，不写项目 baseline。
-                pin = ParseProjectToolPinnedFingerprint("installed-package", FormatProjectToolFingerprint(definition.Fingerprint));
-            }
-
-            definition.PinnedFingerprintOwner = pin.Owner;
-            definition.PinnedFingerprintAlgorithm = pin.Algorithm;
-            definition.PinnedFingerprintFormat = pin.Format;
-            definition.ExpectedFingerprint = pin.Value;
-            var matches = !pin.HardMismatch && string.Equals(pin.Sha256, definition.Fingerprint, StringComparison.OrdinalIgnoreCase);
-            // 任一 pin 格式、算法或内容不匹配都使用同一阻断路径。
-            definition.FingerprintStatus = matches ? "match" : "blocked";
-            definition.FingerprintMessage = matches
-                ? "Custom tool fingerprint matches handler code + descriptor."
-                : pin.HardMismatch
-                    ? "Custom tool fingerprint pin uses an unsupported algorithm or format and must be re-pinned."
-                    : "Custom tool fingerprint content differs from its v2 pin.";
-            return new ProjectToolFingerprintCheck
-            {
-                Blocked = !matches,
-                Expected = definition.ExpectedFingerprint,
-                Actual = definition.Fingerprint,
-                Message = definition.FingerprintMessage
-            };
-        }
-
-        /// <summary>解析 project Tool pin；裸 SHA、未知算法和畸形值都不能被当作 v2 expected。</summary>
-        private static ProjectToolPinnedFingerprint ParseProjectToolPinnedFingerprint(string owner, string value)
-        {
-            var pin = new ProjectToolPinnedFingerprint { Owner = owner, Value = value ?? string.Empty, Format = "malformed" };
-            var match = Regex.Match(pin.Value, "^([^:]+):([0-9a-fA-F]{64})$");
-            if (!match.Success)
-            {
-                pin.Format = Regex.IsMatch(pin.Value, "^[0-9a-fA-F]{64}$") ? "bare-sha256" : "malformed";
-                pin.Algorithm = pin.Format == "bare-sha256" ? "none" : "invalid";
-                pin.HardMismatch = true;
-                return pin;
-            }
-            pin.Algorithm = match.Groups[1].Value;
-            pin.Sha256 = match.Groups[2].Value.ToLowerInvariant();
-            pin.Format = string.Equals(pin.Algorithm, ProjectToolFingerprintAlgorithm, StringComparison.Ordinal) ? "valid-v2" : "algorithm-mismatch";
-            pin.HardMismatch = !string.Equals(pin.Algorithm, ProjectToolFingerprintAlgorithm, StringComparison.Ordinal);
-            return pin;
-        }
-
-        private static string FormatProjectToolFingerprint(string sha256)
-        {
-            return ProjectToolFingerprintAlgorithm + ":" + (sha256 ?? string.Empty).ToLowerInvariant();
-        }
-
-
-        private static string LoadProjectToolExpectedFingerprint(string name)
-        {
-            try
-            {
-                var path = ProjectToolExpectedFingerprintPath(name);
-                return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
-            }
-            catch (Exception exception)
-            {
-                WriteLog("custom_tool_fingerprint_baseline_read_failed name=" + name + " error=" + exception.GetType().Name + ": " + exception.Message);
-                return null;
-            }
-        }
-
-        private static void SaveProjectToolExpectedFingerprint(string name, string fingerprint)
-        {
-            try
-            {
-                var path = ProjectToolExpectedFingerprintPath(name);
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                File.WriteAllText(path, fingerprint ?? string.Empty);
-            }
-            catch (Exception exception)
-            {
-                WriteLog("custom_tool_fingerprint_baseline_write_failed name=" + name + " error=" + exception.GetType().Name + ": " + exception.Message);
-            }
-        }
-
-        private static string ProjectToolExpectedFingerprintPath(string name)
-        {
-            return Path.Combine(UnityCliTempRoot(), "fingerprints", "tools", SafeProjectToolFingerprintFileName(name) + ".sha256");
-        }
-
-        private static string SafeProjectToolFingerprintFileName(string name)
-        {
-            return Regex.Replace(name ?? "project-tool", "[^A-Za-z0-9_.-]", "_");
-        }
-
-        private static string ProjectToolDescriptorFingerprintMaterial(RegisteredTool definition)
-        {
-            return "name=" + (definition.Name ?? string.Empty)
-                + "\nsummary=" + (definition.Summary ?? string.Empty)
-                + "\ndescription=" + (definition.Description ?? string.Empty)
-                + "\ngroup=" + (definition.Group ?? string.Empty)
-                + "\ninputSchema=" + NormalizeFingerprintJson(definition.InputSchema)
-                + "\noutputSchema=" + NormalizeFingerprintJson(definition.OutputSchema)
-                + "\ndestructiveHint=" + Bool(definition.DestructiveHint)
-                + "\nsupportsDryRun=" + Bool(definition.SupportsDryRun)
-                + "\nsideEffects=" + string.Join(",", (definition.SideEffects ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
-                + "\npermissions=" + string.Join(",", (definition.Permissions ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
-                + "\nrequiresPackages=" + string.Join(",", (definition.RequiresPackages ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
-                + "\ntarget=" + (definition.Target ?? string.Empty)
-                + "\navailabilityScope=" + (definition.AvailabilityScope ?? string.Empty)
-                + "\nplayModeSupport=" + (definition.PlayModeSupport ?? string.Empty)
-                + "\ncontractProfile=" + (definition.ContractProfile ?? string.Empty)
-                + "\ndefaultTimeoutMs=" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture)
-                + "\nmaxTimeoutMs=" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture)
-                + "\nrequiredInput=" + string.Join(",", (definition.RequiredInput ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
-                + "\nexamples=" + NormalizeFingerprintJson(UnityCliSerializer.Serialize(definition.Examples ?? Array.Empty<ToolExample>()))
-                + "\ncompletion=" + CompletionFingerprintMaterial(definition.CompletionContract)
-                + "\ndescriptorSource=" + (definition.DescriptorSource ?? string.Empty);
-        }
-
-        /// <summary>把 sealed completion contract 纳入 descriptor integrity proof。</summary>
-        private static string CompletionFingerprintMaterial(UnityCliToolCompletionContract contract)
-        {
-            if (contract == null) return string.Empty;
-            return string.Join("|", new[]
-            {
-                contract.ExecutionClass, contract.CompletionPredicate, contract.ProofSource,
-                contract.ReloadPolicy, contract.TimeoutError, contract.OutcomeUnknownPolicy,
-                contract.CompletionDriverId, contract.JournalPolicy, contract.Mutation ? "mutation" : "read-only"
-            }.Select(value => value ?? string.Empty).ToArray());
-        }
-
         private static string NormalizeProjectToolPlayModeSupport(string value, string target)
         {
             if (string.Equals(value, "supported", StringComparison.OrdinalIgnoreCase)) return "supported";
@@ -814,124 +628,6 @@ namespace UnityCli
             if (string.Equals(value, "editor-only", StringComparison.OrdinalIgnoreCase)) return "editor-only";
             if (string.Equals(value, "unknown", StringComparison.OrdinalIgnoreCase)) return "unknown";
             return string.Equals(target, "runtime", StringComparison.OrdinalIgnoreCase) ? "runtime-only" : "editor-only";
-        }
-
-        private static string ProjectToolHandlerFingerprintMaterial(RegisteredTool definition)
-        {
-            return "assembly=" + (definition.Assembly ?? string.Empty)
-                + "\nmethod=" + (definition.Method ?? string.Empty)
-                + "\nhandler=" + ProjectToolHandlerSource(definition);
-        }
-
-        private static string ProjectToolHandlerSource(RegisteredTool definition)
-        {
-            try
-            {
-                var typeName = definition.Method;
-                if (string.IsNullOrEmpty(typeName)) return string.Empty;
-                var dot = typeName.LastIndexOf('.');
-                if (dot <= 0) return string.Empty;
-                typeName = typeName.Substring(0, dot);
-                var fileName = typeName.Substring(typeName.LastIndexOf('.') + 1) + ".cs";
-                foreach (var guid in AssetDatabase.FindAssets(Path.GetFileNameWithoutExtension(fileName) + " t:MonoScript"))
-                {
-                    var path = AssetDatabase.GUIDToAssetPath(guid);
-                    if (!string.Equals(Path.GetFileName(path), fileName, StringComparison.OrdinalIgnoreCase)) continue;
-                    var text = File.ReadAllText(path);
-                    if (text.IndexOf(definition.Method.Substring(dot + 1), StringComparison.Ordinal) >= 0)
-                    {
-                        return NormalizeFingerprintText(text);
-                    }
-                }
-            }
-            catch (Exception exception)
-            {
-                WriteLog("custom_tool_fingerprint_source_failed name=" + definition.Name + " error=" + exception.GetType().Name + ": " + exception.Message);
-            }
-            return string.Empty;
-        }
-
-        private static string NormalizeFingerprintText(string value)
-        {
-            return (value ?? string.Empty).Replace("\r\n", "\n").Replace("\r", "\n");
-        }
-
-        private static string NormalizeFingerprintJson(string value)
-        {
-            return Regex.Replace((value ?? string.Empty).Trim(), "\\s+", " ");
-        }
-
-        private static string Sha256Hex(string value)
-        {
-            using (var sha = SHA256.Create())
-            {
-                var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(value ?? string.Empty));
-                var builder = new StringBuilder(bytes.Length * 2);
-                foreach (var b in bytes)
-                {
-                    builder.Append(b.ToString("x2", CultureInfo.InvariantCulture));
-                }
-                return builder.ToString();
-            }
-        }
-
-        private static Dictionary<string, object> ProjectToolFingerprintData(RegisteredTool definition)
-        {
-            return new Dictionary<string, object>
-            {
-                { "currentAlgorithm", ProjectToolFingerprintAlgorithm }, { "actualSha256", definition.Fingerprint },
-                { "pinnedOwner", definition.PinnedFingerprintOwner }, { "pinnedAlgorithm", definition.PinnedFingerprintAlgorithm },
-                { "pinnedFormat", definition.PinnedFingerprintFormat }, { "pinnedValue", definition.ExpectedFingerprint },
-                { "status", definition.FingerprintStatus }, { "message", definition.FingerprintMessage },
-                { "rePinValue", FormatProjectToolFingerprint(definition.Fingerprint) },
-                { "rePinSteps", ProjectToolFingerprintRePinSteps(definition) },
-                { "descriptorSha256", definition.DescriptorSha256 }, { "handlerSha256", definition.HandlerSha256 }
-            };
-        }
-
-        private static string[] ProjectToolFingerprintRePinSteps(RegisteredTool definition)
-        {
-            var value = FormatProjectToolFingerprint(definition.Fingerprint);
-            return definition.PinnedFingerprintOwner == "descriptor"
-                ? new[] { "Review the Tool change.", "Set ToolDescriptor.Fingerprint to " + value + ".", "Run the Tool again." }
-                : new[] { "Review the Tool change.", "Replace the persisted project Tool fingerprint with " + value + ".", "Run the Tool again." };
-        }
-
-
-        private static Dictionary<string, object> ProjectToolFingerprintSummary()
-        {
-            var items = new List<object>();
-            var blocked = 0;
-            foreach (var pair in ProjectTools)
-            {
-                var definition = pair.Value;
-                RefreshProjectToolFingerprint(definition);
-                if (definition.FingerprintStatus == "blocked") blocked++;
-                items.Add(new Dictionary<string, object>
-                {
-                    { "name", definition.Name },
-                    { "fingerprint", ProjectToolFingerprintData(definition) }
-                });
-            }
-            items.Sort((left, right) => StringComparer.Ordinal.Compare(
-                ((Dictionary<string, object>)left)["name"] as string,
-                ((Dictionary<string, object>)right)["name"] as string));
-            return new Dictionary<string, object>
-            {
-                { "algorithm", ProjectToolFingerprintAlgorithm },
-                { "toolCount", (long)ProjectTools.Count },
-                { "blockedCount", (long)blocked },
-                { "tools", items }
-            };
-        }
-
-        private static Dictionary<string, object> ProjectToolFingerprintDetails(RegisteredTool definition)
-        {
-            return new Dictionary<string, object>
-            {
-                { "tool", definition.Name },
-                { "fingerprint", ProjectToolFingerprintData(definition) }
-            };
         }
     }
 }

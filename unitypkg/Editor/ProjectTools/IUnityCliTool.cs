@@ -91,7 +91,6 @@ namespace UnityCli
         public string[] Permissions { get; set; }
         public string[] RequiresPackages { get; set; }
         public ToolExample[] Examples { get; set; }
-        public string Fingerprint { get; set; }
         public ToolCompletionDescriptor Completion { get; set; }
     }
 

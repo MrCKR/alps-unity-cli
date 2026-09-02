@@ -67,7 +67,7 @@ test("doctor warns about invalid registry records and continues with valid insta
     selectInstance: async () => ({ instance: (await readInstances(fixture.dataDir))[0]!, matchedBy: "instanceId" }),
     bridgeExecute: async (payload: BridgeRequest) => payload.command === "project-tool.list"
       ? { ok: true as const, requestId: payload.requestId, data: { tools: [] } }
-      : { ok: true as const, requestId: payload.requestId, data: { result: { checks: [], customTools: { fingerprint: { toolCount: 0, blockedCount: 0 } } } } },
+      : { ok: true as const, requestId: payload.requestId, data: { result: { bridge: { ready: true, toolCount: 0 }, checks: [] } } },
   } as never, "req_doctor_invalid_registry");
 
   assert.ok(result.ok, JSON.stringify(result));
@@ -96,7 +96,6 @@ test("doctor uses strict instance selection and live diagnose.preflight", async 
             project: { path: fixture.projectPath },
             editor: { compiling: false, importing: false },
             bridge: { ready: true, toolCount: 327 },
-            customTools: { fingerprint: { algorithm: "unity-cli-project-tool-fingerprint-v2", toolCount: 327, blockedCount: 0, tools: [] } },
             checks: [],
           },
         },
@@ -114,7 +113,7 @@ test("doctor uses strict instance selection and live diagnose.preflight", async 
   assert.ok(result.ok);
   const data = result.data as { checks: Array<{ name: string; status: string }> };
   assert.equal(data.checks.find((check) => check.name === "bridge_connectivity")?.status, "pass");
-  assert.equal(data.checks.find((check) => check.name === "project_tool_fingerprint")?.status, "pass");
+  assert.equal(data.checks.find((check) => check.name === "tool_catalog")?.status, "pass");
   assert.equal(data.checks.some((check) => check.name.includes("context")), false);
   assert.ok(requests.some((request) => request.command === "project-tool.run" && request.input?.name === "diagnose.preflight"));
   assert.doesNotMatch(JSON.stringify(result), /endpoint|listenerId|listenerGeneration|actualPort|logPath|warnCount|fingerprintMode/);

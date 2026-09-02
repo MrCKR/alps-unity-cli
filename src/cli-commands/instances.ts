@@ -38,7 +38,7 @@ async function runWriterOwnedPrune(flags: Record<string, string | boolean>, runt
       timeoutMs,
       admissionAbsoluteDeadlineMs: startedAtMs + timeoutMs,
     });
-    const result = await executeBridgePayload(requestId, "internal.instances.prune", {}, { ...flags, instance: admission.instanceId }, { ...runtime, rootAdmission: admission }, undefined, {
+    const result = await executeBridgePayload(requestId, "internal.instances.prune", {}, { ...flags, instance: admission.instanceId }, { ...runtime, rootAdmission: admission }, {
       mode: "execute",
       mutation: true,
       absoluteDeadlineMs: admission.executionAbsoluteDeadlineMs,

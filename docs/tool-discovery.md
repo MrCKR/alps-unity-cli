@@ -76,13 +76,13 @@ unitycli tools describe camera.screenshot
 | `requiresPackages` | 非空 Unity Package 依赖 |
 | `examples` | `description`、结构化业务 `input` 与按需 `execution` |
 
-`group`和`summary`已在发现层使用，不在单 Tool describe重复；`source`、`outputSchema`、`permissions`、fingerprint、completion 和 handler 只保留在内部 metadata。
+`group`和`summary`已在发现层使用，不在单 Tool describe重复；`source`、`outputSchema`、`permissions`、completion 和 handler 只保留在内部 metadata。
 
 ## 完整目录语义
 
-一个已连接实例的 catalog 同时包含 package 内置能力、已安装 Extension 能力、项目 `IUnityCliTool<TReq,TRes>` 能力，以及 Editor、Runtime 和 package-local Tool。动作与读取能力都使用同一 `tools group/list/search/describe/run` 路径；读取型 Tool 通过无副作用 descriptor 明确其边界。
+一个已连接实例的 catalog 同时包含 package 内置能力、已安装 Extension 能力、项目 `IUnityCliTool<TReq,TRes>` 能力，以及 Editor、Runtime 和 package-local Tool。Unity 的 `[InitializeOnLoad]` 构造入口在每个 domain 内从编译元数据构建并完整验证一次 Tool table，随后 list、search、describe、run 和 Runtime availability 都读取同一个只读 table。动作与读取能力都使用同一 `tools group/list/search/describe/run` 路径；读取型 Tool 通过无副作用 descriptor 明确其边界。
 
-目录不按 source、EditMode/PlayMode 或当前可执行性过滤。当前不可执行的能力仍显示，由 descriptor 和执行错误说明原因。静态 capability snapshot 只供 package 生成、contract 和审计，不进入公开 discovery。
+目录不按 source、EditMode/PlayMode 或当前可执行性过滤。availability 在投影条目时读取，不会重建 table；当前不可执行的能力仍显示，由 descriptor 和执行错误说明原因。静态 capability snapshot 只供 package 生成、contract 和审计，不进入公开 discovery。
 
 ## AI Agent 工作流
 
@@ -91,7 +91,7 @@ unitycli tools describe camera.screenshot
 3. 用 `tools group list`、`tools search '<k1|k2|...>'` 缩小范围，并消费完所需的`pageInfo.nextCursor`页面。
 4. 用 `tools describe` 获取 schema、状态约束、副作用和示例。
 5. 用 `tools run` 调用同一名称。
-6. 安装 Package、安装 Extension、domain reload 或切换 PlayMode 后重新 discovery。
+6. 安装 Package、安装 Extension、编译/domain reload 或 listener generation 替换后重新 discovery；仅切换 PlayMode 时读取更新后的 availability。
 
 ## 错误处理
 

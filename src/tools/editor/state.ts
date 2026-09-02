@@ -196,7 +196,7 @@ async function probeBridge(context: EditorStateReadContext, observationDeadlineM
   if (remaining(observationDeadlineMs) <= 0) return undefined;
   // selector 只在外层执行一次；私有 Symbol 调用字段保留真实 instanceId，不会进入 Bridge body。
   // snapshot是准入独立观察；父级hybrid Tool的业务lease不得进入该private POST。
-  const result = await executeBridgePayload(context.requestId, "internal.editor.state.snapshot", {}, { instance: selection.instance.instanceId }, { bridgeExecute: context.bridgeExecute, dataDir: context.dataDir }, undefined, withObservationSelection({ mode: "observeNow", mutation: false, observationAbsoluteDeadlineMs: observationDeadlineMs }, selection));
+  const result = await executeBridgePayload(context.requestId, "internal.editor.state.snapshot", {}, { instance: selection.instance.instanceId }, { bridgeExecute: context.bridgeExecute, dataDir: context.dataDir }, withObservationSelection({ mode: "observeNow", mutation: false, observationAbsoluteDeadlineMs: observationDeadlineMs }, selection));
   if (!result.ok || !result.data || typeof result.data !== "object" || Array.isArray(result.data)) return undefined;
   const data = result.data as Record<string, unknown>;
   const snapshot = parseSnapshot(data.snapshot ?? data, session);

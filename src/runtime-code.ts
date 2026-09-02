@@ -83,7 +83,7 @@ export async function executeRuntimeCode(request: RuntimeCodeRequest, runtime: R
     instance: request.instance ?? "",
     "timeout-ms": String(timeoutMs),
     __destructiveConfirmed: true,
-  }, runtime, undefined, { mode: "execute", mutation: true, defaultTimeoutMs: timeoutMs, absoluteDeadlineMs });
+  }, runtime, { mode: "execute", mutation: true, defaultTimeoutMs: timeoutMs, absoluteDeadlineMs });
   if (!result.ok) throwCliFailure(result);
   return (result.data ?? {}) as Record<string, unknown>;
 }

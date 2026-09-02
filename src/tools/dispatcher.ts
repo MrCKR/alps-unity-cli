@@ -9,7 +9,6 @@ import {
   SessionSupervisorError,
   type BridgeRuntime,
   type BridgeCommandSpec,
-  type BridgeDescriptorBinding,
   type RootAdmissionLease
 } from "../bridge/index.js";
 import { failure, success } from "../output.js";
@@ -248,7 +247,7 @@ async function executeCoreBridgeSpec(
 ): Promise<CliResult> {
   let args = await spec.buildArgs({ command: name, flags: bridgeWrapperFlags(flags, input), positionalTarget });
   if (spec.toolName) args = { name: spec.toolName, input: args };
-  return enrichTargetFailureWithDialogBlocker(await executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, undefined, {
+  return enrichTargetFailureWithDialogBlocker(await executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, {
     mode: "execute",
     mutation: true,
     absoluteDeadlineMs,
@@ -906,14 +905,11 @@ async function executeLiveTool(
   const { admission, supervisor } = admissionContext;
   const runtimeTarget = admission.target === "runtime";
   const wrapper = runtimeTarget ? "runtime-tool.run" : "project-tool.run";
-  const descriptorBinding: BridgeDescriptorBinding = {
-    ...(tool.liveDescriptorFingerprint ? { liveDescriptorFingerprint: tool.liveDescriptorFingerprint } : {})
-  };
   const rootRuntime: ToolsRuntime = { ...runtime, rootAdmission: admission };
 
   // live descriptor已完成schema校验，wrapper直接承载typed input并复用同一root admission。
   const mutation = toolIsMutation(tool);
-  const result = await enrichTargetFailureWithDialogBlocker(await executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, rootRuntime, descriptorBinding, {
+  const result = await enrichTargetFailureWithDialogBlocker(await executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, rootRuntime, {
     mode: "execute",
     mutation,
     defaultTimeoutMs: timeoutMs,

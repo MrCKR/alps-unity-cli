@@ -78,9 +78,9 @@ export async function handleDoctorCommand(
   checks.push(await checkConfigIntegrity(readyInstances));
   checks.push(await checkObsoleteLocalState(runtime.dataDir));
 
-  const fingerprintCheck = checkBridgeFingerprintStatus(checks);
-  if (fingerprintCheck) {
-    checks.push(fingerprintCheck);
+  const catalogCheck = checkBridgeCatalogStatus(checks);
+  if (catalogCheck) {
+    checks.push(catalogCheck);
   }
 
   const compileCheck = checkCompileStatus(checks);
@@ -207,7 +207,6 @@ async function checkBridgeConnectivity(
       { name: "diagnose.preflight", input: {} },
       { instance: instanceId, "timeout-ms": String(EDITOR_STATE_OBSERVATION_BUDGET_MS) },
       runtime,
-      undefined,
       // connectivity probe 与 editor.state 共享同一即时观察预算，由 supervisor 将 Bridge POST 限制为 3500ms。
       { mode: "observeNow", mutation: false, defaultTimeoutMs: EDITOR_STATE_OBSERVATION_BUDGET_MS }
     );
@@ -242,27 +241,23 @@ async function checkBridgeConnectivity(
   }
 }
 
-function checkBridgeFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
+function checkBridgeCatalogStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
   const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
   const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
-  if (!bridgeResponse || typeof bridgeResponse !== "object") {
-    return undefined;
-  }
-  const customTools = (bridgeResponse as { customTools?: unknown }).customTools;
-  const fingerprint = customTools && typeof customTools === "object" ? (customTools as { fingerprint?: unknown }).fingerprint : undefined;
-  if (!fingerprint || typeof fingerprint !== "object") {
-    return undefined;
-  }
-  const blockedCount = numberProp(fingerprint, "blockedCount") ?? 0;
-  const toolCount = numberProp(fingerprint, "toolCount") ?? 0;
-  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : "pass";
+  if (!bridgeResponse || typeof bridgeResponse !== "object") return undefined;
+  const bridge = (bridgeResponse as { bridge?: unknown }).bridge;
+  if (!bridge || typeof bridge !== "object") return undefined;
+
+  const ready = (bridge as Record<string, unknown>).ready === true;
+  const toolCount = numberProp(bridge, "toolCount") ?? -1;
+  const status: DoctorCheck["status"] = ready && toolCount >= 0 ? "pass" : "fail";
   return {
-    name: "project_tool_fingerprint",
+    name: "tool_catalog",
     status,
     message: status === "pass"
-      ? `Custom tool fingerprints match for ${toolCount} tool(s).`
-      : `Custom tool fingerprints are blocked for ${blockedCount} of ${toolCount} tool(s).`,
-    details: { fingerprint }
+      ? `The current Unity domain published one immutable Tool catalog with ${toolCount} tool(s).`
+      : "The current Unity domain did not report a complete immutable Tool catalog.",
+    details: { ready, toolCount }
   };
 }
 
@@ -522,9 +517,8 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Ensure Unity Editor is running with the UnityCLI Bridge package for the selected --instance or CWD project.");
           suggestions.push("Run unitycli instances list to inspect identity, session, blocker, and transition state.");
           break;
-        case "project_tool_fingerprint":
-          suggestions.push("Inspect unitycli doctor fingerprint details, then review project tool descriptor/handler code changes.");
-          suggestions.push("Apply the reported rePinValue only after accepting the exact Tool change.");
+        case "tool_catalog":
+          suggestions.push("Fix the reported Tool descriptor, schema, completion, signature, or ownership error, then let Unity compile and reload the domain.");
           break;
         case "data_directory":
           suggestions.push("Run any unitycli command to auto-create the data directory.");

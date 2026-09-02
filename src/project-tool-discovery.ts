@@ -1,5 +1,5 @@
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
-import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolContractProfile, type ToolHandler, type ToolMetadata, type ToolSupportStatus } from "./tools/metadata/index.js";
+import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolContractProfile, type ToolHandler, type ToolMetadata } from "./tools/metadata/index.js";
 import { failure } from "./output.js";
 import type { CliResult } from "./types.js";
 import type { AnyJson } from "./schema/any-json.js";
@@ -22,7 +22,7 @@ export async function discoverProjectTools(
     return { ok: true, tools: runtime.projectTools.map(ensureProjectToolDefaults), mode: "runtime" };
   }
 
-  const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
+  const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }
@@ -78,7 +78,6 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     unavailableReason: stringProp(descriptor, "unavailableReason"),
     source: toolSourceProp(descriptor, "source"),
     contractProfile,
-    liveDescriptorFingerprint: stringProp(descriptor, "internalDescriptorFingerprint"),
     completionContract
   });
 }
@@ -272,7 +271,7 @@ export async function discoverRuntimeTools(
     return { ok: true, tools: runtimeTools, mode: "runtime" };
   }
 
-  const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
+  const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }

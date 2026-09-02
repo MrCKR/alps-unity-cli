@@ -65,7 +65,7 @@ async function readRuntimeSummary(
   requestId: string
 ): Promise<Record<string, unknown> | undefined> {
   try {
-    const result = await executeBridgePayload(requestId, "diagnose.preflight", {}, flags, runtime, undefined, { mode: "read", mutation: false });
+    const result = await executeBridgePayload(requestId, "diagnose.preflight", {}, flags, runtime, { mode: "read", mutation: false });
     if (!result.ok || !result.data || typeof result.data !== "object" || Array.isArray(result.data)) return undefined;
     const bridge = (result.data as Record<string, unknown>).bridge;
     if (!bridge || typeof bridge !== "object" || Array.isArray(bridge)) return undefined;

@@ -35,7 +35,7 @@ test("packaged static catalog exactly covers C# built-in and Extension Tool inve
   assert.ok(catalog.tools.every((tool) => tool.inputSchema && tool.outputSchema));
   assert.ok(catalog.tools.every((tool) => tool.source === "built-in" || tool.source === "extension"));
   assert.equal(Object.hasOwn(catalog, "contexts"), false);
-  const forbiddenToolFields = ["artifactKinds", "capabilityType", "cliCommand", "completionContract", "defaultTimeoutMs", "descriptorFingerprint", "fingerprint", "handler", "internalDescriptorFingerprint", "maxTimeoutMs", "supportStatus", "supportsJob", "version"];
+  const forbiddenToolFields = ["artifactKinds", "capabilityType", "cliCommand", "completionContract", "defaultTimeoutMs", "handler", "maxTimeoutMs", "supportStatus", "supportsJob", "version"];
   for (const tool of catalog.tools) {
     for (const field of forbiddenToolFields) assert.equal(Object.hasOwn(tool, field), false, `${String(tool.name)} must not freeze ${field}`);
     const outputFields = schemaPropertyNames(tool.outputSchema);

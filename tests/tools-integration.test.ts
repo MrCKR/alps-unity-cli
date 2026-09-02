@@ -202,13 +202,11 @@ test("重复official attribute原名使整个live catalog fail closed", async ()
     group: "UnityPipeline",
     source: "project",
     contractProfile: "official-attribute",
-    liveDescriptorFingerprint: "a".repeat(64),
   });
   const second = makeLiveTool({
     ...first,
     summary: "Second duplicate attribute.",
     description: "Second attributed method with the same original command name.",
-    liveDescriptorFingerprint: "b".repeat(64),
   });
   const result = await execute(["command"], {
     ...connected,

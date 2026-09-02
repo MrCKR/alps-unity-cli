@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -24,46 +23,23 @@ namespace UnityCli
         // Play Mode session tracking
         private static string currentPlayModeSessionId = null;
         private static bool playModeReady = false;
-        private static int runtimeRegistryVersion = 0;
-        private static string runtimeToolCatalogFingerprint = null;
         private static bool runtimeExecutorInitialized = false;
 
-        /// <summary>
-        /// Initialize the Runtime Executor: subscribe to Play Mode state change
-        /// events and compute the initial tool catalog fingerprint.
-        /// </summary>
+        /// <summary>订阅当前domain的PlayMode状态；只验证已发布catalog，不触发发现或重建。</summary>
         private static void InitializeRuntimeExecutor()
         {
             if (runtimeExecutorInitialized) return;
+            ReadPublishedProjectToolCatalog();
             runtimeExecutorInitialized = true;
             EditorApplication.playModeStateChanged += OnRuntimePlayModeStateChanged;
-            RefreshRuntimeToolCatalog();
             WriteLog("runtime_executor_initialized");
 
-            // If we are already in Play Mode at initialization time (e.g. after domain reload),
-            // immediately establish the session as ready.
             if (EditorApplication.isPlaying)
             {
                 currentPlayModeSessionId = GeneratePlayModeSessionId();
                 playModeReady = true;
-                runtimeRegistryVersion++;
-                RefreshRuntimeToolCatalog();
-                WriteLog("runtime_session_ready_after_domain_reload sessionId=" + currentPlayModeSessionId + " registryVersion=" + runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture) + " fingerprint=" + (runtimeToolCatalogFingerprint ?? "none"));
+                WriteLog("runtime_session_ready_after_domain_reload sessionId=" + currentPlayModeSessionId);
             }
-        }
-
-        /// <summary>
-        /// Called after domain reload to reinitialize the Runtime Executor.
-        /// Domain reload resets all static fields, so the event subscription
-        /// and session state are lost. This method re-subscribes to Play Mode
-        /// state change events and restores the session state if already in
-        /// Play Mode.
-        /// </summary>
-        private static void ReinitializeRuntimeExecutorAfterDomainReload()
-        {
-            // Reset the guard so InitializeRuntimeExecutor runs again
-            runtimeExecutorInitialized = false;
-            InitializeRuntimeExecutor();
         }
 
         /// <summary>
@@ -83,11 +59,8 @@ namespace UnityCli
                     break;
 
                 case PlayModeStateChange.ExitingEditMode:
-                    // About to enter Play Mode: pre-generate session ID
                     currentPlayModeSessionId = GeneratePlayModeSessionId();
                     playModeReady = false;
-                    runtimeRegistryVersion++;
-                    RefreshRuntimeToolCatalog();
                     WriteLog("runtime_session_entering sessionId=" + currentPlayModeSessionId);
                     break;
 
@@ -96,13 +69,9 @@ namespace UnityCli
                     // After domain reload, currentPlayModeSessionId is reset to null.
                     // Generate a new session ID if the pre-generated one was lost.
                     if (currentPlayModeSessionId == null)
-                    {
                         currentPlayModeSessionId = GeneratePlayModeSessionId();
-                        runtimeRegistryVersion++;
-                        RefreshRuntimeToolCatalog();
-                    }
                     playModeReady = true;
-                    WriteLog("runtime_session_ready sessionId=" + currentPlayModeSessionId + " registryVersion=" + runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture) + " fingerprint=" + (runtimeToolCatalogFingerprint ?? "none"));
+                    WriteLog("runtime_session_ready sessionId=" + currentPlayModeSessionId);
                     break;
 
                 case PlayModeStateChange.ExitingPlayMode:
@@ -118,32 +87,15 @@ namespace UnityCli
             return "pms-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N").Substring(0, 8);
         }
 
-        private static void RefreshRuntimeToolCatalog()
-        {
-            DiscoverProjectTools();
-            var count = 0;
-            var material = new StringBuilder();
-            foreach (var pair in ProjectTools)
-            {
-                var def = pair.Value;
-                if (def.Target == "runtime" || def.Target == "both")
-                {
-                    count++;
-                    material.Append(def.Name).Append('\n')
-                        .Append(def.Fingerprint ?? "").Append('\n');
-                }
-            }
-            runtimeToolCatalogFingerprint = Sha256Hex("unity-cli-runtime-tool-catalog-v1\ncount=" + count.ToString(CultureInfo.InvariantCulture) + "\n" + material.ToString());
-        }
-
         /// <summary>
         /// Runtime session readiness report, included in instance registration
         /// and available via editor.state.
         /// </summary>
         private static Dictionary<string, object> RuntimeSessionData()
         {
+            var catalog = ReadPublishedProjectToolCatalog();
             var availableTools = new List<object>();
-            foreach (var pair in ProjectTools)
+            foreach (var pair in catalog.Tools)
             {
                 if (pair.Value.Target != "runtime" && pair.Value.Target != "both") continue;
                 availableTools.Add(new Dictionary<string, object>
@@ -154,8 +106,7 @@ namespace UnityCli
             // 会话数据直接嵌入最终 response，禁止序列化后重新解析为 object。
             return new Dictionary<string, object>
             {
-                { "playModeSessionId", currentPlayModeSessionId }, { "ready", playModeReady }, { "registryVersion", runtimeRegistryVersion },
-                { "toolCatalogFingerprint", runtimeToolCatalogFingerprint }, { "availableRuntimeTools", availableTools }
+                { "playModeSessionId", currentPlayModeSessionId }, { "ready", playModeReady }, { "availableRuntimeTools", availableTools }
             };
         }
 
@@ -165,10 +116,10 @@ namespace UnityCli
         /// </summary>
         private static object RuntimeToolList(UnityCli.Protocol.BridgeRequest request)
         {
-            DiscoverProjectTools();
+            var catalog = ReadPublishedProjectToolCatalog();
             InitializeRuntimeExecutor();
             var tools = new System.Collections.Generic.List<object>();
-            foreach (var definition in ProjectTools.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal))
+            foreach (var definition in catalog.Tools.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal))
             {
                 if (definition.Target != "runtime" && definition.Target != "both") continue;
                 var descriptor = ProjectToolDescriptorData(definition);
@@ -192,14 +143,13 @@ namespace UnityCli
         {
             public string Name { get; set; }
             [UnityCliAnyJson] public object Input { get; set; }
-            public string ExpectedDescriptorFingerprint { get; set; }
             public string ArtifactDir { get; set; }
             public string ProjectPath { get; set; }
         }
 
         private static async ValueTask<object> RuntimeToolRun(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
-            DiscoverProjectTools();
+            var catalog = ReadPublishedProjectToolCatalog();
             InitializeRuntimeExecutor();
 
             var args = request.DeserializeArgs<RuntimeToolRunArgs>();
@@ -220,13 +170,13 @@ namespace UnityCli
             }
 
             // Validate the tool exists and is a runtime tool
-            if (!ProjectTools.ContainsKey(name))
+            if (!catalog.Tools.ContainsKey(name))
             {
                 throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name,
                     "Run unitycli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 
-            var definition = ProjectTools[name];
+            var definition = catalog.Tools[name];
             if (definition.Target != "runtime" && definition.Target != "both")
             {
                 throw new BridgeCommandException("E_RUNTIME_TOOL_TARGET_MISMATCH",
@@ -235,26 +185,6 @@ namespace UnityCli
                     new[] { "Run editor-domain tools without --runtime, or select a Tool whose descriptor declares target=runtime." });
             }
             var dryRun = request.Execution != null && request.Execution.DryRun == true;
-
-            // runtime-tool.run 是内部包装命令；门禁前刷新 live 指纹，防止跨 PlayMode/domain reload 重放旧 proof。
-            var fingerprintCheck = RefreshProjectToolFingerprint(definition);
-            if (!string.IsNullOrEmpty(args.ExpectedDescriptorFingerprint)
-                && !string.Equals(args.ExpectedDescriptorFingerprint, definition.Fingerprint, StringComparison.Ordinal))
-            {
-                throw new BridgeCommandException(
-                    "E_TOOL_DESCRIPTOR_CHANGED",
-                    "The runtime Tool descriptor changed after discovery: " + name,
-                    new Dictionary<string, object> { { "toolName", name }, { "expectedFingerprint", args.ExpectedDescriptorFingerprint }, { "actualFingerprint", definition.Fingerprint } },
-                    new[] { "Run tools describe again in the current Play Mode generation before constructing a new request." });
-            }
-            // Fingerprint policy 使用同一次 live refresh 结果。
-            if (fingerprintCheck.Blocked)
-            {
-                WriteLog("runtime_tool_fingerprint_blocked requestId=" + request.RequestId + " name=" + name);
-                throw new BridgeCommandException("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message,
-                    ProjectToolFingerprintDetails(definition),
-                    ProjectToolFingerprintRePinSteps(definition));
-            }
 
             // timeout 仅来自顶层 execution，业务 input 不参与执行策略。
             var timeoutMs = request.ExecutionTimeoutMs(definition.DefaultTimeoutMs, definition.MaxTimeoutMs);

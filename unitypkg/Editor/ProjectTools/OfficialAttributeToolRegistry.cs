@@ -95,7 +95,7 @@ namespace UnityCli
         /// 扫描一个类型声明的官方 attributed static method。所有候选都先写入 pending registry；
         /// 任一签名、schema、ownership 或名称冲突都会阻止本轮目录发布。
         /// </summary>
-        private static void TryRegisterOfficialAttributeTools(Assembly assembly, Type type)
+        private static void TryRegisterOfficialAttributeTools(UnityCliToolCatalogBuilder builder, RegistryOwnershipResolver ownershipResolver, Assembly assembly, Type type)
         {
             var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                 .Where(method => FindAttribute(method, OfficialCliCommandAttribute) != null)
@@ -111,9 +111,8 @@ namespace UnityCli
 
             foreach (var method in methods)
             {
-                var definition = CreateOfficialAttributeTool(assembly, type, method);
-                RegisterProjectTool(definition);
-                WriteLog("custom_tool_registered name=" + definition.Name + " source=official-attribute type=" + type.FullName + " method=" + method.Name);
+                var definition = CreateOfficialAttributeTool(ownershipResolver, type, method);
+                RegisterProjectTool(builder, definition, UnityCliToolProviderKind.OfficialAttribute);
             }
         }
 
@@ -139,9 +138,10 @@ namespace UnityCli
             return suppressed;
         }
 
-        /// <summary>从 CustomAttributeData 构造保守 descriptor、严格输入 schema 与方法返回完成契约。</summary>
-        private static RegisteredTool CreateOfficialAttributeTool(Assembly assembly, Type implementationType, MethodInfo method)
+        /// <summary>签名和返回形态只读取编译元数据；任一不支持形态在pending publish前失败。</summary>
+        private static void ValidateOfficialMethodSignature(MethodInfo method)
         {
+            if (method == null) throw new ArgumentNullException("method");
             if (!method.IsStatic) throw new InvalidOperationException("Official CLI command method must be static: " + MethodIdentity(method) + ".");
             if (method.IsGenericMethodDefinition || method.ContainsGenericParameters)
                 throw new InvalidOperationException("Official CLI command method cannot be generic: " + MethodIdentity(method) + ".");
@@ -149,6 +149,12 @@ namespace UnityCli
                 throw new InvalidOperationException("Official CLI command return type is unsupported: " + MethodIdentity(method) + ".");
             if (method.ReturnType == typeof(void) && method.IsDefined(typeof(AsyncStateMachineAttribute), false))
                 throw new InvalidOperationException("Official CLI command cannot use async void: " + MethodIdentity(method) + ".");
+        }
+
+        /// <summary>从 CustomAttributeData 构造保守 descriptor、严格输入 schema 与方法返回完成契约。</summary>
+        private static RegisteredTool CreateOfficialAttributeTool(RegistryOwnershipResolver ownershipResolver, Type implementationType, MethodInfo method)
+        {
+            ValidateOfficialMethodSignature(method);
 
             var command = FindAttribute(method, OfficialCliCommandAttribute);
             var name = ConstructorString(command, 0, "name", method);
@@ -179,7 +185,7 @@ namespace UnityCli
                 NormalizeResultWithNewtonsoft = output.NormalizeWithNewtonsoft,
                 Parameters = parameters
             };
-            var ownership = registryOwnership.Resolve(implementationType);
+            var ownership = ownershipResolver.Resolve(implementationType, toolName);
             if (!string.Equals(ownership, "project", StringComparison.Ordinal))
                 throw new InvalidOperationException("Official attribute Tool ownership must resolve to project or third-party code: " + MethodIdentity(method) + ".");
 
@@ -204,7 +210,6 @@ namespace UnityCli
                 Description = description + " Imported from Unity.Pipeline.Commands.CliCommandAttribute. Risk, PlayMode, dry-run and completion semantics use the conservative official-attribute contract. Schema defaults and examples describe valid default behavior, not caller intent; use caller-requested business values on the first execution.",
                 Group = OfficialAttributeToolGroup,
                 Source = "project",
-                Ownership = "project",
                 InputSchema = UnityCliSerializer.Serialize(inputSchema),
                 OutputSchema = output.Schema,
                 DestructiveHint = true,
@@ -226,11 +231,6 @@ namespace UnityCli
                 ContractProfile = "official-attribute",
                 DefaultTimeoutMs = 30000,
                 MaxTimeoutMs = 600000,
-                RequiredInput = parameters.Where(parameter => parameter.Required).Select(parameter => parameter.Name).ToArray(),
-                RegisteredBy = "official-pipeline-attribute",
-                DescriptorSource = OfficialCliCommandAttribute,
-                Assembly = assembly.GetName().Name,
-                Method = MethodIdentity(method),
                 RequestType = typeof(Dictionary<string, object>),
                 ResultType = output.ValidationType,
                 CompletionContract = completion,

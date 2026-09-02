@@ -62,7 +62,6 @@ namespace UnityCli
         private static HttpListener listener;
         private static bool started;
         private static readonly BridgeStartupStateMachine StartupState = new BridgeStartupStateMachine();
-        private static bool projectToolsDiscovered;
         private static volatile bool domainReloading;
         private const double RegistryRefreshSeconds = 30.0;
         private static int port;
@@ -88,6 +87,8 @@ namespace UnityCli
             if (AssetDatabase.IsAssetImportWorkerProcess()) return;
             WriteRuntimeLoadDiagnostics("static_constructor");
             UnityCliTransactionLog.RotateForNewSession();
+            InitializeProjectToolCatalog();
+            if (ProjectToolCatalogReady()) InitializeRuntimeExecutor();
             InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
@@ -257,10 +258,6 @@ namespace UnityCli
             StartupState.Reset();
             WriteLog("bridge_after_assembly_reload scheduling bootstrap");
             ScheduleBridgeStartup();
-
-            // After domain reload, static fields are reset. Re-initialize the Runtime Executor
-            // and restore session state if we are already in Play Mode.
-            ReinitializeRuntimeExecutorAfterDomainReload();
         }
 
         private static void UnregisterAndStop()

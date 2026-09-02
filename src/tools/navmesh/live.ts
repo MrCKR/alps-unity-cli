@@ -178,7 +178,7 @@ async function bind(context: ToolContext, tool: string, requireEditMode: boolean
 }
 
 async function call(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: ToolContext, invocation: ReturnType<typeof withTransitionBinding>): Promise<{ data?: unknown }> {
-  const response = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, undefined, invocation);
+  const response = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, invocation);
   if (!response.ok) throw StructuredToolError.from(response.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "NavMesh bridge command failed." });
   return { data: response.data };
 }

@@ -85,7 +85,7 @@ unitycli tools run UnityPipeline_test --input '{"mode":"EditMode"}'
 unitycli command test --mode EditMode
 ```
 
-两种语法共享instance选择、availability、schema终检、risk metadata、dry-run、timeout、descriptor fingerprint、completion contract、Bridge执行和错误码。command语法兼容不承诺补齐当前catalog中不存在的官方命令，也不改变本项目JSON输出格式。
+两种语法共享instance选择、当前domain的immutable Tool table、availability、schema终检、risk metadata、dry-run、timeout、completion contract、Bridge执行和错误码。command语法不承诺补齐当前catalog中不存在的官方命令，也不改变本项目JSON输出格式。
 
 ## Pipeline与Bridge启动
 

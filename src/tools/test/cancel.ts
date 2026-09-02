@@ -71,7 +71,7 @@ export default defineTool<TestCancelRequest, TestCancelResult>({
 });
 
 async function call(requestId: string, command: string, input: Record<string, unknown>, flags: BridgeFlags, context: any, invocation: any) {
-  const response = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, undefined, invocation);
+  const response = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, invocation);
   if (!response.ok) throw StructuredToolError.from(response.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live test cancellation bridge failed." });
   return response;
 }

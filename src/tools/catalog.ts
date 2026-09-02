@@ -151,14 +151,33 @@ function officialAttributeNamespaceViolation(tool: ToolMetadata): string | undef
   return undefined;
 }
 
-/** runtime availability 必须来自同一份 live descriptor，不能借同名切换 owner。 */
+/** runtime availability 必须来自同一published table entry，动态availability不参与identity比较。 */
 function sameLiveRegistration(left: ToolMetadata, right: ToolMetadata): boolean {
-  if (left.group !== right.group || left.target !== right.target || toolContractProfile(left) !== toolContractProfile(right)) return false;
-  if (left.liveDescriptorFingerprint || right.liveDescriptorFingerprint) {
-    return left.liveDescriptorFingerprint === right.liveDescriptorFingerprint;
-  }
-  return JSON.stringify(left.inputSchema) === JSON.stringify(right.inputSchema)
-    && JSON.stringify(left.outputSchema) === JSON.stringify(right.outputSchema);
+  return JSON.stringify(liveRegistrationIdentity(left)) === JSON.stringify(liveRegistrationIdentity(right));
+}
+
+function liveRegistrationIdentity(tool: ToolMetadata): Record<string, unknown> {
+  return {
+    name: tool.name,
+    summary: tool.summary,
+    description: tool.description,
+    group: tool.group,
+    source: tool.source,
+    inputSchema: tool.inputSchema,
+    outputSchema: tool.outputSchema,
+    destructiveHint: tool.destructiveHint,
+    sideEffects: tool.sideEffects ?? [],
+    supportsDryRun: tool.supportsDryRun ?? false,
+    permissions: tool.permissions ?? [],
+    requiresPackages: tool.requiresPackages ?? [],
+    examples: tool.examples ?? [],
+    target: tool.target,
+    availabilityScope: tool.availabilityScope,
+    playModeSupport: tool.playModeSupport,
+    contractProfile: toolContractProfile(tool),
+    timeoutMs: tool.timeoutMs,
+    completionContract: tool.completionContract,
+  };
 }
 
 /** 返回稳定的 catalog ownership 冲突，不允许静默覆盖。 */

@@ -61,7 +61,7 @@ export default defineTool<AssetRefreshRequest, AssetRefreshResult | AssetRefresh
 });
 
 async function bridge(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: any, invocation: any): Promise<{ data?: unknown }> {
-  const result = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, undefined, invocation);
+  const result = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live asset refresh bridge failed." });
   return { data: result.data };
 }

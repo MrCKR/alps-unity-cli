@@ -64,8 +64,6 @@ export interface ToolMetadata {
   requiresPackages?: string[];
   /** descriptor 的完成保证来源；TS 本地和 IUnityCliTool 默认为 native。 */
   contractProfile?: ToolContractProfile;
-  /** Live Bridge 计算的 handler+descriptor 指纹；破坏性 proof 必须绑定此值。 */
-  liveDescriptorFingerprint?: string;
   /** 每次直接调用必须命中的机器可执行 completion contract。 */
   completionContract?: ToolCompletionContract;
 }

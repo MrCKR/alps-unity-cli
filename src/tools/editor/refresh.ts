@@ -114,7 +114,7 @@ async function bridge(requestId: string, command: string, input: RecordValue, fl
     dataDir: context.dataDir,
     rootAdmission: context.rootAdmission,
     bridgeExecute: context.bridgeExecute,
-  }, undefined, invocation);
+  }, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live refresh bridge failed." });
   return { data: result.data };
 }
