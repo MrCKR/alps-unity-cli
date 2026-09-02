@@ -398,7 +398,7 @@ namespace UnityCli
                     && Same(Text(root.TestOperation, "cancelRootRequestDigest"), dispatch.RootRequestDigest);
             }
 
-            /// <summary>所有取消终态先冻结有界候选与first terminal；父root成功后才允许exact owner完成。</summary>
+            /// <summary>child terminal与完整恢复marker先于parent Finish持久化，避免父cleanup删除唯一重建身份。</summary>
             private static bool FinalizeCancelTerminal(CancelDispatchIdentity dispatch, object envelope, string effectState)
             {
                 if (dispatch == null || dispatch.AdmissionOwner == null) return false;
@@ -407,15 +407,13 @@ namespace UnityCli
                 object first;
                 try { first = queueState.StoreTerminalFirst(CancelTerminalScope, dispatch.CancelRequestId, dispatch.CancelRequestDigest, dispatch.RootRequestDigest, envelope); }
                 catch { RetainCancelAdmissionForRecovery(dispatch, envelope, effectState); return false; }
+                // parent Finish可能同步删除test-run root；此前必须已有完整Recovery/Continuation marker。
+                if (!RetainCancelAdmissionForRecovery(dispatch, first, effectState)) return false;
                 Root root;
                 try { root = Load(queueState); }
-                catch { RetainCancelAdmissionForRecovery(dispatch, first, effectState); return false; }
+                catch { return false; }
                 var parentAlreadyFinalized = root == null && CancelParentTerminalMatches(dispatch.RootRequestId, dispatch.RootRequestDigest, effectState, queueState);
-                if (!parentAlreadyFinalized && !MatchesCancelIdentity(root, dispatch))
-                {
-                    RetainCancelAdmissionForRecovery(dispatch, first, effectState);
-                    return false;
-                }
+                if (!parentAlreadyFinalized && !MatchesCancelIdentity(root, dispatch)) return false;
                 if (!parentAlreadyFinalized)
                 {
                     try
@@ -426,19 +424,11 @@ namespace UnityCli
                     }
                     catch
                     {
-                        if (!CancelParentTerminalMatches(dispatch.RootRequestId, dispatch.RootRequestDigest, effectState, queueState))
-                        {
-                            RetainCancelAdmissionForRecovery(dispatch, first, effectState);
-                            return false;
-                        }
+                        if (!CancelParentTerminalMatches(dispatch.RootRequestId, dispatch.RootRequestDigest, effectState, queueState)) return false;
                     }
                 }
                 if (!CancelParentTerminalMatches(dispatch.RootRequestId, dispatch.RootRequestDigest, effectState, queueState)
-                    && (effectState == "cancelled" || effectState == "outcome_unknown"))
-                {
-                    RetainCancelAdmissionForRecovery(dispatch, first, effectState);
-                    return false;
-                }
+                    && (effectState == "cancelled" || effectState == "outcome_unknown")) return false;
                 try
                 {
                     var owner = CaptureAdmissionOwner(queueState, dispatch.CancelRequestId, dispatch.CancelRequestDigest);
@@ -508,7 +498,7 @@ namespace UnityCli
                 catch { return false; }
             }
 
-            /// <summary>root不可读或保存失败时持久化完整候选并推进Recovery，禁止queue完成cancel owner。</summary>
+            /// <summary>parent Finish前持久化完整候选并推进Recovery，任何后续失败都禁止queue误完成cancel owner。</summary>
             private static bool RetainCancelAdmissionForRecovery(CancelDispatchIdentity dispatch, object envelope, string effectState)
             {
                 try

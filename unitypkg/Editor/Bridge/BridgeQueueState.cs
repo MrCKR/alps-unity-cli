@@ -13,6 +13,8 @@ namespace UnityCli
         private readonly object SettlementLock = new object();
         internal readonly LinkedList<UnityCliBridge.BridgeWorkItem> WorkQueue = new LinkedList<UnityCliBridge.BridgeWorkItem>();
         internal readonly LinkedList<UnityCliBridge.BridgeWorkItem> SafeStatusQueue = new LinkedList<UnityCliBridge.BridgeWorkItem>();
+        internal readonly LinkedList<UnityCliBridge.BridgeWorkItem> ControlQueue = new LinkedList<UnityCliBridge.BridgeWorkItem>();
+        internal LinkedListNode<UnityCliBridge.BridgeWorkItem> ControlScanCursor;
         internal readonly HashSet<UnityCliBridge.BridgeWorkItem> RunningWork = new HashSet<UnityCliBridge.BridgeWorkItem>();
         internal readonly HashSet<UnityCliBridge.BridgeWorkItem> PendingSettlementWork = new HashSet<UnityCliBridge.BridgeWorkItem>();
         internal readonly Dictionary<string, UnityCliBridge.BridgeWorkItem> ActiveRequestWork = new Dictionary<string, UnityCliBridge.BridgeWorkItem>(StringComparer.Ordinal);
@@ -33,8 +35,14 @@ namespace UnityCli
         private readonly Dictionary<string, PendingCompletionIntent> pendingCompletionIntents = new Dictionary<string, PendingCompletionIntent>(StringComparer.Ordinal);
         private int ioCallbackCount;
         private int lastQueueNodesExamined;
+        private int lastFifoNodesExamined;
+        private int lastControlNodesExamined;
+        private int lastSafeStatusNodesExamined;
         internal int IoCallbackCount { get { return Volatile.Read(ref ioCallbackCount); } }
         internal int LastQueueNodesExamined { get { return Volatile.Read(ref lastQueueNodesExamined); } }
+        internal int LastFifoNodesExamined { get { return Volatile.Read(ref lastFifoNodesExamined); } }
+        internal int LastControlNodesExamined { get { return Volatile.Read(ref lastControlNodesExamined); } }
+        internal int LastSafeStatusNodesExamined { get { return Volatile.Read(ref lastSafeStatusNodesExamined); } }
 
         internal BridgeQueueState(
             UnityCliAdmissionPool admissionPool,
@@ -332,18 +340,27 @@ namespace UnityCli
                 : IsolatedExecution.TryGetCurrentOwner(out requestId, out requestDigest);
         }
 
-        internal void RecordQueueNodesExamined(int count)
+        internal void RecordQueueNodesExamined(int safeStatusCount, int controlCount, int fifoCount)
         {
-            if (count < 0 || count > UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
-                throw new InvalidOperationException("Bridge queue scan exceeded its fixed production bound.");
-            Volatile.Write(ref lastQueueNodesExamined, count);
+            if (safeStatusCount < 0 || safeStatusCount > UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick
+                || controlCount < 0 || controlCount > UnityCliBridgeQueuePolicy.MaxControlNodesExaminedPerTick
+                || fifoCount < 0 || fifoCount > UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick)
+                throw new InvalidOperationException("Bridge queue lane scan exceeded its fixed production bound.");
+            var total = checked(safeStatusCount + controlCount + fifoCount);
+            if (total > UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
+                throw new InvalidOperationException("Bridge queue scan exceeded its fixed total production bound.");
+            Volatile.Write(ref lastSafeStatusNodesExamined, safeStatusCount);
+            Volatile.Write(ref lastControlNodesExamined, controlCount);
+            Volatile.Write(ref lastFifoNodesExamined, fifoCount);
+            Volatile.Write(ref lastQueueNodesExamined, total);
         }
 
         internal void AssertEmptyForTests()
         {
             lock (QueueLock)
             {
-                if (WorkQueue.Count != 0 || SafeStatusQueue.Count != 0 || RunningWork.Count != 0 || PendingSettlementWork.Count != 0 || ActiveRequestWork.Count != 0)
+                if (WorkQueue.Count != 0 || SafeStatusQueue.Count != 0 || ControlQueue.Count != 0 || ControlScanCursor != null
+                    || RunningWork.Count != 0 || PendingSettlementWork.Count != 0 || ActiveRequestWork.Count != 0)
                     throw new InvalidOperationException("Local BridgeQueueState still owns work.");
             }
             if (PendingCompletionIntentCount != 0)

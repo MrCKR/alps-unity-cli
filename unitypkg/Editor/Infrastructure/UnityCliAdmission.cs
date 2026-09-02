@@ -1381,14 +1381,17 @@ namespace UnityCli
                 string markerScope;
                 string rootScope;
                 AdmissionOwnerScopes(command, out markerScope, out rootScope);
-                current.TopRequestDigest = AdmissionAcceptedTopDigest(state, response, current, command);
+                var cancelCandidate = command == "internal.test.run.cancel" ? item.CaptureCancelRecoveryCandidate() : null;
+                current.TopRequestDigest = cancelCandidate != null && AdmissionDigestIsValid(cancelCandidate.RootRequestDigest)
+                    ? cancelCandidate.RootRequestDigest
+                    : AdmissionAcceptedTopDigest(state, response, current, command);
                 var marker = new Dictionary<string, object>
                 {
                     { "requestId", current.RequestId }, { "requestDigest", AdmissionTopDigest(current) }, { "editorSessionId", EditorSessionId() }
                 };
                 var cancelOwner = UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
                 if (command == "internal.test.run.cancel"
-                    && !TryAddCancelAdmissionRootIdentity(state, marker, current, item.CaptureCancelRecoveryCandidate(), out cancelOwner))
+                    && !TryAddCancelAdmissionRootIdentity(state, marker, current, cancelCandidate, out cancelOwner))
                     return AdmissionTransferResult.TransferPending;
                 var recovered = PersistAdmissionOwnerTransfer(state, markerScope + "-admission-owner", marker, current,
                     command == "internal.test.run.cancel" ? cancelOwner : UnityCliAdmissionPool.AdmissionOwnerState.Recovery);
@@ -1424,7 +1427,10 @@ namespace UnityCli
                 if (!readable) return AdmissionTransferResult.TransferPending;
                 var accepted = AdmissionResponseIsCoordinatorAccepted(response) || durable;
                 if (!accepted) return AdmissionTransferResult.NotAccepted;
-                identity.TopRequestDigest = AdmissionAcceptedTopDigest(state, response, identity, command);
+                var cancelCandidate = command == "internal.test.run.cancel" ? item.CaptureCancelRecoveryCandidate() : null;
+                identity.TopRequestDigest = cancelCandidate != null && AdmissionDigestIsValid(cancelCandidate.RootRequestDigest)
+                    ? cancelCandidate.RootRequestDigest
+                    : AdmissionAcceptedTopDigest(state, response, identity, command);
                 var intended = durable
                     ? UnityCliAdmissionPool.AdmissionOwnerState.Coordinator
                     : UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
@@ -1434,7 +1440,7 @@ namespace UnityCli
                     { "requestId", identity.RequestId }, { "requestDigest", AdmissionTopDigest(identity) }, { "editorSessionId", EditorSessionId() }
                 };
                 if (command == "internal.test.run.cancel"
-                    && !TryAddCancelAdmissionRootIdentity(state, marker, identity, item.CaptureCancelRecoveryCandidate(), out intended))
+                    && !TryAddCancelAdmissionRootIdentity(state, marker, identity, cancelCandidate, out intended))
                     return AdmissionTransferResult.TransferPending;
                 var updated = PersistAdmissionOwnerTransfer(state, markerScope + "-admission-owner", marker, identity, intended);
                 identity.OwnerState = updated.OwnerState;
@@ -1530,8 +1536,10 @@ namespace UnityCli
             try
             {
                 var root = state.LoadOperation("test-run");
+                if (root == null)
+                    return TryAddCancelAdmissionIdentityFromTerminalProof(state, marker, identity, candidate);
                 object rawOperation;
-                var operation = root != null && root.TryGetValue("testOperation", out rawOperation) ? AsDictionary(rawOperation) : null;
+                var operation = root.TryGetValue("testOperation", out rawOperation) ? AsDictionary(rawOperation) : null;
                 var rootRequestId = AdmissionText(root, "requestId");
                 var rootRequestDigest = AdmissionText(root, "requestDigest");
                 var runId = AdmissionText(operation, "cancelRunId");
@@ -1560,13 +1568,71 @@ namespace UnityCli
                     || !string.Equals(candidate.RunId, runId, StringComparison.Ordinal)
                     || !CancelTerminalEffectState(candidate.EffectState)
                     || !CancelTerminalCandidateIsValid(candidate.Envelope, identity.RequestId)) return false;
-                marker["cancelContinuationState"] = "continuation_pending";
-                marker["parentRepairEffectState"] = candidate.EffectState;
-                marker["parentRepairPending"] = true;
-                marker["cancelTerminalEnvelope"] = candidate.Envelope;
-                intendedOwner = UnityCliAdmissionPool.AdmissionOwnerState.Recovery;
+                AddCancelRecoveryCandidateFields(marker, identity, candidate);
                 return true;
             }
+            catch { return false; }
+        }
+
+        /// <summary>parent root已清理时，只用WorkItem候选与exact双terminal重建同一恢复marker。</summary>
+        private static bool TryAddCancelAdmissionIdentityFromTerminalProof(
+            BridgeQueueState state,
+            IDictionary<string, object> marker,
+            AdmissionOwnerIdentity identity,
+            BridgeWorkItem.CancelRecoveryCandidate candidate)
+        {
+            if (candidate == null || !IsSafeId(candidate.RootRequestId) || !AdmissionDigestIsValid(candidate.RootRequestDigest)
+                || !Guid.TryParse(candidate.RunId, out _) || !string.Equals(AdmissionTopDigest(identity), candidate.RootRequestDigest, StringComparison.Ordinal)
+                || (candidate.EffectState != "cancelled" && candidate.EffectState != "outcome_unknown")
+                || !CancelTerminalCandidateIsValid(candidate.Envelope, identity.RequestId)) return false;
+            object childTerminal;
+            object selectedChildTerminal;
+            object parentTerminal;
+            if (!state.TryGetTerminal("test-cancel", identity.RequestId, identity.RequestDigest, out childTerminal)
+                || !state.TryGetTerminalBySelector("test-cancel", identity.RequestId, candidate.RootRequestDigest, out selectedChildTerminal)
+                || !state.TryGetTerminal("test-run", candidate.RootRequestId, candidate.RootRequestDigest, out parentTerminal)
+                || !SerializedEqual(childTerminal, selectedChildTerminal)
+                || !SerializedEqual(childTerminal, candidate.Envelope)
+                || !CancelParentTerminalCandidateIsValid(parentTerminal, candidate.RootRequestId, candidate.EffectState)) return false;
+            AddCancelRecoveryCandidateFields(marker, identity, candidate);
+            return true;
+        }
+
+        private static void AddCancelRecoveryCandidateFields(
+            IDictionary<string, object> marker,
+            AdmissionOwnerIdentity identity,
+            BridgeWorkItem.CancelRecoveryCandidate candidate)
+        {
+            marker["rootRequestId"] = candidate.RootRequestId;
+            marker["rootRequestDigest"] = candidate.RootRequestDigest;
+            marker["runId"] = candidate.RunId;
+            marker["cancelRequestId"] = identity.RequestId;
+            marker["cancelRequestDigest"] = identity.RequestDigest;
+            marker["cancelContinuationState"] = "continuation_pending";
+            marker["parentRepairEffectState"] = candidate.EffectState;
+            marker["parentRepairPending"] = true;
+            marker["cancelTerminalEnvelope"] = candidate.Envelope;
+        }
+
+        private static bool CancelParentTerminalCandidateIsValid(object envelope, string rootRequestId, string effectState)
+        {
+            try
+            {
+                var value = AsDictionary(UnityCliSerializer.Parse(UnityCliSerializer.Serialize(envelope)));
+                object ok;
+                object rawError;
+                var error = value != null && value.TryGetValue("error", out rawError) ? AsDictionary(rawError) : null;
+                var expectedCode = effectState == "cancelled" ? "E_TEST_RUN_CANCELLED" : "E_EXECUTION_TIMEOUT";
+                return value != null && string.Equals(AdmissionText(value, "requestId"), rootRequestId, StringComparison.Ordinal)
+                    && value.TryGetValue("ok", out ok) && ok is bool && !(bool)ok
+                    && error != null && string.Equals(AdmissionText(error, "code"), expectedCode, StringComparison.Ordinal);
+            }
+            catch { return false; }
+        }
+
+        private static bool SerializedEqual(object left, object right)
+        {
+            try { return string.Equals(UnityCliSerializer.Serialize(left), UnityCliSerializer.Serialize(right), StringComparison.Ordinal); }
             catch { return false; }
         }
 

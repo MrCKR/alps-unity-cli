@@ -119,6 +119,17 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void TotalNodeVisitBoundIsTheExactSumOfIndependentLaneBudgets()
+        {
+            Assert.That(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick, Is.EqualTo(
+                UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick
+                + UnityCliBridgeQueuePolicy.MaxControlNodesExaminedPerTick
+                + UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick));
+            Assert.That(UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick,
+                Is.EqualTo(UnityCliBridgeQueuePolicy.MaxSafeStatusStartsPerTick));
+        }
+
+        [Test]
         public void NodeScanBoundCountsActualIndexerVisits()
         {
             var queued = new CountingQueue(Enumerable.Range(0, UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick - 1)

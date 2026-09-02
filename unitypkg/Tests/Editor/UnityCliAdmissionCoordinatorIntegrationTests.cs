@@ -427,6 +427,11 @@ namespace UnityCli.Tests
             });
             Assert.That(queueState.TryAcquireLease(parentRequestId, parentDigest, out var acquired), Is.True);
             Assert.That(acquired, Is.True);
+            queueState.TestHooks.ExpectOnce("before-operation-save:test-cancel-admission-owner", () =>
+            {
+                Assert.That(queueState.OperationExists("test-run"), Is.True);
+                Assert.That(queueState.TryGetTerminal("test-run", parentRequestId, parentDigest, out var parentBeforeMarker), Is.False);
+            });
             queueState.TestHooks.ExpectOnce("before-terminal-store:test-run", () => { throw new IOException("injected parent terminal fault"); });
 
             var finalized = UnityCliBridge.UnityCliTestRunCoordinator.FinalizeCancelTerminalForTests(queueState,
@@ -544,6 +549,65 @@ namespace UnityCli.Tests
             Assert.That(queueState.OperationExists("test-run-admission-owner"), Is.False);
             Assert.That(queueState.TryIsLeaseOwned(parentRequestId, parentDigest, out var parentOwned), Is.True);
             Assert.That(parentOwned, Is.False);
+        }
+
+        [Test]
+        public void DeletedParentRootFallbackUsesFrozenCandidateAndExactTerminalsAfterFirstMarkerFault()
+        {
+            var parentRequestId = Unique("deleted-parent");
+            var parentDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(parentRequestId), InstanceId);
+            var cancelRequestId = Unique("deleted-parent-cancel");
+            var cancelRequest = Request(cancelRequestId, "internal.test.run.cancel", new Dictionary<string, object>
+            {
+                { "expectedEditorSessionId", UnityCliBridge.EditorSessionId() }
+            });
+            var cancelRaw = RequestBytes(cancelRequest);
+            var cancelDigest = UnityCliRequestDigest.Compute(cancelRaw, InstanceId);
+            var runId = Guid.NewGuid().ToString();
+            var pool = CreatePool("deleted-parent-fallback-session");
+            Consume(pool, cancelRequestId, cancelDigest, Deadline(cancelRequest));
+            bool created;
+            var item = Enqueue(cancelRequest, cancelRaw, pool, out created);
+            Assert.That(created, Is.True);
+            var childTerminal = ProtocolEnvelopeFactory.Success(cancelRequestId,
+                new Dictionary<string, object> { { "cancelled", true } });
+            var parentTerminal = ProtocolEnvelopeFactory.Error(parentRequestId, "E_TEST_RUN_CANCELLED",
+                "The exact tracked Unity test run was cancelled.");
+            item.FreezeCancelRecoveryCandidate(parentRequestId, parentDigest, runId, "cancelled", childTerminal);
+            queueState.StoreTerminalFirst("test-cancel", cancelRequestId, cancelDigest, parentDigest, childTerminal);
+            queueState.StoreTerminalFirst("test-run", parentRequestId, parentDigest, parentTerminal);
+            Assert.That(queueState.OperationExists("test-run"), Is.False);
+            Assert.That(queueState.TryIsLeaseOwned(parentRequestId, parentDigest, out var parentOwned), Is.True);
+            Assert.That(parentOwned, Is.False);
+            queueState.TestHooks.ExpectOnce("before-operation-save:test-cancel-admission-owner", () =>
+            {
+                throw new IOException("injected first child marker save fault after parent cleanup");
+            });
+
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item,
+                UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(cancelRequestId, "E_EXECUTION_TIMEOUT",
+                    "Cancellation completed but queue settlement is pending."))), Is.False);
+            Assert.That(item.Completed.IsSet, Is.False);
+            Assert.That(queueState.OperationExists("test-cancel-admission-owner"), Is.False);
+            Assert.That(pool.Capture().Records.Single().OwnerState,
+                Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.WorkItem));
+
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(queueState);
+
+            Assert.That(item.Completed.IsSet, Is.True);
+            var rebuilt = queueState.LoadOperation("test-cancel-admission-owner");
+            Assert.That(rebuilt["rootRequestId"], Is.EqualTo(parentRequestId));
+            Assert.That(rebuilt["rootRequestDigest"], Is.EqualTo(parentDigest));
+            Assert.That(rebuilt["runId"], Is.EqualTo(runId));
+            Assert.That(rebuilt["cancelContinuationState"], Is.EqualTo("continuation_pending"));
+            Assert.That(rebuilt["parentRepairEffectState"], Is.EqualTo("cancelled"));
+            Assert.That(pool.Capture().Records.Single().OwnerState,
+                Is.EqualTo(UnityCliAdmissionPool.AdmissionOwnerState.Recovery));
+            Assert.That(UnityCliBridge.UnityCliTestRunCoordinator.RetryCancelAdmissionOwnerMarkerForTests(queueState), Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.OperationExists("test-cancel-admission-owner"), Is.False);
+            Assert.That(queueState.OperationExists("test-run"), Is.False);
         }
 
         [Test]

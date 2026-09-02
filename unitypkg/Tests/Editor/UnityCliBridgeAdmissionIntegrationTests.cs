@@ -512,7 +512,9 @@ namespace UnityCli.Tests
             Assert.That(state.PendingSettlementWork, Is.Empty);
             Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
             Assert.That(UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state), Is.EqualTo(new[] { exact.RequestId }));
-            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(1));
+            Assert.That(state.LastControlNodesExamined, Is.EqualTo(1));
+            Assert.That(state.LastFifoNodesExamined, Is.EqualTo(1));
+            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(2));
             UnityCliBridge.ShutdownQueuedWorkForTests(state);
             state.ClearOperation(scope);
             state.ReleaseLease(parentRequestId, parentDigest);
@@ -746,7 +748,7 @@ namespace UnityCli.Tests
         [Test]
         public void ProductionQueueTraversalCountsActualLinkedListNodesWithinHardBound()
         {
-            for (var index = 0; index < UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick + 1; index++)
+            for (var index = 0; index < UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick + 1; index++)
             {
                 var request = Request("actual-queue-scan-" + index.ToString());
                 request.Command = "project-tool.list";
@@ -763,7 +765,10 @@ namespace UnityCli.Tests
 
             var starts = UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state);
 
-            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+            Assert.That(state.LastSafeStatusNodesExamined, Is.EqualTo(0));
+            Assert.That(state.LastControlNodesExamined, Is.EqualTo(0));
+            Assert.That(state.LastFifoNodesExamined, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick));
+            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick));
             Assert.That(starts.Length, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxStartsPerTick));
             Assert.That(starts, Does.Not.Contain("actual-queue-scan-128"));
             UnityCliBridge.ShutdownQueuedWorkForTests(state);
@@ -785,7 +790,10 @@ namespace UnityCli.Tests
             var firstTick = UnityCliBridge.TakeQueuedStartsForTests(state, UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable);
 
             Assert.That(firstTick.Select(item => item.Request.RequestId), Is.EqualTo(new[] { safe.Request.RequestId }));
-            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+            Assert.That(state.LastSafeStatusNodesExamined, Is.EqualTo(1));
+            Assert.That(state.LastControlNodesExamined, Is.EqualTo(127));
+            Assert.That(state.LastFifoNodesExamined, Is.EqualTo(UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick));
+            Assert.That(state.LastQueueNodesExamined, Is.EqualTo(256));
             Assert.That(state.SafeStatusQueue, Is.Empty);
             Assert.That(UnityCliBridge.CompleteWorkItemForTests(safe, Success(safe.Request.RequestId)), Is.True);
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(128));
@@ -804,8 +812,49 @@ namespace UnityCli.Tests
             UnityCliBridge.ShutdownQueuedWorkForTests(state);
 
             Assert.That(state.SafeStatusQueue, Is.Empty);
+            Assert.That(state.ControlQueue, Is.Empty);
             Assert.That(state.WorkQueue, Is.Empty);
             Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ContinuousSafeStatusCannotHideBoundaryAuthorizedControlFromItsIndependentBudget()
+        {
+            var parentRequestId = "control-budget-parent-" + Guid.NewGuid().ToString("N");
+            var parentDigest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(parentRequestId), "test-instance");
+            var operationId = "control-budget-operation-" + Guid.NewGuid().ToString("N");
+            state.SaveOperation("navmesh-bake", new Dictionary<string, object>
+            {
+                { "requestId", parentRequestId }, { "requestDigest", parentDigest },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "operationId", operationId }
+            });
+            Assert.That(state.TryAcquireLease(parentRequestId, parentDigest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+            for (var index = 0; index < UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick; index++)
+                PublishQueueItem("control-budget-safe-" + index.ToString(), "internal.editor.compile.status", UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
+            for (var index = 0; index < UnityCliBridgeQueuePolicy.MaxControlNodesExaminedPerTick - 1; index++)
+                PublishQueueItem("control-budget-pending-" + index.ToString(), "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control);
+            var boundary = PublishQueueItem("control-budget-boundary", "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control);
+            boundary.Request.Input = new Dictionary<string, object> { { "operationId", operationId } };
+
+            var firstTick = UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state);
+            for (var index = 0; index < UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick; index++)
+                PublishQueueItem("control-budget-refill-" + index.ToString(), "internal.editor.compile.status", UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
+            var secondTick = UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state);
+
+            Assert.That(firstTick, Does.Contain(boundary.Request.RequestId));
+            Assert.That(secondTick, Does.Contain(boundary.Request.RequestId));
+            Assert.That(state.LastSafeStatusNodesExamined,
+                Is.EqualTo(UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick));
+            Assert.That(state.LastControlNodesExamined,
+                Is.EqualTo(UnityCliBridgeQueuePolicy.MaxControlNodesExaminedPerTick));
+            Assert.That(state.LastFifoNodesExamined,
+                Is.EqualTo(UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick));
+            Assert.That(state.LastQueueNodesExamined,
+                Is.EqualTo(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick));
+            UnityCliBridge.ShutdownQueuedWorkForTests(state);
+            state.ClearOperation("navmesh-bake");
+            state.ReleaseLease(parentRequestId, parentDigest);
         }
 
         [Test]
@@ -936,6 +985,11 @@ namespace UnityCli.Tests
                 item.QueueNode = state.WorkQueue.AddLast(item);
                 if (workClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus)
                     item.SafeStatusNode = state.SafeStatusQueue.AddLast(item);
+                if (workClass == UnityCliBridgeQueuePolicy.WorkClass.Control)
+                {
+                    item.ControlNode = state.ControlQueue.AddLast(item);
+                    if (state.ControlScanCursor == null) state.ControlScanCursor = item.ControlNode;
+                }
             }
             return item;
         }

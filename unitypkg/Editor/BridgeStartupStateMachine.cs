@@ -101,7 +101,7 @@ namespace UnityCli
         StopListener
     }
 
-    /// <summary>listener首次registry claim之前保持queue关闭；成功只开放一次，不可恢复失败才停止。</summary>
+    /// <summary>listener首次registry claim之前保持queue关闭；只有Written开放，stale或永久失败均停止。</summary>
     internal sealed class BridgeInitialPublicationGate
     {
         private bool waiting;
@@ -121,7 +121,7 @@ namespace UnityCli
             if (outcome == InstancePublicationRetryOutcome.Pending || outcome == InstancePublicationRetryOutcome.None)
                 return BridgeInitialPublicationAction.Wait;
             waiting = false;
-            if (outcome == InstancePublicationRetryOutcome.Published)
+            if (outcome == InstancePublicationRetryOutcome.Written)
             {
                 published = true;
                 return BridgeInitialPublicationAction.OpenQueueAndListen;

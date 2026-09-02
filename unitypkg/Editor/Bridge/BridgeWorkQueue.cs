@@ -86,9 +86,12 @@ namespace UnityCli
                 {
                     item.QueueNode = null;
                     item.SafeStatusNode = null;
+                    item.ControlNode = null;
                 }
                 state.WorkQueue.Clear();
                 state.SafeStatusQueue.Clear();
+                state.ControlQueue.Clear();
+                state.ControlScanCursor = null;
                 return pending;
             }
         }
@@ -231,28 +234,42 @@ namespace UnityCli
             List<BridgeWorkItem> snapshotItems;
             int runningOrdinaryReads;
             bool mutationRunning;
-            var actualNodeVisits = 0;
+            var safeStatusVisits = 0;
+            var controlVisits = 0;
+            var fifoVisits = 0;
             lock (state.QueueLock)
             {
                 snapshotItems = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick);
-                var prioritySafeStatus = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxSafeStatusStartsPerTick);
+                var prioritySafeStatus = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick);
                 var safeCursor = state.SafeStatusQueue.First;
-                while (safeCursor != null && prioritySafeStatus.Count < UnityCliBridgeQueuePolicy.MaxSafeStatusStartsPerTick
-                    && actualNodeVisits < UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
+                while (safeCursor != null && safeStatusVisits < UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick)
                 {
                     prioritySafeStatus.Add(safeCursor.Value);
-                    actualNodeVisits += 1;
+                    safeStatusVisits += 1;
                     safeCursor = safeCursor.Next;
                 }
+                var priorityControl = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxControlNodesExaminedPerTick);
+                var controlLimit = Math.Min(state.ControlQueue.Count, UnityCliBridgeQueuePolicy.MaxControlNodesExaminedPerTick);
+                var controlCursor = state.ControlScanCursor;
+                if (controlCursor == null || controlCursor.List != state.ControlQueue) controlCursor = state.ControlQueue.First;
+                while (controlCursor != null && controlVisits < controlLimit)
+                {
+                    priorityControl.Add(controlCursor.Value);
+                    controlVisits += 1;
+                    controlCursor = controlCursor.Next ?? state.ControlQueue.First;
+                }
+                state.ControlScanCursor = state.ControlQueue.Count == 0 ? null : controlCursor;
                 var seen = new HashSet<BridgeWorkItem>();
                 var cursor = state.WorkQueue.First;
-                while (cursor != null && actualNodeVisits < UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick)
+                while (cursor != null && fifoVisits < UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick)
                 {
                     var item = cursor.Value;
                     if (seen.Add(item)) snapshotItems.Add(item);
-                    actualNodeVisits += 1;
+                    fifoVisits += 1;
                     cursor = cursor.Next;
                 }
+                foreach (var item in priorityControl)
+                    if (seen.Add(item)) snapshotItems.Add(item);
                 foreach (var item in prioritySafeStatus)
                     if (seen.Add(item)) snapshotItems.Add(item);
                 runningOrdinaryReads = state.RunningWork.Count(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
@@ -260,7 +277,7 @@ namespace UnityCli
                     || item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Control);
                 queueDepth = state.WorkQueue.Count;
             }
-            state.RecordQueueNodesExamined(actualNodeVisits);
+            state.RecordQueueNodesExamined(safeStatusVisits, controlVisits, fifoVisits);
             rejections = new List<ControlQueueRejection>();
             if (snapshotItems.Count == 0) return new List<BridgeWorkItem>();
 
@@ -543,6 +560,11 @@ namespace UnityCli
                             {
                                 if (item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus)
                                     item.SafeStatusNode = state.SafeStatusQueue.AddLast(item);
+                                if (item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Control)
+                                {
+                                    item.ControlNode = state.ControlQueue.AddLast(item);
+                                    if (state.ControlScanCursor == null) state.ControlScanCursor = item.ControlNode;
+                                }
                             }
                             catch
                             {
@@ -826,15 +848,23 @@ namespace UnityCli
             state.Sinks.WriteLog("admission_settlement_deferred requestId=" + item.Request.RequestId + " reason=" + reason);
         }
 
-        /// <summary>QueueLock内同时摘除主FIFO与SafeStatus索引，任何入口都不得留下失效节点。</summary>
+        /// <summary>QueueLock内同时摘除主FIFO与两个独立索引，任何入口都不得留下失效节点。</summary>
         private static void RemoveQueuedItemUnderLock(BridgeQueueState state, BridgeWorkItem item)
         {
             if (item.QueueNode != null && item.QueueNode.List == state.WorkQueue)
                 state.WorkQueue.Remove(item.QueueNode);
             if (item.SafeStatusNode != null && item.SafeStatusNode.List == state.SafeStatusQueue)
                 state.SafeStatusQueue.Remove(item.SafeStatusNode);
+            if (item.ControlNode != null && item.ControlNode.List == state.ControlQueue)
+            {
+                if (object.ReferenceEquals(state.ControlScanCursor, item.ControlNode))
+                    state.ControlScanCursor = item.ControlNode.Next ?? state.ControlQueue.First;
+                state.ControlQueue.Remove(item.ControlNode);
+                if (state.ControlQueue.Count == 0) state.ControlScanCursor = null;
+            }
             item.QueueNode = null;
             item.SafeStatusNode = null;
+            item.ControlNode = null;
         }
 
         private static void RemoveActiveWorkItem(BridgeQueueState state, BridgeWorkItem item)
@@ -925,6 +955,7 @@ namespace UnityCli
             }
             public LinkedListNode<BridgeWorkItem> QueueNode { get; set; }
             internal LinkedListNode<BridgeWorkItem> SafeStatusNode { get; set; }
+            internal LinkedListNode<BridgeWorkItem> ControlNode { get; set; }
             public bool HasStarted { get { lock (StateLock) return started; } }
             public CancellationToken Token { get { return cancellation.Token; } }
             public ManualResetEventSlim Started { get; private set; } = new ManualResetEventSlim(false);

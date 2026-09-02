@@ -8,7 +8,11 @@ namespace UnityCli
     public static class UnityCliBridgeQueuePolicy
     {
         public const int MaxBypassIdentities = 128;
-        public const int MaxNodesExaminedPerTick = 128;
+        public const int MaxFifoNodesExaminedPerTick = 128;
+        public const int MaxControlNodesExaminedPerTick = 128;
+        public const int MaxSafeStatusNodesExaminedPerTick = 4;
+        public const int MaxNodesExaminedPerTick = MaxFifoNodesExaminedPerTick
+            + MaxControlNodesExaminedPerTick + MaxSafeStatusNodesExaminedPerTick;
         public const int MaxStartsPerTick = 16;
         public const int MaxSafeStatusStartsPerTick = 4;
 
