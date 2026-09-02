@@ -171,6 +171,17 @@ interface MainThreadHealth {
   lifecycle: RegistryLifecycle;
 }
 
+export interface InstanceHealthInspection {
+  transportVerified: boolean;
+  mainThread?: {
+    observed: boolean;
+    sequence: number;
+    ageMs: number | null;
+    lifecycle: RegistryLifecycle;
+    fresh: boolean;
+  };
+}
+
 interface HealthIdentity {
   version: 3;
   target: InstanceTarget;
@@ -1156,6 +1167,31 @@ async function probeHealthIdentity(identity: RegistryIdentity, session: Registry
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/** doctor 只消费已脱敏的严格 Health v3 结论；transport 与 pulse freshness 分开投影。 */
+export async function inspectInstanceHealth(instance: UnityInstance, now = Date.now()): Promise<InstanceHealthInspection> {
+  const session = instance.activeSession;
+  if (!session) return { transportVerified: false };
+  const health = await probeHealthIdentity({
+    instanceId: instance.instanceId,
+    canonicalProjectPath: instance.canonicalProjectPath,
+    displayProjectPath: instance.displayProjectPath,
+  }, session);
+  if (!health) return { transportVerified: false };
+  const ageMs = health.mainThread.ageMs === null
+    ? null
+    : health.mainThread.ageMs + Math.max(0, now - health.checkedAt);
+  return {
+    transportVerified: true,
+    mainThread: {
+      observed: health.mainThread.observed,
+      sequence: health.mainThread.sequence,
+      ageMs,
+      lifecycle: health.mainThread.lifecycle,
+      fresh: healthMainThreadIsFresh(health, now),
+    },
+  };
 }
 
 /** cache停留时间必须计入服务端pulse age，避免旧health在TTL内伪装新鲜。 */

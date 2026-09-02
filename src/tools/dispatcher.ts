@@ -42,7 +42,7 @@ function createSessionSupervisor(flags: Record<string, string | boolean>, runtim
   return runtime.createSessionSupervisor?.(flags, runtime) ?? new SessionSupervisor(flags, runtime);
 }
 
-const MULTI_TARGET_CATALOG_TOOLS = new Set(["tools.group", "tools.group-list", "tools.search", "tools.describe", "diagnose.capabilities"]);
+const MULTI_TARGET_CATALOG_TOOLS = new Set(["tools.group", "tools.group-list", "tools.search", "tools.describe"]);
 type TargetAdmissionContext = {
   admissions: Partial<Record<InstanceTarget, RootAdmissionLease>>;
   supervisors: Partial<Record<InstanceTarget, SessionSupervisor>>;

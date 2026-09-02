@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools/commands.js";
 import { handleDoctorCommand, type DoctorRuntime } from "../src/doctor.js";
-import { handleCapabilitiesCommand } from "../src/capabilities.js";
 import { ExtensionRegistry, BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
 import { checkExtensionBundles, installExtensionBundle, readExtensionInstallManifest } from "../src/extensions/installer.js";
 import { readInstalledUnityPackages } from "../src/extensions/project-resolver.js";
@@ -135,7 +134,7 @@ test("extension manifest contributions expose tool names and required packages",
   assert.deepEqual(requiredPackagesForContribution(vfxGraph!.manifest, vfxGraph!.contribution), ["com.unity.visualeffectgraph"]);
 });
 
-test("tools describe resolves extension availability against live-discovered extension descriptors", async () => {
+test("tools describe and selected Tool gate preserve extension dependency severity", async () => {
   const projectPath = await makeFakeProject();
   const selected = await selectedProject(projectPath, [probuilderPingTool()]);
 
@@ -145,6 +144,13 @@ test("tools describe resolves extension availability against live-discovered ext
   assert.equal(describeData.available, false);
   assert.match(String(describeData.unavailableReason), /E_EXTENSION_DEPENDENCY_MISSING/);
   assert.ok((describeData.requiresPackages as string[]).includes("com.unity.probuilder"));
+
+  const run = await handleToolsCommand("run", ["probuilder.ping"], { ...selected.flags, input: "{}" }, selected.runtime, `${requestId}_run`);
+  assert.ok(!run.ok);
+  assert.equal(run.error.code, "E_EXTENSION_DEPENDENCY_MISSING");
+  assert.equal(run.error.transient, false);
+  assert.equal(run.error.retryAfterMs, 0);
+  assert.ok(run.error.nextActions.some((action) => action.includes("Unity Package Manager") || action.includes("Packages/manifest.json")));
 });
 
 test("tools describe requires a healthy physical extension installation", async () => {
@@ -231,22 +237,34 @@ test("probuilder.scene is exposed only as a Tool contribution", () => {
   assert.equal(findBuiltinExtensionToolContribution("probuilder.scene")?.extensionId, "probuilder");
 });
 
-test("doctor and capabilities keep extension summaries available from manifests", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-doctor-p5t04-"));
-  const projectPath = await makeFakeProject({ "com.unity.probuilder": "5.0.0" });
+test("doctor treats uninstalled optional extensions as warnings", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-doctor-optional-"));
+  const projectPath = await makeFakeProject();
 
   const doctorRuntime: DoctorRuntime = { dataDir };
-  const doctor = await handleDoctorCommand({ project: projectPath }, doctorRuntime, "req_doctor_ext");
+  const doctor = await handleDoctorCommand({ project: projectPath }, doctorRuntime, "req_doctor_optional_ext");
   assert.ok(doctor.ok);
-  const checks = (doctor.data as { checks: Array<{ name: string; status: string }> }).checks;
-  const extCheck = checks.find((check) => check.name === "extension_availability");
-  assert.ok(extCheck);
-  assert.equal(extCheck!.status, "fail");
+  const checks = (doctor.data as { checks: Array<{ name: string; status: string; details?: Record<string, unknown> }> }).checks;
+  const extCheck = checks.find((check) => check.name === "extensions");
+  assert.equal(extCheck?.status, "warn");
+  assert.equal(extCheck?.details?.optionalUninstalled, 5);
+  assert.equal(Object.hasOwn(extCheck?.details ?? {}, "code"), false);
+});
 
-  const capabilities = await handleCapabilitiesCommand({ project: projectPath }, { projectTools: [] }, requestId);
-  assert.ok(capabilities.ok);
-  const ext = (capabilities.data as Record<string, unknown>).extensions as Record<string, unknown>;
-  assert.equal(ext.total, 5);
+test("doctor fails installed or enabled broken extensions with a stable dependency code", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-doctor-broken-"));
+  const projectPath = await makeFakeProject();
+  const bridgePackage = join(projectPath, "Packages", "com.alpsckr.unitycli");
+  await mkdir(bridgePackage, { recursive: true });
+  await writeFile(join(bridgePackage, "extensions.json"), JSON.stringify({ extensions: ["probuilder"] }));
+
+  const doctor = await handleDoctorCommand({ project: projectPath }, { dataDir }, "req_doctor_broken_ext");
+  assert.ok(doctor.ok);
+  const extCheck = (doctor.data as { checks: Array<{ name: string; status: string; details?: Record<string, unknown> }> }).checks
+    .find((check) => check.name === "extensions");
+  assert.equal(extCheck?.status, "fail");
+  assert.equal(extCheck?.details?.code, "E_EXTENSION_DEPENDENCY_MISSING");
+  assert.equal((extCheck?.details?.broken as unknown[]).length, 1);
 });
 
 test("validateExtensionManifestContracts validates manifests against bridge routing without offline extension descriptors", () => {

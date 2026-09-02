@@ -9,7 +9,7 @@ async function source(path: string): Promise<string> {
 }
 
 test("named core atomic tools prevalidate, commit, and return independently observed state", async () => {
-  const [assign, collision, force, material, jointAdd, simulation, prefabCreate, instantiate, unpack, create, load, save, unload, frame, resolution, preflight] = await Promise.all([
+  const [assign, collision, force, material, jointAdd, simulation, prefabCreate, instantiate, unpack, create, load, save, unload, frame, resolution] = await Promise.all([
     source("Tools/physics/assign-material.cs"),
     source("Tools/physics/collision-matrix.cs"),
     source("Tools/physics/force.cs"),
@@ -25,7 +25,6 @@ test("named core atomic tools prevalidate, commit, and return independently obse
     source("Tools/scene/unload.cs"),
     source("Tools/scene/view-frame.cs"),
     source("Tools/editor/resolution.cs"),
-    source("Tools/diagnose/preflight.cs"),
   ]);
 
   assert.match(assign, /EditorUtility\.InstanceIDToObject\(colliderId\) as Collider/);
@@ -74,11 +73,6 @@ test("named core atomic tools prevalidate, commit, and return independently obse
   assert.match(frame, /E_EXECUTION_TIMEOUT/);
   assert.match(resolution, /var observedWidth = PlayerSettings\.defaultScreenWidth/);
   assert.match(resolution, /E_EDITOR_RESOLUTION_STATE_MISMATCH/);
-
-  assert.doesNotMatch(preflight, /ctx\.CommitEffect\(\)/);
-  assert.doesNotMatch(preflight, /DiscoverProjectTools\(\)/);
-  assert.doesNotMatch(preflight, /DiscoverProjectContexts\(\)/);
-  assert.doesNotMatch(preflight, /SideEffects\s*=/);
 });
 
 test("shared undo and redo require request-specific read Tool proof", async () => {

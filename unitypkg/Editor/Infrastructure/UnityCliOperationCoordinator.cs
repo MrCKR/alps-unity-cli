@@ -740,7 +740,7 @@ namespace UnityCli
         /// <summary>Context/catalog/health 类请求没有 business mutation，不得创建 request journal。</summary>
         private static bool IsReadOnlyBridgeCommand(string command)
         {
-            if (IsEditorStateSnapshotCommand(command)) return true;
+            if (IsEditorStateSnapshotCommand(command) || IsDoctorDiagnosticCommand(command)) return true;
             return string.Equals(command, "project-tool.list", StringComparison.Ordinal)
                 || string.Equals(command, "runtime-tool.list", StringComparison.Ordinal);
         }

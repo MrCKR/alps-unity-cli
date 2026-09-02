@@ -16,7 +16,7 @@ namespace UnityCli
         {
             return new List<object> {
                 CapabilityData("camera", CameraCommands), CapabilityData("scene", SceneCommands), CapabilityData("go", GameObjectCommands), CapabilityData("asset", AssetCommands),
-                CapabilityData("diagnose", DiagnoseCommands), CapabilityData("screenshot", ScreenshotCommands), CapabilityData("prefab", PrefabCommands), CapabilityData("ui", UiCommands),
+                CapabilityData("screenshot", ScreenshotCommands), CapabilityData("prefab", PrefabCommands), CapabilityData("ui", UiCommands),
                 CapabilityData("material", MaterialCommands), CapabilityData("graphics", GraphicsCommands), CapabilityData("physics", PhysicsCommands), CapabilityData("scriptable-object", ScriptableObjectCommands),
                 CapabilityData("profiler", ProfilerCommands), CapabilityData("animation", AnimationCommands), CapabilityData("shader", ShaderCommands), CapabilityData("texture", TextureCommands),
                 CapabilityData("editor", EditorCommands), CapabilityData("code", CodeCommands), CapabilityData("project-tool", ProjectToolCommands), CapabilityData("runtime-tool", RuntimeToolCommands),

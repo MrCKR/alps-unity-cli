@@ -22,11 +22,10 @@ test("editor.state has zero C# Tool or Context owners", async () => {
 });
 
 test("private editor-state snapshot is explicitly registered but absent from public inventories", async () => {
-  const [registry, sampler, capability, preflight, coordinator, instanceRegistry, http, bridge] = await Promise.all([
+  const [registry, sampler, capability, coordinator, instanceRegistry, http, bridge] = await Promise.all([
     readFile(join(editor, "Bridge", "BridgeCommandRegistry.cs"), "utf8"),
     readFile(join(editor, "Infrastructure", "UnityCliEditorStateSnapshot.cs"), "utf8"),
     readFile(join(editor, "Infrastructure", "UnityCliJson.cs"), "utf8"),
-    readFile(join(editor, "Tools", "diagnose", "preflight.cs"), "utf8"),
     readFile(join(editor, "Infrastructure", "UnityCliOperationCoordinator.cs"), "utf8"),
     readFile(join(editor, "Infrastructure", "UnityCliInstanceRegistry.cs"), "utf8"),
     readFile(join(editor, "Bridge", "BridgeHttpServer.cs"), "utf8"),
@@ -58,7 +57,6 @@ test("private editor-state snapshot is explicitly registered but absent from pub
   assert.match(bridge, /var allowedDuringPlayModeTransition =[\s\S]*IsEditorStateSnapshotCommand\(request\.Command\)/);
   assert.match(bridge, /OnBeforeAssemblyReload[\s\S]*?StopListener\(\);/, "domain reload must close the listener for natural fallback");
   assert.doesNotMatch(capability, new RegExp(escape(privateCommand)));
-  assert.doesNotMatch(preflight, new RegExp(escape(privateCommand)));
 });
 
 function escape(value: string): string {

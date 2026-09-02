@@ -126,7 +126,7 @@ unitycli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","m
 | 只读工具 | 检查输出数据是否符合预期 |
 | 修改工具 | 重新调用只读工具确认变更 |
 | Live Editor Tool | 读取能力自己的终态业务数据，必要时用读取型Tool验证 |
-| 诊断工具 | 检查 doctor 或 preflight |
+| 诊断控制面 | 检查 `doctor` 的独立 Registry/Health、pulse、business、catalog、compile 与 Extension checks |
 
 ## 错误处理
 

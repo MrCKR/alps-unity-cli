@@ -65,6 +65,8 @@ test("raw code.exec dry-run cannot compile source and normal execution rechecks 
   const referenceDiscovery = support.slice(support.indexOf("private static IEnumerable<string> DefaultCodeReferences"), support.indexOf("private static IEnumerable<string> SplitCsv"));
   assert.doesNotMatch(referenceDiscovery, /File\.Exists|File\.Open|Directory\.GetFiles/);
   assert.doesNotMatch(support, /ValidateCodeReferences|WaitForExit\(60000\)|E_CODE_RUNTIME_FAILED/);
+  assert.match(support, /UnityCliExceptionProjection\.Project\(exception\)[\s\S]*projection\.PublicMessage/);
+  assert.match(support, /"causes", projection\.Causes[\s\S]*"causeChainTruncated", projection\.Truncated/);
   assert.match(support, /E_CODE_RUNTIME_EXCEPTION/);
   assert.match(coordinator, /BeginDirectEffect\(string requestId\)[\s\S]*DirectMutationBindingMatches\(requestId, requestDigest\)[\s\S]*IsOwnedBy\(requestId, requestDigest\)[\s\S]*E_UNITY_BUSY/);
   assert.match(toolSource, /absoluteDeadlineMs: context\.absoluteDeadlineMs[\s\S]*timeoutMs: 60_000/);

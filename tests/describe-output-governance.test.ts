@@ -65,8 +65,7 @@ function assertNoInternalSourceText(subject: string, text: string): void {
 test("TS-local descriptor registry owns exactly the current package-local tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    "asset.refresh", "build.run", "code.exec", "diagnose.capabilities",
-    "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
+    "asset.refresh", "build.run", "code.exec", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
     "editor.dialogs", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
     "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
     "occlusion.bake-status", "package.bridge-remove", "package.deploy",
@@ -134,10 +133,14 @@ test("large-output TS-local descriptors disclose output controls", () => {
   }
 });
 
-test("diagnose.preflight exposes health counts without Bridge routes or logs", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/diagnose/preflight.cs", import.meta.url), "utf8");
-  assert.match(source, /public bool Ready \{ get; set; \}[\s\S]*public long ToolCount/);
-  assert.match(source, /BuildCompileStatus\(ct\)[\s\S]*maxScannedEntries = 5000[\s\S]*maxScanMilliseconds = 50[\s\S]*ct\.ThrowIfCancellationRequested\(\)[\s\S]*compileErrorsTruncated = true/);
-  assert.doesNotMatch(source, /ContextCount|CustomContexts|ProjectContexts/);
-  assert.doesNotMatch(source, /public long Port|public string LogPath|BuildCapabilities\(|POST \/bridge\/execute/);
+test("doctor private diagnostics keep catalog and compile reads bounded", async () => {
+  const [diagnostics, registry] = await Promise.all([
+    readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliDoctorDiagnostics.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8"),
+  ]);
+  assert.match(diagnostics, /internal\.doctor\.business[\s\S]*internal\.doctor\.catalog[\s\S]*internal\.doctor\.compile/);
+  assert.match(diagnostics, /maxScannedEntries = 5000[\s\S]*maxScanMilliseconds = 50[\s\S]*maxCompileErrorBytes = 64 \* 1024/);
+  const snapshot = registry.slice(registry.indexOf("private static Dictionary<string, object> ProjectToolCatalogDiagnosticSnapshot"), registry.indexOf("private static string BoundedCatalogDiagnosticText"));
+  assert.match(snapshot, /blockedToolsTruncated[\s\S]*blockedTools/);
+  assert.doesNotMatch(snapshot, /RefreshProjectToolFingerprint|ProjectToolDescriptorData|foreach/);
 });

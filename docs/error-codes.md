@@ -192,7 +192,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
 | `E_UNITY_COMPILE_FAILED` | owned compilation cycle 完成且包含 compiler error；details 带本次 diagnostics |
 | `E_CODE_COMPILE_FAILED` | Runtime Code 编译失败 |
-| `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常 |
+| `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常；message 指向最深可操作 cause，details.causes 为循环安全且受深度/字节限制的 cause chain |
 | `E_IO_ERROR` | IO 错误 |
 
 ## AI Agent 错误处理流程
@@ -209,7 +209,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 - Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
 - Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search <k1|k2|...>` 或 `tools describe`
 - 弹窗 blocker 的 `nextActions` 必须指向先 `tools run editor.dialogs`，再 `tools run editor.dialog.click`；不得要求人工处理、预定义按钮列表、launch-only 入口或额外确认
-- 诊断错误的 `nextActions` 必须指向 `doctor` 或 `tools run diagnose.preflight`
+- 诊断错误的 `nextActions` 必须指向顶层 `doctor` 或对应 owner（`instances list`、`editor.state`、`extensions doctor`、Unity Console）
 
 ## JSON 字段命名
 

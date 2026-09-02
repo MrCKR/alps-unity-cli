@@ -35,6 +35,16 @@ namespace UnityCli
         private static readonly Dictionary<string, RegisteredTool> ProjectTools = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
         private static Dictionary<string, RegisteredTool> discoveryTools;
         private static RegistryOwnershipResolver registryOwnership;
+        private static ProjectToolCatalogDiagnosticState projectToolCatalogDiagnostics;
+
+        private sealed class ProjectToolCatalogDiagnosticState
+        {
+            internal string CatalogFingerprint;
+            internal long ToolCount;
+            internal long BlockedCount;
+            internal bool BlockedToolsTruncated;
+            internal List<Dictionary<string, object>> BlockedTools;
+        }
 
         private static void RegisterProjectTool(RegisteredTool definition)
         {
@@ -114,6 +124,7 @@ namespace UnityCli
 
                 ProjectTools.Clear();
                 foreach (var item in pending) ProjectTools.Add(item.Key, item.Value);
+                projectToolCatalogDiagnostics = BuildProjectToolCatalogDiagnosticState();
                 projectToolsDiscovered = true;
             }
             catch (Exception exception)
@@ -898,31 +909,55 @@ namespace UnityCli
         }
 
 
-        private static Dictionary<string, object> ProjectToolFingerprintSummary()
+        /// <summary>registration 完成时一次构造 immutable catalog 摘要；doctor 读取时不再遍历或刷新 Tool。</summary>
+        private static ProjectToolCatalogDiagnosticState BuildProjectToolCatalogDiagnosticState()
         {
-            var items = new List<object>();
-            var blocked = 0;
-            foreach (var pair in ProjectTools)
+            const int maxBlockedTools = 32;
+            var blocked = new List<Dictionary<string, object>>();
+            var blockedCount = 0L;
+            var fingerprintMaterial = new StringBuilder();
+            foreach (var definition in ProjectTools.Values.OrderBy(value => value.Name, StringComparer.Ordinal))
             {
-                var definition = pair.Value;
-                RefreshProjectToolFingerprint(definition);
-                if (definition.FingerprintStatus == "blocked") blocked++;
-                items.Add(new Dictionary<string, object>
+                fingerprintMaterial.Append(definition.Name).Append('=').Append(definition.Fingerprint ?? string.Empty).Append('\n');
+                if (!string.Equals(definition.FingerprintStatus, "blocked", StringComparison.Ordinal)) continue;
+                blockedCount++;
+                if (blocked.Count >= maxBlockedTools) continue;
+                blocked.Add(new Dictionary<string, object>
                 {
                     { "name", definition.Name },
-                    { "fingerprint", ProjectToolFingerprintData(definition) }
+                    { "message", BoundedCatalogDiagnosticText(definition.FingerprintMessage, 1024) },
+                    { "rePinValue", FormatProjectToolFingerprint(definition.Fingerprint) }
                 });
             }
-            items.Sort((left, right) => StringComparer.Ordinal.Compare(
-                ((Dictionary<string, object>)left)["name"] as string,
-                ((Dictionary<string, object>)right)["name"] as string));
+            return new ProjectToolCatalogDiagnosticState
+            {
+                CatalogFingerprint = Sha256Hex(fingerprintMaterial.ToString()),
+                ToolCount = ProjectTools.Count,
+                BlockedCount = blockedCount,
+                BlockedToolsTruncated = blockedCount > blocked.Count,
+                BlockedTools = blocked
+            };
+        }
+
+        /// <summary>返回冻结状态的有界副本，禁止调用 fingerprint refresh 或 descriptor serialization。</summary>
+        private static Dictionary<string, object> ProjectToolCatalogDiagnosticSnapshot()
+        {
+            if (projectToolCatalogDiagnostics == null) throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool catalog diagnostic state is unavailable.", "Wait for Tool registration to finish, then run doctor again.");
             return new Dictionary<string, object>
             {
                 { "algorithm", ProjectToolFingerprintAlgorithm },
-                { "toolCount", (long)ProjectTools.Count },
-                { "blockedCount", (long)blocked },
-                { "tools", items }
+                { "catalogFingerprint", projectToolCatalogDiagnostics.CatalogFingerprint },
+                { "toolCount", projectToolCatalogDiagnostics.ToolCount },
+                { "blockedCount", projectToolCatalogDiagnostics.BlockedCount },
+                { "blockedToolsTruncated", projectToolCatalogDiagnostics.BlockedToolsTruncated },
+                { "blockedTools", projectToolCatalogDiagnostics.BlockedTools.Select(item => new Dictionary<string, object>(item)).Cast<object>().ToList() }
             };
+        }
+
+        private static string BoundedCatalogDiagnosticText(string value, int maxChars)
+        {
+            value = value ?? string.Empty;
+            return value.Length <= maxChars ? value : value.Substring(0, maxChars);
         }
 
         private static Dictionary<string, object> ProjectToolFingerprintDetails(RegisteredTool definition)

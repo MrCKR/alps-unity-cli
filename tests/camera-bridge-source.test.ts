@@ -681,7 +681,7 @@ test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
   assert.match(httpBlock, /request\.Command == "runtime-tool\.list"/, "HandleHttpCore must allow runtime-tool.list during Play Mode transitions");
   assert.match(httpBlock, /request\.Command == "runtime-tool\.run"/, "HandleHttpCore must allow runtime-tool.run during Play Mode transitions");
   assert.match(httpBlock, /request\.Command == "project-tool\.list"/, "HandleHttpCore must allow project-tool.list during Play Mode transitions");
-  assert.match(httpBlock, /request\.Command == "diagnose\.preflight"/, "HandleHttpCore must allow diagnose.preflight during Play Mode transitions");
+  assert.match(httpBlock, /IsDoctorAdmissionBypassCommand\(request\.Command\)/, "HandleHttpCore must allow bounded doctor catalog/compile reads during Play Mode transitions");
 });
 
 test("EnsureEditorNotBusy only blocks Play Mode transitions", async () => {
