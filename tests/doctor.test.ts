@@ -112,6 +112,7 @@ test("doctor reports an empty registry through a public success envelope", async
   const resultChecks = checks(result);
   assert.equal(resultChecks.find((check) => check.name === "registry_health_identity")?.details?.code, "E_INSTANCE_REQUIRED");
   assert.equal(resultChecks.find((check) => check.name === "main_thread_pulse")?.details?.code, "E_MAIN_THREAD_PULSE_UNAVAILABLE");
+  if (!result.ok) return assert.fail(JSON.stringify(result));
   assert.equal(Object.hasOwn(result.data as object, "command"), false);
 });
 

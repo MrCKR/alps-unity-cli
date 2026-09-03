@@ -11,7 +11,9 @@ function countForbiddenJsonFields(value: unknown): number {
     && (Object.hasOwn(record, "summary") || Object.hasOwn(record, "group") || Object.hasOwn(record, "inputSchema"));
   const own = Number(Object.hasOwn(record, "descriptorFingerprint")) + Number(Object.hasOwn(record, "handlerFingerprint"))
     + Number(descriptor && Object.hasOwn(record, "fingerprint"));
-  return own + Object.values(record).reduce((total, item) => total + countForbiddenJsonFields(item), 0);
+  let nested = 0;
+  for (const key of Object.keys(record)) nested += countForbiddenJsonFields(record[key]);
+  return own + nested;
 }
 
 async function filesUnder(root: string): Promise<string[]> {

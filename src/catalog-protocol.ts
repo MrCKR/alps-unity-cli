@@ -150,7 +150,7 @@ async function readCatalogSummary(
     ...(query.localNames ? { localNames: query.localNames } : {}),
     ...(query.cursorContext ? { cursorContext: query.cursorContext } : {}),
     ...(query.cursorToken ? { cursorToken: query.cursorToken } : {}),
-  }, flags, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs });
+  }, flags, runtime, { mode: "read", mutation: false, absoluteDeadlineMs });
   if (!result.ok) return result as CliResult & { ok: false };
   return parseSummaryResponse(result.data, requestId, command, query);
 }
@@ -173,7 +173,7 @@ async function readCatalogGroups(
   const result = await executeBridgePayload(requestId, command, {
     ...(expectedGeneration ? { expectedCatalogGeneration: expectedGeneration } : {}),
     reservedNames,
-  }, flags, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs });
+  }, flags, runtime, { mode: "read", mutation: false, absoluteDeadlineMs });
   if (!result.ok) return result as CliResult & { ok: false };
   return parseGroupsResponse(result.data, requestId, command);
 }
@@ -205,7 +205,7 @@ async function readCatalogDescriptor(
 
   const command = `${target === "editor" ? "project" : "runtime"}-tool.describe`;
   const input = target === "editor" && fallbackName ? { name, fallbackName } : { name };
-  const result = await executeBridgePayload(requestId, command, input, flags, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs });
+  const result = await executeBridgePayload(requestId, command, input, flags, runtime, { mode: "read", mutation: false, absoluteDeadlineMs });
   if (!result.ok) return result as CliResult & { ok: false };
   return parseDescriptorResponse(result.data, requestId, command, name, target, target === "editor" ? fallbackName : undefined);
 }

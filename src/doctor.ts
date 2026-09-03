@@ -252,7 +252,6 @@ async function checkBusinessDiagnostic(
       input,
       selectedFlags,
       { ...runtime, rootAdmission: admission },
-      undefined,
       { mode: "read", mutation: false, absoluteDeadlineMs: admission.executionAbsoluteDeadlineMs },
     );
     if (!result.ok) return failedLiveCheck("business_diagnostic", result.error);
@@ -365,7 +364,6 @@ async function privateDoctorRead(
     {},
     { ...flags, instance: selected.selection.instance.instanceId },
     runtime,
-    undefined,
     withObservationSelection({ mode: "observeNow", mutation: false, defaultTimeoutMs: EDITOR_STATE_OBSERVATION_BUDGET_MS }, selected.selection),
   );
   return result.ok ? { data: result.data } : failedLiveCheck(checkName, result.error);
@@ -566,10 +564,11 @@ function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
     "assetDatabaseOperationCount", "sourceFileReadCount", "persistedToolValueOperationCount", "perToolSuccessLogCount",
   ]);
   const serialized = JSON.stringify(data);
+  const toolCount = data.toolCount;
   if (!providerCounts || !publication || serialized === undefined
     || Buffer.byteLength(serialized, "utf8") > MAX_DOCTOR_CATALOG_RESPONSE_BYTES
     || data.identity !== DOCTOR_CATALOG_IDENTITY
-    || !isNonNegativeInteger(data.toolCount) || data.toolCount > MAX_DOCTOR_CATALOG_TOOLS) return undefined;
+    || !isNonNegativeInteger(toolCount) || toolCount > MAX_DOCTOR_CATALOG_TOOLS) return undefined;
 
   if (!isNonNegativeInteger(providerCounts.builtIn) || !isNonNegativeInteger(providerCounts.extension)
     || !isNonNegativeInteger(providerCounts.projectInterface) || !isNonNegativeInteger(providerCounts.officialAttribute)) return undefined;
@@ -579,8 +578,8 @@ function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
     projectInterface: providerCounts.projectInterface,
     officialAttribute: providerCounts.officialAttribute,
   };
-  if (Object.values(typedProviderCounts).some((count) => count > data.toolCount)
-    || Object.values(typedProviderCounts).reduce((sum, count) => sum + count, 0) !== data.toolCount
+  if (Object.values(typedProviderCounts).some((count) => count > toolCount)
+    || Object.values(typedProviderCounts).reduce((sum, count) => sum + count, 0) !== toolCount
     || !isNonNegativeInteger(publication.assemblyCount) || publication.assemblyCount > MAX_DOCTOR_CATALOG_ASSEMBLIES
     || !isNonNegativeInteger(publication.providerAssemblyCount) || publication.providerAssemblyCount > publication.assemblyCount
     || !isNonNegativeInteger(publication.elapsedMilliseconds)
@@ -602,7 +601,7 @@ function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
 
   return {
     identity: DOCTOR_CATALOG_IDENTITY,
-    toolCount: data.toolCount,
+    toolCount,
     providerCounts: typedProviderCounts,
     publicationDiagnostics: typedPublication,
   };

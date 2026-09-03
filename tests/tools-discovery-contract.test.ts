@@ -15,7 +15,12 @@ test("discovery controls are not public Tool identities", () => {
 
 test("frozen top-level tools controls remain usable while tools run rejects their former identities", async () => {
   const runtime = {
-    projectTools: [makeLiveTool({ name: "fixture.read", group: "fixture", summary: "Read one fixture." })],
+    projectTools: [makeLiveTool({
+      name: "fixture.read",
+      group: "fixture",
+      summary: "Read one fixture.",
+      description: "Read one fixture descriptor through the frozen tools controls.",
+    })],
     runtimeTools: [],
   };
   const groups = await execute(["tools", "group"], runtime as never);

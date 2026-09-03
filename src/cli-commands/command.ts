@@ -493,12 +493,16 @@ async function resolveCommandCatalogTool(
   const operability = resolveCatalogIndependentOperabilityTool(name);
   if (operability) return { ok: true, tool: operability, context: invocationContext };
   const fallbackName = name.startsWith(ATTRIBUTE_PREFIX) ? undefined : `${ATTRIBUTE_PREFIX}${name}`;
-  const resolved = invocationContext
-    ? await resolveCatalogToolForInvocation(name, flags, runtime, requestId, invocationContext, fallbackName)
-    : await resolveCatalogTool(name, flags, runtime, requestId, absoluteDeadlineMs, fallbackName);
+  if (invocationContext) {
+    const resolved = await resolveCatalogToolForInvocation(name, flags, runtime, requestId, invocationContext, fallbackName);
+    if (!resolved.ok || !resolved.tool || resolved.tool.name === name) return resolved;
+    if (resolved.tool.name === fallbackName && isOfficialAttributeTool(resolved.tool)) return resolved;
+    return { ok: true, context: resolved.context };
+  }
+  const resolved = await resolveCatalogTool(name, flags, runtime, requestId, absoluteDeadlineMs, fallbackName);
   if (!resolved.ok || !resolved.tool || resolved.tool.name === name) return resolved;
   if (resolved.tool.name === fallbackName && isOfficialAttributeTool(resolved.tool)) return resolved;
-  return { ok: true, context: "context" in resolved ? resolved.context : invocationContext };
+  return { ok: true };
 }
 
 async function commandHelp(

@@ -248,6 +248,8 @@ test("checkToolExtensionAvailability works with constructed live descriptors", a
 
   const unboundExtension = await checkToolExtensionAvailability(makeLiveTool({
     name: "fixture.unbound-extension",
+    summary: "Probe one unbound extension descriptor.",
+    description: "Probe one extension-scoped descriptor that is intentionally absent from the extension inventory.",
     source: "extension",
     group: "fixture",
   }), await freezeExtensionAvailability({ project: missingProject }, {}));

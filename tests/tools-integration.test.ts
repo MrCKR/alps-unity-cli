@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import type { BridgeRequest, RootAdmissionLease, RootAdmissionRequest } from "../src/bridge/index.js";
-import { readEditorCatalogDescriptor, readEditorCatalogSummary, readRuntimeCatalogDescriptor } from "../src/catalog-protocol.js";
+import { readEditorCatalogDescriptor, readEditorCatalogSummary, readRuntimeCatalogDescriptor, type CatalogSummaryQuery } from "../src/catalog-protocol.js";
 import { execute } from "../src/cli.js";
 import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
@@ -12,6 +13,21 @@ process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 const disconnected = { dataDir: "Z:/definitely-missing-unity-cli-data" } as const;
 const injectedBridge = async (payload: BridgeRequest) => ({ ok: true as const, requestId: payload.requestId, data: {} });
 const connected = { ...disconnected, projectTools: staticBridgeToolMetadata(), runtimeTools: [], bridgeExecute: injectedBridge } as const;
+
+function fixtureCatalogSummaryQuery(overrides: Partial<CatalogSummaryQuery> & Pick<CatalogSummaryQuery, "limit" | "reservedNames">): CatalogSummaryQuery {
+  const localNames = overrides.localNames ?? [];
+  return {
+    ...overrides,
+    localNames,
+    cursorContext: overrides.cursorContext ?? createHash("sha256").update(JSON.stringify({
+      operation: "tools.search",
+      group: overrides.group ?? "",
+      keyword: overrides.keyword ?? "",
+      localGeneration: "fixture-local-generation",
+      localNames,
+    }), "utf8").digest("hex"),
+  };
+}
 
 function bridgeDescriptor(tool: ReturnType<typeof staticBridgeToolMetadata>[number]): Record<string, unknown> {
   return {
@@ -210,11 +226,11 @@ test("summary protocol bounds a large catalog before transport projection", asyn
     group: "g".repeat(200),
     outputSchema: { type: "object", properties: { payload: { type: "string", description: "x".repeat(4_096) } } },
   }));
-  const result = await readEditorCatalogSummary({}, { projectTools }, "req_large_summary", {
+  const result = await readEditorCatalogSummary({}, { projectTools }, "req_large_summary", fixtureCatalogSummaryQuery({
     keyword: "searchable",
     limit: 101,
     reservedNames: [],
-  });
+  }));
   assert.equal(result.ok, true, JSON.stringify(result));
   if (!result.ok) return;
   assert.equal(result.total, 5_000);
@@ -226,14 +242,16 @@ test("summary protocol bounds a large catalog before transport projection", asyn
   const multibyte = await readEditorCatalogSummary({}, { projectTools: [makeLiveTool({
     name: "fixture.multibyte",
     summary: `${"界".repeat(170)}ab`,
+    description: "Expose one multibyte summary that remains within the UTF-8 transport bound.",
     group: "fixture",
-  })] }, "req_multibyte_summary", { limit: 101, reservedNames: [] });
+  })] }, "req_multibyte_summary", fixtureCatalogSummaryQuery({ limit: 101, reservedNames: [] }));
   assert.equal(multibyte.ok, true, JSON.stringify(multibyte));
   const oversizedMultibyte = await readEditorCatalogSummary({}, { projectTools: [makeLiveTool({
     name: "fixture.multibyte-too-large",
     summary: `${"界".repeat(170)}abc`,
+    description: "Expose one multibyte summary that intentionally exceeds the bounded UTF-8 transport limit.",
     group: "fixture",
-  })] }, "req_multibyte_summary_large", { limit: 101, reservedNames: [] });
+  })] }, "req_multibyte_summary_large", fixtureCatalogSummaryQuery({ limit: 101, reservedNames: [] }));
   assert.equal(oversizedMultibyte.ok, false);
   if (!oversizedMultibyte.ok) assert.equal(oversizedMultibyte.error.code, "E_TOOL_REGISTRY_UNHEALTHY");
 });
@@ -259,7 +277,7 @@ test("private summary and exact protocols fail closed on extra payload and wrong
         }],
       },
     }),
-  }, "req_malformed_summary", { limit: 20, reservedNames: [] });
+  }, "req_malformed_summary", fixtureCatalogSummaryQuery({ limit: 20, reservedNames: [] }));
   assert.equal(malformedSummary.ok, false);
   if (!malformedSummary.ok) assert.equal(malformedSummary.error.code, "E_TOOL_REGISTRY_UNHEALTHY");
 
@@ -313,9 +331,9 @@ test("private summary and exact protocols fail closed on extra payload and wrong
 
 test("generation-bound cursor rejects a changed catalog and multi-target output remains ordinal", async () => {
   const editorTools = [
-    makeLiveTool({ name: "fixture.zulu", summary: "Order hit zulu.", group: "fixture" }),
-    makeLiveTool({ name: "fixture.runtime", summary: "Order hit runtime.", group: "fixture", target: "runtime" }),
-    makeLiveTool({ name: "fixture.alpha", summary: "Order hit alpha.", group: "fixture" }),
+    makeLiveTool({ name: "fixture.zulu", summary: "Order hit zulu.", description: "Emit one zulu-ordered catalog item.", group: "fixture" }),
+    makeLiveTool({ name: "fixture.runtime", summary: "Order hit runtime.", description: "Emit one runtime-scoped catalog item.", group: "fixture", target: "runtime" }),
+    makeLiveTool({ name: "fixture.alpha", summary: "Order hit alpha.", description: "Emit one alpha-ordered catalog item.", group: "fixture" }),
   ];
   const runtimeOverlay = { ...editorTools[1], available: false as const, unavailableReason: "E_RUNTIME_NOT_READY: Enter Play Mode." };
   const runtime = { ...connected, projectTools: editorTools, runtimeTools: [runtimeOverlay] };
@@ -323,7 +341,7 @@ test("generation-bound cursor rejects a changed catalog and multi-target output 
   assert.equal(first.ok, true, JSON.stringify(first));
   const firstData = first.data as { tools: Array<{ name: string }>; pageInfo: { nextCursor?: string } };
   assert.deepEqual(firstData.tools.map((tool) => tool.name), ["fixture.alpha"]);
-  runtime.projectTools = [...editorTools, makeLiveTool({ name: "fixture.beta", summary: "Order hit beta.", group: "fixture" })];
+  runtime.projectTools = [...editorTools, makeLiveTool({ name: "fixture.beta", summary: "Order hit beta.", description: "Emit one beta-ordered catalog item.", group: "fixture" })];
   const changed = await execute(["tools", "search", "order hit", "--page-size", "1", "--cursor", firstData.pageInfo.nextCursor!], runtime as never);
   assert.equal(changed.ok, false);
   if (!changed.ok) assert.equal(changed.error.code, "E_TOOL_CATALOG_CHANGED");
