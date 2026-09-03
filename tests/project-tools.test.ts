@@ -56,7 +56,7 @@ function descriptor(overrides: Record<string, unknown> = {}): Record<string, unk
 /** 构造 sealed official-attribute 保守 descriptor。 */
 function officialDescriptor(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return descriptor({
-    name: "UnityPipeline_sample.echo",
+    name: "UnityPipeline_hotfix_container_inspect",
     group: "UnityPipeline",
     contractProfile: "official-attribute",
     destructiveHint: true,
@@ -66,7 +66,7 @@ function officialDescriptor(overrides: Record<string, unknown> = {}): Record<str
     requiresPackages: [],
     playModeSupport: "unknown",
     availabilityScope: "editorSession",
-    examples: [{ description: "Echo hello.", argv: ["tools", "run", "UnityPipeline_sample.echo", "--input", "{\"value\":\"hello\"}"] }],
+    examples: [{ description: "Echo hello.", argv: ["tools", "run", "UnityPipeline_hotfix_container_inspect", "--input", "{\"value\":\"hello\"}"] }],
     completionContract: {
       executionClass: "external",
       journalPolicy: "required",
@@ -237,11 +237,23 @@ test("official attribute descriptors cannot weaken their sealed conservative con
   assert.deepEqual((result.error.details as { invalidFields: string[] }).invalidFields, ["destructiveHint"]);
 });
 
+test("official attribute snake_case identity does not make the live catalog unhealthy", async () => {
+  const result = await discoverProjectTools({}, {
+    bridgeExecute: async (payload) => ({
+      ok: true,
+      requestId: payload.requestId,
+      data: { tools: [officialDescriptor({ name: "UnityPipeline_project_reload_data" })] },
+    }),
+  }, "req_official_snake_case");
+  assert.ok(result.ok, JSON.stringify(result));
+  if (result.ok) assert.equal(result.tools[0]?.name, "UnityPipeline_project_reload_data");
+});
+
 test("unsupported official attribute dry-run fails before Bridge dispatch", async () => {
   let bridgeCalls = 0;
   const tool = projectDescriptorToToolMetadata(officialDescriptor());
   assert.ok(tool);
-  const result = await execute(["tools", "run", "UnityPipeline_sample.echo", "--input", "{\"value\":\"hello\"}", "--dry-run"], {
+  const result = await execute(["tools", "run", "UnityPipeline_hotfix_container_inspect", "--input", "{\"value\":\"hello\"}", "--dry-run"], {
     dataDir: "Z:/missing-unity-cli-data",
     projectTools: [tool],
     bridgeExecute: async () => { bridgeCalls += 1; throw new Error("must not dispatch"); },

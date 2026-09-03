@@ -182,7 +182,6 @@ namespace UnityCli
             try
             {
                 DiscoverProjectTools();
-                if (projectToolCatalogDiagnostics == null) throw new InvalidOperationException("Tool catalog snapshot was not published.");
                 return true;
             }
             catch (Exception exception)

@@ -31,29 +31,37 @@ import { readInstalledExtensions } from "./cli-commands/extensions.js";
 import { checkExtensionBundles, readExtensionInstallManifest, type ExtensionStatusCheck } from "./extensions/installer.js";
 import { failure, success } from "./output.js";
 import type { CliError, CliResult } from "./types.js";
-import { isRegisteredToolName } from "./tool-name.js";
 
 const DOCTOR_BUSINESS_TIMEOUT_MS = 10_000;
 const DOCTOR_BUSINESS_COMPLETION = "doctor-business-read-v1";
-const DOCTOR_CATALOG_ALGORITHM = "unity-cli-project-tool-fingerprint-v2";
+const DOCTOR_CATALOG_IDENTITY = "unity-cli-immutable-domain-catalog";
 const MAX_DOCTOR_CATALOG_TOOLS = 10_000;
-const MAX_DOCTOR_BLOCKED_TOOLS = 32;
-const MAX_DOCTOR_BLOCKED_MESSAGE_BYTES = 1024;
+const MAX_DOCTOR_CATALOG_ASSEMBLIES = 100_000;
 const MAX_DOCTOR_CATALOG_RESPONSE_BYTES = 64 * 1024;
 
-interface DoctorBlockedTool {
-  name: string;
-  message: string;
-  rePinValue: string;
+interface DoctorCatalogProviderCounts {
+  builtIn: number;
+  extension: number;
+  projectInterface: number;
+  officialAttribute: number;
+}
+
+interface DoctorCatalogPublicationDiagnostics {
+  assemblyCount: number;
+  providerAssemblyCount: number;
+  elapsedMilliseconds: number;
+  discoveryPassCount: number;
+  assetDatabaseOperationCount: number;
+  sourceFileReadCount: number;
+  persistedToolValueOperationCount: number;
+  perToolSuccessLogCount: number;
 }
 
 interface DoctorCatalogData {
-  algorithm: typeof DOCTOR_CATALOG_ALGORITHM;
-  catalogFingerprint: string;
+  identity: typeof DOCTOR_CATALOG_IDENTITY;
   toolCount: number;
-  blockedCount: number;
-  blockedToolsTruncated: boolean;
-  blockedTools: DoctorBlockedTool[];
+  providerCounts: DoctorCatalogProviderCounts;
+  publicationDiagnostics: DoctorCatalogPublicationDiagnostics;
 }
 
 export interface DoctorRuntime extends BridgeRuntime {
@@ -277,24 +285,20 @@ async function checkCatalogIntegrity(
   selected: SelectedHealth,
 ): Promise<DoctorCheck> {
   const result = await privateDoctorRead("catalog_integrity", "internal.doctor.catalog", flags, runtime, requestId, selected);
-  if (isDoctorCheck(result)) return result;
+  if (isDoctorCheck(result)) {
+    return result.details?.code === "E_TOOL_REGISTRY_UNHEALTHY" ? { ...result, status: "fail" } : result;
+  }
   const data = doctorCatalogData(result.data);
   if (!data) return invalidLiveCheck("catalog_integrity", "Catalog integrity read returned an invalid bounded DTO.");
-  const blockedCount = data.blockedCount;
   return {
     name: "catalog_integrity",
-    status: blockedCount > 0 ? "fail" : "pass",
-    message: blockedCount > 0
-      ? `${blockedCount} registered Tool fingerprint(s) are blocked.`
-      : `The immutable catalog integrity snapshot covers ${data.toolCount} registered Tool(s).`,
+    status: "pass",
+    message: `The immutable domain catalog contains ${data.toolCount} registered Tool(s).`,
     details: {
-      ...(blockedCount > 0 ? { code: "E_TOOL_FINGERPRINT_MISMATCH" } : {}),
-      algorithm: data.algorithm,
-      catalogFingerprint: data.catalogFingerprint,
+      identity: data.identity,
       toolCount: data.toolCount,
-      blockedCount,
-      blockedToolsTruncated: data.blockedToolsTruncated,
-      blockedTools: data.blockedTools,
+      providerCounts: data.providerCounts,
+      publicationDiagnostics: data.publicationDiagnostics,
     },
   };
 }
@@ -536,42 +540,55 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-/** catalog DTO 是闭集；sample、aggregate、字段与总 UTF-8 bytes 必须同时一致。 */
+/** catalog DTO 只接受唯一 published snapshot 的 aggregate，并校验 count parity 与固定 publication 边界。 */
 function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
-  const data = exactRecord(value, ["algorithm", "catalogFingerprint", "toolCount", "blockedCount", "blockedToolsTruncated", "blockedTools"]);
+  const data = exactRecord(value, ["identity", "toolCount", "providerCounts", "publicationDiagnostics"]);
   if (!data) return undefined;
+  const providerCounts = exactRecord(data.providerCounts, ["builtIn", "extension", "projectInterface", "officialAttribute"]);
+  const publication = exactRecord(data.publicationDiagnostics, [
+    "assemblyCount", "providerAssemblyCount", "elapsedMilliseconds", "discoveryPassCount",
+    "assetDatabaseOperationCount", "sourceFileReadCount", "persistedToolValueOperationCount", "perToolSuccessLogCount",
+  ]);
   const serialized = JSON.stringify(data);
-  if (serialized === undefined || Buffer.byteLength(serialized, "utf8") > MAX_DOCTOR_CATALOG_RESPONSE_BYTES
-    || data.algorithm !== DOCTOR_CATALOG_ALGORITHM
-    || typeof data.catalogFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(data.catalogFingerprint)
-    || !isNonNegativeInteger(data.toolCount) || data.toolCount > MAX_DOCTOR_CATALOG_TOOLS
-    || !isNonNegativeInteger(data.blockedCount) || data.blockedCount > data.toolCount
-    || typeof data.blockedToolsTruncated !== "boolean" || !Array.isArray(data.blockedTools)) return undefined;
+  if (!providerCounts || !publication || serialized === undefined
+    || Buffer.byteLength(serialized, "utf8") > MAX_DOCTOR_CATALOG_RESPONSE_BYTES
+    || data.identity !== DOCTOR_CATALOG_IDENTITY
+    || !isNonNegativeInteger(data.toolCount) || data.toolCount > MAX_DOCTOR_CATALOG_TOOLS) return undefined;
 
-  const expectedSampleCount = Math.min(data.blockedCount, MAX_DOCTOR_BLOCKED_TOOLS);
-  if (data.blockedTools.length !== expectedSampleCount
-    || data.blockedToolsTruncated !== (data.blockedCount > MAX_DOCTOR_BLOCKED_TOOLS)) return undefined;
-
-  const blockedTools: DoctorBlockedTool[] = [];
-  const names = new Set<string>();
-  for (const value of data.blockedTools) {
-    const item = exactRecord(value, ["name", "message", "rePinValue"]);
-    if (!item || !isRegisteredToolName(item.name) || names.has(item.name)
-      || typeof item.message !== "string" || item.message.length === 0
-      || Buffer.byteLength(item.message, "utf8") > MAX_DOCTOR_BLOCKED_MESSAGE_BYTES
-      || typeof item.rePinValue !== "string"
-      || !/^unity-cli-project-tool-fingerprint-v2:[a-f0-9]{64}$/.test(item.rePinValue)) return undefined;
-    names.add(item.name);
-    blockedTools.push({ name: item.name, message: item.message, rePinValue: item.rePinValue });
-  }
+  if (!isNonNegativeInteger(providerCounts.builtIn) || !isNonNegativeInteger(providerCounts.extension)
+    || !isNonNegativeInteger(providerCounts.projectInterface) || !isNonNegativeInteger(providerCounts.officialAttribute)) return undefined;
+  const typedProviderCounts: DoctorCatalogProviderCounts = {
+    builtIn: providerCounts.builtIn,
+    extension: providerCounts.extension,
+    projectInterface: providerCounts.projectInterface,
+    officialAttribute: providerCounts.officialAttribute,
+  };
+  if (Object.values(typedProviderCounts).some((count) => count > data.toolCount)
+    || Object.values(typedProviderCounts).reduce((sum, count) => sum + count, 0) !== data.toolCount
+    || !isNonNegativeInteger(publication.assemblyCount) || publication.assemblyCount > MAX_DOCTOR_CATALOG_ASSEMBLIES
+    || !isNonNegativeInteger(publication.providerAssemblyCount) || publication.providerAssemblyCount > publication.assemblyCount
+    || !isNonNegativeInteger(publication.elapsedMilliseconds)
+    || publication.discoveryPassCount !== 1
+    || publication.assetDatabaseOperationCount !== 0
+    || publication.sourceFileReadCount !== 0
+    || publication.persistedToolValueOperationCount !== 0
+    || publication.perToolSuccessLogCount !== 0) return undefined;
+  const typedPublication: DoctorCatalogPublicationDiagnostics = {
+    assemblyCount: publication.assemblyCount,
+    providerAssemblyCount: publication.providerAssemblyCount,
+    elapsedMilliseconds: publication.elapsedMilliseconds,
+    discoveryPassCount: publication.discoveryPassCount,
+    assetDatabaseOperationCount: publication.assetDatabaseOperationCount,
+    sourceFileReadCount: publication.sourceFileReadCount,
+    persistedToolValueOperationCount: publication.persistedToolValueOperationCount,
+    perToolSuccessLogCount: publication.perToolSuccessLogCount,
+  };
 
   return {
-    algorithm: DOCTOR_CATALOG_ALGORITHM,
-    catalogFingerprint: data.catalogFingerprint,
+    identity: DOCTOR_CATALOG_IDENTITY,
     toolCount: data.toolCount,
-    blockedCount: data.blockedCount,
-    blockedToolsTruncated: data.blockedToolsTruncated,
-    blockedTools,
+    providerCounts: typedProviderCounts,
+    publicationDiagnostics: typedPublication,
   };
 }
 
@@ -606,7 +623,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         suggestions.push("Use the business diagnostic error code and nextActions without treating it as a transport failure.");
         break;
       case "catalog_integrity":
-        suggestions.push("Review only the reported blocked Tool fingerprints before applying any re-pin value.");
+        suggestions.push("Fix the catalog publication failure, then let Unity compile and reload the domain.");
         break;
       case "compile":
         suggestions.push("Fix the bounded compiler diagnostics or wait for compilation to finish.");

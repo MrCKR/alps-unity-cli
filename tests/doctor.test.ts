@@ -25,6 +25,25 @@ type MainThreadFixture = {
   lifecycle: string;
 };
 
+function healthyCatalog(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    identity: "unity-cli-immutable-domain-catalog",
+    toolCount: 327,
+    providerCounts: { builtIn: 300, extension: 10, projectInterface: 15, officialAttribute: 2 },
+    publicationDiagnostics: {
+      assemblyCount: 450,
+      providerAssemblyCount: 20,
+      elapsedMilliseconds: 12,
+      discoveryPassCount: 1,
+      assetDatabaseOperationCount: 0,
+      sourceFileReadCount: 0,
+      persistedToolValueOperationCount: 0,
+      perToolSuccessLogCount: 0,
+    },
+    ...overrides,
+  };
+}
+
 /** 创建含严格 v3 claim 与可控 Health pulse 的 doctor 夹具。 */
 async function doctorFixture(mainThread: Partial<MainThreadFixture> = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-doctor-data-"));
@@ -65,7 +84,7 @@ function healthyDoctorBridge(fixture: Awaited<ReturnType<typeof doctorFixture>>,
       return { ok: true, requestId: payload.requestId, data: { accepted: true, projectPath: fixture.projectPath, sceneLoaded: true, activeScenePath: "Assets/Main.unity", playMode: false } };
     }
     if (payload.command === "internal.doctor.catalog") {
-      return { ok: true, requestId: payload.requestId, data: { algorithm: "unity-cli-project-tool-fingerprint-v2", catalogFingerprint: "a".repeat(64), toolCount: 327, blockedCount: 0, blockedToolsTruncated: false, blockedTools: [] } };
+      return { ok: true, requestId: payload.requestId, data: healthyCatalog() };
     }
     if (payload.command === "internal.doctor.compile") {
       return { ok: true, requestId: payload.requestId, data: { compiling: false, scanComplete: true, hasCompileErrors: false, compileErrorCount: 0, compileErrorsTruncated: false, compileErrors: [], nextActions: [] } };
@@ -166,13 +185,23 @@ test("stale main-thread pulse remains distinct from verified Health transport", 
   assert.equal(bridgeCalls, 0);
 });
 
-test("catalog and compile checks validate bounded business fields and stable codes", async (t) => {
+test("catalog publication failure remains independent from verified transport and compile state", async (t) => {
   const fixture = await doctorFixture();
   t.after(() => fixture.health.close());
   const bridge = healthyDoctorBridge(fixture);
   const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, await doctorRuntime(fixture, async (payload) => {
     if (payload.command === "internal.doctor.catalog") {
-      return { ok: true, requestId: payload.requestId, data: { algorithm: "unity-cli-project-tool-fingerprint-v2", catalogFingerprint: "b".repeat(64), toolCount: 327, blockedCount: 1, blockedToolsTruncated: false, blockedTools: [{ name: "project.audit", message: "fingerprint changed", rePinValue: `unity-cli-project-tool-fingerprint-v2:${"c".repeat(64)}` }] } };
+      return {
+        ok: false,
+        requestId: payload.requestId,
+        error: {
+          code: "E_TOOL_REGISTRY_UNHEALTHY",
+          message: "Immutable catalog publication failed.",
+          transient: true,
+          retryAfterMs: 1000,
+          nextActions: ["Fix the Tool definition and reload the domain."],
+        },
+      };
     }
     if (payload.command === "internal.doctor.compile") {
       return { ok: true, requestId: payload.requestId, data: { compiling: false, scanComplete: true, hasCompileErrors: true, compileErrorCount: 1, compileErrorsTruncated: false, compileErrors: ["Assets/Broken.cs(1,1): error CS1002"], nextActions: ["Fix the compiler error."] } };
@@ -180,67 +209,74 @@ test("catalog and compile checks validate bounded business fields and stable cod
     return bridge(payload);
   }), "req_doctor_failures");
   const resultChecks = checks(result);
+  const identity = resultChecks.find((check) => check.name === "registry_health_identity");
   const catalog = resultChecks.find((check) => check.name === "catalog_integrity");
   const compile = resultChecks.find((check) => check.name === "compile");
 
+  assert.equal(identity?.status, "pass");
+  assert.equal(identity?.details?.transportVerified, true);
   assert.equal(catalog?.status, "fail");
-  assert.equal(catalog?.details?.code, "E_TOOL_FINGERPRINT_MISMATCH");
-  assert.equal(catalog?.details?.blockedCount, 1);
+  assert.equal(catalog?.details?.code, "E_TOOL_REGISTRY_UNHEALTHY");
   assert.equal(compile?.status, "fail");
   assert.equal(compile?.details?.code, "E_UNITY_COMPILE_FAILED");
   assert.equal(compile?.details?.compileErrorCount, 1);
-  assert.deepEqual(compile?.details?.nextActions, ["Fix the compiler error."]);
 });
 
-test("doctor accepts a consistent bounded blocked Tool sample", async (t) => {
+test("doctor accepts the immutable catalog aggregate without per-Tool pin state", async (t) => {
   const fixture = await doctorFixture();
   t.after(() => fixture.health.close());
-  const bridge = healthyDoctorBridge(fixture);
-  const blockedTools = Array.from({ length: 32 }, (_, index) => ({
-    name: `project.tool-${index}`,
-    message: "fingerprint changed",
-    rePinValue: `unity-cli-project-tool-fingerprint-v2:${index.toString(16).padStart(64, "0")}`,
-  }));
-  const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, await doctorRuntime(fixture, async (payload) => {
-    if (payload.command === "internal.doctor.catalog") {
-      return { ok: true, requestId: payload.requestId, data: { algorithm: "unity-cli-project-tool-fingerprint-v2", catalogFingerprint: "b".repeat(64), toolCount: 327, blockedCount: 33, blockedToolsTruncated: true, blockedTools } };
-    }
-    return bridge(payload);
-  }), "req_doctor_truncated_catalog");
+  const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, await doctorRuntime(fixture), "req_doctor_catalog_aggregate");
   const catalog = checks(result).find((check) => check.name === "catalog_integrity");
-  assert.equal(catalog?.status, "fail");
-  assert.equal(catalog?.details?.blockedCount, 33);
-  assert.equal(catalog?.details?.blockedToolsTruncated, true);
-  assert.equal((catalog?.details?.blockedTools as unknown[]).length, 32);
+  assert.equal(catalog?.status, "pass");
+  assert.equal(catalog?.details?.identity, "unity-cli-immutable-domain-catalog");
+  assert.deepEqual(catalog?.details?.providerCounts, { builtIn: 300, extension: 10, projectInterface: 15, officialAttribute: 2 });
+  assert.deepEqual(catalog?.details?.publicationDiagnostics, {
+    assemblyCount: 450,
+    providerAssemblyCount: 20,
+    elapsedMilliseconds: 12,
+    discoveryPassCount: 1,
+    assetDatabaseOperationCount: 0,
+    sourceFileReadCount: 0,
+    persistedToolValueOperationCount: 0,
+    perToolSuccessLogCount: 0,
+  });
+  assert.doesNotMatch(JSON.stringify(catalog), /fingerprint|rePin|blockedTools|blockedCount/i);
 });
 
-test("doctor rejects catalog DTO field, byte, name, and aggregate boundary violations", async (t) => {
+test("doctor rejects malformed catalog aggregate and publication boundaries", async (t) => {
   const fixture = await doctorFixture();
   t.after(() => fixture.health.close());
   const bridge = healthyDoctorBridge(fixture);
-  const validBlocked = {
-    name: "project.audit",
-    message: "fingerprint changed",
-    rePinValue: `unity-cli-project-tool-fingerprint-v2:${"c".repeat(64)}`,
-  };
-  const base = {
-    algorithm: "unity-cli-project-tool-fingerprint-v2",
-    catalogFingerprint: "b".repeat(64),
-    toolCount: 327,
-    blockedCount: 1,
-    blockedToolsTruncated: false,
-    blockedTools: [validBlocked],
+  const providerCounts = { builtIn: 300, extension: 10, projectInterface: 15, officialAttribute: 2 };
+  const publicationDiagnostics = {
+    assemblyCount: 450,
+    providerAssemblyCount: 20,
+    elapsedMilliseconds: 12,
+    discoveryPassCount: 1,
+    assetDatabaseOperationCount: 0,
+    sourceFileReadCount: 0,
+    persistedToolValueOperationCount: 0,
+    perToolSuccessLogCount: 0,
   };
   const invalidCatalogs = [
-    { ...base, internalPath: "forbidden" },
-    { ...base, blockedTools: [{ ...validBlocked, internalPath: "forbidden" }] },
-    { ...base, blockedTools: [{ ...validBlocked, name: "project.数据" }] },
-    { ...base, blockedTools: [{ ...validBlocked, name: `project.${"a".repeat(129)}` }] },
-    { ...base, blockedTools: [{ ...validBlocked, message: "m".repeat(1025) }] },
-    { ...base, blockedToolsTruncated: true },
-    { ...base, blockedCount: 2 },
-    { ...base, toolCount: 10_001 },
-    { ...base, blockedTools: Array.from({ length: 32 }, (_, index) => ({ ...validBlocked, name: `project.tool-${index}`, message: "\u0001".repeat(1024) })), blockedCount: 32 },
+    {
+      algorithm: "unity-cli-project-tool-fingerprint-v2",
+      catalogFingerprint: "a".repeat(64),
+      toolCount: 327,
+      blockedCount: 1,
+      blockedToolsTruncated: false,
+      blockedTools: [{ name: "project.audit", status: "blocked", rePinValue: "forbidden" }],
+    },
+    healthyCatalog({ internalPath: "forbidden" }),
+    healthyCatalog({ identity: "per-tool-fingerprint-v2" }),
+    healthyCatalog({ toolCount: 10_001 }),
+    healthyCatalog({ providerCounts: { ...providerCounts, builtIn: 299 } }),
+    healthyCatalog({ providerCounts: { ...providerCounts, internalOwner: 1 } }),
+    healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, assemblyCount: 100_001 } }),
+    healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, providerAssemblyCount: 451 } }),
+    healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, discoveryPassCount: 2 } }),
+    healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, sourceFileReadCount: 1 } }),
+    healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, internalPath: "forbidden" } }),
   ];
 
   for (const [index, catalog] of invalidCatalogs.entries()) {
@@ -251,7 +287,7 @@ test("doctor rejects catalog DTO field, byte, name, and aggregate boundary viola
     const catalogCheck = checks(result).find((check) => check.name === "catalog_integrity");
     assert.equal(catalogCheck?.status, "fail");
     assert.equal(catalogCheck?.details?.code, "E_BRIDGE_RESPONSE_INVALID");
-    assert.doesNotMatch(JSON.stringify(catalogCheck), /forbidden|数据/);
+    assert.doesNotMatch(JSON.stringify(catalogCheck), /forbidden|per-tool-fingerprint/);
   }
 });
 

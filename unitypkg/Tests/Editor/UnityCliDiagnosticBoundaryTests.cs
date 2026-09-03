@@ -16,55 +16,52 @@ namespace UnityCli.Tests
         private static readonly Type BridgeType = Type.GetType("UnityCli.UnityCliBridge, UnityCli.Editor", true);
 
         [Test]
-        public void FirstDoctorCatalogHandlerDoesNotInvokeDiscoveryWhenSnapshotIsMissing()
+        public void DoctorCatalogHandlerReadsThePublishedSnapshotWithoutAnotherConstruction()
         {
-            var snapshot = Field("projectToolCatalogDiagnostics");
-            var operationCounter = Field("projectToolDiscoveryInvocationCount");
-            var originalSnapshot = snapshot.GetValue(null);
+            var constructionCounter = Field("projectToolCatalogConstructionCount");
+            var reader = BridgeType.GetProperty("ProjectToolCatalogSnapshotReader", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null, null);
+            var snapshot = reader.GetType().GetMethod("Read", BindingFlags.Public | BindingFlags.Instance).Invoke(reader, null);
+            var expectedToolCount = Convert.ToInt64(snapshot.GetType().GetProperty("ToolCount").GetValue(snapshot, null));
             var registry = Method("CreateCommandRegistry").Invoke(null, null);
             var requestType = Type.GetType("UnityCli.Protocol.BridgeRequest, UnityCli.Editor", true);
             var request = Activator.CreateInstance(requestType);
             requestType.GetProperty("Command").SetValue(request, "internal.doctor.catalog", null);
-            requestType.GetProperty("RequestId").SetValue(request, "doctor-first-handler", null);
+            requestType.GetProperty("RequestId").SetValue(request, "doctor-catalog-owner", null);
             requestType.GetProperty("Input").SetValue(request, new Dictionary<string, object>(), null);
 
-            try
-            {
-                snapshot.SetValue(null, null);
-                var before = Convert.ToInt64(operationCounter.GetValue(null));
-                var pending = (ValueTask<object>)registry.GetType().GetMethod("ExecuteAsync").Invoke(registry, new[] { request, (object)CancellationToken.None });
-                Exception failure = null;
-                try { pending.AsTask().GetAwaiter().GetResult(); }
-                catch (Exception exception) { failure = exception; }
+            var before = Convert.ToInt64(constructionCounter.GetValue(null));
+            var pending = (ValueTask<object>)registry.GetType().GetMethod("ExecuteAsync").Invoke(registry, new[] { request, (object)CancellationToken.None });
+            var result = (IDictionary<string, object>)pending.AsTask().GetAwaiter().GetResult();
+            var after = Convert.ToInt64(constructionCounter.GetValue(null));
 
-                Assert.That(failure, Is.Not.Null);
-                Assert.That(failure.GetType().GetProperty("Code").GetValue(failure, null), Is.EqualTo("E_TOOL_REGISTRY_UNHEALTHY"));
-                Assert.That(failure.Message, Is.EqualTo("Tool catalog snapshot is unavailable before registry publication."));
-                var operationCount = Convert.ToInt64(operationCounter.GetValue(null)) - before;
-                Assert.That(operationCount, Is.Zero);
-
-                var envelope = (string)Method("SerializeBridgeExceptionEnvelope").Invoke(null, new object[] { "doctor-first-handler", failure });
-                Assert.That(Encoding.UTF8.GetByteCount(envelope), Is.LessThanOrEqualTo(4096));
-                Assert.That(envelope, Does.Contain("\"code\":\"E_TOOL_REGISTRY_UNHEALTHY\""));
-            }
-            finally
-            {
-                snapshot.SetValue(null, originalSnapshot);
-            }
+            Assert.That(after, Is.EqualTo(before));
+            Assert.That(result["identity"], Is.EqualTo("unity-cli-immutable-domain-catalog"));
+            Assert.That(Convert.ToInt64(result["toolCount"]), Is.EqualTo(expectedToolCount));
+            Assert.That(result["providerCounts"], Is.InstanceOf<IDictionary<string, object>>());
+            Assert.That(result["publicationDiagnostics"], Is.InstanceOf<IDictionary<string, object>>());
+            var serialized = Type.GetType("UnityCli.UnityCliSerializer, UnityCli.Editor", true)
+                .GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { result }) as string;
+            Assert.That(Encoding.UTF8.GetByteCount(serialized), Is.LessThanOrEqualTo(64 * 1024));
+            Assert.That(serialized, Does.Not.Contain("fingerprint").IgnoreCase);
+            Assert.That(serialized, Does.Not.Contain("rePinValue"));
         }
 
         [Test]
-        public void AllProjectToolOwnersShareOneNameGrammarAndUtf8Budget()
+        public void ProjectToolNamesUseProfileAwareGrammarAndOneUtf8Budget()
         {
-            var validate = Method("ValidateProjectToolName");
-            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "scene.data" }));
-            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "UnityPipeline_validation.official-result" }));
-            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { new string('a', 128) }));
+            var validator = Type.GetType("UnityCli.UnityCliToolName, UnityCli.Editor", true);
+            var validate = validator.GetMethod("Validate", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "scene.data", "native" }));
+            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { new string('a', 128), "native" }));
+            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "UnityPipeline_hotfix_container_inspect", "official-attribute" }));
+            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "UnityPipeline_project_reload_data", "official-attribute" }));
 
-            AssertInvalidName(validate, "Scene.Data");
-            AssertInvalidName(validate, "scene..data");
-            AssertInvalidName(validate, "scene.数据");
-            AssertInvalidName(validate, new string('a', 129));
+            AssertInvalidName(validate, "UnityPipeline_project_reload_data", "native");
+            AssertInvalidName(validate, "project_reload_data", "official-attribute");
+            AssertInvalidName(validate, "Scene.Data", "native");
+            AssertInvalidName(validate, "scene..data", "native");
+            AssertInvalidName(validate, "scene.数据", "native");
+            AssertInvalidName(validate, new string('a', 129), "native");
         }
 
         [Test]
@@ -98,9 +95,9 @@ namespace UnityCli.Tests
             Assert.That(Encoding.UTF8.GetByteCount(envelope), Is.LessThanOrEqualTo(1536 * 1024));
         }
 
-        private static void AssertInvalidName(MethodInfo validate, string name)
+        private static void AssertInvalidName(MethodInfo validate, string name, string contractProfile)
         {
-            var exception = Assert.Throws<TargetInvocationException>(() => validate.Invoke(null, new object[] { name }));
+            var exception = Assert.Throws<TargetInvocationException>(() => validate.Invoke(null, new object[] { name, contractProfile }));
             Assert.That(exception.InnerException, Is.TypeOf<InvalidOperationException>());
             Assert.That(exception.InnerException.Message, Is.EqualTo("Tool name must use the registered Tool syntax and fit 128 UTF-8 bytes."));
         }

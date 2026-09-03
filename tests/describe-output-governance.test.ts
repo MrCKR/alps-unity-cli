@@ -133,7 +133,7 @@ test("large-output TS-local descriptors disclose output controls", () => {
   }
 });
 
-test("doctor private diagnostics keep catalog and compile reads bounded", async () => {
+test("doctor private diagnostics read the immutable catalog owner and keep compile output bounded", async () => {
   const [diagnostics, registry, bridge] = await Promise.all([
     readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliDoctorDiagnostics.cs", import.meta.url), "utf8"),
     readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8"),
@@ -142,12 +142,9 @@ test("doctor private diagnostics keep catalog and compile reads bounded", async 
   assert.match(diagnostics, /internal\.doctor\.business[\s\S]*internal\.doctor\.catalog[\s\S]*internal\.doctor\.compile/);
   assert.match(diagnostics, /maxScannedEntries = 5000[\s\S]*maxScanMilliseconds = 50[\s\S]*maxCompileErrorBytes = 64 \* 1024/);
   const doctorHandler = diagnostics.slice(diagnostics.indexOf("private static object DoctorCatalogDiagnostic"), diagnostics.indexOf("private static object DoctorCompileDiagnostic"));
-  assert.match(doctorHandler, /CatalogSnapshotReader\.Read\(\)/);
-  assert.doesNotMatch(doctorHandler, /DiscoverProjectTools|RefreshProjectToolFingerprint|ProjectToolDescriptorData/);
-  const startup = bridge.slice(bridge.indexOf("private static bool CompleteBridgeStartup"), bridge.indexOf("private static void StartListener"));
-  assert.match(startup, /DiscoverProjectTools\(\)[\s\S]*projectToolCatalogDiagnostics == null[\s\S]*return true/);
-  const snapshot = registry.slice(registry.indexOf("private static Dictionary<string, object> ProjectToolCatalogDiagnosticSnapshot"), registry.indexOf("private static string BoundedCatalogDiagnosticText"));
-  assert.match(snapshot, /blockedToolsTruncated[\s\S]*blockedTools/);
-  assert.doesNotMatch(snapshot, /DiscoverProjectTools|RefreshProjectToolFingerprint|ProjectToolDescriptorData|foreach/);
-  assert.match(registry, /MaxCatalogBlockedTools = 32[\s\S]*MaxCatalogBlockedMessageUtf8Bytes = 1024[\s\S]*MaxProjectToolCatalogDiagnosticBytes = 64 \* 1024/);
+  assert.match(doctorHandler, /ProjectToolCatalogSnapshotReader\.Read\(\)/);
+  assert.match(doctorHandler, /providerCounts[\s\S]*publicationDiagnostics[\s\S]*DiscoveryPassCount[\s\S]*PerToolSuccessLogCount/);
+  assert.doesNotMatch(doctorHandler, /DiscoverProjectTools|RefreshProjectToolFingerprint|ProjectToolDescriptorData|rePinValue|blockedTools/);
+  assert.doesNotMatch(registry, /CatalogSnapshotReader|ProjectToolCatalogDiagnosticState|ProjectToolCatalogBlockedDiagnostic|projectToolCatalogDiagnostics/);
+  assert.doesNotMatch(bridge, /projectToolCatalogDiagnostics/);
 });

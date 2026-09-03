@@ -154,7 +154,7 @@ namespace UnityCli
             var name = ConstructorString(command, 0, "name", method);
             var description = ConstructorString(command, 1, "description", method);
             var toolName = OfficialAttributeToolPrefix + (name ?? string.Empty);
-            ValidateProjectToolName(toolName);
+            UnityCliToolName.Validate(toolName, "official-attribute");
             if (string.IsNullOrWhiteSpace(description))
                 throw new InvalidOperationException("Official CLI command description is required: " + MethodIdentity(method) + ".");
 

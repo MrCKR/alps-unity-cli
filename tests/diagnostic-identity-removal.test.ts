@@ -7,21 +7,18 @@ const removedIdentities = [
   `diagnose.${"pre" + "flight"}`,
   `diagnose.${"cap" + "abilities"}`,
 ];
-const sourceRoots = ["src", join("unitypkg", "Editor"), "docs"];
+const sourceRoots = ["src", join("unitypkg", "Editor"), "docs", "contracts"];
 
 async function sourceFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
     const path = join(root, entry.name);
-    const normalized = path.replaceAll("\\", "/");
     if (entry.isDirectory()) {
-      if (entry.name === "Generated") continue;
       files.push(...await sourceFiles(path));
       continue;
     }
-    if (entry.name.startsWith(".generated-") || normalized.includes("/Generated/")) continue;
-    if (/\.(?:ts|cs|md)$/.test(entry.name)) files.push(path);
+    if (/\.(?:ts|cs|md|json)$/.test(entry.name)) files.push(path);
   }
   return files;
 }

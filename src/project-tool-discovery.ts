@@ -38,7 +38,8 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
   }
   const descriptor = value as Record<string, unknown>;
   const name = stringProp(descriptor, "name");
-  if (!isRegisteredToolName(name)) {
+  const contractProfile = toolContractProfileProp(descriptor, "contractProfile");
+  if (!contractProfile || !isRegisteredToolName(name, contractProfile)) {
     return undefined;
   }
   const summary = stringProp(descriptor, "summary");
@@ -52,7 +53,6 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
   const target = toolTargetProp(descriptor, "target");
   const availabilityScope = availabilityScopeProp(descriptor, "availabilityScope");
   const completionContract = completionContractProp(descriptor, "completionContract");
-  const contractProfile = toolContractProfileProp(descriptor, "contractProfile");
   const examples = inputSchema ? toolExamplesProp(descriptor, "examples", name, inputSchema) : undefined;
   if (!summary || !description || !group || !inputSchema || !outputSchema || destructiveHint === undefined
       || supportsDryRun === undefined || !playModeSupport || !target || !availabilityScope || !completionContract || !contractProfile || !examples
@@ -89,14 +89,15 @@ function projectDescriptorInvalidFields(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["descriptor"];
   const descriptor = value as Record<string, unknown>;
   const name = stringProp(descriptor, "name");
+  const contractProfile = toolContractProfileProp(descriptor, "contractProfile");
   const inputSchema = objectProp(descriptor, "inputSchema");
   const checks: Array<[string, boolean]> = [
-    ["name", isRegisteredToolName(name)], ["summary", !!stringProp(descriptor, "summary")], ["description", !!stringProp(descriptor, "description")],
+    ["name", !!contractProfile && isRegisteredToolName(name, contractProfile)], ["summary", !!stringProp(descriptor, "summary")], ["description", !!stringProp(descriptor, "description")],
     ["group", !!stringProp(descriptor, "group")], ["inputSchema", !!inputSchema], ["outputSchema", !!objectProp(descriptor, "outputSchema")],
     ["destructiveHint", booleanProp(descriptor, "destructiveHint") !== undefined], ["supportsDryRun", booleanProp(descriptor, "supportsDryRun") !== undefined],
     ["playModeSupport", !!playModeSupportProp(descriptor, "playModeSupport")], ["target", !!toolTargetProp(descriptor, "target")],
     ["availabilityScope", !!availabilityScopeProp(descriptor, "availabilityScope")], ["completionContract", !!completionContractProp(descriptor, "completionContract")],
-    ["contractProfile", !!toolContractProfileProp(descriptor, "contractProfile")],
+    ["contractProfile", !!contractProfile],
     ["examples", !!(name && inputSchema && toolExamplesProp(descriptor, "examples", name, inputSchema))],
   ];
   return [...new Set([...checks.filter(([, valid]) => !valid).map(([field]) => field), ...officialAttributeContractInvalidFields(descriptor)])];

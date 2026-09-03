@@ -32,63 +32,16 @@ namespace UnityCli
         private const string ProjectToolFingerprintAlgorithm = "unity-cli-project-tool-fingerprint-v2";
         private const string OfficialAttributeToolPrefix = "UnityPipeline_";
         private const string OfficialAttributeToolGroup = "UnityPipeline";
-        private const int MaxProjectToolNameUtf8Bytes = 128;
         private const int MaxRegisteredProjectTools = 10000;
-        private const int MaxCatalogBlockedTools = 32;
-        private const int MaxCatalogBlockedMessageUtf8Bytes = 1024;
-        private const int MaxProjectToolCatalogDiagnosticBytes = 64 * 1024;
-        private static readonly Regex RegisteredProjectToolNamePattern = new Regex("^(?:[a-z][a-z0-9-]*|UnityPipeline_[a-z][a-z0-9-]*)(?:\\.[a-z0-9][a-z0-9-]*)*$", RegexOptions.CultureInvariant);
         private static readonly Dictionary<string, RegisteredTool> ProjectTools = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
-        private static readonly IProjectToolCatalogSnapshotReader CatalogSnapshotReader = new FrozenProjectToolCatalogSnapshotReader();
         private static Dictionary<string, RegisteredTool> discoveryTools;
         private static RegistryOwnershipResolver registryOwnership;
-        private static ProjectToolCatalogDiagnosticState projectToolCatalogDiagnostics;
-        private static long projectToolDiscoveryInvocationCount;
-
-        private interface IProjectToolCatalogSnapshotReader
-        {
-            Dictionary<string, object> Read();
-        }
-
-        /// <summary>reader 不拥有 cache，只复制 registry owner 已发布的单份 immutable snapshot。</summary>
-        private sealed class FrozenProjectToolCatalogSnapshotReader : IProjectToolCatalogSnapshotReader
-        {
-            public Dictionary<string, object> Read() { return ProjectToolCatalogDiagnosticSnapshot(); }
-        }
-
-        private sealed class ProjectToolCatalogBlockedDiagnostic
-        {
-            internal ProjectToolCatalogBlockedDiagnostic(string name, string message, string rePinValue)
-            {
-                Name = name; Message = message; RePinValue = rePinValue;
-            }
-            internal readonly string Name;
-            internal readonly string Message;
-            internal readonly string RePinValue;
-            internal Dictionary<string, object> Copy() { return new Dictionary<string, object> { { "name", Name }, { "message", Message }, { "rePinValue", RePinValue } }; }
-        }
-
-        private sealed class ProjectToolCatalogDiagnosticState
-        {
-            internal ProjectToolCatalogDiagnosticState(string catalogFingerprint, long toolCount, long blockedCount, ProjectToolCatalogBlockedDiagnostic[] blockedTools)
-            {
-                CatalogFingerprint = catalogFingerprint;
-                ToolCount = toolCount;
-                BlockedCount = blockedCount;
-                BlockedTools = blockedTools;
-            }
-            internal readonly string CatalogFingerprint;
-            internal readonly long ToolCount;
-            internal readonly long BlockedCount;
-            internal readonly ProjectToolCatalogBlockedDiagnostic[] BlockedTools;
-            internal bool BlockedToolsTruncated { get { return BlockedCount > BlockedTools.Length; } }
-        }
 
         private static void RegisterProjectTool(RegisteredTool definition)
         {
             if (definition == null || string.IsNullOrWhiteSpace(definition.Summary) || definition.InvokeAsync == null)
                 throw new ArgumentException("Tool registration requires name, summary, and a typed async invoker.");
-            ValidateProjectToolName(definition.Name);
+            UnityCliToolName.Validate(definition.Name, definition.ContractProfile);
             var target = discoveryTools ?? ProjectTools;
             if (target.ContainsKey(definition.Name)) throw new InvalidOperationException("Duplicate tool registration: " + definition.Name);
             if (target.Count >= MaxRegisteredProjectTools) throw new InvalidOperationException("Tool registry exceeds its bounded registration count.");
@@ -118,13 +71,6 @@ namespace UnityCli
             target.Add(definition.Name, definition);
         }
 
-        /// <summary>所有 owner 只允许同一 ASCII Tool 语法，并按 UTF-8 bytes 限制注册输入。</summary>
-        private static void ValidateProjectToolName(string name)
-        {
-            if (string.IsNullOrEmpty(name) || Encoding.UTF8.GetByteCount(name) > MaxProjectToolNameUtf8Bytes || !RegisteredProjectToolNamePattern.IsMatch(name))
-                throw new InvalidOperationException("Tool name must use the registered Tool syntax and fit 128 UTF-8 bytes.");
-        }
-
         /// <summary>保留namespace只属于official attribute投影；任一owner违规使整轮pending registry作废。</summary>
         private static void ValidateOfficialAttributeNamespace(RegisteredTool definition)
         {
@@ -139,7 +85,6 @@ namespace UnityCli
 
         private static void DiscoverProjectTools()
         {
-            Interlocked.Increment(ref projectToolDiscoveryInvocationCount);
             if (projectToolsDiscovered) return;
 
             var pending = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
@@ -170,7 +115,6 @@ namespace UnityCli
 
                 ProjectTools.Clear();
                 foreach (var item in pending) ProjectTools.Add(item.Key, item.Value);
-                projectToolCatalogDiagnostics = BuildProjectToolCatalogDiagnosticState();
                 projectToolsDiscovered = true;
             }
             catch (Exception exception)
@@ -954,69 +898,6 @@ namespace UnityCli
                 : new[] { "Review the Tool change.", "Replace the persisted project Tool fingerprint with " + value + ".", "Run the Tool again." };
         }
 
-
-        /// <summary>registration 完成时一次构造 immutable catalog 摘要；doctor 读取时不再遍历或刷新 Tool。</summary>
-        private static ProjectToolCatalogDiagnosticState BuildProjectToolCatalogDiagnosticState()
-        {
-            var blocked = new List<ProjectToolCatalogBlockedDiagnostic>();
-            var blockedCount = 0L;
-            var fingerprintMaterial = new StringBuilder();
-            foreach (var definition in ProjectTools.Values.OrderBy(value => value.Name, StringComparer.Ordinal))
-            {
-                fingerprintMaterial.Append(definition.Name).Append('=').Append(definition.Fingerprint ?? string.Empty).Append('\n');
-                if (!string.Equals(definition.FingerprintStatus, "blocked", StringComparison.Ordinal)) continue;
-                blockedCount++;
-                if (blocked.Count >= MaxCatalogBlockedTools) continue;
-                blocked.Add(new ProjectToolCatalogBlockedDiagnostic(
-                    definition.Name,
-                    BoundedCatalogDiagnosticText(definition.FingerprintMessage, MaxCatalogBlockedMessageUtf8Bytes),
-                    FormatProjectToolFingerprint(definition.Fingerprint)));
-            }
-            var state = new ProjectToolCatalogDiagnosticState(Sha256Hex(fingerprintMaterial.ToString()), ProjectTools.Count, blockedCount, blocked.ToArray());
-            if (Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(ProjectToolCatalogDiagnosticData(state))) > MaxProjectToolCatalogDiagnosticBytes)
-                throw new InvalidOperationException("Tool catalog diagnostic snapshot exceeds its bounded response size.");
-            return state;
-        }
-
-        /// <summary>返回冻结状态的有界副本，禁止调用 fingerprint refresh、discovery 或 descriptor serialization。</summary>
-        private static Dictionary<string, object> ProjectToolCatalogDiagnosticSnapshot()
-        {
-            var state = projectToolCatalogDiagnostics;
-            if (state == null) throw new BridgeCommandException(
-                "E_TOOL_REGISTRY_UNHEALTHY",
-                "Tool catalog snapshot is unavailable before registry publication.",
-                new Dictionary<string, object> { { "registry", "tools" } },
-                new[] { "Wait for the selected Editor listener to publish a ready registry snapshot, then run doctor again." });
-            return ProjectToolCatalogDiagnosticData(state);
-        }
-
-        private static Dictionary<string, object> ProjectToolCatalogDiagnosticData(ProjectToolCatalogDiagnosticState state)
-        {
-            return new Dictionary<string, object>
-            {
-                { "algorithm", ProjectToolFingerprintAlgorithm },
-                { "catalogFingerprint", state.CatalogFingerprint },
-                { "toolCount", state.ToolCount },
-                { "blockedCount", state.BlockedCount },
-                { "blockedToolsTruncated", state.BlockedToolsTruncated },
-                { "blockedTools", state.BlockedTools.Select(item => (object)item.Copy()).ToList() }
-            };
-        }
-
-        private static string BoundedCatalogDiagnosticText(string value, int maxBytes)
-        {
-            value = value ?? string.Empty;
-            var high = Math.Min(value.Length, maxBytes);
-            var low = 0;
-            while (low < high)
-            {
-                var middle = low + (high - low + 1) / 2;
-                if (Encoding.UTF8.GetByteCount(value, 0, middle) <= maxBytes) low = middle;
-                else high = middle - 1;
-            }
-            if (low > 0 && low < value.Length && char.IsHighSurrogate(value[low - 1]) && char.IsLowSurrogate(value[low])) low--;
-            return low == value.Length ? value : value.Substring(0, low);
-        }
 
         private static Dictionary<string, object> ProjectToolFingerprintDetails(RegisteredTool definition)
         {
