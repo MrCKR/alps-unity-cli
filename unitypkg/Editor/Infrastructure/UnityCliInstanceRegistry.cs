@@ -36,11 +36,12 @@ namespace UnityCli
         private static string lastRegistrationSignature;
         private static long listenerGeneration;
         private static long publicationSequence;
-        private static bool registryPublicationRetryPending;
-        private static bool registryPublicationRetryExhausted;
-        private static int registryPublicationAttemptCount;
-        private static double nextRegistryPublicationRetryAt;
-        private static string pendingRegistryRequestedState;
+        private static readonly UnityCliInstancePublicationRetry RegistryPublicationRetry = new UnityCliInstancePublicationRetry(
+            RegistryPublicationMaxAttempts,
+            () => EditorApplication.timeSinceStartup,
+            PublishInstanceForRetry,
+            RegistryPublicationRetryDelaySeconds,
+            WriteLog);
 
         /// <summary>当前 listener generation 只用于 transport attestation 与 registry 内部一致性校验。</summary>
         private static long CurrentListenerGeneration()
@@ -278,80 +279,43 @@ namespace UnityCli
         }
 
         /// <summary>请求当前状态发布；已有失败链只更新最新状态，不创建第二条重试链。</summary>
-        private static bool RegisterInstance(string requestedState)
+        private static InstancePublicationRetryOutcome RegisterInstance(string requestedState)
         {
-            if (registryPublicationRetryExhausted) return false;
-            if (registryPublicationRetryPending)
-            {
-                pendingRegistryRequestedState = requestedState;
-                return false;
-            }
-            return AttemptInstancePublication(requestedState);
+            return RegistryPublicationRetry.Request(requestedState);
         }
 
-        /// <summary>中央update入口推进唯一重试链；达到上限后本次domain不再后台尝试。</summary>
-        private static void TickInstancePublicationRetry()
+        /// <summary>中央update入口推进唯一重试链；首次publication结果由Bridge gate继续处理。</summary>
+        private static InstancePublicationRetryOutcome TickInstancePublicationRetry()
         {
-            if (!registryPublicationRetryPending || registryPublicationRetryExhausted || !started || domainReloading) return;
-            if (EditorApplication.timeSinceStartup < nextRegistryPublicationRetryAt) return;
-            var requestedState = pendingRegistryRequestedState;
-            registryPublicationRetryPending = false;
-            pendingRegistryRequestedState = null;
-            AttemptInstancePublication(string.IsNullOrEmpty(requestedState) ? "ready" : requestedState);
+            if (!started || domainReloading) return InstancePublicationRetryOutcome.None;
+            return RegistryPublicationRetry.Tick();
         }
 
         /// <summary>listener停止或domain结束时清空本次启动的重试状态。</summary>
         private static void CancelInstancePublicationRetry()
         {
-            registryPublicationRetryPending = false;
-            registryPublicationRetryExhausted = false;
-            registryPublicationAttemptCount = 0;
-            nextRegistryPublicationRetryAt = 0;
-            pendingRegistryRequestedState = null;
+            RegistryPublicationRetry.Reset();
         }
 
-        /// <summary>执行一次写入；只对文件、权限或锁类短暂失败安排有限重试。</summary>
-        private static bool AttemptInstancePublication(string requestedState)
+        private static InstancePublicationAttempt PublishInstanceForRetry(string requestedState)
         {
             Exception failure;
-            if (TryRegisterInstance(requestedState, out failure))
-            {
-                var recoveredAttempts = registryPublicationAttemptCount;
-                CancelInstancePublicationRetry();
-                if (recoveredAttempts > 0)
-                    WriteLog("instance_publication_retry_succeeded attempts=" + (recoveredAttempts + 1).ToString(CultureInfo.InvariantCulture));
-                return true;
-            }
-
-            registryPublicationAttemptCount += 1;
-            var failureKind = RegistryPublicationFailureKind(failure);
-            var retryable = IsRetryableRegistryPublicationFailure(failure);
-            WriteLog("instance_register_failed kind=" + failureKind + " retryable=" + (retryable ? "true" : "false") + " attempt=" + registryPublicationAttemptCount.ToString(CultureInfo.InvariantCulture));
-            if (!retryable || registryPublicationAttemptCount >= RegistryPublicationMaxAttempts)
-            {
-                registryPublicationRetryPending = false;
-                registryPublicationRetryExhausted = true;
-                pendingRegistryRequestedState = null;
-                WriteLog("instance_publication_retry_stopped kind=" + failureKind + " attempts=" + registryPublicationAttemptCount.ToString(CultureInfo.InvariantCulture) + " nextAction=restore-data-root-write-access-then-reload-domain");
-                return false;
-            }
-
-            pendingRegistryRequestedState = requestedState;
-            registryPublicationRetryPending = true;
-            nextRegistryPublicationRetryAt = EditorApplication.timeSinceStartup + RegistryPublicationRetryDelaySeconds(registryPublicationAttemptCount);
-            return false;
+            var result = TryRegisterInstance(requestedState, out failure);
+            return new InstancePublicationAttempt(result, IsRetryableRegistryPublicationFailure(failure), RegistryPublicationFailureKind(failure));
         }
 
-        /// <summary>写入或更新当前editor session claim；同identity的其他存活claim必须保留以形成conflict。</summary>
-        private static bool TryRegisterInstance(string requestedState, out Exception failure)
+        /// <summary>写入或更新当前editor session claim；stale CAS与写入失败必须保持可区分。</summary>
+        private static RegistryPublicationResult TryRegisterInstance(string requestedState, out Exception failure)
         {
             failure = null;
-            // AutoStart=false不即时停当前domain，但compile/reload边界开始后不得再把旧listener发布成transitioning。
+            // AutoStart=false不即时停当前domain，但compile/reload边界开始后旧listener必须按stale结果退出。
             if (!UnityCliProjectSettings.Current.BridgeAutoStart
-                && (domainReloading || EditorApplication.isCompiling || EditorApplication.isUpdating)) return true;
+                && (domainReloading || EditorApplication.isCompiling || EditorApplication.isUpdating))
+                return RegistryPublicationResult.StaleSkipped;
             try
             {
                 string recoveryReason = null;
+                var publicationResult = RegistryPublicationResult.Written;
                 WithRegistryMutex(() =>
                 {
                     var registry = ReadCurrentRegistryForPublication(out recoveryReason);
@@ -361,6 +325,7 @@ namespace UnityCli
                     var nextSequence = Interlocked.Increment(ref publicationSequence);
                     if (IsStalePublication(previous, listenerGeneration, nextSequence))
                     {
+                        publicationResult = RegistryPublicationResult.StaleSkipped;
                         WriteLog("instance_publication_skipped_stale session=" + EditorSessionId() + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture) + " sequence=" + nextSequence.ToString(CultureInfo.InvariantCulture));
                         return;
                     }
@@ -370,9 +335,10 @@ namespace UnityCli
                     var data = RegistryData(revision, sessions);
                     WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(data) + "\n");
                 });
+                if (publicationResult != RegistryPublicationResult.Written) return publicationResult;
                 if (!string.IsNullOrEmpty(recoveryReason))
                     WriteLog("instance_registry_recovered reason=" + recoveryReason + " id=" + InstanceId());
-                // Registry是低频publication，不是heartbeat；日志只记录生命周期或listener变化。
+                // Registry是低频publication，不是heartbeat；只有实际写入才更新signature与触发清理。
                 var registrationSignature = NormalizeSessionLifecycle(requestedState) + "|" + ListenerId + "|" + listenerGeneration.ToString(CultureInfo.InvariantCulture);
                 if (!string.Equals(registrationSignature, lastRegistrationSignature, StringComparison.Ordinal))
                 {
@@ -380,12 +346,12 @@ namespace UnityCli
                     WriteLog("instance_registered id=" + InstanceId() + " session=" + EditorSessionId() + " lifecycle=" + NormalizeSessionLifecycle(requestedState) + " listenerId=" + ListenerId + " generation=" + listenerGeneration.ToString(CultureInfo.InvariantCulture));
                 }
                 TryRunAutomaticInstanceCleanup();
-                return true;
+                return RegistryPublicationResult.Written;
             }
             catch (Exception exception)
             {
                 failure = exception;
-                return false;
+                return RegistryPublicationResult.Failed;
             }
         }
 
@@ -496,13 +462,51 @@ namespace UnityCli
                 && string.Equals(ReadString(identity, "canonicalProjectPath"), ProjectIdentity().CanonicalProjectPath, StringComparison.Ordinal);
         }
 
+        /// <summary>端口监听前冻结本domain唯一generation；网络接收与queue publication都只能发生在其后。</summary>
+        private static void PrepareListenerGenerationForStart()
+        {
+            if (listenerGeneration > 0) return;
+            WithRegistryMutex(() =>
+            {
+                string ignored;
+                EnsureListenerGeneration(ReadCurrentRegistryForPublication(out ignored));
+            });
+            if (listenerGeneration <= 0) throw new InvalidOperationException("Listener generation could not be established before startup.");
+        }
+
         /// <summary>读取当前 session 上一次 listener 代次；domain reload 后严格递增。</summary>
         private static void EnsureListenerGeneration(Dictionary<string, object> registry)
         {
             if (listenerGeneration > 0) return;
             var previous = ReadSessions(registry).FirstOrDefault(IsCurrentSession);
             var listener = ReadDictionary(previous, "listener");
-            listenerGeneration = Math.Max(1L, ReadLong(listener, "generation") + 1L);
+            listenerGeneration = ComputeListenerGeneration(listenerGeneration, ReadLong(listener, "generation"));
+        }
+
+        private static long ComputeListenerGeneration(long currentGeneration, long previousGeneration)
+        {
+            return currentGeneration > 0 ? currentGeneration : Math.Max(1L, previousGeneration + 1L);
+        }
+
+        internal static long ComputeListenerGenerationForTests(long currentGeneration, long previousGeneration)
+        {
+            return ComputeListenerGeneration(currentGeneration, previousGeneration);
+        }
+
+        internal static RegistryPublicationResult RegistryPublicationResultForTests(
+            long previousGeneration,
+            long previousSequence,
+            long generation,
+            long sequence)
+        {
+            var previous = new Dictionary<string, object>
+            {
+                { "publicationSequence", previousSequence },
+                { "listener", new Dictionary<string, object> { { "generation", previousGeneration } } }
+            };
+            return IsStalePublication(previous, generation, sequence)
+                ? RegistryPublicationResult.StaleSkipped
+                : RegistryPublicationResult.Written;
         }
 
         /// <summary>供 deterministic port 选择读取本 session 的 previous actual port。</summary>
@@ -707,6 +711,140 @@ namespace UnityCli
         private static Dictionary<string, object> PlayModeStateData()
         {
             return new Dictionary<string, object> { { "isPlaying", EditorApplication.isPlaying }, { "isPaused", EditorApplication.isPaused }, { "isPlayingOrWillChangePlaymode", EditorApplication.isPlayingOrWillChangePlaymode } };
+        }
+    }
+
+    internal enum RegistryPublicationResult
+    {
+        Written,
+        StaleSkipped,
+        Failed
+    }
+
+    internal enum InstancePublicationRetryOutcome
+    {
+        None,
+        Pending,
+        Written,
+        StaleSkipped,
+        PermanentFailure
+    }
+
+    internal sealed class InstancePublicationAttempt
+    {
+        internal InstancePublicationAttempt(RegistryPublicationResult result, bool retryable, string failureKind)
+        {
+            Result = result;
+            Retryable = retryable;
+            FailureKind = string.IsNullOrEmpty(failureKind) ? "unknown" : failureKind;
+        }
+
+        internal RegistryPublicationResult Result { get; private set; }
+        internal bool Retryable { get; private set; }
+        internal string FailureKind { get; private set; }
+    }
+
+    /// <summary>同domain registry publication的单链有界重试；clock与writer均为显式依赖。</summary>
+    internal sealed class UnityCliInstancePublicationRetry
+    {
+        private readonly int maxAttempts;
+        private readonly Func<double> now;
+        private readonly Func<string, InstancePublicationAttempt> publish;
+        private readonly Func<int, double> retryDelay;
+        private readonly Action<string> log;
+        private bool pending;
+        private bool exhausted;
+        private int attemptCount;
+        private double nextRetryAt;
+        private string pendingState;
+
+        internal UnityCliInstancePublicationRetry(
+            int maxAttempts,
+            Func<double> now,
+            Func<string, InstancePublicationAttempt> publish,
+            Func<int, double> retryDelay,
+            Action<string> log)
+        {
+            if (maxAttempts < 1 || now == null || publish == null || retryDelay == null || log == null)
+                throw new ArgumentException("Instance publication retry dependencies are incomplete.");
+            this.maxAttempts = maxAttempts;
+            this.now = now;
+            this.publish = publish;
+            this.retryDelay = retryDelay;
+            this.log = log;
+        }
+
+        internal bool Pending { get { return pending; } }
+        internal bool Exhausted { get { return exhausted; } }
+        internal int AttemptCount { get { return attemptCount; } }
+
+        internal InstancePublicationRetryOutcome Request(string requestedState)
+        {
+            if (string.IsNullOrEmpty(requestedState)) throw new ArgumentException("Requested registry state is required.", "requestedState");
+            if (exhausted) return InstancePublicationRetryOutcome.PermanentFailure;
+            if (pending)
+            {
+                pendingState = requestedState;
+                return InstancePublicationRetryOutcome.Pending;
+            }
+            return Attempt(requestedState);
+        }
+
+        internal InstancePublicationRetryOutcome Tick()
+        {
+            if (!pending || exhausted || now() < nextRetryAt) return InstancePublicationRetryOutcome.None;
+            var requestedState = string.IsNullOrEmpty(pendingState) ? "ready" : pendingState;
+            pending = false;
+            pendingState = null;
+            return Attempt(requestedState);
+        }
+
+        internal void Reset()
+        {
+            pending = false;
+            exhausted = false;
+            attemptCount = 0;
+            nextRetryAt = 0;
+            pendingState = null;
+        }
+
+        private InstancePublicationRetryOutcome Attempt(string requestedState)
+        {
+            var result = publish(requestedState);
+            if (result == null) throw new InvalidOperationException("Registry publication boundary returned no result.");
+            if (result.Result == RegistryPublicationResult.Written)
+            {
+                var recoveredAttempts = attemptCount;
+                Reset();
+                if (recoveredAttempts > 0)
+                    log("instance_publication_retry_succeeded attempts=" + (recoveredAttempts + 1).ToString(CultureInfo.InvariantCulture));
+                return InstancePublicationRetryOutcome.Written;
+            }
+            if (result.Result == RegistryPublicationResult.StaleSkipped)
+            {
+                Reset();
+                return InstancePublicationRetryOutcome.StaleSkipped;
+            }
+            if (result.Result != RegistryPublicationResult.Failed)
+                throw new InvalidOperationException("Registry publication attempt returned an unknown result.");
+
+            attemptCount += 1;
+            log("instance_register_failed kind=" + result.FailureKind + " retryable=" + (result.Retryable ? "true" : "false")
+                + " attempt=" + attemptCount.ToString(CultureInfo.InvariantCulture));
+            if (!result.Retryable || attemptCount >= maxAttempts)
+            {
+                pending = false;
+                exhausted = true;
+                pendingState = null;
+                log("instance_publication_retry_stopped kind=" + result.FailureKind + " attempts=" + attemptCount.ToString(CultureInfo.InvariantCulture)
+                    + " nextAction=restore-data-root-write-access-then-reload-domain");
+                return InstancePublicationRetryOutcome.PermanentFailure;
+            }
+
+            pendingState = requestedState;
+            pending = true;
+            nextRetryAt = now() + retryDelay(attemptCount);
+            return InstancePublicationRetryOutcome.Pending;
         }
     }
 }

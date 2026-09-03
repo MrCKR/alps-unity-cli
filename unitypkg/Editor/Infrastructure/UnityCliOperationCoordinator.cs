@@ -97,7 +97,7 @@ namespace UnityCli
                 object durableTerminal;
                 if (UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, request.RequestId, requestDigest, out durableTerminal))
                 {
-                    CleanupPublishedDirectMutation(request.RequestId, requestDigest, AdmissionTerminalIsOutcomeUnknown(durableTerminal));
+                    CleanupPublishedDirectMutation(request.RequestId, requestDigest);
                     return UnityCliSerializer.Serialize(durableTerminal);
                 }
             }
@@ -192,26 +192,37 @@ namespace UnityCli
             try { UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest); } catch { }
         }
 
-        /// <summary>effect后的direct terminal先做字节admission，再进入active root与共享cache；超限统一替换为紧凑终态。</summary>
+        /// <summary>effect后的direct terminal先冻结first terminal，再由exact cleanup marker驱动root、lease与admission收敛。</summary>
         private static string PersistDirectMutationTerminal(string requestId, string requestDigest, string serializedEnvelope)
+        {
+            return PublishDirectMutationTerminal(ProductionQueueState, requestId, requestDigest, serializedEnvelope);
+        }
+
+        internal static string PublishDirectMutationTerminalForTests(BridgeQueueState state, string requestId, string requestDigest, string serializedEnvelope)
+        {
+            if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Direct mutation test state must be isolated.", "state");
+            return PublishDirectMutationTerminal(state, requestId, requestDigest, serializedEnvelope);
+        }
+
+        private static string PublishDirectMutationTerminal(BridgeQueueState state, string requestId, string requestDigest, string serializedEnvelope)
         {
             try
             {
                 bool isOwned;
-                if (!UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned) || !isOwned)
+                if (!state.TryIsLeaseOwned(requestId, requestDigest, out isOwned) || !isOwned)
                     serializedEnvelope = ExecutionTimeoutEnvelope(requestId, "The direct mutation lost its exact lease after effect; outcome is unknown. Inspect the affected business state.");
                 if (Encoding.UTF8.GetByteCount(serializedEnvelope ?? string.Empty) > MaxDirectMutationTerminalBytes)
                     serializedEnvelope = ExecutionTimeoutEnvelope(requestId, "The direct mutation completed, but its terminal exceeded the durable byte budget; inspect the affected business state.");
                 object envelope = UnityCliSerializer.Parse(serializedEnvelope) as Dictionary<string, object>;
                 if (envelope == null)
                     envelope = ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "The direct mutation terminal could not be decoded after effect; outcome is unknown.");
-                var root = LoadDirectMutationRoot();
+                var root = LoadDirectMutationRoot(state);
                 RequireDirectMutationRoot(root, requestId, requestDigest);
                 root["phase"] = "terminal_pending";
                 root["terminalEnvelope"] = envelope;
-                UnityCliActiveOperation.Save(DirectMutationTerminalScope, root);
-                var first = UnityCliActiveOperation.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, envelope);
-                UnityCliActiveOperation.Clear(DirectMutationTerminalScope);
+                state.SaveOperation(DirectMutationTerminalScope, root);
+                var first = state.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, envelope);
+                CleanupPublishedDirectMutation(state, requestId, requestDigest);
                 return UnityCliSerializer.Serialize(first);
             }
             catch (BridgeCommandException exception) { return SerializeBridgeExceptionEnvelope(requestId, exception); }
@@ -239,9 +250,14 @@ namespace UnityCli
 
         private static Dictionary<string, object> LoadDirectMutationRoot()
         {
+            return LoadDirectMutationRoot(ProductionQueueState);
+        }
+
+        private static Dictionary<string, object> LoadDirectMutationRoot(BridgeQueueState state)
+        {
             try
             {
-                var root = UnityCliActiveOperation.Load(DirectMutationTerminalScope);
+                var root = state.LoadOperation(DirectMutationTerminalScope);
                 if (root == null) return null;
                 object requestId; object requestDigest; object editorSessionId; object phase;
                 if (!root.TryGetValue("requestId", out requestId) || !root.TryGetValue("requestDigest", out requestDigest)
@@ -260,6 +276,51 @@ namespace UnityCli
                 || !string.Equals(root["requestDigest"] as string, requestDigest, StringComparison.Ordinal)
                 || !string.Equals(root["editorSessionId"] as string, EditorSessionId(), StringComparison.Ordinal))
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Direct mutation active identity cannot be proven; outcome is unknown.");
+        }
+
+        internal enum DirectMutationReloadOutcome { NotApplicable, WaitingExactOwner, SettledEffectBefore, IdentityBlocked }
+
+        /// <summary>旧domain不再执行effect；CleanupPending先释放旧lease，再冻结terminal并执行exact cleanup。</summary>
+        internal static DirectMutationReloadOutcome ReconcileAcceptedDirectMutationAfterReload(BridgeQueueState state, string requestId, string requestDigest)
+        {
+            return ReconcileAcceptedDirectMutationAfterReload(state, requestId, requestDigest,
+                DirectMutationCleanupPendingForIdentity(requestId, requestDigest));
+        }
+
+        internal static DirectMutationReloadOutcome ReconcileAcceptedDirectMutationAfterReload(BridgeQueueState state, string requestId, string requestDigest, bool releaseExactOwnerBeforeSettlement)
+        {
+            if (state == null) throw new ArgumentNullException("state");
+            var root = LoadDirectMutationRoot(state);
+            if (root == null) return DirectMutationReloadOutcome.NotApplicable;
+            RequireDirectMutationRoot(root, requestId, requestDigest);
+            if (!string.Equals(root["phase"] as string, "accepted_before_effect", StringComparison.Ordinal))
+                return DirectMutationReloadOutcome.NotApplicable;
+            string leaseRequestId;
+            string leaseRequestDigest;
+            if (!state.TryGetCurrentLeaseOwner(out leaseRequestId, out leaseRequestDigest))
+                return DirectMutationReloadOutcome.IdentityBlocked;
+            if (string.Equals(leaseRequestId, requestId, StringComparison.Ordinal)
+                && string.Equals(leaseRequestDigest, requestDigest, StringComparison.Ordinal))
+            {
+                if (!releaseExactOwnerBeforeSettlement) return DirectMutationReloadOutcome.WaitingExactOwner;
+                if (object.ReferenceEquals(state, ProductionQueueState)) ReleaseDirectMutationLease(requestId, requestDigest);
+                else state.ReleaseLease(requestId, requestDigest);
+                if (!state.TryGetCurrentLeaseOwner(out leaseRequestId, out leaseRequestDigest))
+                    return DirectMutationReloadOutcome.IdentityBlocked;
+            }
+            if (!string.IsNullOrEmpty(leaseRequestId) || !string.IsNullOrEmpty(leaseRequestDigest))
+                return DirectMutationReloadOutcome.IdentityBlocked;
+            var owner = CaptureAdmissionOwner(state, requestId, requestDigest);
+            if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.WorkItem
+                && owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.Recovery)
+                return DirectMutationReloadOutcome.IdentityBlocked;
+            var terminal = ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Direct mutation was accepted before domain reload but never crossed its effect barrier; no effect was executed.", null, new[] { "Submit a new request only after inspecting the exact terminal." });
+            root["phase"] = "terminal_pending";
+            root["terminalEnvelope"] = terminal;
+            state.SaveOperation(DirectMutationTerminalScope, root);
+            state.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, terminal);
+            UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, state);
+            return DirectMutationReloadOutcome.SettledEffectBefore;
         }
 
         private static string TryResumeDirectMutation(string requestId, string requestDigest)
@@ -289,30 +350,53 @@ namespace UnityCli
                 ? pending
                 : (object)ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Direct mutation effect was interrupted before a terminal was frozen; outcome is unknown.");
             var result = PersistDirectMutationTerminal(requestId, requestDigest, UnityCliSerializer.Serialize(envelope));
-            CleanupPublishedDirectMutation(requestId, requestDigest, AdmissionTerminalIsOutcomeUnknown(envelope));
+            CleanupPublishedDirectMutation(requestId, requestDigest);
             return result;
         }
 
-        private static void CleanupPublishedDirectMutation(string requestId, string requestDigest, bool completeAdmission)
+        /// <summary>主循环重试已发布direct terminal的exact cleanup；失败保留固定marker等待下一帧。</summary>
+        private static void RetryDirectMutationTerminalCleanup()
+        {
+            RetryDirectMutationTerminalCleanup(ProductionQueueState);
+        }
+
+        internal static void RetryDirectMutationTerminalCleanupForTests(BridgeQueueState state)
+        {
+            if (state == null || state.IsolatedExecution == null) throw new ArgumentException("Direct mutation test state must be isolated.", "state");
+            RetryDirectMutationTerminalCleanup(state);
+        }
+
+        private static void RetryDirectMutationTerminalCleanup(BridgeQueueState state)
+        {
+            try { UnityCliActiveOperation.RetryExactTerminalCleanup(DirectMutationTerminalScope, state); }
+            catch (Exception exception) { state.Sinks.WriteLog("direct_mutation_cleanup_retry_failed " + exception.GetType().Name); }
+        }
+
+        /// <summary>terminal类型不决定slot释放；exact marker必须在root清理前durable存在。</summary>
+        private static void CleanupPublishedDirectMutation(string requestId, string requestDigest)
+        {
+            CleanupPublishedDirectMutation(ProductionQueueState, requestId, requestDigest);
+        }
+
+        private static void CleanupPublishedDirectMutation(BridgeQueueState state, string requestId, string requestDigest)
         {
             try
             {
                 object terminal;
-                if (!UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out terminal)) return;
-                UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, completeAdmission);
+                if (!state.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out terminal)) return;
+                AdmissionOwnerIdentity owner;
+                var completeAdmission = TryCaptureExactAdmissionOwner(state, requestId, requestDigest, out owner);
+                UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, state, completeAdmission);
             }
             catch { }
         }
 
-        private static bool AdmissionTerminalIsOutcomeUnknown(object envelope)
+        internal static string RecoverPublishedDirectMutationForTests(BridgeQueueState state, string requestId, string requestDigest)
         {
-            var value = envelope as IDictionary<string, object>;
-            object ok;
-            if (value == null || !value.TryGetValue("ok", out ok) || !(ok is bool) || (bool)ok) return false;
-            object rawError;
-            var error = value.TryGetValue("error", out rawError) ? rawError as IDictionary<string, object> : null;
-            object code;
-            return error != null && error.TryGetValue("code", out code) && string.Equals(code as string, "E_EXECUTION_TIMEOUT", StringComparison.Ordinal);
+            object terminal;
+            if (state == null || state.IsolatedExecution == null || !state.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out terminal)) return null;
+            CleanupPublishedDirectMutation(state, requestId, requestDigest);
+            return UnityCliSerializer.Serialize(terminal);
         }
 
         private static void FinalizeDirectMutationExecution(string requestId, string requestDigest)
@@ -405,6 +489,12 @@ namespace UnityCli
         {
             return string.Equals(SessionState.GetString(DirectMutationRequestIdSessionKey, string.Empty), requestId, StringComparison.Ordinal)
                 && string.Equals(SessionState.GetString(DirectMutationRequestDigestSessionKey, string.Empty), requestDigest, StringComparison.Ordinal);
+        }
+
+        private static bool DirectMutationCleanupPendingForIdentity(string requestId, string requestDigest)
+        {
+            return DirectMutationBindingMatches(requestId, requestDigest)
+                && SessionState.GetBool(DirectMutationCleanupPendingSessionKey, false);
         }
 
         /// <summary>普通 Tool 的 effect 提交只保留 runner 协调语义，不写请求级持久状态。</summary>
@@ -611,30 +701,95 @@ namespace UnityCli
             return request == null ? null : request.Command;
         }
 
-        /// <summary>queue 只需保守判断资源所有权；解析失败按 mutation 串行，最终错误仍由 coordinator 结构化返回。</summary>
-        private static bool CoordinatedRequestIsMutation(BridgeRequest request)
+        /// <summary>HTTP worker只读取immutable request与已冻结registry；未知或依赖场景现状的分类显式按Mutation关闭。</summary>
+        internal static UnityCliBridgeQueuePolicy.WorkClass QueueRequestWorkClass(BridgeRequest request)
         {
-            try
-            {
-                if (request != null && string.Equals(request.Command, "internal.editor.compile.start", StringComparison.Ordinal))
-                    return request.Execution == null || request.Execution.DryRun != true;
-                var contract = ResolveRequestCompletionContract(request);
-                return RequestRequiresMutation(request, contract);
-            }
-            catch
-            {
-                return true;
-            }
+            if (request == null) return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+            var toolName = RequestToolName(request);
+            if (!string.IsNullOrEmpty(toolName) && toolName.StartsWith("scene.", StringComparison.Ordinal))
+                return UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+            UnityCliBridgeQueuePolicy.WorkClass registered;
+            if (CommandRegistry.TryGetQueueClass(request.Command, out registered)) return registered;
+            var contract = ResolveQueueCompletionContract(request);
+            if (contract == null)
+                return IsReadOnlyBridgeCommand(request.Command)
+                    ? UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead
+                    : UnityCliBridgeQueuePolicy.WorkClass.Mutation;
+            if (request.Execution != null && request.Execution.DryRun == true) return UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
+            if (!contract.Mutation) return UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
+            bool requiresSceneState;
+            var inputMutation = RequestMutationFromImmutableInput(contract.ToolName, RequestBusinessInput(request), out requiresSceneState);
+            return requiresSceneState || inputMutation
+                ? UnityCliBridgeQueuePolicy.WorkClass.Mutation
+                : UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead;
         }
 
-        /// <summary>descriptor 表示潜在风险；本次 input 没有 setter/action 时按 read 执行。</summary>
+        /// <summary>worker只读取内置冻结contract；项目自定义Tool未知时由调用方保守归Mutation。</summary>
+        private static UnityCliToolCompletionContract ResolveQueueCompletionContract(BridgeRequest request)
+        {
+            var toolName = RequestToolName(request);
+            if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
+            UnityCliToolCompletionContract contract;
+            if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
+            return string.Equals(toolName, "code.exec", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
+        }
+
+        private sealed class DurableMutationBarrierProof
+        {
+            internal UnityCliBridgeQueuePolicy.DurableMutationBarrier State;
+            internal string RequestId;
+            internal string RequestDigest;
+        }
+
+        /// <summary>durable lease三态同时冻结当前owner identity，供锁外control root proof精确绑定。</summary>
+        private static DurableMutationBarrierProof CurrentDurableMutationBarrier(BridgeQueueState state)
+        {
+            string requestId;
+            string requestDigest;
+            if (state == null || !state.TryGetCurrentLeaseOwner(out requestId, out requestDigest))
+                return new DurableMutationBarrierProof { State = UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable };
+            if (string.IsNullOrEmpty(requestId) && string.IsNullOrEmpty(requestDigest))
+                return new DurableMutationBarrierProof { State = UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear };
+            if (!IsSafeId(requestId) || !IsSha256(requestDigest))
+                return new DurableMutationBarrierProof { State = UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable };
+            return new DurableMutationBarrierProof
+            {
+                State = UnityCliBridgeQueuePolicy.DurableMutationBarrier.Held,
+                RequestId = requestId,
+                RequestDigest = requestDigest
+            };
+        }
+
+        /// <summary>主线程在pure input裁决后，仅对真正依赖场景现状的幂等分支读取Unity对象。</summary>
         private static bool RequestRequiresMutation(BridgeRequest request, UnityCliToolCompletionContract contract)
         {
             if (request == null || contract == null || !contract.Mutation || (request.Execution != null && request.Execution.DryRun == true)) return false;
-            var name = contract.ToolName;
             var input = RequestBusinessInput(request);
-            if (name == "graphics.reflection-probe") return HasAnyMeaningfulInput(input, "mode", "resolution", "bounces", "hdr", "boxSize", "boxOffset") || CreateProbeNeedsMutation(input, true);
-            if (name == "graphics.light-probe-group") return HasAnyMeaningfulInput(input, "positions") || CreateProbeNeedsMutation(input, false);
+            bool requiresSceneState;
+            var inputMutation = RequestMutationFromImmutableInput(contract.ToolName, input, out requiresSceneState);
+            if (!requiresSceneState) return inputMutation;
+            if (contract.ToolName == "physics.rigidbody") return RigidbodyNeedsMutation(input);
+            if (contract.ToolName == "graphics.reflection-probe") return CreateProbeNeedsMutation(input, true);
+            if (contract.ToolName == "graphics.light-probe-group") return CreateProbeNeedsMutation(input, false);
+            return true;
+        }
+
+        /// <summary>只按immutable JSON字段判断；需要场景现状的幂等分支通过requiresSceneState显式上报。</summary>
+        private static bool RequestMutationFromImmutableInput(string name, IDictionary<string, object> input, out bool requiresSceneState)
+        {
+            requiresSceneState = false;
+            if (name == "graphics.reflection-probe")
+            {
+                if (HasAnyMeaningfulInput(input, "mode", "resolution", "bounces", "hdr", "boxSize", "boxOffset")) return true;
+                requiresSceneState = InputBoolean(input, "create");
+                return false;
+            }
+            if (name == "graphics.light-probe-group")
+            {
+                if (HasAnyMeaningfulInput(input, "positions")) return true;
+                requiresSceneState = InputBoolean(input, "create");
+                return false;
+            }
             if (name == "graphics.skybox-set-properties") return HasAllMeaningfulInput(input, "property", "value");
             if (name == "build.settings.set") return HasAnyInput(input, "apiCompatibilityLevel", "applicationIdentifier", "bundleVersion", "companyId", "productName", "scriptingBackend");
             if (name == "graphics.bake-settings") return HasAnyInput(input, "bakedGI", "bounces", "directSamples", "environmentSamples", "filtering", "indirectSamples", "lightingMode", "realtimeGI");
@@ -649,7 +804,13 @@ namespace UnityCli
             if (name == "graphics.scene-debug") return HasAnyInput(input, "drawMode", "shadingMode");
             if (name == "physics.collision-matrix") return HasAllInput(input, "layerA", "layerB", "ignore");
             if (name == "physics.settings") return HasAnyInput(input, "autoSimulation", "bounceThreshold", "defaultContactOffset", "defaultSolverIterations", "defaultSolverVelocityIterations", "gravity", "gravity2d", "property", "queriesHitBackfaces", "queriesHitTriggers", "queriesStartInColliders", "value");
-            if (name == "physics.rigidbody") return !InputBoolean(input, "validate") && (HasAnyMeaningfulInput(input, "angularDrag", "drag", "isKinematic", "mass", "useGravity") || RigidbodyNeedsMutation(input));
+            if (name == "physics.rigidbody")
+            {
+                if (InputBoolean(input, "validate")) return false;
+                if (HasAnyMeaningfulInput(input, "angularDrag", "drag", "isKinematic", "mass", "useGravity")) return true;
+                requiresSceneState = true;
+                return false;
+            }
             if (name == "physics.simulation") return InputBoolean(input, "simulate");
             if (name == "texture.import-settings") return HasAnyInput(input, "alphaIsTransparency", "compression", "filterMode", "maxTextureSize", "mipmap", "readable", "sRGB", "textureType", "type", "wrapMode");
             if (name == "profiler.deep") return HasAnyInput(input, "enabled");

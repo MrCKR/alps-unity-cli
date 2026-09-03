@@ -1,0 +1,404 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+
+namespace UnityCli
+{
+    /// <summary>Bridge主线程队列的纯分类、容量与启动选择策略。</summary>
+    public static class UnityCliBridgeQueuePolicy
+    {
+        public const int MaxBypassIdentities = 128;
+        public const int MaxFifoNodesExaminedPerTick = 128;
+        public const int MaxControlNodesExaminedPerTick = 128;
+        public const int MaxSafeStatusNodesExaminedPerTick = 4;
+        public const int MaxNodesExaminedPerTick = MaxFifoNodesExaminedPerTick
+            + MaxControlNodesExaminedPerTick + MaxSafeStatusNodesExaminedPerTick;
+        public const int MaxStartsPerTick = 16;
+        public const int MaxSafeStatusStartsPerTick = 4;
+
+        public enum WorkClass
+        {
+            Mutation,
+            OrdinaryRead,
+            SafeStatus,
+            Control
+        }
+
+        public enum DurableMutationBarrier
+        {
+            Clear,
+            Held,
+            Unreadable
+        }
+
+        public enum ControlDisposition
+        {
+            Pending,
+            Authorized,
+            RejectParentUnavailable,
+            RejectIdentityMismatch,
+            ExpireDeadline
+        }
+
+        public enum BypassAdmissionOutcome
+        {
+            Enqueue,
+            Attach,
+            RejectCapacity,
+            RejectIdentityMismatch
+        }
+
+        public sealed class QueueNode
+        {
+            public QueueNode(string nodeId, string command, WorkClass workClass)
+                : this(nodeId, command, workClass, ControlDisposition.Pending) { }
+
+            private QueueNode(string nodeId, string command, WorkClass workClass, ControlDisposition controlDisposition)
+            {
+                ValidateNodeId(nodeId);
+                ValidateEnum(controlDisposition, "controlDisposition");
+                NodeId = nodeId;
+                Command = command;
+                Class = Classify(command, workClass);
+                if (Class != WorkClass.Control && controlDisposition != ControlDisposition.Pending)
+                    throw new InvalidOperationException("Only a durable control node can receive a control disposition.");
+                ControlDecision = Class == WorkClass.Control ? controlDisposition : ControlDisposition.Pending;
+            }
+
+            public string NodeId { get; }
+            public string Command { get; }
+            public WorkClass Class { get; }
+            public ControlDisposition ControlDecision { get; }
+            public bool ControlAuthorized { get { return ControlDecision == ControlDisposition.Authorized; } }
+
+            public QueueNode WithControlAuthorization(bool authorized)
+            {
+                return WithControlDisposition(authorized ? ControlDisposition.Authorized : ControlDisposition.Pending);
+            }
+
+            public QueueNode WithControlDisposition(ControlDisposition disposition)
+            {
+                if (Class != WorkClass.Control && disposition != ControlDisposition.Pending)
+                    throw new InvalidOperationException("Only a durable control node can receive a control disposition.");
+                return new QueueNode(NodeId, Command, Class, disposition);
+            }
+        }
+
+        public sealed class BypassIdentity
+        {
+            public BypassIdentity(string requestId, string requestDigest)
+            {
+                ValidateRequestId(requestId);
+                ValidateDigest(requestDigest);
+                RequestId = requestId;
+                RequestDigest = requestDigest;
+            }
+
+            public string RequestId { get; }
+            public string RequestDigest { get; }
+        }
+
+        public sealed class BypassAdmissionDecision
+        {
+            internal BypassAdmissionDecision(BypassAdmissionOutcome outcome, int existingIndex)
+            {
+                Outcome = outcome;
+                ExistingIndex = existingIndex;
+            }
+
+            public BypassAdmissionOutcome Outcome { get; }
+            public int ExistingIndex { get; }
+        }
+
+        public sealed class StartDecision
+        {
+            internal StartDecision(string nodeId, int queueIndex, WorkClass workClass)
+            {
+                NodeId = nodeId;
+                QueueIndex = queueIndex;
+                Class = workClass;
+            }
+
+            public string NodeId { get; }
+            public int QueueIndex { get; }
+            public WorkClass Class { get; }
+        }
+
+        public sealed class RejectDecision
+        {
+            internal RejectDecision(string nodeId, int queueIndex, ControlDisposition disposition)
+            {
+                NodeId = nodeId;
+                QueueIndex = queueIndex;
+                Disposition = disposition;
+            }
+
+            public string NodeId { get; }
+            public int QueueIndex { get; }
+            public ControlDisposition Disposition { get; }
+        }
+
+        public sealed class TickSelection
+        {
+            internal TickSelection(List<StartDecision> starts, List<RejectDecision> rejects, int nodesExamined)
+            {
+                Starts = new ReadOnlyCollection<StartDecision>(starts.ToArray());
+                Rejects = new ReadOnlyCollection<RejectDecision>(rejects.ToArray());
+                NodesExamined = nodesExamined;
+            }
+
+            public IReadOnlyList<StartDecision> Starts { get; }
+            public IReadOnlyList<RejectDecision> Rejects { get; }
+            public int NodesExamined { get; }
+        }
+
+        /// <summary>只接受生产注册表裁决的闭集分类；SafeStatus命令不能被降级为普通读取。</summary>
+        public static WorkClass Classify(string command, WorkClass workClass)
+        {
+            ValidateCommand(command);
+            ValidateEnum(workClass, "workClass");
+            var safeStatus = IsSafeStatusCommand(command);
+            var durableControl = IsDurableControlCommand(command);
+            if (safeStatus && workClass != WorkClass.SafeStatus)
+                throw new ArgumentException("SafeStatus command must use SafeStatus classification.", "workClass");
+            if (!safeStatus && workClass == WorkClass.SafeStatus)
+                throw new ArgumentException("Only the exact SafeStatus allowlist may use SafeStatus classification.", "workClass");
+            if (durableControl && workClass != WorkClass.Control)
+                throw new ArgumentException("Durable control command must use Control classification.", "workClass");
+            if (!durableControl && workClass == WorkClass.Control)
+                throw new ArgumentException("Only the exact durable control allowlist may use Control classification.", "workClass");
+            return workClass;
+        }
+
+        /// <summary>精确白名单不接受后缀、大小写或project-tool间接名称。</summary>
+        public static bool IsSafeStatusCommand(string command)
+        {
+            switch (command)
+            {
+                case "internal.editor.compile.status":
+                case "internal.editor.refresh.status":
+                case "internal.editor.state.snapshot":
+                case "internal.asset.refresh.status":
+                case "internal.package.embed.status":
+                case "internal.package.resolve.status":
+                case "internal.test.run.status":
+                case "internal.test.run.cancel.status":
+                case "internal.navmesh.bake.status":
+                case "internal.occlusion.bake.status":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>只有绑定当前durable parent的私有命令可进入受限control lane。</summary>
+        public static bool IsDurableControlCommand(string command)
+        {
+            switch (command)
+            {
+                case "internal.test.run.cancel.plan":
+                case "internal.test.run.cancel":
+                case "internal.package.files.claim":
+                case "internal.package.files.commit":
+                case "internal.package.files.prove":
+                case "internal.package.files.fail":
+                case "internal.navmesh.bake.cancel":
+                case "internal.occlusion.bake.cancel":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>internal普通读取只允许不触发plan、cancel或writer控制的精确观察命令。</summary>
+        public static bool IsOrdinaryReadInternalCommand(string command)
+        {
+            return string.Equals(command, "internal.navmesh.bake.snapshot", StringComparison.Ordinal)
+                || string.Equals(command, "internal.occlusion.bake.snapshot", StringComparison.Ordinal);
+        }
+
+        /// <summary>同requestId同digest只attach；新identity达到固定上限时拒绝。</summary>
+        public static BypassAdmissionDecision DecideBypassAdmission(IReadOnlyList<BypassIdentity> activeAndQueued, BypassIdentity candidate)
+        {
+            if (activeAndQueued == null) throw new ArgumentNullException("activeAndQueued");
+            if (candidate == null) throw new ArgumentNullException("candidate");
+            if (activeAndQueued.Count > MaxBypassIdentities) throw new ArgumentException("Bypass identity snapshot exceeds its fixed bound.", "activeAndQueued");
+
+            var requestIds = new HashSet<string>(StringComparer.Ordinal);
+            var existingIndex = -1;
+            var exactMatch = false;
+            for (var index = 0; index < activeAndQueued.Count; index++)
+            {
+                var existing = activeAndQueued[index];
+                if (existing == null) throw new ArgumentException("Bypass identity snapshot contains null.", "activeAndQueued");
+                if (!requestIds.Add(existing.RequestId)) throw new ArgumentException("Bypass identity snapshot contains duplicate requestId.", "activeAndQueued");
+                if (!string.Equals(existing.RequestId, candidate.RequestId, StringComparison.Ordinal)) continue;
+                existingIndex = index;
+                exactMatch = string.Equals(existing.RequestDigest, candidate.RequestDigest, StringComparison.Ordinal);
+            }
+
+            if (existingIndex >= 0)
+                return new BypassAdmissionDecision(exactMatch ? BypassAdmissionOutcome.Attach : BypassAdmissionOutcome.RejectIdentityMismatch, existingIndex);
+            return activeAndQueued.Count == MaxBypassIdentities
+                ? new BypassAdmissionDecision(BypassAdmissionOutcome.RejectCapacity, -1)
+                : new BypassAdmissionDecision(BypassAdmissionOutcome.Enqueue, -1);
+        }
+
+        /// <summary>lane遍历每访问一个唯一节点就完成一次policy检查，避免production再次扫描候选集合。</summary>
+        public sealed class TickSelectionAccumulator
+        {
+            private readonly int runningOrdinaryReads;
+            private readonly bool mutationRunning;
+            private readonly DurableMutationBarrier durableMutationBarrier;
+            private readonly List<QueueNode> examinedNodes = new List<QueueNode>(MaxNodesExaminedPerTick);
+            private readonly List<int> earlierOrdinaryReadIndices = new List<int>();
+            private readonly List<int> safeStatusIndices = new List<int>(MaxSafeStatusStartsPerTick);
+            private readonly List<RejectDecision> rejects = new List<RejectDecision>();
+            private readonly HashSet<string> nodeIds = new HashSet<string>(StringComparer.Ordinal);
+            private int firstMutationIndex = -1;
+            private int firstAuthorizedControlIndex = -1;
+            private bool completed;
+
+            internal TickSelectionAccumulator(int runningOrdinaryReads, bool mutationRunning, DurableMutationBarrier durableMutationBarrier)
+            {
+                if (runningOrdinaryReads < 0) throw new ArgumentOutOfRangeException("runningOrdinaryReads");
+                ValidateEnum(durableMutationBarrier, "durableMutationBarrier");
+                this.runningOrdinaryReads = runningOrdinaryReads;
+                this.mutationRunning = mutationRunning;
+                this.durableMutationBarrier = durableMutationBarrier;
+            }
+
+            private bool HasCapacity { get { return examinedNodes.Count < MaxNodesExaminedPerTick; } }
+
+            /// <summary>调用方已访问lane节点时同步记录唯一候选及其完整eligibility。</summary>
+            public void Examine(QueueNode node)
+            {
+                if (completed) throw new InvalidOperationException("Tick selection is already complete.");
+                if (!HasCapacity) throw new InvalidOperationException("Tick selection exceeded its fixed node bound.");
+                if (node == null) throw new ArgumentException("Examined queue prefix contains null.", "node");
+                if (!nodeIds.Add(node.NodeId)) throw new ArgumentException("Examined queue prefix contains duplicate nodeId.", "node");
+                var index = examinedNodes.Count;
+                examinedNodes.Add(node);
+                if (node.Class == WorkClass.Control && IsTerminalControlDisposition(node.ControlDecision))
+                {
+                    rejects.Add(new RejectDecision(node.NodeId, index, node.ControlDecision));
+                    return;
+                }
+                if (firstAuthorizedControlIndex < 0 && node.Class == WorkClass.Control && node.ControlAuthorized)
+                    firstAuthorizedControlIndex = index;
+                if (firstMutationIndex < 0 && (node.Class == WorkClass.Mutation || node.Class == WorkClass.Control))
+                    firstMutationIndex = index;
+                if (node.Class == WorkClass.SafeStatus && safeStatusIndices.Count < MaxSafeStatusStartsPerTick)
+                    safeStatusIndices.Add(index);
+                if (firstMutationIndex < 0 && node.Class == WorkClass.OrdinaryRead)
+                    earlierOrdinaryReadIndices.Add(index);
+            }
+
+            /// <summary>基于已检查节点完成本tick的唯一启动与拒绝裁决。</summary>
+            public TickSelection Complete()
+            {
+                if (completed) throw new InvalidOperationException("Tick selection is already complete.");
+                completed = true;
+                var selectedIndices = new List<int>(MaxStartsPerTick);
+                selectedIndices.AddRange(safeStatusIndices);
+                var remainingStarts = MaxStartsPerTick - selectedIndices.Count;
+                var regularBarrierClear = !mutationRunning && durableMutationBarrier == DurableMutationBarrier.Clear;
+                if (!mutationRunning && durableMutationBarrier == DurableMutationBarrier.Held
+                    && remainingStarts > 0 && firstAuthorizedControlIndex >= 0)
+                {
+                    selectedIndices.Add(firstAuthorizedControlIndex);
+                    remainingStarts -= 1;
+                }
+
+                if (regularBarrierClear && remainingStarts > 0)
+                {
+                    if (firstMutationIndex < 0 || earlierOrdinaryReadIndices.Count > 0)
+                    {
+                        foreach (var index in earlierOrdinaryReadIndices)
+                        {
+                            if (remainingStarts == 0) break;
+                            selectedIndices.Add(index);
+                            remainingStarts -= 1;
+                        }
+                    }
+                    else if (runningOrdinaryReads == 0 && examinedNodes[firstMutationIndex].Class == WorkClass.Mutation)
+                    {
+                        selectedIndices.Add(firstMutationIndex);
+                        remainingStarts -= 1;
+                    }
+                }
+
+                selectedIndices.Sort();
+                var starts = new List<StartDecision>(selectedIndices.Count);
+                foreach (var index in selectedIndices)
+                {
+                    var node = examinedNodes[index];
+                    starts.Add(new StartDecision(node.NodeId, index, node.Class));
+                }
+                return new TickSelection(starts, rejects, examinedNodes.Count);
+            }
+        }
+
+        /// <summary>创建与一次production lane遍历同生命周期的增量选择器。</summary>
+        public static TickSelectionAccumulator BeginSelection(
+            int runningOrdinaryReads,
+            bool mutationRunning,
+            DurableMutationBarrier durableMutationBarrier)
+        {
+            return new TickSelectionAccumulator(runningOrdinaryReads, mutationRunning, durableMutationBarrier);
+        }
+
+        /// <summary>按队列顺序选择本tick唯一可移除并尝试启动的节点，不修改调用方集合。</summary>
+        public static TickSelection SelectStarts(
+            IReadOnlyList<QueueNode> queued,
+            int runningOrdinaryReads,
+            bool mutationRunning,
+            DurableMutationBarrier durableMutationBarrier)
+        {
+            if (queued == null) throw new ArgumentNullException("queued");
+            var accumulator = BeginSelection(runningOrdinaryReads, mutationRunning, durableMutationBarrier);
+            var examined = Math.Min(queued.Count, MaxNodesExaminedPerTick);
+            for (var index = 0; index < examined; index++) accumulator.Examine(queued[index]);
+            return accumulator.Complete();
+        }
+
+        private static bool IsTerminalControlDisposition(ControlDisposition disposition)
+        {
+            return disposition == ControlDisposition.RejectParentUnavailable
+                || disposition == ControlDisposition.RejectIdentityMismatch
+                || disposition == ControlDisposition.ExpireDeadline;
+        }
+
+        private static void ValidateCommand(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command) || command.Length > 256 || !string.Equals(command, command.Trim(), StringComparison.Ordinal))
+                throw new ArgumentException("Bridge command must be a non-empty exact value of at most 256 characters.", "command");
+        }
+
+        private static void ValidateNodeId(string nodeId)
+        {
+            if (string.IsNullOrWhiteSpace(nodeId) || nodeId.Length > 200)
+                throw new ArgumentException("Queue nodeId is required and must be at most 200 characters.", "nodeId");
+        }
+
+        private static void ValidateRequestId(string requestId)
+        {
+            if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 200)
+                throw new ArgumentException("Bypass requestId is required and must be at most 200 characters.", "requestId");
+        }
+
+        private static void ValidateDigest(string digest)
+        {
+            if (string.IsNullOrEmpty(digest) || digest.Length != 64)
+                throw new ArgumentException("Bypass requestDigest must be a lowercase SHA-256 value.", "requestDigest");
+            foreach (var character in digest)
+                if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')))
+                    throw new ArgumentException("Bypass requestDigest must be a lowercase SHA-256 value.", "requestDigest");
+        }
+
+        private static void ValidateEnum<T>(T value, string parameterName) where T : struct
+        {
+            if (!Enum.IsDefined(typeof(T), value)) throw new ArgumentOutOfRangeException(parameterName);
+        }
+    }
+}

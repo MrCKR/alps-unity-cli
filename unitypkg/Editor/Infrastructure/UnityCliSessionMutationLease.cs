@@ -35,44 +35,84 @@ namespace UnityCli
             {
                 recoveryBlocked = false;
                 if (!RecoverStaleOwner()) { recoveryBlocked = true; return; }
-                TryFinalizeOwnedPlayModeRoot();
-                Owner current;
-                byte[] ignored;
-                if (!TryReadOwnerSnapshot(out current, out ignored)) { recoveryBlocked = true; return; }
+                try
+                {
+                    var directOutcome = ReconcileAcceptedDirectMutationBeforeLeaseRestore(ProductionQueueState, null);
+                    if (directOutcome == DirectMutationReloadOutcome.IdentityBlocked)
+                    {
+                        recoveryBlocked = true;
+                        return;
+                    }
+                    TryFinalizeOwnedPlayModeRoot();
+                    if (!RestoreValidatedActiveRootLease(ProductionQueueState)) recoveryBlocked = true;
+                }
+                catch { recoveryBlocked = true; }
+            }
 
-                // 仅交叉读取每个 coordinator 的固定 active 文件，不扫描任何请求目录。
-                // 铁律：active 文件属上次启动（editorSessionId 不符）时不恢复，机制状态重启作废。
+            /// <summary>测试只通过隔离state执行与production相同的direct reconciliation→generic restore顺序。</summary>
+            internal static string InitializeRecoveryOrderForTests(BridgeQueueState state, bool cleanupPending = false)
+            {
+                if (state == null || state.IsolatedExecution == null)
+                    throw new ArgumentException("Lease recovery order tests require isolated state.", "state");
+                var directOutcome = ReconcileAcceptedDirectMutationBeforeLeaseRestore(state, (requestId, requestDigest) => cleanupPending);
+                return directOutcome == DirectMutationReloadOutcome.IdentityBlocked || !RestoreValidatedActiveRootLease(state)
+                    ? DirectMutationReloadOutcome.IdentityBlocked.ToString()
+                    : directOutcome.ToString();
+            }
+
+            /// <summary>accepted direct root必须先冻结effect-before终态；显式依赖默认使用production cleanup identity。</summary>
+            private static DirectMutationReloadOutcome ReconcileAcceptedDirectMutationBeforeLeaseRestore(BridgeQueueState state, Func<string, string, bool> cleanupPending)
+            {
+                var root = state.LoadOperation("direct-mutation");
+                if (root == null || !string.Equals(root.ContainsKey("phase") ? root["phase"] as string : null, "accepted_before_effect", StringComparison.Ordinal))
+                    return DirectMutationReloadOutcome.NotApplicable;
+                if (!string.Equals(root.ContainsKey("editorSessionId") ? root["editorSessionId"] as string : null, EditorSessionId(), StringComparison.Ordinal))
+                {
+                    state.ClearOperation("direct-mutation");
+                    return DirectMutationReloadOutcome.NotApplicable;
+                }
+                var requestId = root.ContainsKey("requestId") ? root["requestId"] as string : null;
+                var requestDigest = root.ContainsKey("requestDigest") ? root["requestDigest"] as string : null;
+                var releaseExactOwner = cleanupPending == null
+                    ? DirectMutationCleanupPendingForIdentity(requestId, requestDigest)
+                    : cleanupPending(requestId, requestDigest);
+                return ReconcileAcceptedDirectMutationAfterReload(state, requestId, requestDigest, releaseExactOwner);
+            }
+
+            /// <summary>固定scope恢复只接受当前session唯一root；direct reconciliation已经在本方法之前完成。</summary>
+            private static bool RestoreValidatedActiveRootLease(BridgeQueueState state)
+            {
+                string currentRequestId;
+                string currentRequestDigest;
+                if (!state.TryGetCurrentLeaseOwner(out currentRequestId, out currentRequestDigest)) return false;
                 Owner recoverable = null;
                 var currentSession = EditorSessionId();
                 foreach (var scope in new[] { "compile", "package-resolve", "refresh", "asset-refresh", "package-embed", "test-run", "build", "navmesh-bake", "occlusion-bake", "direct-mutation" })
                 {
-                    if (!UnityCliActiveOperation.Exists(scope)) continue;
-                    try
+                    if (!state.OperationExists(scope)) continue;
+                    Dictionary<string, object> root;
+                    try { root = state.LoadOperation(scope); }
+                    catch { return false; }
+                    object requestId;
+                    object requestDigest;
+                    object stateSession;
+                    if (root == null || !root.TryGetValue("requestId", out requestId) || !root.TryGetValue("requestDigest", out requestDigest)
+                        || !root.TryGetValue("editorSessionId", out stateSession)) return false;
+                    if (!string.Equals(stateSession as string, currentSession, StringComparison.Ordinal))
                     {
-                        var state = UnityCliActiveOperation.Load(scope);
-                        object requestId;
-                        object requestDigest;
-                        object stateSession;
-                        if (state == null || !state.TryGetValue("requestId", out requestId) || !state.TryGetValue("requestDigest", out requestDigest)
-                            || !state.TryGetValue("editorSessionId", out stateSession)) { recoveryBlocked = true; return; }
-                        if (!string.Equals(stateSession as string, currentSession, StringComparison.Ordinal)) { UnityCliActiveOperation.Clear(scope); continue; }
-                        var candidate = new Owner { RequestId = requestId as string, RequestDigest = requestDigest as string };
-                        if (!IsSafeId(candidate.RequestId) || !IsSha256(candidate.RequestDigest)) { recoveryBlocked = true; return; }
-                        if (recoverable != null) { recoveryBlocked = true; return; }
-                        recoverable = candidate;
+                        state.ClearOperation(scope);
+                        continue;
                     }
-                    catch { recoveryBlocked = true; return; }
+                    var candidate = new Owner { RequestId = requestId as string, RequestDigest = requestDigest as string };
+                    if (!IsSafeId(candidate.RequestId) || !IsSha256(candidate.RequestDigest) || recoverable != null) return false;
+                    recoverable = candidate;
                 }
-                if (recoverable == null) return;
-                if (current != null)
-                {
-                    if (!OwnsCurrentProcess(current)
-                        || !string.Equals(current.RequestId, recoverable.RequestId, StringComparison.Ordinal)
-                        || !string.Equals(current.RequestDigest, recoverable.RequestDigest, StringComparison.Ordinal)) recoveryBlocked = true;
-                    return;
-                }
+                if (recoverable == null) return true;
+                if (!string.IsNullOrEmpty(currentRequestId) || !string.IsNullOrEmpty(currentRequestDigest))
+                    return string.Equals(currentRequestId, recoverable.RequestId, StringComparison.Ordinal)
+                        && string.Equals(currentRequestDigest, recoverable.RequestDigest, StringComparison.Ordinal);
                 bool recoveredLease;
-                if (!TryAcquireCore(recoverable.RequestId, recoverable.RequestDigest, true, out recoveredLease)) recoveryBlocked = true;
+                return state.TryRecoverLease(recoverable.RequestId, recoverable.RequestDigest, out recoveredLease);
             }
 
             /// <summary>

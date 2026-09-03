@@ -52,48 +52,68 @@ namespace UnityCli
             catch (DirectoryNotFoundException) { return false; }
         }
 
-        /// <summary>terminal已durable后先写exact cleanup marker，再清active root并重试释放lease。</summary>
-        internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest, bool completeAdmission = true)
+        /// <summary>terminal已durable后以三段式transfer取得TerminalCleanup owner，再清root与lease。</summary>
+        internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest, bool completeAdmission = true, Action<string> cleanupBoundary = null)
+        {
+            BeginExactTerminalCleanup(scope, requestId, requestDigest, null, completeAdmission, cleanupBoundary);
+        }
+
+        internal static void BeginExactTerminalCleanup(string scope, string requestId, string requestDigest, BridgeQueueState state, bool completeAdmission = true, Action<string> cleanupBoundary = null)
         {
             ValidateTerminalIdentity(scope, requestId, requestDigest);
             var cleanupScope = scope + "-terminal-cleanup";
-            var existing = Load(cleanupScope);
+            var existing = LoadForState(state, cleanupScope);
             if (existing != null && (!string.Equals(Text(existing, "requestId"), requestId, StringComparison.Ordinal)
                 || !string.Equals(Text(existing, "requestDigest"), requestDigest, StringComparison.Ordinal)))
             {
-                if (RetryExactTerminalCleanup(scope)) return;
+                if (RetryExactTerminalCleanup(scope, state, cleanupBoundary)) return;
                 existing = null;
             }
             if (existing == null)
             {
-                var marker = new Dictionary<string, object>
+                existing = new Dictionary<string, object>
                 {
                     { "requestId", requestId }, { "requestDigest", requestDigest },
                     { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "completeAdmission", completeAdmission }
                 };
-                UnityCliBridge.AddAdmissionOwnerFields(marker, requestId, completeAdmission ? UnityCliAdmissionPool.AdmissionOwnerKind.Coordinator : UnityCliAdmissionPool.AdmissionOwnerKind.WorkItem);
-                Save(cleanupScope, marker);
+                if (completeAdmission)
+                {
+                    var owner = state == null ? UnityCliBridge.CaptureAdmissionOwner(requestId, requestDigest) : UnityCliBridge.CaptureAdmissionOwner(state, requestId, requestDigest);
+                    if (state == null) UnityCliBridge.PersistAdmissionOwnerTransfer(cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                    else UnityCliBridge.PersistAdmissionOwnerTransfer(state, cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                }
+                else SaveForState(state, cleanupScope, existing);
             }
             else if (completeAdmission)
             {
                 object current;
                 if (!existing.TryGetValue("completeAdmission", out current) || !(current is bool)) return;
-                if (!(bool)current)
+                var owner = state == null ? UnityCliBridge.CaptureAdmissionOwner(requestId, requestDigest) : UnityCliBridge.CaptureAdmissionOwner(state, requestId, requestDigest);
+                existing["completeAdmission"] = true;
+                if (owner.OwnerState != UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup)
                 {
-                    var owner = UnityCliBridge.ReadAdmissionOwnerFields(existing, requestId);
-                    UnityCliBridge.AddAdmissionOwnerFields(existing, owner, UnityCliAdmissionPool.AdmissionOwnerKind.Coordinator);
-                    existing["completeAdmission"] = true;
-                    Save(cleanupScope, existing);
+                    if (state == null) UnityCliBridge.PersistAdmissionOwnerTransfer(cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                    else UnityCliBridge.PersistAdmissionOwnerTransfer(state, cleanupScope, existing, owner, UnityCliAdmissionPool.AdmissionOwnerState.TerminalCleanup);
+                }
+                else
+                {
+                    existing["admissionTransferCommitted"] = true;
+                    SaveForState(state, cleanupScope, existing);
                 }
             }
-            RetryExactTerminalCleanup(scope);
+            RetryExactTerminalCleanup(scope, state, cleanupBoundary);
         }
 
         /// <summary>只有确认exact owner已不存在才删除cleanup marker；读取不确定时保持原状。</summary>
-        internal static bool RetryExactTerminalCleanup(string scope)
+        internal static bool RetryExactTerminalCleanup(string scope, Action<string> cleanupBoundary = null)
+        {
+            return RetryExactTerminalCleanup(scope, null, cleanupBoundary);
+        }
+
+        internal static bool RetryExactTerminalCleanup(string scope, BridgeQueueState state, Action<string> cleanupBoundary = null)
         {
             var cleanupScope = scope + "-terminal-cleanup";
-            var marker = Load(cleanupScope);
+            var marker = LoadForState(state, cleanupScope);
             if (marker == null) return false;
             var requestId = Text(marker, "requestId");
             var requestDigest = Text(marker, "requestDigest");
@@ -101,35 +121,77 @@ namespace UnityCli
             object completeAdmissionValue;
             if (!marker.TryGetValue("completeAdmission", out completeAdmissionValue) || !(completeAdmissionValue is bool)) return true;
             var completeAdmission = (bool)completeAdmissionValue;
-            var admissionOwner = UnityCliBridge.ReadAdmissionOwnerFields(marker, requestId);
             ValidateTerminalIdentity(scope, requestId, requestDigest);
             if (!string.Equals(editorSessionId, UnityCliBridge.EditorSessionId(), StringComparison.Ordinal))
             {
-                Clear(cleanupScope);
+                ClearForTerminalCleanup(state, cleanupScope, cleanupBoundary);
                 return false;
             }
+            UnityCliBridge.AdmissionOwnerIdentity admissionOwner = null;
+            if (completeAdmission)
+            {
+                try { admissionOwner = state == null ? UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(cleanupScope, marker, requestId, requestDigest) : UnityCliBridge.ReconcileAdmissionTransferForLiveMarker(state, cleanupScope, marker, requestId, requestDigest); }
+                catch { return true; }
+                if (admissionOwner == null) return false;
+            }
             Dictionary<string, object> active;
-            try { active = Load(scope); }
+            try { active = LoadForState(state, scope); }
             catch
             {
                 bool markerOwnsLease;
-                if (!UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out markerOwnsLease)) return true;
-                if (!markerOwnsLease) { Clear(cleanupScope); return false; }
-                try { Clear(scope); active = null; }
+                if (!TryIsLeaseOwnedForState(state, requestId, requestDigest, out markerOwnsLease)) return true;
+                if (!markerOwnsLease)
+                {
+                    if (completeAdmission && !(state == null ? UnityCliBridge.CompleteAdmissionRoot(admissionOwner) : UnityCliBridge.CompleteAdmissionRoot(state, admissionOwner))) return true;
+                    ClearForTerminalCleanup(state, cleanupScope, cleanupBoundary);
+                    return false;
+                }
+                try { ClearForTerminalCleanup(state, scope, cleanupBoundary); active = null; }
                 catch { return true; }
             }
             if (active != null && string.Equals(Text(active, "requestId"), requestId, StringComparison.Ordinal)
                 && string.Equals(Text(active, "requestDigest"), requestDigest, StringComparison.Ordinal))
             {
-                try { Clear(scope); }
+                try { ClearForTerminalCleanup(state, scope, cleanupBoundary); }
                 catch { return true; }
             }
-            UnityCliBridge.UnityCliSessionMutationLease.Release(requestId, requestDigest);
+            ReleaseLeaseForState(state, requestId, requestDigest);
             bool isOwned;
-            if (!UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned) || isOwned) return true;
-            if (completeAdmission && !UnityCliBridge.CompleteAdmissionRoot(admissionOwner)) return true;
-            Clear(cleanupScope);
+            if (!TryIsLeaseOwnedForState(state, requestId, requestDigest, out isOwned) || isOwned) return true;
+            if (completeAdmission && !(state == null ? UnityCliBridge.CompleteAdmissionRoot(admissionOwner) : UnityCliBridge.CompleteAdmissionRoot(state, admissionOwner))) return true;
+            ClearForTerminalCleanup(state, cleanupScope, cleanupBoundary);
             return false;
+        }
+
+        private static Dictionary<string, object> LoadForState(BridgeQueueState state, string scope)
+        {
+            return state == null ? Load(scope) : state.LoadOperation(scope);
+        }
+
+        private static void SaveForState(BridgeQueueState state, string scope, Dictionary<string, object> value)
+        {
+            if (state == null) Save(scope, value);
+            else state.SaveOperation(scope, value);
+        }
+
+        private static void ClearForTerminalCleanup(BridgeQueueState state, string scope, Action<string> cleanupBoundary)
+        {
+            if (cleanupBoundary != null) cleanupBoundary(scope);
+            if (state == null) Clear(scope);
+            else state.ClearOperation(scope);
+        }
+
+        private static bool TryIsLeaseOwnedForState(BridgeQueueState state, string requestId, string requestDigest, out bool isOwned)
+        {
+            return state == null
+                ? UnityCliBridge.UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned)
+                : state.TryIsLeaseOwned(requestId, requestDigest, out isOwned);
+        }
+
+        private static void ReleaseLeaseForState(BridgeQueueState state, string requestId, string requestDigest)
+        {
+            if (state == null) UnityCliBridge.UnityCliSessionMutationLease.Release(requestId, requestDigest);
+            else state.ReleaseLease(requestId, requestDigest);
         }
 
         private const int MaxTerminalCacheBytes = 8 * 1024 * 1024;
