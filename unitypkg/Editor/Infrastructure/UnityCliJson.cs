@@ -19,8 +19,7 @@ namespace UnityCli
                 CapabilityData("diagnose", DiagnoseCommands), CapabilityData("screenshot", ScreenshotCommands), CapabilityData("prefab", PrefabCommands), CapabilityData("ui", UiCommands),
                 CapabilityData("material", MaterialCommands), CapabilityData("graphics", GraphicsCommands), CapabilityData("physics", PhysicsCommands), CapabilityData("scriptable-object", ScriptableObjectCommands),
                 CapabilityData("profiler", ProfilerCommands), CapabilityData("animation", AnimationCommands), CapabilityData("shader", ShaderCommands), CapabilityData("texture", TextureCommands),
-                CapabilityData("editor", EditorCommands), CapabilityData("code", CodeCommands), CapabilityData("project-tool", ProjectToolCommands), CapabilityData("runtime-tool", RuntimeToolCommands),
-                CapabilityData("extension", ExtensionCommands)
+                CapabilityData("editor", EditorCommands), CapabilityData("code", CodeCommands), CapabilityData("project-tool", ProjectToolCommands), CapabilityData("runtime-tool", RuntimeToolCommands)
             };
         }
 

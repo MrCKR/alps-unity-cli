@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 using UnityEditor;
@@ -17,8 +16,8 @@ namespace UnityCli
         /// <summary>
         /// diagnose.preflight — 聚合 Unity Editor 健康诊断。
         ///
-        /// 作为 UnityCliBridge 的嵌套类实现，聚合 Editor 状态、公开 Tool 计数、项目 Tool
-        /// fingerprint 与编译诊断。所有动态字段直接构造为 Dictionary/List 值树。
+        /// 作为 UnityCliBridge 的嵌套类实现，聚合 Editor 状态、当前domain Tool catalog
+        /// 健康与编译诊断。所有动态字段直接构造为 Dictionary/List 值树。
         /// </summary>
         public sealed class DiagnosePreflightTool : IUnityCliTool<DiagnosePreflightTool.Request, DiagnosePreflightTool.Result>
         {
@@ -33,7 +32,6 @@ namespace UnityCli
                 public ProjectInfo Project { get; set; }
                 [UnityCliAnyJson] public object Editor { get; set; }
                 public BridgeInfo Bridge { get; set; }
-                public CustomFingerprintInfo CustomTools { get; set; }
                 [UnityCliAnyJson] public List<object> Checks { get; set; }
             }
 
@@ -48,11 +46,6 @@ namespace UnityCli
             {
                 public bool Ready { get; set; }
                 public long ToolCount { get; set; }
-            }
-
-            public sealed class CustomFingerprintInfo
-            {
-                [UnityCliAnyJson] public object Fingerprint { get; set; }
             }
 
             public sealed class CompileStatusCheck
@@ -71,8 +64,8 @@ namespace UnityCli
             public ToolDescriptor Describe() => new()
             {
                 Name = "diagnose.preflight",
-                Summary = "Run a live Unity Editor health check for project state, capability counts, custom fingerprints, and compile diagnostics.",
-                Description = "Reads current project and Editor busy state, public Tool counts, custom Tool fingerprint health, and recent compile diagnostics without exposing Bridge routes, ports, or logs.",
+                Summary = "Run a live Unity Editor health check for project state, immutable Tool catalog status, and compile diagnostics.",
+                Description = "Reads current project and Editor busy state, the published domain Tool catalog readiness and Tool count, and recent compile diagnostics without rebuilding discovery or exposing Bridge routes, ports, or logs.",
                 Group = "diagnose",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
                 DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
                 Examples = new[]
@@ -84,13 +77,14 @@ namespace UnityCli
 
             public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
             {
-                // preflight 只读取已经发布的 registry 快照，不能为了诊断触发 discovery 或写入缓存。
+                // preflight 通过041预留的internal reader读取同一published snapshot，不触发发现或复制目录。
+                var catalog = ProjectToolCatalogSnapshotReader.Read();
                 var scene = SceneManager.GetActiveScene();
                 var checks = new List<object>
                 {
                     MakeCheck("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)),
                     MakeCheck("sceneLoaded", scene.isLoaded),
-                    MakeCheck("projectToolFingerprint", !ProjectTools.Values.Any(definition => definition.FingerprintStatus == "blocked")),
+                    MakeCheck("toolCatalog", true),
                     BuildCompileStatus(ct)
                 };
 
@@ -113,9 +107,8 @@ namespace UnityCli
                     Bridge = new BridgeInfo
                     {
                         Ready = true,
-                        ToolCount = ProjectTools.Count
+                        ToolCount = catalog.ToolCount
                     },
-                    CustomTools = new CustomFingerprintInfo { Fingerprint = ProjectToolFingerprintSummary() },
                     Checks = checks
                 });
             }

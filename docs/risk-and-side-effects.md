@@ -67,7 +67,7 @@ For tools with `supportsDryRun`, `--dry-run` returns the same `plannedEffects` w
 
 ## Project Tool Integrity
 
-Project tools are checked internally before execution. A descriptor mismatch returns a structured error with the next action needed to restore a verified project tool; implementation proof is not included in normal descriptor or success output.
+Each Unity domain validates the complete Tool table before publishing its single executable slot. List and describe read the same publication's descriptor-only projection, while execution reads the executable entry from that slot; the reader cannot obtain invokers, CLR types, or writable metadata. A failed candidate never replaces the prior slot. Source changes become visible only after Unity compiles and replaces the domain and listener generation. `doctor` reads a separate bounded catalog-health snapshot so transport reachability is not confused with registry health.
 
 ## How to Assess Risk as an AI Agent
 
@@ -75,14 +75,15 @@ Project tools are checked internally before execution. A descriptor mismatch ret
 2. **For destructive tools**: Assess the declared effects and invoke directly when authorized by the public call; use `--dry-run` only when a preview is useful.
 3. **For runtime tools**: Verify Play Mode state before calling `target: "runtime"` tools.
 4. **For direct-final tools**: Set an appropriate `--timeout-ms` when the operation may take time, then use the returned business data as the terminal result.
-5. **For project tools**: Follow any structured mismatch error and use `doctor` for diagnostics.
+5. **For project tools**: Use `doctor` to inspect current-domain catalog health; fix invalid definitions and let Unity compile before rediscovery.
 
 ## Known Limitations
 
 | Limitation | Risk Level | Mitigation |
 |-----------|-----------|------------|
 | Dry-run is not available for every destructive tool | Medium | Invoke directly with declared effects; use preview only where supported |
-| Project tool registration can change during domain reload | Low | Re-discover the selected target and follow structured availability errors |
+| Project tool registration changes only when Unity replaces the domain | Low | Re-discover after compilation/reload; bind exact session/listener provenance and let the first business POST reject stale generation |
+| Catalog publication can fail closed on an ownership or descriptor error | Medium | Use `doctor` for transport and catalog-health results, fix the reported definition, then reload Unity |
 
 ## Cross-Reference
 

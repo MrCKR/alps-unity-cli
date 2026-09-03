@@ -47,7 +47,6 @@ function descriptor(overrides: Record<string, unknown> = {}): Record<string, unk
       outcomeUnknownPolicy: "not-applicable-read-only",
       completionDriverId: "direct-typed-result-v1",
     },
-    internalDescriptorFingerprint: "a".repeat(64),
     available: true,
     ...overrides,
   };
@@ -95,7 +94,6 @@ test("project Tool parser requires a complete self-contained descriptor", () => 
   assert.equal(parsed.name, "sample.echo");
   assert.ok(parsed.outputSchema);
   assert.equal(parsed.availabilityScope, "editorSession");
-  assert.equal(parsed.liveDescriptorFingerprint, "a".repeat(64));
   assert.equal(parsed.completionContract?.completionDriverId, "direct-typed-result-v1");
   assert.equal(parsed.contractProfile, "native");
 
@@ -137,7 +135,7 @@ test("public custom Tool descriptor exposes only the compact invocation contract
   assert.deepEqual(Object.keys(published).sort(), [
     "description", "destructiveHint", "examples", "inputSchema", "name", "playModeSupport", "supportsDryRun", "target",
   ]);
-  for (const field of ["outputSchema", "group", "permissions", "available", "internalDescriptorFingerprint", "completionContract", "handler", "contractProfile"])
+  for (const field of ["outputSchema", "group", "permissions", "available", "completionContract", "handler", "contractProfile"])
     assert.equal(Object.hasOwn(published, field), false, field);
   assert.deepEqual(published.examples, [{ description: "Echo hello.", input: { value: "hello" } }]);
   assert.deepEqual(parsed.outputSchema, descriptor().outputSchema);
@@ -251,13 +249,25 @@ test("unsupported official attribute dry-run fails before Bridge dispatch", asyn
   assert.equal(bridgeCalls, 0);
 });
 
-test("C# registry emits and fingerprints native profiles without partial custom registration", () => {
+test("C# registry publishes native profiles only after complete pending-table validation", () => {
   const source = readFileSync("unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", "utf8");
-  assert.match(source, /ContractProfile = "native"/);
+  const builder = readFileSync("unitypkg/Editor/ProjectTools/RegisteredTool.cs", "utf8");
+  assert.match(source, /UnityCliSchemaDeriver\.DeriveSchema\(typeof\(TRes\)\)[\s\S]*"native"/);
   assert.match(source, /\{ "contractProfile", definition\.ContractProfile \}/);
-  assert.match(source, /\\ncontractProfile=/);
+  assert.match(source, /builder\.Publish[\s\S]*Volatile\.Write/);
   assert.match(source, /E_TOOL_REGISTRY_UNHEALTHY/);
-  assert.doesNotMatch(source, /custom_tool_registration_rejected|diagnostics\.Contains\("E_TOOL_COMPLETION_CONTRACT_REQUIRED"\)/);
+  assert.match(builder, /faulted[\s\S]*Duplicate tool registration/);
+});
+
+test("Bridge catalog summary bounds main-thread projection before descriptor serialization", () => {
+  const source = readFileSync("unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", "utf8");
+  const start = source.indexOf("private static object ProjectToolCatalogSummary");
+  const end = source.indexOf("private static bool ProjectToolCatalogMatches", start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(block.indexOf("Take(args.Limit)") < block.indexOf("ProjectToolRoutingSummaryData"));
+  assert.match(block, /args\.Limit < 1 \|\| args\.Limit > 101/);
+  assert.doesNotMatch(block, /ProjectToolDescriptorData|InputSchema|OutputSchema|Permissions|CompletionContractData/);
 });
 
 test("project Tool discovery fails closed on malformed registry entries", async () => {
@@ -284,7 +294,6 @@ test("custom Tool rejects a malformed successful Bridge terminal without exposin
   if (result.ok) return;
   assert.equal(result.error.code, "E_BRIDGE_RESPONSE_INVALID");
   assert.equal(JSON.stringify(result).includes("project-tool.run"), false);
-  assert.equal(JSON.stringify(result).includes("descriptorFingerprint"), false);
 });
 
 test("instance selector never becomes a Tool business field", async () => {
@@ -337,6 +346,5 @@ test("custom Tool runs once through direct project-tool.run and returns business
   assert.deepEqual(requests[0].input, {
     name: "sample.echo",
     input: { value: "hello" },
-    expectedDescriptorFingerprint: "a".repeat(64),
   });
 });

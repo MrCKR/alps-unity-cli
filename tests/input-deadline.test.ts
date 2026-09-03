@@ -22,6 +22,8 @@ function lease(request: RootAdmissionRequest): RootAdmissionLease {
     instanceId: `unity-${"b".repeat(64)}`,
     canonicalProjectPath: process.cwd(),
     sessionId: `session-${"c".repeat(64)}`,
+    listenerId: `listener-${"e".repeat(32)}`,
+    listenerGeneration: 1,
     token: "d".repeat(64),
     consumed: false,
     grantExpiresAtMs: request.admissionAbsoluteDeadlineMs + 2_000,

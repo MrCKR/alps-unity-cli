@@ -46,6 +46,7 @@ export interface ExtensionStatusCheck {
   extensionId: ExtensionId;
   name: string;
   status: ExtensionInstallStatus;
+  integrity: "shallow" | "target" | "full";
   dependencyInstalled: boolean;
   installed: boolean;
   outdated: boolean;
@@ -57,6 +58,27 @@ export interface ExtensionStatusCheck {
   nextActions: string[];
 }
 
+/** 一次公开调用冻结的 package/install 输入，后续检查不得重新读取。 */
+export interface ExtensionStateSnapshot {
+  projectPath: string;
+  installedPackages: ReadonlyMap<string, string>;
+  installManifest: ExtensionInstallManifest;
+}
+
+export interface ExtensionCheckOptions {
+  snapshot?: ExtensionStateSnapshot;
+  absoluteDeadlineMs?: number;
+}
+
+export type ExtensionFilesystemOperation =
+  | "snapshot"
+  | "target-proof"
+  | "managed-file-hash"
+  | "source-proof"
+  | "source-file-hash"
+  | "source-tree-entry"
+  | "unknown-tree-entry";
+
 const packageName = "com.alpsckr.unitycli";
 const manifestFileName = "unitycli.extensions.manifest.json";
 const manifestLockTimeoutMs = 15_000;
@@ -64,6 +86,8 @@ const processStartIdentity = new Date(Date.now() - Math.floor(process.uptime() *
 
 let afterProjectionCopyForTest: (() => Promise<void>) | undefined;
 let sourceRootForTest: ((extensionId: ExtensionId) => string) | undefined;
+let filesystemOperationObserverForTest: ((operation: ExtensionFilesystemOperation, extensionId?: ExtensionId) => void) | undefined;
+let extensionFilesystemNow: () => number = Date.now;
 
 /** 仅测试使用：在 source projection 复制后强制制造交错。 */
 export function setAfterProjectionCopyForTest(hook: (() => Promise<void>) | undefined): void {
@@ -73,6 +97,18 @@ export function setAfterProjectionCopyForTest(hook: (() => Promise<void>) | unde
 /** 仅测试使用：把可变 source 夹具隔离到临时目录。 */
 export function setExtensionSourceRootForTest(resolver: ((extensionId: ExtensionId) => string) | undefined): void {
   sourceRootForTest = resolver;
+}
+
+/** 仅测试使用：计数 discovery 的语义文件系统操作，不暴露到公开结果。 */
+export function setExtensionFilesystemOperationObserverForTest(
+  observer: ((operation: ExtensionFilesystemOperation, extensionId?: ExtensionId) => void) | undefined,
+): void {
+  filesystemOperationObserverForTest = observer;
+}
+
+/** 仅测试使用：以确定时钟证明大目录扫描在deadline内中止。 */
+export function setExtensionFilesystemClockForTest(clock: (() => number) | undefined): void {
+  extensionFilesystemNow = clock ?? Date.now;
 }
 
 /** 返回 extension 源码目录。 */
@@ -276,54 +312,114 @@ export async function removeExtensionBundle(projectPath: string, extensionId: Ex
   });
 }
 
-/** 检查所有 extension 的物理安装状态。 */
-export async function checkExtensionBundles(projectPath: string): Promise<ExtensionStatusCheck[]> {
+/** package lock 与安装 manifest 每次 invocation 只读取一次。 */
+export async function readExtensionStateSnapshot(projectPath: string): Promise<ExtensionStateSnapshot> {
+  filesystemOperationObserverForTest?.("snapshot");
+  const canonicalProjectPath = resolve(projectPath);
+  const [installedPackages, installManifest] = await Promise.all([
+    readInstalledUnityPackages(canonicalProjectPath),
+    readExtensionInstallManifest(canonicalProjectPath),
+  ]);
+  return { projectPath: canonicalProjectPath, installedPackages, installManifest };
+}
+
+/** list 使用 manifest/version/root 的浅状态，不做 source 或 managed-file hash。 */
+export async function listExtensionBundles(
+  projectPath: string,
+  snapshot?: ExtensionStateSnapshot,
+): Promise<ExtensionStatusCheck[]> {
+  const frozen = snapshot ?? await readExtensionStateSnapshot(projectPath);
   const registry = new ExtensionRegistry();
-  const installedPackages = await readInstalledUnityPackages(projectPath);
-  const installManifest = await readExtensionInstallManifest(projectPath);
+  return registry.extensionIds().map((extensionId) => {
+    const extension = registry.getExtension(extensionId)!;
+    const availability = resolveInstallAvailability(extension.manifest, frozen.installedPackages);
+    const entry = frozen.installManifest.extensions.find((item) => item.extensionId === extensionId);
+    const targetPresent = existsSync(extensionInstallRoot(frozen.projectPath, extensionId));
+    const outdated = Boolean(entry && (entry.version !== extension.manifest.version || !targetPresent));
+    const status = resolvePhysicalStatus(availability, entry !== undefined, outdated, [], [], []);
+    return extensionStatus(extension.manifest, availability, status, "shallow", Boolean(entry && targetPresent && !outdated), outdated, {
+      missingFiles: [], changedFiles: [], unknownFiles: [],
+    });
+  });
+}
+
+/** 普通 discovery/执行只证明一个 selected extension 的 target 投影，不读取 source tree。 */
+export async function checkSelectedExtensionBundle(
+  projectPath: string,
+  extensionId: ExtensionId,
+  options: ExtensionCheckOptions = {},
+): Promise<ExtensionStatusCheck | undefined> {
+  const registry = new ExtensionRegistry();
+  const extension = registry.getExtension(extensionId);
+  if (!extension) return undefined;
+  const snapshot = options.snapshot ?? await readExtensionStateSnapshot(projectPath);
+  const availability = resolveInstallAvailability(extension.manifest, snapshot.installedPackages);
+  const entry = snapshot.installManifest.extensions.find((item) => item.extensionId === extensionId);
+  const targetRoot = extensionInstallRoot(snapshot.projectPath, extensionId);
+  filesystemOperationObserverForTest?.("target-proof", extensionId);
+  const fileCheck = entry
+    ? await checkManagedFiles(targetRoot, entry.files, options.absoluteDeadlineMs, extensionId)
+    : { missingFiles: [], changedFiles: [], unknownFiles: [] };
+  const outdated = Boolean(entry && entry.version !== extension.manifest.version);
+  const installed = Boolean(entry && !outdated && fileCheck.missingFiles.length === 0 && fileCheck.changedFiles.length === 0 && fileCheck.unknownFiles.length === 0);
+  const status = resolvePhysicalStatus(availability, entry !== undefined, outdated, fileCheck.missingFiles, fileCheck.changedFiles, fileCheck.unknownFiles);
+  return extensionStatus(extension.manifest, availability, status, "target", installed, outdated, fileCheck);
+}
+
+/** extensions doctor 独占全 extension source/managed-file 深 hash。 */
+export async function checkExtensionBundles(projectPath: string, options: ExtensionCheckOptions = {}): Promise<ExtensionStatusCheck[]> {
+  const registry = new ExtensionRegistry();
+  const snapshot = options.snapshot ?? await readExtensionStateSnapshot(projectPath);
   const checks: ExtensionStatusCheck[] = [];
 
   for (const extensionId of registry.extensionIds()) {
+    requireExtensionScanDeadline(options.absoluteDeadlineMs);
     const extension = registry.getExtension(extensionId)!;
-    const bundleAvailability = resolveInstallAvailability(extension.manifest, installedPackages);
-    const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
-    const targetRoot = extensionInstallRoot(projectPath, extensionId);
+    const availability = resolveInstallAvailability(extension.manifest, snapshot.installedPackages);
+    const entry = snapshot.installManifest.extensions.find((item) => item.extensionId === extensionId);
+    const targetRoot = extensionInstallRoot(snapshot.projectPath, extensionId);
     const sourceRoot = extensionSourceRoot(extensionId);
     const includes = extensionUnityInstallIncludes(extension.manifest);
     const sourceProjectionComplete = existsSync(sourceRoot) && includes.every((include) => existsSync(safeSourcePath(sourceRoot, include)));
-    const sourceHash = sourceProjectionComplete ? await hashBundleProjection(sourceRoot, includes) : undefined;
-    const fileCheck = entry ? await checkManagedFiles(targetRoot, entry.files) : { missingFiles: [], changedFiles: [], unknownFiles: await listUnknownFiles(targetRoot, []) };
-    // version、投影源码 hash 和 include 文件均属于 physical install contract。
+    filesystemOperationObserverForTest?.("source-proof", extensionId);
+    const sourceHash = sourceProjectionComplete ? await hashBundleProjection(sourceRoot, includes, options.absoluteDeadlineMs, extensionId) : undefined;
+    filesystemOperationObserverForTest?.("target-proof", extensionId);
+    const fileCheck = entry
+      ? await checkManagedFiles(targetRoot, entry.files, options.absoluteDeadlineMs, extensionId)
+      : { missingFiles: [], changedFiles: [], unknownFiles: await listUnknownFiles(targetRoot, [], options.absoluteDeadlineMs, extensionId) };
     const outdated = Boolean(entry && (!sourceProjectionComplete || !sourceHash || entry.sourceHash !== sourceHash || entry.version !== extension.manifest.version));
-    const hasUnknownFiles = fileCheck.unknownFiles.length > 0;
-    const installed = Boolean(entry && fileCheck.missingFiles.length === 0 && fileCheck.changedFiles.length === 0 && !outdated && !hasUnknownFiles);
-    const status = resolvePhysicalStatus(bundleAvailability, entry !== undefined, outdated, fileCheck.missingFiles, fileCheck.changedFiles, fileCheck.unknownFiles);
-
-    checks.push({
-      extensionId,
-      name: extension.manifest.name,
-      status,
-      dependencyInstalled: bundleAvailability.status === "available",
-      installed,
-      outdated,
-      unknownFiles: fileCheck.unknownFiles,
-      missingFiles: fileCheck.missingFiles,
-      changedFiles: fileCheck.changedFiles,
-      providedTools: extension.manifest.contributions.tools?.map((tool) => tool.name) ?? [],
-      missingPackageIds: bundleAvailability.missingPackageIds,
-      nextActions: nextActionsForStatus(extension.manifest, bundleAvailability, status)
-    });
+    const installed = Boolean(entry && fileCheck.missingFiles.length === 0 && fileCheck.changedFiles.length === 0 && !outdated && fileCheck.unknownFiles.length === 0);
+    const status = resolvePhysicalStatus(availability, entry !== undefined, outdated, fileCheck.missingFiles, fileCheck.changedFiles, fileCheck.unknownFiles);
+    checks.push(extensionStatus(extension.manifest, availability, status, "full", installed, outdated, fileCheck));
   }
 
   return checks;
 }
 
-/**
- * 返回目标项目的唯一 extension physical install state 视图。
- * 控制面和 live capability gate 均必须使用此入口，不能用 package dependency 替代安装状态。
- */
-export async function readExtensionPhysicalStates(projectPath: string): Promise<Map<ExtensionId, ExtensionStatusCheck>> {
-  return new Map((await checkExtensionBundles(projectPath)).map((check) => [check.extensionId, check]));
+function extensionStatus(
+  manifest: ExtensionManifest,
+  availability: ExtensionAvailabilityResult,
+  status: ExtensionInstallStatus,
+  integrity: "shallow" | "target" | "full",
+  installed: boolean,
+  outdated: boolean,
+  files: { missingFiles: string[]; changedFiles: string[]; unknownFiles: string[] },
+): ExtensionStatusCheck {
+  return {
+    extensionId: manifest.id,
+    name: manifest.name,
+    status,
+    integrity,
+    dependencyInstalled: availability.status === "available",
+    installed,
+    outdated,
+    unknownFiles: files.unknownFiles,
+    missingFiles: files.missingFiles,
+    changedFiles: files.changedFiles,
+    providedTools: manifest.contributions.tools?.map((tool) => tool.name) ?? [],
+    missingPackageIds: availability.missingPackageIds,
+    nextActions: nextActionsForStatus(manifest, availability, status),
+  };
 }
 
 /** 跨进程序列化同一项目的 extension 文件与 manifest 变更；活 owner 与损坏锁一律不按时间抢占。 */
@@ -463,31 +559,40 @@ async function removeManagedFiles(targetRoot: string, files: ManagedExtensionFil
   }
 }
 
-async function checkManagedFiles(targetRoot: string, files: ManagedExtensionFile[]): Promise<{ missingFiles: string[]; changedFiles: string[]; unknownFiles: string[] }> {
+async function checkManagedFiles(
+  targetRoot: string,
+  files: ManagedExtensionFile[],
+  absoluteDeadlineMs?: number,
+  extensionId?: ExtensionId,
+): Promise<{ missingFiles: string[]; changedFiles: string[]; unknownFiles: string[] }> {
   const missingFiles: string[] = [];
   const changedFiles: string[] = [];
   const managed = new Set(files.map((file) => file.path));
   for (const file of files) {
+    requireExtensionScanDeadline(absoluteDeadlineMs);
     const fullPath = safeManagedPath(targetRoot, file.path);
     if (!existsSync(fullPath)) {
       missingFiles.push(file.path);
       continue;
     }
-    const actualHash = await hashFile(fullPath);
-    if (actualHash !== file.sha256) {
-      changedFiles.push(file.path);
-    }
+    filesystemOperationObserverForTest?.("managed-file-hash", extensionId);
+    const actualHash = await hashFile(fullPath, absoluteDeadlineMs);
+    if (actualHash !== file.sha256) changedFiles.push(file.path);
   }
-  const unknownFiles = await listUnknownFiles(targetRoot, managed);
+  const unknownFiles = await listUnknownFiles(targetRoot, managed, absoluteDeadlineMs, extensionId);
   return { missingFiles, changedFiles, unknownFiles };
 }
 
-async function listUnknownFiles(targetRoot: string, managed: Iterable<string>): Promise<string[]> {
-  if (!existsSync(targetRoot)) {
-    return [];
-  }
+async function listUnknownFiles(
+  targetRoot: string,
+  managed: Iterable<string>,
+  absoluteDeadlineMs?: number,
+  extensionId?: ExtensionId,
+): Promise<string[]> {
+  requireExtensionScanDeadline(absoluteDeadlineMs);
+  if (!existsSync(targetRoot)) return [];
   const managedSet = new Set(managed);
-  const allFiles = await listFiles(targetRoot);
+  const allFiles = await listFiles(targetRoot, targetRoot, absoluteDeadlineMs, extensionId);
   return allFiles.filter((file) => !managedSet.has(file) && !isUnityGeneratedMetaFile(file)).sort();
 }
 
@@ -495,16 +600,16 @@ function isUnityGeneratedMetaFile(path: string): boolean {
   return path.endsWith(".meta");
 }
 
-async function listFiles(root: string, current = root): Promise<string[]> {
+async function listFiles(root: string, current = root, absoluteDeadlineMs?: number, extensionId?: ExtensionId): Promise<string[]> {
+  requireExtensionScanDeadline(absoluteDeadlineMs);
   const entries = await readdir(current, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
+    requireExtensionScanDeadline(absoluteDeadlineMs);
+    filesystemOperationObserverForTest?.("unknown-tree-entry", extensionId);
     const fullPath = join(current, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await listFiles(root, fullPath));
-    } else if (entry.isFile()) {
-      files.push(normalizePath(relative(root, fullPath)));
-    }
+    if (entry.isDirectory()) files.push(...await listFiles(root, fullPath, absoluteDeadlineMs, extensionId));
+    else if (entry.isFile()) files.push(normalizePath(relative(root, fullPath)));
   }
   return files;
 }
@@ -533,41 +638,64 @@ async function hashManagedProjection(root: string, files: ManagedExtensionFile[]
   return hash.digest("hex");
 }
 
-async function hashBundleProjection(sourceRoot: string, includes: string[]): Promise<string> {
+async function hashBundleProjection(
+  sourceRoot: string,
+  includes: string[],
+  absoluteDeadlineMs?: number,
+  extensionId?: ExtensionId,
+): Promise<string> {
   const files: Array<{ path: string; sourcePath: string }> = [];
   for (const includePath of includes.map(normalizePath).sort()) {
+    requireExtensionScanDeadline(absoluteDeadlineMs);
     const sourcePath = safeSourcePath(sourceRoot, includePath);
     if (!existsSync(sourcePath)) continue;
     const targetRelativeRoot = projectionTargetRoot(includePath);
-    if ((await stat(sourcePath)).isDirectory()) {
-      await collectProjectionFiles(sourcePath, sourcePath, targetRelativeRoot, files);
-    } else {
-      files.push({ path: targetRelativeRoot, sourcePath });
-    }
+    if ((await stat(sourcePath)).isDirectory()) await collectProjectionFiles(sourcePath, sourcePath, targetRelativeRoot, files, absoluteDeadlineMs, extensionId);
+    else files.push({ path: targetRelativeRoot, sourcePath });
   }
   const hash = createHash("sha256");
   for (const file of files.sort((left, right) => left.path.localeCompare(right.path))) {
+    requireExtensionScanDeadline(absoluteDeadlineMs);
     hash.update(`file:${file.path}\n`);
+    filesystemOperationObserverForTest?.("source-file-hash", extensionId);
     hash.update(await readFile(file.sourcePath));
     hash.update("\n");
   }
   return hash.digest("hex");
 }
 
-async function collectProjectionFiles(dir: string, root: string, targetPrefix: string, files: Array<{ path: string; sourcePath: string }>): Promise<void> {
+async function collectProjectionFiles(
+  dir: string,
+  root: string,
+  targetPrefix: string,
+  files: Array<{ path: string; sourcePath: string }>,
+  absoluteDeadlineMs?: number,
+  extensionId?: ExtensionId,
+): Promise<void> {
+  requireExtensionScanDeadline(absoluteDeadlineMs);
   for (const entry of (await readdir(dir, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))) {
+    requireExtensionScanDeadline(absoluteDeadlineMs);
+    filesystemOperationObserverForTest?.("source-tree-entry", extensionId);
     const sourcePath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      await collectProjectionFiles(sourcePath, root, targetPrefix, files);
-    } else if (entry.isFile()) {
+    if (entry.isDirectory()) await collectProjectionFiles(sourcePath, root, targetPrefix, files, absoluteDeadlineMs, extensionId);
+    else if (entry.isFile()) {
       const relativePath = normalizePath(relative(root, sourcePath));
       files.push({ path: normalizePath(targetPrefix ? `${targetPrefix}/${relativePath}` : relativePath), sourcePath });
     }
   }
 }
 
-async function hashFile(path: string): Promise<string> {
+async function hashFile(path: string, absoluteDeadlineMs?: number): Promise<string> {
+  requireExtensionScanDeadline(absoluteDeadlineMs);
   return createHash("sha256").update(await readFile(path)).digest("hex");
+}
+
+function requireExtensionScanDeadline(absoluteDeadlineMs?: number): void {
+  if (absoluteDeadlineMs !== undefined && extensionFilesystemNow() >= absoluteDeadlineMs) {
+    throw new ExtensionInstallerError("E_EXTENSION_SCAN_TIMEOUT", "Extension filesystem inspection exceeded the immutable command deadline.", [
+      "Remove unexpected files or retry extensions doctor with a larger --timeout-ms after filesystem activity settles."
+    ]);
+  }
 }
 
 function resolvePhysicalStatus(

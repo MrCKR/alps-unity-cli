@@ -457,7 +457,7 @@ export function runtimeInventoryIssues(discovered, baseline) {
 function inventoryHash(names) { return createHash("sha256").update([...names].sort().join("\n")).digest("hex"); }
 
 async function discover(m) {
-  const groups = await m.call("tools.group", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } }));
+  const groups = await m.call("catalog.groups", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } }));
   for (const item of groups.envelope?.data?.groups ?? []) {
     const group = nameOf(item); if (!group) continue;
     let cursor;

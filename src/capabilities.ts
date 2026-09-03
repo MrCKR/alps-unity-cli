@@ -7,7 +7,7 @@ import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import type { ProjectToolRuntime } from "./project-tool-discovery.js";
 import { success } from "./output.js";
-import { loadToolCatalog } from "./tools/catalog.js";
+import { loadFullToolCatalogForDiagnostics } from "./tools/catalog.js";
 import { toolSource, type ToolMetadata } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
 
@@ -17,7 +17,7 @@ export async function handleCapabilitiesCommand(
   runtime: BridgeRuntime & ProjectToolRuntime,
   requestId: string
 ): Promise<CliResult> {
-  const toolCatalog = await loadToolCatalog(flags, runtime, `${requestId}_tools`);
+  const toolCatalog = await loadFullToolCatalogForDiagnostics(flags, runtime, `${requestId}_tools`);
   if (toolCatalog.ok === false) return toolCatalog;
 
   const catalogSummary = buildCatalogSummary(toolCatalog.tools);
@@ -65,7 +65,7 @@ async function readRuntimeSummary(
   requestId: string
 ): Promise<Record<string, unknown> | undefined> {
   try {
-    const result = await executeBridgePayload(requestId, "diagnose.preflight", {}, flags, runtime, undefined, { mode: "read", mutation: false });
+    const result = await executeBridgePayload(requestId, "diagnose.preflight", {}, flags, runtime, { mode: "read", mutation: false });
     if (!result.ok || !result.data || typeof result.data !== "object" || Array.isArray(result.data)) return undefined;
     const bridge = (result.data as Record<string, unknown>).bridge;
     if (!bridge || typeof bridge !== "object" || Array.isArray(bridge)) return undefined;

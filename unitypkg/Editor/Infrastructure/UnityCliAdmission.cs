@@ -380,7 +380,7 @@ namespace UnityCli
 
         private static bool AdmissionRecoveryCommand(string command)
         {
-            return command == "project-tool.list" || command == "internal.editor.state.snapshot"
+            return IsProjectToolCatalogReadCommand(command) || command == "internal.editor.state.snapshot"
                 || UnityCliCompileCoordinator.IsCommand(command) || UnityCliLiveBuildCoordinator.IsCommand(command)
                 || UnityCliLiveRefreshCoordinator.IsCommand(command) || UnityCliAssetRefreshCoordinator.IsCommand(command)
                 || UnityCliPackageEmbedCoordinator.IsCommand(command) || UnityCliPackageResolveCoordinator.IsCommand(command)
@@ -392,7 +392,15 @@ namespace UnityCli
         {
             switch (command)
             {
+                case "project-tool.health":
+                case "project-tool.groups":
+                case "project-tool.summary":
+                case "project-tool.describe":
                 case "project-tool.list":
+                case "runtime-tool.groups":
+                case "runtime-tool.summary":
+                case "runtime-tool.describe":
+                case "runtime-tool.list":
                 case "diagnose.preflight":
                 case "internal.editor.state.snapshot":
                 case "internal.editor.compile.status":

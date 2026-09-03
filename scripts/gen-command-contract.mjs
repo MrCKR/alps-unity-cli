@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
 
 process.env.UNITY_CLI_GENERATING_CONTRACT = "1";
 
@@ -12,11 +13,18 @@ await importFromDist("extensions/index.js");
 
 const OUTPUT_PATH = "contracts/command-contract.json";
 const DEFAULT_TIMEOUT_MS = 30000;
+const publicToolNames = new Set(collectPublicToolInventory(process.cwd()).map((entry) => entry.name));
 
 const bridgeOnlyEntries = new Map([
-  ["extension.status", { handler_type: "hybrid", destructive: false }],
+  ["project-tool.health", { handler_type: "bridge", destructive: false }],
+  ["project-tool.groups", { handler_type: "bridge", destructive: false }],
+  ["project-tool.summary", { handler_type: "bridge", destructive: false }],
+  ["project-tool.describe", { handler_type: "bridge", destructive: false }],
   ["project-tool.list", { handler_type: "bridge", destructive: false }],
   ["project-tool.run", { handler_type: "bridge", destructive: false }],
+  ["runtime-tool.groups", { handler_type: "bridge", destructive: false }],
+  ["runtime-tool.summary", { handler_type: "bridge", destructive: false }],
+  ["runtime-tool.describe", { handler_type: "bridge", destructive: false }],
   ["runtime-tool.list", { handler_type: "bridge", destructive: false }],
   ["runtime-tool.run", { handler_type: "bridge", destructive: false }]
 ]);
@@ -38,7 +46,7 @@ for (const tool of allRegisteredToolMetadata()) {
 
 for (const descriptor of staticCatalog.tools) {
   const name = String(descriptor.name);
-  if (entries.has(name)) continue;
+  if (!publicToolNames.has(name) || entries.has(name)) continue;
   const group = String(descriptor.group);
   entries.set(name, {
     bridgeCommand: name,

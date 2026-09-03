@@ -24,11 +24,6 @@ export type BridgeResponse = ProtocolEnvelope<Record<string, unknown>, Record<st
 
 export type BridgeFlags = Record<string, string | boolean>;
 
-/** 动态 Tool 的 live descriptor 指纹只用于正确性校验，不构成执行授权。 */
-export interface BridgeDescriptorBinding {
-  liveDescriptorFingerprint?: string;
-}
-
 export interface BridgeInvocationOptions {
   mode?: "execute" | "read" | "observeNow";
   mutation?: boolean;

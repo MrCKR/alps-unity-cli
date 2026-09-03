@@ -90,8 +90,8 @@ export function loadUnavailableDescriptors(
 /**
  * Collect all tool contributions across available extensions.
  *
- * This is the primary entry point for tools group list / tools search to discover
- * extension-provided tools without scanning unavailable extensions.
+ * Manifest-level inventory helper for extension control-plane summaries.
+ * Live Tool discovery never uses these entries as descriptor truth.
  */
 export function collectAvailableTools(
   registry: ExtensionRegistry,
@@ -111,8 +111,7 @@ export function collectAvailableTools(
 /**
  * Collect all tool contributions across ALL extensions (including unavailable).
  *
- * Used by `tools group list` when the user explicitly wants to see all tools
- * regardless of availability.
+ * This remains extension manifest inventory only; live summary/describe comes from Bridge.
  */
 function hasInstalledPackage(
   installedPackages: ReadonlyMap<string, string> | Readonly<Record<string, string>>,

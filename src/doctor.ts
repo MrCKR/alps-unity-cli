@@ -2,17 +2,15 @@
  * CLI command: doctor
  *
  * Diagnoses CLI → UnityPkg connectivity, instance health,
- * live Bridge preflight, configuration integrity, and capability discovery.
+ * read-only catalog health, configuration integrity, and capability discovery.
  * Transport endpoint and listener identity remain internal to instance selection.
  */
 
 import { getString } from "./args.js";
 import { access, stat } from "node:fs/promises";
-import { discoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { instanceSelectionFailure, obsoleteLocalStatePaths, readInstances, readInstancesWithRegistryDiagnostics, selectInstanceForFlags, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { EDITOR_STATE_OBSERVATION_BUDGET_MS } from "./bridge/session-supervisor.js";
-import { builtinToolMetadata } from "./tools/metadata/index.js";
 import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
 import { ExtensionRegistry, extensionAvailabilitySummary } from "./extensions/index.js";
 import { extensionAvailabilityFlags } from "./extension-availability.js";
@@ -20,7 +18,7 @@ import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
-export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime {
+export interface DoctorRuntime extends BridgeRuntime {
   dataDir: string;
   selectInstance?: typeof selectInstanceForFlags;
 }
@@ -54,12 +52,10 @@ export async function handleDoctorCommand(
   }
 
   // Check 3: Bridge connectivity follows the same strict --instance/CWD selector as business calls.
-  let bridgeReachable = false;
   try {
     const selection = await (runtime.selectInstance ?? selectInstanceForFlags)(flags, runtime.dataDir);
     const bridgeCheck = await checkBridgeConnectivity(selection.instance.instanceId, requestId, runtime);
     checks.push(bridgeCheck);
-    bridgeReachable = bridgeCheck.status === "pass";
   } catch (error) {
     const selectionFailure = instanceSelectionFailure(requestId, error);
     const selectionError = selectionFailure && !selectionFailure.ok ? selectionFailure.error : undefined;
@@ -78,18 +74,10 @@ export async function handleDoctorCommand(
   checks.push(await checkConfigIntegrity(readyInstances));
   checks.push(await checkObsoleteLocalState(runtime.dataDir));
 
-  const fingerprintCheck = checkBridgeFingerprintStatus(checks);
-  if (fingerprintCheck) {
-    checks.push(fingerprintCheck);
+  const catalogCheck = checkBridgeCatalogStatus(checks);
+  if (catalogCheck) {
+    checks.push(catalogCheck);
   }
-
-  const compileCheck = checkCompileStatus(checks);
-  if (compileCheck) {
-    checks.push(compileCheck);
-  }
-
-  // Unified CLI/tools discovery surface
-  checks.push(await checkUnifiedDiscovery(flags, runtime, requestId, bridgeReachable));
 
   // Extension package availability comes from physical project state.
   checks.push(await checkExtensionAvailability(flags, runtime));
@@ -203,26 +191,20 @@ async function checkBridgeConnectivity(
   try {
     const result = await executeBridgePayload(
       requestId,
-      "project-tool.run",
-      { name: "diagnose.preflight", input: {} },
+      "project-tool.health",
+      {},
       { instance: instanceId, "timeout-ms": String(EDITOR_STATE_OBSERVATION_BUDGET_MS) },
       runtime,
-      undefined,
       // connectivity probe 与 editor.state 共享同一即时观察预算，由 supervisor 将 Bridge POST 限制为 3500ms。
       { mode: "observeNow", mutation: false, defaultTimeoutMs: EDITOR_STATE_OBSERVATION_BUDGET_MS }
     );
 
     if (result.ok) {
-      const wrapperData = result.data;
-      const bridgeResponse = wrapperData && typeof wrapperData === "object" && !Array.isArray(wrapperData)
-        && (wrapperData as Record<string, unknown>).result && typeof (wrapperData as Record<string, unknown>).result === "object"
-        ? (wrapperData as Record<string, unknown>).result
-        : wrapperData;
       return {
         name: "bridge_connectivity",
         status: "pass",
-        message: `Bridge identity is reachable for ${instanceId}.`,
-        details: { instanceId, bridgeResponse }
+        message: `Bridge transport is reachable for ${instanceId}.`,
+        details: { instanceId, bridgeResponse: result.data }
       };
     }
 
@@ -242,59 +224,27 @@ async function checkBridgeConnectivity(
   }
 }
 
-function checkBridgeFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
+function checkBridgeCatalogStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
   const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
   const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
-  if (!bridgeResponse || typeof bridgeResponse !== "object") {
-    return undefined;
-  }
-  const customTools = (bridgeResponse as { customTools?: unknown }).customTools;
-  const fingerprint = customTools && typeof customTools === "object" ? (customTools as { fingerprint?: unknown }).fingerprint : undefined;
-  if (!fingerprint || typeof fingerprint !== "object") {
-    return undefined;
-  }
-  const blockedCount = numberProp(fingerprint, "blockedCount") ?? 0;
-  const toolCount = numberProp(fingerprint, "toolCount") ?? 0;
-  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : "pass";
+  if (!bridgeResponse || typeof bridgeResponse !== "object") return undefined;
+  const snapshot = bridgeResponse as Record<string, unknown>;
+  const ready = snapshot.ready === true;
+  const toolCount = numberProp(snapshot, "toolCount") ?? -1;
+  const failureMessage = stringProp(snapshot, "failure");
+  const nextActions = Array.isArray(snapshot.nextActions)
+    ? snapshot.nextActions.filter((value): value is string => typeof value === "string" && value.length > 0).slice(0, 4)
+    : [];
+  const valid = typeof snapshot.ready === "boolean" && toolCount >= 0
+    && (ready ? failureMessage === undefined && nextActions.length === 0 : !!failureMessage && nextActions.length > 0);
+  const status: DoctorCheck["status"] = valid && ready ? "pass" : "fail";
   return {
-    name: "project_tool_fingerprint",
+    name: "tool_catalog",
     status,
     message: status === "pass"
-      ? `Custom tool fingerprints match for ${toolCount} tool(s).`
-      : `Custom tool fingerprints are blocked for ${blockedCount} of ${toolCount} tool(s).`,
-    details: { fingerprint }
-  };
-}
-
-function checkCompileStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
-  const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
-  const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
-  if (!bridgeResponse || typeof bridgeResponse !== "object") {
-    return undefined;
-  }
-  const checksArray = (bridgeResponse as { checks?: unknown }).checks;
-  if (!Array.isArray(checksArray)) {
-    return undefined;
-  }
-  const compile = checksArray.find((entry): entry is Record<string, unknown> =>
-    typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).name === "compileStatus");
-  if (!compile) {
-    return undefined;
-  }
-  const compiling = compile.compiling === true;
-  const hasErrors = compile.hasCompileErrors === true;
-  const errors = Array.isArray(compile.compileErrors) ? compile.compileErrors.filter((e): e is string => typeof e === "string") : [];
-  const status: DoctorCheck["status"] = hasErrors ? "fail" : compiling ? "warn" : "pass";
-  const message = hasErrors
-    ? `Unity has compile errors (${errors.length} shown). Often caused by a broken extension under Packages/com.alpsckr.unitycli/Extensions.`
-    : compiling
-      ? "Unity is currently compiling scripts."
-      : "Unity scripts compiled cleanly.";
-  return {
-    name: "compile_status",
-    status,
-    message,
-    details: { compiling, hasCompileErrors: hasErrors, compileErrors: errors.slice(0, 10), nextActions: compile.nextActions }
+      ? `The current Unity domain published one immutable Tool catalog with ${toolCount} tool(s).`
+      : `E_TOOL_REGISTRY_UNHEALTHY: ${failureMessage ?? "The catalog health snapshot is invalid."}`,
+    details: { ...(status === "fail" ? { code: "E_TOOL_REGISTRY_UNHEALTHY" } : {}), ready, toolCount: Math.max(0, toolCount), ...(failureMessage ? { failure: failureMessage } : {}), ...(nextActions.length > 0 ? { nextActions } : {}) }
   };
 }
 
@@ -337,34 +287,6 @@ async function checkDataDirectory(dataDir: string): Promise<DoctorCheck> {
       message: `Cannot access data directory: ${error instanceof Error ? error.message : String(error)}`
     };
   }
-}
-
-async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string, bridgeReachable: boolean): Promise<DoctorCheck> {
-  if (!bridgeReachable && runtime.projectTools === undefined) {
-    return {
-      name: "unified_tool_discovery",
-      status: "warn",
-      message: "Tool discovery is unavailable because no Unity instance is connected.",
-      details: { mode: "unavailable", toolCount: 0 }
-    };
-  }
-  const discovery = await discoverProjectTools(flags, runtime, `${requestId}_project_tools`, { requireBridge: true });
-  if (!discovery.ok) {
-    return {
-      name: "unified_tool_discovery",
-      status: "warn",
-      message: `Tool discovery failed: ${discovery.error?.code ?? "unknown"} — ${discovery.error?.message ?? "no message"}`,
-      details: { mode: "error", toolCount: 0, errorCode: discovery.error?.code, errorMessage: discovery.error?.message }
-    };
-  }
-
-  const localCount = builtinToolMetadata().length;
-  return {
-    name: "unified_tool_discovery",
-    status: "pass",
-    message: `The connected instance exposes ${localCount + discovery.tools.length} Tool descriptor(s).`,
-    details: { mode: discovery.mode, localCount, liveCount: discovery.tools.length, toolCount: localCount + discovery.tools.length }
-  };
 }
 
 async function checkConfigIntegrity(readyInstances: UnityInstance[]): Promise<DoctorCheck> {
@@ -522,9 +444,8 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Ensure Unity Editor is running with the UnityCLI Bridge package for the selected --instance or CWD project.");
           suggestions.push("Run unitycli instances list to inspect identity, session, blocker, and transition state.");
           break;
-        case "project_tool_fingerprint":
-          suggestions.push("Inspect unitycli doctor fingerprint details, then review project tool descriptor/handler code changes.");
-          suggestions.push("Apply the reported rePinValue only after accepting the exact Tool change.");
+        case "tool_catalog":
+          suggestions.push("Fix the reported Tool descriptor, schema, completion, signature, or ownership error, then let Unity compile and reload the domain.");
           break;
         case "data_directory":
           suggestions.push("Run any unitycli command to auto-create the data directory.");
@@ -534,10 +455,6 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           break;
         case "obsolete_local_state":
           suggestions.push("Delete only the reported obsolete config.json, aliases.json, or aggregate instances.json files after auditing them.");
-          break;
-        case "unified_tool_discovery":
-          suggestions.push("Run unitycli tools group to see tool groups.");
-          suggestions.push("Run unitycli tools group list <group> with a connected Unity instance to inspect its complete Tool descriptors.");
           break;
         case "extension_registry":
           suggestions.push("Run unitycli extensions list to see available extensions.");

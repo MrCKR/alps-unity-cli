@@ -769,7 +769,51 @@ test("root admission polls serially with jitter and grants a fresh full executio
   assert.equal(maxConcurrentAcquire, 1);
   assert.equal(now, 1_180);
   assert.equal(admission.executionAbsoluteDeadlineMs, 2_180);
+  assert.equal(admission.listenerId, `listener-${"0".repeat(31)}1`);
+  assert.equal(admission.listenerGeneration, 1);
   assert.equal(admission.consumed, false);
+});
+
+test("changed discovery listener fails before admission or business POST", async () => {
+  let acquireCalls = 0;
+  let businessPosts = 0;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => 2_000,
+    select: async () => selection("ready", 2),
+    acquire: async () => {
+      acquireCalls += 1;
+      throw new Error("stale discovery must fail before admission transport");
+    },
+    post: async () => {
+      businessPosts += 1;
+      throw new Error("stale discovery must fail before business transport");
+    },
+  });
+  await assert.rejects(() => supervisor.acquireRootAdmission({
+    requestId: "req_stale_discovery",
+    command: "scene.hierarchy",
+    input: {},
+    dryRun: false,
+    target: "editor",
+    completionContractIdentity: "atomic-read-v1",
+    expectedDiscoveryProvenance: {
+      target: "editor",
+      instanceId: INSTANCE_ID,
+      sessionId: SESSION_ID,
+      editorSessionId: SESSION_ID,
+      listenerId: `listener-${"0".repeat(31)}1`,
+      listenerGeneration: 1,
+    },
+    timeoutMs: 1_000,
+    admissionAbsoluteDeadlineMs: 3_000,
+  }), (error: unknown) => {
+    assert.ok(error instanceof SessionSupervisorError);
+    assert.equal(error.code, "E_TOOL_CATALOG_CHANGED");
+    assert.deepEqual(error.details, { instanceId: INSTANCE_ID, phase: "admission", businessRequestSent: false });
+    return true;
+  });
+  assert.equal(acquireCalls, 0);
+  assert.equal(businessPosts, 0);
 });
 
 test("explicit pre-effect admission rejection polls reacquire until capacity is available", async () => {
@@ -786,6 +830,8 @@ test("explicit pre-effect admission rejection polls reacquire until capacity is 
     instanceId: INSTANCE_ID,
     canonicalProjectPath: "c:\\repo\\project",
     sessionId: SESSION_ID,
+    listenerId: `listener-${"0".repeat(31)}1`,
+    listenerGeneration: 1,
     token: "a".repeat(64),
     consumed: false,
     grantExpiresAtMs: 3_100,
