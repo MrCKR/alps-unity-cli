@@ -23,6 +23,9 @@ test("native Tool names retain the exact syntax and UTF-8 byte limit", () => {
   assert.equal(isRegisteredToolName("scene.数据"), false);
   assert.equal(isRegisteredToolName("Scene.data"), false);
   assert.equal(isRegisteredToolName("scene..data"), false);
+  assert.equal(isRegisteredToolName("scene.data\n"), false);
+  assert.equal(isRegisteredToolName("scene.data\r\n"), false);
+  assert.equal(isRegisteredToolName("scene.data "), false);
 
   assert.throws(() => defineTool(invalidDefinition("scene.数据")), /registered Tool syntax.*128 UTF-8 bytes/);
   assert.throws(() => defineTool(invalidDefinition("a".repeat(129))), /registered Tool syntax.*128 UTF-8 bytes/);
@@ -36,6 +39,9 @@ test("official attribute names preserve legal snake_case suffixes within the tot
   assert.equal(isRegisteredToolName("project_reload_data", "official-attribute"), false);
   assert.equal(isRegisteredToolName(`UnityPipeline_${"a".repeat(114)}`, "official-attribute"), true);
   assert.equal(isRegisteredToolName(`UnityPipeline_${"a".repeat(115)}`, "official-attribute"), false);
+  assert.equal(isRegisteredToolName("UnityPipeline_project_reload_data\n", "official-attribute"), false);
+  assert.equal(isRegisteredToolName("UnityPipeline_project_reload_data\r\n", "official-attribute"), false);
+  assert.equal(isRegisteredToolName("UnityPipeline_project_reload_data\t", "official-attribute"), false);
 });
 
 test("native and official C# registration both use the profile-aware name validator", async () => {
@@ -48,4 +54,5 @@ test("native and official C# registration both use the profile-aware name valida
   assert.match(official, /var toolName = OfficialAttributeToolPrefix[\s\S]*UnityCliToolName\.Validate\(toolName, "official-attribute"\)/);
   assert.match(validator, /MaxUtf8Bytes = 128[\s\S]*Encoding\.UTF8\.GetByteCount\(name\)/);
   assert.match(validator, /NativePattern[\s\S]*OfficialSuffixPattern/);
+  assert.equal((validator.match(/\\\\z/g) ?? []).length, 2);
 });

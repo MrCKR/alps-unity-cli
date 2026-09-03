@@ -29,6 +29,7 @@ import { withObservationSelection } from "./bridge/types.js";
 import { extensionAvailabilityFlags } from "./extension-availability.js";
 import { readInstalledExtensions } from "./cli-commands/extensions.js";
 import { checkExtensionBundles, readExtensionInstallManifest, type ExtensionStatusCheck } from "./extensions/installer.js";
+import { EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT } from "./extensions/state-contract.js";
 import { failure, success } from "./output.js";
 import type { CliError, CliResult } from "./types.js";
 
@@ -390,26 +391,41 @@ async function checkExtensions(flags: Record<string, string | boolean>, runtime:
     ]);
     const installedEntries = new Set(manifest.extensions.map((entry) => entry.extensionId));
     const knownIds = new Set(physical.map((entry) => entry.extensionId));
+    const unknownInstalled = manifest.extensions.map((entry) => entry.extensionId).filter((id) => !knownIds.has(id));
     const unknownEnabled = [...enabled].filter((id) => !knownIds.has(id));
     const broken = physical.filter((entry) => (enabled.has(entry.extensionId) || installedEntries.has(entry.extensionId)) && !entry.installed);
     const optional = physical.filter((entry) => !enabled.has(entry.extensionId) && !installedEntries.has(entry.extensionId));
     const healthyInstalled = physical.filter((entry) => entry.installed).length;
 
-    if (unknownEnabled.length > 0 || broken.length > 0) {
+    if (unknownInstalled.length > 0 || unknownEnabled.length > 0 || broken.length > 0) {
       const missingDependency = broken.some((entry) => entry.status === "missing_dependency");
+      const code = unknownInstalled.length > 0 ? "E_EXTENSION_UNKNOWN_INSTALLED"
+        : unknownEnabled.length > 0 ? "E_EXTENSION_STATE_INVALID"
+          : missingDependency ? "E_EXTENSION_DEPENDENCY_MISSING" : "E_EXTENSION_TARGET_PROJECTION_INVALID";
+      const nextActions = unknownInstalled.length > 0
+        ? ["Inspect unitycli.extensions.manifest.json and the matching extension directories.", "Remove unknown installed entries only after auditing their projected files."]
+        : unknownEnabled.length > 0
+          ? ["Inspect extensions.json and remove IDs that are not present in the CLI extension registry."]
+          : [...new Set(broken.flatMap((entry) => entry.nextActions))];
       return {
         name: "extensions",
         status: "fail",
-        message: `${broken.length + unknownEnabled.length} installed or enabled extension state(s) are broken.`,
+        message: `${broken.length + unknownInstalled.length + unknownEnabled.length} installed or enabled extension state(s) are broken.`,
         details: {
-          code: unknownEnabled.length > 0 ? "E_EXTENSION_STATE_INVALID"
-            : missingDependency ? "E_EXTENSION_DEPENDENCY_MISSING" : "E_EXTENSION_TARGET_PROJECTION_INVALID",
+          code,
           projectPath,
           healthyInstalled,
           optionalUninstalled: optional.length,
-          unknownEnabled,
-          broken: broken.slice(0, 32).map(extensionDiagnostic),
-          brokenTruncated: broken.length > 32,
+          unknownInstalledCount: unknownInstalled.length,
+          unknownInstalled: unknownInstalled.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+          unknownInstalledTruncated: unknownInstalled.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+          unknownEnabledCount: unknownEnabled.length,
+          unknownEnabled: unknownEnabled.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+          unknownEnabledTruncated: unknownEnabled.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+          brokenCount: broken.length,
+          broken: broken.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT).map(extensionDiagnostic),
+          brokenTruncated: broken.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+          nextActions,
         },
       };
     }
@@ -423,12 +439,12 @@ async function checkExtensions(flags: Record<string, string | boolean>, runtime:
           projectPath,
           healthyInstalled,
           optionalUninstalled: optional.length,
-          optional: optional.slice(0, 32).map((entry) => ({
+          optional: optional.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT).map((entry) => ({
             extensionId: entry.extensionId,
             status: entry.status,
             missingPackageIds: entry.missingPackageIds,
           })),
-          optionalTruncated: optional.length > 32,
+          optionalTruncated: optional.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
         },
       };
     }

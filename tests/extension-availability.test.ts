@@ -113,6 +113,29 @@ test("concurrent extension installs preserve every manifest entry", async () => 
   assert.equal(states.find((state) => state.extensionId === "urp")?.installed, true);
 });
 
+test("extension install manifest enforces the shared ID syntax and entry limit", async () => {
+  const projectPath = await makeFakeProject();
+  const packageRoot = join(projectPath, "Packages", "com.alpsckr.unitycli");
+  const manifestPath = join(packageRoot, "unitycli.extensions.manifest.json");
+  await mkdir(packageRoot, { recursive: true });
+  const entry = (extensionId: string) => ({
+    extensionId,
+    version: "1.0.0",
+    installedAt: "2026-01-01T00:00:00.000Z",
+    sourceHash: "a".repeat(64),
+    files: [],
+    requiresUnityPackages: [],
+    copyRoot: "extension-directory",
+    layout: "directory",
+    installMode: "copy-if-package-present",
+  });
+
+  await writeFile(manifestPath, JSON.stringify({ version: 1, extensions: [entry("unknown\n")] }));
+  await assert.rejects(() => readExtensionInstallManifest(projectPath), { code: "E_EXTENSION_INSTALL_MANIFEST_INVALID" });
+  await writeFile(manifestPath, JSON.stringify({ version: 1, extensions: Array.from({ length: 257 }, (_, index) => entry(`unknown-${index}`)) }));
+  await assert.rejects(() => readExtensionInstallManifest(projectPath), { code: "E_EXTENSION_INSTALL_MANIFEST_INVALID" });
+});
+
 test("extension manifests stay visible without an offline extension metadata registry", () => {
   assert.ok(!builtinToolGroups().includes("probuilder"));
   assert.ok(EXTENSION_GROUPS.has("probuilder"));
@@ -248,7 +271,61 @@ test("doctor treats uninstalled optional extensions as warnings", async () => {
   const extCheck = checks.find((check) => check.name === "extensions");
   assert.equal(extCheck?.status, "warn");
   assert.equal(extCheck?.details?.optionalUninstalled, 5);
+  assert.equal((extCheck?.details?.optional as unknown[]).length, 5);
+  assert.equal(extCheck?.details?.optionalTruncated, false);
   assert.equal(Object.hasOwn(extCheck?.details ?? {}, "code"), false);
+});
+
+test("doctor fails unknown installed manifest entries with bounded stable details", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-doctor-unknown-installed-"));
+  const projectPath = await makeFakeProject();
+  const bridgePackage = join(projectPath, "Packages", "com.alpsckr.unitycli");
+  await mkdir(bridgePackage, { recursive: true });
+  const extensions = Array.from({ length: 40 }, (_, index) => ({
+    extensionId: `unknown-${index}`,
+    version: "1.0.0",
+    installedAt: "2026-01-01T00:00:00.000Z",
+    sourceHash: "a".repeat(64),
+    files: [],
+    requiresUnityPackages: [],
+    copyRoot: "extension-directory",
+    layout: "directory",
+    installMode: "copy-if-package-present",
+  }));
+  await writeFile(join(bridgePackage, "unitycli.extensions.manifest.json"), JSON.stringify({ version: 1, extensions }));
+
+  const doctor = await handleDoctorCommand({ project: projectPath }, { dataDir }, "req_doctor_unknown_installed");
+  assert.ok(doctor.ok);
+  const extCheck = (doctor.data as { checks: Array<{ name: string; status: string; details?: Record<string, unknown> }> }).checks
+    .find((check) => check.name === "extensions");
+  assert.equal(extCheck?.status, "fail");
+  assert.equal(extCheck?.details?.code, "E_EXTENSION_UNKNOWN_INSTALLED");
+  assert.equal(extCheck?.details?.unknownInstalledCount, 40);
+  assert.equal((extCheck?.details?.unknownInstalled as unknown[]).length, 32);
+  assert.equal(extCheck?.details?.unknownInstalledTruncated, true);
+  assert.equal(extCheck?.details?.unknownEnabledCount, 0);
+  assert.ok((extCheck?.details?.nextActions as string[]).some((action) => action.includes("manifest")));
+});
+
+test("doctor reports unknown enabled state independently with bounded samples", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-doctor-unknown-enabled-"));
+  const projectPath = await makeFakeProject();
+  const bridgePackage = join(projectPath, "Packages", "com.alpsckr.unitycli");
+  await mkdir(bridgePackage, { recursive: true });
+  const extensions = Array.from({ length: 40 }, (_, index) => `unknown-${index}`);
+  await writeFile(join(bridgePackage, "extensions.json"), JSON.stringify({ extensions }));
+
+  const doctor = await handleDoctorCommand({ project: projectPath }, { dataDir }, "req_doctor_unknown_enabled");
+  assert.ok(doctor.ok);
+  const extCheck = (doctor.data as { checks: Array<{ name: string; status: string; details?: Record<string, unknown> }> }).checks
+    .find((check) => check.name === "extensions");
+  assert.equal(extCheck?.status, "fail");
+  assert.equal(extCheck?.details?.code, "E_EXTENSION_STATE_INVALID");
+  assert.equal(extCheck?.details?.unknownInstalledCount, 0);
+  assert.equal(extCheck?.details?.unknownEnabledCount, 40);
+  assert.equal((extCheck?.details?.unknownEnabled as unknown[]).length, 32);
+  assert.equal(extCheck?.details?.unknownEnabledTruncated, true);
+  assert.ok((extCheck?.details?.nextActions as string[]).some((action) => action.includes("extensions.json")));
 });
 
 test("doctor fails installed or enabled broken extensions with a stable dependency code", async () => {

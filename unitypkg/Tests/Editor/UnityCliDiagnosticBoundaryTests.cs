@@ -62,6 +62,12 @@ namespace UnityCli.Tests
             AssertInvalidName(validate, "scene..data", "native");
             AssertInvalidName(validate, "scene.数据", "native");
             AssertInvalidName(validate, new string('a', 129), "native");
+            AssertInvalidName(validate, "scene.data\n", "native");
+            AssertInvalidName(validate, "scene.data\r\n", "native");
+            AssertInvalidName(validate, "scene.data ", "native");
+            AssertInvalidName(validate, "UnityPipeline_project_reload_data\n", "official-attribute");
+            AssertInvalidName(validate, "UnityPipeline_project_reload_data\r\n", "official-attribute");
+            AssertInvalidName(validate, "UnityPipeline_project_reload_data\t", "official-attribute");
         }
 
         [Test]

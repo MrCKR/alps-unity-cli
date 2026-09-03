@@ -6,6 +6,12 @@ import { fileURLToPath } from "node:url";
 import { readInstalledUnityPackages } from "./project-resolver.js";
 import { ExtensionRegistry, resolveExtensionAvailability } from "./registry.js";
 import type { ExtensionAvailabilityResult, ExtensionId, ExtensionManifest } from "./types.js";
+import {
+  EXTENSION_STATE_MAX_ENTRIES,
+  ExtensionStateContractError,
+  isValidExtensionId,
+  readBoundedExtensionStateFile,
+} from "./state-contract.js";
 import { stripBom } from "../util.js";
 
 export type ExtensionInstallStatus = "installed" | "available_not_installed" | "missing_dependency" | "outdated" | "unknown_files";
@@ -97,18 +103,21 @@ export function extensionInstallManifestPath(projectPath: string): string {
 
 /** 读取 extension 安装 manifest；仅缺失文件代表空状态，损坏状态必须阻断变更。 */
 export async function readExtensionInstallManifest(projectPath: string): Promise<ExtensionInstallManifest> {
-  const path = extensionInstallManifestPath(projectPath);
-  let content: string;
+  let content: string | undefined;
   try {
-    content = await readFile(path, "utf8");
+    content = await readBoundedExtensionStateFile(extensionInstallManifestPath(projectPath));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyManifest();
+    if (error instanceof ExtensionStateContractError) throw invalidInstallManifest(projectPath, error.message);
     throw error;
   }
+  if (content === undefined) return emptyManifest();
+
   try {
     const parsed = JSON.parse(stripBom(content)) as Partial<ExtensionInstallManifest>;
-    if (parsed.version !== 1 || !Array.isArray(parsed.extensions) || !parsed.extensions.every(isInstalledEntry)) {
-      throw invalidInstallManifest(projectPath, "Expected version 1 and valid extension entries.");
+    if (parsed.version !== 1 || !Array.isArray(parsed.extensions)
+      || parsed.extensions.length > EXTENSION_STATE_MAX_ENTRIES
+      || !parsed.extensions.every(isInstalledEntry)) {
+      throw invalidInstallManifest(projectPath, `Expected version 1 and at most ${EXTENSION_STATE_MAX_ENTRIES} valid extension entries.`);
     }
     if (new Set(parsed.extensions.map((entry) => entry.extensionId)).size !== parsed.extensions.length) {
       throw invalidInstallManifest(projectPath, "Extension entries must have unique extensionId values.");
@@ -122,6 +131,11 @@ export async function readExtensionInstallManifest(projectPath: string): Promise
 
 /** 原子写入 extension 安装 manifest，读取方不会观察到半写文件。 */
 export async function writeExtensionInstallManifest(projectPath: string, manifest: ExtensionInstallManifest): Promise<void> {
+  if (manifest.extensions.length > EXTENSION_STATE_MAX_ENTRIES
+    || !manifest.extensions.every(isInstalledEntry)
+    || new Set(manifest.extensions.map((entry) => entry.extensionId)).size !== manifest.extensions.length) {
+    throw invalidInstallManifest(projectPath, `Expected at most ${EXTENSION_STATE_MAX_ENTRIES} unique valid extension entries.`);
+  }
   const manifestPath = extensionInstallManifestPath(projectPath);
   const temporaryPath = `${manifestPath}.${process.pid}.${randomUUID()}.tmp`;
   await mkdir(dirname(manifestPath), { recursive: true });
@@ -659,7 +673,7 @@ function invalidInstallManifest(projectPath: string, reason: string): ExtensionI
 
 function isInstalledEntry(value: unknown): value is InstalledExtensionManifestEntry {
   const entry = value as Partial<InstalledExtensionManifestEntry>;
-  return typeof entry?.extensionId === "string" && entry.extensionId.length > 0
+  return isValidExtensionId(entry?.extensionId)
     && typeof entry.version === "string" && entry.version.length > 0
     && typeof entry.installedAt === "string" && !Number.isNaN(Date.parse(entry.installedAt))
     && typeof entry.sourceHash === "string" && /^[a-f0-9]{64}$/i.test(entry.sourceHash)

@@ -10,7 +10,7 @@
  * 核心 CLI 不在编译期依赖任何可选 Unity Package。
  */
 
-import { readFile, writeFile, mkdir, rename, rm, open } from "node:fs/promises";
+import { writeFile, mkdir, rename, rm, open } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
 import { getString } from "../args.js";
@@ -37,6 +37,13 @@ import {
   type ExtensionStatusCheck
 } from "../extensions/installer.js";
 import type { ExtensionId } from "../extensions/types.js";
+import {
+  EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+  EXTENSION_STATE_MAX_ENTRIES,
+  ExtensionStateContractError,
+  isValidExtensionId,
+  readBoundedExtensionStateFile,
+} from "../extensions/state-contract.js";
 
 // ── Install state store ────────────────────────────────────────────────────
 
@@ -48,17 +55,24 @@ function extensionsStatePath(projectPath: string): string {
 /** 读取启用状态；只有不存在的状态文件可视为空，损坏内容必须 fail closed。 */
 export async function readInstalledExtensions(projectPath: string): Promise<Set<ExtensionId>> {
   const statePath = extensionsStatePath(projectPath);
-  let content: string;
+  let content: string | undefined;
   try {
-    content = await readFile(statePath, "utf8");
+    content = await readBoundedExtensionStateFile(statePath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Set();
-    throw error;
+    if (!(error instanceof ExtensionStateContractError)) throw error;
+    throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", `Extension state file is invalid: ${statePath}. ${error.message}`, ["Repair or remove extensions.json only after inspecting its contents."]);
   }
+  if (content === undefined) return new Set();
+
   try {
     const parsed = JSON.parse(content) as { extensions?: unknown };
-    if (!Array.isArray(parsed.extensions) || !parsed.extensions.every((id) => typeof id === "string")) throw new Error("extensions must be a string array");
-    return new Set(parsed.extensions as ExtensionId[]);
+    if (!Array.isArray(parsed.extensions)
+      || parsed.extensions.length > EXTENSION_STATE_MAX_ENTRIES
+      || !parsed.extensions.every(isValidExtensionId)
+      || new Set(parsed.extensions).size !== parsed.extensions.length) {
+      throw new Error("extensions must be a unique, bounded extension ID array");
+    }
+    return new Set(parsed.extensions);
   } catch {
     throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", `Extension state file is invalid: ${statePath}`, ["Repair or remove extensions.json only after inspecting its contents."]);
   }
@@ -66,6 +80,9 @@ export async function readInstalledExtensions(projectPath: string): Promise<Set<
 
 /** 原子替换状态文件并从目标位置回读，避免成功响应依赖内存状态。 */
 export async function writeInstalledExtensions(projectPath: string, ids: Set<ExtensionId>): Promise<void> {
+  if (ids.size > EXTENSION_STATE_MAX_ENTRIES || ![...ids].every(isValidExtensionId)) {
+    throw new ExtensionStateError("E_EXTENSION_STATE_INVALID", `Extension state must contain at most ${EXTENSION_STATE_MAX_ENTRIES} valid extension IDs.`);
+  }
   const statePath = extensionsStatePath(projectPath);
   const dir = resolve(statePath, "..");
   await mkdir(dir, { recursive: true });
@@ -337,10 +354,15 @@ async function handleExtensionsDoctor(
   }
 
   const installedPackages = await readInstalledUnityPackages(projectPath);
-  const enabledExtensions = await readInstalledExtensions(projectPath);
-
+  const [enabledExtensions, installManifest, physicalChecks] = await Promise.all([
+    readInstalledExtensions(projectPath),
+    readExtensionInstallManifest(projectPath),
+    checkExtensionBundles(projectPath),
+  ]);
   const summary = extensionAvailabilitySummary(registry, installedPackages);
-  const physicalChecks = await checkExtensionBundles(projectPath);
+  const knownIds = new Set(registry.extensionIds());
+  const unknownEnabled = [...enabledExtensions].filter((id) => !knownIds.has(id));
+  const unknownInstalled = installManifest.extensions.map((entry) => entry.extensionId).filter((id) => !knownIds.has(id));
 
   const checks = registry.extensionIds().map((id) => {
     const desc = loadExtensionDescriptor(registry, id, installedPackages);
@@ -359,7 +381,7 @@ async function handleExtensionsDoctor(
       issues.push(`Extension "${id}" managed files are missing, changed, or source hash is outdated.`);
     }
     if (physical.status === "unknown_files") {
-      issues.push(`Extension "${id}" install directory contains unknown files: ${physical.unknownFiles.join(", ")}`);
+      issues.push(`Extension "${id}" install directory contains ${physical.unknownFiles.length} unknown file(s).`);
     }
     if (availability.status === "unknown") {
       issues.push(`Extension "${id}" availability could not be resolved (no project packages read).`);
@@ -374,39 +396,27 @@ async function handleExtensionsDoctor(
       dependencyInstalled: physical.dependencyInstalled,
       availability: availability.status,
       missingPackageIds: availability.missingPackageIds,
-      missingFiles: physical.missingFiles,
-      changedFiles: physical.changedFiles,
-      unknownFiles: physical.unknownFiles,
-      issues
+      missingFileCount: physical.missingFiles.length,
+      missingFiles: physical.missingFiles.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+      missingFilesTruncated: physical.missingFiles.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+      changedFileCount: physical.changedFiles.length,
+      changedFiles: physical.changedFiles.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+      changedFilesTruncated: physical.changedFiles.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+      unknownFileCount: physical.unknownFiles.length,
+      unknownFiles: physical.unknownFiles.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+      unknownFilesTruncated: physical.unknownFiles.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+      issues,
     };
   });
 
-  // Detect unknown enabled extensions (enabled ids not in registry)
-  const unknownEnabled: string[] = [];
-  for (const id of enabledExtensions) {
-    if (!registry.hasExtension(id)) {
-      unknownEnabled.push(id);
-    }
-  }
-  if (unknownEnabled.length > 0) {
-    checks.push(...unknownEnabled.map((id): typeof checks[number] => ({
-      id,
-      name: id,
-      enabled: true,
-      installed: false,
-      status: "unknown_files" as const,
-      dependencyInstalled: false,
-      availability: "unknown" as const,
-      missingPackageIds: [],
-      missingFiles: [],
-      changedFiles: [],
-      unknownFiles: [],
-      issues: [`Extension "${id}" is enabled in project state but is not registered in the CLI extension registry.`]
-    })));
-  }
-
-  const allIssues = checks.flatMap((c) => c.issues);
-  const healthy = allIssues.length === 0;
+  const knownIssues = checks.flatMap((check) => check.issues);
+  const unknownInstalledIssues = unknownInstalled.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT)
+    .map((id) => `Extension "${id}" is installed in the manifest but is not registered in the CLI extension registry.`);
+  const unknownEnabledIssues = unknownEnabled.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT)
+    .map((id) => `Extension "${id}" is enabled in project state but is not registered in the CLI extension registry.`);
+  const issueTotal = knownIssues.length + unknownInstalled.length + unknownEnabled.length;
+  const issues = [...knownIssues, ...unknownInstalledIssues, ...unknownEnabledIssues].slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT);
+  const healthy = issueTotal === 0;
 
   const data: Record<string, unknown> = {
     projectPath,
@@ -416,14 +426,26 @@ async function handleExtensionsDoctor(
       available: summary.available,
       unavailable: summary.unavailable,
       unknown: summary.unknown,
-      enabled: checks.filter((check) => check.enabled).length,
-      installed: checks.filter((check) => check.installed).length
+      enabled: checks.filter((check) => check.enabled).length + unknownEnabled.length,
+      installed: checks.filter((check) => check.installed).length + unknownInstalled.length,
     },
     checks,
-    issues: allIssues,
+    unknownInstalled: {
+      total: unknownInstalled.length,
+      sample: unknownInstalled.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+      truncated: unknownInstalled.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+    },
+    unknownEnabled: {
+      total: unknownEnabled.length,
+      sample: unknownEnabled.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+      truncated: unknownEnabled.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+    },
+    issueTotal,
+    issues,
+    issuesTruncated: issueTotal > issues.length,
     nextActions: healthy
       ? ["All extensions are in a consistent state."]
-      : allIssues
+      : ["Inspect the bounded extension diagnostics and repair only the reported project state or projection."],
   };
 
   return success(requestId, data);

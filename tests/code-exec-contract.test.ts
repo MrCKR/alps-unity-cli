@@ -35,6 +35,18 @@ test("code.exec clearly preserves necessary hazardous code and discloses the non
   assert.doesNotMatch(codeExec.description, /reject(?:s|ed)? (?:dangerous|hazardous) code/i);
 });
 
+test("Shared exception projection grants exact Editor internals access without an asmdef cycle", async () => {
+  const [assemblyInfo, sharedAssembly, editorAssembly] = await Promise.all([
+    readFile("unitypkg/Shared/AssemblyInfo.cs", "utf8"),
+    readFile("unitypkg/Shared/UnityCli.Shared.asmdef", "utf8"),
+    readFile("unitypkg/UnityCli.Editor.asmdef", "utf8"),
+  ]);
+  assert.match(assemblyInfo, /InternalsVisibleTo\("UnityCli\.Editor"\)/);
+  assert.match(assemblyInfo, /InternalsVisibleTo\("UnityCli\.Editor\.Tests"\)/);
+  assert.deepEqual((JSON.parse(sharedAssembly) as { references: string[] }).references, []);
+  assert.ok((JSON.parse(editorAssembly) as { references: string[] }).references.includes("UnityCli.Shared"));
+});
+
 test("raw code.exec dry-run cannot compile source and normal execution rechecks the exact lease", async () => {
   const [support, coordinator, runtimeCode, toolSource, dispatcher] = await Promise.all([
     readFile("unitypkg/Editor/Infrastructure/CodeExecSupport.cs", "utf8"),

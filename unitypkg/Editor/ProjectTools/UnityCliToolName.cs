@@ -10,8 +10,8 @@ namespace UnityCli
     {
         internal const int MaxUtf8Bytes = 128;
         private const string OfficialPrefix = "UnityPipeline_";
-        private static readonly Regex NativePattern = new Regex("^[a-z][a-z0-9-]*(?:\\.[a-z0-9][a-z0-9-]*)*$", RegexOptions.CultureInvariant);
-        private static readonly Regex OfficialSuffixPattern = new Regex("^[a-z][a-z0-9_-]*(?:\\.[a-z0-9][a-z0-9_-]*)*$", RegexOptions.CultureInvariant);
+        private static readonly Regex NativePattern = new Regex("^[a-z][a-z0-9-]*(?:\\.[a-z0-9][a-z0-9-]*)*\\z", RegexOptions.CultureInvariant);
+        private static readonly Regex OfficialSuffixPattern = new Regex("^[a-z][a-z0-9_-]*(?:\\.[a-z0-9][a-z0-9_-]*)*\\z", RegexOptions.CultureInvariant);
 
         internal static void Validate(string name, string contractProfile)
         {
