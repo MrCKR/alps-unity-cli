@@ -61,6 +61,20 @@ namespace UnityCli
                 return MemberToData(root);
             }
 
+            internal static int ParseMaxDepth(object value)
+            {
+                try
+                {
+                    var result = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+                    if (result < 0 || result > AbsoluteMaxDepth) throw new OverflowException();
+                    return result;
+                }
+                catch (Exception exception) when (exception is FormatException || exception is InvalidCastException || exception is OverflowException)
+                {
+                    throw new BridgeCommandException("E_OBJECT_READ_LIMIT_INVALID", "viewQuery.maxDepth must be an integer between 0 and 16.", "Pass a maxDepth in the documented range.");
+                }
+            }
+
             private static void ValidateOptions(Options options)
             {
                 if (options.MaxDepth < 0 || options.MaxDepth > AbsoluteMaxDepth)
@@ -88,6 +102,7 @@ namespace UnityCli
                     var child = error == null
                         ? ToMember(value, path, value == null ? "null" : value.GetType().FullName, childOptions, active, 0, budget)
                         : ErrorMember(path, error);
+                    if (!budget.TryReserveSerializedUtf8(rawPath)) { aggregate.Truncated = true; aggregate.NextPath = rawPath; aggregate.Error = BudgetError(budget); break; }
                     aggregate.Fields.Add(new SerializedMember.KV { Key = rawPath, Value = child });
                     if (child.Truncated && budget.IsExhausted)
                     {
@@ -180,8 +195,9 @@ namespace UnityCli
                 if (value is IList list)
                 {
                     if (!budget.TryConsumeGetter()) { error = BudgetError(budget); return null; }
+                    var count = list.Count;
                     int index;
-                    if (!int.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out index) || index < 0 || index >= list.Count) { error = "list index out of range: " + token; return null; }
+                    if (!int.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out index) || index < 0 || index >= count) { error = "list index out of range: " + token; return null; }
                     if (!budget.TryConsumeGetter()) { error = BudgetError(budget); return null; }
                     return list[index];
                 }
@@ -192,6 +208,7 @@ namespace UnityCli
                     {
                         while (budget.TryConsumeScannedRecord() && enumerator.MoveNext())
                         {
+                            if (!budget.TryConsumeGetter()) { error = BudgetError(budget); return null; }
                             var entry = enumerator.Entry;
                             if (string.Equals(Convert.ToString(entry.Key, CultureInfo.InvariantCulture), token, StringComparison.Ordinal)) return entry.Value;
                         }
@@ -258,7 +275,7 @@ namespace UnityCli
 
             private static SerializedMember NewMember(string path, string typeName, UnityCliRequestBudget budget)
             {
-                if (!budget.TryConsumeNode() || !budget.TryReserveSerializedUtf8(path) || !budget.TryReserveSerializedUtf8(typeName))
+                if (!budget.TryConsumeNode() || !budget.TryReserveSerializedUtf8Bytes(128L) || !budget.TryReserveSerializedUtf8(path) || !budget.TryReserveSerializedUtf8(typeName))
                     return new SerializedMember { Path = path, TypeName = typeName, Truncated = true, NextPath = path, Error = BudgetError(budget) };
                 return new SerializedMember { Path = path, TypeName = typeName };
             }
@@ -267,9 +284,10 @@ namespace UnityCli
             {
                 member.IsArray = true;
                 if (!budget.TryConsumeGetter()) { Truncate(member, budget, member.Path + "[0]"); return; }
-                member.ArrayLength = list.Count;
+                var count = list.Count;
+                member.ArrayLength = count;
                 member.HasKnownTotal = true;
-                var limit = Math.Min(list.Count, options.MaxArrayItems);
+                var limit = Math.Min(count, options.MaxArrayItems);
                 for (var index = 0; index < limit; index++)
                 {
                     var itemPath = member.Path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]";
@@ -277,14 +295,15 @@ namespace UnityCli
                     member.ArrayItems.Add(ToMember(list[index], itemPath, null, options, active, depth + 1, budget));
                     if (budget.IsExhausted) { Truncate(member, budget, itemPath); return; }
                 }
-                if (list.Count > limit) { member.Truncated = true; member.NextPath = member.Path + "[" + limit.ToString(CultureInfo.InvariantCulture) + "]"; }
+                if (count > limit) { member.Truncated = true; member.NextPath = member.Path + "[" + limit.ToString(CultureInfo.InvariantCulture) + "]"; }
             }
 
             private static void ExpandDictionary(IDictionary dictionary, SerializedMember member, Options options, HashSet<object> active, int depth, UnityCliRequestBudget budget)
             {
                 member.IsDictionary = true;
                 if (!budget.TryConsumeGetter()) { Truncate(member, budget, member.Path); return; }
-                member.ArrayLength = dictionary.Count;
+                var count = dictionary.Count;
+                member.ArrayLength = count;
                 member.HasKnownTotal = true;
                 var enumerator = dictionary.GetEnumerator();
                 var emitted = 0;
@@ -294,14 +313,16 @@ namespace UnityCli
                     {
                         if (!budget.TryConsumeScannedRecord()) { Truncate(member, budget, member.Path); return; }
                         if (!enumerator.MoveNext()) return;
+                        if (!budget.TryConsumeGetter()) { Truncate(member, budget, member.Path); return; }
                         var entry = enumerator.Entry;
                         var key = Convert.ToString(entry.Key, CultureInfo.InvariantCulture);
                         var entryPath = member.Path + "[" + key + "]";
+                        if (!budget.TryReserveSerializedUtf8(key)) { Truncate(member, budget, entryPath); return; }
                         member.DictionaryEntries.Add(new SerializedMember.KV { Key = key, Value = ToMember(entry.Value, entryPath, null, options, active, depth + 1, budget) });
                         emitted++;
                         if (budget.IsExhausted) { Truncate(member, budget, entryPath); return; }
                     }
-                    if (emitted < dictionary.Count) { member.Truncated = true; member.NextPath = member.Path + "[" + emitted.ToString(CultureInfo.InvariantCulture) + "]"; }
+                    if (emitted < count) { member.Truncated = true; member.NextPath = member.Path + "[" + emitted.ToString(CultureInfo.InvariantCulture) + "]"; }
                 }
                 finally { (enumerator as IDisposable)?.Dispose(); }
             }
@@ -318,6 +339,7 @@ namespace UnityCli
                     {
                         if (!budget.TryConsumeScannedRecord()) { Truncate(member, budget, member.Path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]"); return; }
                         if (!enumerator.MoveNext()) { member.ArrayLength = index; return; }
+                        if (!budget.TryConsumeGetter()) { Truncate(member, budget, member.Path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]"); return; }
                         var itemPath = member.Path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]";
                         member.ArrayItems.Add(ToMember(enumerator.Current, itemPath, null, options, active, depth + 1, budget));
                         index++;
@@ -344,9 +366,15 @@ namespace UnityCli
                         try
                         {
                             var child = ToMember(field.GetValue(obj), member.Path + "." + field.Name, field.FieldType.FullName, options, active, depth + 1, budget);
-                            if (TypeAllowed(child.TypeName, options)) { member.Fields.Add(new SerializedMember.KV { Key = field.Name, Value = child }); memberCount++; }
+                            if (TypeAllowed(child.TypeName, options))
+                            {
+                                if (!budget.TryReserveSerializedUtf8(field.Name)) { Truncate(member, budget, member.Path + "." + field.Name); return; }
+                                member.Fields.Add(new SerializedMember.KV { Key = field.Name, Value = child });
+                                memberCount++;
+                            }
                             if (budget.IsExhausted) { Truncate(member, budget, member.Path + "." + field.Name); return; }
                         }
+                        catch (UnityCliRequestBudgetExceededException) { Truncate(member, budget, member.Path + "." + field.Name); return; }
                         catch (Exception exception) { member.Fields.Add(new SerializedMember.KV { Key = field.Name, Value = ErrorMember(member.Path + "." + field.Name, exception.Message) }); memberCount++; }
                     }
                 }
@@ -364,11 +392,13 @@ namespace UnityCli
                         {
                             child.ReadOnly = !property.CanWrite;
                             child.Writable = property.CanWrite;
+                            if (!budget.TryReserveSerializedUtf8(property.Name)) { Truncate(member, budget, member.Path + "." + property.Name); return; }
                             member.Props.Add(new SerializedMember.KV { Key = property.Name, Value = child });
                             memberCount++;
                         }
                         if (budget.IsExhausted) { Truncate(member, budget, member.Path + "." + property.Name); return; }
                     }
+                    catch (UnityCliRequestBudgetExceededException) { Truncate(member, budget, member.Path + "." + property.Name); return; }
                     catch (Exception exception) { member.Props.Add(new SerializedMember.KV { Key = property.Name, Value = ErrorMember(member.Path + "." + property.Name, exception.Message) }); memberCount++; }
                 }
             }
@@ -410,9 +440,12 @@ namespace UnityCli
             public static Dictionary<string, object> UnityObjectRefJson(UnityEngine.Object value, UnityCliRequestBudget budget)
             {
                 if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var name = value.name;
+                var typeName = value.GetType().FullName;
+                if (!budget.TryReserveSerializedUtf8(name) || !budget.TryReserveSerializedUtf8(typeName)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 var result = new Dictionary<string, object>
                 {
-                    { "instanceId", (long)value.GetInstanceID() }, { "name", value.name }, { "typeName", value.GetType().FullName }
+                    { "instanceId", (long)value.GetInstanceID() }, { "name", name }, { "typeName", typeName }
                 };
                 if (value is GameObject gameObject)
                 {
@@ -431,6 +464,7 @@ namespace UnityCli
 
             private static string GameObjectFullPath(GameObject gameObject, UnityCliRequestBudget budget)
             {
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 var path = gameObject.name;
                 var current = gameObject.transform.parent;
                 while (current != null)

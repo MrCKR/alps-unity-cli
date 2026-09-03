@@ -11,7 +11,7 @@ namespace UnityCli
     {
         public sealed class Request
         {
-            public int? Frame { get; set; }
+            [UnityCliRange(-1L, int.MaxValue)] public int? Frame { get; set; }
             [UnityCliRange(0L, 1024L)] public int? Thread { get; set; }
             [UnityCliRange(1L, 500L)] public int? PageSize { get; set; }
             [UnityCliRange(0L, 32L)] public int? Depth { get; set; }
@@ -71,11 +71,12 @@ namespace UnityCli
             var accessor = RawHierarchyAccessor.Open(frame, threadIndex, budget);
             try
             {
+                var rootName = accessor.SampleCount > 0 ? accessor.Name(0, budget) : string.Empty;
                 var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Session("profiler.hierarchy") + "\0" + frame.ToString(CultureInfo.InvariantCulture)
-                    + "\0" + threadIndex.ToString(CultureInfo.InvariantCulture) + "\0" + accessor.SampleCount.ToString(CultureInfo.InvariantCulture));
+                    + "\0" + threadIndex.ToString(CultureInfo.InvariantCulture) + "\0" + accessor.SampleCount.ToString(CultureInfo.InvariantCulture) + "\0" + rootName);
                 var stack = string.IsNullOrEmpty(request.Cursor)
                     ? new List<TraversalFrame> { new TraversalFrame { ParentId = 0, NextChild = 0, Depth = 0 } }
-                    : ParseCursor(request.Cursor, generation);
+                    : ParseCursor(request.Cursor, generation, accessor, maxDepth, budget);
                 var items = new List<HierarchyItem>();
                 while (stack.Count > 0 && items.Count < pageSize)
                 {
@@ -135,11 +136,25 @@ namespace UnityCli
             return false;
         }
 
-        private static List<TraversalFrame> ParseCursor(string cursor, string generation)
+        private static List<TraversalFrame> ParseCursor(string cursor, string generation, RawHierarchyAccessor accessor, int maxDepth, UnityCliRequestBudget budget)
         {
             string position;
             if (!UnityCliContinuationToken.TryParse(cursor, "profiler.hierarchy", generation, out position)) throw Stale();
-            try { return DecodeStack(position); }
+            try
+            {
+                var stack = DecodeStack(position);
+                if (stack.Count == 0 || stack.Count > maxDepth + 1) throw Stale();
+                for (var index = 0; index < stack.Count; index++)
+                {
+                    var frame = stack[index];
+                    if (frame.Depth != index || frame.ParentId < 0 || frame.ParentId >= accessor.SampleCount || frame.NextChild < 0) throw Stale();
+                    var childCount = accessor.ChildCount(frame.ParentId, budget);
+                    if (frame.NextChild > childCount) throw Stale();
+                }
+                return stack;
+            }
+            catch (UnityCliRequestBudgetExceededException) { throw; }
+            catch (UnityCliBridge.BridgeCommandException) { throw; }
             catch { throw Stale(); }
         }
 
@@ -200,6 +215,7 @@ namespace UnityCli
                 if (validProperty != null && !ReadBool(validProperty, view, budget)) throw NoData();
                 if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 sampleCount = Convert.ToInt32(sampleCountProperty.GetValue(view, null), CultureInfo.InvariantCulture);
+                if (sampleCount <= 0) throw NoData();
             }
 
             internal int SampleCount { get { return sampleCount; } }
@@ -229,7 +245,16 @@ namespace UnityCli
             private object Invoke(MethodInfo method, object[] args, UnityCliRequestBudget budget)
             {
                 if (!budget.TryConsumeReflectionCall()) return null;
-                return method.Invoke(view, args);
+                try { return method.Invoke(view, args); }
+                catch (TargetInvocationException exception)
+                {
+                    var inner = exception.InnerException ?? exception;
+                    throw new UnityCliBridge.BridgeCommandException("E_PROFILER_HIERARCHY_READ_FAILED", "Raw profiler hierarchy read failed: " + inner.GetType().Name + ".", "Record a fresh frame and restart pagination.");
+                }
+                catch (Exception exception)
+                {
+                    throw new UnityCliBridge.BridgeCommandException("E_PROFILER_HIERARCHY_READ_FAILED", "Raw profiler hierarchy read failed: " + exception.GetType().Name + ".", "Record a fresh frame and restart pagination.");
+                }
             }
 
             private static PropertyInfo ReflectProperty(Type type, string name, UnityCliRequestBudget budget)

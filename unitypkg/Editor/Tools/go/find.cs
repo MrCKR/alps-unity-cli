@@ -100,7 +100,11 @@ namespace UnityCli
             {
                 var exact = ResolveExact(method, searchTerm, budget);
                 var exactItems = new List<Item>();
-                if (exact != null && (request.IncludeInactive || exact.activeInHierarchy)) exactItems.Add(BuildItem(exact, budget));
+                if (exact != null)
+                {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    if (request.IncludeInactive || exact.activeInHierarchy) exactItems.Add(BuildItem(exact, budget));
+                }
                 return new System.Threading.Tasks.ValueTask<Result>(ResultPage(exactItems, pageSize, request.Cursor, null, generation, prefabOpen, budget));
             }
 
@@ -108,14 +112,17 @@ namespace UnityCli
             int? layer = null;
             if (method == "by_component") componentType = GameObjectToolSupport.ResolveComponentType(searchTerm, budget);
             if (method == "by_layer") layer = GameObjectToolSupport.ParseLayer(searchTerm);
+            var prefabTraversal = prefabOpen ? new UnityCliHierarchyPager.Traversal(prefabStage.scene, prefabStage.prefabContentsRoot, int.MaxValue) : null;
+            var sceneTraversal = new UnityCliHierarchyPager.LoadedSceneTraversal(prefabOpen ? prefabStage.scene.handle : 0);
             GameObject current;
             var phase = prefabOpen ? "prefab" : "scene";
-            if (string.IsNullOrEmpty(request.Cursor)) current = prefabOpen ? prefabStage.prefabContentsRoot : UnityCliHierarchyPager.FirstLoadedSceneObject();
+            if (string.IsNullOrEmpty(request.Cursor)) current = prefabOpen ? prefabStage.prefabContentsRoot : sceneTraversal.First(budget);
             else
             {
-                current = UnityCliHierarchyPager.ResolveCursor(request.Cursor, "go.find", generation, out phase);
+                current = UnityCliHierarchyPager.ResolveCursor(request.Cursor, "go.find", generation, budget, out phase);
                 if (phase != "scene" && phase != "prefab") throw UnityCliHierarchyPager.Stale();
-                if (phase == "prefab" && (!prefabOpen || !IsDescendantOrSelf(current.transform, prefabStage.prefabContentsRoot.transform))) throw UnityCliHierarchyPager.Stale();
+                if (phase == "prefab" && (!prefabOpen || !IsDescendantOrSelf(current.transform, prefabStage.prefabContentsRoot.transform, budget))) throw UnityCliHierarchyPager.Stale();
+                if (phase == "scene" && prefabOpen && current.scene.handle == prefabStage.scene.handle) throw UnityCliHierarchyPager.Stale();
             }
 
             var items = new List<Item>();
@@ -123,14 +130,15 @@ namespace UnityCli
             {
                 var candidate = current;
                 if (!budget.TryConsumeScannedRecord()) break;
-                current = phase == "prefab"
-                    ? UnityCliHierarchyPager.Next(candidate, prefabStage.scene, null, int.MaxValue)
-                    : UnityCliHierarchyPager.NextAcrossLoadedScenes(candidate);
-                if (phase == "prefab" && current == null) { phase = "scene"; current = UnityCliHierarchyPager.FirstLoadedSceneObject(); }
                 try
                 {
-                    if (!Matches(candidate, method, searchTerm, request.IncludeInactive, componentType, layer, budget)) continue;
-                    items.Add(BuildItem(candidate, budget));
+                    var nextPhase = phase;
+                    var next = phase == "prefab" ? prefabTraversal.Next(candidate, budget) : sceneTraversal.Next(candidate, budget);
+                    if (phase == "prefab" && next == null) { nextPhase = "scene"; next = sceneTraversal.First(budget); }
+                    if (Matches(candidate, method, searchTerm, request.IncludeInactive, componentType, layer, budget))
+                        items.Add(BuildItem(candidate, budget));
+                    phase = nextPhase;
+                    current = next;
                 }
                 catch (UnityCliRequestBudgetExceededException)
                 {
@@ -163,9 +171,9 @@ namespace UnityCli
         {
             if (method == "by_path") return UnityCliBridge.ObjectRefResolver.FindGameObjectByExactPath(value, budget);
             int instanceId;
-            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out instanceId)
-                ? EditorUtility.InstanceIDToObject(instanceId) as GameObject
-                : null;
+            if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out instanceId)) return null;
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            return EditorUtility.InstanceIDToObject(instanceId) as GameObject;
         }
 
         private static string InferSearchMethod(Request request)
@@ -199,19 +207,29 @@ namespace UnityCli
             if (!budget.TryConsumeNode() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             var path = UnityCliHierarchyPager.Path(gameObject, budget);
             var name = gameObject.name;
-            if (!budget.TryReserveSerializedUtf8(name) || !budget.TryReserveSerializedUtf8(path)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            if (!budget.TryConsumeGetter() || !budget.TryConsumeGetter() || !budget.TryConsumeGetter()
+                || !budget.TryConsumeGetter() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var tag = gameObject.tag;
+            var childCount = gameObject.transform.childCount;
+            if (!budget.TryReserveSerializedUtf8(name) || !budget.TryReserveSerializedUtf8(path) || !budget.TryReserveSerializedUtf8(tag))
+                throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             return new Item
             {
                 Id = gameObject.GetInstanceID(), Name = name, Path = path,
                 Active = gameObject.activeSelf, ActiveInHierarchy = gameObject.activeInHierarchy,
-                Tag = gameObject.tag, Layer = gameObject.layer,
-                ChildCount = gameObject.transform.childCount, ChildrenTruncated = gameObject.transform.childCount > 0
+                Tag = tag, Layer = gameObject.layer,
+                ChildCount = childCount, ChildrenTruncated = childCount > 0
             };
         }
 
-        private static bool IsDescendantOrSelf(Transform value, Transform root)
+        private static bool IsDescendantOrSelf(Transform value, Transform root, UnityCliRequestBudget budget)
         {
-            while (value != null) { if (value == root) return true; value = value.parent; }
+            while (value != null)
+            {
+                if (value == root) return true;
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                value = value.parent;
+            }
             return false;
         }
     }

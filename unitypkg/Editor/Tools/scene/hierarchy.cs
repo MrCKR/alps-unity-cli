@@ -87,6 +87,10 @@ namespace UnityCli
             request = request ?? new Request();
             var budget = ctx.UseReadBudget(request.Budget);
             var scene = SceneManager.GetActiveScene();
+            if (!budget.TryConsumeGetter() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var sceneName = scene.name;
+            var scenePath = scene.path;
+            if (!budget.TryReserveSerializedUtf8(sceneName) || !budget.TryReserveSerializedUtf8(scenePath)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             var parent = ResolveParent(request.Parent, budget);
             if (parent != null && parent.scene.handle != scene.handle)
                 throw new UnityCliBridge.BridgeCommandException("E_SCENE_HIERARCHY_PARENT_NOT_FOUND", "Parent is not in the active scene: " + request.Parent, "Pass an exact active-scene hierarchy path or instance id.");
@@ -96,12 +100,13 @@ namespace UnityCli
             var selector = (parent == null ? "root" : parent.GetInstanceID().ToString(CultureInfo.InvariantCulture)) + "\0" + maxDepth.ToString(CultureInfo.InvariantCulture)
                 + "\0" + query + "\0" + request.ComponentType + "\0" + request.IncludeInactive + "\0" + request.IncludeComponents;
             var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Hierarchy(scene) + "\0" + selector);
+            var traversal = new UnityCliHierarchyPager.Traversal(scene, parent, maxDepth);
             GameObject current;
-            if (string.IsNullOrEmpty(request.Cursor)) current = UnityCliHierarchyPager.First(scene, parent);
+            if (string.IsNullOrEmpty(request.Cursor)) current = traversal.First(budget);
             else
             {
-                current = UnityCliHierarchyPager.ResolveCursor(request.Cursor, "scene.hierarchy", generation, out var phase);
-                if (phase != "scene" || current.scene.handle != scene.handle || !WithinBoundary(current.transform, parent == null ? null : parent.transform, maxDepth))
+                current = UnityCliHierarchyPager.ResolveCursor(request.Cursor, "scene.hierarchy", generation, budget, out var phase);
+                if (phase != "scene" || current.scene.handle != scene.handle || !WithinBoundary(current.transform, parent == null ? null : parent.transform, maxDepth, budget))
                     throw UnityCliHierarchyPager.Stale();
             }
 
@@ -110,11 +115,12 @@ namespace UnityCli
             {
                 var candidate = current;
                 if (!budget.TryConsumeScannedRecord()) break;
-                current = UnityCliHierarchyPager.Next(candidate, scene, parent, maxDepth);
                 try
                 {
-                    if (!Matches(candidate, query, request.ComponentType, request.IncludeInactive, budget)) continue;
-                    items.Add(BuildItem(candidate.transform, parent, request.IncludeComponents, budget));
+                    var next = traversal.Next(candidate, budget);
+                    if (Matches(candidate, query, request.ComponentType, request.IncludeInactive, budget))
+                        items.Add(BuildItem(candidate.transform, parent, request.IncludeComponents, budget));
+                    current = next;
                 }
                 catch (UnityCliRequestBudgetExceededException)
                 {
@@ -126,7 +132,7 @@ namespace UnityCli
             var nextCursor = UnityCliHierarchyPager.Cursor("scene.hierarchy", generation, "scene", current);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                Scene = new SceneSummary { Name = scene.name, Path = scene.path },
+                Scene = new SceneSummary { Name = sceneName, Path = scenePath },
                 Items = items,
                 PageInfo = new PageInfo
                 {
@@ -148,19 +154,29 @@ namespace UnityCli
             if (string.IsNullOrEmpty(parent)) return null;
             int instanceId;
             GameObject value = null;
-            if (int.TryParse(parent, NumberStyles.Integer, CultureInfo.InvariantCulture, out instanceId)) value = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+            if (int.TryParse(parent, NumberStyles.Integer, CultureInfo.InvariantCulture, out instanceId))
+            {
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                value = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+            }
             else value = UnityCliBridge.ObjectRefResolver.FindGameObjectByExactPath(parent, budget);
             if (value == null) throw new UnityCliBridge.BridgeCommandException("E_SCENE_HIERARCHY_PARENT_NOT_FOUND", "Parent GameObject not found: " + parent, "Pass an exact hierarchy path or instance id from a fresh scene.hierarchy page.");
             return value;
         }
 
-        private static bool WithinBoundary(Transform value, Transform boundary, int maxDepth)
+        private static bool WithinBoundary(Transform value, Transform boundary, int maxDepth, UnityCliRequestBudget budget)
         {
             if (value == null) return false;
             var current = value;
-            while (current != null && current != boundary) current = current.parent;
-            if (boundary != null && current != boundary) return false;
-            return UnityCliHierarchyPager.Depth(value, boundary) <= maxDepth;
+            var depth = 0;
+            while (current != null && current != boundary)
+            {
+                if (depth > maxDepth) return false;
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                current = current.parent;
+                depth++;
+            }
+            return (boundary == null || current == boundary) && depth - 1 <= maxDepth;
         }
 
         private static bool Matches(GameObject gameObject, string query, string componentType, bool includeInactive, UnityCliRequestBudget budget)
@@ -181,6 +197,7 @@ namespace UnityCli
                 if (!budget.TryConsumeScannedRecord()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 if (component == null && string.Equals(componentType, "MissingScript", StringComparison.OrdinalIgnoreCase)) return true;
                 if (component == null) continue;
+                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 var type = component.GetType();
                 if (string.Equals(type.Name, componentType, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(type.FullName, componentType, StringComparison.OrdinalIgnoreCase)) return true;
@@ -200,19 +217,28 @@ namespace UnityCli
             if (includeComponents)
             {
                 componentNames = new List<string>();
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 foreach (var component in gameObject.GetComponents<Component>())
                 {
-                    if (!budget.TryConsumeScannedRecord()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                    componentNames.Add(component == null ? "MissingScript" : component.GetType().FullName);
+                    if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    var componentName = component == null ? "MissingScript" : component.GetType().FullName;
+                    if (!budget.TryReserveSerializedUtf8(componentName)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    componentNames.Add(componentName);
                 }
             }
+            if (!budget.TryConsumeGetter() || !budget.TryConsumeGetter() || !budget.TryConsumeGetter()
+                || !budget.TryConsumeGetter() || !budget.TryConsumeGetter() || !budget.TryConsumeGetter())
+                throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var childCount = transform.childCount;
+            var tag = gameObject.tag;
+            if (!budget.TryReserveSerializedUtf8(tag)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             return new HierarchyItem
             {
                 Id = gameObject.GetInstanceID(), Name = name, Path = path,
-                Depth = UnityCliHierarchyPager.Depth(transform, parent == null ? null : parent.transform),
+                Depth = UnityCliHierarchyPager.Depth(transform, parent == null ? null : parent.transform, budget),
                 Active = gameObject.activeSelf, ActiveInHierarchy = gameObject.activeInHierarchy,
-                Tag = gameObject.tag, Layer = gameObject.layer, ChildCount = transform.childCount,
-                ChildrenTruncated = transform.childCount > 0,
+                Tag = tag, Layer = gameObject.layer, ChildCount = childCount,
+                ChildrenTruncated = childCount > 0,
                 ComponentCount = componentNames == null ? (long?)null : componentNames.Count,
                 ComponentTypes = componentNames,
                 Components = componentNames

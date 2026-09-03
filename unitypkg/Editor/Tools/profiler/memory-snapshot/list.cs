@@ -40,8 +40,8 @@ namespace UnityCli
         {
             request = request ?? new Request();
             var budget = ctx.UseReadBudget(request.Budget);
-            var files = ProfilerMemorySnapshotSupport.Catalog();
-            var generation = ProfilerMemorySnapshotSupport.CatalogGeneration(files);
+            var files = ProfilerMemorySnapshotSupport.Catalog(budget);
+            var generation = ProfilerMemorySnapshotSupport.CatalogGeneration(files, budget);
             var offset = 0;
             if (!string.IsNullOrEmpty(request.Cursor))
             {
@@ -55,7 +55,7 @@ namespace UnityCli
             var index = offset;
             while (index < files.Count && snapshots.Count < pageSize)
             {
-                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeNode() || !budget.TryConsumeGetter()) break;
+                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeNode() || !budget.TryConsumeGetter() || !budget.TryConsumeGetter()) break;
                 var item = MemorySnapshotEntry.FromFileInfo(files[index]);
                 if (!budget.TryReserveSerializedUtf8(item.Path) || !budget.TryReserveSerializedUtf8(item.Created)) break;
                 snapshots.Add(item);

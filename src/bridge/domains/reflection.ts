@@ -20,7 +20,10 @@ function reflectionFindArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]
     methodName: stringFlag(flags, "method-name") ?? structured.methodName,
     includePrivate: boolFlag(flags, "include-private") ?? structured.includePrivate,
     includeStatic: boolFlag(flags, "include-static") ?? structured.includeStatic,
-    includeInstance: boolFlag(flags, "include-instance") ?? structured.includeInstance
+    includeInstance: boolFlag(flags, "include-instance") ?? structured.includeInstance,
+    pageSize: numberFlag(flags, "page-size") ?? structured.pageSize,
+    cursor: stringFlag(flags, "cursor") ?? structured.cursor,
+    budget: structured.budget
   });
 }
 
@@ -40,7 +43,12 @@ function typeSchemaArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]
   const structured = structuredInput(flags);
   return compactArgs({
     typeName: stringFlag(flags, "type-name") ?? structured.typeName,
-    maxDepth: numberFlag(flags, "max-depth") ?? structured.maxDepth
+    maxDepth: numberFlag(flags, "max-depth") ?? structured.maxDepth,
+    maxMembers: numberFlag(flags, "max-members") ?? structured.maxMembers,
+    maxDefinitions: numberFlag(flags, "max-definitions") ?? structured.maxDefinitions,
+    pageSize: numberFlag(flags, "page-size") ?? structured.pageSize,
+    cursor: stringFlag(flags, "cursor") ?? structured.cursor,
+    budget: structured.budget
   });
 }
 

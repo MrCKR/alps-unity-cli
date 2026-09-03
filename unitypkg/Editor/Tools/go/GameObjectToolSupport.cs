@@ -55,7 +55,7 @@ namespace UnityCli
                 if (query.TryGetValue("path", out value)) options.ViewPath = value as string;
                 if (query.TryGetValue("namePattern", out value)) options.NamePattern = value as string;
                 if (query.TryGetValue("typeFilter", out value)) options.TypeFilter = value as string;
-                if (query.TryGetValue("maxDepth", out value) && value != null) options.MaxDepth = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+                if (query.TryGetValue("maxDepth", out value) && value != null) options.MaxDepth = UnityCliBridge.ObjectSerializer.ParseMaxDepth(value);
             }
             if (!string.IsNullOrEmpty(request.NamePattern))
             {

@@ -56,6 +56,27 @@ namespace UnityCli
             return null;
         }
 
+        /// <summary>读取型截图解析复用一次 Camera snapshot，并把每个候选计入请求 scan/getter 预算。</summary>
+        public static Camera ResolveCamera(string target, UnityCliRequestBudget budget)
+        {
+            if (budget == null) throw new ArgumentNullException("budget");
+            if (string.IsNullOrEmpty(target))
+            {
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var main = Camera.main;
+                if (main != null) return main;
+            }
+            var cameras = Camera.allCameras;
+            foreach (var camera in cameras)
+            {
+                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                if (string.IsNullOrEmpty(target) || camera.name == target || camera.GetInstanceID().ToString(CultureInfo.InvariantCulture) == target) return camera;
+                var path = UnityCliHierarchyPager.Path(camera.gameObject, budget);
+                if (path == target) return camera;
+            }
+            return null;
+        }
+
         /// <summary>构造 Camera 摘要信息 DTO。</summary>
         public static CameraInfo BuildCameraInfo(Camera camera)
         {
@@ -155,10 +176,12 @@ namespace UnityCli
             var previousActive = RenderTexture.active;
             var previousClearFlags = camera.clearFlags;
             var previousBackground = camera.backgroundColor;
-            var renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
-            var texture = new Texture2D(width, height, transparent ? TextureFormat.ARGB32 : TextureFormat.RGB24, false);
+            RenderTexture renderTexture = null;
+            Texture2D texture = null;
             try
             {
+                renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+                texture = new Texture2D(width, height, transparent ? TextureFormat.ARGB32 : TextureFormat.RGB24, false);
                 camera.targetTexture = renderTexture;
                 if (transparent)
                 {
@@ -180,11 +203,12 @@ namespace UnityCli
                     Sha256 = artifact.Sha256,
                     CapturePlan = budget.Plan
                 };
-                // inlineBase64 仅在图片字节小于内联上限时附带,避免大 base64 撑爆 JSON 响应
+                // inlineBase64 同时受固定图片上限与请求级 UTF-8 预算约束。
                 const int InlineImageMaxBytes = 512 * 1024;
-                if (inlineBase64 && bytes != null && bytes.Length <= InlineImageMaxBytes)
+                string encoded;
+                if (inlineBase64 && bytes != null && bytes.Length <= InlineImageMaxBytes && budget.TryCreateInlineBase64(bytes, out encoded))
                 {
-                    capture.ImageBase64 = Convert.ToBase64String(bytes);
+                    capture.ImageBase64 = encoded;
                     capture.ImageWidth = width;
                     capture.ImageHeight = height;
                     capture.ImageMimeType = format == "jpg" ? "image/jpeg" : "image/png";
@@ -197,9 +221,8 @@ namespace UnityCli
                 camera.targetTexture = previousTarget;
                 camera.clearFlags = previousClearFlags;
                 camera.backgroundColor = previousBackground;
-                UnityEngine.Object.DestroyImmediate(texture);
-                renderTexture.Release();
-                UnityEngine.Object.DestroyImmediate(renderTexture);
+                if (texture != null) UnityEngine.Object.DestroyImmediate(texture);
+                if (renderTexture != null) { renderTexture.Release(); UnityEngine.Object.DestroyImmediate(renderTexture); }
             }
         }
 

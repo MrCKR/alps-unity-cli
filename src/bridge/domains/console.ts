@@ -12,7 +12,8 @@ function consoleGetArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]
     type: stringFlag(flags, "type") ?? stringFlag(flags, "level") ?? stringValue(structured.type),
     filter: stringFlag(flags, "filter") ?? stringFlag(flags, "search") ?? stringValue(structured.filter) ?? stringValue(structured.search),
     count: numberFlag(flags, "count") ?? numberValue(structured.count),
-    cursor: numberFlag(flags, "cursor") ?? numberValue(structured.cursor)
+    cursor: stringFlag(flags, "cursor") ?? stringValue(structured.cursor),
+    budget: structured.budget
   });
 }
 

@@ -72,7 +72,7 @@ namespace UnityCli
                 object maxDepth;
                 if (query.TryGetValue("maxDepth", out maxDepth) && maxDepth != null)
                 {
-                    options.MaxDepth = System.Convert.ToInt32(maxDepth, CultureInfo.InvariantCulture);
+                    options.MaxDepth = UnityCliBridge.ObjectSerializer.ParseMaxDepth(maxDepth);
                 }
             }
             if (!string.IsNullOrEmpty(request.NamePattern))

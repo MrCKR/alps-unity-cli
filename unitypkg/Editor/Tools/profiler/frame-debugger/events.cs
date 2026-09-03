@@ -87,7 +87,10 @@ namespace UnityCli
                         entry.InstanceCount = FrameDebuggerReflection.ReadField(data, "instanceCount", budget);
                         entry.MeshName = FrameDebuggerReflection.ReadField(data, "meshName", budget);
                     }
-                    if (!budget.TryReserveSerializedUtf8(entry.Name) || !budget.TryReserveSerializedUtf8(entry.ShaderName) || !budget.TryReserveSerializedUtf8(entry.PassName)) break;
+                    if (!budget.TryReserveSerializedUtf8(entry.Name) || !budget.TryReserveSerializedUtf8(entry.ShaderName)
+                        || !budget.TryReserveSerializedUtf8(entry.PassName) || !budget.TryReserveSerializedUtf8(entry.VertexCount)
+                        || !budget.TryReserveSerializedUtf8(entry.IndexCount) || !budget.TryReserveSerializedUtf8(entry.InstanceCount)
+                        || !budget.TryReserveSerializedUtf8(entry.MeshName)) break;
                     events.Add(entry);
                     index++;
                 }

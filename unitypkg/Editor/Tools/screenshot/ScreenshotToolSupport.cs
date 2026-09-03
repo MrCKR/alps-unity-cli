@@ -23,6 +23,7 @@ namespace UnityCli
         public long PeakTemporaryBytes { get; set; }
         public long ArtifactByteCeiling { get; set; }
         public long PlannedWorstCaseArtifactBytes { get; set; }
+        public long MaxPixelsPerCapture { get; set; }
     }
 
     /// <summary>截图域的尺寸、内存、捕获次数和 artifact byte 统一 owner。</summary>
@@ -71,9 +72,10 @@ namespace UnityCli
             var sheetPixels = contactSheet ? checked(imagePixels * 6L) : 0L;
             if (contactSheet) ValidateDimensions(checked(width * 3), checked(height * 2), "contact sheet");
             var totalPixels = checked(imagePixels * captureCount + sheetPixels);
+            // 同时覆盖 RenderTexture/depth、readable texture、编码缓冲与 contact-sheet copy 缓冲。
             var peakTemporaryBytes = contactSheet
-                ? checked(imagePixels * 8L + sheetPixels * 6L)
-                : checked(imagePixels * 8L);
+                ? checked(imagePixels * 12L + sheetPixels * 8L + 65536L)
+                : checked(imagePixels * 12L + 65536L);
             var worstCaseArtifacts = checked(totalPixels * 4L + (captureCount + (contactSheet ? 1 : 0)) * 65536L);
             if (totalPixels > maxTotalPixels) throw Limit("aggregate totalPixels " + totalPixels.ToString(CultureInfo.InvariantCulture) + " exceeds maxTotalPixels.");
             if (peakTemporaryBytes > maxTemporaryBytes) throw Limit("peak temporary bytes " + peakTemporaryBytes.ToString(CultureInfo.InvariantCulture) + " exceeds maxTemporaryBytes.");
@@ -82,7 +84,8 @@ namespace UnityCli
             {
                 CaptureCount = captureCount + (contactSheet ? 1 : 0), TotalPixels = totalPixels,
                 PeakTemporaryBytes = peakTemporaryBytes, ArtifactByteCeiling = maxArtifactBytes,
-                PlannedWorstCaseArtifactBytes = worstCaseArtifacts
+                PlannedWorstCaseArtifactBytes = worstCaseArtifacts,
+                MaxPixelsPerCapture = contactSheet ? sheetPixels : imagePixels
             }, requestBudget);
         }
 
@@ -98,30 +101,66 @@ namespace UnityCli
         {
             if (bytes == null || bytes.Length == 0) throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_ARTIFACT_EMPTY", "Screenshot encoder produced no image data.", "Check the camera and render settings, then retry.");
             budget.ChargeArtifact(bytes.LongLength);
-            try { File.WriteAllBytes(outputPath, bytes); }
-            catch (Exception exception) { throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to write screenshot output: " + exception.Message); }
-            return VerifyScreenshotArtifact(outputPath, Path.GetExtension(outputPath).TrimStart('.'), budget);
+            try
+            {
+                using (var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    const int chunkSize = 64 * 1024;
+                    for (var offset = 0; offset < bytes.Length; offset += chunkSize)
+                    {
+                        budget.Checkpoint();
+                        var count = Math.Min(chunkSize, bytes.Length - offset);
+                        stream.Write(bytes, offset, count);
+                    }
+                    stream.Flush(true);
+                }
+                var proof = VerifyScreenshotArtifact(outputPath, Path.GetExtension(outputPath).TrimStart('.'), budget);
+                if (proof.SizeBytes != bytes.LongLength)
+                    throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_ARTIFACT_INVALID", "Persisted screenshot size differs from the encoded artifact.", "Inspect output storage before retrying.");
+                return proof;
+            }
+            catch (UnityCliBridge.BridgeCommandException) { DeleteArtifactNoThrow(outputPath); throw; }
+            catch (UnityCliRequestBudgetExceededException) { DeleteArtifactNoThrow(outputPath); throw; }
+            catch (OperationCanceledException) { DeleteArtifactNoThrow(outputPath); throw; }
+            catch (Exception exception)
+            {
+                DeleteArtifactNoThrow(outputPath);
+                throw new UnityCliBridge.BridgeCommandException("E_IO_ERROR", "Failed to write screenshot output: " + exception.Message);
+            }
         }
 
-        /// <summary>fresh proof 使用 bounded stream header/hash，不再 File.ReadAllBytes 复制整个 artifact。</summary>
+        /// <summary>fresh proof 使用 bounded stream header/hash，并在每个固定块检查同一 deadline/cancel。</summary>
         public static ScreenshotArtifactProof VerifyScreenshotArtifact(string outputPath, string format, ScreenshotCaptureBudget budget)
         {
             if (!File.Exists(outputPath)) throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_ARTIFACT_MISSING", "Screenshot artifact was not written: " + outputPath, "Check output permissions before retrying.");
             var info = new FileInfo(outputPath);
             budget.EnsureArtifactSize(info.Length);
             var normalized = NormalizeFormat(format, outputPath);
-            byte[] header = new byte[8];
+            var header = new byte[8];
             string hash;
             using (var stream = new FileStream(outputPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
+                budget.Checkpoint();
                 var read = stream.Read(header, 0, header.Length);
                 var valid = normalized == "png"
                     ? read == 8 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47 && header[4] == 0x0d && header[5] == 0x0a && header[6] == 0x1a && header[7] == 0x0a
                     : read >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff;
                 if (!valid) throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_ARTIFACT_INVALID", "Screenshot artifact does not match its requested format: " + outputPath, "Use a .png or .jpg output path and retry.");
                 stream.Position = 0L;
-                using (var sha = SHA256.Create()) hash = string.Concat(Array.ConvertAll(sha.ComputeHash(stream), value => value.ToString("x2", CultureInfo.InvariantCulture)));
+                using (var sha = SHA256.Create())
+                {
+                    var buffer = new byte[64 * 1024];
+                    int count;
+                    while ((count = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        budget.Checkpoint();
+                        sha.TransformBlock(buffer, 0, count, buffer, 0);
+                    }
+                    sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                    hash = string.Concat(Array.ConvertAll(sha.Hash, value => value.ToString("x2", CultureInfo.InvariantCulture)));
+                }
             }
+            budget.Checkpoint();
             return new ScreenshotArtifactProof { Path = outputPath, SizeBytes = info.Length, Sha256 = hash, Format = normalized };
         }
 
@@ -176,22 +215,49 @@ namespace UnityCli
             sheet.SetPixels32(column * tileWidth, row * tileHeight, tileWidth, tileHeight, pixels);
         }
 
-        public static Bounds TargetRenderBounds(GameObject gameObject)
+        public static Bounds TargetRenderBounds(GameObject gameObject, UnityCliRequestBudget budget)
         {
-            var renderers = gameObject.GetComponentsInChildren<Renderer>();
-            if (renderers.Length == 0) return new Bounds(gameObject.transform.position, Vector3.one);
-            var bounds = renderers[0].bounds;
-            for (var index = 1; index < renderers.Length; index++) if (renderers[index] != null && renderers[index].gameObject.activeInHierarchy) bounds.Encapsulate(renderers[index].bounds);
+            var stack = new Stack<Transform>();
+            stack.Push(gameObject.transform);
+            var found = false;
+            var bounds = new Bounds(gameObject.transform.position, Vector3.one);
+            while (stack.Count > 0)
+            {
+                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeNode() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var current = stack.Pop();
+                var renderers = current.GetComponents<Renderer>();
+                foreach (var renderer in renderers)
+                {
+                    if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    if (renderer == null || !renderer.gameObject.activeInHierarchy) continue;
+                    if (!found) { bounds = renderer.bounds; found = true; }
+                    else bounds.Encapsulate(renderer.bounds);
+                }
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var childCount = current.childCount;
+                for (var index = childCount - 1; index >= 0; index--)
+                {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    stack.Push(current.GetChild(index));
+                }
+            }
             return bounds;
         }
 
-        public static void MaybeAppendInline(ScreenshotCaptureResult result, byte[] bytes, int width, int height, string mimeType, bool inlineBase64)
+        public static void MaybeAppendInline(ScreenshotCaptureResult result, byte[] bytes, int width, int height, string mimeType, bool inlineBase64, ScreenshotCaptureBudget budget)
         {
             if (!inlineBase64 || bytes == null || bytes.Length > InlineImageMaxBytes) return;
-            result.ImageBase64 = Convert.ToBase64String(bytes);
+            string encoded;
+            if (!budget.TryCreateInlineBase64(bytes, out encoded)) return;
+            result.ImageBase64 = encoded;
             result.ImageWidth = width;
             result.ImageHeight = height;
             result.ImageMimeType = mimeType;
+        }
+
+        private static void DeleteArtifactNoThrow(string outputPath)
+        {
+            try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { }
         }
 
         private static void ValidateLimit(long value, long minimum, long maximum, string name)
@@ -209,6 +275,7 @@ namespace UnityCli
     {
         private readonly UnityCliRequestBudget requestBudget;
         private long captures;
+        private long capturedPixels;
         private long artifactBytes;
 
         internal ScreenshotCaptureBudget(ScreenshotCapturePlan plan, UnityCliRequestBudget requestBudget)
@@ -223,8 +290,16 @@ namespace UnityCli
         {
             requestBudget.CheckpointOrThrow();
             ScreenshotToolSupport.ValidateDimensions(width, height, "capture");
+            var pixels = checked((long)width * height);
             captures++;
-            if (captures > Plan.CaptureCount) throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_LIMIT_EXCEEDED", "Capture count exceeded the frozen aggregate plan.", "Submit a new request with a valid aggregate plan.");
+            capturedPixels = checked(capturedPixels + pixels);
+            if (captures > Plan.CaptureCount || pixels > Plan.MaxPixelsPerCapture || capturedPixels > Plan.TotalPixels)
+                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_LIMIT_EXCEEDED", "Capture count or pixels exceeded the frozen aggregate plan.", "Submit a new request with a valid aggregate plan.");
+        }
+
+        public void Checkpoint()
+        {
+            requestBudget.CheckpointOrThrow();
         }
 
         public void ChargeArtifact(long bytes)
@@ -240,6 +315,16 @@ namespace UnityCli
             requestBudget.CheckpointOrThrow();
             if (bytes <= 0L || bytes > Plan.ArtifactByteCeiling)
                 throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_LIMIT_EXCEEDED", "Persisted artifact size exceeds the frozen request ceiling.", "Reduce dimensions or capture count.");
+        }
+
+        public bool TryCreateInlineBase64(byte[] bytes, out string value)
+        {
+            value = null;
+            if (bytes == null) return false;
+            var encodedBytes = checked(((bytes.LongLength + 2L) / 3L) * 4L);
+            if (!requestBudget.TryReserveSerializedUtf8Bytes(encodedBytes)) return false;
+            value = Convert.ToBase64String(bytes);
+            return true;
         }
     }
 

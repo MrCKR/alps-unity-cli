@@ -44,10 +44,12 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_FORMAT_UNSUPPORTED", "screenshot.screen only writes .png output.", "Pass a .png output path.");
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
+            var requestBudget = ctx.UseReadBudget(request.Budget);
             var superSize = request.SuperSize ?? 1;
+            if (!requestBudget.TryConsumeGetter() || !requestBudget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(requestBudget.ExhaustedDimension);
             var width = checked(Screen.width * superSize);
             var height = checked(Screen.height * superSize);
-            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, ctx.UseReadBudget(request.Budget));
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, requestBudget);
             ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
             captureBudget.BeginCapture(width, height);
@@ -80,7 +82,7 @@ namespace UnityCli
             if (request.InlineBase64 && artifact.SizeBytes <= 512 * 1024)
             {
                 var bytes = File.ReadAllBytes(outputPath);
-                ScreenshotToolSupport.MaybeAppendInline(result, bytes, (int)dimensions.width, (int)dimensions.height, "image/png", true);
+                ScreenshotToolSupport.MaybeAppendInline(result, bytes, (int)dimensions.width, (int)dimensions.height, "image/png", true, captureBudget);
             }
             return result;
         }

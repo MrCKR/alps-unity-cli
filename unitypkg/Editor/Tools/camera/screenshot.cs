@@ -50,7 +50,8 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "Camera screenshot requires a target Camera.", "Pass a Camera name, hierarchy path or instance id. Run tools run camera.list before retrying.");
             }
-            var camera = CameraToolSupport.ResolveCamera(target);
+            var requestBudget = ctx.UseReadBudget(request.Budget);
+            var camera = CameraToolSupport.ResolveCamera(target, requestBudget);
             if (camera == null)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "Camera not found: " + target, "Run tools run camera.list, then retry with a camera name, hierarchy path, or instance id from the result.");
@@ -62,7 +63,7 @@ namespace UnityCli
             var quality = request.Quality ?? 95;
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
-            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, ctx.UseReadBudget(request.Budget));
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, requestBudget);
             ctx.CommitEffect();
             return new System.Threading.Tasks.ValueTask<CameraCapture>(CameraToolSupport.CaptureCamera(camera, width, height, request.Transparent, quality, outputPath, format, request.Overwrite, request.InlineBase64, captureBudget));
         }

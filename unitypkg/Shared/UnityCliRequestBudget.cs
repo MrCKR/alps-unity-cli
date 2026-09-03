@@ -150,10 +150,15 @@ namespace UnityCli
         /// <summary>构造动态输出时预留确定的 UTF-8 文本字节；最终 JSON 仍由框架做精确检查。</summary>
         public bool TryReserveSerializedUtf8(string value)
         {
+            return TryReserveSerializedUtf8Bytes(value == null ? 4L : Encoding.UTF8.GetByteCount(value));
+        }
+
+        /// <summary>为 JSON 结构或已知编码结果预留确定字节，避免先分配完整字符串。</summary>
+        public bool TryReserveSerializedUtf8Bytes(long bytes)
+        {
             cancellationToken.ThrowIfCancellationRequested();
             if (!TryCheckpoint()) return false;
-            var bytes = value == null ? 4L : Encoding.UTF8.GetByteCount(value);
-            if (bytes > maxSerializedUtf8Bytes - serializedUtf8Bytes)
+            if (bytes < 0L || bytes > maxSerializedUtf8Bytes - serializedUtf8Bytes)
             {
                 Exhaust("serializedUtf8Bytes");
                 return false;
@@ -176,6 +181,7 @@ namespace UnityCli
 
         public UnityCliRequestBudgetUsage Usage()
         {
+            TryCheckpoint();
             return new UnityCliRequestBudgetUsage
             {
                 ScannedRecords = scannedRecords,
@@ -229,7 +235,7 @@ namespace UnityCli
             {
                 var size = sizes[index];
                 if (size < 0L) throw new ArgumentOutOfRangeException("sizes");
-                if (size > maximumBytes - bytes) continue;
+                if (size > maximumBytes - bytes) break;
                 bytes += size;
                 result.Add(index);
             }
@@ -248,7 +254,7 @@ namespace UnityCli
         public static bool TryParse(string token, string expectedScope, string expectedGeneration, out string position)
         {
             position = null;
-            if (string.IsNullOrEmpty(token)) return false;
+            if (string.IsNullOrEmpty(token) || token.Length > 4096) return false;
             var parts = token.Split('.');
             if (parts.Length != 4 || parts[0] != "ucli1") return false;
             string scope;

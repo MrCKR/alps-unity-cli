@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const editor = new URL("../unitypkg/Editor/", import.meta.url);
@@ -16,6 +16,7 @@ test("request budget owns all six counters and injectable monotonic time", async
   }
   assert.match(budget, /IUnityCliMonotonicClock/);
   assert.match(budget, /CancellationToken/);
+  assert.match(budget, /TryReserveSerializedUtf8Bytes/);
   assert.doesNotMatch(budget, /Thread\.Sleep/);
 });
 
@@ -25,6 +26,8 @@ test("console scene and GameObject discovery page raw positions without full res
     source("Tools/scene/hierarchy.cs"), source("Tools/go/find.cs"),
   ]);
   assert.match(editorSupport, /rawIndex/);
+  assert.match(editorSupport, /CreateConsoleCursor[\s\S]*topFingerprint/);
+  assert.match(editorSupport, /TruncatedPage\(rawCount,[\s\S]*CreateConsoleCursor/);
   assert.match(consoleGet, /NextCursor/);
   assert.doesNotMatch(consoleGet, /Skip\(|Take\(|ToList\(/);
   assert.doesNotMatch(hierarchy, /allItems|CollectHierarchy|Skip\(|Take\(|OrderBy/);
@@ -68,8 +71,11 @@ test("profiler and snapshot paths remain raw-paged and governed", async () => {
   assert.doesNotMatch(events, /GetFrameEvents|CopyTo\(/);
   assert.match(snapshots, /Library.*UnityCli.*memory-snapshots/);
   assert.match(snapshots, /RetainedSnapshotCount = 100/);
+  assert.match(snapshots, /RetainedSnapshotBytes = 8L \* 1024L \* 1024L \* 1024L/);
   assert.match(snapshots, /PublicationLock/);
+  assert.ok(snapshots.indexOf("length > requestedMaxBytes") < snapshots.indexOf("File.Move(source, finalPath)"));
   assert.match(take, /MemorySnapshotTerminal/);
+  assert.match(take, /TryAbandon/);
   assert.match(list, /NextCursor/);
   assert.doesNotMatch(take + list, /temporaryCachePath|MemoryCaptures|Directory\.GetFiles/);
 });
@@ -81,8 +87,59 @@ test("reflection pages bind assembly generation and budgeted member definitions"
   ]);
   assert.match(reflection, /ResolvedTypeCache/);
   assert.match(reflection, /UnityCliReadGeneration\.Reflection/);
+  assert.match(reflection, /raw ordinal/);
+  assert.doesNotMatch(reflection, /type\.GetMethods\(bindings\)[\s\S]{0,240}\.Where/);
   assert.match(typeTool, /MaxMembers/);
   assert.match(typeTool, /MaxDefinitions/);
   assert.match(methodTool, /NextCursor/);
   assert.match(typeTool + methodTool, /UnityCliReadBudgetInput/);
+});
+
+test("continuations bind listener generation and callback waits expose abandonment cleanup", async () => {
+  const [generation, waiter] = await Promise.all([
+    source("Infrastructure/UnityCliReadGeneration.cs"),
+    source("Infrastructure/UnityCliWaiter.cs"),
+  ]);
+  assert.match(generation, /ListenerId/);
+  assert.match(generation, /CurrentListenerGeneration/);
+  assert.match(waiter, /Action onAbandoned/);
+  assert.match(waiter, /NotifyAbandoned/);
+});
+
+test("screenshot artifact IO is chunked and temporary allocations are guarded", async () => {
+  const [support, camera, gameView, sceneView] = await Promise.all([
+    source("Tools/screenshot/ScreenshotToolSupport.cs"),
+    source("Tools/camera/CameraToolSupport.cs"),
+    source("Tools/screenshot/game-view.cs"),
+    source("Tools/screenshot/scene-view.cs"),
+  ]);
+  assert.match(support, /chunkSize = 64 \* 1024/);
+  assert.match(support, /TransformBlock/);
+  assert.match(support, /DeleteArtifactNoThrow/);
+  for (const value of [camera, gameView, sceneView]) {
+    assert.match(value, /RenderTexture [a-zA-Z]+ = null/);
+    assert.match(value, /finally/);
+    assert.match(value, /Release\(\)/);
+    assert.match(value, /DestroyImmediate/);
+  }
+});
+
+test("command projections preserve opaque cursors and nested budgets", async () => {
+  const roots = new URL("../src/bridge/domains/", import.meta.url);
+  const files = ["console.ts", "game-object.ts", "scene.ts", "profiler.ts", "reflection.ts", "screenshot.ts"];
+  const text = (await Promise.all(files.map((file) => readFile(new URL(file, roots), "utf8")))).join("\n");
+  assert.ok((text.match(/cursor: stringFlag\(flags, "cursor"\)/g) ?? []).length >= 5);
+  assert.match(text, /budget: structured\.budget/);
+  assert.match(text, /limits: structured\.limits/);
+});
+
+test("obsolete aggregate readers are absent from canonical source and non-generated routes", async () => {
+  await assert.rejects(access(new URL("Tools/go/inspect.cs", editor)));
+  await assert.rejects(access(new URL("Tools/scene/data.cs", editor)));
+  const [goRoute, sceneRoute] = await Promise.all([
+    readFile(new URL("../src/bridge/domains/game-object.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/bridge/domains/scene.ts", import.meta.url), "utf8"),
+  ]);
+  assert.doesNotMatch(goRoute, /go\.inspect/);
+  assert.doesNotMatch(sceneRoute, /scene\.data/);
 });

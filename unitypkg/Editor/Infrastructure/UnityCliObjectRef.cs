@@ -2,8 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -47,12 +45,14 @@ namespace UnityCli
         internal static class ObjectRefResolver
         {
             /// <summary>解析任意 UnityEngine.Object 引用。</summary>
-            public static UnityEngine.Object ResolveObject(IUnityCliObjectReferenceInput request)
+            public static UnityEngine.Object ResolveObject(IUnityCliObjectReferenceInput request, UnityCliRequestBudget budget)
             {
-                // 优先级：instanceId > assetPath/guid > name(path)
+                if (budget == null) throw new ArgumentNullException("budget");
+                // 优先级：instanceId > assetPath/guid > exact hierarchy path/name
                 var instanceId = request.InstanceId;
                 if (instanceId.HasValue && instanceId.Value != 0)
                 {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var obj = EditorUtility.InstanceIDToObject(instanceId.Value);
                     if (obj == null)
                     {
@@ -67,11 +67,13 @@ namespace UnityCli
                 var guid = request.Guid;
                 if (!string.IsNullOrEmpty(guid))
                 {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var pathByGuid = AssetDatabase.GUIDToAssetPath(guid);
                     if (!string.IsNullOrEmpty(pathByGuid)) assetPath = pathByGuid;
                 }
                 if (!string.IsNullOrEmpty(assetPath))
                 {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
                     if (asset == null)
                     {
@@ -82,19 +84,11 @@ namespace UnityCli
                     return asset;
                 }
 
-                // 名称/路径解析：优先在活动场景中找 GameObject，再回退资产
                 var path = request.Path ?? request.Name ?? request.Target;
                 if (!string.IsNullOrEmpty(path))
                 {
-                    var go = FindGameObjectByPath(path);
-                    if (go != null) return go;
-
-                    var assetByName = AssetDatabase.FindAssets(path);
-                    if (assetByName != null && assetByName.Length > 0)
-                    {
-                        var resolved = AssetDatabase.LoadMainAssetAtPath(AssetDatabase.GUIDToAssetPath(assetByName[0]));
-                        if (resolved != null) return resolved;
-                    }
+                    var gameObject = FindGameObjectByExactPath(path, budget);
+                    if (gameObject != null) return gameObject;
                 }
 
                 throw new BridgeCommandException("E_OBJECTREF_REQUIRED",
@@ -103,11 +97,13 @@ namespace UnityCli
             }
 
             /// <summary>解析 GameObject 引用。</summary>
-            public static GameObject ResolveGameObject(IUnityCliObjectReferenceInput request)
+            public static GameObject ResolveGameObject(IUnityCliObjectReferenceInput request, UnityCliRequestBudget budget)
             {
+                if (budget == null) throw new ArgumentNullException("budget");
                 var instanceId = request.InstanceId;
                 if (instanceId.HasValue && instanceId.Value != 0)
                 {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var obj = EditorUtility.InstanceIDToObject(instanceId.Value) as GameObject;
                     if (obj == null)
                     {
@@ -121,7 +117,7 @@ namespace UnityCli
                 var path = request.Path ?? request.Target ?? request.Name;
                 if (!string.IsNullOrEmpty(path))
                 {
-                    var go = FindGameObjectByPath(path);
+                    var go = FindGameObjectByExactPath(path, budget);
                     if (go != null) return go;
                     throw new BridgeCommandException("E_OBJECTREF_GAMEOBJECT_REQUIRED",
                         "No GameObject matched path/name '" + path + "' in any loaded scene.",
@@ -139,11 +135,13 @@ namespace UnityCli
             /// 2) GameObject + component index
             /// 3) GameObject + component typeName
             /// </summary>
-            public static Component ResolveComponent(IUnityCliObjectReferenceInput request)
+            public static Component ResolveComponent(IUnityCliObjectReferenceInput request, UnityCliRequestBudget budget)
             {
+                if (budget == null) throw new ArgumentNullException("budget");
                 var componentInstanceId = request.ComponentInstanceId;
                 if (componentInstanceId.HasValue && componentInstanceId.Value != 0)
                 {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var obj = EditorUtility.InstanceIDToObject(componentInstanceId.Value) as Component;
                     if (obj == null)
                     {
@@ -154,11 +152,14 @@ namespace UnityCli
                     return obj;
                 }
 
-                var gameObject = ResolveGameObject(request);
+                var gameObject = ResolveGameObject(request, budget);
                 var componentIndex = request.ComponentIndex;
                 if (componentIndex.HasValue)
                 {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var components = gameObject.GetComponents<Component>();
+                    for (var index = 0; index < components.Length; index++)
+                        if (!budget.TryConsumeScannedRecord()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     if (componentIndex.Value < 0 || componentIndex.Value >= components.Length)
                     {
                         throw new BridgeCommandException("E_OBJECTREF_COMPONENT_INDEX_OUT_OF_RANGE",
@@ -171,7 +172,8 @@ namespace UnityCli
                 var componentType = request.Component ?? request.ComponentType;
                 if (!string.IsNullOrEmpty(componentType))
                 {
-                    var type = ResolveComponentType(componentType);
+                    var type = GameObjectToolSupport.ResolveComponentType(componentType, budget);
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var component = gameObject.GetComponent(type);
                     if (component == null)
                     {
@@ -192,8 +194,10 @@ namespace UnityCli
             {
                 if (string.IsNullOrEmpty(path)) return null;
                 if (budget == null) throw new ArgumentNullException("budget");
+                if (path.Length > 8192) throw new BridgeCommandException("E_OBJECTREF_PATH_INVALID", "Exact hierarchy paths are limited to 8192 characters.", "Pass a shorter full case-sensitive hierarchy path or an instance id.");
                 var segments = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
                 if (segments.Length == 0) return null;
+                if (segments.Length > 256) throw new BridgeCommandException("E_OBJECTREF_PATH_INVALID", "Exact hierarchy paths are limited to 256 segments.", "Pass an instance id for deeper objects.");
                 GameObject match = null;
                 for (var sceneIndex = 0; sceneIndex < SceneManager.sceneCount; sceneIndex++)
                 {
@@ -208,23 +212,34 @@ namespace UnityCli
                         for (var segmentIndex = 1; segmentIndex < segments.Length; segmentIndex++)
                         {
                             Transform childMatch = null;
-                            for (var childIndex = 0; childIndex < current.childCount; childIndex++)
+                            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                            var childCount = current.childCount;
+                            for (var childIndex = 0; childIndex < childCount; childIndex++)
                             {
-                                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                                 var child = current.GetChild(childIndex);
                                 if (!string.Equals(child.name, segments[segmentIndex], StringComparison.Ordinal)) continue;
-                                if (childMatch != null) ThrowAmbiguousPath(path, new List<GameObject> { childMatch.gameObject, child.gameObject });
+                                if (childMatch != null) ThrowExactAmbiguousPath(path, childMatch.gameObject, child.gameObject, budget);
                                 childMatch = child;
                             }
                             if (childMatch == null) { resolved = false; break; }
                             current = childMatch;
                         }
                         if (!resolved) continue;
-                        if (match != null) ThrowAmbiguousPath(path, new List<GameObject> { match, current.gameObject });
+                        if (match != null) ThrowExactAmbiguousPath(path, match, current.gameObject, budget);
                         match = current.gameObject;
                     }
                 }
                 return match;
+            }
+
+            private static void ThrowExactAmbiguousPath(string path, GameObject first, GameObject second, UnityCliRequestBudget budget)
+            {
+                var firstPath = UnityCliHierarchyPager.Path(first, budget);
+                var secondPath = UnityCliHierarchyPager.Path(second, budget);
+                throw new BridgeCommandException("E_OBJECTREF_AMBIGUOUS",
+                    "Path '" + path + "' matches multiple GameObjects: " + firstPath + ", " + secondPath,
+                    "Pass the instanceId from go.find to disambiguate objects in different loaded scenes.");
             }
 
             /// <summary>
@@ -304,11 +319,15 @@ namespace UnityCli
             // 多命中时抛歧义错误，列候选完整路径（从顶层起），不静默取错。
             private static void ThrowAmbiguousPath(string path, List<GameObject> matches)
             {
-                var candidates = matches
-                    .Select(m => FullPath(m.transform))
-                    .Distinct()
-                    .Take(10)
-                    .ToList();
+                var candidates = new List<string>();
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var match in matches)
+                {
+                    var candidate = FullPath(match.transform);
+                    if (!seen.Add(candidate)) continue;
+                    candidates.Add(candidate);
+                    if (candidates.Count == 10) break;
+                }
                 throw new BridgeCommandException("E_OBJECTREF_AMBIGUOUS",
                     "Path '" + path + "' matches " + matches.Count + " GameObjects: " + string.Join(", ", candidates),
                     "Pass the full hierarchy path from a scene root, or use go.find to obtain the instanceId.");

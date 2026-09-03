@@ -11,7 +11,6 @@ export const sceneBridgeSpecs: BridgeCommandSpec[] = [
   { group: "scene", command: "unload", bridgeCommand: "project-tool.run", toolName: "scene.unload", buildArgs: sceneFileArgs, destructiveHint: true, supportsDryRun: true },
   { group: "scene", command: "set-active", bridgeCommand: "project-tool.run", toolName: "scene.set-active", buildArgs: sceneFileArgs },
   { group: "scene", command: "list-opened", bridgeCommand: "project-tool.run", toolName: "scene.list-opened", buildArgs: ({ flags }) => queryArgs(flags) },
-  { group: "scene", command: "data", bridgeCommand: "project-tool.run", toolName: "scene.data", buildArgs: sceneDataArgs },
   { group: "scene", command: "gameobject", bridgeCommand: "project-tool.run", toolName: "scene.gameobject", buildArgs: sceneGameObjectReadArgs },
   { group: "scene", command: "gameobject-component", bridgeCommand: "project-tool.run", toolName: "scene.gameobject.component", buildArgs: sceneGameObjectReadArgs },
   { group: "scene", command: "gameobject-components", bridgeCommand: "project-tool.run", toolName: "scene.gameobject.components", buildArgs: sceneGameObjectReadArgs },
@@ -32,11 +31,6 @@ function sceneSaveArgs(context: Parameters<BridgeCommandSpec["buildArgs"]>[0]): 
     ...sceneFileArgs(context),
     all: boolFlag(context.flags, "all") ?? boolValue(structured.all)
   });
-}
-
-function sceneDataArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  const structured = structuredInput(flags);
-  return compactArgs({ maxDepth: numberFlag(flags, "max-depth") ?? numberValue(structured.maxDepth), maxResults: numberFlag(flags, "max-results") ?? numberValue(structured.maxResults), nameFilter: stringFlag(flags, "name-filter") ?? stringValue(structured.nameFilter), includeComponents: boolFlag(flags, "include-components") ?? boolValue(structured.includeComponents) });
 }
 
 /** 统一投影三个 GameObject 读取 Tool 的可选 selector 与读取深度字段。 */
@@ -75,14 +69,15 @@ function sceneHierarchyArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]
   const structured = structuredInput(flags);
   return compactArgs({
     pageSize: numberFlag(flags, "page-size") ?? numberFlag(flags, "limit") ?? numberValue(structured.pageSize),
-    cursor: numberFlag(flags, "cursor") ?? numberValue(structured.cursor),
+    cursor: stringFlag(flags, "cursor") ?? stringValue(structured.cursor),
     parent: stringFlag(flags, "parent") ?? stringValue(structured.parent),
     maxDepth: numberFlag(flags, "max-depth") ?? numberValue(structured.maxDepth),
     nameFilter: stringFlag(flags, "name-filter") ?? stringFlag(flags, "filter") ?? stringFlag(flags, "query") ?? stringValue(structured.nameFilter) ?? stringValue(structured.query),
     query: stringFlag(flags, "query") ?? stringValue(structured.query),
     componentType: stringFlag(flags, "component-type") ?? stringValue(structured.componentType),
     includeComponents: boolFlag(flags, "include-components") ?? boolValue(structured.includeComponents),
-    includeInactive: boolFlag(flags, "include-inactive") ?? boolValue(structured.includeInactive)
+    includeInactive: boolFlag(flags, "include-inactive") ?? boolValue(structured.includeInactive),
+    budget: structured.budget
   });
 }
 

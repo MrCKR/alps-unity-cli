@@ -86,12 +86,14 @@ namespace UnityCli
             captureBudget.BeginCapture(width, height);
             var originalPanelSettings = document.panelSettings;
             var originalEnabled = document.enabled;
-            var renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
-            var panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            RenderTexture renderTexture = null;
+            PanelSettings panelSettings = null;
             Texture2D texture = null;
             var previousActive = RenderTexture.active;
             try
             {
+                renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+                panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
                 renderTexture.Create();
                 panelSettings.targetTexture = renderTexture;
                 panelSettings.scaleMode = PanelScaleMode.ConstantPixelSize;
@@ -122,9 +124,8 @@ namespace UnityCli
                 document.panelSettings = originalPanelSettings;
                 document.enabled = originalEnabled;
                 if (texture != null) Object.DestroyImmediate(texture);
-                renderTexture.Release();
-                Object.DestroyImmediate(renderTexture);
-                Object.DestroyImmediate(panelSettings);
+                if (renderTexture != null) { renderTexture.Release(); Object.DestroyImmediate(renderTexture); }
+                if (panelSettings != null) Object.DestroyImmediate(panelSettings);
             }
         }
     }

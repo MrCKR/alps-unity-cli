@@ -72,7 +72,8 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ObjectToolSupport.EnsureEditorNotBusy("object.modify");
-            var target = UnityCliBridge.ObjectRefResolver.ResolveObject(request);
+            var readBudget = ctx.UseReadBudget(request.Budget);
+            var target = UnityCliBridge.ObjectRefResolver.ResolveObject(request, readBudget);
             if (EditorApplication.isPlaying && EditorUtility.IsPersistent(target))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "object.modify cannot modify persistent assets during Play Mode.", "Target a scene object or exit Play Mode before modifying an asset.");
@@ -83,7 +84,6 @@ namespace UnityCli
 
             var hasPathPatches = true;
             UnityCliBridge.ObjectPatch.ValidateOnly(target, request.PathPatches, null);
-            var readBudget = ctx.UseReadBudget(request.Budget);
 
             // dry-run 预览:不修改对象
             if (ctx.DryRun)

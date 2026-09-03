@@ -27,6 +27,27 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void ZeroNegativeAndOverMaximumBudgetValuesFailBeforeReads()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => new UnityCliRequestBudget(new UnityCliReadBudgetInput { MaxScannedRecords = 0 }, 1000, CancellationToken.None, new ManualClock()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new UnityCliRequestBudget(new UnityCliReadBudgetInput { MaxNodes = -1 }, 1000, CancellationToken.None, new ManualClock()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new UnityCliRequestBudget(new UnityCliReadBudgetInput { MaxGetters = UnityCliRequestBudget.AbsoluteMaxGetters + 1 }, 1000, CancellationToken.None, new ManualClock()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new UnityCliRequestBudget(new UnityCliReadBudgetInput { MaxReflectionCalls = UnityCliRequestBudget.AbsoluteMaxReflectionCalls + 1 }, 1000, CancellationToken.None, new ManualClock()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new UnityCliRequestBudget(new UnityCliReadBudgetInput { MaxMainThreadMilliseconds = UnityCliRequestBudget.AbsoluteMaxMainThreadMilliseconds + 1 }, 1000, CancellationToken.None, new ManualClock()));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new UnityCliRequestBudget(new UnityCliReadBudgetInput { MaxSerializedUtf8Bytes = UnityCliRequestBudget.AbsoluteMaxSerializedUtf8Bytes + 1 }, 1000, CancellationToken.None, new ManualClock()));
+        }
+
+        [Test]
+        public void SerializedUtf8BudgetCountsEncodedBytesAndStructureReservations()
+        {
+            var budget = new UnityCliRequestBudget(new UnityCliReadBudgetInput { MaxSerializedUtf8Bytes = 8 }, 1000, CancellationToken.None, new ManualClock());
+            Assert.That(budget.TryReserveSerializedUtf8("é"), Is.True);
+            Assert.That(budget.TryReserveSerializedUtf8Bytes(6), Is.True);
+            Assert.That(budget.TryReserveSerializedUtf8("x"), Is.False);
+            Assert.That(budget.ExhaustedDimension, Is.EqualTo("serializedUtf8Bytes"));
+        }
+
+        [Test]
         public void ManualMonotonicClockAndCancellationShareEveryCounter()
         {
             var clock = new ManualClock();
@@ -79,7 +100,7 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void HighBranchProfilerAndLargeSceneShapesStopAtGlobalNodeBudget()
+        public void HighBranchProfilerAndLargeSceneOrPrefabShapesStopAtGlobalNodeBudget()
         {
             var profiler = SyntheticTree.Wide(depth: 2, width: 100);
             var profilerBudget = Budget(new ManualClock(), scans: 250, nodes: 200);
@@ -93,6 +114,17 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void ContinuationBindsScopeGenerationAndRawPosition()
+        {
+            var token = UnityCliContinuationToken.Create("console.get", "generation-a", "99999:99000:sentinel");
+            string position;
+            Assert.That(UnityCliContinuationToken.TryParse(token, "console.get", "generation-a", out position), Is.True);
+            Assert.That(position, Is.EqualTo("99999:99000:sentinel"));
+            Assert.That(UnityCliContinuationToken.TryParse(token, "console.get", "generation-b", out position), Is.False);
+            Assert.That(UnityCliContinuationToken.TryParse(token, "scene.hierarchy", "generation-a", out position), Is.False);
+        }
+
+        [Test]
         public void SnapshotRetentionKeepsLatestHundredAndHonorsBytePressure()
         {
             var sizes = Enumerable.Repeat(10L, 101).ToArray();
@@ -101,6 +133,8 @@ namespace UnityCli.Tests
             Assert.That(byCount.Contains(100), Is.False);
             var byBytes = UnityCliRetentionPlanner.RetainedIndices(sizes, 100, 35);
             CollectionAssert.AreEqual(new[] { 0, 1, 2 }, byBytes.OrderBy(value => value).ToArray());
+            var contiguousNewest = UnityCliRetentionPlanner.RetainedIndices(new[] { 20L, 40L, 1L }, 100, 35);
+            CollectionAssert.AreEqual(new[] { 0 }, contiguousNewest.OrderBy(value => value).ToArray());
         }
 
         [Test]
@@ -119,10 +153,15 @@ namespace UnityCli.Tests
         [Test]
         public void CallbackTerminalAcceptsExactlyOneWinnerAndLateCallbacksAreRejected()
         {
-            var terminal = new MemorySnapshotTerminal();
-            Assert.That(terminal.TryAbandon(), Is.True);
-            Assert.That(terminal.TryOwnCallback(), Is.False);
-            Assert.That(terminal.IsAbandoned, Is.True);
+            var abandoned = new MemorySnapshotTerminal();
+            Assert.That(abandoned.TryAbandon(), Is.True);
+            Assert.That(abandoned.TryOwnCallback(), Is.False);
+            Assert.That(abandoned.IsAbandoned, Is.True);
+
+            var completed = new MemorySnapshotTerminal();
+            Assert.That(completed.TryOwnCallback(), Is.True);
+            Assert.That(completed.TryAbandon(), Is.False);
+            Assert.That(completed.TryOwnCallback(), Is.False);
         }
 
         private static int Traverse(SyntheticTree root, UnityCliRequestBudget budget)

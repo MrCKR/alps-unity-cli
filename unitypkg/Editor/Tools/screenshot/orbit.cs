@@ -70,27 +70,32 @@ namespace UnityCli
             }
 
             ctx.CommitEffect();
-            var cam = Camera.main;
-            var tempCreated = false;
-            if (cam == null)
-            {
-                var tempGo = new GameObject("__unitycli_orbit_cam__");
-                cam = tempGo.AddComponent<Camera>();
-                tempCreated = true;
-            }
-            var previousPosition = cam.transform.position;
-            var previousRotation = cam.transform.rotation;
+            Camera camera = null;
+            GameObject temporaryCameraObject = null;
+            var previousPosition = Vector3.zero;
+            var previousRotation = Quaternion.identity;
             try
             {
+                camera = Camera.main;
+                if (camera == null)
+                {
+                    temporaryCameraObject = new GameObject("__unitycli_orbit_cam__");
+                    camera = temporaryCameraObject.AddComponent<Camera>();
+                }
+                else
+                {
+                    previousPosition = camera.transform.position;
+                    previousRotation = camera.transform.rotation;
+                }
                 for (var i = 0; i < angleCount; i++)
                 {
                     var angle = (360f / angleCount) * i;
                     var rad = angle * Mathf.Deg2Rad;
-                    cam.transform.position = center + new Vector3(Mathf.Cos(rad) * radius, 0, Mathf.Sin(rad) * radius);
-                    cam.transform.LookAt(center);
+                    camera.transform.position = center + new Vector3(Mathf.Cos(rad) * radius, 0, Mathf.Sin(rad) * radius);
+                    camera.transform.LookAt(center);
                     var path = Path.Combine(ScreenshotToolSupport.AssetFullPath(outputDir), "orbit_" + i.ToString("00", CultureInfo.InvariantCulture) + ".png");
                     ScreenshotToolSupport.CreateScreenshotDirectory(path);
-                    var texture = ScreenshotToolSupport.RenderScreenshotTexture(cam, width, height, captureBudget);
+                    var texture = ScreenshotToolSupport.RenderScreenshotTexture(camera, width, height, captureBudget);
                     ScreenshotArtifactProof proof;
                     try { proof = ScreenshotToolSupport.WriteScreenshotBytes(path, texture.EncodeToPNG(), captureBudget); }
                     finally { UnityEngine.Object.DestroyImmediate(texture); }
@@ -99,8 +104,8 @@ namespace UnityCli
             }
             finally
             {
-                if (tempCreated) UnityEngine.Object.DestroyImmediate(cam.gameObject);
-                else { cam.transform.position = previousPosition; cam.transform.rotation = previousRotation; }
+                if (temporaryCameraObject != null) UnityEngine.Object.DestroyImmediate(temporaryCameraObject);
+                else if (camera != null) { camera.transform.position = previousPosition; camera.transform.rotation = previousRotation; }
             }
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Artifacts = artifacts, CapturePlan = captureBudget.Plan });

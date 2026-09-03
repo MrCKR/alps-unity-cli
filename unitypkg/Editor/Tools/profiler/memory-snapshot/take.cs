@@ -32,7 +32,7 @@ namespace UnityCli
             Name = "profiler.memory-snapshot.take",
             Summary = "Capture one governed Memory Profiler snapshot with bounded retention and one callback terminal.",
             Description = "Capture a .snap artifact only under Library/UnityCli/memory-snapshots. path is a file name, not a directory. maxBytes defaults to and cannot exceed 4 GiB. Successful publication keeps the newest 100 snapshots while enforcing an 8 GiB directory ceiling. A pending same-root file is atomically moved only after a successful non-empty callback; timeout, cancellation, domain reload, late callback and write faults share one terminal and clean pending/orphan files. Requires com.unity.memoryprofiler. Available in Edit and Play Mode; it writes a project-local Library artifact but no Assets content.",
-            Group = "profiler", DestructiveHint = true, SideEffects = new[] { "memory-snapshot-write" }, Target = "editor", PlayModeSupport = "supported",
+            Group = "profiler", DestructiveHint = false, SideEffects = new[] { "memory-snapshot-write" }, Target = "editor", PlayModeSupport = "supported",
             RequiresPackages = new[] { "com.unity.memoryprofiler" }, DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Take a governed snapshot", Input = new Request { Path = "capture.snap", MaxBytes = 1073741824L } } }
         };
@@ -60,35 +60,33 @@ namespace UnityCli
                     {
                         if (!terminal.TryOwnCallback())
                         {
-                            ProfilerMemorySnapshotSupport.DeleteNoThrow(capturedPath ?? pendingPath);
                             ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
                             return;
                         }
-                        try
+                        var accepted = complete(() =>
                         {
-                            requestBudget.ResumeAfterWait();
-                            requestBudget.CheckpointOrThrow();
-                            if (!succeeded) throw ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_FAILED", "MemoryProfiler reported snapshot failure.", "Inspect Unity Console before retrying.");
-                            var info = ProfilerMemorySnapshotSupport.Publish(capturedPath, pendingPath, finalPath);
-                            if (info.Length > maxBytes)
+                            try
                             {
-                                ProfilerMemorySnapshotSupport.DeleteNoThrow(finalPath);
-                                throw ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_LIMIT_EXCEEDED", "Snapshot exceeds the requested maxBytes ceiling.", "Increase maxBytes within 4 GiB or reduce captured state.");
+                                requestBudget.ResumeAfterWait();
+                                requestBudget.CheckpointOrThrow();
+                                if (!succeeded) throw ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_FAILED", "MemoryProfiler reported snapshot failure.", "Inspect Unity Console before retrying.");
+                                var info = ProfilerMemorySnapshotSupport.Publish(capturedPath, pendingPath, finalPath, maxBytes, requestBudget);
+                                return new Result
+                                {
+                                    Path = finalPath,
+                                    SizeBytes = info.Length,
+                                    RetainedCountLimit = ProfilerMemorySnapshotSupport.RetainedSnapshotCount,
+                                    RetainedBytesLimit = ProfilerMemorySnapshotSupport.RetainedSnapshotBytes,
+                                    PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.memory-snapshot.take", Path = finalPath } }
+                                };
                             }
-                            complete(new Result
+                            catch
                             {
-                                Path = finalPath,
-                                SizeBytes = info.Length,
-                                RetainedCountLimit = ProfilerMemorySnapshotSupport.RetainedSnapshotCount,
-                                RetainedBytesLimit = ProfilerMemorySnapshotSupport.RetainedSnapshotBytes,
-                                PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.memory-snapshot.take", Path = finalPath } }
-                            });
-                        }
-                        catch (Exception exception)
-                        {
-                            ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
-                            fail(exception);
-                        }
+                                ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
+                                throw;
+                            }
+                        });
+                        if (!accepted) ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
                     });
                     binding.SetCallback(callback);
                     try { binding.Invoke(); }
@@ -102,7 +100,10 @@ namespace UnityCli
                         if (terminal.TryOwnCallback()) fail(ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_FAILED", "Snapshot capture failed: " + exception.Message, "Inspect Unity Console and the Memory Profiler package."));
                         ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
                     }
-                }, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
+                }, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct, () =>
+                {
+                    if (terminal.TryAbandon()) ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
+                });
                 requestBudget.ResumeAfterWait();
                 return result;
             }

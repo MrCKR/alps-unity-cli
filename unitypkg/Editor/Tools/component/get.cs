@@ -18,7 +18,7 @@ namespace UnityCli
             public string AssetPath { get; set; }
             public string Guid { get; set; }
             public int? ComponentInstanceId { get; set; }
-            public int? ComponentIndex { get; set; }
+            [UnityCliRange(0L, int.MaxValue)] public int? ComponentIndex { get; set; }
             public string Component { get; set; }
             public string ComponentType { get; set; }
             [UnityCliRange(0L, 16L)] public int? MaxDepth { get; set; }
@@ -59,9 +59,10 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request);
+            var budget = ctx.UseReadBudget(request.Budget);
+            var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request, budget);
             var options = GameObjectToolSupport.BuildSerializerOptions(request);
-            var data = UnityCliBridge.ObjectSerializer.Serialize(component, options, ctx.UseReadBudget(request.Budget));
+            var data = UnityCliBridge.ObjectSerializer.Serialize(component, options, budget);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 TypeName = component.GetType().FullName,

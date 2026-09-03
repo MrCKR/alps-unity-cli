@@ -50,17 +50,21 @@ namespace UnityCli
         {
             if (budget == null) throw new ArgumentNullException("budget");
             budget.CheckpointOrThrow();
+            var generation = UnityCliReadGeneration.Session(scope);
             var entryType = FindConsoleType("UnityEditor.LogEntry", budget);
             var logEntries = FindConsoleType("UnityEditor.LogEntries", budget);
-            if (entryType == null || logEntries == null) return ConsoleReadPage.Empty(pageSize, budget.Usage());
-            if (!budget.TryConsumeReflectionCall()) return ConsoleReadPage.TruncatedPage(pageSize, cursor, budget.Usage());
+            if (entryType == null || logEntries == null)
+            {
+                if (budget.IsExhausted) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                return ConsoleReadPage.Empty(generation, budget.Usage());
+            }
+            if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             var getEntry = logEntries.GetMethod("GetEntryInternal", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (!budget.TryConsumeReflectionCall()) return ConsoleReadPage.TruncatedPage(pageSize, cursor, budget.Usage());
+            if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             var countMethod = logEntries.GetMethod("GetCount", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (getEntry == null || countMethod == null) return ConsoleReadPage.Empty(pageSize, budget.Usage());
-            if (!budget.TryConsumeReflectionCall()) return ConsoleReadPage.TruncatedPage(pageSize, cursor, budget.Usage());
+            if (getEntry == null || countMethod == null) return ConsoleReadPage.Empty(generation, budget.Usage());
+            if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             var rawCount = Convert.ToInt32(countMethod.Invoke(null, null), CultureInfo.InvariantCulture);
-            var generation = UnityCliReadGeneration.Session(scope);
             var upperBound = rawCount - 1;
             var nextIndex = upperBound;
             string expectedTopFingerprint = null;
@@ -74,13 +78,19 @@ namespace UnityCli
                 expectedTopFingerprint = string.IsNullOrEmpty(parts[2]) ? null : parts[2];
                 if (upperBound < 0 || nextIndex < 0 || nextIndex > upperBound || rawCount <= upperBound) throw StaleConsoleCursor();
             }
-            if (rawCount == 0) return ConsoleReadPage.Empty(pageSize, budget.Usage());
+            if (rawCount == 0) return ConsoleReadPage.Empty(generation, budget.Usage());
 
-            var fields = ConsoleFields.Create(entryType, budget);
+            ConsoleFields fields;
+            try { fields = ConsoleFields.Create(entryType, budget); }
+            catch (UnityCliRequestBudgetExceededException)
+            {
+                var sentinel = cursor ?? CreateConsoleCursor(scope, generation, upperBound, upperBound, string.Empty);
+                return ConsoleReadPage.TruncatedPage(rawCount, sentinel, generation, budget.Usage());
+            }
             var entry = Activator.CreateInstance(entryType);
             string topFingerprint = null;
             if (!TryReadConsoleEntry(getEntry, entry, upperBound, fields, budget, out var top))
-                return ConsoleReadPage.TruncatedPage(pageSize, cursor ?? CreateConsoleCursor(scope, generation, upperBound, upperBound, string.Empty), budget.Usage());
+                return ConsoleReadPage.TruncatedPage(rawCount, cursor ?? CreateConsoleCursor(scope, generation, upperBound, upperBound, string.Empty), generation, budget.Usage());
             topFingerprint = ConsoleFingerprint(top);
             if (expectedTopFingerprint != null && !string.Equals(expectedTopFingerprint, topFingerprint, StringComparison.Ordinal)) throw StaleConsoleCursor();
 
@@ -222,14 +232,14 @@ namespace UnityCli
         public string Generation { get; set; }
         public UnityCliRequestBudgetUsage Budget { get; set; }
 
-        internal static ConsoleReadPage Empty(int pageSize, UnityCliRequestBudgetUsage usage)
+        internal static ConsoleReadPage Empty(string generation, UnityCliRequestBudgetUsage usage)
         {
-            return new ConsoleReadPage { Items = new List<ConsoleEntry>(), RawEntryCount = 0L, Truncated = false, Budget = usage };
+            return new ConsoleReadPage { Items = new List<ConsoleEntry>(), RawEntryCount = 0L, Truncated = false, Generation = generation, Budget = usage };
         }
 
-        internal static ConsoleReadPage TruncatedPage(int pageSize, string cursor, UnityCliRequestBudgetUsage usage)
+        internal static ConsoleReadPage TruncatedPage(long rawEntryCount, string cursor, string generation, UnityCliRequestBudgetUsage usage)
         {
-            return new ConsoleReadPage { Items = new List<ConsoleEntry>(), NextCursor = cursor, Truncated = true, Budget = usage };
+            return new ConsoleReadPage { Items = new List<ConsoleEntry>(), RawEntryCount = rawEntryCount, NextCursor = cursor, Truncated = true, Generation = generation, Budget = usage };
         }
     }
     public sealed class EditorPlannedEffect { public string Type { get; set; } public string Path { get; set; } public string Action { get; set; } public string Name { get; set; } }

@@ -62,29 +62,34 @@ namespace UnityCli
             var width = request.Width ?? 1280;
             var height = request.Height ?? 720;
             var format = ScreenshotToolSupport.NormalizeFormat(null, outputPath);
+            var requestBudget = ctx.UseReadBudget(request.Budget);
+            if (!requestBudget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(requestBudget.ExhaustedDimension);
             var cameraCount = Camera.allCamerasCount;
             if (cameraCount > ScreenshotToolSupport.MaxCaptureCount)
                 throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_LIMIT_INVALID", "screenshot.game-view found more than 36 active Cameras.", "Disable unrelated Cameras or capture one Camera explicitly.");
             var cameras = cameraCount > 0 ? Camera.allCameras : new Camera[0];
-            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, Math.Max(1, cameraCount), false, request.Limits, ctx.UseReadBudget(request.Budget));
+            foreach (var camera in cameras)
+                if (!requestBudget.TryConsumeScannedRecord() || !requestBudget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(requestBudget.ExhaustedDimension);
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, Math.Max(1, cameraCount), false, request.Limits, requestBudget);
             ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
 
-            var rt = new RenderTexture(width, height, 24);
-            var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+            RenderTexture renderTexture = null;
+            Texture2D texture = null;
             byte[] bytes;
             ScreenshotArtifactProof artifact;
             var previousActive = RenderTexture.active;
             try
             {
-                RenderTexture.active = rt;
-                if (cameras.Length == 0) captureBudget.BeginCapture(width, height);
+                captureBudget.BeginCapture(width, height);
+                renderTexture = new RenderTexture(width, height, 24);
+                texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+                RenderTexture.active = renderTexture;
                 foreach (var cam in cameras)
                 {
                     if (!cam.gameObject.activeInHierarchy) continue;
-                    captureBudget.BeginCapture(width, height);
                     var prevTarget = cam.targetTexture;
-                    try { cam.targetTexture = rt; cam.Render(); }
+                    try { cam.targetTexture = renderTexture; cam.Render(); }
                     finally { cam.targetTexture = prevTarget; }
                 }
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
@@ -95,9 +100,8 @@ namespace UnityCli
             finally
             {
                 RenderTexture.active = previousActive;
-                UnityEngine.Object.DestroyImmediate(texture);
-                rt.Release();
-                UnityEngine.Object.DestroyImmediate(rt);
+                if (texture != null) UnityEngine.Object.DestroyImmediate(texture);
+                if (renderTexture != null) { renderTexture.Release(); UnityEngine.Object.DestroyImmediate(renderTexture); }
             }
 
             var result = new Result
@@ -106,15 +110,16 @@ namespace UnityCli
                 Quality = 95, Source = "game-view", Target = "Camera.main/allCameras",
                 SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256, CapturePlan = captureBudget.Plan
             };
-            MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
+            MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64, captureBudget);
             return new System.Threading.Tasks.ValueTask<Result>(result);
         }
 
-        private static void MaybeAppendInline(Result result, byte[] bytes, int width, int height, string mimeType, bool inlineBase64)
+        private static void MaybeAppendInline(Result result, byte[] bytes, int width, int height, string mimeType, bool inlineBase64, ScreenshotCaptureBudget budget)
         {
-            if (inlineBase64 && bytes != null && bytes.Length <= 512 * 1024)
+            string encoded;
+            if (inlineBase64 && bytes != null && bytes.Length <= 512 * 1024 && budget.TryCreateInlineBase64(bytes, out encoded))
             {
-                result.ImageBase64 = Convert.ToBase64String(bytes);
+                result.ImageBase64 = encoded;
                 result.ImageWidth = width;
                 result.ImageHeight = height;
                 result.ImageMimeType = mimeType;

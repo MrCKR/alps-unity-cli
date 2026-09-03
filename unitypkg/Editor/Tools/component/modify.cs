@@ -21,7 +21,7 @@ namespace UnityCli
             public string AssetPath { get; set; }
             public string Guid { get; set; }
             public int? ComponentInstanceId { get; set; }
-            public int? ComponentIndex { get; set; }
+            [UnityCliRange(0L, int.MaxValue)] public int? ComponentIndex { get; set; }
             public string Component { get; set; }
             public string ComponentType { get; set; }
             [UnityCliRange(0L, 16L)] public int? MaxDepth { get; set; }
@@ -60,11 +60,11 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("component.modify");
-            var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request);
+            var readBudget = ctx.UseReadBudget(request.Budget);
+            var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request, readBudget);
             if (request.PathPatches == null || request.PathPatches.Count == 0)
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PATCH_REQUIRED", "component.modify requires non-empty pathPatches.", "Pass direct replace pathPatches for writable serialized properties.");
             UnityCliBridge.ObjectPatch.ValidateOnly(component, request.PathPatches, null);
-            var readBudget = ctx.UseReadBudget(request.Budget);
             if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result

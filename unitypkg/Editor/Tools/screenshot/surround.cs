@@ -66,7 +66,7 @@ namespace UnityCli
             var contactSheetPath = ScreenshotToolSupport.ResolveScreenshotOutputPath(request.ContactSheetPath ?? Path.Combine(outputDir, "surround_contact_sheet.png"));
             var width = request.Width ?? 512;
             var height = request.Height ?? 512;
-            var bounds = ScreenshotToolSupport.TargetRenderBounds(gameObject);
+            var bounds = ScreenshotToolSupport.TargetRenderBounds(gameObject, requestBudget);
             var center = bounds.center;
             var radius = request.Radius ?? Mathf.Max(bounds.extents.magnitude * 2.5f, 5f);
             var fov = request.Fov ?? 60f;
@@ -105,19 +105,21 @@ namespace UnityCli
             ctx.CommitEffect();
             Directory.CreateDirectory(outputFullDir);
             ScreenshotToolSupport.CreateScreenshotDirectory(contactSheetPath);
-            var cameraObject = new GameObject("__unitycli_surround_cam__");
-            var camera = cameraObject.AddComponent<Camera>();
-            camera.fieldOfView = fov;
-            camera.nearClipPlane = 0.1f;
-            camera.farClipPlane = Mathf.Max(radius * 6f, 100f);
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.18f, 0.18f, 0.18f, 1f);
+            GameObject cameraObject = null;
+            Camera camera = null;
             Texture2D sheet = null;
             var artifacts = new List<SurroundShot>();
             byte[] contactBytes = null;
             ScreenshotArtifactProof contactProof = null;
             try
             {
+                cameraObject = new GameObject("__unitycli_surround_cam__");
+                camera = cameraObject.AddComponent<Camera>();
+                camera.fieldOfView = fov;
+                camera.nearClipPlane = 0.1f;
+                camera.farClipPlane = Mathf.Max(radius * 6f, 100f);
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0.18f, 0.18f, 0.18f, 1f);
                 sheet = ScreenshotToolSupport.CreateContactSheet(width, height, captureBudget);
                 for (var index = 0; index < labels.Length; index++)
                 {
@@ -144,7 +146,7 @@ namespace UnityCli
             finally
             {
                 if (sheet != null) UnityEngine.Object.DestroyImmediate(sheet);
-                UnityEngine.Object.DestroyImmediate(cameraObject);
+                if (cameraObject != null) UnityEngine.Object.DestroyImmediate(cameraObject);
             }
 
             var result = new Result
@@ -153,9 +155,10 @@ namespace UnityCli
                 ContactSheet = new ScreenshotArtifactEntry { Source = "surround-contact-sheet", Path = contactSheetPath, Width = width * 3L, Height = height * 2L, Format = "png", SizeBytes = contactProof.SizeBytes, Sha256 = contactProof.Sha256 },
                 Artifacts = artifacts, CapturePlan = captureBudget.Plan
             };
-            if (request.InlineBase64 && contactBytes != null && contactBytes.Length <= 512 * 1024)
+            string encoded;
+            if (request.InlineBase64 && contactBytes != null && contactBytes.Length <= 512 * 1024 && captureBudget.TryCreateInlineBase64(contactBytes, out encoded))
             {
-                result.ImageBase64 = Convert.ToBase64String(contactBytes);
+                result.ImageBase64 = encoded;
                 result.ImageWidth = width * 3L;
                 result.ImageHeight = height * 2L;
                 result.ImageMimeType = "image/png";

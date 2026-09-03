@@ -55,13 +55,14 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "camera.multiview requires targets.", "Run tools run camera.list, then pass comma-separated camera names, hierarchy paths, or instance ids.");
             }
+            var requestBudget = ctx.UseReadBudget(request.Budget);
             var names = request.Targets.Split(new[] { ',' }, System.StringSplitOptions.RemoveEmptyEntries);
             if (names.Length < 1 || names.Length > 16)
                 throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_LIMIT_INVALID", "camera.multiview targets must contain 1..16 cameras.", "Reduce the target list before retrying.");
             var cameras = new List<Camera>();
             foreach (var name in names)
             {
-                var camera = CameraToolSupport.ResolveCamera(name.Trim());
+                var camera = CameraToolSupport.ResolveCamera(name.Trim(), requestBudget);
                 if (camera == null)
                 {
                     throw new UnityCliBridge.BridgeCommandException("E_CAMERA_NOT_FOUND", "Camera not found: " + name.Trim(), "Run tools run camera.list, then retry with camera names, hierarchy paths, or instance ids from the result.");
@@ -72,7 +73,7 @@ namespace UnityCli
             var width = CameraToolSupport.ClampScreenshotDimension(request.Width ?? 1280, "width");
             var height = CameraToolSupport.ClampScreenshotDimension(request.Height ?? 720, "height");
             var format = CameraToolSupport.NormalizeFormat(request.Format, Path.Combine(outputDir, "capture.png"));
-            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, cameras.Count, false, request.Limits, ctx.UseReadBudget(request.Budget));
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, cameras.Count, false, request.Limits, requestBudget);
             var captures = new List<CameraCapture>();
             var effects = new List<CameraPlannedEffect>();
             var plans = new List<KeyValuePair<int, string>>();

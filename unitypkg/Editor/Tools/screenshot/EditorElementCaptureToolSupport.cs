@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
 #if UNITY_6000_7_OR_NEWER
@@ -45,7 +44,7 @@ namespace UnityCli
             var candidates = new List<EditorWindow>();
             foreach (var value in Resources.FindObjectsOfTypeAll<EditorWindow>())
             {
-                if (!requestBudget.TryConsumeScannedRecord()) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "window scan exhausted the request-wide budget.");
+                if (!requestBudget.TryConsumeScannedRecord()) throw new UnityCliRequestBudgetExceededException(requestBudget.ExhaustedDimension);
                 if (value == null || value.rootVisualElement == null || value.rootVisualElement.panel == null) continue;
                 if (!string.Equals(value.GetType().Name, request.Window, StringComparison.Ordinal)
                     && !string.Equals(value.titleContent == null ? null : value.titleContent.text, request.Window, StringComparison.Ordinal)) continue;
@@ -64,7 +63,7 @@ namespace UnityCli
                 throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "Resolved element dimensions " + width + "x" + height + " exceed the requested capture bounds.");
             var limits = new ScreenshotBudgetInput { MaxArtifactBytes = maxBytes };
             var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, limits, requestBudget);
-            return new Plan { Element = element, WindowType = window.GetType().Name, WindowTitle = window.titleContent == null ? null : window.titleContent.text, WindowInstanceId = window.GetInstanceID(), Selector = request.Selector, ElementType = element.GetType().Name, ElementName = element.name, ElementClasses = element.GetClasses().Take(128).Select(Bound).ToList(), Width = width, Height = height, MaxBytes = maxBytes, CaptureBudget = captureBudget };
+            return new Plan { Element = element, WindowType = window.GetType().Name, WindowTitle = window.titleContent == null ? null : window.titleContent.text, WindowInstanceId = window.GetInstanceID(), Selector = request.Selector, ElementType = element.GetType().Name, ElementName = element.name, ElementClasses = BoundClasses(element, requestBudget), Width = width, Height = height, MaxBytes = maxBytes, CaptureBudget = captureBudget };
 #endif
         }
 
@@ -138,7 +137,8 @@ namespace UnityCli
                     var values = direct ? parent.Children() : Descendants(parent);
                     foreach (var value in values)
                     {
-                        if (++visited > 10000 || !budget.TryConsumeScannedRecord() || !budget.TryConsumeNode()) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "selector scan exceeded its 10000-element or request-wide budget.");
+                        if (++visited > 10000) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "selector scan exceeded 10000 UI elements.");
+                        if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeNode()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                         if (Matches(value, token)) next.Add(value);
                         if (next.Count > 256) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "selector produced more than 256 intermediate matches.");
                     }
@@ -147,7 +147,21 @@ namespace UnityCli
                 direct = false;
                 if (current.Count == 0) return null;
             }
-            return current.FirstOrDefault();
+            return current.Count == 0 ? null : current[0];
+        }
+
+        private static List<string> BoundClasses(VisualElement element, UnityCliRequestBudget budget)
+        {
+            var result = new List<string>();
+            foreach (var value in element.GetClasses())
+            {
+                if (result.Count >= 128) break;
+                if (!budget.TryConsumeScannedRecord()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var bounded = Bound(value);
+                if (!budget.TryReserveSerializedUtf8(bounded)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                result.Add(bounded);
+            }
+            return result;
         }
 
         private static IEnumerable<VisualElement> Descendants(VisualElement root)

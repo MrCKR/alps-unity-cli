@@ -56,24 +56,24 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_LIMIT_INVALID", "size must be finite and greater than zero.", "Pass a positive finite orthographic size.");
             var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, requestBudget);
             var format = ScreenshotToolSupport.NormalizeFormat(null, outputPath);
-            var bounds = go.GetComponent<Renderer>() != null ? go.GetComponent<Renderer>().bounds : new Bounds(go.transform.position, Vector3.one);
+            var bounds = ScreenshotToolSupport.TargetRenderBounds(go, requestBudget);
             ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
 
-            var tempGo = new GameObject("__unitycli_isolated_cam__");
-            var cam = tempGo.AddComponent<Camera>();
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1f);
-            cam.orthographic = request.Orthographic;
-            cam.orthographicSize = request.Size ?? 2f;
-            tempGo.transform.position = bounds.center + new Vector3(0, 0, -5);
-            tempGo.transform.LookAt(bounds.center);
-
+            GameObject temporaryCameraObject = null;
             byte[] bytes;
             ScreenshotArtifactProof artifact;
             try
             {
-                var texture = ScreenshotToolSupport.RenderScreenshotTexture(cam, width, height, captureBudget);
+                temporaryCameraObject = new GameObject("__unitycli_isolated_cam__");
+                var camera = temporaryCameraObject.AddComponent<Camera>();
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1f);
+                camera.orthographic = request.Orthographic;
+                camera.orthographicSize = request.Size ?? 2f;
+                temporaryCameraObject.transform.position = bounds.center + new Vector3(0, 0, -5);
+                temporaryCameraObject.transform.LookAt(bounds.center);
+                var texture = ScreenshotToolSupport.RenderScreenshotTexture(camera, width, height, captureBudget);
                 try
                 {
                     bytes = format == "jpg" ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
@@ -83,7 +83,7 @@ namespace UnityCli
             }
             finally
             {
-                UnityEngine.Object.DestroyImmediate(tempGo);
+                if (temporaryCameraObject != null) UnityEngine.Object.DestroyImmediate(temporaryCameraObject);
             }
 
             var result = new Result
@@ -91,7 +91,7 @@ namespace UnityCli
                 ScreenshotPath = outputPath, ArtifactPath = outputPath, Source = "isolated-object",
                 SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256, CapturePlan = captureBudget.Plan
             };
-            ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
+            ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64, captureBudget);
             return new System.Threading.Tasks.ValueTask<Result>(result);
         }
     }

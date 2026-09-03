@@ -3,7 +3,6 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const gameObjectBridgeSpecs: BridgeCommandSpec[] = [
   { group: "go", command: "find", bridgeCommand: "project-tool.run", toolName: "go.find", buildArgs: findArgs },
-  { group: "go", command: "inspect", bridgeCommand: "project-tool.run", toolName: "go.inspect", buildArgs: inspectArgs },
   { group: "go", command: "create", bridgeCommand: "project-tool.run", toolName: "go.create", buildArgs: gameObjectArgs },
   { group: "go", command: "modify", bridgeCommand: "project-tool.run", toolName: "go.modify", buildArgs: gameObjectArgs },
   { group: "go", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "go.duplicate", buildArgs: gameObjectArgs },
@@ -40,8 +39,10 @@ function findArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["bui
     id: stringFlag(flags, "id") ?? stringValue(structured.id),
     searchMethod: stringFlag(flags, "search-method") ?? stringValue(structured.searchMethod),
     includeInactive: boolFlag(flags, "include-inactive") ?? boolValue(structured.includeInactive),
+    preferPrefabStage: boolFlag(flags, "prefer-prefab-stage") ?? boolValue(structured.preferPrefabStage),
     pageSize: numberFlag(flags, "page-size") ?? numberValue(structured.pageSize),
-    cursor: numberFlag(flags, "cursor") ?? numberValue(structured.cursor)
+    cursor: stringFlag(flags, "cursor") ?? stringValue(structured.cursor),
+    budget: structured.budget
   });
 }
 
@@ -92,17 +93,6 @@ function gameObjectArgs({ command, flags, positionalTarget }: Parameters<BridgeC
     scaleZ: floatFlag(flags, "scale-z") ?? numberValue(structured.scaleZ) ?? numberValue(scale?.z),
     worldPositionStays: boolFlag(flags, "world-position-stays") ?? boolValue(structured.worldPositionStays),
     dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight") ?? boolValue(structured.dryRun)
-  });
-}
-
-/** go.inspect 的目标解析：优先使用 --input.target，避免与 tools run --target 实例选择冲突。 */
-function inspectArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  const structured = structuredInput(flags);
-  return compactArgs({
-    target: stringValue(structured.target) ?? positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name"),
-    name: stringFlag(flags, "name") ?? stringValue(structured.name),
-    path: stringFlag(flags, "path") ?? stringValue(structured.path),
-    id: stringFlag(flags, "id") ?? stringValue(structured.id)
   });
 }
 
@@ -173,6 +163,7 @@ function componentDeepArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>
     paths: structured.paths,
     viewQuery: structured.viewQuery,
     namePattern: stringFlag(flags, "name-pattern") ?? structured.namePattern,
+    budget: structured.budget,
     pathPatches: structured.pathPatches,
     jsonPatch: structured.jsonPatch,
     componentDiff: structured.componentDiff,

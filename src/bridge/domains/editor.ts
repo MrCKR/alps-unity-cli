@@ -42,7 +42,13 @@ function numberField(flags: BridgeFlags, key: string): number | undefined {
 
 function editorArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   if (command === "editor.console") {
-    return compactArgs({ ...queryArgs(flags), type: stringFlag(flags, "type"), count: numberFlag(flags, "count") ?? numberFlag(flags, "limit"), clear: boolFlag(flags, "clear") });
+    const structured = structuredInput(flags);
+    return compactArgs({
+      type: stringFlag(flags, "type") ?? stringField(flags, "type"),
+      count: numberFlag(flags, "count") ?? numberFlag(flags, "limit") ?? numberField(flags, "count"),
+      cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor"),
+      budget: structured.budget
+    });
   }
   if (command === "editor.undo" || command === "editor.redo") {
     return compactArgs({ completionProbe: structuredInput(flags).completionProbe });

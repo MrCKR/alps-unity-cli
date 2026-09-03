@@ -20,7 +20,7 @@ namespace UnityCli
         UnityCliMainThreadAwaitable<bool> UntilStable(Func<bool> predicate, TimeSpan timeout, int minimumFrames = 2, TimeSpan minimumDuration = default, CancellationToken ct = default);
         UnityCliMainThreadAwaitable<bool> UntilEditorReady(TimeSpan timeout, CancellationToken ct = default);
         UnityCliMainThreadAwaitable<bool> UntilPlayModeState(PlayModeStateChange state, TimeSpan timeout, CancellationToken ct = default);
-        UnityCliMainThreadAwaitable<T> ForCallback<T>(Action<Action<T>, Action<Exception>> start, TimeSpan timeout, CancellationToken ct = default);
+        UnityCliMainThreadAwaitable<T> ForCallback<T>(Action<Func<Func<T>, bool>, Func<Exception, bool>> start, TimeSpan timeout, CancellationToken ct = default, Action onAbandoned = null);
     }
 
     internal interface IMainThreadAwaitableSource<out T>
@@ -101,9 +101,9 @@ namespace UnityCli
             return UnityCliWaitScheduler.UntilPlayModeState(requestId, owner, state, timeout, ct);
         }
 
-        public UnityCliMainThreadAwaitable<T> ForCallback<T>(Action<Action<T>, Action<Exception>> start, TimeSpan timeout, CancellationToken ct = default)
+        public UnityCliMainThreadAwaitable<T> ForCallback<T>(Action<Func<Func<T>, bool>, Func<Exception, bool>> start, TimeSpan timeout, CancellationToken ct = default, Action onAbandoned = null)
         {
-            return UnityCliWaitScheduler.ForCallback(requestId, owner, start, timeout, ct);
+            return UnityCliWaitScheduler.ForCallback(requestId, owner, start, timeout, ct, onAbandoned);
         }
     }
 
@@ -224,7 +224,7 @@ namespace UnityCli
                 }
             }
 
-            public void Cancel(Exception exception)
+            public virtual void Cancel(Exception exception)
             {
                 if (IsCompleted) return;
                 Fail(exception);
@@ -399,10 +399,12 @@ namespace UnityCli
             private bool callbackTerminal;
             private T callbackResult;
             private Exception callbackException;
+            private readonly Action onAbandoned;
 
-            public CallbackWait(string requestId, string owner, Action<Action<T>, Action<Exception>> start, TimeSpan timeout, CancellationToken cancellationToken)
+            public CallbackWait(string requestId, string owner, Action<Func<Func<T>, bool>, Func<Exception, bool>> start, TimeSpan timeout, CancellationToken cancellationToken, Action onAbandoned)
                 : base(requestId, owner, cancellationToken)
             {
+                this.onAbandoned = onAbandoned;
                 deadlineUtc = DateTime.UtcNow.Add(timeout < TimeSpan.Zero ? TimeSpan.Zero : timeout);
                 start?.Invoke(OnComplete, OnFail);
             }
@@ -411,6 +413,7 @@ namespace UnityCli
             {
                 bool completed;
                 bool failed;
+                bool abandoned = false;
                 T result;
                 Exception exception;
                 lock (callbackLock)
@@ -419,8 +422,13 @@ namespace UnityCli
                     failed = callbackFailed;
                     result = callbackResult;
                     exception = callbackException;
-                    if (!completed && !failed && utcNow >= deadlineUtc) callbackTerminal = true;
+                    if (!completed && !failed && utcNow >= deadlineUtc)
+                    {
+                        callbackTerminal = true;
+                        abandoned = true;
+                    }
                 }
+                if (abandoned) NotifyAbandoned();
                 if (failed) return Fail(exception ?? new Exception("Callback wait failed."));
                 if (completed) return Succeed(result);
                 if (utcNow >= deadlineUtc)
@@ -435,25 +443,67 @@ namespace UnityCli
                 return false;
             }
 
-            private void OnComplete(T result)
+            public override void Cancel(Exception exception)
+            {
+                var abandoned = false;
+                var completed = false;
+                var failed = false;
+                T result = default;
+                Exception callbackError = null;
+                lock (callbackLock)
+                {
+                    completed = callbackCompleted;
+                    failed = callbackFailed;
+                    result = callbackResult;
+                    callbackError = callbackException;
+                    if (!callbackTerminal)
+                    {
+                        callbackTerminal = true;
+                        abandoned = true;
+                    }
+                }
+                if (completed) { Succeed(result); return; }
+                if (failed) { Fail(callbackError ?? exception); return; }
+                if (abandoned) NotifyAbandoned();
+                base.Cancel(exception);
+            }
+
+            private void NotifyAbandoned()
+            {
+                try { onAbandoned?.Invoke(); }
+                catch { /* abandonment cleanup must not replace the scheduler terminal */ }
+            }
+
+            /// <summary>在 callback lock 内先取得 terminal ownership，再执行结果工厂；拒绝的迟到 callback 不得产生 publication。</summary>
+            private bool OnComplete(Func<T> createResult)
             {
                 lock (callbackLock)
                 {
-                    if (callbackTerminal || IsCompleted) return;
+                    if (callbackTerminal || IsCompleted) return false;
                     callbackTerminal = true;
-                    callbackResult = result;
-                    callbackCompleted = true;
+                    try
+                    {
+                        callbackResult = createResult == null ? default : createResult();
+                        callbackCompleted = true;
+                    }
+                    catch (Exception exception)
+                    {
+                        callbackException = exception;
+                        callbackFailed = true;
+                    }
+                    return true;
                 }
             }
 
-            private void OnFail(Exception exception)
+            private bool OnFail(Exception exception)
             {
                 lock (callbackLock)
                 {
-                    if (callbackTerminal || IsCompleted) return;
+                    if (callbackTerminal || IsCompleted) return false;
                     callbackTerminal = true;
                     callbackException = exception;
                     callbackFailed = true;
+                    return true;
                 }
             }
         }
@@ -521,9 +571,9 @@ namespace UnityCli
             }
         }
 
-        public static UnityCliMainThreadAwaitable<T> ForCallback<T>(string requestId, string owner, Action<Action<T>, Action<Exception>> start, TimeSpan timeout, CancellationToken cancellationToken)
+        public static UnityCliMainThreadAwaitable<T> ForCallback<T>(string requestId, string owner, Action<Func<Func<T>, bool>, Func<Exception, bool>> start, TimeSpan timeout, CancellationToken cancellationToken, Action onAbandoned = null)
         {
-            var wait = new CallbackWait<T>(requestId, owner, start, timeout, cancellationToken);
+            var wait = new CallbackWait<T>(requestId, owner, start, timeout, cancellationToken, onAbandoned);
             Register(wait);
             return new UnityCliMainThreadAwaitable<T>(wait);
         }

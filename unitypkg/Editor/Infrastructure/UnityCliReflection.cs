@@ -26,46 +26,62 @@ namespace UnityCli
                 internal string Generation;
             }
 
-            /// <summary>根成员按稳定 ordinal 分页；递归 definition/member/reflection 全部共用调用方 budget。</summary>
+            /// <summary>根字段/属性按 raw ordinal 分页；递归 definition/member/reflection 全部共用调用方 budget。</summary>
             public static Page Generate(string typeName, int maxDepth, int maxMembers, int maxDefinitions, int pageSize, string cursor, UnityCliRequestBudget budget)
             {
                 var type = ResolveType(typeName, budget);
-                if (type == null) throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Type not found: " + typeName, "Pass a full type name such as UnityEngine.Transform or UnityEngine.Rigidbody.");
-                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public).Cast<MemberInfo>();
-                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                    .Where(property => property.CanRead && property.GetIndexParameters().Length == 0).Cast<MemberInfo>();
-                var members = fields.Concat(properties).OrderBy(member => member.Name, StringComparer.Ordinal).ToArray();
-                var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Reflection() + "\0" + type.AssemblyQualifiedName + "\0" + maxDepth.ToString(CultureInfo.InvariantCulture)
-                    + "\0" + maxMembers.ToString(CultureInfo.InvariantCulture) + "\0" + maxDefinitions.ToString(CultureInfo.InvariantCulture));
-                var offset = 0;
-                if (!string.IsNullOrEmpty(cursor))
+                if (type == null)
                 {
-                    string position;
-                    if (!UnityCliContinuationToken.TryParse(cursor, "type.schema", generation, out position)
-                        || !int.TryParse(position, NumberStyles.Integer, CultureInfo.InvariantCulture, out offset) || offset < 0 || offset > members.Length)
-                        throw new BridgeCommandException("E_CONTINUATION_STALE", "The type.schema continuation does not match the current assembly generation and limits.", "Start a new type.schema read without cursor.");
+                    if (budget.IsExhausted) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Type not found: " + typeName, "Pass a full type name such as UnityEngine.Transform or UnityEngine.Rigidbody.");
                 }
+                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
+                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
+                var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Reflection() + "\0" + type.AssemblyQualifiedName + "\0" + fields.Length.ToString(CultureInfo.InvariantCulture)
+                    + "\0" + properties.Length.ToString(CultureInfo.InvariantCulture) + "\0" + maxDepth.ToString(CultureInfo.InvariantCulture)
+                    + "\0" + maxMembers.ToString(CultureInfo.InvariantCulture) + "\0" + maxDefinitions.ToString(CultureInfo.InvariantCulture));
+                var phase = "field";
+                var index = 0;
+                if (!string.IsNullOrEmpty(cursor)) ParseSchemaCursor(cursor, generation, fields.Length, properties.Length, out phase, out index);
+
                 var context = new SchemaContext(type, maxDepth, maxMembers, maxDefinitions, budget);
                 var rootProperties = new Dictionary<string, object>();
-                var index = offset;
-                while (index < members.Length && rootProperties.Count < pageSize)
+                var emitted = 0;
+                while (emitted < pageSize)
                 {
-                    if (!context.TryMember() || !budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) break;
-                    var member = members[index];
-                    rootProperties[member.Name] = SchemaFor(MemberType(member), context, 1);
-                    if (budget.IsExhausted) { rootProperties.Remove(member.Name); break; }
+                    MemberInfo member = null;
+                    if (phase == "field")
+                    {
+                        if (index >= fields.Length) { phase = "property"; index = 0; continue; }
+                        if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) break;
+                        member = fields[index];
+                    }
+                    else
+                    {
+                        if (index >= properties.Length) { phase = "complete"; break; }
+                        if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) break;
+                        var property = properties[index];
+                        if (!property.CanRead || property.GetIndexParameters().Length != 0) { index++; continue; }
+                        member = property;
+                    }
+                    if (!context.TryMember()) break;
+                    var name = member.Name;
+                    if (!budget.TryReserveSerializedUtf8(name)) break;
+                    rootProperties[name] = SchemaFor(MemberType(member), context, 1);
+                    emitted++;
                     index++;
+                    if (budget.IsExhausted) break;
                 }
+                if (phase == "field" && index >= fields.Length) { phase = "property"; index = 0; }
+                if (phase == "property" && index >= properties.Length) phase = "complete";
                 var schema = new Dictionary<string, object>
                 {
                     { "type", "object" }, { "typeName", FriendlyTypeName(type) }, { "properties", rootProperties }
                 };
                 if (context.Definitions.Count > 0) schema["$defs"] = context.Definitions;
-                var next = index < members.Length
-                    ? UnityCliContinuationToken.Create("type.schema", generation, index.ToString(CultureInfo.InvariantCulture))
-                    : null;
+                var next = phase == "complete" ? null : UnityCliContinuationToken.Create("type.schema", generation, phase + ":" + index.ToString(CultureInfo.InvariantCulture));
                 return new Page
                 {
                     Truncated = next != null || context.Truncated,
@@ -74,10 +90,28 @@ namespace UnityCli
                     Data = new Dictionary<string, object>
                     {
                         { "command", "type.schema" }, { "typeName", FriendlyTypeName(type) }, { "schema", schema },
-                        { "memberCount", (long)members.Length }, { "returnedMemberCount", (long)rootProperties.Count },
+                        { "memberCount", (long)fields.Length + properties.Length }, { "returnedMemberCount", (long)rootProperties.Count },
                         { "definitionCount", (long)context.Definitions.Count }
                     }
                 };
+            }
+
+            private static void ParseSchemaCursor(string cursor, string generation, int fieldCount, int propertyCount, out string phase, out int index)
+            {
+                string position;
+                phase = null;
+                index = -1;
+                if (!UnityCliContinuationToken.TryParse(cursor, "type.schema", generation, out position)) throw StaleSchemaCursor();
+                var separator = position.IndexOf(':');
+                if (separator <= 0 || !int.TryParse(position.Substring(separator + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out index)) throw StaleSchemaCursor();
+                phase = position.Substring(0, separator);
+                if (index < 0 || phase == "field" && index > fieldCount || phase == "property" && index > propertyCount
+                    || phase != "field" && phase != "property") throw StaleSchemaCursor();
+            }
+
+            private static BridgeCommandException StaleSchemaCursor()
+            {
+                return new BridgeCommandException("E_CONTINUATION_STALE", "The type.schema continuation does not match the current assembly generation and limits.", "Start a new type.schema read without cursor.");
             }
 
             private static Type MemberType(MemberInfo member)
@@ -122,27 +156,27 @@ namespace UnityCli
                     return new Dictionary<string, object> { { "type", "string" }, { "typeName", FriendlyTypeName(type) }, { "enum", values }, { "truncated", context.Truncated } };
                 }
 
-                if (TryGetDictionaryTypes(type, out var keyType, out var dictionaryValueType))
+                if (TryGetDictionaryTypes(type, context, out var keyType, out var dictionaryValueType))
                 {
                     var dictionarySchema = new Dictionary<string, object> { { "type", "object" }, { "typeName", FriendlyTypeName(type) } };
-                    WriteGenericMetadata(dictionarySchema, type);
-                    dictionarySchema["propertyNames"] = DictionaryKeySchema(keyType);
+                    WriteGenericMetadata(dictionarySchema, type, context);
+                    dictionarySchema["propertyNames"] = DictionaryKeySchema(keyType, context);
                     dictionarySchema["additionalProperties"] = depth >= context.MaxDepth ? TruncatedSchema(dictionaryValueType) : SchemaFor(dictionaryValueType, context, depth + 1);
                     return dictionarySchema;
                 }
 
-                var elementType = GetEnumerableElementType(type);
+                var elementType = GetEnumerableElementType(type, context);
                 if (elementType != null)
                 {
                     var arraySchema = new Dictionary<string, object> { { "type", "array" }, { "typeName", FriendlyTypeName(type) } };
                     if (type.IsArray) arraySchema["arrayRank"] = (long)type.GetArrayRank();
-                    WriteGenericMetadata(arraySchema, type);
+                    WriteGenericMetadata(arraySchema, type, context);
                     arraySchema["items"] = depth >= context.MaxDepth ? TruncatedSchema(elementType) : SchemaFor(elementType, context, depth + 1);
                     return arraySchema;
                 }
 
                 var objectSchema = new Dictionary<string, object> { { "type", "object" }, { "typeName", FriendlyTypeName(type) } };
-                WriteGenericMetadata(objectSchema, type);
+                WriteGenericMetadata(objectSchema, type, context);
                 if (depth >= context.MaxDepth)
                 {
                     objectSchema["truncated"] = true;
@@ -150,7 +184,7 @@ namespace UnityCli
                 }
                 var properties = new Dictionary<string, object>();
                 if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; objectSchema["truncated"] = true; return objectSchema; }
-                foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public).OrderBy(value => value.Name, StringComparer.Ordinal))
+                foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
                 {
                     if (!context.TryMember() || !context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; break; }
                     properties[field.Name] = SchemaFor(field.FieldType, context, depth + 1);
@@ -159,7 +193,7 @@ namespace UnityCli
                 if (!context.Budget.IsExhausted && context.MemberCount < context.MaxMembers)
                 {
                     if (!context.Budget.TryConsumeReflectionCall()) context.Truncated = true;
-                    else foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public).OrderBy(value => value.Name, StringComparer.Ordinal))
+                    else foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
                     {
                         if (!property.CanRead || property.GetIndexParameters().Length != 0) continue;
                         if (!context.TryMember() || !context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; break; }
@@ -175,7 +209,8 @@ namespace UnityCli
             /// <summary>复杂类型使用 $ref，基础/集合类型直接内联。</summary>
             private static object SchemaFor(Type type, SchemaContext context, int depth)
             {
-                if (type == null || IsPrimitiveLike(type) || type.IsEnum || type.IsByRef || type.IsPointer || type.IsGenericParameter || IsNullable(type) || TryGetDictionaryTypes(type, out _, out _) || GetEnumerableElementType(type) != null)
+                if (type == null || IsPrimitiveLike(type) || type.IsEnum || type.IsByRef || type.IsPointer || type.IsGenericParameter || IsNullable(type)
+                    || TryGetDictionaryTypes(type, context, out _, out _) || GetEnumerableElementType(type, context) != null)
                 {
                     return BuildSchema(type, context, depth, false);
                 }
@@ -183,6 +218,7 @@ namespace UnityCli
                 var key = DefinitionKey(type);
                 if (!context.Definitions.ContainsKey(key) && !context.BuildingDefinitions.Contains(key))
                 {
+                    if (!context.Budget.TryReserveSerializedUtf8(key)) { context.Truncated = true; return TruncatedSchema(type); }
                     if (context.Definitions.Count >= context.MaxDefinitions || !context.Budget.TryConsumeReflectionCall())
                     {
                         context.Truncated = true;
@@ -195,10 +231,20 @@ namespace UnityCli
                 return new Dictionary<string, object> { { "$ref", "#/$defs/" + key } };
             }
 
-            private static Dictionary<string, object> DictionaryKeySchema(Type keyType)
+            private static Dictionary<string, object> DictionaryKeySchema(Type keyType, SchemaContext context)
             {
                 var schema = new Dictionary<string, object> { { "type", "string" } };
-                if (keyType != null && keyType.IsEnum) schema["enum"] = Enum.GetNames(keyType).Cast<object>().ToList();
+                if (keyType != null && keyType.IsEnum)
+                {
+                    if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; schema["truncated"] = true; return schema; }
+                    var values = new List<object>();
+                    foreach (var value in Enum.GetNames(keyType))
+                    {
+                        if (!context.TryMember() || !context.Budget.TryReserveSerializedUtf8(value)) { context.Truncated = true; schema["truncated"] = true; break; }
+                        values.Add(value);
+                    }
+                    schema["enum"] = values;
+                }
                 else if (keyType != null) schema["typeName"] = FriendlyTypeName(keyType);
                 return schema;
             }
@@ -208,44 +254,71 @@ namespace UnityCli
                 return new Dictionary<string, object> { { "type", "object" }, { "typeName", FriendlyTypeName(type) }, { "truncated", true } };
             }
 
-            private static void WriteGenericMetadata(Dictionary<string, object> schema, Type type)
+            private static void WriteGenericMetadata(Dictionary<string, object> schema, Type type, SchemaContext context)
             {
                 if (!type.IsGenericType) return;
+                if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; schema["truncated"] = true; return; }
                 schema["genericTypeDefinition"] = FriendlyTypeName(type.GetGenericTypeDefinition());
-                schema["genericArguments"] = type.GetGenericArguments().Select(FriendlyTypeName).Cast<object>().ToList();
+                var values = new List<object>();
+                foreach (var argument in type.GetGenericArguments())
+                {
+                    if (!context.TryMember()) { context.Truncated = true; schema["truncated"] = true; break; }
+                    var value = FriendlyTypeName(argument);
+                    if (!context.Budget.TryReserveSerializedUtf8(value)) { context.Truncated = true; schema["truncated"] = true; break; }
+                    values.Add(value);
+                }
+                schema["genericArguments"] = values;
             }
 
-            private static bool TryGetDictionaryTypes(Type type, out Type keyType, out Type valueType)
+            private static bool TryGetDictionaryTypes(Type type, SchemaContext context, out Type keyType, out Type valueType)
             {
                 keyType = null;
                 valueType = null;
                 if (type == null || type == typeof(string)) return false;
-                foreach (var candidate in type.GetInterfaces().Concat(new[] { type }))
+                if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; return false; }
+                if (TryGetDictionaryCandidate(type, out keyType, out valueType)) return true;
+                foreach (var candidate in type.GetInterfaces())
                 {
-                    if (!candidate.IsGenericType) continue;
-                    var definition = candidate.GetGenericTypeDefinition();
-                    if (definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>))
-                    {
-                        var args = candidate.GetGenericArguments();
-                        keyType = args[0];
-                        valueType = args[1];
-                        return true;
-                    }
+                    if (TryGetDictionaryCandidate(candidate, out keyType, out valueType)) return true;
                 }
                 return false;
             }
 
-            private static Type GetEnumerableElementType(Type type)
+            private static bool TryGetDictionaryCandidate(Type candidate, out Type keyType, out Type valueType)
+            {
+                keyType = null;
+                valueType = null;
+                if (!candidate.IsGenericType) return false;
+                var definition = candidate.GetGenericTypeDefinition();
+                if (definition != typeof(IDictionary<,>) && definition != typeof(IReadOnlyDictionary<,>)) return false;
+                var arguments = candidate.GetGenericArguments();
+                keyType = arguments[0];
+                valueType = arguments[1];
+                return true;
+            }
+
+            private static Type GetEnumerableElementType(Type type, SchemaContext context)
             {
                 if (type == null || type == typeof(string)) return null;
+                if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; return null; }
                 if (type.IsArray) return type.GetElementType();
-                foreach (var candidate in type.GetInterfaces().Concat(new[] { type }))
+                var direct = GetEnumerableCandidate(type);
+                if (direct != null) return direct;
+                foreach (var candidate in type.GetInterfaces())
                 {
-                    if (!candidate.IsGenericType) continue;
-                    var definition = candidate.GetGenericTypeDefinition();
-                    if (definition == typeof(IEnumerable<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>)) return candidate.GetGenericArguments()[0];
+                    var element = GetEnumerableCandidate(candidate);
+                    if (element != null) return element;
                 }
                 return typeof(IEnumerable).IsAssignableFrom(type) ? typeof(object) : null;
+            }
+
+            private static Type GetEnumerableCandidate(Type candidate)
+            {
+                if (!candidate.IsGenericType) return null;
+                var definition = candidate.GetGenericTypeDefinition();
+                return definition == typeof(IEnumerable<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>)
+                    ? candidate.GetGenericArguments()[0]
+                    : null;
             }
 
             private static string JsonTypeFor(Type type)
@@ -268,10 +341,19 @@ namespace UnityCli
                 var baseName = type.GetGenericTypeDefinition().FullName ?? type.GetGenericTypeDefinition().Name;
                 var tick = baseName.IndexOf('`');
                 if (tick >= 0) baseName = baseName.Substring(0, tick);
-                return baseName + "<" + string.Join(",", type.GetGenericArguments().Select(FriendlyTypeName).ToArray()) + ">";
+                var arguments = type.GetGenericArguments();
+                var names = new string[arguments.Length];
+                for (var index = 0; index < arguments.Length; index++) names[index] = FriendlyTypeName(arguments[index]);
+                return baseName + "<" + string.Join(",", names) + ">";
             }
 
-            private static string DefinitionKey(Type type) => new string((FriendlyTypeName(type) ?? "Unknown").Select(character => char.IsLetterOrDigit(character) ? character : '_').ToArray());
+            private static string DefinitionKey(Type type)
+            {
+                var value = FriendlyTypeName(type) ?? "Unknown";
+                var characters = value.ToCharArray();
+                for (var index = 0; index < characters.Length; index++) if (!char.IsLetterOrDigit(characters[index])) characters[index] = '_';
+                return new string(characters);
+            }
 
             internal static Type ResolveType(string fullName)
             {
@@ -343,7 +425,7 @@ namespace UnityCli
                 internal bool Truncated;
             }
 
-            /// <summary>MethodInfo array 只作 runtime reflection snapshot；descriptor 按 raw ordinal 逐项构造并受全局预算约束。</summary>
+            /// <summary>MethodInfo array 是唯一 runtime reflection snapshot；过滤和 descriptor 从 raw ordinal 流式推进。</summary>
             public static MethodPage FindMethods(string typeName, string methodName, BindingFlags bindings, int pageSize, string cursor, UnityCliRequestBudget budget)
             {
                 var type = TypeSchemaGenerator.ResolveType(typeName, budget);
@@ -353,43 +435,50 @@ namespace UnityCli
                     throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Type not found: " + typeName, "Pass a full type name such as UnityEngine.Transform.");
                 }
                 if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                var methods = type.GetMethods(bindings)
-                    .Where(method => string.IsNullOrEmpty(methodName) || string.Equals(method.Name, methodName, StringComparison.Ordinal))
-                    .OrderBy(method => method.MetadataToken).ThenBy(method => method.Name, StringComparer.Ordinal).ToArray();
+                var methods = type.GetMethods(bindings);
                 var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Reflection() + "\0" + type.AssemblyQualifiedName + "\0"
                     + ((int)bindings).ToString(CultureInfo.InvariantCulture) + "\0" + methodName + "\0" + methods.Length.ToString(CultureInfo.InvariantCulture));
-                var offset = 0;
+                var index = 0;
                 if (!string.IsNullOrEmpty(cursor))
                 {
                     string position;
                     if (!UnityCliContinuationToken.TryParse(cursor, "reflection.method.find", generation, out position)
-                        || !int.TryParse(position, NumberStyles.Integer, CultureInfo.InvariantCulture, out offset) || offset < 0 || offset > methods.Length)
+                        || !int.TryParse(position, NumberStyles.Integer, CultureInfo.InvariantCulture, out index) || index < 0 || index > methods.Length)
                         throw new BridgeCommandException("E_CONTINUATION_STALE", "The reflection method continuation does not match the current assembly generation and selector.", "Start a new reflection.method.find read without cursor.");
                 }
                 var result = new List<ReflectionMethodDescriptor>();
-                var index = offset;
                 while (index < methods.Length && result.Count < pageSize)
                 {
-                    if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeNode() || !budget.TryConsumeReflectionCall()) break;
+                    if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) break;
                     var method = methods[index];
+                    var name = method.Name;
+                    if (!string.IsNullOrEmpty(methodName) && !string.Equals(name, methodName, StringComparison.Ordinal)) { index++; continue; }
+                    if (!budget.TryConsumeNode() || !budget.TryConsumeReflectionCall()) break;
                     var parameters = method.GetParameters();
+                    var returnType = method.ReturnType == null ? null : method.ReturnType.FullName;
+                    var declaringType = method.DeclaringType == null ? null : method.DeclaringType.FullName;
+                    if (!budget.TryReserveSerializedUtf8(name) || !budget.TryReserveSerializedUtf8(returnType) || !budget.TryReserveSerializedUtf8(declaringType)) break;
                     var parameterResults = new List<ReflectionParameterDescriptor>();
-                    var complete = true;
+                    var parametersComplete = true;
                     foreach (var parameter in parameters)
                     {
-                        if (!budget.TryConsumeNode() || !budget.TryConsumeReflectionCall()) { complete = false; break; }
-                        parameterResults.Add(new ReflectionParameterDescriptor { Name = parameter.Name, ParameterType = parameter.ParameterType.FullName, HasDefaultValue = parameter.HasDefaultValue });
+                        if (!budget.TryConsumeNode() || !budget.TryConsumeReflectionCall()) { parametersComplete = false; break; }
+                        var parameterName = parameter.Name;
+                        var parameterType = parameter.ParameterType == null ? null : parameter.ParameterType.FullName;
+                        if (!budget.TryReserveSerializedUtf8(parameterName) || !budget.TryReserveSerializedUtf8(parameterType)) { parametersComplete = false; break; }
+                        parameterResults.Add(new ReflectionParameterDescriptor { Name = parameterName, ParameterType = parameterType, HasDefaultValue = parameter.HasDefaultValue });
                     }
-                    if (!complete || !budget.TryReserveSerializedUtf8(method.Name) || !budget.TryReserveSerializedUtf8(method.ReturnType.FullName)) break;
                     result.Add(new ReflectionMethodDescriptor
                     {
-                        Name = method.Name, IsStatic = method.IsStatic, IsPublic = method.IsPublic, IsPrivate = method.IsPrivate,
-                        ReturnType = method.ReturnType.FullName, DeclaringType = method.DeclaringType.FullName, Parameters = parameterResults
+                        Name = name, IsStatic = method.IsStatic, IsPublic = method.IsPublic, IsPrivate = method.IsPrivate,
+                        ReturnType = returnType, DeclaringType = declaringType, ParameterCount = parameters.Length,
+                        ParametersTruncated = !parametersComplete, Parameters = parameterResults
                     });
                     index++;
+                    if (!parametersComplete) break;
                 }
                 var next = index < methods.Length ? UnityCliContinuationToken.Create("reflection.method.find", generation, index.ToString(CultureInfo.InvariantCulture)) : null;
-                return new MethodPage { Methods = result, Total = methods.Length, NextCursor = next, Generation = generation, Truncated = next != null };
+                return new MethodPage { Methods = result, Total = methods.Length, NextCursor = next, Generation = generation, Truncated = next != null || budget.IsExhausted };
             }
 
 
@@ -448,6 +537,8 @@ namespace UnityCli
                         new[] { "Inspect the method contract and arguments before submitting a new request." });
                 }
                 catch (BridgeCommandException) { throw; }
+                catch (UnityCliRequestBudgetExceededException) { throw; }
+                catch (OperationCanceledException) { throw; }
                 catch (Exception exception)
                 {
                     throw new BridgeCommandException(
@@ -577,6 +668,8 @@ namespace UnityCli
                 {
                     return ObjectSerializer.Serialize(result, new ObjectSerializer.Options { MaxDepth = 2, IncludeFields = false, IncludeProperties = true, DeepSerialization = false }, budget);
                 }
+                catch (UnityCliRequestBudgetExceededException) { throw; }
+                catch (OperationCanceledException) { throw; }
                 catch (Exception exception)
                 {
                     // 反射返回值不可投影时显式暴露原因，不能 ToString() 制造不稳定业务数据。
@@ -593,6 +686,8 @@ namespace UnityCli
             public bool IsPrivate { get; set; }
             public string ReturnType { get; set; }
             public string DeclaringType { get; set; }
+            public long ParameterCount { get; set; }
+            public bool ParametersTruncated { get; set; }
             public List<ReflectionParameterDescriptor> Parameters { get; set; }
         }
 

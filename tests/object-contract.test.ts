@@ -158,21 +158,25 @@ test("C# object serializer represents non-finite dynamic numbers without invalid
   assert.match(serializer, /value is float single[\s\S]*JsonNumberData\(single\)/);
 });
 
-test("C# paged capabilities return nextCursor in the same numeric domain as cursor", async () => {
-  const files = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
-  const source = (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
-  assert.doesNotMatch(source, /string NextCursor\s*\{/);
-  assert.doesNotMatch(source, /NextCursor\s*=.*ToString\(/);
-  assert.match(source, /long\? NextCursor\s*\{/);
+test("bounded Unity readers expose opaque string continuation in the same cursor domain", async () => {
+  const paths = [
+    "../unitypkg/Editor/Tools/console/get.cs",
+    "../unitypkg/Editor/Tools/scene/hierarchy.cs",
+    "../unitypkg/Editor/Tools/go/find.cs",
+    "../unitypkg/Editor/Tools/profiler/hierarchy.cs",
+    "../unitypkg/Editor/Tools/profiler/frame-debugger/events.cs"
+  ];
+  for (const path of paths) {
+    const source = await readFile(new URL(path, import.meta.url), "utf8");
+    assert.match(source, /string Cursor\s*\{/);
+    assert.match(source, /string NextCursor\s*\{/);
+  }
 });
 
-test("no duplicate main entry: go.inspect stays lightweight, object.get-data is the deep reader", async () => {
+test("object.get-data is the deep reader and obsolete go.inspect source is absent", async () => {
   const tools = await discoverLiveTools(
-    makeLiveTool({ name: "go.inspect", summary: "Inspect a GameObject.", description: "Inspect a GameObject with a lightweight summary.", group: "go" }),
     makeLiveTool({ name: "object.get-data", summary: "Read serialized object data.", description: "Read deep serialized object data.", group: "object" })
   );
-  const inspect = tools.get("go.inspect")!;
-  const getData = tools.get("object.get-data")!;
-  assert.notEqual(inspect.name, getData.name);
-  assert.ok(getData.description.toLowerCase().includes("deep"));
+  assert.ok(tools.get("object.get-data")?.description.toLowerCase().includes("deep"));
+  await assert.rejects(readFile(new URL("../unitypkg/Editor/Tools/go/inspect.cs", import.meta.url), "utf8"));
 });

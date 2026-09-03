@@ -43,6 +43,8 @@ namespace UnityCli
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
+            var requestBudget = ctx.UseReadBudget(request.Budget);
+            if (!requestBudget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(requestBudget.ExhaustedDimension);
             var sceneView = SceneView.lastActiveSceneView;
             if (sceneView == null || sceneView.camera == null)
                 throw new UnityCliBridge.BridgeCommandException("E_SCENE_VIEW_NOT_AVAILABLE", "No active SceneView camera.", "Open a SceneView window.");
@@ -55,7 +57,7 @@ namespace UnityCli
 
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
-            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, ctx.UseReadBudget(request.Budget));
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, requestBudget);
             ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
 
@@ -63,17 +65,19 @@ namespace UnityCli
             var prevActive = RenderTexture.active;
             var prevClear = camera.clearFlags;
             var prevBg = camera.backgroundColor;
-            var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
-            var texture = new Texture2D(width, height, request.Transparent ? TextureFormat.ARGB32 : TextureFormat.RGB24, false);
+            RenderTexture renderTexture = null;
+            Texture2D texture = null;
             byte[] bytes;
             ScreenshotArtifactProof artifact;
             try
             {
                 captureBudget.BeginCapture(width, height);
-                camera.targetTexture = rt;
+                renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+                texture = new Texture2D(width, height, request.Transparent ? TextureFormat.ARGB32 : TextureFormat.RGB24, false);
+                camera.targetTexture = renderTexture;
                 if (request.Transparent) { camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(0, 0, 0, 0); }
                 camera.Render();
-                RenderTexture.active = rt;
+                RenderTexture.active = renderTexture;
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
                 bytes = format == "jpg" ? texture.EncodeToJPG(quality) : texture.EncodeToPNG();
@@ -85,9 +89,8 @@ namespace UnityCli
                 camera.targetTexture = prevTarget;
                 camera.clearFlags = prevClear;
                 camera.backgroundColor = prevBg;
-                UnityEngine.Object.DestroyImmediate(texture);
-                rt.Release();
-                UnityEngine.Object.DestroyImmediate(rt);
+                if (texture != null) UnityEngine.Object.DestroyImmediate(texture);
+                if (renderTexture != null) { renderTexture.Release(); UnityEngine.Object.DestroyImmediate(renderTexture); }
             }
 
             var result = new Result
@@ -95,7 +98,7 @@ namespace UnityCli
                 ScreenshotPath = outputPath, ArtifactPath = outputPath, Source = "scene-view",
                 SizeBytes = artifact.SizeBytes, Sha256 = artifact.Sha256, CapturePlan = captureBudget.Plan
             };
-            ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
+            ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64, captureBudget);
             return new System.Threading.Tasks.ValueTask<Result>(result);
         }
     }
