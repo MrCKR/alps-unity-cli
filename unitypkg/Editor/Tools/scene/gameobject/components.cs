@@ -17,12 +17,13 @@ namespace UnityCli
                 public int Id { get; set; }
                 public string Path { get; set; }
                 public bool IncludeProperties { get; set; } = true;
+                public UnityCliReadBudgetInput Budget { get; set; }
             }
 
             public sealed class Result
             {
                 public GameObjectRef GameObject { get; set; }
-                public List<ComponentInfo> Components { get; set; }
+                [UnityCliItemsRange(0, ObjectRefResolver.AbsoluteMaxBatchItems)] public List<ComponentInfo> Components { get; set; }
                 public long Count { get; set; }
             }
 
@@ -56,16 +57,18 @@ namespace UnityCli
             /// <summary>解析目标并直接构造组件列表 DTO，不经过 JSON 字符串。</summary>
             public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
             {
+                request = request ?? new Request();
+                var budget = ctx.UseReadBudget(request.Budget);
                 var id = request.Id == 0 ? (int?)null : request.Id;
-                var gameObject = ResolveSceneContextGameObject(request.Target, id, request.Path);
-                var components = SceneContextComponentDetails(gameObject, request.IncludeProperties);
+                var gameObject = ResolveSceneContextGameObject(request.Target, id, request.Path, budget);
+                var components = SceneContextComponentDetails(gameObject, request.IncludeProperties, budget);
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     GameObject = new GameObjectRef
                     {
-                        Id = gameObject.GetInstanceID(),
-                        Name = gameObject.name,
-                        Path = HierarchyPath(gameObject)
+                        Id = ConsumeSceneGetter(budget, gameObject.GetInstanceID),
+                        Name = ConsumeSceneGetter(budget, () => gameObject.name),
+                        Path = HierarchyPath(gameObject, budget)
                     },
                     Components = components,
                     Count = components.Count

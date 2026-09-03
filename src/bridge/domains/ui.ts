@@ -113,7 +113,9 @@ async function uiArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       output: stringFlag(flags, "output") ?? stringField(flags, "output"),
       width: numberFlag(flags, "width") ?? numberField(flags, "width"),
       height: numberFlag(flags, "height") ?? numberField(flags, "height"),
-      overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite")
+      overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite"),
+      limits: structuredInput(flags).limits,
+      budget: structuredInput(flags).budget
     });
   }
   return compactArgs({

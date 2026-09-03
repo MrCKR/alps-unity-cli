@@ -17,7 +17,6 @@ const filledCsharpHandlerCommands = [
   "scene.create",
   "scene.load",
   "scene.save",
-  "go.inspect",
   "go.create",
   "go.modify",
   "go.duplicate",

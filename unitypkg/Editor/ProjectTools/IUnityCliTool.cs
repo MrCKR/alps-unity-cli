@@ -155,5 +155,6 @@ namespace UnityCli
         public UnityCliStringEnumAttribute(params string[] values) { Values = values ?? Array.Empty<string>(); }
         public string[] Values { get; private set; }
     }
+
 }
 #endif

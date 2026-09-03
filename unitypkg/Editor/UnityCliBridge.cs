@@ -35,7 +35,7 @@ namespace UnityCli
         private const int DeterministicFallbackCount = 64;
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview" };
         private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.build-settings", "scene.create", "scene.load", "scene.save" };
-        private static readonly string[] GameObjectCommands = { "go.find", "go.inspect", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
+        private static readonly string[] GameObjectCommands = { "go.find", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
         private static readonly string[] AssetCommands = { "asset.search", "asset.info", "asset.create", "asset.import", "asset.modify", "asset.delete", "asset.duplicate", "asset.move", "asset.rename", "asset.refresh" };
         private static readonly string[] ScreenshotCommands = { "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround" };
         private static readonly string[] PrefabCommands = { "prefab.info", "prefab.hierarchy", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close" };
@@ -413,7 +413,9 @@ namespace UnityCli
             try
             {
                 var data = await ExecuteData(request, cancellationToken);
-                // handler 返回后先让 coordinator 消费 completion evidence；超时后的已证明 mutation 仍可持久化 canonical terminal。
+                // Project Tool 的成功 envelope 已在其同一 deadline 与请求预算内完成；其他内部命令保持统一包装。
+                var serializedEnvelope = data as SerializedBridgeEnvelope;
+                if (serializedEnvelope != null) return serializedEnvelope.Json;
                 return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, data));
             }
             catch (BridgeCommandException exception)

@@ -2,15 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace UnityCli
 {
-    /// <summary>
-    /// go.find — 按名称/标签/层/组件/层级路径/实例ID 搜索 GameObject,可选优先 Prefab Stage。
-    /// </summary>
+    /// <summary>go.find — exact selector 直达，其他 selector 按 raw hierarchy position 有界续页。</summary>
     public class GameObjectFindTool : IUnityCliTool<GameObjectFindTool.Request, GameObjectFindTool.Result>
     {
         public sealed class Request
@@ -24,26 +22,52 @@ namespace UnityCli
             public string Component { get; set; }
             public string Path { get; set; }
             public string Id { get; set; }
+            [UnityCliStringEnum("by_name", "by_tag", "by_layer", "by_component", "by_path", "by_id")]
             public string SearchMethod { get; set; }
             public bool IncludeInactive { get; set; }
             public bool PreferPrefabStage { get; set; }
-            public int? PageSize { get; set; }
-            public int? Cursor { get; set; }
+            [UnityCliRange(1L, 500L)] public int? PageSize { get; set; }
+            public string Cursor { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
         {
             public bool PrefabStageOpen { get; set; }
-            public long MatchCount { get; set; }
-            public List<GoFindItem> Items { get; set; }
-            public GoPageInfo PageInfo { get; set; }
+            public long ReturnedCount { get; set; }
+            [UnityCliItemsRange(0, 500)] public List<Item> Items { get; set; }
+            public PageInfo PageInfo { get; set; }
+            public UnityCliRequestBudgetUsage Budget { get; set; }
+        }
+
+        public sealed class Item
+        {
+            public long Id { get; set; }
+            public string Name { get; set; }
+            public string Path { get; set; }
+            public bool Active { get; set; }
+            public bool ActiveInHierarchy { get; set; }
+            public string Tag { get; set; }
+            public long Layer { get; set; }
+            public long ChildCount { get; set; }
+            public bool ChildrenTruncated { get; set; }
+        }
+
+        public sealed class PageInfo
+        {
+            public long PageSize { get; set; }
+            public string Cursor { get; set; }
+            public string NextCursor { get; set; }
+            public bool Complete { get; set; }
+            public bool Truncated { get; set; }
+            public string Generation { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "go.find",
-            Summary = "Search GameObjects by name, tag, layer, component, hierarchy path, or instance id; optionally prefer an open Prefab Stage.",
-            Description = "Search GameObjects by name, tag, layer, component, hierarchy path, or instance id. Results are lightweight and paged. Pass preferPrefabStage=true to first match inside an open Prefab Stage (prefabContentsRoot), then merge scene matches.",
+            Summary = "Resolve exact GameObject ids/paths directly or page filtered hierarchy matches from stable raw positions.",
+            Description = "Search loaded GameObjects by exact name, tag, layer or component. by_id uses direct instance resolution and by_path walks only the exact case-sensitive path; neither materializes the scene tree. Other selectors stream Unity hierarchy order with pageSize 1..500 (default 50). All work shares budget defaults of 10000 scans, 4096 nodes, 2048 getters, 4096 reflection calls, 250 main-thread ms and 1 MiB UTF-8; maxima are 100000/20000/10000/20000/2000 ms/8 MiB. No filtered total is fabricated: pageInfo.complete/truncated and nextCursor identify the next raw object. preferPrefabStage scans the open Prefab Stage first. Read-only in Edit and Play Mode.",
             Group = "go",
             DestructiveHint = false,
             Target = "editor",
@@ -52,47 +76,105 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Find by name", Input = new Request { SearchTerm = "Player", SearchMethod = "by_name", PageSize = 25 } },
-                new ToolExample { Description = "Find objects with Camera component", Input = new Request { SearchTerm = "Camera", SearchMethod = "by_component", PageSize = 10 } }
+                new ToolExample { Description = "Find an exact object name", Input = new Request { SearchTerm = "Player", SearchMethod = "by_name", PageSize = 25 } },
+                new ToolExample { Description = "Resolve a full hierarchy path directly", Input = new Request { SearchTerm = "World/Player", SearchMethod = "by_path" } }
             }
         };
 
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
+            request = request ?? new Request();
             var searchTerm = request.SearchTerm ?? request.Query ?? request.Target ?? request.Name ?? request.Tag ?? request.Layer ?? request.Component ?? request.Path ?? request.Id;
-            if (string.IsNullOrEmpty(searchTerm))
-            {
-                throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject find requires a search term.", "Pass --input '{\"searchTerm\":\"Player\",\"searchMethod\":\"by_name\"}'.");
-            }
-            var searchMethod = request.SearchMethod ?? InferSearchMethod(request);
-            var includeInactive = request.IncludeInactive;
-            var preferPrefabStage = request.PreferPrefabStage;
-            var pageSize = Math.Max(1, Math.Min(request.PageSize ?? 50, 500));
-            var cursor = Math.Max(0, request.Cursor ?? 0);
+            if (string.IsNullOrEmpty(searchTerm)) throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject find requires a search term.", "Pass searchTerm and one documented searchMethod.");
+            var method = request.SearchMethod ?? InferSearchMethod(request);
+            var budget = ctx.UseReadBudget(request.Budget);
+            var pageSize = request.PageSize ?? 50;
+            if ((method == "by_id" || method == "by_path") && !string.IsNullOrEmpty(request.Cursor))
+                throw new UnityCliBridge.BridgeCommandException("E_CONTINUATION_INVALID", "Exact by_id/by_path resolution does not accept cursor.", "Remove cursor for exact resolution.");
 
-            // Prefab Stage 优先:preferPrefabStage=true 且有打开的 Prefab Stage 时,先在 prefab 内容里匹配,再合并场景匹配
             var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-            var prefabStageMatches = new List<GameObject>();
-            var prefabStageOpen = preferPrefabStage && prefabStage != null && prefabStage.prefabContentsRoot != null;
-            if (prefabStageOpen)
+            var prefabOpen = request.PreferPrefabStage && prefabStage != null && prefabStage.prefabContentsRoot != null;
+            var generation = UnityCliContinuationToken.Fingerprint(
+                UnityCliReadGeneration.Hierarchy(SceneManager.GetActiveScene()) + "\0" + method + "\0" + searchTerm + "\0" + request.IncludeInactive + "\0" + prefabOpen);
+            if (method == "by_id" || method == "by_path")
             {
-                foreach (var t in prefabStage.prefabContentsRoot.GetComponentsInChildren<Transform>(includeInactive))
+                var exact = ResolveExact(method, searchTerm, budget);
+                var exactItems = new List<Item>();
+                if (exact != null)
                 {
-                    if (MatchesGameObject(t.gameObject, searchMethod, searchTerm)) prefabStageMatches.Add(t.gameObject);
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    if (request.IncludeInactive || exact.activeInHierarchy) exactItems.Add(BuildItem(exact, budget));
+                }
+                return new System.Threading.Tasks.ValueTask<Result>(ResultPage(exactItems, pageSize, request.Cursor, null, generation, prefabOpen, budget));
+            }
+
+            Type componentType = null;
+            int? layer = null;
+            if (method == "by_component") componentType = GameObjectToolSupport.ResolveComponentType(searchTerm, budget);
+            if (method == "by_layer") layer = GameObjectToolSupport.ParseLayer(searchTerm);
+            var prefabTraversal = prefabOpen ? new UnityCliHierarchyPager.Traversal(prefabStage.scene, prefabStage.prefabContentsRoot, int.MaxValue, budget) : null;
+            var sceneTraversal = new UnityCliHierarchyPager.LoadedSceneTraversal(budget, prefabOpen ? prefabStage.scene.handle : 0);
+            GameObject current;
+            var phase = prefabOpen ? "prefab" : "scene";
+            if (string.IsNullOrEmpty(request.Cursor)) current = prefabOpen ? prefabStage.prefabContentsRoot : sceneTraversal.First(budget);
+            else
+            {
+                current = UnityCliHierarchyPager.ResolveCursor(request.Cursor, "go.find", generation, budget, out phase);
+                if (phase != "scene" && phase != "prefab") throw UnityCliHierarchyPager.Stale();
+                if (phase == "prefab" && (!prefabOpen || !IsDescendantOrSelf(current.transform, prefabStage.prefabContentsRoot.transform, budget))) throw UnityCliHierarchyPager.Stale();
+                if (phase == "scene" && prefabOpen && current.scene.handle == prefabStage.scene.handle) throw UnityCliHierarchyPager.Stale();
+            }
+
+            var items = new List<Item>();
+            while (current != null && items.Count < pageSize)
+            {
+                var candidate = current;
+                if (!budget.TryConsumeScannedRecord()) break;
+                try
+                {
+                    var nextPhase = phase;
+                    var next = phase == "prefab" ? prefabTraversal.Next(candidate, budget) : sceneTraversal.Next(candidate, budget);
+                    if (phase == "prefab" && next == null) { nextPhase = "scene"; next = sceneTraversal.First(budget); }
+                    if (Matches(candidate, method, searchTerm, request.IncludeInactive, componentType, layer, budget))
+                        items.Add(BuildItem(candidate, budget));
+                    phase = nextPhase;
+                    current = next;
+                }
+                catch (UnityCliRequestBudgetExceededException)
+                {
+                    current = candidate;
+                    break;
                 }
             }
-            var sceneMatches = SearchGameObjects(searchMethod, searchTerm, includeInactive);
-            var matches = prefabStageOpen ? prefabStageMatches.Concat(sceneMatches).ToList() : sceneMatches;
-            var total = matches.Count;
-            var page = matches.Skip(cursor).Take(pageSize).ToList();
-            long? nextCursor = cursor + page.Count < total ? (long?)(cursor + page.Count) : null;
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
+
+            if (items.Count == 0 && current != null) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
+            var nextCursor = UnityCliHierarchyPager.Cursor("go.find", generation, phase, current, budget);
+            return new System.Threading.Tasks.ValueTask<Result>(ResultPage(items, pageSize, request.Cursor, nextCursor, generation, prefabOpen, budget));
+        }
+
+        private static Result ResultPage(List<Item> items, int pageSize, string cursor, string nextCursor, string generation, bool prefabOpen, UnityCliRequestBudget budget)
+        {
+            return new Result
             {
-                PrefabStageOpen = prefabStageOpen,
-                MatchCount = total,
-                Items = page.ConvertAll(BuildItem),
-                PageInfo = new GoPageInfo { PageSize = pageSize, Cursor = cursor, NextCursor = nextCursor, Total = total }
-            });
+                PrefabStageOpen = prefabOpen,
+                ReturnedCount = items.Count,
+                Items = items,
+                PageInfo = new PageInfo
+                {
+                    PageSize = pageSize, Cursor = cursor, NextCursor = nextCursor,
+                    Complete = nextCursor == null, Truncated = nextCursor != null, Generation = generation
+                },
+                Budget = budget.Usage()
+            };
+        }
+
+        private static GameObject ResolveExact(string method, string value, UnityCliRequestBudget budget)
+        {
+            if (method == "by_path") return UnityCliBridge.ObjectRefResolver.FindGameObjectByExactPath(value, budget);
+            int instanceId;
+            if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out instanceId)) return null;
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            return EditorUtility.InstanceIDToObject(instanceId) as GameObject;
         }
 
         private static string InferSearchMethod(Request request)
@@ -105,47 +187,51 @@ namespace UnityCli
             return "by_name";
         }
 
-        private static List<GameObject> SearchGameObjects(string searchMethod, string searchTerm, bool includeInactive)
+        private static bool Matches(GameObject gameObject, string method, string value, bool includeInactive, Type componentType, int? layer, UnityCliRequestBudget budget)
         {
-            var allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>(includeInactive)
-                .OrderBy(GameObjectToolSupport.HierarchyPath, StringComparer.Ordinal).ToList();
-            return allObjects.Where(go => MatchesGameObject(go, searchMethod, searchTerm)).ToList();
-        }
-
-        private static bool MatchesGameObject(GameObject gameObject, string searchMethod, string searchTerm)
-        {
-            var normalized = (searchMethod ?? "by_name").Trim().ToLowerInvariant();
-            if (normalized == "by_id") return gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == searchTerm;
-            if (normalized == "by_path") return string.Equals(GameObjectToolSupport.HierarchyPath(gameObject), searchTerm, StringComparison.Ordinal);
-            if (normalized == "by_tag") return string.Equals(gameObject.tag, searchTerm, StringComparison.Ordinal);
-            if (normalized == "by_layer") return gameObject.layer == GameObjectToolSupport.ParseLayer(searchTerm);
-            if (normalized == "by_component") { var type = GameObjectToolSupport.ResolveComponentType(searchTerm); return type != null && gameObject.GetComponent(type) != null; }
-            if (normalized != "by_name") throw new UnityCliBridge.BridgeCommandException("E_SEARCH_METHOD_INVALID", "Unsupported GameObject searchMethod: " + searchMethod, "Use by_name, by_tag, by_layer, by_component, by_path, or by_id.");
-            return string.Equals(gameObject.name, searchTerm, StringComparison.Ordinal);
-        }
-
-        private static GoFindItem BuildItem(GameObject gameObject)
-        {
-            var componentNames = new List<string>();
-            foreach (var component in gameObject.GetComponents<Component>())
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            if (!includeInactive && !gameObject.activeInHierarchy) return false;
+            if (method == "by_component")
             {
-                componentNames.Add(component != null ? component.GetType().Name : "MissingScript");
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                return gameObject.GetComponent(componentType) != null;
             }
-            return new GoFindItem
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            if (method == "by_tag") return string.Equals(gameObject.tag, value, StringComparison.Ordinal);
+            if (method == "by_layer") return gameObject.layer == layer;
+            if (method != "by_name") throw new UnityCliBridge.BridgeCommandException("E_SEARCH_METHOD_INVALID", "Unsupported GameObject searchMethod: " + method, "Use by_name, by_tag, by_layer, by_component, by_path, or by_id.");
+            return string.Equals(gameObject.name, value, StringComparison.Ordinal);
+        }
+
+        private static Item BuildItem(GameObject gameObject, UnityCliRequestBudget budget)
+        {
+            if (!budget.TryConsumeNode() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var path = UnityCliHierarchyPager.Path(gameObject, budget);
+            var name = gameObject.name;
+            if (!budget.TryConsumeGetter() || !budget.TryConsumeGetter() || !budget.TryConsumeGetter()
+                || !budget.TryConsumeGetter() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var tag = gameObject.tag;
+            var childCount = gameObject.transform.childCount;
+            if (!budget.TryReserveSerializedUtf8(name) || !budget.TryReserveSerializedUtf8(path) || !budget.TryReserveSerializedUtf8(tag))
+                throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            return new Item
             {
-                Id = gameObject.GetInstanceID(),
-                Name = gameObject.name,
-                Path = GameObjectToolSupport.HierarchyPath(gameObject),
-                Active = gameObject.activeSelf,
-                ActiveInHierarchy = gameObject.activeInHierarchy,
-                Tag = gameObject.tag,
-                Layer = gameObject.layer,
-                ChildCount = gameObject.transform.childCount,
-                ChildrenTruncated = gameObject.transform.childCount > 0,
-                ComponentCount = componentNames.Count,
-                ComponentTypes = componentNames,
-                Components = componentNames
+                Id = gameObject.GetInstanceID(), Name = name, Path = path,
+                Active = gameObject.activeSelf, ActiveInHierarchy = gameObject.activeInHierarchy,
+                Tag = tag, Layer = gameObject.layer,
+                ChildCount = childCount, ChildrenTruncated = childCount > 0
             };
+        }
+
+        private static bool IsDescendantOrSelf(Transform value, Transform root, UnityCliRequestBudget budget)
+        {
+            while (value != null)
+            {
+                if (value == root) return true;
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                value = value.parent;
+            }
+            return false;
         }
     }
 }

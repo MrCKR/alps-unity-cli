@@ -1,10 +1,10 @@
-import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, screenshotArgs, stringFlag } from "../args.js";
+import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const cameraBridgeSpecs: BridgeCommandSpec[] = [
   { group: "camera", command: "list", bridgeCommand: "project-tool.run", toolName: "camera.list", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "camera", command: "info", bridgeCommand: "project-tool.run", toolName: "camera.info", buildArgs: ({ flags, positionalTarget }) => compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") }) },
-  { group: "camera", command: "screenshot", bridgeCommand: "project-tool.run", toolName: "camera.screenshot", buildArgs: ({ flags, positionalTarget }) => compactArgs({ ...screenshotArgs(flags, undefined), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") }), destructiveHint: true },
+  { group: "camera", command: "screenshot", bridgeCommand: "project-tool.run", toolName: "camera.screenshot", buildArgs: cameraScreenshotArgs, destructiveHint: true },
   { group: "camera", command: "create", bridgeCommand: "project-tool.run", toolName: "camera.create", buildArgs: cameraCreateArgs },
   { group: "camera", command: "target", bridgeCommand: "project-tool.run", toolName: "camera.target", buildArgs: cameraTargetArgs },
   { group: "camera", command: "lens", bridgeCommand: "project-tool.run", toolName: "camera.lens", buildArgs: cameraLensArgs },
@@ -48,12 +48,44 @@ function cameraLensArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpe
   });
 }
 
-function cameraMultiviewArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+function cameraScreenshotArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
   return compactArgs({
-    targets: stringFlag(flags, "targets"),
-    output: stringFlag(flags, "output"),
-    width: numberFlag(flags, "width"),
-    height: numberFlag(flags, "height"),
-    format: stringFlag(flags, "format")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? structured.target,
+    path: stringFlag(flags, "path") ?? stringFlag(flags, "output") ?? structured.path ?? structured.output,
+    output: structured.output,
+    width: numberFlag(flags, "width") ?? structured.width,
+    height: numberFlag(flags, "height") ?? structured.height,
+    format: stringFlag(flags, "format") ?? structured.format,
+    transparent: boolFlag(flags, "transparent") ?? structured.transparent,
+    quality: numberFlag(flags, "quality") ?? structured.quality,
+    overwrite: boolFlag(flags, "overwrite") ?? structured.overwrite,
+    inlineBase64: boolFlag(flags, "inline-base64") ?? structured.inlineBase64,
+    limits: structured.limits,
+    budget: structured.budget
   });
+}
+
+function cameraMultiviewArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({
+    targets: stringFlag(flags, "targets") ?? structured.targets,
+    output: stringFlag(flags, "output") ?? structured.output,
+    width: numberFlag(flags, "width") ?? structured.width,
+    height: numberFlag(flags, "height") ?? structured.height,
+    format: stringFlag(flags, "format") ?? structured.format,
+    limits: structured.limits,
+    budget: structured.budget
+  });
+}
+
+function structuredInput(flags: Record<string, unknown>): Record<string, unknown> {
+  const raw = typeof flags.__structuredInput === "string" ? flags.__structuredInput : undefined;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
 }
