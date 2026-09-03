@@ -173,10 +173,15 @@ test("bounded Unity readers expose opaque string continuation in the same cursor
   }
 });
 
-test("object.get-data is the deep reader and obsolete go.inspect source is absent", async () => {
+test("scene.gameobject stays lightweight while object.get-data owns deep reads and go.inspect stays absent", async () => {
   const tools = await discoverLiveTools(
+    makeLiveTool({ name: "scene.gameobject", summary: "Read one GameObject summary.", description: "Read one lightweight GameObject summary.", group: "scene" }),
     makeLiveTool({ name: "object.get-data", summary: "Read serialized object data.", description: "Read deep serialized object data.", group: "object" })
   );
-  assert.ok(tools.get("object.get-data")?.description.toLowerCase().includes("deep"));
+  const gameObject = tools.get("scene.gameobject")!;
+  const getData = tools.get("object.get-data")!;
+  assert.notEqual(gameObject.name, getData.name);
+  assert.match(gameObject.description, /lightweight/i);
+  assert.match(getData.description, /deep/i);
   await assert.rejects(readFile(new URL("../unitypkg/Editor/Tools/go/inspect.cs", import.meta.url), "utf8"));
 });

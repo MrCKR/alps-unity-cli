@@ -4,7 +4,6 @@ import type { BridgeCommandSpec } from "../types.js";
 export const sceneBridgeSpecs: BridgeCommandSpec[] = [
   { group: "scene", command: "active", bridgeCommand: "project-tool.run", toolName: "scene.active", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "scene.hierarchy", buildArgs: sceneHierarchyArgs },
-  { group: "scene", command: "build-settings", bridgeCommand: "project-tool.run", toolName: "scene.build-settings", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "create", bridgeCommand: "project-tool.run", toolName: "scene.create", buildArgs: sceneFileArgs, destructiveHint: true },
   { group: "scene", command: "load", bridgeCommand: "project-tool.run", toolName: "scene.load", buildArgs: sceneFileArgs },
   { group: "scene", command: "save", bridgeCommand: "project-tool.run", toolName: "scene.save", buildArgs: sceneSaveArgs, destructiveHint: true, supportsDryRun: true },

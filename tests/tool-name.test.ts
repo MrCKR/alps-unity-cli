@@ -14,7 +14,7 @@ const invalidDefinition = (name: string) => ({
 });
 
 test("native Tool names retain the exact syntax and UTF-8 byte limit", () => {
-  assert.equal(isRegisteredToolName("scene.data"), true);
+  assert.equal(isRegisteredToolName("scene.snapshot"), true);
   assert.equal(isRegisteredToolName("scene.hotfix-container"), true);
   assert.equal(isRegisteredToolName("a".repeat(MAX_TOOL_NAME_UTF8_BYTES)), true);
   assert.equal(isRegisteredToolName("a".repeat(MAX_TOOL_NAME_UTF8_BYTES + 1)), false);
@@ -23,9 +23,9 @@ test("native Tool names retain the exact syntax and UTF-8 byte limit", () => {
   assert.equal(isRegisteredToolName("scene.数据"), false);
   assert.equal(isRegisteredToolName("Scene.data"), false);
   assert.equal(isRegisteredToolName("scene..data"), false);
-  assert.equal(isRegisteredToolName("scene.data\n"), false);
-  assert.equal(isRegisteredToolName("scene.data\r\n"), false);
-  assert.equal(isRegisteredToolName("scene.data "), false);
+  assert.equal(isRegisteredToolName("scene.snapshot\n"), false);
+  assert.equal(isRegisteredToolName("scene.snapshot\r\n"), false);
+  assert.equal(isRegisteredToolName("scene.snapshot "), false);
 
   assert.throws(() => defineTool(invalidDefinition("scene.数据")), /registered Tool syntax.*128 UTF-8 bytes/);
   assert.throws(() => defineTool(invalidDefinition("a".repeat(129))), /registered Tool syntax.*128 UTF-8 bytes/);

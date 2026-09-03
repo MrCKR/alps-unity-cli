@@ -6,10 +6,10 @@ const editor = new URL("../unitypkg/Editor/", import.meta.url);
 const source = (path: string) => readFile(new URL(path, editor), "utf8");
 
 test("core graphics requests validate immutable plans before one commit and read back effects", async () => {
-  const [quality, scene, settings, pipeline, ambient, fog, reflection, properties, bakeSettings, bakeProbe, material, sun, support] = await Promise.all([
-    source("Tools/graphics/quality.cs"), source("Tools/graphics/scene-debug.cs"), source("Tools/graphics/settings.cs"), source("Tools/graphics/pipeline-quality.cs"), source("Tools/graphics/skybox-set-ambient.cs"), source("Tools/graphics/skybox-set-fog.cs"), source("Tools/graphics/skybox-set-reflection.cs"), source("Tools/graphics/skybox-set-properties.cs"), source("Tools/graphics/bake-settings.cs"), source("Tools/graphics/bake-reflection-probe.cs"), source("Tools/graphics/skybox-set-material.cs"), source("Tools/graphics/skybox-set-sun.cs"), source("Tools/graphics/GraphicsToolSupport.cs"),
+  const [quality, scene, pipeline, ambient, fog, reflection, properties, bakeSettings, bakeProbe, material, sun, support] = await Promise.all([
+    source("Tools/graphics/quality.cs"), source("Tools/graphics/scene-debug.cs"), source("Tools/graphics/pipeline-settings.cs"), source("Tools/graphics/skybox-set-ambient.cs"), source("Tools/graphics/skybox-set-fog.cs"), source("Tools/graphics/skybox-set-reflection.cs"), source("Tools/graphics/skybox-set-properties.cs"), source("Tools/graphics/bake-settings.cs"), source("Tools/graphics/bake-reflection-probe.cs"), source("Tools/graphics/skybox-set-material.cs"), source("Tools/graphics/skybox-set-sun.cs"), source("Tools/graphics/GraphicsToolSupport.cs"),
   ]);
-  for (const text of [quality, settings, pipeline, ambient, fog, reflection, properties, bakeSettings]) {
+  for (const text of [quality, pipeline, ambient, fog, reflection, properties, bakeSettings]) {
     assert.match(text, /ctx\.CommitEffect\(\)/);
     assert.match(text, /STATE_MISMATCH|readback/i);
   }
@@ -27,8 +27,7 @@ test("core graphics requests validate immutable plans before one commit and read
   assert.doesNotMatch(reflection, /DefaultReflectionResolution/);
   assert.match(quality, /MasterTextureLimit/);
   assert.match(quality, /RealtimeReflectionProbes/);
-  assert.match(settings, /ReloadAsset<RenderPipelineAsset>/);
-  assert.match(settings, /GenericSettingMatches/);
+  assert.match(pipeline, /ReloadAsset<RenderPipelineAsset>/);
   assert.match(properties, /E_SKYBOX_PROPERTY_NOT_FOUND/);
   assert.match(properties, /E_SKYBOX_PROPERTY_TYPE_UNSUPPORTED/);
   assert.match(properties, /ReloadAsset<Material>/);
@@ -49,24 +48,42 @@ test("core graphics requests validate immutable plans before one commit and read
   assert.match(bakeProbe, /bytes\[0\] == 0x76/);
 });
 
-test("graphics probe and pipeline writes validate before commit and read fresh objects", async () => {
-  const [reflection, group, positions, pipeline] = await Promise.all([
-    source("Tools/graphics/reflection-probe.cs"),
-    source("Tools/graphics/light-probe-group.cs"),
-    source("Tools/graphics/probe-positions.cs"),
+test("retained graphics mutations commit only writes and read back their owning state", async () => {
+  const [quality, pipeline, group, reflection] = await Promise.all([
+    source("Tools/graphics/quality.cs"),
     source("Tools/graphics/pipeline-settings.cs"),
+    source("Tools/graphics/light-probe-group.cs"),
+    source("Tools/graphics/reflection-probe.cs"),
   ]);
-  const reflectionBefore = reflection.slice(0, reflection.indexOf("ctx.CommitEffect()"));
-  assert.match(reflectionBefore, /E_REFLECTION_PROBE_RESOLUTION_INVALID/);
-  assert.match(reflectionBefore, /E_REFLECTION_PROBE_BOUNCES_INVALID/);
-  assert.match(reflection, /ResolveUniqueTarget\(go\.GetInstanceID\(\)\.ToString\(CultureInfo\.InvariantCulture\)/);
-  assert.match(reflection, /E_REFLECTION_PROBE_STATE_MISMATCH/);
-  assert.match(group, /SamePositions\(observedPositions, positions\)/);
-  assert.match(group, /GetInstanceID\(\)\.ToString\(CultureInfo\.InvariantCulture\)/);
-  assert.match(positions, /E_PROBE_TYPE_INVALID/);
-  assert.match(positions, /E_PROBE_POSITIONS_INVALID/);
-  assert.match(positions, /E_PROBE_STATE_MISMATCH/);
+
+  assert.match(quality, /var hasWrite = level\.HasValue \|\| request\.VSyncCount\.HasValue[\s\S]*request\.SoftParticles\.HasValue;/);
+  assert.match(quality, /if \(hasWrite\) ctx\.CommitEffect\(\)/);
+  assert.match(quality, /var observed = GraphicsToolSupport\.BuildQualitySettings\(\)/);
+  assert.match(quality, /E_QUALITY_STATE_MISMATCH/);
+
+  const pipelineRead = pipeline.indexOf("if (string.IsNullOrEmpty(r.RenderPipeline))");
+  const pipelineCommit = pipeline.indexOf("ctx.CommitEffect()");
+  assert.ok(pipelineRead >= 0 && pipelineCommit > pipelineRead, "pipeline pure read must return before commit");
   assert.match(pipeline, /AssetPathToGUID\(pipelinePath\)/);
   assert.match(pipeline, /AssetDatabase\.ImportAsset\(pipelinePath, ImportAssetOptions\.ForceUpdate\)/);
   assert.match(pipeline, /ReloadAsset<RenderPipelineAsset>\(pipelinePath, pipelineGuid\)/);
+  assert.match(pipeline, /var observedPipeline = GraphicsSettings\.defaultRenderPipeline/);
+  assert.match(pipeline, /E_RENDER_PIPELINE_STATE_MISMATCH/);
+
+  assert.match(group, /var mutates = createdObject \|\| addComponent \|\| positions != null;/);
+  assert.match(reflection, /var mutates = createdObject \|\| addComponent \|\| hasMode \|\| r\.Resolution\.HasValue \|\| r\.Bounces\.HasValue \|\| r\.Hdr\.HasValue \|\| boxSize\.HasValue \|\| boxOffset\.HasValue;/);
+  for (const text of [group, reflection]) {
+    assert.match(text, /if \(mutates\)[\s\S]*ctx\.CommitEffect\(\)/);
+    assert.match(text, /UnityCliSceneMutation/);
+    assert.match(text, /ResolveUniqueTarget\(go\.GetInstanceID\(\)\.ToString\(CultureInfo\.InvariantCulture\)/);
+  }
+  assert.match(group, /var observedPositions = observedProbe == null \? null : observedProbe\.probePositions/);
+  assert.match(group, /SamePositions\(observedPositions, positions\)/);
+  assert.match(group, /E_LIGHT_PROBE_GROUP_STATE_MISMATCH/);
+
+  const reflectionBefore = reflection.slice(0, reflection.indexOf("ctx.CommitEffect()"));
+  assert.match(reflectionBefore, /E_REFLECTION_PROBE_RESOLUTION_INVALID/);
+  assert.match(reflectionBefore, /E_REFLECTION_PROBE_BOUNCES_INVALID/);
+  assert.match(reflection, /var observed = GraphicsToolSupport\.BuildReflectionProbeInfo\(observedProbe\)/);
+  assert.match(reflection, /E_REFLECTION_PROBE_STATE_MISMATCH/);
 });

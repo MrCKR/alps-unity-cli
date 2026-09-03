@@ -67,8 +67,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "scene.hierarchy",
-            Summary = "Page the active scene hierarchy from stable raw GameObject positions without materializing the tree.",
-            Description = "Read active-scene GameObjects in Unity hierarchy order. pageSize is 1..500 (default 50), maxDepth is 0..16 (default 1), and parent is an exact instance id or full case-sensitive hierarchy path. Each page scans only forward from nextCursor and shares budget defaults of 10000 scans, 4096 nodes, 2048 getters, 4096 reflection calls, 250 main-thread ms and 1 MiB UTF-8; maxima are 100000/20000/10000/20000/2000 ms/8 MiB. pageInfo never fabricates a filtered total: complete=false/truncated=true and nextCursor identify the next raw GameObject. Old generations return E_CONTINUATION_STALE. Read-only in Edit and Play Mode.",
+            Summary = "Read a lightweight, paged active scene hierarchy from stable raw GameObject positions.",
+            Description = "Read a lightweight active-scene hierarchy in Edit or Play mode. Use parent for one subtree, maxDepth to limit recursion, query/name/component filters to narrow results, and includeComponents only when component previews are needed. Read one selected object with scene.gameobject; use object.get-data or component.get for deep fields. pageSize is 1..500 (default 50), maxDepth is 0..16 (default 1), each page scans only forward from nextCursor, pageInfo never fabricates a filtered total, and old generations return E_CONTINUATION_STALE. All pages share scan/node/getter/reflection/time/UTF-8 budgets.",
             Group = "scene",
             DestructiveHint = false,
             Target = "editor",
@@ -77,7 +77,7 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "List a bounded hierarchy page", Input = new Request { PageSize = 25, MaxDepth = 1 } },
+                new ToolExample { Description = "List one hierarchy page", Input = new Request { PageSize = 25, MaxDepth = 1 } },
                 new ToolExample { Description = "Find camera nodes by component type", Input = new Request { ComponentType = "Camera", PageSize = 10 } }
             }
         };

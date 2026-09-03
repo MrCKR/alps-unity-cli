@@ -66,7 +66,6 @@ test("PlayMode scene tools use the mutation helper instead of unsafe Editor APIs
     "unitypkg/Editor/Tools/material/set-renderer-color.cs",
     "unitypkg/Editor/Tools/material/assign.cs",
     "unitypkg/Editor/Tools/controller/assign.cs",
-    "unitypkg/Editor/Tools/graphics/probe-positions.cs",
     "unitypkg/Editor/Tools/graphics/light-probe-group.cs",
     "unitypkg/Editor/Tools/graphics/reflection-probe.cs",
     "unitypkg/Editor/Tools/graphics/skybox-set-material.cs",
@@ -109,8 +108,25 @@ test("supported PlayMode descriptors contain no direct unsafe Editor mutation ca
 
   for (const file of files) {
     const value = await readFile(file, "utf8");
-    if (!/PlayModeSupport = "(?:supported|session-affecting)"/.test(value)) continue;
+    if (!/PlayModeSupport = "supported"/.test(value)) continue;
     assert.doesNotMatch(value, unsafe, relative(rootPath, file));
+  }
+});
+
+test("retained graphics replacements declare their final PlayMode behavior", async () => {
+  const [quality, pipeline, group, reflection] = await Promise.all([
+    source("unitypkg/Editor/Tools/graphics/quality.cs"),
+    source("unitypkg/Editor/Tools/graphics/pipeline-settings.cs"),
+    source("unitypkg/Editor/Tools/graphics/light-probe-group.cs"),
+    source("unitypkg/Editor/Tools/graphics/reflection-probe.cs"),
+  ]);
+
+  for (const value of [quality, pipeline]) {
+    assert.match(value, /PlayModeSupport = "session-affecting"/);
+  }
+  for (const value of [group, reflection]) {
+    assert.match(value, /PlayModeSupport = "supported"/);
+    assert.match(value, /UnityCliSceneMutation/);
   }
 });
 
@@ -136,7 +152,7 @@ test("persistent writes are explicitly editor-only", async () => {
     "unitypkg/Editor/Tools/asset/create.cs", "unitypkg/Editor/Tools/texture/create.cs", "unitypkg/Editor/Tools/shader/create.cs",
     "unitypkg/Editor/Tools/scriptable-object/create.cs", "unitypkg/Editor/Tools/material/create.cs", "unitypkg/Editor/Tools/physics/material.cs",
     "unitypkg/Editor/Tools/animation/clip/create.cs", "unitypkg/Editor/Tools/animation/animator/set-parameter.cs", "unitypkg/Editor/Tools/controller/create.cs",
-    "unitypkg/Editor/Tools/graphics/settings.cs", "unitypkg/Editor/Tools/graphics/quality.cs", "unitypkg/Editor/Tools/graphics/pipeline-quality.cs", "unitypkg/Editor/Tools/graphics/skybox-set-properties.cs",
+    "unitypkg/Editor/Tools/graphics/skybox-set-properties.cs",
     "unitypkg/Editor/Tools/prefab/create.cs", "unitypkg/Editor/Tools/scene/save.cs",
     "unitypkg/Editor/Tools/build/settings/set.cs", "unitypkg/Editor/Tools/project/layer/add.cs",
     "extensions/urp/unitypkg/Editor/Urp/settings-set.cs", "extensions/hdrp/unitypkg/Editor/Hdrp/settings-set.cs"

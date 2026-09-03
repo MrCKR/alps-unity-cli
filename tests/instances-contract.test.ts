@@ -14,9 +14,11 @@ function assertValid(value: unknown): void { assert.deepEqual(validateSchema(sch
 
 test("instances contract freezes status, options, writer and retention", () => {
   assert.equal(contract.version, 1);
+  assert.equal(contract.topLevel, "instances");
   assert.equal(contract.schema, "schemas/instances.schema.json");
   assert.deepEqual(contract.registry.statuses, ["ready", "transitioning", "blocked", "unresponsive", "unverifiable", "offline", "conflict"]);
   assert.deepEqual(contract.subcommands.list.options, ["all"]);
+  assert.equal(contract.subcommands.list.readOnly, true);
   assert.deepEqual(contract.subcommands.prune.options, ["instance", "timeout-ms"]);
   assert.equal(contract.subcommands.prune.privateCommand, "internal.instances.prune");
   assert.deepEqual(contract.subcommands.prune.retention, { offlineMax: 100, damagedMax: 20, maxAgeDays: 30, scanLimit: 2000, deleteLimit: 20 });

@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { readSnapshot, setRegistry, validateRegistryUrl } from "../../package-manager.js";
+import { setRegistry, validateRegistryUrl } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
 
 export interface PackageRegistrySetRequest {

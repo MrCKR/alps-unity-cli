@@ -51,25 +51,6 @@ export interface PackageManagerPaths {
   lockPath: string;
 }
 
-export interface PackageEntry {
-  name: string;
-  requestedVersion?: string;
-  lockedVersion?: string;
-  source?: string;
-  url?: string;
-  hash?: string;
-  dependencies?: Record<string, string>;
-}
-
-export interface PackageSnapshot {
-  projectPath: string;
-  manifestPath: string;
-  lockPath: string;
-  registry?: string;
-  scopedRegistries: ScopedRegistry[];
-  packages: PackageEntry[];
-}
-
 export interface PackageSpec {
   name: string;
   version?: string;
@@ -224,27 +205,6 @@ export function packagePaths(projectPath: string): PackageManagerPaths {
   };
 }
 
-export async function readSnapshot(projectPath: string): Promise<PackageSnapshot> {
-  const paths = packagePaths(projectPath);
-  const manifest = await readManifest(paths.manifestPath, false);
-  const lock = await readLock(paths.lockPath);
-  const dependencyNames = new Set([...Object.keys(manifest.dependencies ?? {}), ...Object.keys(lock.dependencies ?? {})]);
-  const packages = [...dependencyNames].sort().map((name) => toPackageEntry(name, manifest.dependencies?.[name], lock.dependencies?.[name]));
-
-  return {
-    projectPath: paths.projectPath,
-    manifestPath: paths.manifestPath,
-    lockPath: paths.lockPath,
-    registry: typeof manifest.registry === "string" ? manifest.registry : undefined,
-    scopedRegistries: normalizeScopedRegistries(manifest.scopedRegistries),
-    packages
-  };
-}
-
-export async function packageInfo(projectPath: string, name: string): Promise<PackageEntry | undefined> {
-  return (await readSnapshot(projectPath)).packages.find((entry) => entry.name === name);
-}
-
 export async function installPackage(projectPath: string, spec: PackageSpec, options: ManifestMutationOptions = {}): Promise<{ manifestPath: string; installedVersion: string; dependencyInstalled?: true; dryRun?: true; plannedEffects?: Array<Record<string, unknown>> }> {
   const resolvedProject = packagePaths(projectPath).projectPath;
   return options.dryRun ? installPackageLocked(resolvedProject, spec, options) : withProjectFileMutationLease(resolvedProject, "package-manifest-mutation", () => installPackageLocked(resolvedProject, spec, options));
@@ -256,7 +216,7 @@ async function installPackageLocked(projectPath: string, spec: PackageSpec, opti
   if (!spec.version) {
     throw new PackageManagerError("PACKAGE_VERSION_REQUIRED", `Package install requires an explicit Unity package version for manifest writes: ${spec.name}`, [
       "Pass a SemVer version with --version or append @<version> to the package name, e.g. com.unity.textmeshpro@3.0.7.",
-      "Use package.search or Unity Package Manager documentation to choose a compatible version."
+      "Use Unity Package Manager documentation to choose a compatible version."
     ]);
   }
   manifest.dependencies ??= {};
@@ -264,7 +224,7 @@ async function installPackageLocked(projectPath: string, spec: PackageSpec, opti
   if (previousVersion && isPackageVersionDowngrade(spec.version, previousVersion)) {
     throw new PackageManagerError("PACKAGE_DOWNGRADE_BLOCKED", `Refusing to downgrade ${spec.name} from ${previousVersion} to ${spec.version}.`, [
       "Choose a version greater than or equal to the currently requested manifest version.",
-      "Run tools run package.info --input '{\"name\":\"<package>\"}' to inspect the current requested and locked versions."
+      "Inspect Packages/manifest.json and the live package.resolve result before choosing a new version."
     ]);
   }
   if (options.dryRun) return { manifestPath: paths.manifestPath, installedVersion: spec.version, dryRun: true, plannedEffects: [{ type: "package.install", package: spec.name, version: spec.version, previousVersion }] };
@@ -289,7 +249,7 @@ async function removePackageLocked(projectPath: string, name: string, options: R
   const lock = await readLock(paths.lockPath);
   const removedVersion = manifest.dependencies?.[name];
   if (!removedVersion) {
-    throw new PackageManagerError("PACKAGE_NOT_FOUND", `Package is not declared in manifest: ${name}`, ["Run tools run package.list to inspect installed packages."]);
+    throw new PackageManagerError("PACKAGE_NOT_FOUND", `Package is not declared in manifest: ${name}`, ["Inspect Packages/manifest.json or run package.resolve to read Unity's resolved PackageInfo snapshot."]);
   }
   const dependents = packageDependents(lock, name);
   const blocked = dependents.length > 0 && !options.force;
@@ -386,7 +346,7 @@ async function removeScopedRegistryLocked(projectPath: string, name: string, opt
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
   const index = registries.findIndex((registry) => registry.name === name);
   if (index < 0) {
-    throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Run tools run package.scoped-registry.list to inspect scoped registries."]);
+    throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Inspect the scopedRegistries array in Packages/manifest.json before retrying."]);
   }
   const removed = registries[index];
   const matchedPackages = packagesUsingScopes(manifest, removed.scopes);
@@ -1409,7 +1369,7 @@ export function validateRegistryUrl(url: string | undefined): string {
   } catch {
     throw new PackageManagerError("REGISTRY_URL_INVALID", `Registry URL is invalid: ${url}`, [
       "Use an http(s) registry URL, for example https://package.openupm.com.",
-      "Run unitycli tools describe package.search or package.registry.set for accepted registry inputs."
+      "Run unitycli tools describe package.registry.set for accepted registry inputs."
     ]);
   }
 }
@@ -1420,29 +1380,6 @@ export function parseScopes(raw: string | undefined): string[] {
     throw new PackageManagerError("SCOPES_REQUIRED", "Pass --scope <scope> or comma-separated scopes.");
   }
   return uniqueScopes(scopes);
-}
-
-export async function searchRegistry(registry: string, query: string): Promise<Array<{ name: string; version?: string; description?: string }>> {
-  const endpoint = `${registry.replace(/\/$/, "")}/-/v1/search?text=${encodeURIComponent(query)}`;
-  let response: Response;
-  try {
-    response = await fetch(endpoint);
-  } catch (error) {
-    throw new PackageManagerError("REGISTRY_UNREACHABLE", error instanceof Error ? error.message : String(error), ["Check the registry URL and network connectivity."]);
-  }
-  if (!response.ok) {
-    throw new PackageManagerError("REGISTRY_UNREACHABLE", `Registry returned HTTP ${response.status}.`, ["Check the registry URL and credentials."]);
-  }
-  const payload = (await response.json()) as { objects?: Array<{ package?: { name?: string; version?: string; description?: string } }> };
-  return (payload.objects ?? []).flatMap((entry) => {
-    const candidate = entry.package;
-    if (typeof candidate?.name !== "string") return [];
-    return [{
-      name: candidate.name,
-      ...(typeof candidate.version === "string" ? { version: candidate.version } : {}),
-      ...(typeof candidate.description === "string" ? { description: candidate.description } : {}),
-    }];
-  });
 }
 
 export class PackageManagerError extends Error {
@@ -2343,18 +2280,6 @@ function manifestReadbackMismatch(manifestPath: string, detail: string): Package
 
 function stripJsonBom(value: string): string {
   return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
-}
-
-function toPackageEntry(name: string, requestedVersion: string | undefined, locked: LockPackage | undefined): PackageEntry {
-  return {
-    name,
-    requestedVersion,
-    lockedVersion: locked?.version,
-    source: locked?.source,
-    url: locked?.url,
-    hash: locked?.hash,
-    dependencies: locked?.dependencies
-  };
 }
 
 /** 比较 Unity registry 常见数字版本；git/file/custom spec 无法可靠比较时不拦截。 */

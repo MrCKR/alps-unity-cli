@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 
@@ -16,21 +17,40 @@ namespace UnityCli
             var index = scenes.ToList().FindIndex(scene => scene.path == path);
             if (index < 0)
                 throw new UnityCliBridge.BridgeCommandException("E_BUILD_SCENE_NOT_FOUND", "Build Settings does not contain scene: " + path, "Run build.scene.list and pass a listed path.");
-            if (!ctx.DryRun)
+            var changed = scenes[index].enabled != enabled;
+            var plannedEffects = changed
+                ? new List<BuildScenePlannedEffect> { new BuildScenePlannedEffect { Type = toolName, Path = path, Enabled = enabled } }
+                : new List<BuildScenePlannedEffect>();
+            if (!ctx.DryRun && changed)
             {
                 ctx.CommitEffect();
                 scenes[index] = new EditorBuildSettingsScene(path, enabled);
                 EditorBuildSettings.scenes = scenes;
                 scenes = ReadScenes();
-                if (!scenes.Any(scene => scene.path == path && scene.enabled == enabled))
+                index = scenes.ToList().FindIndex(scene => scene.path == path);
+                if (index < 0 || scenes[index].enabled != enabled)
                     throw new UnityCliBridge.BridgeCommandException("E_BUILD_SCENE_STATE_MISMATCH", "Build Settings did not apply the requested enabled state for " + path + ".", "Inspect build.scene.list and retry.");
             }
-            return new(new BuildSceneMutationResult { Count = scenes.LongLength, DryRun = ctx.DryRun });
+            return new(new BuildSceneMutationResult
+            {
+                Count = scenes.LongLength,
+                Scene = BuildEntry(scenes[index], index),
+                Changed = !ctx.DryRun && changed,
+                NoOpReason = !changed ? "scene-already-" + (enabled ? "enabled" : "disabled") : null,
+                DryRun = ctx.DryRun,
+                PlannedEffects = plannedEffects
+            });
         }
 
         public static EditorBuildSettingsScene[] ReadScenes()
         {
             return EditorBuildSettings.scenes ?? new EditorBuildSettingsScene[0];
+        }
+
+        // 将 fresh EditorBuildSettings 读回投影为公开条目。
+        public static BuildSceneEntry BuildEntry(EditorBuildSettingsScene scene, int index)
+        {
+            return new BuildSceneEntry { Path = BuildToolSupport.NormalizeAssetPath(scene.path), Enabled = scene.enabled, BuildIndex = index };
         }
     }
 }

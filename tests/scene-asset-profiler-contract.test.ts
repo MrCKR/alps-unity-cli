@@ -36,7 +36,7 @@ test("cross-domain new tools keep contract entries with present C# handlers", ()
     "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set",
     "build.scene.list", "build.scene.add", "build.scene.remove", "build.scene.enable", "build.scene.disable",
     "build.platform.get", "build.platform.set", "build.profile.list", "build.profile.create", "build.profile.switch", "build.profile.modify", "build.settings.get", "build.settings.set",
-    "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
+    "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
   ];
   for (const name of newTools) {
     const contract = findCommandContract(name);

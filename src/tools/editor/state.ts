@@ -63,7 +63,7 @@ interface EditorStateReadDependencies {
 export default defineTool<EditorStateRequest, EditorStateResult>({
   name: "editor.state",
   summary: "Read the selected Unity Editor session state, progress, and external blockers without waiting.",
-  description: "Read selected Unity project identity and active Editor session. Input must be empty. This read-only Tool never waits, refreshes Unity, writes a journal, or dismisses dialogs. It combines bounded main-thread snapshot, Registry v3, verified process identity, and Windows modal observation to classify transition, blocker, unresponsive, unverifiable, offline, and verified conflict. Ready proves only current session state; after a started mutation timeout, read affected business state before a new request.",
+  description: "Read one selected Unity project's active Editor session without waiting. Input must be empty. This read-only Tool combines a bounded main-thread snapshot, Registry v3, verified process identity, and Windows modal observation; it never refreshes Unity, writes a journal, or dismisses dialogs. Use top-level instances list for registry inventory. After a started mutation timeout, inspect the affected business state before a new request.",
   group: "editor",
   destructiveHint: false,
   sideEffects: [],
