@@ -3,37 +3,186 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace UnityCli
 {
+    /// <summary>构造期冻结的执行条目；所有 descriptor 集合和 JSON 值均防御性复制。</summary>
     internal sealed class RegisteredTool
     {
-        public string Name { get; set; }
-        public string Summary { get; set; }
-        public string Description { get; set; }
-        public string Group { get; set; }
-        public string Source { get; set; }
-        public string InputSchema { get; set; }
-        public string OutputSchema { get; set; }
-        public bool DestructiveHint { get; set; }
-        public string[] SideEffects { get; set; }
-        public bool SupportsDryRun { get; set; }
-        public string[] Permissions { get; set; }
-        public string[] RequiresPackages { get; set; }
-        public object Examples { get; set; }
-        public string Target { get; set; }
-        public string AvailabilityScope { get; set; }
-        public string PlayModeSupport { get; set; }
-        public string ContractProfile { get; set; }
-        public int DefaultTimeoutMs { get; set; }
-        public int MaxTimeoutMs { get; set; }
-        public Type RequestType { get; set; }
-        public Type ResultType { get; set; }
-        public UnityCliToolCompletionContract CompletionContract { get; set; }
-        internal OfficialAttributeToolBinding OfficialAttributeBinding { get; set; }
-        public Func<object, UnityCliProjectToolContext, CancellationToken, ValueTask<object>> InvokeAsync { get; set; }
+        private readonly string[] sideEffects;
+        private readonly string[] permissions;
+        private readonly string[] requiresPackages;
+        private readonly string examplesJson;
+
+        internal RegisteredTool(
+            ToolDescriptor descriptor,
+            RegistryToolOwnership ownership,
+            string inputSchema,
+            string outputSchema,
+            string availabilityScope,
+            string contractProfile,
+            Type requestType,
+            Type resultType,
+            UnityCliToolCompletionContract completionContract,
+            OfficialAttributeToolBinding officialAttributeBinding,
+            Func<object, UnityCliProjectToolContext, CancellationToken, ValueTask<object>> invokeAsync)
+        {
+            if (descriptor == null) throw new ArgumentNullException("descriptor");
+            if (ownership == null) throw new ArgumentNullException("ownership");
+            Name = descriptor.Name;
+            Summary = descriptor.Summary;
+            Description = descriptor.Description;
+            Group = string.IsNullOrEmpty(descriptor.Group) ? DefaultGroup(descriptor.Name) : descriptor.Group;
+            Source = ownership.Source;
+            OwnerIdentity = ownership;
+            InputSchema = inputSchema;
+            OutputSchema = outputSchema;
+            DestructiveHint = descriptor.DestructiveHint;
+            sideEffects = (descriptor.SideEffects ?? Array.Empty<string>()).ToArray();
+            SupportsDryRun = descriptor.SupportsDryRun;
+            permissions = (descriptor.Permissions ?? Array.Empty<string>()).ToArray();
+            requiresPackages = (descriptor.RequiresPackages ?? Array.Empty<string>()).ToArray();
+            examplesJson = UnityCliSerializer.Serialize(
+                UnityCliSerializer.Parse(UnityCliSerializer.Serialize(descriptor.Examples ?? Array.Empty<ToolExample>())));
+            Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target;
+            AvailabilityScope = string.IsNullOrEmpty(availabilityScope)
+                ? (Target == "runtime" ? "playModeSession" : "editorSession")
+                : availabilityScope;
+            PlayModeSupport = NormalizePlayModeSupport(descriptor.PlayModeSupport, Target);
+            ContractProfile = string.IsNullOrEmpty(contractProfile) ? "native" : contractProfile;
+            DefaultTimeoutMs = descriptor.DefaultTimeoutMs <= 0 ? 30000 : descriptor.DefaultTimeoutMs;
+            MaxTimeoutMs = descriptor.MaxTimeoutMs <= 0 ? 600000 : descriptor.MaxTimeoutMs;
+            RequestType = requestType;
+            ResultType = resultType;
+            CompletionContract = completionContract;
+            OfficialAttributeBinding = officialAttributeBinding;
+            InvokeAsync = invokeAsync;
+        }
+
+        public string Name { get; }
+        public string Summary { get; }
+        public string Description { get; }
+        public string Group { get; }
+        public string Source { get; }
+        public string InputSchema { get; }
+        public string OutputSchema { get; }
+        public bool DestructiveHint { get; }
+        public IReadOnlyList<string> SideEffects { get { return new ReadOnlyCollection<string>(sideEffects.ToArray()); } }
+        public bool SupportsDryRun { get; }
+        public IReadOnlyList<string> Permissions { get { return new ReadOnlyCollection<string>(permissions.ToArray()); } }
+        public IReadOnlyList<string> RequiresPackages { get { return new ReadOnlyCollection<string>(requiresPackages.ToArray()); } }
+        public string Target { get; }
+        public string AvailabilityScope { get; }
+        public string PlayModeSupport { get; }
+        public string ContractProfile { get; }
+        public int DefaultTimeoutMs { get; }
+        public int MaxTimeoutMs { get; }
+        public Type RequestType { get; }
+        public Type ResultType { get; }
+        public UnityCliToolCompletionContract CompletionContract { get; }
+        internal RegistryToolOwnership OwnerIdentity { get; }
+        internal OfficialAttributeToolBinding OfficialAttributeBinding { get; }
+        internal Func<object, UnityCliProjectToolContext, CancellationToken, ValueTask<object>> InvokeAsync { get; }
+        internal string ExamplesJson { get { return examplesJson; } }
+        internal object CloneExamples() { return UnityCliSerializer.Parse(examplesJson); }
+
+        private static string DefaultGroup(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "custom";
+            var dot = name.IndexOf('.');
+            return dot > 0 ? name.Substring(0, dot) : "custom";
+        }
+
+        private static string NormalizePlayModeSupport(string value, string target)
+        {
+            if (value == "supported" || value == "runtime-only" || value == "session-affecting"
+                || value == "editor-only" || value == "unknown") return value;
+            return target == "runtime" ? "runtime-only" : "editor-only";
+        }
+    }
+
+    /// <summary>snapshot reader 唯一可见的 descriptor；不含 CLR Type、binding 或 invoker。</summary>
+    internal sealed class RegisteredToolDescriptor
+    {
+        private readonly string[] sideEffects;
+        private readonly string[] permissions;
+        private readonly string[] requiresPackages;
+        private readonly string examplesJson;
+
+        internal RegisteredToolDescriptor(RegisteredTool tool)
+        {
+            Name = tool.Name;
+            Summary = tool.Summary;
+            Description = tool.Description;
+            Group = tool.Group;
+            Source = tool.Source;
+            InputSchema = tool.InputSchema;
+            OutputSchema = tool.OutputSchema;
+            DestructiveHint = tool.DestructiveHint;
+            sideEffects = tool.SideEffects.ToArray();
+            SupportsDryRun = tool.SupportsDryRun;
+            permissions = tool.Permissions.ToArray();
+            requiresPackages = tool.RequiresPackages.ToArray();
+            examplesJson = tool.ExamplesJson;
+            Target = tool.Target;
+            AvailabilityScope = tool.AvailabilityScope;
+            PlayModeSupport = tool.PlayModeSupport;
+            ContractProfile = tool.ContractProfile;
+            DefaultTimeoutMs = tool.DefaultTimeoutMs;
+            CompletionContract = new PublishedToolCompletionContract(tool.CompletionContract);
+        }
+
+        public string Name { get; }
+        public string Summary { get; }
+        public string Description { get; }
+        public string Group { get; }
+        public string Source { get; }
+        public string InputSchema { get; }
+        public string OutputSchema { get; }
+        public bool DestructiveHint { get; }
+        public IReadOnlyList<string> SideEffects { get { return new ReadOnlyCollection<string>(sideEffects.ToArray()); } }
+        public bool SupportsDryRun { get; }
+        public IReadOnlyList<string> Permissions { get { return new ReadOnlyCollection<string>(permissions.ToArray()); } }
+        public IReadOnlyList<string> RequiresPackages { get { return new ReadOnlyCollection<string>(requiresPackages.ToArray()); } }
+        public string Target { get; }
+        public string AvailabilityScope { get; }
+        public string PlayModeSupport { get; }
+        public string ContractProfile { get; }
+        public int DefaultTimeoutMs { get; }
+        public PublishedToolCompletionContract CompletionContract { get; }
+        internal object CloneExamples() { return UnityCliSerializer.Parse(examplesJson); }
+    }
+
+    /// <summary>published descriptor 使用的 completion 深拷贝。</summary>
+    internal sealed class PublishedToolCompletionContract
+    {
+        internal PublishedToolCompletionContract(UnityCliToolCompletionContract source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            ExecutionClass = source.ExecutionClass;
+            CompletionPredicate = source.CompletionPredicate;
+            ProofSource = source.ProofSource;
+            ReloadPolicy = source.ReloadPolicy;
+            TimeoutError = source.TimeoutError;
+            OutcomeUnknownPolicy = source.OutcomeUnknownPolicy;
+            CompletionDriverId = source.CompletionDriverId;
+            JournalPolicy = source.JournalPolicy;
+            Mutation = source.Mutation;
+        }
+
+        public string ExecutionClass { get; }
+        public string CompletionPredicate { get; }
+        public string ProofSource { get; }
+        public string ReloadPolicy { get; }
+        public string TimeoutError { get; }
+        public string OutcomeUnknownPolicy { get; }
+        public string CompletionDriverId { get; }
+        public string JournalPolicy { get; }
+        public bool Mutation { get; }
     }
 
     internal enum UnityCliToolProviderKind
@@ -44,64 +193,117 @@ namespace UnityCli
         OfficialAttribute
     }
 
-    /// <summary>041 的内部读取边界；实现只能返回当前domain已经发布的同一个只读快照。</summary>
+    /// <summary>只返回当前 domain 的 descriptor snapshot，不能取得 executable entry。</summary>
     internal interface IUnityCliToolCatalogSnapshotReader
     {
         UnityCliToolCatalogSnapshot Read();
     }
 
-    /// <summary>一次domain构建的终态；字典在构造时复制并封装，发布后不再接受写入。</summary>
+    internal interface IUnityCliToolCatalogHealthSnapshotReader
+    {
+        UnityCliToolCatalogHealthSnapshot Read();
+    }
+
+    /// <summary>一次 publication 的不可变 descriptor 投影与真实 discovery 计数。</summary>
     internal sealed class UnityCliToolCatalogSnapshot
     {
         internal UnityCliToolCatalogSnapshot(
-            Dictionary<string, RegisteredTool> tools,
+            IEnumerable<RegisteredToolDescriptor> descriptors,
             int assemblyCount,
             int providerAssemblyCount,
             int builtInToolCount,
             int extensionToolCount,
             int projectInterfaceToolCount,
             int officialAttributeToolCount,
-            long elapsedMilliseconds)
+            long elapsedMilliseconds,
+            int discoveryPassCount,
+            int assetDatabaseOperationCount,
+            int sourceFileReadCount,
+            int persistedToolValueOperationCount,
+            int perToolSuccessLogCount)
         {
-            Tools = new ReadOnlyDictionary<string, RegisteredTool>(new Dictionary<string, RegisteredTool>(tools, StringComparer.Ordinal));
+            Descriptors = new ReadOnlyCollection<RegisteredToolDescriptor>(
+                descriptors.OrderBy(item => item.Name, StringComparer.Ordinal).ToArray());
             AssemblyCount = assemblyCount;
             ProviderAssemblyCount = providerAssemblyCount;
             BuiltInToolCount = builtInToolCount;
             ExtensionToolCount = extensionToolCount;
             ProjectInterfaceToolCount = projectInterfaceToolCount;
             OfficialAttributeToolCount = officialAttributeToolCount;
-            ElapsedMilliseconds = elapsedMilliseconds;
+            ElapsedMilliseconds = Math.Max(0, elapsedMilliseconds);
+            DiscoveryPassCount = discoveryPassCount;
+            AssetDatabaseOperationCount = assetDatabaseOperationCount;
+            SourceFileReadCount = sourceFileReadCount;
+            PersistedToolValueOperationCount = persistedToolValueOperationCount;
+            PerToolSuccessLogCount = perToolSuccessLogCount;
         }
 
-        public IReadOnlyDictionary<string, RegisteredTool> Tools { get; private set; }
-        public int ToolCount { get { return Tools.Count; } }
-        public int AssemblyCount { get; private set; }
-        public int ProviderAssemblyCount { get; private set; }
-        public int BuiltInToolCount { get; private set; }
-        public int ExtensionToolCount { get; private set; }
-        public int ProjectInterfaceToolCount { get; private set; }
-        public int OfficialAttributeToolCount { get; private set; }
-        public long ElapsedMilliseconds { get; private set; }
-        public int DiscoveryPassCount { get { return 1; } }
-        public int AssetDatabaseOperationCount { get { return 0; } }
-        public int SourceFileReadCount { get { return 0; } }
-        public int PersistedToolValueOperationCount { get { return 0; } }
-        public int PerToolSuccessLogCount { get { return 0; } }
+        public IReadOnlyList<RegisteredToolDescriptor> Descriptors { get; }
+        public int ToolCount { get { return Descriptors.Count; } }
+        public int AssemblyCount { get; }
+        public int ProviderAssemblyCount { get; }
+        public int BuiltInToolCount { get; }
+        public int ExtensionToolCount { get; }
+        public int ProjectInterfaceToolCount { get; }
+        public int OfficialAttributeToolCount { get; }
+        public long ElapsedMilliseconds { get; }
+        public int DiscoveryPassCount { get; }
+        public int AssetDatabaseOperationCount { get; }
+        public int SourceFileReadCount { get; }
+        public int PersistedToolValueOperationCount { get; }
+        public int PerToolSuccessLogCount { get; }
     }
 
-    /// <summary>纯内存pending registry；任一验证失败后永久fault，不能发布部分结果。</summary>
+    /// <summary>doctor 可独立读取的 bounded health；失败时不暴露 executable table。</summary>
+    internal sealed class UnityCliToolCatalogHealthSnapshot
+    {
+        internal UnityCliToolCatalogHealthSnapshot(bool ready, int toolCount, string failure, string nextAction)
+        {
+            Ready = ready;
+            ToolCount = Math.Max(0, toolCount);
+            Failure = failure ?? string.Empty;
+            NextAction = nextAction ?? string.Empty;
+        }
+
+        public bool Ready { get; }
+        public int ToolCount { get; }
+        public string Failure { get; }
+        public string NextAction { get; }
+    }
+
+    /// <summary>唯一原子 publication；executable table 与其 descriptor 投影同源、同代。</summary>
+    internal sealed class UnityCliPublishedToolCatalog
+    {
+        internal UnityCliPublishedToolCatalog(Dictionary<string, RegisteredTool> tools, UnityCliToolCatalogSnapshot snapshot)
+        {
+            ExecutableTools = new ReadOnlyDictionary<string, RegisteredTool>(
+                new Dictionary<string, RegisteredTool>(tools, StringComparer.Ordinal));
+            Snapshot = snapshot ?? throw new ArgumentNullException("snapshot");
+        }
+
+        internal IReadOnlyDictionary<string, RegisteredTool> ExecutableTools { get; }
+        internal UnityCliToolCatalogSnapshot Snapshot { get; }
+    }
+
+    /// <summary>纯内存 pending registry；任一验证失败后永久 fault，失败对象不能替换 publication slot。</summary>
     internal sealed class UnityCliToolCatalogBuilder
     {
         private readonly Dictionary<string, RegisteredTool> pending = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
+        private readonly HashSet<string> providerMetadata = new HashSet<string>(StringComparer.Ordinal);
         private bool discoveryStarted;
         private bool faulted;
         private bool published;
         private int assemblyCount;
-        private int providerAssemblyCount;
+        private int expectedProviderAssemblyCount;
         private int builtInToolCount;
         private int extensionToolCount;
         private int projectInterfaceToolCount;
         private int officialAttributeToolCount;
+        private int discoveryPassCount;
+        private int assetDatabaseOperationCount;
+        private int sourceFileReadCount;
+        private int persistedToolValueOperationCount;
+        private int perToolSuccessLogCount;
 
         internal void BeginDiscovery(int loadedAssemblyCount, int candidateProviderAssemblyCount)
         {
@@ -109,9 +311,23 @@ namespace UnityCli
             if (loadedAssemblyCount < 1 || candidateProviderAssemblyCount < 1 || candidateProviderAssemblyCount > loadedAssemblyCount)
                 throw new ArgumentOutOfRangeException("candidateProviderAssemblyCount");
             discoveryStarted = true;
+            discoveryPassCount++;
             assemblyCount = loadedAssemblyCount;
-            providerAssemblyCount = candidateProviderAssemblyCount;
+            expectedProviderAssemblyCount = candidateProviderAssemblyCount;
         }
+
+        /// <summary>生产 discovery 与 301-provider 测试共用此 exact assembly metadata 路径。</summary>
+        internal void RecordProviderMetadata(string assemblyIdentity)
+        {
+            if (!discoveryStarted || published || faulted || string.IsNullOrWhiteSpace(assemblyIdentity))
+                throw new InvalidOperationException("Tool provider metadata is not writable.");
+            if (!providerMetadata.Add(assemblyIdentity)) throw new InvalidOperationException("Duplicate Tool provider assembly identity: " + assemblyIdentity + ".");
+        }
+
+        internal void RecordAssetDatabaseOperation() { assetDatabaseOperationCount++; }
+        internal void RecordSourceFileRead() { sourceFileReadCount++; }
+        internal void RecordPersistedToolValueOperation() { persistedToolValueOperationCount++; }
+        internal void RecordPerToolSuccessLog() { perToolSuccessLogCount++; }
 
         internal void Add(RegisteredTool definition, UnityCliToolProviderKind providerKind)
         {
@@ -137,36 +353,46 @@ namespace UnityCli
             }
         }
 
-        internal void Abort()
-        {
-            faulted = true;
-        }
+        internal void Abort() { faulted = true; }
 
-        internal UnityCliToolCatalogSnapshot Publish(long elapsedMilliseconds)
+        internal UnityCliPublishedToolCatalog Publish(long elapsedMilliseconds)
         {
             if (!discoveryStarted || faulted || published) throw new InvalidOperationException("Tool catalog cannot publish an incomplete or faulted table.");
+            if (providerMetadata.Count != expectedProviderAssemblyCount)
+                throw new InvalidOperationException("Tool catalog provider metadata does not match the discovered provider assembly set.");
             if (builtInToolCount + extensionToolCount + projectInterfaceToolCount + officialAttributeToolCount != pending.Count)
                 throw new InvalidOperationException("Tool catalog provider counts do not match the pending table.");
             published = true;
-            return new UnityCliToolCatalogSnapshot(
-                pending,
+            var descriptors = pending.Values.Select(tool => new RegisteredToolDescriptor(tool));
+            var snapshot = new UnityCliToolCatalogSnapshot(
+                descriptors,
                 assemblyCount,
-                providerAssemblyCount,
+                providerMetadata.Count,
                 builtInToolCount,
                 extensionToolCount,
                 projectInterfaceToolCount,
                 officialAttributeToolCount,
-                Math.Max(0, elapsedMilliseconds));
+                elapsedMilliseconds,
+                discoveryPassCount,
+                assetDatabaseOperationCount,
+                sourceFileReadCount,
+                persistedToolValueOperationCount,
+                perToolSuccessLogCount);
+            return new UnityCliPublishedToolCatalog(pending, snapshot);
         }
 
         private static void Validate(RegisteredTool definition, UnityCliToolProviderKind providerKind)
         {
             if (definition == null || string.IsNullOrWhiteSpace(definition.Name) || string.IsNullOrWhiteSpace(definition.Summary)
                 || string.IsNullOrWhiteSpace(definition.Description) || string.IsNullOrWhiteSpace(definition.Group)
-                || definition.Examples == null || definition.InvokeAsync == null)
-                throw new ArgumentException("Tool registration requires name, summary, description, group, and a typed async invoker.");
-            if (definition.Name.Length > 256 || definition.Summary.Length > 512 || definition.Group.Length > 256)
-                throw new ArgumentException("Tool name, summary, or group exceeds the catalog transport bound: " + definition.Name);
+                || definition.CloneExamples() == null || definition.InvokeAsync == null)
+                throw new ArgumentException("Tool registration requires name, summary, description, group, examples, and a typed async invoker.");
+            if (definition.Name.Length > 256 || definition.Summary.Length > 512 || definition.Group.Length > 256
+                || definition.Description.Length > 65536
+                || Encoding.UTF8.GetByteCount(definition.InputSchema ?? string.Empty) > 1024 * 1024
+                || Encoding.UTF8.GetByteCount(definition.OutputSchema ?? string.Empty) > 1024 * 1024
+                || Encoding.UTF8.GetByteCount(definition.ExamplesJson ?? string.Empty) > 256 * 1024)
+                throw new ArgumentException("Tool descriptor exceeds a catalog transport bound: " + definition.Name);
             if (definition.RequestType == null || definition.ResultType == null
                 || string.IsNullOrWhiteSpace(definition.InputSchema) || string.IsNullOrWhiteSpace(definition.OutputSchema)
                 || !(UnityCliSerializer.Parse(definition.InputSchema) is IDictionary<string, object>)
@@ -185,8 +411,7 @@ namespace UnityCli
                 throw new ArgumentException("Tool registration requires a complete completion contract: " + definition.Name);
             if (definition.DefaultTimeoutMs <= 0 || definition.MaxTimeoutMs < definition.DefaultTimeoutMs)
                 throw new ArgumentException("Tool registration timeout bounds are invalid: " + definition.Name);
-            if (definition.SideEffects == null || definition.Permissions == null || definition.RequiresPackages == null
-                || !(definition.Examples is IEnumerable) || definition.Examples is string
+            if (!(definition.CloneExamples() is IEnumerable)
                 || (definition.Target != "editor" && definition.Target != "runtime" && definition.Target != "both")
                 || (definition.AvailabilityScope != "always" && definition.AvailabilityScope != "projectFiles"
                     && definition.AvailabilityScope != "editorSession" && definition.AvailabilityScope != "playModeSession")
@@ -202,13 +427,22 @@ namespace UnityCli
                 || !string.Equals(definition.ContractProfile, expectedProfile, StringComparison.Ordinal)
                 || ((providerKind == UnityCliToolProviderKind.OfficialAttribute) != (definition.OfficialAttributeBinding != null)))
                 throw new InvalidOperationException("Tool provider ownership does not match its descriptor: " + definition.Name);
+            if (definition.OwnerIdentity == null
+                || definition.OwnerIdentity.ImplementationType == null
+                || definition.OwnerIdentity.ImplementationType.Assembly != definition.OwnerIdentity.Assembly)
+                throw new InvalidOperationException("Tool provider has no exact compiled owner identity: " + definition.Name);
+            if (providerKind == UnityCliToolProviderKind.Extension && string.IsNullOrWhiteSpace(definition.OwnerIdentity.ExtensionId))
+                throw new InvalidOperationException("Extension Tool has no exact extension id: " + definition.Name);
+            if (providerKind != UnityCliToolProviderKind.Extension && !string.IsNullOrEmpty(definition.OwnerIdentity.ExtensionId))
+                throw new InvalidOperationException("Non-extension Tool cannot claim an extension id: " + definition.Name);
             if (definition.OfficialAttributeBinding != null
                 && (definition.OfficialAttributeBinding.Method == null || definition.OfficialAttributeBinding.DeclaredResultType == null
                     || definition.OfficialAttributeBinding.Parameters == null))
                 throw new InvalidOperationException("Official attribute Tool binding is incomplete: " + definition.Name);
             var completionOwner = definition.CompletionContract.DescriptorOwner ?? string.Empty;
             if ((providerKind == UnityCliToolProviderKind.BuiltIn && completionOwner != "built-in")
-                || (providerKind == UnityCliToolProviderKind.Extension && !completionOwner.StartsWith("extension:", StringComparison.Ordinal))
+                || (providerKind == UnityCliToolProviderKind.Extension
+                    && completionOwner != "extension:" + definition.OwnerIdentity.ExtensionId)
                 || ((providerKind == UnityCliToolProviderKind.ProjectInterface || providerKind == UnityCliToolProviderKind.OfficialAttribute)
                     && completionOwner != "project"))
                 throw new InvalidOperationException("Tool completion owner does not match its provider: " + definition.Name);

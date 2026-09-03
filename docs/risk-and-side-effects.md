@@ -67,7 +67,7 @@ For tools with `supportsDryRun`, `--dry-run` returns the same `plannedEffects` w
 
 ## Project Tool Integrity
 
-Each Unity domain validates the complete Tool table before publishing it. List, describe, and execution read that same immutable table; source changes become visible only after Unity compiles and replaces the domain and listener generation.
+Each Unity domain validates the complete Tool table before publishing its single executable slot. List and describe read the same publication's descriptor-only projection, while execution reads the executable entry from that slot; the reader cannot obtain invokers, CLR types, or writable metadata. A failed candidate never replaces the prior slot. Source changes become visible only after Unity compiles and replaces the domain and listener generation. `doctor` reads a separate bounded catalog-health snapshot so transport reachability is not confused with registry health.
 
 ## How to Assess Risk as an AI Agent
 
@@ -82,7 +82,8 @@ Each Unity domain validates the complete Tool table before publishing it. List, 
 | Limitation | Risk Level | Mitigation |
 |-----------|-----------|------------|
 | Dry-run is not available for every destructive tool | Medium | Invoke directly with declared effects; use preview only where supported |
-| Project tool registration changes only when Unity replaces the domain | Low | Re-discover after compilation/reload and bind the new Editor session/listener generation |
+| Project tool registration changes only when Unity replaces the domain | Low | Re-discover after compilation/reload; bind exact session/listener provenance and let the first business POST reject stale generation |
+| Catalog publication can fail closed on an ownership or descriptor error | Medium | Use `doctor` for transport and catalog-health results, fix the reported definition, then reload Unity |
 
 ## Cross-Reference
 

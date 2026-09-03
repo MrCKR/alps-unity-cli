@@ -2,7 +2,7 @@
  * CLI command: doctor
  *
  * Diagnoses CLI → UnityPkg connectivity, instance health,
- * live Bridge preflight, configuration integrity, and capability discovery.
+ * read-only catalog health, configuration integrity, and capability discovery.
  * Transport endpoint and listener identity remain internal to instance selection.
  */
 
@@ -81,11 +81,6 @@ export async function handleDoctorCommand(
   const catalogCheck = checkBridgeCatalogStatus(checks);
   if (catalogCheck) {
     checks.push(catalogCheck);
-  }
-
-  const compileCheck = checkCompileStatus(checks);
-  if (compileCheck) {
-    checks.push(compileCheck);
   }
 
   // Unified CLI/tools discovery surface
@@ -203,8 +198,8 @@ async function checkBridgeConnectivity(
   try {
     const result = await executeBridgePayload(
       requestId,
-      "project-tool.run",
-      { name: "diagnose.preflight", input: {} },
+      "project-tool.health",
+      {},
       { instance: instanceId, "timeout-ms": String(EDITOR_STATE_OBSERVATION_BUDGET_MS) },
       runtime,
       // connectivity probe 与 editor.state 共享同一即时观察预算，由 supervisor 将 Bridge POST 限制为 3500ms。
@@ -212,16 +207,11 @@ async function checkBridgeConnectivity(
     );
 
     if (result.ok) {
-      const wrapperData = result.data;
-      const bridgeResponse = wrapperData && typeof wrapperData === "object" && !Array.isArray(wrapperData)
-        && (wrapperData as Record<string, unknown>).result && typeof (wrapperData as Record<string, unknown>).result === "object"
-        ? (wrapperData as Record<string, unknown>).result
-        : wrapperData;
       return {
         name: "bridge_connectivity",
         status: "pass",
-        message: `Bridge identity is reachable for ${instanceId}.`,
-        details: { instanceId, bridgeResponse }
+        message: `Bridge transport is reachable for ${instanceId}.`,
+        details: { instanceId, bridgeResponse: result.data }
       };
     }
 
@@ -245,51 +235,23 @@ function checkBridgeCatalogStatus(checks: DoctorCheck[]): DoctorCheck | undefine
   const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
   const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
   if (!bridgeResponse || typeof bridgeResponse !== "object") return undefined;
-  const bridge = (bridgeResponse as { bridge?: unknown }).bridge;
-  if (!bridge || typeof bridge !== "object") return undefined;
-
-  const ready = (bridge as Record<string, unknown>).ready === true;
-  const toolCount = numberProp(bridge, "toolCount") ?? -1;
-  const status: DoctorCheck["status"] = ready && toolCount >= 0 ? "pass" : "fail";
+  const snapshot = bridgeResponse as Record<string, unknown>;
+  const ready = snapshot.ready === true;
+  const toolCount = numberProp(snapshot, "toolCount") ?? -1;
+  const failureMessage = stringProp(snapshot, "failure");
+  const nextActions = Array.isArray(snapshot.nextActions)
+    ? snapshot.nextActions.filter((value): value is string => typeof value === "string" && value.length > 0).slice(0, 4)
+    : [];
+  const valid = typeof snapshot.ready === "boolean" && toolCount >= 0
+    && (ready ? failureMessage === undefined && nextActions.length === 0 : !!failureMessage && nextActions.length > 0);
+  const status: DoctorCheck["status"] = valid && ready ? "pass" : "fail";
   return {
     name: "tool_catalog",
     status,
     message: status === "pass"
       ? `The current Unity domain published one immutable Tool catalog with ${toolCount} tool(s).`
-      : "The current Unity domain did not report a complete immutable Tool catalog.",
-    details: { ready, toolCount }
-  };
-}
-
-function checkCompileStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
-  const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
-  const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
-  if (!bridgeResponse || typeof bridgeResponse !== "object") {
-    return undefined;
-  }
-  const checksArray = (bridgeResponse as { checks?: unknown }).checks;
-  if (!Array.isArray(checksArray)) {
-    return undefined;
-  }
-  const compile = checksArray.find((entry): entry is Record<string, unknown> =>
-    typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).name === "compileStatus");
-  if (!compile) {
-    return undefined;
-  }
-  const compiling = compile.compiling === true;
-  const hasErrors = compile.hasCompileErrors === true;
-  const errors = Array.isArray(compile.compileErrors) ? compile.compileErrors.filter((e): e is string => typeof e === "string") : [];
-  const status: DoctorCheck["status"] = hasErrors ? "fail" : compiling ? "warn" : "pass";
-  const message = hasErrors
-    ? `Unity has compile errors (${errors.length} shown). Often caused by a broken extension under Packages/com.alpsckr.unitycli/Extensions.`
-    : compiling
-      ? "Unity is currently compiling scripts."
-      : "Unity scripts compiled cleanly.";
-  return {
-    name: "compile_status",
-    status,
-    message,
-    details: { compiling, hasCompileErrors: hasErrors, compileErrors: errors.slice(0, 10), nextActions: compile.nextActions }
+      : `E_TOOL_REGISTRY_UNHEALTHY: ${failureMessage ?? "The catalog health snapshot is invalid."}`,
+    details: { ...(status === "fail" ? { code: "E_TOOL_REGISTRY_UNHEALTHY" } : {}), ready, toolCount: Math.max(0, toolCount), ...(failureMessage ? { failure: failureMessage } : {}), ...(nextActions.length > 0 ? { nextActions } : {}) }
   };
 }
 

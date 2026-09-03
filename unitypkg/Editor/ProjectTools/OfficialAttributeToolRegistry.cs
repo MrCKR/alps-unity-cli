@@ -186,7 +186,7 @@ namespace UnityCli
                 Parameters = parameters
             };
             var ownership = ownershipResolver.Resolve(implementationType, toolName);
-            if (!string.Equals(ownership, "project", StringComparison.Ordinal))
+            if (!string.Equals(ownership.Source, "project", StringComparison.Ordinal))
                 throw new InvalidOperationException("Official attribute Tool ownership must resolve to project or third-party code: " + MethodIdentity(method) + ".");
 
             var completion = new UnityCliToolCompletionContract(
@@ -203,15 +203,12 @@ namespace UnityCli
                 "required",
                 true);
 
-            return new RegisteredTool
+            var descriptor = new ToolDescriptor
             {
                 Name = toolName,
                 Summary = OfficialSummary(description),
                 Description = description + " Imported from Unity.Pipeline.Commands.CliCommandAttribute. Risk, PlayMode, dry-run and completion semantics use the conservative official-attribute contract. Schema defaults and examples describe valid default behavior, not caller intent; use caller-requested business values on the first execution.",
                 Group = OfficialAttributeToolGroup,
-                Source = "project",
-                InputSchema = UnityCliSerializer.Serialize(inputSchema),
-                OutputSchema = output.Schema,
                 DestructiveHint = true,
                 SideEffects = new[] { "arbitrary-method-invocation" },
                 SupportsDryRun = false,
@@ -226,17 +223,22 @@ namespace UnityCli
                     }
                 },
                 Target = "editor",
-                AvailabilityScope = runtimeOnly ? "playModeSession" : "editorSession",
                 PlayModeSupport = playModeSupport,
-                ContractProfile = "official-attribute",
                 DefaultTimeoutMs = 30000,
-                MaxTimeoutMs = 600000,
-                RequestType = typeof(Dictionary<string, object>),
-                ResultType = output.ValidationType,
-                CompletionContract = completion,
-                OfficialAttributeBinding = binding,
-                InvokeAsync = (request, context, cancellationToken) => InvokeOfficialAttributeTool(binding, request, context, cancellationToken)
+                MaxTimeoutMs = 600000
             };
+            return new RegisteredTool(
+                descriptor,
+                ownership,
+                UnityCliSerializer.Serialize(inputSchema),
+                output.Schema,
+                runtimeOnly ? "playModeSession" : "editorSession",
+                "official-attribute",
+                typeof(Dictionary<string, object>),
+                output.ValidationType,
+                completion,
+                binding,
+                (request, context, cancellationToken) => InvokeOfficialAttributeTool(binding, request, context, cancellationToken));
         }
 
         /// <summary>解析参数 attribute，严格验证签名和默认值可转换性。</summary>

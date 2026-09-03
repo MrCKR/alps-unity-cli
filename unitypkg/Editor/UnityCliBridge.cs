@@ -52,7 +52,7 @@ namespace UnityCli
         private static readonly string[] EditorCommands = { "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.console", "project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove" };
         private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify" };
         private static readonly string[] CodeCommands = { "code.exec" };
-        private static readonly string[] ProjectToolCommands = { "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run" };
+        private static readonly string[] ProjectToolCommands = { "project-tool.health", "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run" };
         private static readonly string[] RuntimeToolCommands = { "runtime-tool.groups", "runtime-tool.summary", "runtime-tool.describe", "runtime-tool.list", "runtime-tool.run" };
         private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
@@ -379,7 +379,7 @@ namespace UnityCli
                 throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", null, new[] { "Wait for domain reload to complete and retry." }, true, 10000);
             }
 
-            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
+            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command) || IsProjectToolCatalogReadCommand(request.Command);
             if (EditorApplication.isCompiling && !allowedDuringCompileOrImport)
             {
                 throw new BridgeCommandException("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", null, new[] { "Wait for Unity to finish compiling and retry." }, true, 5000);

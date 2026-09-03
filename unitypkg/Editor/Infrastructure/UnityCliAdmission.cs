@@ -392,6 +392,7 @@ namespace UnityCli
         {
             switch (command)
             {
+                case "project-tool.health":
                 case "project-tool.groups":
                 case "project-tool.summary":
                 case "project-tool.describe":

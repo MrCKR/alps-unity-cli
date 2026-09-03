@@ -67,6 +67,7 @@ test("command contract keeps representative TS-local, C# built-in, and extension
 
   assert.equal(contracts.get("tools.group"), undefined);
   assert.equal(contracts.get("extension.status"), undefined);
+  assert.equal(contracts.get("project-tool.health")?.handler_type, "bridge");
   assert.equal(contracts.get("project-tool.summary")?.handler_type, "bridge");
   assert.equal(contracts.get("runtime-tool.describe")?.handler_type, "bridge");
   assert.equal(contracts.get("build.run")?.handler_type, "hybrid");

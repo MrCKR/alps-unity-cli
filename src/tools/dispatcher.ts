@@ -9,6 +9,7 @@ import {
   SessionSupervisorError,
   type BridgeRuntime,
   type BridgeCommandSpec,
+  type DiscoveryProvenance,
   type RootAdmissionLease
 } from "../bridge/index.js";
 import { failure, success } from "../output.js";
@@ -33,6 +34,8 @@ export type ToolsRuntime = ProjectToolRuntime & Partial<BridgeRuntime> & {
   fetch?: (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
   /** 仅供隔离测试观察准入边界。 */
   createSessionSupervisor?: (flags: Record<string, string | boolean>, runtime: BridgeRuntime) => SessionSupervisor;
+  /** live descriptor discovery 的调用级 exact session/listener provenance。 */
+  discoveryProvenances?: Partial<Record<InstanceTarget, DiscoveryProvenance>>;
 };
 
 type ParsedInput = { ok: true; input: Record<string, unknown> } | { ok: false; error: CliResult };
@@ -49,6 +52,25 @@ type TargetAdmissionContext = {
   executionAbsoluteDeadlineMs: number;
 };
 
+export interface ToolInvocationContext {
+  readonly timeoutMs: number;
+  readonly admissionAbsoluteDeadlineMs: number;
+  readonly discoveryProvenances?: Partial<Record<InstanceTarget, DiscoveryProvenance>>;
+}
+
+/** command 与 tools run 在第一次 live discovery 前只创建一次顶层 admission deadline。 */
+export function beginToolInvocation(
+  flags: Record<string, string | boolean>,
+  requestId: string,
+  timeoutMetadata?: Pick<ToolMetadata, "timeoutMs">,
+  startedAtMs = Date.now(),
+): { ok: true; context: ToolInvocationContext } | { ok: false; result: CliResult } {
+  const timeoutFailure = validateExecutionTimeoutFlags(flags, requestId);
+  if (timeoutFailure) return { ok: false, result: timeoutFailure };
+  const timeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? timeoutMetadata?.timeoutMs ?? 30_000);
+  return { ok: true, context: { timeoutMs, admissionAbsoluteDeadlineMs: startedAtMs + timeoutMs } };
+}
+
 /**
  * Tool 分发顺序固定为输入解析、catalog 解析、schema 校验、目标选择、执行与 envelope。
  * 调用即授权，只保留 schema、目标与 descriptor 的正确性验证。
@@ -60,12 +82,11 @@ export async function dispatchTool(
   runtime: ToolsRuntime,
   requestId: string,
   seed: Record<string, unknown> = {},
-  resolvedTool?: ToolMetadata
+  resolvedTool?: ToolMetadata,
+  invocationContext?: ToolInvocationContext,
 ): Promise<CliResult> {
   const dispatchStartedAtMs = Date.now();
   if (!name) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
-  const executionFlagError = validateExecutionTimeoutFlags(flags, requestId);
-  if (executionFlagError) return executionFlagError;
   if (resolvedTool && resolvedTool.name !== name) return failure(requestId, "E_TOOL_SCHEMA_CONFLICT", `Resolved Tool name ${resolvedTool.name} does not match requested name ${name}.`, [
     "Refresh the selected Unity instance catalog and retry the same command."
   ], { requestedName: name, resolvedName: resolvedTool.name });
@@ -73,12 +94,18 @@ export async function dispatchTool(
   const localMetadata = findToolByName(name);
   const timeoutMetadata = resolvedTool ?? localMetadata;
   const defaultTimeoutMs = name === "code.exec" ? 60_000 : 30_000;
-  const admissionTimeoutMs = Math.max(1, executionFromFlags(flags).timeoutMs ?? timeoutMetadata?.timeoutMs ?? defaultTimeoutMs);
-  const admissionAbsoluteDeadlineMs = dispatchStartedAtMs + admissionTimeoutMs;
+  const started = invocationContext
+    ? { ok: true as const, context: invocationContext }
+    : beginToolInvocation(flags, requestId, { timeoutMs: timeoutMetadata?.timeoutMs ?? defaultTimeoutMs }, dispatchStartedAtMs);
+  if (!started.ok) return started.result;
+  const admissionTimeoutMs = started.context.timeoutMs;
+  const admissionAbsoluteDeadlineMs = started.context.admissionAbsoluteDeadlineMs;
   const parsed = await parseTypedInput(flags, requestId, name === "code.exec" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
   if (!parsed.ok) return parsed.error;
   const dispatchFlags = withStructuredInput(flags, parsed.input);
-  const dispatchResolved = (tool: ToolMetadata, input: Record<string, unknown>): Promise<CliResult> => dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs);
+  const dispatchResolved = (tool: ToolMetadata, input: Record<string, unknown>): Promise<CliResult> => dispatchResolvedTool(
+    tool, input, dispatchFlags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs, started.context.discoveryProvenances,
+  );
   // command入口已从同一次live catalog读取schema；直接使用该descriptor，避免二次发现改变绑定。
   if (resolvedTool) {
     const input = requestFromInput(resolvedTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
@@ -111,13 +138,70 @@ export async function dispatchTool(
     return executeCoreBridgeSpec(name, coreSpec, parsed.input, dispatchFlags, runtime, requestId, admissionAbsoluteDeadlineMs, positionalTarget);
   }
 
-  const resolved = await resolveCatalogTool(name, catalogFlags, runtime, requestId, admissionAbsoluteDeadlineMs);
+  const resolved = await resolveCatalogToolForInvocation(name, catalogFlags, runtime, requestId, started.context);
   if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime, admissionAbsoluteDeadlineMs);
   const tool = resolved.tool;
   if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
 
   const input = requestFromInput(tool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
-  return dispatchResolved(tool, input);
+  return dispatchResolvedTool(tool, input, dispatchFlags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs, resolved.context.discoveryProvenances);
+}
+
+/**
+ * live exact descriptor 在真实 catalog admission 上读取，并把 exact listener provenance 带回同一顶层调用。
+ * fixture 仍走相同 resolver，但没有伪造 registry identity。
+ */
+export async function resolveCatalogToolForInvocation(
+  name: string,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string,
+  context: ToolInvocationContext,
+): Promise<({ ok: true; tool?: ToolMetadata; context: ToolInvocationContext }) | (CliResult & { ok: false })> {
+  if (runtime.projectTools) {
+    const resolved = await resolveCatalogTool(name, flags, runtime, requestId, context.admissionAbsoluteDeadlineMs);
+    return resolved.ok ? { ...resolved, context } : resolved;
+  }
+  const acquired = await acquireCatalogAdmissions(
+    `catalog.resolve:${name}`, { name }, flags, runtime, requestId, context.timeoutMs,
+    context.admissionAbsoluteDeadlineMs, "catalog-resolution-v1",
+  );
+  if ("result" in acquired) return acquired.result as CliResult & { ok: false };
+  const provenances = discoveryProvenances(acquired.admissions);
+  const primary = acquired.admissions.editor ?? acquired.admissions.runtime!;
+  // descriptor discovery consumes only the original top-level admission budget.
+  for (const admission of Object.values(acquired.admissions)) {
+    if (admission) admission.executionAbsoluteDeadlineMs = context.admissionAbsoluteDeadlineMs;
+  }
+  try {
+    const resolved = await resolveCatalogTool(name, flags, {
+      ...runtime, rootAdmission: primary, rootAdmissions: acquired.admissions,
+    }, requestId, context.admissionAbsoluteDeadlineMs);
+    return resolved.ok
+      ? { ...resolved, context: { ...context, discoveryProvenances: provenances } }
+      : resolved;
+  } finally {
+    await releaseUnconsumedCatalogAdmissions(acquired);
+  }
+}
+
+function discoveryProvenances(
+  admissions: Partial<Record<InstanceTarget, RootAdmissionLease>>,
+): Partial<Record<InstanceTarget, DiscoveryProvenance>> {
+  const result: Partial<Record<InstanceTarget, DiscoveryProvenance>> = {};
+  for (const target of ["editor", "runtime"] as InstanceTarget[]) {
+    const admission = admissions[target];
+    if (!admission) continue;
+    result[target] = {
+      target,
+      instanceId: admission.instanceId,
+      sessionId: admission.sessionId,
+      ...(target === "editor" ? { editorSessionId: admission.sessionId } : {}),
+      listenerId: admission.listenerId,
+      listenerGeneration: admission.listenerGeneration,
+    };
+  }
+  return result;
 }
 
 /** 公开统一catalog对每个在线target session分别占一个slot，禁止跨池旁路输出。 */
@@ -151,13 +235,18 @@ async function acquireCatalogAdmissions(
   timeoutMs: number,
   admissionAbsoluteDeadlineMs: number,
   completionContractIdentity: string,
+  expectedDiscoveryProvenances?: Partial<Record<InstanceTarget, DiscoveryProvenance>>,
 ): Promise<TargetAdmissionContext | { result: CliResult }> {
   const context: TargetAdmissionContext = { admissions: {}, supervisors: {}, executionAbsoluteDeadlineMs: 0 };
   let lastOffline: CliResult | undefined;
   for (const target of ["editor", "runtime"] as InstanceTarget[]) {
     const supervisor = createSessionSupervisor(flags, runtime);
     try {
-      const admission = await supervisor.acquireRootAdmission({ requestId, command, input, dryRun: false, target, completionContractIdentity, timeoutMs, admissionAbsoluteDeadlineMs });
+      const admission = await supervisor.acquireRootAdmission({
+        requestId, command, input, dryRun: false, target, completionContractIdentity,
+        captureDiscoveryProvenance: true,
+        expectedDiscoveryProvenance: expectedDiscoveryProvenances?.[target], timeoutMs, admissionAbsoluteDeadlineMs,
+      });
       context.admissions[target] = admission;
       context.supervisors[target] = supervisor;
     } catch (error) {
@@ -208,7 +297,9 @@ async function dispatchResolvedTool(
   requestId: string,
   admissionTimeoutMs: number,
   admissionAbsoluteDeadlineMs: number,
+  discoveryProvenance?: Partial<Record<InstanceTarget, DiscoveryProvenance>>,
 ): Promise<CliResult> {
+  const invocationRuntime: ToolsRuntime = discoveryProvenance ? { ...runtime, discoveryProvenances: discoveryProvenance } : runtime;
   const definition = findDefineTool(tool.name);
   const executionTool = tool;
   const completion = generatedToolCompletionContract(executionTool.name) ?? executionTool.completionContract;
@@ -219,9 +310,9 @@ async function dispatchResolvedTool(
   if (completion.mutation !== descriptorMutation) return failure(requestId, "E_TOOL_COMPLETION_CONTRACT_MISMATCH", `Tool ${executionTool.name} completion contract disagrees with its descriptor mutation signals.`, [
     `Run unitycli tools describe ${executionTool.name} and fix the descriptor or completion contract before execution.`
   ], { toolName: executionTool.name, contractMutation: completion.mutation, descriptorMutation });
-  if (extensionIdForToolName(executionTool.name)) {
+  if (executionTool.source === "extension" || extensionIdForToolName(executionTool.name)) {
     try {
-      const extensionSnapshot = await freezeExtensionAvailability(flags, runtime);
+      const extensionSnapshot = await freezeExtensionAvailability(flags, invocationRuntime);
       const availability = await checkToolExtensionAvailability(executionTool, extensionSnapshot, admissionAbsoluteDeadlineMs);
       if (!availability.available) return failure(requestId, availability.errorCode, availability.message, availability.nextActions, { extensionId: availability.extensionId, missingPackageIds: availability.availabilityResult?.missingPackageIds ?? executionTool.requiresPackages ?? [] });
     } catch (error) {
@@ -240,8 +331,8 @@ async function dispatchResolvedTool(
     errors: schemaErrors
   });
   return definition && executionTool.handler !== "bridge-runtime"
-    ? executeDefinition(executionTool, completion, definition, input, flags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs)
-    : executeLiveTool(executionTool, completion, input, flags, runtime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs);
+    ? executeDefinition(executionTool, completion, definition, input, flags, invocationRuntime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs)
+    : executeLiveTool(executionTool, completion, input, flags, invocationRuntime, requestId, admissionTimeoutMs, admissionAbsoluteDeadlineMs);
 }
 
 /** 已有 core bridge spec 使用统一参数构造，不进入 live custom wrapper。 */
@@ -841,7 +932,10 @@ async function acquireToolAdmission(
   selected?: InstanceSelection,
 ): Promise<ToolAdmissionContext> {
   if (MULTI_TARGET_CATALOG_TOOLS.has(tool.name)) {
-    const acquired = await acquireCatalogAdmissions(tool.name, input, flags, runtime, requestId, timeoutMs, admissionAbsoluteDeadlineMs, JSON.stringify(completion));
+    const acquired = await acquireCatalogAdmissions(
+      tool.name, input, flags, runtime, requestId, timeoutMs, admissionAbsoluteDeadlineMs,
+      JSON.stringify(completion), runtime.discoveryProvenances,
+    );
     if ("result" in acquired) return acquired;
     const admission = acquired.admissions.editor ?? acquired.admissions.runtime!;
     const supervisor = acquired.supervisors[admission.target]!;
@@ -858,6 +952,7 @@ async function acquireToolAdmission(
       dryRun: getBoolean(flags, "dry-run") || getBoolean(flags, "preflight"),
       target,
       completionContractIdentity: JSON.stringify(completion),
+      expectedDiscoveryProvenance: runtime.discoveryProvenances?.[target],
       timeoutMs,
       admissionAbsoluteDeadlineMs,
     });

@@ -16,6 +16,7 @@ const DEFAULT_TIMEOUT_MS = 30000;
 const publicToolNames = new Set(collectPublicToolInventory(process.cwd()).map((entry) => entry.name));
 
 const bridgeOnlyEntries = new Map([
+  ["project-tool.health", { handler_type: "bridge", destructive: false }],
   ["project-tool.groups", { handler_type: "bridge", destructive: false }],
   ["project-tool.summary", { handler_type: "bridge", destructive: false }],
   ["project-tool.describe", { handler_type: "bridge", destructive: false }],

@@ -93,9 +93,10 @@ unitycli extensions doctor --project <path>         # 深度校验全部 source/
 当扩展依赖的 Unity Package 未安装或不满足 manifest 的精确版本时：
 
 - 扩展工具通过 `tools group/list/describe/run` 暴露；缺依赖时 `tools describe` 返回 `available: false`、`unavailableReason` 和 `requiresPackages`
-- 每次调用冻结一份packages-lock/install manifest输入；group或command摘要页对每个distinct extension最多做一次target proof，普通扩展Tool执行只检查所选extension
+- 每次调用冻结一份packages-lock/install manifest输入；group或command摘要页对每个distinct extension最多做一次target proof，普通扩展Tool执行只检查所选extension。selected dependency gate复用generated Tool owner与exact compiled assembly identity，不从Tool名称前缀推断owner
 - selected target proof只校验该extension的managed files与unknown files，不读取source tree；`extensions list`返回`integrity:"shallow"`且不计算source/managed-file hash，完整全extension source与target hash只由显式`extensions doctor`执行并返回`integrity:"full"`
 - 执行时返回错误，`error.nextActions` 指向手动安装 Unity Package 与随后运行 `extensions install <id>`
+- 发布前generated inventory必须同时匹配Tool name、extension id、assembly identity和implementation type；缺项、多项或跨Extension归属会使catalog fail closed
 - 不自动安装 Unity Package，不产生静默失败
 
 ```json

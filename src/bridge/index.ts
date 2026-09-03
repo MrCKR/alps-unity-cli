@@ -9,7 +9,7 @@ import { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "
 
 export { BridgeCommandRegistry, bridgeCommandRegistry } from "./registry.js";
 export { rootAdmissionFingerprint } from "./admission.js";
-export type { RootAdmissionLease, RootAdmissionRequest } from "./admission.js";
+export type { DiscoveryProvenance, RootAdmissionLease, RootAdmissionRequest } from "./admission.js";
 export { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "./session-supervisor.js";
 export type { BridgeCommandSpec, BridgeInvocationOptions, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 

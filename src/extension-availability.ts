@@ -10,6 +10,7 @@ import type { ExtensionAvailabilityResult, ExtensionId } from "./extensions/type
 import { findBuiltinExtensionToolContribution } from "./extensions/tool-manifest.js";
 import { currentInstanceProjectPath } from "./instances.js";
 import type { RootAdmissionLease } from "./bridge/index.js";
+import { generatedToolCompletionContract } from "./tools/.generated-completion-registry.js";
 import type { ResolvedToolMetadata, ToolMetadata } from "./tools/metadata/types.js";
 
 /** Extension capability 的统一可用性结论。dependencyInstalled 与 installed 永不互相替代。 */
@@ -52,19 +53,27 @@ export async function freezeExtensionAvailability(
   };
 }
 
-/** 仅用 manifest ownership 判断是否需要冻结 extension 文件输入。 */
+/** selected dependency gate 复用 generated descriptor owner，不从名称前缀猜 Extension。 */
 export function extensionIdForToolName(toolName: string): ExtensionId | undefined {
-  return findExtensionForTool(new ExtensionRegistry(), toolName)?.extensionId;
+  const owner = generatedToolCompletionContract(toolName)?.descriptorOwner;
+  return owner?.startsWith("extension:") ? owner.slice("extension:".length) as ExtensionId : undefined;
 }
 
 /** 普通 Tool invocation 至多证明其 selected extension，不扫描其他 extension。 */
 export async function checkToolExtensionAvailability(
-  tool: Pick<ToolMetadata, "name" | "requiresPackages">,
+  tool: Pick<ToolMetadata, "name" | "requiresPackages"> & { source?: ToolMetadata["source"] },
   snapshot: ExtensionAvailabilitySnapshot,
   absoluteDeadlineMs?: number,
 ): Promise<ExtensionAvailabilityCheck> {
+  const generatedExtensionId = extensionIdForToolName(tool.name);
   const contribution = findExtensionForTool(snapshot.registry, tool.name);
-  if (!contribution) return available();
+  if (!generatedExtensionId && !contribution && tool.source !== "extension") return available();
+  if (!generatedExtensionId || !contribution || contribution.extensionId !== generatedExtensionId) {
+    const extensionId = generatedExtensionId ?? contribution?.extensionId;
+    return unavailable(extensionId, undefined, undefined, "E_EXTENSION_INVENTORY_MISMATCH", `Tool "${tool.name}" does not have one exact generated Extension owner matching its manifest contribution.`, [
+      "Regenerate the unified Tool and Extension inventories, then let Unity compile and reload the domain.",
+    ]);
+  }
   const { extensionId } = contribution;
   const extension = snapshot.registry.getExtension(extensionId);
   if (!extension) return available();
@@ -151,14 +160,14 @@ function available(): ExtensionAvailabilityCheck {
 }
 
 function unavailable(
-  extensionId: ExtensionId,
+  extensionId: ExtensionId | undefined,
   availabilityResult: ExtensionAvailabilityResult | undefined,
   physicalState: ExtensionStatusCheck | undefined,
   errorCode: string,
   message: string,
   nextActions: string[],
 ): ExtensionAvailabilityCheck {
-  return { available: false, extensionId, availabilityResult, physicalState, errorCode, message, nextActions };
+  return { available: false, ...(extensionId ? { extensionId } : {}), availabilityResult, physicalState, errorCode, message, nextActions };
 }
 
 function findExtensionForTool(registry: ExtensionRegistry, toolName: string): { extensionId: ExtensionId; requiresPackages: string[] } | undefined {

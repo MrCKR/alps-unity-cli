@@ -44,7 +44,7 @@ tools describe <tool>    # exact-name descriptor projection
 tools run <tool> --input <json>
 ```
 
-Descriptions expose the input and execution boundary required for one correct call. Internal output schemas and completion metadata validate terminal business data but are not duplicated into public discovery output.
+Descriptions expose the input and execution boundary required for one correct call. Internal output schemas and completion metadata validate terminal business data but are not duplicated into public discovery output. Each Unity domain publishes one immutable executable catalog slot; its descriptor-only projection is derived during the same publication and cannot expose invokers, CLR types, writable metadata, or a second catalog cache. A catalog build failure leaves the prior slot intact and is reported by a separate read-only health snapshot.
 
 ## Installation Control Plane
 
@@ -75,7 +75,7 @@ offline
 conflict
 ```
 
-The current Unity writer replaces unusable prior state with its current identity and connection, then publishes `transitioning` before `ready`. CLI calls wait within their existing deadline when the selected Unity process is starting or changing connections. Historical cleanup remains writer-owned: automatic cleanup and `instances prune` share one globally serialized, bounded retention function.
+The current Unity writer replaces unusable prior state with its current identity and connection, then publishes `transitioning` before `ready`. CLI calls wait within their existing deadline when the selected Unity process is starting or changing connections. Live catalog discovery freezes exact session/listener provenance for the top-level invocation and root admission; a changed generation before the first business POST fails closed. Historical cleanup remains writer-owned: automatic cleanup and `instances prune` share one globally serialized, bounded retention function.
 
 A live mutation can continue across a reload only while the same Editor session owns the exact request. After the first mutation POST, a changed Editor session forbids redelivery. Timeout or disconnect before a trusted terminal response is outcome unknown.
 

@@ -252,7 +252,7 @@ test("unsupported official attribute dry-run fails before Bridge dispatch", asyn
 test("C# registry publishes native profiles only after complete pending-table validation", () => {
   const source = readFileSync("unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", "utf8");
   const builder = readFileSync("unitypkg/Editor/ProjectTools/RegisteredTool.cs", "utf8");
-  assert.match(source, /ContractProfile = "native"/);
+  assert.match(source, /UnityCliSchemaDeriver\.DeriveSchema\(typeof\(TRes\)\)[\s\S]*"native"/);
   assert.match(source, /\{ "contractProfile", definition\.ContractProfile \}/);
   assert.match(source, /builder\.Publish[\s\S]*Volatile\.Write/);
   assert.match(source, /E_TOOL_REGISTRY_UNHEALTHY/);

@@ -21,9 +21,8 @@ async function sourceFiles(root: string): Promise<string[]> {
   for (const entry of await readdir(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "Generated") continue;
       result.push(...await sourceFiles(path));
-    } else if (/\.(?:cs|ts|md)$/.test(entry.name) && !entry.name.startsWith(".generated")) result.push(path);
+    } else if (/\.(?:cs|ts|md|json|mjs|js|cjs)$/.test(entry.name)) result.push(path);
   }
   return result;
 }
@@ -49,37 +48,56 @@ test("InitializeOnLoad constructor is the only domain catalog construction trigg
   assert.doesNotMatch(runtime, /AppDomain\.CurrentDomain\.GetAssemblies|assembly\.GetTypes\(\)/);
 });
 
-test("catalog construction validates a local pending table and atomically publishes one read-only snapshot", async () => {
+test("catalog construction publishes one executable slot with an immutable descriptor-only reader", async () => {
   const [registry, registered, ownership] = await Promise.all([
     readFile(toolRegistryPath, "utf8"),
     readFile(registeredToolPath, "utf8"),
     readFile(ownershipPath, "utf8"),
   ]);
   assert.match(registry, /var builder = new UnityCliToolCatalogBuilder\(\)/);
-  assert.match(registry, /builder\.Publish[\s\S]*Volatile\.Write\(ref publishedProjectToolCatalog, snapshot\)/);
-  assert.match(registry, /ReadPublishedProjectToolCatalog\(\)[\s\S]*Volatile\.Read/);
+  assert.match(registry, /var candidate = builder\.Publish\(elapsedMilliseconds\)[\s\S]*Volatile\.Write\(ref publishedProjectToolCatalog, candidate\)/);
+  assert.match(registry, /ReadPublishedProjectToolCatalogSnapshot\(\)[\s\S]*\.Snapshot/);
   assert.match(registered, /IUnityCliToolCatalogSnapshotReader[\s\S]*UnityCliToolCatalogSnapshot Read\(\)/);
-  assert.match(registered, /ReadOnlyDictionary<string, RegisteredTool>/);
+  assert.match(registered, /ReadOnlyCollection<RegisteredToolDescriptor>/);
+  assert.match(registered, /RegisteredToolDescriptor[\s\S]*CloneExamples\(\)/);
+  assert.doesNotMatch(registered.slice(registered.indexOf("internal sealed class RegisteredToolDescriptor"), registered.indexOf("internal enum UnityCliToolProviderKind")), /InvokeAsync|RequestType|ResultType|OfficialAttributeBinding/);
+  assert.doesNotMatch(registered.slice(registered.indexOf("internal sealed class RegisteredTool"), registered.indexOf("internal sealed class RegisteredToolDescriptor")), /\{ get; set; \}/);
   assert.match(registered, /faulted = true[\s\S]*cannot publish an incomplete or faulted table/);
-  assert.match(registered, /Duplicate tool registration/);
-  assert.match(registered, /valid object schemas/);
-  assert.match(registered, /complete completion contract/);
-  assert.match(ownership, /only uses compiled|已编译assembly identity/);
-  assert.doesNotMatch(ownership, /File\.|Directory\.|AssetDatabase/);
+  assert.match(registered, /providerMetadata\.Count != expectedProviderAssemblyCount/);
+  assert.match(ownership, /TryGetInventory\(toolName, out expected\)/);
+  assert.match(ownership, /expected\.ImplementationType, implementationType\.FullName/);
+  assert.match(ownership, /expected\/actual set mismatch/);
+  assert.doesNotMatch(ownership, /StartsWith\(ExtensionAssemblyPrefix|File\.|Directory\.|AssetDatabase/);
 });
 
-test("later list, run, completion, Runtime, and preflight access only the published snapshot", async () => {
+test("later descriptor reads and executable runs remain on the same publication", async () => {
   const sources = await readSources([
     toolRegistryPath,
     runtimeExecutorPath,
     "unitypkg/Editor/Tools/diagnose/preflight.cs",
   ]);
   assert.match(sources, /ProjectToolCatalogSnapshotReader\.Read\(\)/);
-  assert.match(sources, /ReadPublishedProjectToolCatalog\(\)/);
+  assert.match(sources, /ReadPublishedProjectToolCatalogSnapshot\(\)/);
+  assert.match(sources, /ReadPublishedProjectToolCatalog\(\)\.ExecutableTools/);
   assert.doesNotMatch(sources, /AssetDatabase\.FindAssets|File\.ReadAllText|File\.WriteAllText/);
   assert.equal(sources.includes(["custom", "tool", "registered"].join("_")), false);
   assert.equal((sources.match(/tool_catalog_initialized assemblies=/g) ?? []).length, 1);
-  assert.match(sources, /foreach \(var pair in catalog\.Tools\)[\s\S]*\{ "available", playModeReady \}/);
+  assert.match(sources, /foreach \(var descriptor in catalog\.Descriptors\)[\s\S]*\{ "available", playModeReady \}/);
+});
+
+test("unified generation emits exact C# owner inventory before runtime publication", async () => {
+  const [generator, inventory, ownership] = await Promise.all([
+    readFile("scripts/gen-tool-completion-registry.mjs", "utf8"),
+    readFile("scripts/lib/public-tool-inventory.mjs", "utf8"),
+    readFile(ownershipPath, "utf8"),
+  ]);
+  assert.match(inventory, /assemblyName/);
+  assert.match(inventory, /implementationType/);
+  assert.match(generator, /UnityCliToolInventoryEntry/);
+  assert.match(generator, /TryGetInventory/);
+  assert.match(generator, /InventoryEntries/);
+  assert.match(ownership, /expected\/actual set mismatch/);
+  assert.doesNotMatch(ownership, /StartsWith\(ExtensionAssemblyPrefix/);
 });
 
 test("typed custom Tools retain async schema, completion, availability, and execution contracts", async () => {
@@ -105,7 +123,7 @@ test("legacy project Context registries and authoring docs are absent", async ()
   ]) await assert.rejects(access(path), { code: "ENOENT" });
 });
 
-test("non-generated C#, TypeScript, docs, and tests contain no removed per-Tool identity or source-verification path", async () => {
+test("generated C#/TS, contracts, schemas, scripts, product source, docs, and tests contain no removed per-Tool identifiers", async () => {
   const forbidden = [
     ["Project", "Tool", "Handler", "Source"].join(""),
     ["internal", "Descriptor", "Fingerprint"].join(""),
@@ -117,7 +135,9 @@ test("non-generated C#, TypeScript, docs, and tests contain no removed per-Tool 
     ["ToolDescriptor", ".", "Fingerprint"].join(""),
     ["custom", "_tool", "_registered"].join(""),
   ];
-  const files = (await Promise.all(["unitypkg/Editor", "unitypkg/Tests", "src", "docs", "tests"].map(sourceFiles))).flat();
+  const files = (await Promise.all([
+    "unitypkg/Editor", "unitypkg/Tests", "extensions", "src", "contracts", "schemas", "scripts", "docs", "tests",
+  ].map(sourceFiles))).flat();
   const residuals: string[] = [];
   for (const path of files) {
     const source = await readFile(path, "utf8");

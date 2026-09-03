@@ -30,6 +30,11 @@ test("root admission fingerprint binds business, instance, target, dry-run, and 
   assert.notEqual(rootAdmissionFingerprint({ ...base, dryRun: true }, instanceA), fingerprint);
   assert.notEqual(rootAdmissionFingerprint({ ...base, target: "runtime" }, instanceA), fingerprint);
   assert.notEqual(rootAdmissionFingerprint({ ...base, completionContractIdentity: "completion-contract-b" }, instanceA), fingerprint);
+  assert.notEqual(rootAdmissionFingerprint({ ...base, captureDiscoveryProvenance: true }, instanceA), fingerprint);
+  assert.notEqual(rootAdmissionFingerprint({ ...base, expectedDiscoveryProvenance: {
+    target: "editor", instanceId: instanceA, sessionId: `session-${"c".repeat(64)}`,
+    editorSessionId: `session-${"c".repeat(64)}`, listenerId: `listener-${"d".repeat(32)}`, listenerGeneration: 2,
+  } }, instanceA), fingerprint);
   assert.notEqual(rootAdmissionFingerprint(base, instanceB), fingerprint);
 });
 

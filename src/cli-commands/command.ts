@@ -4,7 +4,14 @@ import { ExtensionInstallerError } from "../extensions/installer.js";
 import type { CliResult } from "../types.js";
 import { publicToolDescriptor, resolveCatalogIndependentOperabilityTool, resolveCatalogTool } from "../tools/catalog.js";
 import { projectCatalogPage, type CatalogPageRequest } from "../tools/catalog-control.js";
-import { dispatchCatalogProjection, dispatchTool, type ToolsRuntime } from "../tools/dispatcher.js";
+import {
+  beginToolInvocation,
+  dispatchCatalogProjection,
+  dispatchTool,
+  resolveCatalogToolForInvocation,
+  type ToolInvocationContext,
+  type ToolsRuntime,
+} from "../tools/dispatcher.js";
 import type { ToolMetadata } from "../tools/metadata/index.js";
 
 const ATTRIBUTE_PREFIX = "UnityPipeline_";
@@ -96,8 +103,10 @@ export async function handleCommand(
       commandHelp(commandName, flags, rootRuntime, requestId, catalogDeadline(rootRuntime)));
   }
 
-  // 实际执行只读取 native exact name，必要时再读取 sealed attribute exact fallback。
-  const resolved = await resolveCommandCatalogTool(commandName, flags, runtime, requestId);
+  // 实际执行的 discovery 与后续 admission 共享同一个顶层 deadline 和 exact listener provenance。
+  const started = beginToolInvocation(flags, requestId);
+  if (!started.ok) return started.result;
+  const resolved = await resolveCommandCatalogTool(commandName, flags, runtime, requestId, started.context);
   if (!resolved.ok) return resolved;
   const tool = resolved.tool;
   if (!tool) return commandNotFound(requestId, commandName);
@@ -105,7 +114,7 @@ export async function handleCommand(
   const input = parseCommandInput(tool, businessTokens, requestId);
   if (!input.ok) return input.result;
 
-  return dispatchTool(tool.name, undefined, flags, runtime, requestId, input.value, tool);
+  return dispatchTool(tool.name, undefined, flags, runtime, requestId, input.value, tool, resolved.context ?? started.context);
 }
 
 /** 分离command级控制项与业务token；选择实例的控制项在catalog加载前冻结。 */
@@ -478,13 +487,20 @@ async function resolveCommandCatalogTool(
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string,
+  invocationContext?: ToolInvocationContext,
   absoluteDeadlineMs?: number,
-): Promise<{ ok: true; tool?: ToolMetadata } | (CliResult & { ok: false })> {
+): Promise<{ ok: true; tool?: ToolMetadata; context?: ToolInvocationContext } | (CliResult & { ok: false })> {
   const operability = resolveCatalogIndependentOperabilityTool(name);
-  const exact = operability ? { ok: true as const, tool: operability } : await resolveCatalogTool(name, flags, runtime, requestId, absoluteDeadlineMs);
+  const resolveExact = (candidate: string) => invocationContext
+    ? resolveCatalogToolForInvocation(candidate, flags, runtime, requestId, invocationContext)
+    : resolveCatalogTool(candidate, flags, runtime, requestId, absoluteDeadlineMs);
+  const exact = operability ? { ok: true as const, tool: operability, context: invocationContext } : await resolveExact(name);
   if (!exact.ok || exact.tool || name.startsWith(ATTRIBUTE_PREFIX)) return exact;
-  const attribute = await resolveCatalogTool(`${ATTRIBUTE_PREFIX}${name}`, flags, runtime, requestId, absoluteDeadlineMs);
-  if (!attribute.ok || !attribute.tool || !isOfficialAttributeTool(attribute.tool)) return attribute.ok ? { ok: true } : attribute;
+  // fallback 使用新的 exact catalog acquisition，但继续消费同一个顶层 admission deadline。
+  const attribute = await resolveExact(`${ATTRIBUTE_PREFIX}${name}`);
+  if (!attribute.ok || !attribute.tool || !isOfficialAttributeTool(attribute.tool)) {
+    return attribute.ok ? { ok: true, context: "context" in attribute ? attribute.context : invocationContext } : attribute;
+  }
   return attribute;
 }
 
@@ -495,7 +511,7 @@ async function commandHelp(
   requestId: string,
   absoluteDeadlineMs?: number,
 ): Promise<CliResult> {
-  const resolved = await resolveCommandCatalogTool(commandName, flags, runtime, requestId, absoluteDeadlineMs);
+  const resolved = await resolveCommandCatalogTool(commandName, flags, runtime, requestId, undefined, absoluteDeadlineMs);
   if (!resolved.ok) return resolved;
   if (!resolved.tool) return commandNotFound(requestId, commandName);
   const descriptor = commandDescriptor(resolved.tool, commandName);

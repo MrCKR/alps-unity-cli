@@ -53,7 +53,7 @@ unitycli tools search 'screenshot|camera' --page-size 20
 unitycli tools search 'project-summary|scene' --page-size 20 --cursor <nextCursor> --instance my-project
 ```
 
-结果按精确 Tool name 排序；存在`pageInfo.nextCursor`时，将其原值传回同一关键词查询的`--cursor`。cursor绑定原查询和当时的Editor/Runtime catalog generation，不能跨查询或跨generation复用。
+结果按精确 Tool name 排序；存在`pageInfo.nextCursor`时，将其原值传回同一关键词查询的`--cursor`。cursor绑定原查询和当时的Editor/Runtime catalog generation，不能跨查询或跨generation复用。generation同时绑定当前editor session、listener和listener generation；调用过程中发生reload或listener交接时，旧cursor稳定返回`E_TOOL_CATALOG_CHANGED`。
 
 ### `tools describe`
 
@@ -86,6 +86,8 @@ unitycli tools describe camera.screenshot
 
 目录不按 source、EditMode/PlayMode 或当前可执行性过滤。availability 在投影条目时读取，不会重建 table；当前不可执行的能力仍显示，由 descriptor 和执行错误说明原因。静态 capability snapshot 只供 package 生成、contract 和审计，不进入公开 discovery。
 
+每次顶层`tools`或`command`调用只冻结一组私有 discovery provenance：exact editor session、listener ID和listener generation。执行前会把同一 provenance 带入 root admission，并在首次业务 POST前再次比较；若 session、listener或generation已变化，返回`E_TOOL_CATALOG_CHANGED`，不会发送业务请求。provenance不进入业务 input、公开成功响应或公开 error details。
+
 ## AI Agent 工作流
 
 1. 用 `instances list` 确认 canonical project identity，或切换到目标 Unity 项目 CWD。
@@ -103,7 +105,8 @@ unitycli tools describe camera.screenshot
 - `E_INSTANCE_CONFLICT`：同一项目存在至少两个已验证live Editor claim。
 - `E_INSTANCE_UNVERIFIABLE`：PID/start或project ownership证据不完整，不能安全选定session。
 - `E_UNITY_UNRESPONSIVE`：transport identity存在，但近期Unity主线程pulse无法证明。
-- `E_TOOL_REGISTRY_UNHEALTHY`：实例 catalog 有 malformed、重复或 ownership 冲突；修复 registry 后重新发现。
+- `E_TOOL_REGISTRY_UNHEALTHY`：实例 catalog 有 malformed、重复或 ownership 冲突；修复 Tool 定义并让 Unity compile/reload 后重新发现。该错误不表示 Bridge transport 不可达。
+- `E_EXTENSION_INVENTORY_MISMATCH`：generated Extension owner、exact compiled assembly、implementation type与manifest contribution无法闭合；重新生成统一 inventory并让 Unity reload。
 - `E_DISCOVERY_CURSOR_INVALID`：cursor损坏或来自其他查询；从当前查询第一页重新读取。
 - `E_TOOL_CATALOG_CHANGED`：continuation绑定的catalog generation已改变；从当前查询第一页重新读取。
 - `E_TOOL_NOT_FOUND_FOR_TARGET`：名称不属于当前实例目录；运行 `tools search <k1|k2|...>` 重新发现相关能力。

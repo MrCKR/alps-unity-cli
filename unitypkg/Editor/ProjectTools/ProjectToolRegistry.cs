@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CSharp;
@@ -27,26 +28,27 @@ namespace UnityCli
     {
         private const string OfficialAttributeToolPrefix = "UnityPipeline_";
         private const string OfficialAttributeToolGroup = "UnityPipeline";
-        private static UnityCliToolCatalogSnapshot publishedProjectToolCatalog;
-        private static string projectToolCatalogFailure;
+        private static UnityCliPublishedToolCatalog publishedProjectToolCatalog;
+        private static UnityCliToolCatalogHealthSnapshot projectToolCatalogHealth = new UnityCliToolCatalogHealthSnapshot(
+            false, 0, "catalog was not initialized", "Let Unity compile and reload the domain before retrying.");
         private static int projectToolCatalogConstructionCount;
         internal static IUnityCliToolCatalogSnapshotReader ProjectToolCatalogSnapshotReader { get; } = new PublishedToolCatalogSnapshotReader();
+        internal static IUnityCliToolCatalogHealthSnapshotReader ProjectToolCatalogHealthSnapshotReader { get; } = new PublishedToolCatalogHealthSnapshotReader();
 
         private sealed class PublishedToolCatalogSnapshotReader : IUnityCliToolCatalogSnapshotReader
         {
-            public UnityCliToolCatalogSnapshot Read() { return ReadPublishedProjectToolCatalog(); }
+            public UnityCliToolCatalogSnapshot Read() { return ReadPublishedProjectToolCatalogSnapshot(); }
+        }
+
+        private sealed class PublishedToolCatalogHealthSnapshotReader : IUnityCliToolCatalogHealthSnapshotReader
+        {
+            public UnityCliToolCatalogHealthSnapshot Read() { return Volatile.Read(ref projectToolCatalogHealth); }
         }
 
         private static void RegisterProjectTool(UnityCliToolCatalogBuilder builder, RegisteredTool definition, UnityCliToolProviderKind providerKind)
         {
             if (builder == null) throw new ArgumentNullException("builder");
             if (definition == null) throw new ArgumentNullException("definition");
-            definition.Group = string.IsNullOrEmpty(definition.Group) ? ProjectToolGroupFromName(definition.Name) : definition.Group;
-            definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
-            definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
-            definition.PlayModeSupport = NormalizeProjectToolPlayModeSupport(definition.PlayModeSupport, definition.Target);
-            definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
-            definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
             ValidateOfficialAttributeNamespace(definition);
             builder.Add(definition, providerKind);
         }
@@ -79,6 +81,7 @@ namespace UnityCli
                 var ownership = RegistryOwnershipResolver.Load(candidates);
                 foreach (var assembly in candidates)
                 {
+                    builder.RecordProviderMetadata(assembly.GetName().FullName);
                     Type[] types;
                     try { types = assembly.GetTypes(); }
                     catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in Tool provider assembly " + assembly.FullName + ".", exception); }
@@ -90,9 +93,9 @@ namespace UnityCli
                         TryRegisterOfficialAttributeTools(builder, ownership, assembly, type);
                     }
                 }
+                ownership.ValidateComplete();
 
-                var snapshot = builder.Publish((long)Math.Ceiling((DateTime.UtcNow - startedAt).TotalMilliseconds));
-                Volatile.Write(ref publishedProjectToolCatalog, snapshot);
+                var snapshot = PublishProjectToolCatalog(builder, (long)Math.Ceiling((DateTime.UtcNow - startedAt).TotalMilliseconds));
                 WriteLog("tool_catalog_initialized assemblies=" + snapshot.AssemblyCount.ToString(CultureInfo.InvariantCulture)
                     + " providers=" + snapshot.ProviderAssemblyCount.ToString(CultureInfo.InvariantCulture)
                     + " tools=" + snapshot.ToolCount.ToString(CultureInfo.InvariantCulture)
@@ -105,8 +108,10 @@ namespace UnityCli
             catch (Exception exception)
             {
                 builder.Abort();
-                projectToolCatalogFailure = BoundedCatalogDiagnostic(ExceptionChain(exception));
-                WriteLog("tool_catalog_initialization_failed error=" + projectToolCatalogFailure);
+                var failure = BoundedCatalogDiagnostic(ExceptionChain(exception));
+                Volatile.Write(ref projectToolCatalogHealth, new UnityCliToolCatalogHealthSnapshot(
+                    false, 0, failure, "Fix the Tool definition, then let Unity compile and reload the domain before retrying."));
+                WriteLog("tool_catalog_initialization_failed error=" + failure);
             }
         }
 
@@ -115,18 +120,52 @@ namespace UnityCli
             return Volatile.Read(ref publishedProjectToolCatalog) != null;
         }
 
-        /// <summary>所有后续入口只返回同一个published snapshot；失败domain内绝不重试或重建。</summary>
-        private static UnityCliToolCatalogSnapshot ReadPublishedProjectToolCatalog()
+        /// <summary>候选完整 Publish 后才替换唯一 slot；任何第 N 项失败都保留既有 publication。</summary>
+        private static UnityCliToolCatalogSnapshot PublishProjectToolCatalog(UnityCliToolCatalogBuilder builder, long elapsedMilliseconds)
         {
-            var snapshot = Volatile.Read(ref publishedProjectToolCatalog);
-            if (snapshot != null) return snapshot;
+            var candidate = builder.Publish(elapsedMilliseconds);
+            Volatile.Write(ref publishedProjectToolCatalog, candidate);
+            Volatile.Write(ref projectToolCatalogHealth, new UnityCliToolCatalogHealthSnapshot(
+                true, candidate.Snapshot.ToolCount, string.Empty, string.Empty));
+            return candidate.Snapshot;
+        }
+
+        /// <summary>执行入口读取唯一 published executable table；失败 domain 内绝不重建。</summary>
+        private static UnityCliPublishedToolCatalog ReadPublishedProjectToolCatalog()
+        {
+            var catalog = Volatile.Read(ref publishedProjectToolCatalog);
+            if (catalog != null) return catalog;
+            var health = ProjectToolCatalogHealthSnapshotReader.Read();
             throw new BridgeCommandException(
                 "E_TOOL_REGISTRY_UNHEALTHY",
-                "Tool catalog initialization failed in the current Unity domain: " + (projectToolCatalogFailure ?? "catalog was not initialized"),
+                "Tool catalog initialization failed in the current Unity domain: " + health.Failure,
                 new Dictionary<string, object> { { "registry", "tools" } },
-                new[] { "Fix the Tool definition, then let Unity compile and reload the domain before retrying." },
+                new[] { health.NextAction },
                 true,
                 1000);
+        }
+
+        private static UnityCliToolCatalogSnapshot ReadPublishedProjectToolCatalogSnapshot()
+        {
+            return ReadPublishedProjectToolCatalog().Snapshot;
+        }
+
+        /// <summary>doctor 专用只读 health，不取得 invoker、schema 对象或 preflight 聚合。</summary>
+        private static object ProjectToolCatalogHealth(UnityCli.Protocol.BridgeRequest request)
+        {
+            RequireProjectToolCatalogInputKeys(request);
+            var health = ProjectToolCatalogHealthSnapshotReader.Read();
+            var result = new Dictionary<string, object>
+            {
+                { "ready", health.Ready },
+                { "toolCount", (long)health.ToolCount }
+            };
+            if (!health.Ready)
+            {
+                result["failure"] = BoundedCatalogDiagnostic(health.Failure);
+                result["nextActions"] = new[] { health.NextAction };
+            }
+            return result;
         }
 
         private static string BoundedCatalogDiagnostic(string value)
@@ -227,9 +266,9 @@ namespace UnityCli
                 WriteLog("custom_tool_registration_failed type=" + type.FullName + " error=" + diagnostics);
                 throw new InvalidOperationException("Tool registration failed: " + type.FullName + ": " + diagnostics, exception);
             }
-            var providerKind = string.Equals(ownership, "built-in", StringComparison.Ordinal)
+            var providerKind = string.Equals(ownership.Source, "built-in", StringComparison.Ordinal)
                 ? UnityCliToolProviderKind.BuiltIn
-                : string.Equals(ownership, "extension", StringComparison.Ordinal)
+                : string.Equals(ownership.Source, "extension", StringComparison.Ordinal)
                     ? UnityCliToolProviderKind.Extension
                     : UnityCliToolProviderKind.ProjectInterface;
             RegisterProjectTool(builder, definition, providerKind);
@@ -247,46 +286,34 @@ namespace UnityCli
             return BoundedCatalogDiagnostic(string.Join(" -> ", messages.ToArray()));
         }
 
-        private static RegisteredTool CreateRegisteredTool<TReq, TRes>(object instance, ToolDescriptor descriptor, string ownership)
+        private static RegisteredTool CreateRegisteredTool<TReq, TRes>(object instance, ToolDescriptor descriptor, RegistryToolOwnership ownership)
         {
             var tool = (IUnityCliTool<TReq, TRes>)instance;
             var completion = ResolveToolCompletionContract(descriptor, ownership);
-            return new RegisteredTool
-            {
-                Name = descriptor.Name,
-                Summary = descriptor.Summary,
-                Description = descriptor.Description,
-                Group = string.IsNullOrEmpty(descriptor.Group) ? "custom" : descriptor.Group,
-                Source = ownership,
-                InputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
-                OutputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
-                DestructiveHint = descriptor.DestructiveHint,
-                SideEffects = (descriptor.SideEffects ?? Array.Empty<string>()).ToArray(),
-                SupportsDryRun = descriptor.SupportsDryRun,
-                Permissions = (descriptor.Permissions ?? Array.Empty<string>()).ToArray(),
-                RequiresPackages = (descriptor.RequiresPackages ?? Array.Empty<string>()).ToArray(),
-                Examples = UnityCliSerializer.Parse(UnityCliSerializer.Serialize(descriptor.Examples ?? Array.Empty<ToolExample>())),
-                Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
-                PlayModeSupport = string.IsNullOrEmpty(descriptor.PlayModeSupport) ? "editor-only" : descriptor.PlayModeSupport,
-                ContractProfile = "native",
-                DefaultTimeoutMs = descriptor.DefaultTimeoutMs <= 0 ? 30000 : descriptor.DefaultTimeoutMs,
-                MaxTimeoutMs = descriptor.MaxTimeoutMs <= 0 ? 600000 : descriptor.MaxTimeoutMs,
-                RequestType = typeof(TReq),
-                ResultType = typeof(TRes),
-                CompletionContract = completion,
-                InvokeAsync = async (request, context, cancellationToken) => (object)await tool.ExecuteAsync((TReq)request, context, cancellationToken)
-            };
+            return new RegisteredTool(
+                descriptor,
+                ownership,
+                UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
+                UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
+                string.IsNullOrEmpty(descriptor.Target) || descriptor.Target != "runtime" ? "editorSession" : "playModeSession",
+                "native",
+                typeof(TReq),
+                typeof(TRes),
+                completion,
+                null,
+                async (request, context, cancellationToken) => (object)await tool.ExecuteAsync((TReq)request, context, cancellationToken));
         }
 
         /// <summary>built-in/Extension 只信任生成 registry；自定义 Tool 必须提供完整机器契约。</summary>
-        private static UnityCliToolCompletionContract ResolveToolCompletionContract(ToolDescriptor descriptor, string ownership)
+        private static UnityCliToolCompletionContract ResolveToolCompletionContract(ToolDescriptor descriptor, RegistryToolOwnership ownership)
         {
             UnityCliToolCompletionContract generated;
             if (UnityCliToolCompletionRegistry.TryGet(descriptor.Name, out generated))
             {
                 var generatedExtension = generated.DescriptorOwner.StartsWith("extension:", StringComparison.Ordinal);
-                if ((generatedExtension && !string.Equals(ownership, "extension", StringComparison.Ordinal))
-                    || (!generatedExtension && !string.Equals(generated.DescriptorOwner, ownership, StringComparison.Ordinal)))
+                if ((generatedExtension && (!string.Equals(ownership.Source, "extension", StringComparison.Ordinal)
+                        || !string.Equals(generated.DescriptorOwner, "extension:" + ownership.ExtensionId, StringComparison.Ordinal)))
+                    || (!generatedExtension && !string.Equals(generated.DescriptorOwner, ownership.Source, StringComparison.Ordinal)))
                     throw new InvalidOperationException("Completion contract owner mismatch for " + descriptor.Name + ".");
                 var descriptorMutation = descriptor.DestructiveHint
                     || descriptor.SupportsDryRun
@@ -315,7 +342,7 @@ namespace UnityCli
                 || (descriptor.SideEffects != null && descriptor.SideEffects.Length > 0)
                 || string.Equals(descriptor.PlayModeSupport, "session-affecting", StringComparison.Ordinal);
             return new UnityCliToolCompletionContract(
-                descriptor.Name, "project", "direct-terminal", custom.ExecutionClass, custom.CompletionPredicate,
+                descriptor.Name, ownership.Source, "direct-terminal", custom.ExecutionClass, custom.CompletionPredicate,
                 custom.ProofSource, custom.ReloadPolicy, custom.TimeoutError, custom.OutcomeUnknownPolicy,
                 custom.CompletionDriverId, mutation ? "required" : "none", mutation);
         }
@@ -325,14 +352,7 @@ namespace UnityCli
         {
             if (string.IsNullOrWhiteSpace(toolName)) return null;
             RegisteredTool definition;
-            return ReadPublishedProjectToolCatalog().Tools.TryGetValue(toolName, out definition) ? definition.CompletionContract : null;
-        }
-
-        private static string ProjectToolGroupFromName(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return "custom";
-            var dot = name.IndexOf('.');
-            return dot > 0 ? name.Substring(0, dot) : "custom";
+            return ReadPublishedProjectToolCatalog().ExecutableTools.TryGetValue(toolName, out definition) ? definition.CompletionContract : null;
         }
 
         private sealed class ProjectToolCatalogArgs
@@ -349,7 +369,7 @@ namespace UnityCli
         /// <summary>continuation只绑定transport session与listener generation；Tool级identifier不参与stale判定。</summary>
         private static string ProjectToolCatalogGeneration()
         {
-            return Sha256Hex(EditorSessionId() + "\n" + CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture));
+            return Sha256Hex(EditorSessionId() + "\n" + ListenerId + "\n" + CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture));
         }
 
         /// <summary>generation变化时 continuation 必须稳定失败，不能混合两代目录。</summary>
@@ -370,16 +390,16 @@ namespace UnityCli
             if (reservedNames.Length > 4096 || reservedNames.Any(name => string.IsNullOrWhiteSpace(name) || name.Length > 256))
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog reserved names exceed their bounded item or string limits.");
             var reserved = new HashSet<string>(reservedNames, StringComparer.Ordinal);
-            var conflict = catalog.Tools.Keys.OrderBy(name => name, StringComparer.Ordinal).FirstOrDefault(reserved.Contains);
+            var conflict = catalog.Descriptors.Select(tool => tool.Name).FirstOrDefault(reserved.Contains);
             if (conflict != null)
                 throw new BridgeCommandException("E_TOOL_SCHEMA_CONFLICT", "Tool catalog conflict for " + conflict + ": package-local and live registrations use the same name.",
                     new Dictionary<string, object> { { "toolName", conflict }, { "reason", "package-local and live registrations use the same name" } },
                     new[] { "Fix the duplicate Tool registration in the selected Unity project, then retry discovery." });
         }
 
-        private static IEnumerable<RegisteredTool> ProjectToolCatalogDefinitions(UnityCliToolCatalogSnapshot catalog, bool runtimeOnly)
+        private static IEnumerable<RegisteredToolDescriptor> ProjectToolCatalogDefinitions(UnityCliToolCatalogSnapshot catalog, bool runtimeOnly)
         {
-            return catalog.Tools.Values.Where(definition => !runtimeOnly || definition.Target == "runtime" || definition.Target == "both");
+            return catalog.Descriptors.Where(definition => !runtimeOnly || definition.Target == "runtime" || definition.Target == "both");
         }
 
         private static void RequireProjectToolCatalogInputKeys(UnityCli.Protocol.BridgeRequest request, params string[] allowed)
@@ -405,6 +425,9 @@ namespace UnityCli
                 .OrderBy(group => group.Key, StringComparer.Ordinal)
                 .Select(group => (object)new Dictionary<string, object> { { "name", group.Key }, { "toolCount", (long)group.Count() } })
                 .ToList();
+            if (groups.Count > 4096)
+                throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool catalog exceeds the bounded group count.", null,
+                    new[] { "Reduce invalid project Tool group fragmentation, then let Unity reload the domain." });
             return new Dictionary<string, object> { { "catalogGeneration", generation }, { "groups", groups } };
         }
 
@@ -431,7 +454,7 @@ namespace UnityCli
                 .OrderBy(definition => definition.Name, StringComparer.Ordinal)
                 .ToList();
             var remaining = matches.Where(definition => string.IsNullOrEmpty(args.AfterName) || string.CompareOrdinal(definition.Name, args.AfterName) > 0).ToList();
-            var nativeNames = new HashSet<string>(catalog.Tools.Values.Where(definition => definition.ContractProfile != "official-attribute").Select(definition => definition.Name), StringComparer.Ordinal);
+            var nativeNames = new HashSet<string>(catalog.Descriptors.Where(definition => definition.ContractProfile != "official-attribute").Select(definition => definition.Name), StringComparer.Ordinal);
             foreach (var reservedName in args.ReservedNames ?? new string[0]) nativeNames.Add(reservedName);
             var tools = remaining.Take(args.Limit).Select(definition => (object)ProjectToolRoutingSummaryData(definition, runtimeOnly, nativeNames)).ToList();
             return new Dictionary<string, object>
@@ -441,7 +464,7 @@ namespace UnityCli
             };
         }
 
-        private static bool ProjectToolCatalogMatches(RegisteredTool definition, string token)
+        private static bool ProjectToolCatalogMatches(RegisteredToolDescriptor definition, string token)
         {
             return (definition.Name ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0
                 || (definition.Summary ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0
@@ -458,15 +481,21 @@ namespace UnityCli
             if (string.IsNullOrWhiteSpace(args.Name) || args.Name.Length > 256)
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe name is required and must not exceed 256 characters.");
             var generation = ProjectToolCatalogGeneration();
-            RegisteredTool definition;
-            var found = catalog.Tools.TryGetValue(args.Name, out definition)
-                && (!runtimeOnly || definition.Target == "runtime" || definition.Target == "both");
+            var definition = catalog.Descriptors.FirstOrDefault(tool => string.Equals(tool.Name, args.Name, StringComparison.Ordinal));
+            var found = definition != null && (!runtimeOnly || definition.Target == "runtime" || definition.Target == "both");
             var result = new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", found } };
-            if (found) result["descriptor"] = ProjectToolDescriptorData(definition);
+            if (found)
+            {
+                var descriptor = ProjectToolDescriptorData(definition);
+                if (Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(descriptor)) > 3 * 1024 * 1024)
+                    throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Exact Tool descriptor exceeds the bounded transport size.", null,
+                        new[] { "Reduce the Tool schema or examples, then let Unity reload the domain." });
+                result["descriptor"] = descriptor;
+            }
             return result;
         }
 
-        private static Dictionary<string, object> ProjectToolRoutingSummaryData(RegisteredTool definition, bool runtimeOnly, HashSet<string> nativeNames)
+        private static Dictionary<string, object> ProjectToolRoutingSummaryData(RegisteredToolDescriptor definition, bool runtimeOnly, HashSet<string> nativeNames)
         {
             var commandName = definition.Name;
             if (definition.ContractProfile == "official-attribute" && definition.Name.StartsWith(OfficialAttributeToolPrefix, StringComparison.Ordinal))
@@ -489,12 +518,12 @@ namespace UnityCli
             return data;
         }
 
-        private static bool ProjectToolAvailableForCatalog(RegisteredTool definition, bool runtimeOnly)
+        private static bool ProjectToolAvailableForCatalog(RegisteredToolDescriptor definition, bool runtimeOnly)
         {
             return runtimeOnly ? playModeReady : ToolAvailableNow(definition);
         }
 
-        private static string ProjectToolUnavailableForCatalog(RegisteredTool definition, bool runtimeOnly)
+        private static string ProjectToolUnavailableForCatalog(RegisteredToolDescriptor definition, bool runtimeOnly)
         {
             return runtimeOnly && !playModeReady
                 ? "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool."
@@ -503,7 +532,7 @@ namespace UnityCli
 
         private static bool IsProjectToolCatalogReadCommand(string command)
         {
-            return command == "project-tool.groups" || command == "project-tool.summary" || command == "project-tool.describe" || command == "project-tool.list"
+            return command == "project-tool.health" || command == "project-tool.groups" || command == "project-tool.summary" || command == "project-tool.describe" || command == "project-tool.list"
                 || command == "runtime-tool.groups" || command == "runtime-tool.summary" || command == "runtime-tool.describe" || command == "runtime-tool.list";
         }
 
@@ -517,10 +546,10 @@ namespace UnityCli
         /// <summary>完整descriptor导出仅供显式doctor/static capture，不进入公开discovery。</summary>
         private static object ProjectToolList(UnityCli.Protocol.BridgeRequest request)
         {
-            var catalog = ReadPublishedProjectToolCatalog();
+            var catalog = ReadPublishedProjectToolCatalogSnapshot();
             return new Dictionary<string, object>
             {
-                { "tools", catalog.Tools.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal).Select(ProjectToolDescriptorData).ToList() },
+                { "tools", catalog.Descriptors.Select(ProjectToolDescriptorData).ToList() },
                 { "logPath", LogPath() }
             };
         }
@@ -538,12 +567,12 @@ namespace UnityCli
             var catalog = ReadPublishedProjectToolCatalog();
             var args = request.DeserializeArgs<ProjectToolRunArgs>();
             var name = args.Name;
-            if (string.IsNullOrEmpty(name) || !catalog.Tools.ContainsKey(name))
+            if (string.IsNullOrEmpty(name) || !catalog.ExecutableTools.ContainsKey(name))
             {
                 throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unitycli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 
-            var definition = catalog.Tools[name];
+            var definition = catalog.ExecutableTools[name];
             if (EditorApplication.isPlaying && string.Equals(definition.PlayModeSupport, "editor-only", StringComparison.OrdinalIgnoreCase))
             {
                 throw new BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE",
@@ -709,6 +738,22 @@ namespace UnityCli
             };
         }
 
+        private static Dictionary<string, object> CompletionContractData(PublishedToolCompletionContract contract)
+        {
+            return new Dictionary<string, object>
+            {
+                { "executionClass", contract.ExecutionClass },
+                { "completionPredicate", contract.CompletionPredicate },
+                { "proofSource", contract.ProofSource },
+                { "reloadPolicy", contract.ReloadPolicy },
+                { "timeoutError", contract.TimeoutError },
+                { "outcomeUnknownPolicy", contract.OutcomeUnknownPolicy },
+                { "completionDriverId", contract.CompletionDriverId },
+                { "journalPolicy", contract.JournalPolicy },
+                { "mutation", contract.Mutation }
+            };
+        }
+
         /// <summary>effect 后无法确认终态的异常统一收敛为执行超时。</summary>
         private static BridgeCommandException PostEffectExecutionTimeout(string toolName, string stage, string reason)
         {
@@ -719,7 +764,7 @@ namespace UnityCli
                 new[] { "Inspect the affected business state before submitting a new request." });
         }
 
-        private static Dictionary<string, object> ProjectToolDescriptorData(RegisteredTool definition)
+        private static Dictionary<string, object> ProjectToolDescriptorData(RegisteredToolDescriptor definition)
         {
             var data = new Dictionary<string, object>
             {
@@ -730,21 +775,21 @@ namespace UnityCli
                 { "supportsDryRun", definition.SupportsDryRun },
                 { "contractProfile", definition.ContractProfile },
                 { "target", definition.Target }, { "availabilityScope", definition.AvailabilityScope }, { "playModeSupport", definition.PlayModeSupport },
-                { "examples", definition.Examples },
+                { "examples", definition.CloneExamples() },
                 { "defaultTimeoutMs", definition.DefaultTimeoutMs },
                 { "completionContract", CompletionContractData(definition.CompletionContract) },
                 { "available", ToolAvailableNow(definition) }
             };
             if (!(bool)data["available"])
                 data["unavailableReason"] = ToolUnavailableReason(definition);
-            if (definition.SideEffects != null && definition.SideEffects.Length > 0) data["sideEffects"] = definition.SideEffects;
-            if (definition.Permissions != null && definition.Permissions.Length > 0) data["permissions"] = definition.Permissions;
-            if (definition.RequiresPackages != null && definition.RequiresPackages.Length > 0) data["requiresPackages"] = definition.RequiresPackages;
+            if (definition.SideEffects.Count > 0) data["sideEffects"] = definition.SideEffects.ToArray();
+            if (definition.Permissions.Count > 0) data["permissions"] = definition.Permissions.ToArray();
+            if (definition.RequiresPackages.Count > 0) data["requiresPackages"] = definition.RequiresPackages.ToArray();
             return data;
         }
 
         /// <summary>目录始终显示 Tool；available 只描述当前 mode/API 状态，不参与过滤。</summary>
-        private static bool ToolAvailableNow(RegisteredTool definition)
+        private static bool ToolAvailableNow(RegisteredToolDescriptor definition)
         {
             if (BuildProfileApiRequired(definition) && BuildToolSupport.BuildProfileType() == null)
                 return false;
@@ -758,7 +803,7 @@ namespace UnityCli
         }
 
         /// <summary>按执行门禁优先级返回与 available=false 对应的稳定原因。</summary>
-        private static string ToolUnavailableReason(RegisteredTool definition)
+        private static string ToolUnavailableReason(RegisteredToolDescriptor definition)
         {
             if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
                 return "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool.";
@@ -772,14 +817,14 @@ namespace UnityCli
         }
 
         /// <summary>这些 Tool 在所有版本注册；版本差异仅通过 availability 与执行错误表达。</summary>
-        private static bool BuildProfileApiRequired(RegisteredTool definition)
+        private static bool BuildProfileApiRequired(RegisteredToolDescriptor definition)
         {
             return definition.Name == "build.profile.create"
                 || definition.Name == "build.profile.modify"
                 || definition.Name == "build.profile.switch";
         }
 
-        private static bool EditorElementCaptureApiRequired(RegisteredTool definition)
+        private static bool EditorElementCaptureApiRequired(RegisteredToolDescriptor definition)
         {
             return definition.Name == "screenshot.editor-element";
         }
@@ -800,15 +845,6 @@ namespace UnityCli
             return new Dictionary<string, object> { { "result", result } };
         }
 
-        private static string NormalizeProjectToolPlayModeSupport(string value, string target)
-        {
-            if (string.Equals(value, "supported", StringComparison.OrdinalIgnoreCase)) return "supported";
-            if (string.Equals(value, "runtime-only", StringComparison.OrdinalIgnoreCase)) return "runtime-only";
-            if (string.Equals(value, "session-affecting", StringComparison.OrdinalIgnoreCase)) return "session-affecting";
-            if (string.Equals(value, "editor-only", StringComparison.OrdinalIgnoreCase)) return "editor-only";
-            if (string.Equals(value, "unknown", StringComparison.OrdinalIgnoreCase)) return "unknown";
-            return string.Equals(target, "runtime", StringComparison.OrdinalIgnoreCase) ? "runtime-only" : "editor-only";
-        }
     }
 }
 #endif

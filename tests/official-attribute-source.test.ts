@@ -23,11 +23,14 @@ test("official attribute discovery binds exact owners and uses a cycle-safe prov
   assert.doesNotMatch(registry, /ReferencesToolAuthoringApi|Dictionary<Assembly, bool> memo|HashSet<Assembly> visiting/);
   assert.match(registry, /foreach \(var assembly in candidates\)[\s\S]*?assembly\.GetTypes\(\)/);
   assert.doesNotMatch(registry, /foreach \(var assembly in AppDomain\.CurrentDomain\.GetAssemblies\(\)\)[\s\S]*?assembly\.GetTypes\(\)/);
-  assert.match(ownership, /Load\(IEnumerable<Assembly> candidateAssemblies\)/);
-  assert.match(ownership, /foreach \(var assembly in candidateAssemblies\)[\s\S]*?assembly\.GetTypes\(\)/);
-  assert.doesNotMatch(ownership, /AppDomain\.CurrentDomain\.GetAssemblies/);
-  assert.match(ownership, /Dictionary<Type, string> extensionClaims/);
-  assert.match(ownership, /extensionClaims\.TryGetValue\(implementationType, out extensionId\)/);
+  assert.match(ownership, /Load\(IEnumerable<Assembly> candidates\)/);
+  assert.match(ownership, /UnityCliToolCompletionRegistry\.TryGetInventory\(toolName, out expected\)/);
+  assert.match(ownership, /expected\.AssemblyName, assembly\.GetName\(\)\.Name/);
+  assert.match(ownership, /expected\.ImplementationType, implementationType\.FullName/);
+  assert.match(ownership, /Resolve\(Type implementationType, string toolName\)/);
+  assert.match(ownership, /actualPackageInventory\.Add\(toolName, ownership\)/);
+  assert.match(ownership, /ValidateComplete\(\)/);
+  assert.doesNotMatch(ownership, /AppDomain\.CurrentDomain\.GetAssemblies|ExtensionAssemblyPrefix|\.StartsWith\(ExtensionAssemblyPrefix/);
   assert.match(official, /Unity\.Pipeline\.Commands\.CliCommandAttribute/);
   assert.match(official, /Unity\.Pipeline\.Commands\.CliArgAttribute/);
   assert.match(official, /Unity\.Pipeline\.Commands\.IStructuredCommandInput/);
@@ -44,12 +47,12 @@ test("Pipeline package provider在注册前抑制且其他attribute继续共享p
     readFile(officialPath, "utf8"),
     readFile(ownershipPath, "utf8"),
   ]);
-  assert.match(registry, /var pending = new Dictionary<string, RegisteredTool>/);
-  assert.match(registry, /ProjectTools\.Clear\(\)/);
+  assert.match(registry, /var builder = new UnityCliToolCatalogBuilder\(\)/);
+  assert.match(registry, /PublishProjectToolCatalog\(builder/);
   assert.match(registry, /ReflectionTypeLoadException exception\)[^\n]*throw new InvalidOperationException/);
   assert.doesNotMatch(registry, /ReflectionTypeLoadException exception\)[^\n]*types = exception\.Types/);
-  assert.match(registry, /catch \(Exception exception\)[\s\S]*?E_TOOL_REGISTRY_UNHEALTHY/);
-  assert.match(registry, /discoveryTools = null/);
+  assert.match(registry, /catch \(Exception exception\)[\s\S]*?UnityCliToolCatalogHealthSnapshot/);
+  assert.match(registry, /ownership\.ValidateComplete\(\)/);
   assert.match(official, /SuppressedOfficialAttributePackage = "com\.unity\.pipeline"/);
   assert.match(official, /PackageInfo\.FindForAssembly\(assembly\)/);
   assert.match(official, /package\.name, SuppressedOfficialAttributePackage, StringComparison\.Ordinal/);
@@ -57,12 +60,12 @@ test("Pipeline package provider在注册前抑制且其他attribute继续共享p
   assert.match(official, /Official CLI command method must be static/);
   assert.match(official, /duplicate projected parameter name/);
   assert.doesNotMatch(ownership, /PackageInfo\.FindForAssembly|IsOwnedByPackage|AppDomain\.CurrentDomain\.GetAssemblies/);
-  assert.match(ownership, /ReflectionTypeLoadException exception\)[^\n]*throw new InvalidOperationException/);
-  assert.match(ownership, /matches\.Count != 1/);
+  assert.match(ownership, /expected\.DescriptorOwner\.StartsWith\("extension:"/);
+  assert.match(ownership, /loadedExtensionAssemblies\.TryGetValue\(assembly, out loadedExtensionId\)/);
   assert.match(official, /var toolName = OfficialAttributeToolPrefix \+ name/);
   assert.match(official, /Name = toolName/);
   assert.match(official, /Group = OfficialAttributeToolGroup/);
-  assert.match(official, /RegisterProjectTool\(definition\)/);
+  assert.match(official, /RegisterProjectTool\(builder, definition, UnityCliToolProviderKind\.OfficialAttribute\)/);
   assert.match(registry, /Duplicate tool registration/);
   assert.match(registry, /ValidateOfficialAttributeNamespace\(definition\)/);
   assert.match(registry, /Native Tool cannot use the reserved UnityPipeline_/);

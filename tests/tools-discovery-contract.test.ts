@@ -32,10 +32,10 @@ test("frozen top-level tools controls remain usable while tools run rejects thei
   }
 });
 
-test("canonical non-generated source has no removed Tool declaration or Bridge status route", async () => {
+test("canonical and generated source has no removed Tool declaration or Bridge status route", async () => {
   const sourceFiles = [
-    ...(await recursiveFiles("src", ".ts")).filter((path) => !path.includes(".generated-")),
-    ...(await recursiveFiles(join("unitypkg", "Editor"), ".cs")).filter((path) => !path.includes(`${join("Editor", "Generated")}`)),
+    ...await recursiveFiles("src", ".ts"),
+    ...await recursiveFiles(join("unitypkg", "Editor"), ".cs"),
   ];
   const source = (await Promise.all(sourceFiles.map((path) => readFile(path, "utf8")))).join("\n");
   for (const name of REMOVED_IDENTITIES) {

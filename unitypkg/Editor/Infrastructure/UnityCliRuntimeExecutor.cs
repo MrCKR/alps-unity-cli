@@ -29,7 +29,7 @@ namespace UnityCli
         private static void InitializeRuntimeExecutor()
         {
             if (runtimeExecutorInitialized) return;
-            ReadPublishedProjectToolCatalog();
+            ReadPublishedProjectToolCatalogSnapshot();
             runtimeExecutorInitialized = true;
             EditorApplication.playModeStateChanged += OnRuntimePlayModeStateChanged;
             WriteLog("runtime_executor_initialized");
@@ -93,14 +93,14 @@ namespace UnityCli
         /// </summary>
         private static Dictionary<string, object> RuntimeSessionData()
         {
-            var catalog = ReadPublishedProjectToolCatalog();
+            var catalog = ReadPublishedProjectToolCatalogSnapshot();
             var availableTools = new List<object>();
-            foreach (var pair in catalog.Tools)
+            foreach (var descriptor in catalog.Descriptors)
             {
-                if (pair.Value.Target != "runtime" && pair.Value.Target != "both") continue;
+                if (descriptor.Target != "runtime" && descriptor.Target != "both") continue;
                 availableTools.Add(new Dictionary<string, object>
                 {
-                    { "name", pair.Value.Name }, { "target", pair.Value.Target }, { "availabilityScope", pair.Value.AvailabilityScope }, { "available", playModeReady }
+                    { "name", descriptor.Name }, { "target", descriptor.Target }, { "availabilityScope", descriptor.AvailabilityScope }, { "available", playModeReady }
                 });
             }
             // 会话数据直接嵌入最终 response，禁止序列化后重新解析为 object。
@@ -116,10 +116,10 @@ namespace UnityCli
         /// </summary>
         private static object RuntimeToolList(UnityCli.Protocol.BridgeRequest request)
         {
-            var catalog = ReadPublishedProjectToolCatalog();
+            var catalog = ReadPublishedProjectToolCatalogSnapshot();
             InitializeRuntimeExecutor();
             var tools = new System.Collections.Generic.List<object>();
-            foreach (var definition in catalog.Tools.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal))
+            foreach (var definition in catalog.Descriptors.OrderBy(tool => tool.Name, StringComparer.Ordinal))
             {
                 if (definition.Target != "runtime" && definition.Target != "both") continue;
                 var descriptor = ProjectToolDescriptorData(definition);
@@ -170,13 +170,13 @@ namespace UnityCli
             }
 
             // Validate the tool exists and is a runtime tool
-            if (!catalog.Tools.ContainsKey(name))
+            if (!catalog.ExecutableTools.ContainsKey(name))
             {
                 throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name,
                     "Run unitycli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 
-            var definition = catalog.Tools[name];
+            var definition = catalog.ExecutableTools[name];
             if (definition.Target != "runtime" && definition.Target != "both")
             {
                 throw new BridgeCommandException("E_RUNTIME_TOOL_TARGET_MISMATCH",

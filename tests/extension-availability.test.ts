@@ -23,7 +23,7 @@ import { checkToolExtensionAvailability, extensionAvailabilityFlags, freezeExten
 import { builtinToolMetadata, builtinToolGroups, EXTENSION_GROUPS } from "../src/tools/metadata/index.js";
 import { builtinExtensionMetadata } from "../src/extensions/metadata/index.js";
 import { builtinExtensionToolContributions, findBuiltinExtensionToolContribution, requiredPackagesForContribution } from "../src/extensions/tool-manifest.js";
-import { probuilderDeleteFacesTool, probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
+import { makeLiveTool, probuilderDeleteFacesTool, probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
 import { makeRegistry, makeRegistrySession, registryIdentity, writeRegistry } from "./helpers/instance-registry-v3.js";
 import type { ToolMetadata } from "../src/tools/metadata/index.js";
 
@@ -216,6 +216,14 @@ test("checkToolExtensionAvailability works with constructed live descriptors", a
 
   const plain = await checkToolExtensionAvailability(sceneHierarchyTool(), await freezeExtensionAvailability({ project: missingProject }, {}));
   assert.equal(plain.available, true);
+
+  const unboundExtension = await checkToolExtensionAvailability(makeLiveTool({
+    name: "fixture.unbound-extension",
+    source: "extension",
+    group: "fixture",
+  }), await freezeExtensionAvailability({ project: missingProject }, {}));
+  assert.equal(unboundExtension.available, false);
+  assert.equal(unboundExtension.errorCode, "E_EXTENSION_INVENTORY_MISMATCH");
 });
 
 test("group discovery freezes one snapshot and proves each distinct extension once", async () => {

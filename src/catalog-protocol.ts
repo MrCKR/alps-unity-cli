@@ -6,6 +6,9 @@ import type { CliResult } from "./types.js";
 import { normalizeToolMetadata, type ResolvedToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
 
 export const MAX_CATALOG_PAGE_FETCH = 101;
+const MAX_CATALOG_SUMMARY_BYTES = 256 * 1024;
+const MAX_CATALOG_GROUPS_BYTES = 2 * 1024 * 1024;
+const MAX_CATALOG_DESCRIPTOR_BYTES = 3 * 1024 * 1024;
 
 export interface CatalogSummaryQuery {
   group?: string;
@@ -291,6 +294,7 @@ function routingSummary(tool: ResolvedToolMetadata, nativeNames: ReadonlySet<str
 }
 
 function parseSummaryResponse(data: unknown, requestId: string, command: string, query: CatalogSummaryQuery): CatalogSummaryResult {
+  if (jsonByteLength(data) > MAX_CATALOG_SUMMARY_BYTES) return unhealthySummary(requestId, `${command} exceeded the bounded summary transport size.`);
   const record = objectRecord(data);
   const generation = stringField(record, "catalogGeneration");
   const total = numberField(record, "total");
@@ -317,6 +321,7 @@ function parseSummaryResponse(data: unknown, requestId: string, command: string,
 }
 
 function parseGroupsResponse(data: unknown, requestId: string, command: string): CatalogGroupsResult {
+  if (jsonByteLength(data) > MAX_CATALOG_GROUPS_BYTES) return unhealthySummary(requestId, `${command} exceeded the bounded group transport size.`);
   const record = objectRecord(data);
   const generation = stringField(record, "catalogGeneration");
   const rawGroups = record?.groups;
@@ -346,6 +351,7 @@ function parseDescriptorResponse(
   expectedName: string,
   target: "editor" | "runtime",
 ): CatalogDescribeResult {
+  if (jsonByteLength(data) > MAX_CATALOG_DESCRIPTOR_BYTES) return unhealthySummary(requestId, `${command} exceeded the bounded exact descriptor transport size.`);
   const record = objectRecord(data);
   const generation = stringField(record, "catalogGeneration");
   if (!record || !generation || generation.length > 128 || typeof record.found !== "boolean"
@@ -413,7 +419,7 @@ function reservedNameConflict(requestId: string, tools: ResolvedToolMetadata[], 
 
 function unhealthySummary(requestId: string, message: string): CliResult & { ok: false } {
   return failure(requestId, "E_TOOL_REGISTRY_UNHEALTHY", message, [
-    "Fix the Tool descriptor registry in the selected Unity instance, then retry discovery."
+    "Fix the Tool descriptor registry, then let Unity compile and reload the domain before retrying discovery."
   ]) as CliResult & { ok: false };
 }
 
@@ -449,6 +455,11 @@ function schemaFailure(requestId: string, message: string): CliResult & { ok: fa
 
 function searchTokens(keyword: string | undefined): string[] {
   return (keyword ?? "").split("|").map((token) => token.trim().toLowerCase()).filter(Boolean);
+}
+
+function jsonByteLength(value: unknown): number {
+  try { return Buffer.byteLength(JSON.stringify(value), "utf8"); }
+  catch { return Number.POSITIVE_INFINITY; }
 }
 
 function objectRecord(value: unknown): Record<string, unknown> | undefined {

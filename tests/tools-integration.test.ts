@@ -80,6 +80,8 @@ test("each discovery root performs one bounded catalog transport per target", as
           instanceId: `unity-${(request.target === "editor" ? "a" : "b").repeat(64)}`,
           canonicalProjectPath: "c:\\fixture",
           sessionId: `session-${request.target}`,
+          listenerId: `listener-${request.target}`,
+          listenerGeneration: 1,
           token: `${request.target === "editor" ? "c" : "d"}`.repeat(64),
           consumed: false,
           grantExpiresAtMs: Date.now() + 30_000,
@@ -121,6 +123,67 @@ test("each discovery root performs one bounded catalog transport per target", as
   assert.ok(summaryBytes < descriptorBytes * 0.2, `summary=${summaryBytes}, descriptor=${descriptorBytes}`);
   for (const field of ["inputSchema", "outputSchema", "permissions", "completionContract", "examples"])
     assert.equal(Object.hasOwn(summary, field), false, field);
+});
+
+test("tools run carries exact discovery provenance into the business root admission", async () => {
+  const live = staticBridgeToolMetadata().find((tool) => tool.name === "go.find")!;
+  const admissions: RootAdmissionRequest[] = [];
+  const runtime = {
+    ...disconnected,
+    createSessionSupervisor: () => ({
+      acquireRootAdmission: async (request: RootAdmissionRequest): Promise<RootAdmissionLease> => {
+        admissions.push(request);
+        const generation = request.target === "editor" ? 7 : 9;
+        const provenance = request.expectedDiscoveryProvenance ?? (request.captureDiscoveryProvenance ? {
+          target: request.target,
+          instanceId: `unity-${(request.target === "editor" ? "a" : "b").repeat(64)}`,
+          sessionId: `session-${(request.target === "editor" ? "c" : "d").repeat(64)}`,
+          ...(request.target === "editor" ? { editorSessionId: `session-${"c".repeat(64)}` } : {}),
+          listenerId: `listener-${(request.target === "editor" ? "e" : "f").repeat(32)}`,
+          listenerGeneration: generation,
+        } : undefined);
+        return {
+          requestId: request.requestId,
+          command: request.command,
+          rootFingerprint: (request.target === "editor" ? "1" : "2").repeat(64),
+          completionContractIdentity: request.completionContractIdentity,
+          target: request.target,
+          instanceId: provenance?.instanceId ?? `unity-${"a".repeat(64)}`,
+          canonicalProjectPath: "c:\\fixture",
+          sessionId: provenance?.sessionId ?? `session-${"c".repeat(64)}`,
+          listenerId: provenance?.listenerId ?? `listener-${"e".repeat(32)}`,
+          listenerGeneration: provenance?.listenerGeneration ?? generation,
+          discoveryProvenance: provenance,
+          token: (request.target === "editor" ? "3" : "4").repeat(64),
+          consumed: false,
+          grantExpiresAtMs: Date.now() + 30_000,
+          executionAbsoluteDeadlineMs: request.admissionAbsoluteDeadlineMs,
+          injected: true,
+        };
+      },
+      completeRootAdmission: async () => undefined,
+    }),
+    bridgeExecute: async (payload: BridgeRequest) => {
+      if (payload.command === "project-tool.describe") return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: "editor-generation", found: true, descriptor: bridgeDescriptor(live) } };
+      if (payload.command === "runtime-tool.describe") return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: "runtime-generation", found: false } };
+      if (payload.command === "project-tool.run") return { ok: true as const, requestId: payload.requestId, data: { result: { includeInactive: false, items: [], matchCount: 0, pageInfo: { cursor: 0, pageSize: 100, total: 0 }, prefabStageOpen: false, preferPrefabStage: false, query: "Nothing", searchMethod: "by_name" } } };
+      throw new Error(`unexpected command ${payload.command}`);
+    },
+  };
+
+  const result = await execute(["tools", "run", "go.find", "--input", "{\"name\":\"Nothing\"}"], runtime as never);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(admissions.map((request) => request.target), ["editor", "runtime", "editor"]);
+  assert.equal(admissions[0].captureDiscoveryProvenance, true);
+  assert.deepEqual(admissions[2].expectedDiscoveryProvenance, {
+    target: "editor",
+    instanceId: `unity-${"a".repeat(64)}`,
+    sessionId: `session-${"c".repeat(64)}`,
+    editorSessionId: `session-${"c".repeat(64)}`,
+    listenerId: `listener-${"e".repeat(32)}`,
+    listenerGeneration: 7,
+  });
+  assert.equal(admissions[2].admissionAbsoluteDeadlineMs, admissions[0].admissionAbsoluteDeadlineMs);
 });
 
 test("summary protocol bounds a large catalog before transport projection", async () => {
@@ -179,6 +242,16 @@ test("private summary and exact protocols fail closed on extra payload and wrong
   }, "req_wrong_exact", "scene.active");
   assert.equal(wrongExact.ok, false);
   if (!wrongExact.ok) assert.equal(wrongExact.error.code, "E_TOOL_REGISTRY_UNHEALTHY");
+
+  const oversizedExact = await readEditorCatalogDescriptor({}, {
+    bridgeExecute: async (payload: BridgeRequest) => ({
+      ok: true,
+      requestId: payload.requestId,
+      data: { catalogGeneration: "g".repeat(64), found: true, descriptor: { ...bridgeDescriptor(live), description: "x".repeat(3 * 1024 * 1024) } },
+    }),
+  }, "req_oversized_exact", live.name);
+  assert.equal(oversizedExact.ok, false);
+  if (!oversizedExact.ok) assert.equal(oversizedExact.error.code, "E_TOOL_REGISTRY_UNHEALTHY");
 });
 
 test("generation-bound cursor rejects a changed catalog and multi-target output remains ordinal", async () => {
@@ -476,6 +549,8 @@ test("tool-owned timeout result revokes an unconsumed lease exactly once before 
     instanceId: `unity-${"a".repeat(64)}`,
     canonicalProjectPath: "c:\\repo\\project",
     sessionId: `session-${"b".repeat(64)}`,
+    listenerId: `listener-${"c".repeat(32)}`,
+    listenerGeneration: 1,
     token: "a".repeat(64),
     consumed: false,
     grantExpiresAtMs: Date.now() + 2_000,
@@ -513,6 +588,8 @@ test("late local settlement cleans an unconsumed lease exactly once without chan
     instanceId: `unity-${"a".repeat(64)}`,
     canonicalProjectPath: "c:\\repo\\project",
     sessionId: `session-${"b".repeat(64)}`,
+    listenerId: `listener-${"c".repeat(32)}`,
+    listenerGeneration: 1,
     token: "a".repeat(64),
     consumed: false,
     grantExpiresAtMs: Date.now() + 2_000,
@@ -552,6 +629,8 @@ test("late cleanup never revokes a lease consumed before local settlement", asyn
     instanceId: `unity-${"a".repeat(64)}`,
     canonicalProjectPath: "c:\\repo\\project",
     sessionId: `session-${"b".repeat(64)}`,
+    listenerId: `listener-${"c".repeat(32)}`,
+    listenerGeneration: 1,
     token: "a".repeat(64),
     consumed: false,
     grantExpiresAtMs: Date.now() + 2_000,

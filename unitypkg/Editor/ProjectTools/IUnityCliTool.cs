@@ -6,6 +6,14 @@ using System.Threading.Tasks;
 
 namespace UnityCli
 {
+    /// <summary>Extension asmdef 的编译期 owner claim；runtime 仍需与 generated exact inventory 全集一致。</summary>
+    [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false)]
+    public sealed class UnityCliExtensionAssemblyAttribute : Attribute
+    {
+        public UnityCliExtensionAssemblyAttribute(string extensionId) { ExtensionId = extensionId; }
+        public string ExtensionId { get; private set; }
+    }
+
     /// <summary>
     /// 工具统一为语言原生异步接口。实现本接口即声明一个工具。
     /// desc 只声明人写字段；schema 由框架从 TReq/TRes 派生。

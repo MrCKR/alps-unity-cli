@@ -36,15 +36,70 @@ function collectCSharpTools(root) {
     if (!name) throw new Error(`${relativeSource(root, file)}: IUnityCliTool 缺少公开 Name`);
     const source = relativeSource(root, file);
     const extensionMatch = source.match(/^extensions\/([^/]+)\//);
+    const implementationMatch = sourceText.match(/\b(?:class|struct)\s+([A-Za-z0-9_]+)\s*:\s*IUnityCliTool\s*</);
+    if (!implementationMatch) throw new Error(`${source}: IUnityCliTool implementation type is missing`);
+    const namespaceMatch = sourceText.match(/\bnamespace\s+([A-Za-z0-9_.]+)\s*\{/);
+    const containingTypeMatch = implementationMatch.index !== undefined
+      ? sourceText.slice(0, implementationMatch.index).match(/\b(?:class|struct)\s+([A-Za-z0-9_]+)\s*\{\s*$/m)
+      : undefined;
+    const namespaceName = namespaceMatch?.[1] ?? "";
+    const containingType = containingTypeMatch?.[1];
+    const implementationType = `${namespaceName ? `${namespaceName}.` : ""}${containingType ? `${containingType}+` : ""}${implementationMatch[1]}`;
+    const assemblyName = extensionMatch ? readExtensionAssemblyName(root, extensionMatch[1]) : "UnityCli.Editor";
     tools.push({
       name,
       descriptorOwner: extensionMatch ? `extension:${extensionMatch[1]}` : "built-in",
       source,
+      assemblyName,
+      implementationType,
       handler: "bridge",
       asyncSignals: collectAsyncSignals(sourceText, "csharp"),
     });
   }
   return tools;
+}
+
+/** 读取 extension asmdef 的编译 assembly identity。 */
+function readExtensionAssemblyName(root, extensionId) {
+  const files = filesUnder(root, `extensions/${extensionId}/unitypkg`, ".asmdef");
+  if (files.length !== 1) throw new Error(`extensions/${extensionId}: expected exactly one .asmdef, found ${files.length}`);
+  const manifest = JSON.parse(fs.readFileSync(files[0], "utf8"));
+  if (typeof manifest.name !== "string" || manifest.name.length === 0) throw new Error(`${relativeSource(root, files[0])}: asmdef name is required`);
+  return manifest.name;
+}
+
+/** Extension manifest、asmdef 与源码 Tool/type 集合必须完全一致。 */
+function assertExtensionInventory(root, csharpTools) {
+  const extensionsDirectory = path.join(root, "extensions");
+  if (!fs.existsSync(extensionsDirectory)) return;
+  for (const entry of fs.readdirSync(extensionsDirectory, { withFileTypes: true }).filter((item) => item.isDirectory())) {
+    const manifestPath = extensionManifestPath(root, entry.name);
+    if (!fs.existsSync(manifestPath)) continue;
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const expectedTools = (manifest.contributions?.tools ?? []).map((item) => item.name).sort();
+    const expectedTypes = (manifest.contributions?.csharpEntries ?? []).map((item) => item.type).sort();
+    const actual = csharpTools.filter((tool) => tool.descriptorOwner === `extension:${manifest.id}`);
+    compareExactSet(`extensions/${entry.name} Tool inventory`, expectedTools, actual.map((tool) => tool.name).sort());
+    compareExactSet(`extensions/${entry.name} implementation inventory`, expectedTypes, actual.map((tool) => tool.implementationType).sort());
+    const assemblyNames = [...new Set(actual.map((tool) => tool.assemblyName))];
+    if (actual.length > 0 && (assemblyNames.length !== 1 || assemblyNames[0] !== readExtensionAssemblyName(root, entry.name))) {
+      throw new Error(`extensions/${entry.name}: exact asmdef identity does not match Tool inventory`);
+    }
+  }
+}
+
+function extensionRoot(root) {
+  return path.join(root, "extensions");
+}
+
+function extensionManifestPath(root, extensionId) {
+  return path.join(extensionRoot(root), extensionId, "extension.json");
+}
+
+function compareExactSet(label, expected, actual) {
+  if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+    throw new Error(`${label} mismatch: expected=${JSON.stringify(expected)} actual=${JSON.stringify(actual)}`);
+  }
 }
 
 /** 提取 TS defineTool 的公开 descriptor 身份。 */
@@ -107,7 +162,9 @@ function assertNoLegacyContextAuthoring(root) {
 /** 返回全部产品 public Tool；同名 Tool 直接 fail closed。 */
 export function collectPublicToolInventory(root) {
   assertNoLegacyContextAuthoring(root);
-  const tools = [...collectCSharpTools(root), ...collectTypeScriptTools(root)]
+  const csharpTools = collectCSharpTools(root);
+  assertExtensionInventory(root, csharpTools);
+  const tools = [...csharpTools, ...collectTypeScriptTools(root)]
     .sort((left, right) => left.name.localeCompare(right.name) || left.source.localeCompare(right.source));
   const seen = new Map();
   for (const tool of tools) {
