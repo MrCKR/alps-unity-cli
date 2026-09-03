@@ -146,10 +146,12 @@ test("validateManifest rejects non-kebab-case id", () => {
     () => validateManifest({ ...PROBUILDER_MANIFEST, id: "ProBuilder" }),
     (err: unknown) => err instanceof ExtensionRegistryError && err.code === "INVALID_MANIFEST"
   );
-  assert.throws(
-    () => validateManifest({ ...PROBUILDER_MANIFEST, id: "pro_builder" }),
-    (err: unknown) => err instanceof ExtensionRegistryError && err.code === "INVALID_MANIFEST"
-  );
+  for (const id of ["pro_builder", "probuilder\n", "probuilder\r\n", `a${"b".repeat(128)}`]) {
+    assert.throws(
+      () => validateManifest({ ...PROBUILDER_MANIFEST, id }),
+      (err: unknown) => err instanceof ExtensionRegistryError && err.code === "INVALID_MANIFEST"
+    );
+  }
 });
 
 test("validateManifest rejects missing name", () => {

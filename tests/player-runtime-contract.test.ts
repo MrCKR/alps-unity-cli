@@ -19,17 +19,25 @@ async function sources(): Promise<Record<keyof typeof RUNTIME_FILES, string>> {
   return Object.fromEntries(entries) as Record<keyof typeof RUNTIME_FILES, string>;
 }
 
-test("development Player runtime assembly stays Windows-only and Editor-independent", async () => {
+function assertBefore(source: string, first: string, second: string): void {
+  const firstIndex = source.indexOf(first);
+  assert.ok(firstIndex >= 0, `missing source anchor: ${first}`);
+  const secondIndex = source.indexOf(second);
+  assert.ok(secondIndex >= 0, `missing source anchor: ${second}`);
+  assert.ok(firstIndex < secondIndex, `${first} must precede ${second}`);
+}
+
+test("development Player runtime assembly stays UnityEditor-independent and testable", async () => {
   const source = await sources();
   const asmdef = JSON.parse(source.asmdef) as { name: string; includePlatforms: string[]; references: string[] };
   assert.equal(asmdef.name, "UnityCli.Runtime");
-  assert.deepEqual(asmdef.includePlatforms, ["WindowsStandalone32", "WindowsStandalone64"]);
+  assert.deepEqual(asmdef.includePlatforms, ["Editor", "WindowsStandalone32", "WindowsStandalone64"]);
   assert.deepEqual(asmdef.references, ["UnityCli.Shared"]);
   for (const text of [source.bridge, source.json, source.registry]) {
     assert.doesNotMatch(text, /using UnityEditor|Newtonsoft\.|System\.Web\./);
   }
   assert.match(source.bridge, /Debug\.isDebugBuild/);
-  assert.match(source.bridge, /UNITY_STANDALONE_WIN/);
+  assert.match(source.bridge, /UNITY_STANDALONE_WIN && !UNITY_EDITOR/);
 });
 
 test("post-build injection writes only the fixed development Player sidecar", async () => {
@@ -133,24 +141,23 @@ test("Runtime controls stay session-only and package-gated", async () => {
   assert.match(tools, /phasesProven/);
   assert.match(tools, /observed\.Count == 2/);
   assert.equal(tools.match(/if \(!dryRun\) facade\.Update\(\);/g)?.length, 2);
-  assert.ok(tools.indexOf("if (!dryRun) facade.Update();") < tools.indexOf("var before = facade.IsPressed(control);"));
+  assertBefore(tools, "if (!dryRun) facade.Update();", "var before = facade.IsPressed(control);");
   assert.match(tools, /beforePressed/);
   assert.match(tools, /afterPressed/);
   assert.doesNotMatch(tools, /DeltaStateEvent/);
   assert.doesNotMatch(tools, /Type\.GetType\([^\n]*requested|GetMethod\([^\n]*requested/);
 });
 
-test("nested tools discovery uses distinct immutable runtime request identities", async () => {
-  const files = {
-    "src/tools/tools/describe.ts": "_describe_execution",
-    "src/tools/tools/group.ts": "_group_execution",
-    "src/tools/tools/group-list.ts": "_group_list_execution",
-    "src/tools/tools/search.ts": "_search_execution",
-  };
-  for (const [path, suffix] of Object.entries(files)) {
-    const source = await readFile(path, "utf8");
-    assert.ok(source.includes(`context.requestId}${suffix}`), path);
-  }
+test("tools discovery is a direct control-plane and keeps the root request identity", async () => {
+  const source = await readFile("src/tools/commands.ts", "utf8");
+  assert.match(source, /projectCatalogGroups\(flags, rootRuntime, requestId/);
+  assert.match(source, /projectCatalogPage\([^\n]+[\s\S]*rootRuntime, requestId/);
+  assert.match(source, /projectCatalogDescribe\(name, flags, rootRuntime, requestId/);
+  assert.equal(source.match(/dispatchTool\(/g)?.length, 1, "only tools run may enter the Tool dispatcher");
+  assert.match(source, /if \(command === "run"\)[\s\S]{0,240}return dispatchTool\(/);
+  assert.doesNotMatch(source, /requestId\s*\+|`\$\{requestId\}[_-]/, "discovery must not mint a second request identity");
+  for (const obsolete of ["tools/describe", "tools/group", "tools/group-list", "tools/search", "tools/pagination"])
+    assert.equal(source.includes(obsolete), false, obsolete);
 });
 
 test("runtime JSON rejects duplicate keys, trailing tokens, BOM-body use and non-finite output", async () => {
@@ -167,18 +174,19 @@ test("runtime security, cache, artifacts, and shutdown remain bounded", async ()
   const tools = await readFile("unitypkg/Runtime/Tools/UnityCliRuntimeTools.cs", "utf8");
   assert.match(bridge, /MaxQueueItems = 128/);
   assert.match(bridge, /Completion\.Task\.IsCompleted/);
-  assert.match(bridge, /Interlocked\.CompareExchange\(ref work\.ExecutionState, 2, 0\)/);
-  assert.match(bridge, /Interlocked\.CompareExchange\(ref pendingRequest\.ExecutionState, 1, 0\)/);
-  assert.match(bridge, /while \(!work\.Completion\.Task\.IsCompleted\)/);
-  assert.match(bridge, /stopping\.IsCancellationRequested/);
-  assert.match(bridge, /private void StopBridge\(\)[\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.Cancel\(\)/);
-  assert.match(bridge, /if \(immediate == null && enqueue\) pending\.Enqueue\(work\);/);
-  assert.match(bridge, /if \(immediate != null\) \{ Write\(context, immediate\); return; \}/);
-  assert.match(bridge, /work\.Completion\.Task\.Wait\(\)/);
-  assert.match(bridge, /DateTimeOffset\.UtcNow\.ToUnixTimeMilliseconds\(\) >= deadline/);
+  assert.match(bridge, /private bool FinalizeRuntimeRequest\([\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 2, expectedState\)[\s\S]*?request\.Terminal = terminal[\s\S]*?TrySettleRuntimeRequest\(request\)/);
+  assert.match(bridge, /TrySettleRuntimeRequest[\s\S]*?pool\.CompleteTrusted\(identity\)[\s\S]*?ExactCurrentCompleted[\s\S]*?DefinitelyAbsent[\s\S]*?request\.Completion\.TrySetResult\(request\.Terminal\)/);
+  assert.match(bridge, /RetryPendingRuntimeSettlements[\s\S]*?MaxSettlementRetriesPerTick[\s\S]*?SettlementRetryDelayMs/);
+  assert.match(bridge, /private bool TryTakeNextRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.IsCancellationRequested[\s\S]*?pending\.TryDequeue\(out request\)[\s\S]*?Interlocked\.CompareExchange\(ref request\.ExecutionState, 1, 0\)/);
+  assert.match(bridge, /internal RuntimePublicationResult PublishRuntimeRequest\([\s\S]*?lock \(requestCacheSync\)[\s\S]*?requestCache\.TryGet\(requestId, out existing\)[\s\S]*?absoluteDeadlineMs <= UtcNowMs\(\)[\s\S]*?AuthorizeRuntimeAdmission[\s\S]*?PublishPreparedRequestLocked/);
+  assert.match(bridge, /internal void StopRuntimeRequestsLocked\(\)[\s\S]*?lock \(requestCacheSync\)[\s\S]*?stopping\.Cancel\(\)[\s\S]*?FinalizeRuntimeRequest[\s\S]*?pending\.TryDequeue[\s\S]*?requestCache\.Clear\(\)/);
+  assert.match(bridge, /private static string AwaitRuntimeResponse\([\s\S]*?RuntimeWaitDependencies/);
+  assert.match(bridge, /if \(work\.Owner\.FinalizeRuntimeRequest\(work, timeout, 0\)\) return work\.Completion\.Task\.Result;/);
+  assert.doesNotMatch(bridge, /FinalizeRuntimeRequest\(work, timeout, 0\)\) work\.Completion\.Task\.Wait\(\)/);
   assert.match(bridge, /E_RUNTIME_QUEUE_FULL/);
   assert.match(bridge, /E_REQUEST_REPLAY_MISMATCH/);
-  assert.ok(bridge.indexOf("requestCache.TryGetValue") < bridge.indexOf("var deadline = ValidateRequest(envelope)"));
+  assertBefore(bridge, "requestCache.TryGet(requestId, out existing)", "absoluteDeadlineMs <= UtcNowMs()");
+  assertBefore(bridge, "absoluteDeadlineMs <= UtcNowMs()", "AuthorizeRuntimeAdmission(pool, admission, request, requestDigest");
   assert.match(bridge, /E_RUNTIME_SESSION_STALE/);
   assert.match(bridge, /requestCache\.Clear\(\)/);
   assert.match(bridge, /UnityCliRuntimeTools\.Shutdown\(\)/);

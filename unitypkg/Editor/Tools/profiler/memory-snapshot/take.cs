@@ -1,146 +1,148 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using UnityEditor;
-using UnityEngine;
 
 namespace UnityCli
 {
-    /// <summary>
-    /// profiler.memory-snapshot.take — 采集内存快照(.snap)。
-    /// MemoryProfiler.TakeSnapshot 的未来帧回调通过统一 wait scheduler 承接。
-    /// </summary>
+    /// <summary>profiler.memory-snapshot.take — governed pending publication 与唯一 callback terminal。</summary>
     public class ProfilerMemorySnapshotTakeTool : IUnityCliTool<ProfilerMemorySnapshotTakeTool.Request, ProfilerMemorySnapshotTakeTool.Result>
     {
         public sealed class Request
         {
             public string Path { get; set; }
+            [UnityCliRange(1048576L, ProfilerMemorySnapshotSupport.AbsoluteSnapshotBytes)] public long? MaxBytes { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
         {
+            public string Path { get; set; }
             public long SizeBytes { get; set; }
-            public List<ProfilerPlannedEffect> PlannedEffects { get; set; }
+            public long RetainedCountLimit { get; set; }
+            public long RetainedBytesLimit { get; set; }
+            [UnityCliItemsRange(0, 1)] public List<ProfilerPlannedEffect> PlannedEffects { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "profiler.memory-snapshot.take",
-            Summary = "Capture a memory snapshot (.snap) via MemoryProfiler using the unified callback wait path.",
-            Description = "Capture a memory snapshot (.snap) via MemoryProfiler. Requires package com.unity.memoryprofiler. The tool waits for TakeSnapshot's future-frame callback through the framework wait scheduler instead of a custom deferred interface.",
-            Group = "profiler",DestructiveHint = true, SideEffects = new[] { "memory-snapshot-write" }, Target = "editor", PlayModeSupport = "supported",
-            RequiresPackages = new[] { "com.unity.memoryprofiler" },
-            DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
-            Examples = new[] { new ToolExample { Description = "Take a memory snapshot to a custom path", Input = new Request { Path = "Artifacts/snap1.snap" } } }
+            Summary = "Capture one governed Memory Profiler snapshot with bounded retention and one callback terminal.",
+            Description = "Capture a .snap artifact only under Library/UnityCli/memory-snapshots. path is a file name, not a directory. maxBytes defaults to and cannot exceed 4 GiB. Successful publication keeps the newest 100 snapshots while enforcing an 8 GiB directory ceiling. A pending same-root file is atomically moved only after a successful non-empty callback; timeout, cancellation, domain reload, late callback and write faults share one terminal and clean pending/orphan files. Requires com.unity.memoryprofiler. Available in Edit and Play Mode; it writes a project-local Library artifact but no Assets content.",
+            Group = "profiler", DestructiveHint = false, SideEffects = new[] { "memory-snapshot-write" }, Target = "editor", PlayModeSupport = "supported",
+            RequiresPackages = new[] { "com.unity.memoryprofiler" }, DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
+            Examples = new[] { new ToolExample { Description = "Take a governed snapshot", Input = new Request { Path = "capture.snap", MaxBytes = 1073741824L } } }
         };
 
         public async ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default)
         {
-            var profilerType = ProfilerToolSupport.MemoryProfilerType();
-            if (profilerType == null)
+            request = request ?? new Request();
+            var requestBudget = ctx.UseReadBudget(request.Budget);
+            requestBudget.CheckpointOrThrow();
+            var profilerType = ProfilerToolSupport.MemoryProfilerType(requestBudget);
+            if (profilerType == null) throw new UnityCliBridge.BridgeCommandException("E_PROFILER_PACKAGE_MISSING", "Package com.unity.memoryprofiler is required for memory snapshots.", "Install com.unity.memoryprofiler through Package Manager.");
+            var finalPath = ProfilerMemorySnapshotSupport.ResolveFinalPath(request.Path, ctx.RequestId);
+            if (File.Exists(finalPath)) throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Snapshot output already exists: " + finalPath, "Choose another .snap file name.");
+            var maxBytes = request.MaxBytes ?? ProfilerMemorySnapshotSupport.AbsoluteSnapshotBytes;
+            var pendingPath = ProfilerMemorySnapshotSupport.AcquirePendingPath(ctx.RequestId);
+            SnapshotBinding binding;
+            try
             {
-                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_PACKAGE_MISSING",
-                    "Package com.unity.memoryprofiler is required for memory snapshots.",
-                    "Install com.unity.memoryprofiler via the Package Manager.");
+                binding = ResolveTakeSnapshot(profilerType, pendingPath, requestBudget);
+                ctx.CommitEffect();
             }
-
-            var outputPath = request.Path;
-            if (string.IsNullOrEmpty(outputPath))
+            catch
             {
-                var dir = Path.Combine(Application.temporaryCachePath, "MemoryCaptures");
-                Directory.CreateDirectory(dir);
-                outputPath = Path.Combine(dir, "snapshot_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".snap");
+                ProfilerMemorySnapshotSupport.ReleasePendingPath(pendingPath);
+                throw;
             }
-
-            var callbackType = typeof(Action<string, bool>);
-            var captureFlagsType = ProfilerToolSupport.FindType("Unity.Profiling.Memory.CaptureFlags")
-                ?? ProfilerToolSupport.FindType("UnityEngine.Profiling.Memory.Experimental.CaptureFlags");
-            MethodInfo takeMethod = null;
-            object[] invokeArgs = null;
-            if (captureFlagsType != null)
+            try
             {
-                takeMethod = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType, captureFlagsType });
-            }
-            if (takeMethod != null)
-            {
-                invokeArgs = new object[] { outputPath, null, Enum.ToObject(captureFlagsType, 0) };
-            }
-            else
-            {
-                takeMethod = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType });
-            }
-            if (takeMethod == null)
-            {
-                throw new UnityCliBridge.BridgeCommandException("E_PROFILER_API_UNSUPPORTED",
-                    "MemoryProfiler.TakeSnapshot API not found.",
-                    "The installed com.unity.memoryprofiler version may be incompatible.");
-            }
-
-            ctx.CommitEffect();
-            return await ctx.Wait.ForCallback<Result>((complete, fail) =>
-            {
-                var callback = new Action<string, bool>((capturedPath, captureResult) =>
+                var result = await ctx.Wait.ForCallback<Result>((complete, fail) =>
                 {
-                    try
+                    var callback = new Action<string, bool>((capturedPath, succeeded) =>
                     {
-                        if (!captureResult)
+                        try
                         {
-                            fail(new UnityCliBridge.BridgeCommandException("E_PROFILER_SNAPSHOT_FAILED",
-                                "Snapshot capture reported failure for path: " + outputPath,
-                                "Check Unity Console for Memory Profiler errors."));
-                            return;
+                            var accepted = complete(() =>
+                            {
+                                requestBudget.ResumeAfterWait();
+                                requestBudget.CheckpointOrThrow();
+                                if (!succeeded) throw ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_FAILED", "MemoryProfiler reported snapshot failure.", "Inspect Unity Console before retrying.");
+                                var info = ProfilerMemorySnapshotSupport.Publish(capturedPath, pendingPath, finalPath, maxBytes, requestBudget);
+                                if (!requestBudget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(requestBudget.ExhaustedDimension);
+                                return new Result
+                                {
+                                    Path = finalPath,
+                                    SizeBytes = info.Length,
+                                    RetainedCountLimit = ProfilerMemorySnapshotSupport.RetainedSnapshotCount,
+                                    RetainedBytesLimit = ProfilerMemorySnapshotSupport.RetainedSnapshotBytes,
+                                    PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.memory-snapshot.take", Path = finalPath } }
+                                };
+                            });
+                            if (!accepted) ProfilerMemorySnapshotSupport.RequestPendingCleanup(pendingPath);
                         }
-
-                        var finalPath = capturedPath ?? outputPath;
-                        var info = new FileInfo(finalPath);
-                        if (!info.Exists || info.Length <= 0)
+                        finally
                         {
-                            fail(new UnityCliBridge.BridgeCommandException("E_PROFILER_SNAPSHOT_ARTIFACT_MISSING",
-                                "MemoryProfiler reported success without a non-empty snapshot artifact: " + finalPath,
-                                "Check available disk space and the Unity Console, then retry the snapshot."));
-                            return;
+                            ProfilerMemorySnapshotSupport.ReleasePendingPath(pendingPath);
                         }
-                        complete(new Result
-                        {
-                            SizeBytes = info.Length,
-                            PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.memory-snapshot.take", Path = finalPath } }
-                        });
+                    });
+                    binding.SetCallback(callback);
+                    try { binding.Invoke(); }
+                    catch (TargetInvocationException exception)
+                    {
+                        fail(exception.InnerException ?? exception);
+                        ProfilerMemorySnapshotSupport.ReleasePendingPath(pendingPath);
                     }
                     catch (Exception exception)
                     {
-                        fail(exception);
+                        fail(ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_FAILED", "Snapshot capture failed: " + exception.Message, "Inspect Unity Console and the Memory Profiler package."));
+                        ProfilerMemorySnapshotSupport.ReleasePendingPath(pendingPath);
                     }
-                });
+                }, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct, () => ProfilerMemorySnapshotSupport.RequestPendingCleanup(pendingPath));
+                requestBudget.ResumeAfterWait();
+                return result;
+            }
+            catch
+            {
+                ProfilerMemorySnapshotSupport.RequestPendingCleanup(pendingPath);
+                throw;
+            }
+        }
 
-                if (invokeArgs != null)
-                {
-                    invokeArgs[1] = callback;
-                }
-                else
-                {
-                    invokeArgs = new object[] { outputPath, callback };
-                }
+        private static SnapshotBinding ResolveTakeSnapshot(Type profilerType, string pendingPath, UnityCliRequestBudget budget)
+        {
+            var callbackType = typeof(Action<string, bool>);
+            var captureFlagsType = ProfilerToolSupport.FindType("Unity.Profiling.Memory.CaptureFlags", budget)
+                ?? ProfilerToolSupport.FindType("UnityEngine.Profiling.Memory.Experimental.CaptureFlags", budget);
+            MethodInfo method = null;
+            object[] args = null;
+            if (captureFlagsType != null)
+            {
+                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                method = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType, captureFlagsType });
+            }
+            if (method != null) args = new object[] { pendingPath, null, Enum.ToObject(captureFlagsType, 0) };
+            else
+            {
+                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                method = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType });
+                if (method != null) args = new object[] { pendingPath, null };
+            }
+            if (method == null) throw new UnityCliBridge.BridgeCommandException("E_PROFILER_API_UNSUPPORTED", "MemoryProfiler.TakeSnapshot API is unavailable.", "Install a supported com.unity.memoryprofiler version.");
+            return new SnapshotBinding(method, args);
+        }
 
-                try
-                {
-                    takeMethod.Invoke(null, invokeArgs);
-                }
-                catch (TargetInvocationException exception)
-                {
-                    fail(exception.InnerException ?? exception);
-                }
-                catch (Exception exception)
-                {
-                    fail(new UnityCliBridge.BridgeCommandException("E_PROFILER_SNAPSHOT_FAILED",
-                        "Snapshot capture failed: " + exception.Message,
-                        "Check Unity Console and the Memory Profiler package."));
-                }
-            }, TimeSpan.FromSeconds(30), ct);
+        private sealed class SnapshotBinding
+        {
+            private readonly MethodInfo method;
+            private readonly object[] args;
+            internal SnapshotBinding(MethodInfo method, object[] args) { this.method = method; this.args = args; }
+            internal void SetCallback(Action<string, bool> callback) { args[1] = callback; }
+            internal void Invoke() { method.Invoke(null, args); }
         }
     }
 }

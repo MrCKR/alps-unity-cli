@@ -15,9 +15,11 @@ namespace UnityCli
         {
             public string Target { get; set; }
             public string Output { get; set; }
-            public int? Width { get; set; }
-            public int? Height { get; set; }
+            [UnityCliRange(1L, 8192L)] public int? Width { get; set; }
+            [UnityCliRange(1L, 8192L)] public int? Height { get; set; }
             public bool Overwrite { get; set; }
+            public ScreenshotBudgetInput Limits { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
@@ -67,12 +69,13 @@ namespace UnityCli
             var document = go.GetComponent<UIDocument>();
             if (document == null) throw new UnityCliBridge.BridgeCommandException("E_UI_DOCUMENT_NOT_FOUND", "No UIDocument on target.", "Pass a GameObject containing UIDocument.");
 
-            var width = Mathf.Max(1, request.Width ?? 1280);
-            var height = Mathf.Max(1, request.Height ?? 720);
+            var width = request.Width ?? 1280;
+            var height = request.Height ?? 720;
             var outputPath = ScreenshotToolSupport.ResolveScreenshotOutputPath(request.Output ?? "Assets/UI/preview.png");
             if (File.Exists(outputPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "UI preview output already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
 
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, 1, false, request.Limits, ctx.UseReadBudget(request.Budget));
             var effects = new List<UiPlannedEffect> { new UiPlannedEffect { Type = "ui.render-preview", Target = request.Target, Path = outputPath } };
             if (ctx.DryRun)
             {
@@ -80,20 +83,24 @@ namespace UnityCli
             }
 
             ctx.CommitEffect();
+            captureBudget.BeginCapture(width, height);
             var originalPanelSettings = document.panelSettings;
             var originalEnabled = document.enabled;
-            var renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
-            var panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            RenderTexture renderTexture = null;
+            PanelSettings panelSettings = null;
             Texture2D texture = null;
             var previousActive = RenderTexture.active;
             try
             {
+                renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+                panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
                 renderTexture.Create();
                 panelSettings.targetTexture = renderTexture;
                 panelSettings.scaleMode = PanelScaleMode.ConstantPixelSize;
                 document.panelSettings = panelSettings;
                 document.enabled = true;
                 await ctx.Wait.NextFrame(2, ct);
+                ctx.ReadBudget.ResumeAfterWait();
                 ct.ThrowIfCancellationRequested();
 
                 RenderTexture.active = renderTexture;
@@ -101,8 +108,7 @@ namespace UnityCli
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
                 texture.Apply(false, false);
                 var bytes = texture.EncodeToPNG();
-                ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes);
-                var artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, "png");
+                var artifact = ScreenshotToolSupport.WriteScreenshotBytes(outputPath, bytes, captureBudget);
                 return new Result
                 {
                     DryRun = false,
@@ -118,9 +124,8 @@ namespace UnityCli
                 document.panelSettings = originalPanelSettings;
                 document.enabled = originalEnabled;
                 if (texture != null) Object.DestroyImmediate(texture);
-                renderTexture.Release();
-                Object.DestroyImmediate(renderTexture);
-                Object.DestroyImmediate(panelSettings);
+                if (renderTexture != null) { renderTexture.Release(); Object.DestroyImmediate(renderTexture); }
+                if (panelSettings != null) Object.DestroyImmediate(panelSettings);
             }
         }
     }

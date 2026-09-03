@@ -36,11 +36,13 @@ alps-unity-cli的安全模型围绕三个核心原则：Tool副作用必须准�
 | `tools run component.modify` | 修改场景组件或持久 Prefab/资产组件 |
 | `tools run texture.import-settings` | 持久化 TextureImporter 设置 |
 | `tools run texture.sprite` | 持久化 Sprite importer 与切片设置 |
-| `tools run graphics.settings` | 持久化 GraphicsSettings/QualitySettings |
+| `tools run graphics.quality` | 持久化 QualitySettings |
+| `tools run graphics.pipeline-settings` | 持久化默认 RenderPipelineAsset 并触发资产导入 |
 | `tools run graphics.bake-settings` | 持久化 LightingSettings 与场景绑定 |
 | `tools run build.platform.set` | 持久切换 active BuildTarget |
 | `tools run build.profile.switch` | 持久切换 active Build Profile |
 | `tools run editor.menu` | 执行编辑器菜单项 |
+| `tools run reflection.method.call` | 调用精确同步 C# overload，并要求独立 completion proof |
 | `tools run package.install` | 安装包 |
 | `tools run package.remove` | 移除包 |
 | `tools run package.deploy` | 复制本地 package 源到项目 Packages 目录 |

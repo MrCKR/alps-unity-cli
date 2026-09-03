@@ -65,18 +65,15 @@ function assertNoInternalSourceText(subject: string, text: string): void {
 test("TS-local descriptor registry owns exactly the current package-local tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    "asset.refresh", "build.run", "code.exec", "diagnose.capabilities",
-    "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
+    "asset.refresh", "build.run", "code.exec", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
     "editor.dialogs", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
     "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
     "occlusion.bake-status", "package.bridge-remove", "package.deploy",
-    "package.embed", "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get",
-    "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add",
-    "package.scoped-registry.list", "package.scoped-registry.remove", "package.search", "package.status",
+    "package.embed", "package.install", "package.registry.clear", "package.registry.set", "package.remove",
+    "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove",
     "reflect.member", "reflect.search", "reflect.type", "runtime.console", "runtime.input.key", "runtime.input.pointer",
     "runtime.log", "runtime.state", "runtime.target-framerate.set", "runtime.time-scale.set", "runtime.ui.capture-element",
-    "test.cancel", "test.run", "tools.describe", "tools.group",
-    "tools.group-list", "tools.search"
+    "test.cancel", "test.run"
   ]);
   assert.equal(findToolByName("asset.refresh")?.handler, "hybrid");
 });
@@ -134,10 +131,18 @@ test("large-output TS-local descriptors disclose output controls", () => {
   }
 });
 
-test("diagnose.preflight exposes health counts without Bridge routes or logs", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/diagnose/preflight.cs", import.meta.url), "utf8");
-  assert.match(source, /public bool Ready \{ get; set; \}[\s\S]*public long ToolCount/);
-  assert.match(source, /BuildCompileStatus\(ct\)[\s\S]*maxScannedEntries = 5000[\s\S]*maxScanMilliseconds = 50[\s\S]*ct\.ThrowIfCancellationRequested\(\)[\s\S]*compileErrorsTruncated = true/);
-  assert.doesNotMatch(source, /ContextCount|CustomContexts|ProjectContexts/);
-  assert.doesNotMatch(source, /public long Port|public string LogPath|BuildCapabilities\(|POST \/bridge\/execute/);
+test("doctor private diagnostics read the immutable catalog owner and keep compile output bounded", async () => {
+  const [diagnostics, registry, bridge] = await Promise.all([
+    readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliDoctorDiagnostics.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/UnityCliBridge.cs", import.meta.url), "utf8"),
+  ]);
+  assert.match(diagnostics, /internal\.doctor\.business[\s\S]*internal\.doctor\.catalog[\s\S]*internal\.doctor\.compile/);
+  assert.match(diagnostics, /maxScannedEntries = 5000[\s\S]*maxScanMilliseconds = 50[\s\S]*maxCompileErrorBytes = 64 \* 1024/);
+  const doctorHandler = diagnostics.slice(diagnostics.indexOf("private static object DoctorCatalogDiagnostic"), diagnostics.indexOf("private static object DoctorCompileDiagnostic"));
+  assert.match(doctorHandler, /ProjectToolCatalogSnapshotReader\.Read\(\)/);
+  assert.match(doctorHandler, /providerCounts[\s\S]*publicationDiagnostics[\s\S]*DiscoveryPassCount[\s\S]*PerToolSuccessLogCount/);
+  assert.doesNotMatch(doctorHandler, /DiscoverProjectTools|RefreshProjectToolFingerprint|ProjectToolDescriptorData|rePinValue|blockedTools/);
+  assert.doesNotMatch(registry, /CatalogSnapshotReader|ProjectToolCatalogDiagnosticState|ProjectToolCatalogBlockedDiagnostic|projectToolCatalogDiagnostics/);
+  assert.doesNotMatch(bridge, /projectToolCatalogDiagnostics/);
 });

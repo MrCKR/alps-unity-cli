@@ -54,7 +54,7 @@ namespace UnityCli
                 TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct: ct);
             var enabled = FrameDebuggerReflection.GetEnabled();
             if (!stable || !enabled) throw new UnityCliBridge.BridgeCommandException("E_FRAME_DEBUGGER_STATE_MISMATCH", "Frame Debugger enable write did not produce an enabled readback.", "Check Frame Debugger availability and retry.");
-            var eventCount = FrameDebuggerReflection.GetEventCount();
+            var eventCount = FrameDebuggerReflection.GetEventCount(ctx.UseReadBudget());
             return new Result
             {
                 Enabled = enabled,

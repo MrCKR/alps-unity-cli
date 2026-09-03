@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Process = System.Diagnostics.Process;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -21,13 +22,23 @@ namespace UnityCli
         private const int ProtocolVersion = 2;
         private const int RequestBodyLimitBytes = 1024 * 1024;
         private const int MaxQueueItems = 128;
+        private const int MaxRequestCacheItems = 160;
         private const int MaxRequestsPerFrame = 16;
         private const int RegistryRefreshSeconds = 30;
+        private const int MaxSettlementRetriesPerTick = 16;
+        private const int SettlementRetryDelayMs = 100;
         private static UnityCliRuntimeBridge current;
+
+        private sealed class RuntimeCatalogCursorException : FormatException
+        {
+            internal RuntimeCatalogCursorException() : base("The Runtime catalog continuation is altered, stale, or belongs to another query.") { }
+        }
         private readonly ConcurrentQueue<PendingRequest> pending = new ConcurrentQueue<PendingRequest>();
         private readonly object requestCacheSync = new object();
-        private readonly Dictionary<string, PendingRequest> requestCache = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
+        private readonly UnityCliRuntimeRequestPublication<PendingRequest> requestCache = new UnityCliRuntimeRequestPublication<PendingRequest>(MaxRequestCacheItems);
+        private readonly Dictionary<string, PendingRequest> pendingSettlements = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
         private readonly CancellationTokenSource stopping = new CancellationTokenSource();
+        private readonly byte[] catalogCursorSecret = CreateCatalogCursorSecret();
         private long requestOrder;
         private long mainThreadPulseSequence;
         private long mainThreadPulseTimestamp;
@@ -36,6 +47,8 @@ namespace UnityCli
         private UnityCliRuntimeRegistry registry;
         private UnityCliRuntimeIdentity identity;
         private UnityCliAdmissionPool admissionPool;
+        private Func<long> utcNowMsProvider = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        private Func<long> monotonicNowMsProvider = DefaultMonotonicMilliseconds;
         private string sessionId;
         private string listenerId;
         private string buildId;
@@ -44,11 +57,27 @@ namespace UnityCli
         private float nextRegistryRefreshAt;
         private bool previousRunInBackground;
         private bool runInBackgroundCaptured;
+        private readonly RuntimeOneShotTestHooks runtimeTestHooks = new RuntimeOneShotTestHooks();
+
+        private void HitRuntimeTestBoundary(string name)
+        {
+            runtimeTestHooks.Hit(name);
+        }
+
+        internal void ExpectRuntimeBoundaryForTests(string name, Action action)
+        {
+            runtimeTestHooks.ExpectOnce(name, action);
+        }
+
+        internal void AssertRuntimeBoundariesDrainedForTests()
+        {
+            runtimeTestHooks.AssertDrained();
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void StartBeforeSceneLoad()
         {
-#if UNITY_STANDALONE_WIN
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
             // Runtime assembly即使被Editor加载也不得启动listener或登记runtime claim。
             if (!Debug.isDebugBuild || current != null) return;
             RuntimeConfig config;
@@ -75,7 +104,7 @@ namespace UnityCli
                 var process = Process.GetCurrentProcess();
                 sessionId = "session-" + Sha256(config.InstanceId + "\0" + config.BuildId + "\0" + process.Id.ToString(CultureInfo.InvariantCulture) + "\0" + ProcessStartedAt(process));
                 listenerId = "listener-" + Guid.NewGuid().ToString("N");
-                admissionPool = new UnityCliAdmissionPool(config.InstanceId, sessionId, config.TaskPoolMaxActive, config.TaskPoolReopenAt);
+                admissionPool = new UnityCliAdmissionPool(config.InstanceId, sessionId, config.TaskPoolMaxActive, config.TaskPoolReopenAt, null, UtcNowMs);
                 int preferredPort;
                 listener = StartListener(config.InstanceId, out preferredPort, out port);
                 registry = new UnityCliRuntimeRegistry(identity, sessionId, listenerId, preferredPort, port, buildStamp, buildId);
@@ -98,8 +127,14 @@ namespace UnityCli
             Interlocked.Increment(ref mainThreadPulseSequence);
             PendingRequest request;
             UnityCliRuntimeTools.TickFrame(Time.frameCount);
+            RetryPendingRuntimeSettlements();
             var processed = 0;
-            while (processed < MaxRequestsPerFrame && pending.TryDequeue(out request)) { ExecuteOnMainThread(request); processed++; }
+            while (processed < MaxRequestsPerFrame)
+            {
+                if (!TryTakeNextRuntimeRequest(out request)) break;
+                ExecuteOnMainThread(request);
+                processed++;
+            }
             // Player 生命周期稳定时只低频刷新登记；启动和退出仍即时发布或移除。
             if (registry != null && Time.realtimeSinceStartup >= nextRegistryRefreshAt)
             {
@@ -114,15 +149,8 @@ namespace UnityCli
         /// <summary>终止listener，完成active请求，清空session state并移除registry claim。</summary>
         private void StopBridge()
         {
-            lock (requestCacheSync)
-            {
-                // cancellation与request入队共享同一线性化点，锁释放后不能再产生本session work。
-                try { stopping.Cancel(); } catch { }
-                foreach (var entry in requestCache.Values)
-                    if (!entry.Completion.Task.IsCompleted) entry.Completion.TrySetResult(Error(ReadString(entry.Request, "requestId") ?? string.Empty, "E_RUNTIME_SESSION_STALE", "The development Player session ended before the request completed.", new[] { "Launch a new development Player and submit a new request." }));
-                requestCache.Clear();
-                if (admissionPool != null) { admissionPool.Reset(); admissionPool = null; }
-            }
+            // cancellation与request入队共享同一线性化点，锁释放后不能再产生本session work。
+            StopRuntimeRequestsLocked();
             try { if (listener != null) { listener.Stop(); listener.Close(); listener = null; } } catch { }
             try { UnityCliRuntimeTools.Shutdown(); } catch { }
             try { if (registry != null) { registry.Dispose(); registry = null; } } catch { }
@@ -184,63 +212,48 @@ namespace UnityCli
                     Write(context, Error(requestId, "E_INSTANCE_IDENTITY_MISMATCH", attestationError, new[] { "Resolve the runtime target again through --instance." }));
                     return;
                 }
+                var deadline = ValidateRequestStructure(envelope);
                 var digest = Sha256(body);
-                PendingRequest work = null;
-                string immediate = null;
-                var enqueue = false;
-                // 同字节replay可读取已验证请求的terminal；只有首次request才要求deadline仍在未来。
-                lock (requestCacheSync)
-                {
-                    if (stopping.IsCancellationRequested)
-                    {
-                        immediate = Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." });
-                    }
-                    else if (requestCache.TryGetValue(requestId, out work))
-                    {
-                        if (!string.Equals(work.RequestDigest, digest, StringComparison.Ordinal))
-                            immediate = Error(requestId, "E_REQUEST_REPLAY_MISMATCH", "requestId was reused with different immutable request bytes.", new[] { "Submit a new requestId for different Runtime Tool input." });
-                    }
-                    else
-                    {
-                        var deadline = ValidateRequest(envelope);
-                        UnityCliAdmissionPool.ConsumedIdentity admissionOwner;
-                        var admissionError = AuthorizeRuntimeAdmission(context.Request, envelope, out admissionOwner);
-                        if (admissionError != null) immediate = admissionError;
-                        else if (!ReserveRequestCacheSlot())
-                            immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime request cache is full of active work.", new[] { "Wait for active Player requests to complete and retry." }, true, 100);
-                        else if (pending.Count >= MaxQueueItems)
-                            immediate = Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime bridge queue is full.", new[] { "Wait for the Player to process pending requests and retry." }, true, 100);
-                        else
-                        {
-                            work = new PendingRequest { Request = envelope, Completion = new TaskCompletionSource<string>(), AbsoluteDeadlineMs = deadline, RequestDigest = digest, Order = ++requestOrder, AdmissionOwner = admissionOwner };
-                            requestCache.Add(requestId, work);
-                            enqueue = true;
-                        }
-                    }
-                    if (immediate == null && enqueue) pending.Enqueue(work);
-                }
-                if (immediate != null) { Write(context, immediate); return; }
-                while (!work.Completion.Task.IsCompleted)
-                {
-                    var remaining = work.AbsoluteDeadlineMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    if (remaining > 0L)
-                    {
-                        if (work.Completion.Task.Wait((int)Math.Min(remaining, int.MaxValue))) break;
-                        continue;
-                    }
-                    var timeout = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request did not reach the effect barrier before its immutable deadline.", new[] { "Inspect runtime.state before submitting a new request." }, true, 100);
-                    // deadline与main thread只允许一个owner；effect已开始时必须等待同一terminal，不能伪报timeout。
-                    if (Interlocked.CompareExchange(ref work.ExecutionState, 2, 0) == 0)
-                    {
-                        work.Completion.TrySetResult(timeout);
-                        if (work.AdmissionOwner != null) CompleteRuntimeAdmissionRoot(work.AdmissionOwner);
-                    }
-                    else work.Completion.Task.Wait();
-                }
-                Write(context, work.Completion.Task.Result);
+                var publication = PublishRuntimeRequest(envelope, deadline, digest, ReadRuntimeAdmission(context.Request));
+                var work = publication.Work;
+                if (publication.Error != null) { Write(context, publication.Error); return; }
+                Write(context, AwaitRuntimeResponse(work, requestId));
             }
             catch (FormatException exception) { Write(context, Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Send protocolVersion 2 with a complete Runtime bridge request." })); }
             catch (Exception exception) { Write(context, Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime bridge could not process the request.", new[] { "Inspect Player logs and retry after the runtime is ready." })); Debug.LogWarning("UnityCli runtime request failed: " + exception.GetType().Name); }
+        }
+
+        /// <summary>HTTP只等待到immutable deadline或shutdown；running owner继续由主线程提交唯一terminal。</summary>
+        private string AwaitRuntimeResponse(PendingRequest work, string requestId)
+        {
+            return AwaitRuntimeResponse(work, requestId, new RuntimeWaitDependencies(
+                UtcNowMs,
+                (completion, timeoutMs) => Task.WaitAny(completion, Task.Delay(timeoutMs, stopping.Token)) == 0,
+                () => stopping.IsCancellationRequested));
+        }
+
+        internal string AwaitRuntimeResponseForTests(PendingRequest work, RuntimeWaitDependencies dependencies)
+        {
+            if (work == null) throw new ArgumentNullException("work");
+            return AwaitRuntimeResponse(work, work.RequestId, dependencies);
+        }
+
+        private static string AwaitRuntimeResponse(PendingRequest work, string requestId, RuntimeWaitDependencies dependencies)
+        {
+            if (work == null || dependencies == null) throw new ArgumentNullException("Runtime wait dependencies must be explicit.");
+            while (!work.Completion.Task.IsCompleted)
+            {
+                var remaining = work.AbsoluteDeadlineMs - dependencies.UtcNowMs();
+                if (remaining <= 0L || dependencies.IsStopping())
+                {
+                    var timeout = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request did not reach a proven terminal before its immutable deadline or session shutdown.", new[] { "Inspect runtime.state before submitting a new request." }, true, 100);
+                    if (work.Owner.FinalizeRuntimeRequest(work, timeout, 0)) return work.Completion.Task.Result;
+                    return timeout;
+                }
+                var waitMs = checked((int)Math.Min(remaining, int.MaxValue));
+                dependencies.WaitForCompletion(work.Completion.Task, Math.Max(1, waitMs));
+            }
+            return work.Completion.Task.Result;
         }
 
         /// <summary>admission route只操作有界内存，不进入Player主线程队列。</summary>
@@ -258,7 +271,13 @@ namespace UnityCli
                         || RequiredString(value, "target", 16) != "runtime") throw new FormatException("Runtime admission acquire identity is invalid.");
                     RequiredString(value, "command", 256);
                     var acquireFingerprint = RequiredString(value, "rootFingerprint", 64);
-                    var result = admissionPool.Acquire(requestId, acquireFingerprint, listenerId, 1L);
+                    UnityCliAdmissionPool.AcquireResult result;
+                    int active;
+                    if (!TryAcquireRuntimeAdmission(requestId, acquireFingerprint, out result, out active))
+                    {
+                        Write(context, Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." }));
+                        return;
+                    }
                     if (result.Outcome == UnityCliAdmissionPool.AcquireOutcome.Invalid) throw new FormatException("Runtime admission acquire fields are invalid.");
                     if (result.Outcome == UnityCliAdmissionPool.AcquireOutcome.IdentityMismatch)
                     {
@@ -274,7 +293,7 @@ namespace UnityCli
                     if (granted)
                     {
                         context.Response.Headers["x-unity-cli-admission-token"] = result.Token;
-                        Debug.Log("UnityCli " + (result.NewlyGranted ? "admission_granted" : "admission_attached") + " requestId=" + requestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                        Debug.Log("UnityCli " + (result.NewlyGranted ? "admission_granted" : "admission_attached") + " requestId=" + requestId + " active=" + active.ToString(CultureInfo.InvariantCulture));
                     }
                     Write(context, Success(requestId, new Dictionary<string, object>
                     {
@@ -295,8 +314,14 @@ namespace UnityCli
                 var token = context.Request.Headers["x-unity-cli-admission-token"];
                 if (string.IsNullOrEmpty(token) || token.Length > 256) throw new FormatException("Runtime admission token header is missing or invalid.");
                 if (!string.Equals(route, "/bridge/admission/revoke", StringComparison.Ordinal)) throw new FormatException("Runtime admission release route is invalid.");
-                var revoked = admissionPool.Revoke(requestId, fingerprint, token);
-                if (revoked) Debug.Log("UnityCli admission_revoked requestId=" + requestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+                bool revoked;
+                int remainingActive;
+                if (!TryRevokeRuntimeAdmission(requestId, fingerprint, token, out revoked, out remainingActive))
+                {
+                    Write(context, Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." }));
+                    return;
+                }
+                if (revoked) Debug.Log("UnityCli admission_revoked requestId=" + requestId + " active=" + remainingActive.ToString(CultureInfo.InvariantCulture));
                 if (!revoked) { Write(context, Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Admission revoke identity does not match an unconsumed Runtime root.", new[] { "Inspect the selected Runtime session before retrying." })); return; }
                 Write(context, Success(requestId, new Dictionary<string, object> { { "revoked", true } }));
             }
@@ -304,80 +329,405 @@ namespace UnityCli
             catch (Exception exception) { Write(context, Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime admission failed: " + exception.GetType().Name + ".", new[] { "Inspect the Player session before retrying." })); }
         }
 
+        /// <summary>admission端点与execute publication、dequeue和stop共享requestCacheSync。</summary>
+        private bool TryAcquireRuntimeAdmission(string requestId, string fingerprint, out UnityCliAdmissionPool.AcquireResult result, out int active)
+        {
+            lock (requestCacheSync)
+            {
+                result = null;
+                active = 0;
+                if (stopping.IsCancellationRequested || admissionPool == null) return false;
+                HitRuntimeTestBoundary("before-runtime-admission-acquire");
+                result = admissionPool.Acquire(requestId, fingerprint, listenerId, 1L);
+                active = admissionPool.Capture().Active;
+                return true;
+            }
+        }
+
+        private bool TryRevokeRuntimeAdmission(string requestId, string fingerprint, string token, out bool revoked, out int active)
+        {
+            lock (requestCacheSync)
+            {
+                revoked = false;
+                active = 0;
+                if (stopping.IsCancellationRequested || admissionPool == null) return false;
+                revoked = admissionPool.Revoke(requestId, fingerprint, token);
+                active = admissionPool.Capture().Active;
+                return true;
+            }
+        }
+
+        internal bool TryAcquireRuntimeAdmissionForTests(string requestId, string fingerprint, out UnityCliAdmissionPool.AcquireResult result)
+        {
+            int active;
+            return TryAcquireRuntimeAdmission(requestId, fingerprint, out result, out active);
+        }
+
+        private static RuntimeAdmissionInput ReadRuntimeAdmission(HttpListenerRequest request)
+        {
+            return new RuntimeAdmissionInput
+            {
+                RootId = request.Headers["x-unity-cli-admission-root-id"],
+                Fingerprint = request.Headers["x-unity-cli-admission-fingerprint"],
+                Token = request.Headers["x-unity-cli-admission-token"],
+                DeadlineUtc = request.Headers["x-unity-cli-admission-deadline-utc"]
+            };
+        }
+
         /// <summary>新业务request必须消费同session grant；同字节requestCache replay不再次授权。</summary>
-        private string AuthorizeRuntimeAdmission(HttpListenerRequest httpRequest, Dictionary<string, object> request, out UnityCliAdmissionPool.ConsumedIdentity admissionOwner)
+        private string AuthorizeRuntimeAdmission(UnityCliAdmissionPool pool, RuntimeAdmissionInput admission, Dictionary<string, object> request, string requestDigest, out UnityCliAdmissionPool.ConsumedIdentity admissionOwner, out bool newlyConsumed)
         {
             admissionOwner = null;
-            var rootId = httpRequest.Headers["x-unity-cli-admission-root-id"];
-            var fingerprint = httpRequest.Headers["x-unity-cli-admission-fingerprint"];
-            var token = httpRequest.Headers["x-unity-cli-admission-token"];
-            var deadlineText = httpRequest.Headers["x-unity-cli-admission-deadline-utc"];
-            var any = !string.IsNullOrEmpty(rootId) || !string.IsNullOrEmpty(fingerprint) || !string.IsNullOrEmpty(token) || !string.IsNullOrEmpty(deadlineText);
+            newlyConsumed = false;
+            admission = admission ?? new RuntimeAdmissionInput();
+            var any = !string.IsNullOrEmpty(admission.RootId) || !string.IsNullOrEmpty(admission.Fingerprint)
+                || !string.IsNullOrEmpty(admission.Token) || !string.IsNullOrEmpty(admission.DeadlineUtc);
             var requestId = ReadString(request, "requestId") ?? string.Empty;
             var command = ReadString(request, "command");
             if (!any)
             {
-                if (string.Equals(command, "runtime-tool.list", StringComparison.Ordinal)) { rootId = null; return null; }
+                if (RuntimeCatalogReadCommand(command)) return null;
                 return Error(requestId, "E_ADMISSION_REQUIRED", "A valid Unity task-pool admission is required before this Runtime business request can enter the queue.", new[] { "Use the current unitycli to submit the Runtime Tool." });
             }
-            if (string.IsNullOrEmpty(rootId) || string.IsNullOrEmpty(fingerprint) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(deadlineText))
+            if (string.IsNullOrEmpty(admission.RootId) || string.IsNullOrEmpty(admission.Fingerprint)
+                || string.IsNullOrEmpty(admission.Token) || string.IsNullOrEmpty(admission.DeadlineUtc))
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission headers are incomplete.", new[] { "Resolve the Runtime target again before retrying." });
-            if (!string.Equals(rootId, requestId, StringComparison.Ordinal))
+            if (!string.Equals(admission.RootId, requestId, StringComparison.Ordinal))
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission root requestId does not match the Bridge request body.", new[] { "Submit the request through the current unitycli." });
             DateTimeOffset deadline;
-            if (!DateTimeOffset.TryParse(deadlineText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline))
+            if (!DateTimeOffset.TryParse(admission.DeadlineUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline))
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission deadline is invalid.", new[] { "Submit the request through the current unitycli." });
-            var outcome = admissionPool.Authorize(rootId, fingerprint, token, listenerId, 1L, deadline.ToUnixTimeMilliseconds());
-            if (outcome != UnityCliAdmissionPool.AuthorizeOutcome.Authorized)
+            if (pool == null) return Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session ended before admission completed.", new[] { "Launch a new development Player and submit a new request." });
+            var result = pool.AuthorizeAndCapture(admission.RootId, admission.Fingerprint, requestDigest, admission.Token, listenerId, 1L, deadline.ToUnixTimeMilliseconds());
+            if (result.Outcome != UnityCliAdmissionPool.AuthorizeOutcome.Authorized || result.Identity == null)
+            {
+                if ((result.Outcome == UnityCliAdmissionPool.AuthorizeOutcome.Invalid
+                    || result.Outcome == UnityCliAdmissionPool.AuthorizeOutcome.RecoveryBlocked)
+                    && !pool.Revoke(admission.RootId, admission.Fingerprint, admission.Token))
+                    return Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime admission rejection could not prove exact unconsumed cleanup.", new[] { "Launch a new development Player before submitting more work." });
                 return Error(requestId, "E_ADMISSION_IDENTITY_MISMATCH", "Runtime admission token is missing, expired, or bound to another root.", new[] { "Wait for a fresh Runtime admission before submitting business work." });
-            if (!admissionPool.TryGetConsumedIdentity(rootId, out admissionOwner))
-                return Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime admission owner identity could not be frozen after consumption.", new[] { "Inspect the Runtime session before submitting another root." });
+            }
+            admissionOwner = result.Identity;
+            newlyConsumed = result.NewlyConsumed;
             return null;
         }
 
-        /// <summary>所有Unity API只在Update主线程处理；descriptor由TS catalog唯一持有，Player只返回空执行器列表。</summary>
+        /// <summary>requestCacheSync内取得effect ownership后，所有Unity API只在Update主线程处理。</summary>
         private void ExecuteOnMainThread(PendingRequest pendingRequest)
         {
-            // 只有pending request可取得effect ownership；deadline或其他waiter已终结时不得执行。
-            if (Interlocked.CompareExchange(ref pendingRequest.ExecutionState, 1, 0) != 0) return;
             var request = pendingRequest.Request;
             var requestId = ReadString(request, "requestId") ?? string.Empty;
+            string terminal;
             try
             {
                 var deadline = pendingRequest.AbsoluteDeadlineMs;
-                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= deadline) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request deadline elapsed before execution.", new[] { "Retry only after the Player is responsive." }, true, 100)); return; }
-                var command = RequiredString(request, "command", 128);
-                if (string.Equals(command, "runtime-tool.list", StringComparison.Ordinal))
+                if (UtcNowMs() >= deadline)
+                    terminal = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request deadline elapsed before execution.", new[] { "Retry only after the Player is responsive." }, true, 100);
+                else
                 {
-                    pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "tools", new List<object>() }, { "target", "runtime" }, { "runtimeSessionId", sessionId } })); return;
+                    var command = RequiredString(request, "command", 128);
+                    if (RuntimeCatalogReadCommand(command))
+                    {
+                        var input = ReadObject(request, "input") ?? new Dictionary<string, object>();
+                        ValidateRuntimeCatalogInput(command, input);
+                        // Catalog continuation只绑定当前Runtime session与唯一listener generation。
+                        var generation = Sha256(sessionId + "\0" + "1");
+                        var expectedGeneration = ReadString(input, "expectedCatalogGeneration");
+                        if (!string.IsNullOrEmpty(expectedGeneration) && !string.Equals(expectedGeneration, generation, StringComparison.Ordinal))
+                            terminal = Error(requestId, "E_TOOL_CATALOG_CHANGED", "The Tool catalog generation changed before this continuation page was read.", new[] { "Restart this discovery query from its first page against the current Runtime generation." });
+                        else if (string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal))
+                            terminal = Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "groups", new List<object>() } });
+                        else if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
+                            terminal = Success(requestId, RuntimeCatalogSummaryData(input, generation));
+                        else if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
+                            terminal = Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", false } });
+                        else
+                            terminal = Success(requestId, new Dictionary<string, object> { { "tools", new List<object>() }, { "target", "runtime" }, { "runtimeSessionId", sessionId } });
+                    }
+                    else if (string.Equals(command, "runtime-tool.run", StringComparison.Ordinal))
+                    {
+                        var wrapper = ReadObject(request, "input");
+                        if (wrapper == null || !HasOnlyKeys(wrapper, "name", "input", "artifactDir", "playModeSessionId")) throw new FormatException("runtime-tool.run wrapper is invalid.");
+                        var name = RequiredString(wrapper, "name", 256);
+                        var toolInput = ReadObject(wrapper, "input");
+                        if (toolInput == null) throw new FormatException("runtime-tool.run input must be an object.");
+                        var execution = ReadObject(request, "execution");
+                        object dryRunValue;
+                        var dryRun = execution != null && execution.TryGetValue("dryRun", out dryRunValue) && dryRunValue is bool && (bool)dryRunValue;
+                        var result = UnityCliRuntimeTools.Execute(name, toolInput, dryRun);
+                        terminal = Success(requestId, new Dictionary<string, object> { { "result", result } });
+                    }
+                    else
+                    {
+                        terminal = Error(requestId, "E_TOOL_NOT_FOUND", "Runtime bridge command is not approved.", new[] { "Use the public Tool catalog to select a Runtime Tool." });
+                    }
                 }
-                if (string.Equals(command, "runtime-tool.run", StringComparison.Ordinal))
-                {
-                    var wrapper = ReadObject(request, "input");
-                    if (wrapper == null || !HasOnlyKeys(wrapper, "name", "input", "artifactDir", "playModeSessionId")) throw new FormatException("runtime-tool.run wrapper is invalid.");
-                    var name = RequiredString(wrapper, "name", 128);
-                    var toolInput = ReadObject(wrapper, "input");
-                    if (toolInput == null) throw new FormatException("runtime-tool.run input must be an object.");
-                    var execution = ReadObject(request, "execution");
-                    object dryRunValue;
-                    var dryRun = execution != null && execution.TryGetValue("dryRun", out dryRunValue) && dryRunValue is bool && (bool)dryRunValue;
-                    var result = UnityCliRuntimeTools.Execute(name, toolInput, dryRun);
-                    pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "result", result } }));
-                    return;
-                }
-                pendingRequest.Completion.TrySetResult(Error(requestId, "E_TOOL_NOT_FOUND", "Runtime bridge command is not approved.", new[] { "Use the public Tool catalog to select a Runtime Tool." }));
             }
-            catch (UnityCliRuntimeToolException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, exception.Code, exception.Message, new[] { "Run tools describe for the selected Runtime Tool and inspect the current Player session." })); }
-            catch (FormatException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Use the Runtime bridge request schema." })); }
-            catch (Exception exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime command failed before a terminal result was proven.", new[] { "Inspect Player logs and retry after the runtime is ready." })); Debug.LogWarning("UnityCli runtime main-thread command failed: " + exception.GetType().Name); }
-            finally { if (pendingRequest.AdmissionOwner != null) CompleteRuntimeAdmissionRoot(pendingRequest.AdmissionOwner); }
+            catch (UnityCliRuntimeToolException exception) { terminal = Error(requestId, exception.Code, exception.Message, new[] { "Run tools describe for the selected Runtime Tool and inspect the current Player session." }); }
+            catch (RuntimeCatalogCursorException exception) { terminal = Error(requestId, "E_DISCOVERY_CURSOR_INVALID", exception.Message, new[] { "Restart this exact discovery query from its first page." }); }
+            catch (FormatException exception) { terminal = Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Use the Runtime bridge request schema." }); }
+            catch (Exception exception) { terminal = Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime command failed before a terminal result was proven.", new[] { "Inspect Player logs and retry after the runtime is ready." }); Debug.LogWarning("UnityCli runtime main-thread command failed: " + exception.GetType().Name); }
+            FinalizeRuntimeRequest(pendingRequest, terminal, 1);
         }
 
-        private void CompleteRuntimeAdmissionRoot(UnityCliAdmissionPool.ConsumedIdentity identity)
+        private static bool RuntimeCatalogReadCommand(string command)
         {
-            if (admissionPool != null && identity != null
-                && admissionPool.CompleteTrusted(identity.RequestId, identity.RootFingerprint, identity.Token, identity.SessionId, identity.OwnerKind))
-                Debug.Log("UnityCli admission_terminal requestId=" + identity.RequestId + " active=" + admissionPool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+            return string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.list", StringComparison.Ordinal);
+        }
+
+        /// <summary>Runtime catalog是私有闭集协议；空执行器也必须拒绝畸形或无界输入。</summary>
+        private static void ValidateRuntimeCatalogInput(string command, Dictionary<string, object> input)
+        {
+            var expected = ReadString(input, "expectedCatalogGeneration");
+            if (expected != null && Encoding.UTF8.GetByteCount(expected) > 128) throw new FormatException("Catalog generation exceeds its bounded string limit.");
+            object reservedValue;
+            if (input.TryGetValue("reservedNames", out reservedValue))
+            {
+                var reserved = reservedValue as List<object>;
+                if (reserved == null || reserved.Count > 4096 || reserved.Any(value => !(value is string) || string.IsNullOrWhiteSpace((string)value) || Encoding.UTF8.GetByteCount((string)value) > 256))
+                    throw new FormatException("Catalog reserved names exceed their bounded item or string limits.");
+            }
+            if (string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal))
+            {
+                if (!HasOnlyKeys(input, "expectedCatalogGeneration", "reservedNames")) throw new FormatException("Runtime catalog groups input contains an unknown field.");
+                return;
+            }
+            if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
+            {
+                if (!HasOnlyKeys(input, "group", "keyword", "limit", "expectedCatalogGeneration", "reservedNames", "localNames", "cursorContext", "cursorToken"))
+                    throw new FormatException("Runtime catalog summary input contains an unknown field.");
+                if (!input.ContainsKey("reservedNames") || !input.ContainsKey("localNames") || !input.ContainsKey("cursorContext"))
+                    throw new FormatException("Runtime catalog summary input is missing its cursor context fields.");
+                var limit = ReadLong(input, "limit");
+                if (limit < 1L || limit > 101L) throw new FormatException("Catalog summary limit must be an integer in [1,101].");
+                OptionalRuntimeCatalogString(input, "group", 256);
+                OptionalRuntimeCatalogString(input, "keyword", 2048);
+                OptionalRuntimeCatalogString(input, "cursorContext", 64);
+                OptionalRuntimeCatalogString(input, "cursorToken", 8192);
+                var keyword = ReadString(input, "keyword") ?? string.Empty;
+                var tokens = keyword.Split('|').Select(token => token.Trim()).Where(token => token.Length > 0).ToArray();
+                if (tokens.Length > 16 || tokens.Any(token => Encoding.UTF8.GetByteCount(token) > 128))
+                    throw new FormatException("Catalog search accepts at most 16 keywords of at most 128 UTF-8 bytes each.");
+                RuntimeCatalogStringList(input, "localNames", true);
+                return;
+            }
+            if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
+            {
+                if (!HasOnlyKeys(input, "name")) throw new FormatException("Runtime catalog describe input contains an unknown field.");
+                var name = RequiredString(input, "name", 256);
+                if (Encoding.UTF8.GetByteCount(name) > 256) throw new FormatException("Runtime catalog describe name exceeds 256 UTF-8 bytes.");
+                return;
+            }
+            if (!HasOnlyKeys(input)) throw new FormatException("Runtime catalog list input contains an unknown field.");
+        }
+
+        /// <summary>Runtime空live catalog仍签发本listener generation的opaque continuation并证明local page边界。</summary>
+        private Dictionary<string, object> RuntimeCatalogSummaryData(Dictionary<string, object> input, string generation)
+        {
+            var localNames = RuntimeCatalogStringList(input, "localNames", true);
+            var reservedNames = RuntimeCatalogStringList(input, "reservedNames", false);
+            if (localNames.Any(name => !reservedNames.Contains(name))) throw new FormatException("Catalog local names must be a subset of reserved names.");
+            var context = ReadString(input, "cursorContext");
+            if (string.IsNullOrEmpty(context) || context.Length != 64 || context.Any(value => !Uri.IsHexDigit(value)))
+                throw new FormatException("Runtime catalog cursor context is invalid.");
+            var scope = Sha256(generation + "\n" + context + "\n" + (ReadString(input, "group") ?? string.Empty) + "\n"
+                + (ReadString(input, "keyword") ?? string.Empty) + "\n" + string.Join("\n", localNames) + "\n--reserved--\n"
+                + string.Join("\n", reservedNames));
+            int offset;
+            string boundary;
+            ReadRuntimeCatalogCursor(ReadString(input, "cursorToken"), scope, out offset, out boundary);
+            if (offset > localNames.Count || offset > 0 && !string.Equals(localNames[offset - 1], boundary, StringComparison.Ordinal))
+                throw new RuntimeCatalogCursorException();
+            var limit = (int)ReadLong(input, "limit");
+            var pageNames = localNames.Skip(offset).Take(limit).ToList();
+            var end = offset + pageNames.Count;
+            var data = new Dictionary<string, object>
+            {
+                { "catalogGeneration", generation }, { "total", 0L }, { "hasMore", end < localNames.Count },
+                { "tools", new List<object>() }, { "pageNames", pageNames.Cast<object>().ToList() },
+                { "continuationToken", SignRuntimeCatalogCursor(scope, end, end > 0 ? localNames[end - 1] : string.Empty) }
+            };
+            if (Encoding.UTF8.GetByteCount(UnityCliRuntimeJson.Serialize(data)) > 256 * 1024)
+                throw new FormatException("Runtime catalog summary exceeds the bounded UTF-8 transport size.");
+            return data;
+        }
+
+        /// <summary>解析并按UTF-8预算校验Runtime catalog名称集合。</summary>
+        private static List<string> RuntimeCatalogStringList(Dictionary<string, object> input, string key, bool requireSorted)
+        {
+            object raw;
+            if (!input.TryGetValue(key, out raw)) return new List<string>();
+            var values = raw as List<object>;
+            if (values == null || values.Count > 4096 || values.Any(value => !(value is string)
+                || string.IsNullOrWhiteSpace((string)value) || Encoding.UTF8.GetByteCount((string)value) > 256))
+                throw new FormatException("Runtime catalog field " + key + " is invalid.");
+            var result = values.Cast<string>().ToList();
+            if (requireSorted && !result.SequenceEqual(result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)))
+                throw new FormatException("Runtime catalog local names must be ordinally sorted and unique.");
+            return result;
+        }
+
+        /// <summary>验证当前Player listener签发的continuation并恢复边界。</summary>
+        private void ReadRuntimeCatalogCursor(string token, string scope, out int offset, out string boundary)
+        {
+            offset = 0;
+            boundary = string.Empty;
+            if (string.IsNullOrEmpty(token)) return;
+            try
+            {
+                var parts = token.Split('.');
+                if (parts.Length != 2) throw new RuntimeCatalogCursorException();
+                var signature = RuntimeBase64UrlDecode(parts[1]);
+                byte[] expected;
+                using (var hmac = new HMACSHA256(catalogCursorSecret)) expected = hmac.ComputeHash(Encoding.UTF8.GetBytes(parts[0]));
+                if (!RuntimeFixedTimeEqual(signature, expected)) throw new RuntimeCatalogCursorException();
+                var fields = Encoding.UTF8.GetString(RuntimeBase64UrlDecode(parts[0])).Split('\n');
+                int parsed;
+                if (fields.Length != 3 || !string.Equals(fields[0], scope, StringComparison.Ordinal)
+                    || !int.TryParse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture, out parsed) || parsed < 0)
+                    throw new RuntimeCatalogCursorException();
+                offset = parsed;
+                boundary = Encoding.UTF8.GetString(Convert.FromBase64String(fields[2]));
+                if (Encoding.UTF8.GetByteCount(boundary) > 256 || (offset == 0) != string.IsNullOrEmpty(boundary))
+                    throw new RuntimeCatalogCursorException();
+            }
+            catch (RuntimeCatalogCursorException) { throw; }
+            catch { throw new RuntimeCatalogCursorException(); }
+        }
+
+        /// <summary>使用当前Player listener secret签发opaque continuation。</summary>
+        private string SignRuntimeCatalogCursor(string scope, int offset, string boundary)
+        {
+            var payloadText = scope + "\n" + offset.ToString(CultureInfo.InvariantCulture) + "\n"
+                + Convert.ToBase64String(Encoding.UTF8.GetBytes(boundary ?? string.Empty));
+            var payload = RuntimeBase64UrlEncode(Encoding.UTF8.GetBytes(payloadText));
+            byte[] signature;
+            using (var hmac = new HMACSHA256(catalogCursorSecret)) signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+            return payload + "." + RuntimeBase64UrlEncode(signature);
+        }
+
+        /// <summary>secret不落盘，Player listener重启后旧token失效。</summary>
+        private static byte[] CreateCatalogCursorSecret()
+        {
+            var bytes = new byte[32];
+            using (var random = RandomNumberGenerator.Create()) random.GetBytes(bytes);
+            return bytes;
+        }
+
+        /// <summary>编码URL安全token片段。</summary>
+        private static string RuntimeBase64UrlEncode(byte[] value)
+        {
+            return Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        /// <summary>解码URL安全token片段。</summary>
+        private static byte[] RuntimeBase64UrlDecode(string value)
+        {
+            var normalized = value.Replace('-', '+').Replace('_', '/');
+            normalized = normalized.PadRight(normalized.Length + (4 - normalized.Length % 4) % 4, '=');
+            return Convert.FromBase64String(normalized);
+        }
+
+        /// <summary>常量步数比较Runtime token签名。</summary>
+        private static bool RuntimeFixedTimeEqual(byte[] left, byte[] right)
+        {
+            if (left == null || right == null || left.Length != right.Length) return false;
+            var difference = 0;
+            for (var index = 0; index < left.Length; index++) difference |= left[index] ^ right[index];
+            return difference == 0;
+        }
+
+        private static void OptionalRuntimeCatalogString(Dictionary<string, object> input, string key, int maximum)
+        {
+            object value;
+            if (!input.TryGetValue(key, out value)) return;
+            var text = value as string;
+            if (text == null || Encoding.UTF8.GetByteCount(text) > maximum) throw new FormatException("Runtime catalog field " + key + " is invalid.");
+        }
+
+        /// <summary>先冻结terminal，再仅在captured pool证明exact completion或definite absence后公开完成。</summary>
+        private bool FinalizeRuntimeRequest(PendingRequest request, string terminal, int expectedState)
+        {
+            if (request == null || request.Owner != this) return false;
+            if (Interlocked.CompareExchange(ref request.ExecutionState, 2, expectedState) != expectedState) return false;
+            request.Terminal = terminal;
+            if (TrySettleRuntimeRequest(request)) return true;
+            RetainRuntimeSettlement(request);
+            return false;
+        }
+
+        private bool TrySettleRuntimeRequest(PendingRequest request, bool shutdownOnly = false)
+        {
+            if (request == null || Interlocked.CompareExchange(ref request.ExecutionState, 4, 2) != 2)
+                return request != null && Volatile.Read(ref request.ExecutionState) == 3;
+            var pool = request.AdmissionPool;
+            var identity = request.AdmissionOwner;
+            var outcome = identity == null
+                ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
+                : pool == null
+                    ? UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked
+                    : shutdownOnly ? pool.CompleteWorkItemForShutdown(identity) : pool.CompleteTrusted(identity);
+            if (outcome != UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
+                && outcome != UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent)
+            {
+                Interlocked.Exchange(ref request.ExecutionState, 2);
+                return false;
+            }
+            lock (requestCacheSync) pendingSettlements.Remove(request.RequestId);
+            Interlocked.Exchange(ref request.ExecutionState, 3);
+            request.Completion.TrySetResult(request.Terminal);
+            if (pool != null && identity != null && outcome == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted)
+                Debug.Log("UnityCli admission_terminal requestId=" + identity.RequestId + " outcome=" + outcome.ToString() + " active=" + pool.Capture().Active.ToString(CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        private void RetainRuntimeSettlement(PendingRequest request)
+        {
+            request.NextSettlementRetryAtMs = checked(MonotonicNowMs() + SettlementRetryDelayMs);
+            lock (requestCacheSync)
+            {
+                PendingRequest existing;
+                if (pendingSettlements.TryGetValue(request.RequestId, out existing) && !object.ReferenceEquals(existing, request))
+                    throw new InvalidOperationException("Runtime settlement requestId is already owned by another exact request.");
+                if (pendingSettlements.Count >= MaxRequestCacheItems && !pendingSettlements.ContainsKey(request.RequestId))
+                    throw new InvalidOperationException("Runtime settlement journal reached its fixed bound.");
+                pendingSettlements[request.RequestId] = request;
+            }
+        }
+
+        /// <summary>每次只推进固定数量且使用固定单调退避；失败identity保留captured pool与完整owner。</summary>
+        private void RetryPendingRuntimeSettlements()
+        {
+            PendingRequest[] due;
+            var now = MonotonicNowMs();
+            lock (requestCacheSync)
+            {
+                due = new List<PendingRequest>(pendingSettlements.Values).FindAll(value => value.NextSettlementRetryAtMs <= now)
+                    .ToArray();
+                Array.Sort(due, (left, right) => left.Order.CompareTo(right.Order));
+                if (due.Length > MaxSettlementRetriesPerTick) Array.Resize(ref due, MaxSettlementRetriesPerTick);
+            }
+            foreach (var request in due)
+            {
+                if (TrySettleRuntimeRequest(request)) continue;
+                request.NextSettlementRetryAtMs = checked(MonotonicNowMs() + SettlementRetryDelayMs);
+                if (request.SettlementFailureLogged) continue;
+                request.SettlementFailureLogged = true;
+                Debug.LogWarning("UnityCli runtime admission settlement deferred requestId=" + request.RequestId);
+            }
+        }
+
+        internal void RetryPendingRuntimeSettlementsForTests()
+        {
+            RetryPendingRuntimeSettlements();
+        }
+
+        internal int PendingRuntimeSettlementCountForTests()
+        {
+            lock (requestCacheSync) return pendingSettlements.Count;
         }
 
         private Dictionary<string, object> HealthData()
@@ -432,8 +782,8 @@ namespace UnityCli
             finally { try { context.Response.Close(); } catch { } }
         }
 
-        /// <summary>严格校验BridgeRequest v2，并把嵌套execution deadline冻结为Unix毫秒。</summary>
-        private static long ValidateRequest(Dictionary<string, object> request)
+        /// <summary>严格校验BridgeRequest v2并解析deadline；freshness只在cache miss的publication锁内裁决。</summary>
+        private static long ValidateRequestStructure(Dictionary<string, object> request)
         {
             if (!HasOnlyKeys(request, "protocolVersion", "instanceId", "command", "requestId", "input", "execution")) throw new FormatException("Runtime request contains an unknown field.");
             if (ReadLong(request, "protocolVersion") != ProtocolVersion) throw new FormatException("Runtime request protocolVersion must be 2.");
@@ -449,9 +799,7 @@ namespace UnityCli
             var deadlineText = RequiredString(execution, "absoluteDeadlineUtc", 128);
             DateTimeOffset deadline;
             if (!DateTimeOffset.TryParse(deadlineText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out deadline)) throw new FormatException("Runtime request execution.absoluteDeadlineUtc is invalid.");
-            var deadlineMs = deadline.ToUnixTimeMilliseconds();
-            if (deadlineMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) throw new FormatException("Runtime request execution.absoluteDeadlineUtc must be in the future.");
-            return deadlineMs;
+            return deadline.ToUnixTimeMilliseconds();
         }
 
         /// <summary>health与execute都必须绑定同一target/session；execute额外冻结listener generation。</summary>
@@ -568,13 +916,296 @@ namespace UnityCli
         private static Dictionary<string, object> ReadObject(Dictionary<string, object> value, string key) { object result; return value != null && value.TryGetValue(key, out result) ? result as Dictionary<string, object> : null; }
         private static bool IsHex(string value, int length) { if (string.IsNullOrEmpty(value) || value.Length != length) return false; foreach (var item in value) if (!Uri.IsHexDigit(item)) return false; return true; }
         private static bool HasOnlyKeys(Dictionary<string, object> value, params string[] allowed) { if (value == null) return false; var names = new HashSet<string>(allowed, StringComparer.Ordinal); foreach (var key in value.Keys) if (!names.Contains(key)) return false; return true; }
-        /// <summary>缓存固定为128项；只淘汰最旧terminal，进行中的mutation不会失去去重身份。</summary>
-        private bool ReserveRequestCacheSlot() { if (requestCache.Count < MaxQueueItems) return true; PendingRequest oldest = null; string oldestId = null; foreach (var pair in requestCache) if (pair.Value.Completion.Task.IsCompleted && (oldest == null || pair.Value.Order < oldest.Order)) { oldest = pair.Value; oldestId = pair.Key; } if (oldestId == null) return false; requestCache.Remove(oldestId); return true; }
         private static string Sha256(string value) { using (var sha = SHA256.Create()) { var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(value)); var result = new StringBuilder(bytes.Length * 2); foreach (var item in bytes) result.Append(item.ToString("x2")); return result.ToString(); } }
         private static string ProcessStartedAt(Process process) { return process.StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture); }
         private static string RuntimeBuildGuid() { var property = typeof(Application).GetProperty("buildGUID", BindingFlags.Static | BindingFlags.Public); return property == null ? string.Empty : property.GetValue(null, null) as string ?? string.Empty; }
 
-        private sealed class PendingRequest { internal Dictionary<string, object> Request; internal TaskCompletionSource<string> Completion; internal long AbsoluteDeadlineMs; internal string RequestDigest; internal UnityCliAdmissionPool.ConsumedIdentity AdmissionOwner; internal long Order; internal int ExecutionState; }
+        internal void InjectUtcNowProviderForTests(Func<long> provider)
+        {
+            if (provider == null) throw new ArgumentNullException("provider");
+            utcNowMsProvider = provider;
+        }
+
+        internal void InjectMonotonicNowProviderForTests(Func<long> provider)
+        {
+            if (provider == null) throw new ArgumentNullException("provider");
+            monotonicNowMsProvider = provider;
+        }
+
+        internal void ResetClockProvidersForTests()
+        {
+            utcNowMsProvider = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            monotonicNowMsProvider = DefaultMonotonicMilliseconds;
+        }
+
+        private long UtcNowMs()
+        {
+            return utcNowMsProvider();
+        }
+
+        private long MonotonicNowMs()
+        {
+            return monotonicNowMsProvider();
+        }
+
+        private static long DefaultMonotonicMilliseconds()
+        {
+            return checked((long)(System.Diagnostics.Stopwatch.GetTimestamp() * (1000d / System.Diagnostics.Stopwatch.Frequency)));
+        }
+
+        internal enum RuntimePublicationOutcome { Published, Existing, Stopping, CacheFull, QueueFull, Rejected }
+
+        private sealed class RuntimeOneShotTestHooks
+        {
+            private readonly object sync = new object();
+            private readonly Dictionary<string, Action> expected = new Dictionary<string, Action>(StringComparer.Ordinal);
+
+            internal void ExpectOnce(string name, Action action)
+            {
+                if (string.IsNullOrWhiteSpace(name) || action == null) throw new ArgumentException("Runtime one-shot test hook is invalid.");
+                lock (sync)
+                {
+                    if (expected.ContainsKey(name)) throw new InvalidOperationException("Runtime one-shot test hook is already registered: " + name);
+                    expected.Add(name, action);
+                }
+            }
+
+            internal void Hit(string name)
+            {
+                Action action;
+                lock (sync)
+                {
+                    if (!expected.TryGetValue(name, out action)) return;
+                    expected.Remove(name);
+                }
+                action();
+            }
+
+            internal void AssertDrained()
+            {
+                lock (sync)
+                {
+                    if (expected.Count != 0)
+                        throw new InvalidOperationException("Runtime one-shot test hooks were not consumed: " + string.Join(",", expected.Keys));
+                }
+            }
+        }
+
+        internal sealed class RuntimeWaitDependencies
+        {
+            private readonly Func<long> utcNowMs;
+            private readonly Func<Task<string>, int, bool> waitForCompletion;
+            private readonly Func<bool> isStopping;
+
+            internal RuntimeWaitDependencies(Func<long> utcNowMs, Func<Task<string>, int, bool> waitForCompletion, Func<bool> isStopping)
+            {
+                if (utcNowMs == null || waitForCompletion == null || isStopping == null)
+                    throw new ArgumentNullException("Runtime wait dependencies must be explicit.");
+                this.utcNowMs = utcNowMs;
+                this.waitForCompletion = waitForCompletion;
+                this.isStopping = isStopping;
+            }
+
+            internal long UtcNowMs() { return utcNowMs(); }
+            internal bool WaitForCompletion(Task<string> completion, int timeoutMs) { return waitForCompletion(completion, timeoutMs); }
+            internal bool IsStopping() { return isStopping(); }
+        }
+
+        internal sealed class RuntimeAdmissionInput
+        {
+            internal string RootId;
+            internal string Fingerprint;
+            internal string Token;
+            internal string DeadlineUtc;
+        }
+
+        internal sealed class RuntimePublicationResult
+        {
+            internal RuntimePublicationOutcome Outcome;
+            internal PendingRequest Work;
+            internal string Error;
+        }
+
+        /// <summary>exact attach、admission consume、cache reservation与pending publication共享唯一生产锁边界。</summary>
+        internal RuntimePublicationResult PublishRuntimeRequest(Dictionary<string, object> request, long absoluteDeadlineMs, string requestDigest, RuntimeAdmissionInput admission)
+        {
+            if (request == null) throw new ArgumentNullException("request");
+            var requestId = ReadString(request, "requestId") ?? string.Empty;
+            lock (requestCacheSync)
+            {
+                if (stopping.IsCancellationRequested)
+                    return Publication(RuntimePublicationOutcome.Stopping, null, Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." }));
+                PendingRequest existing;
+                if (pendingSettlements.TryGetValue(requestId, out existing))
+                {
+                    if (!string.Equals(existing.RequestDigest, requestDigest, StringComparison.Ordinal))
+                        return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_REQUEST_REPLAY_MISMATCH", "requestId was reused with different immutable request bytes.", new[] { "Submit a new requestId for different Runtime Tool input." }));
+                    return Publication(RuntimePublicationOutcome.Existing, existing, null);
+                }
+                if (requestCache.TryGet(requestId, out existing))
+                {
+                    if (!string.Equals(existing.RequestDigest, requestDigest, StringComparison.Ordinal))
+                        return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_REQUEST_REPLAY_MISMATCH", "requestId was reused with different immutable request bytes.", new[] { "Submit a new requestId for different Runtime Tool input." }));
+                    return Publication(RuntimePublicationOutcome.Existing, existing, null);
+                }
+                if (absoluteDeadlineMs <= UtcNowMs())
+                    return Publication(RuntimePublicationOutcome.Rejected, null, Error(requestId, "E_SCHEMA_INVALID", "Runtime request execution.absoluteDeadlineUtc must be in the future for a cache miss.", new[] { "Submit a new request with a future immutable deadline." }));
+                if (pendingSettlements.Count >= MaxRequestCacheItems)
+                    return Publication(RuntimePublicationOutcome.QueueFull, null, Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime admission settlement capacity is full.", new[] { "Wait for exact Runtime admission cleanup before retrying." }, true, SettlementRetryDelayMs));
+                var pool = admissionPool;
+                UnityCliAdmissionPool.ConsumedIdentity admissionOwner;
+                bool newlyConsumed;
+                var admissionError = AuthorizeRuntimeAdmission(pool, admission, request, requestDigest, out admissionOwner, out newlyConsumed);
+                if (admissionError != null) return Publication(RuntimePublicationOutcome.Rejected, null, admissionError);
+                PendingRequest work = null;
+                try
+                {
+                    work = new PendingRequest(this, request, absoluteDeadlineMs, requestDigest, ++requestOrder, pool, admissionOwner);
+                    var outcome = PublishPreparedRequestLocked(work);
+                    if (outcome == RuntimePublicationOutcome.Published) return Publication(outcome, work, null);
+                    var error = outcome == RuntimePublicationOutcome.Stopping
+                        ? Error(requestId, "E_RUNTIME_SESSION_STALE", "The development Player session is stopping.", new[] { "Launch a new development Player and submit a new request." })
+                        : Error(requestId, "E_RUNTIME_QUEUE_FULL", "Runtime bridge capacity is full.", new[] { "Wait for the Player to process active requests and retry." }, true, 100);
+                    if (newlyConsumed && admissionOwner != null && pool != null && !TryCompensateRuntimeAdmission(pool, admissionOwner))
+                    {
+                        FinalizeRuntimeRequest(work, error, 0);
+                        return Publication(outcome, work, null);
+                    }
+                    return Publication(outcome, null, error);
+                }
+                catch
+                {
+                    if (newlyConsumed && admissionOwner != null && pool != null && !TryCompensateRuntimeAdmission(pool, admissionOwner))
+                    {
+                        var terminal = Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime queue publication failed and exact admission cleanup is pending.", new[] { "Inspect runtime.state before submitting a new request." });
+                        FinalizeRuntimeRequest(work, terminal, 0);
+                        return Publication(RuntimePublicationOutcome.Rejected, work, null);
+                    }
+                    throw;
+                }
+            }
+        }
+
+        private bool TryCompensateRuntimeAdmission(UnityCliAdmissionPool pool, UnityCliAdmissionPool.ConsumedIdentity identity)
+        {
+            try
+            {
+                HitRuntimeTestBoundary("before-runtime-compensation");
+                return pool.CompensateAuthorization(identity);
+            }
+            catch { return false; }
+        }
+
+        private RuntimePublicationOutcome PublishPreparedRequestLocked(PendingRequest work)
+        {
+            if (stopping.IsCancellationRequested) return RuntimePublicationOutcome.Stopping;
+            var reservation = requestCache.Plan(work.RequestId, work.RequestDigest, entry => entry.Completion.Task.IsCompleted, entry => entry.Order);
+            if (reservation == null) return RuntimePublicationOutcome.CacheFull;
+            if (pending.Count >= MaxQueueItems) return RuntimePublicationOutcome.QueueFull;
+            HitRuntimeTestBoundary("before-runtime-publish");
+            return requestCache.Publish(reservation, work, value => { pending.Enqueue(value); return true; })
+                ? RuntimePublicationOutcome.Published
+                : RuntimePublicationOutcome.QueueFull;
+        }
+
+        private static RuntimePublicationResult Publication(RuntimePublicationOutcome outcome, PendingRequest work, string error)
+        {
+            return new RuntimePublicationResult { Outcome = outcome, Work = work, Error = error };
+        }
+
+        /// <summary>dequeue与pending→running ownership共享shutdown使用的requestCacheSync。</summary>
+        private bool TryTakeNextRuntimeRequest(out PendingRequest request)
+        {
+            lock (requestCacheSync)
+            {
+                request = null;
+                if (stopping.IsCancellationRequested) return false;
+                while (pending.TryDequeue(out request))
+                    if (Interlocked.CompareExchange(ref request.ExecutionState, 1, 0) == 0) return true;
+                request = null;
+                return false;
+            }
+        }
+
+        internal void StopRuntimeRequestsLocked()
+        {
+            lock (requestCacheSync)
+            {
+                try { HitRuntimeTestBoundary("before-runtime-stop"); } catch { }
+                try { stopping.Cancel(); } catch { }
+                var entries = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
+                foreach (var entry in requestCache.Values) entries[entry.RequestId] = entry;
+                foreach (var entry in pendingSettlements.Values) entries[entry.RequestId] = entry;
+                foreach (var entry in entries.Values)
+                {
+                    var running = Volatile.Read(ref entry.ExecutionState) == 1;
+                    var terminal = running
+                        ? Error(entry.RequestId, "E_EXECUTION_TIMEOUT", "The development Player session ended after Runtime effect ownership began; outcome is unknown.", new[] { "Inspect the affected runtime state before submitting a new request." })
+                        : Error(entry.RequestId, "E_RUNTIME_SESSION_STALE", "The development Player session ended before the request completed.", new[] { "Launch a new development Player and submit a new request." });
+                    FinalizeRuntimeRequestForShutdown(entry, terminal);
+                }
+                PendingRequest ignored;
+                while (pending.TryDequeue(out ignored)) { }
+                requestCache.Clear();
+                var unresolved = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
+                foreach (var entry in entries.Values)
+                    if (Volatile.Read(ref entry.ExecutionState) != 3) unresolved[entry.RequestId] = entry;
+                pendingSettlements.Clear();
+                foreach (var entry in unresolved.Values) pendingSettlements[entry.RequestId] = entry;
+                if (unresolved.Count == 0)
+                {
+                    var pool = admissionPool;
+                    admissionPool = null;
+                    if (pool != null) pool.Reset();
+                }
+            }
+        }
+
+        private bool FinalizeRuntimeRequestForShutdown(PendingRequest request, string terminal)
+        {
+            if (request == null || request.Owner != this) return false;
+            while (true)
+            {
+                var state = Volatile.Read(ref request.ExecutionState);
+                if (state == 3) return true;
+                if (state == 4) return false;
+                if (state == 0 || state == 1)
+                {
+                    if (Interlocked.CompareExchange(ref request.ExecutionState, 2, state) != state) continue;
+                    request.Terminal = terminal;
+                }
+                else if (state != 2) return false;
+                return TrySettleRuntimeRequest(request, true);
+            }
+        }
+
+        internal sealed class PendingRequest
+        {
+            internal PendingRequest(UnityCliRuntimeBridge owner, Dictionary<string, object> request, long absoluteDeadlineMs, string requestDigest, long order, UnityCliAdmissionPool admissionPool, UnityCliAdmissionPool.ConsumedIdentity admissionOwner)
+            {
+                Owner = owner;
+                Request = request;
+                Completion = new TaskCompletionSource<string>();
+                AbsoluteDeadlineMs = absoluteDeadlineMs;
+                RequestDigest = requestDigest;
+                Order = order;
+                AdmissionPool = admissionPool;
+                AdmissionOwner = admissionOwner;
+            }
+            internal UnityCliRuntimeBridge Owner;
+            internal Dictionary<string, object> Request;
+            internal string RequestId { get { return ReadString(Request, "requestId") ?? string.Empty; } }
+            internal TaskCompletionSource<string> Completion;
+            internal long AbsoluteDeadlineMs;
+            internal string RequestDigest;
+            internal UnityCliAdmissionPool AdmissionPool;
+            internal UnityCliAdmissionPool.ConsumedIdentity AdmissionOwner;
+            internal long Order;
+            internal int ExecutionState;
+            internal string Terminal;
+            internal long NextSettlementRetryAtMs;
+            internal bool SettlementFailureLogged;
+        }
         private sealed class RuntimeConfig { internal string InstanceId; internal string CanonicalProjectPath; internal string DisplayProjectPath; internal string BuildId; internal string BuildStamp; internal int TaskPoolMaxActive; internal int TaskPoolReopenAt; }
     }
 }

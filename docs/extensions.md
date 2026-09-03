@@ -43,13 +43,7 @@ unitycli tools run my.custom-tool --input '{}'
 
 ### 诊断
 
-```powershell
-# 检查 CLI 控制面、Bridge 连接和项目工具完整性
-unitycli doctor
-
-# 诊断预检（Unity Bridge 工具）
-unitycli tools run diagnose.preflight
-```
+`unitycli doctor` 独立报告 Registry/Health transport identity、主线程 pulse、业务准入、catalog integrity、编译与 Extension 状态。可选但未安装的 Extension 只产生提示；已安装或已启用的损坏 Extension 才使 Extension check 失败。
 
 ## 扩展包命令
 

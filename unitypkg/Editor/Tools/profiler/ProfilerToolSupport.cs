@@ -28,7 +28,14 @@ namespace UnityCli
         /// </summary>
         public static Type FindType(string fullName)
         {
+            return FindType(fullName, null);
+        }
+
+        /// <summary>请求路径在首次type/assembly lookup前消费budget；程序集快照有1024项硬上限。</summary>
+        public static Type FindType(string fullName, UnityCliRequestBudget budget)
+        {
             if (string.IsNullOrEmpty(fullName)) return null;
+            if (budget != null && !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             try
             {
                 var direct = Type.GetType(fullName, false);
@@ -38,8 +45,12 @@ namespace UnityCli
 
             var separator = fullName.IndexOf(',');
             var typeName = separator < 0 ? fullName : fullName.Substring(0, separator).Trim();
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            var assemblies = budget == null ? AppDomain.CurrentDomain.GetAssemblies() : UnityCliAssemblySnapshot.Get(budget);
+            if (assemblies.Length > 1024)
+                throw new UnityCliBridge.BridgeCommandException("E_REFLECTION_LIMIT_EXCEEDED", "Loaded assembly count exceeds the hard reflection bound.");
+            foreach (var assembly in assemblies)
             {
+                if (budget != null && !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 Type type = null;
                 try { type = assembly.GetType(typeName, false); } catch { }
                 if (type != null) return type;
@@ -291,10 +302,10 @@ namespace UnityCli
         }
 
         /// <summary>查找 MemoryProfiler 类型(包 com.unity.memoryprofiler)。找不到返回 null。</summary>
-        public static Type MemoryProfilerType()
+        public static Type MemoryProfilerType(UnityCliRequestBudget budget = null)
         {
-            return FindType("Unity.Profiling.Memory.MemoryProfiler")
-                ?? FindType("UnityEngine.Profiling.Memory.Experimental.MemoryProfiler");
+            return FindType("Unity.Profiling.Memory.MemoryProfiler", budget)
+                ?? FindType("UnityEngine.Profiling.Memory.Experimental.MemoryProfiler", budget);
         }
 
         /// <summary>

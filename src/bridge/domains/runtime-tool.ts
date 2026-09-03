@@ -4,6 +4,9 @@ import { compactArgs, numberFlag, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const runtimeToolBridgeSpecs: BridgeCommandSpec[] = [
+  { group: "runtime-tool", command: "groups", bridgeCommand: "runtime-tool.groups", buildArgs: runtimeToolListArgs, internal: true },
+  { group: "runtime-tool", command: "summary", bridgeCommand: "runtime-tool.summary", buildArgs: runtimeToolListArgs, internal: true },
+  { group: "runtime-tool", command: "describe", bridgeCommand: "runtime-tool.describe", buildArgs: runtimeToolListArgs, internal: true },
   { group: "runtime-tool", command: "list", bridgeCommand: "runtime-tool.list", buildArgs: runtimeToolListArgs, internal: true },
   { group: "runtime-tool", command: "run", bridgeCommand: "runtime-tool.run", buildArgs: runtimeToolRunArgs, internal: true }
 ];

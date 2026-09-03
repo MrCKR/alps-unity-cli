@@ -83,7 +83,10 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 |--------|------|------|
 | `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search <k1|k2|...>` |
 | `E_TOOL_REGISTRY_UNHEALTHY` | 当前实例 Tool catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
-| `E_SCHEMA_INVALID` | 输入不符合 schema | 查看对应 `tools describe` 的 inputSchema |
+| `E_SCHEMA_INVALID` | 输入不符合 schema，包括公开数值范围 | 查看对应 `tools describe` 的 inputSchema |
+| `E_REQUEST_BUDGET_INVALID` | request-wide预算为零、负数或超过公开上限 | 传正值且不超过descriptor/schema最大值 |
+| `E_REQUEST_BUDGET_EXCEEDED` | 读取在完整结果前耗尽scan/node/getter/reflection/time/UTF-8预算 | 使用返回的continuation，或收紧selector/提高上限内预算 |
+| `E_CONTINUATION_STALE` | opaque cursor的selector或Unity/assembly generation已变化 | 删除cursor并开始一次fresh读取 |
 
 ### 可选预览错误
 
@@ -105,6 +108,11 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_SCENE_AMBIGUOUS` | 场景资产名匹配多个 `.unity` 文件；改传精确 `Assets/*.unity` path |
 | `E_SCENE_VIEW_NOT_AVAILABLE` | Scene 视图不可用 |
 | `E_GAMEOBJECT_DELETE_FAILED` | GameObject 在同步删除后仍存在；按 `nextActions` 检查目标与 Unity Console |
+| `E_SCREENSHOT_LIMIT_INVALID` | dimensions/pixels/capture count/temp/artifact计划输入无效或超过上限 |
+| `E_SCREENSHOT_LIMIT_EXCEEDED` | effect后编码结果违反首effect前冻结的artifact计划 |
+| `E_PROFILER_SNAPSHOT_PATH_INVALID` | snapshot不是governed root下的简单`.snap`文件名 |
+| `E_PROFILER_SNAPSHOT_LIMIT_EXCEEDED` | snapshot超过单文件或latest-100/8-GiB保留策略 |
+| `E_PROFILER_SNAPSHOT_CATALOG_UNBOUNDED` | governed snapshot目录超出产品可恢复观察边界 |
 
 ### Occlusion 错误
 
@@ -192,7 +200,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
 | `E_UNITY_COMPILE_FAILED` | owned compilation cycle 完成且包含 compiler error；details 带本次 diagnostics |
 | `E_CODE_COMPILE_FAILED` | Runtime Code 编译失败 |
-| `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常 |
+| `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常；message 指向最深可操作 cause，details.causes 为循环安全且受深度/字节限制的 cause chain |
 | `E_IO_ERROR` | IO 错误 |
 
 ## AI Agent 错误处理流程
@@ -209,7 +217,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 - Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
 - Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search <k1|k2|...>` 或 `tools describe`
 - 弹窗 blocker 的 `nextActions` 必须指向先 `tools run editor.dialogs`，再 `tools run editor.dialog.click`；不得要求人工处理、预定义按钮列表、launch-only 入口或额外确认
-- 诊断错误的 `nextActions` 必须指向 `doctor` 或 `tools run diagnose.preflight`
+- 诊断错误的 `nextActions` 必须指向顶层 `doctor` 或对应 owner（`instances list`、`editor.state`、`extensions doctor`、Unity Console）
 
 ## JSON 字段命名
 

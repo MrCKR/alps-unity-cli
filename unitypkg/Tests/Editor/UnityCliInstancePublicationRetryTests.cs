@@ -1,142 +1,225 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
-using System.Text;
-using System.Threading;
 using NUnit.Framework;
 
 namespace UnityCli.Tests
 {
     public sealed class UnityCliInstancePublicationRetryTests
     {
-        private Type bridgeType;
-        private MethodInfo register;
-        private MethodInfo tick;
-        private MethodInfo cancel;
-        private MethodInfo instanceId;
-        private FieldInfo started;
-        private FieldInfo exhausted;
-        private FieldInfo attemptCount;
-        private string originalDataRoot;
-        private bool originalStarted;
-        private string testRoot;
+        private double now;
+        private readonly Queue<InstancePublicationAttempt> attempts = new Queue<InstancePublicationAttempt>();
+        private readonly List<string> publishedStates = new List<string>();
+        private readonly List<string> logs = new List<string>();
 
         [SetUp]
         public void SetUp()
         {
-            bridgeType = Type.GetType("UnityCli.UnityCliBridge, UnityCli.Editor", true);
-            register = Method("RegisterInstance");
-            tick = Method("TickInstancePublicationRetry");
-            cancel = Method("CancelInstancePublicationRetry");
-            instanceId = Method("InstanceId");
-            started = Field("started");
-            exhausted = Field("registryPublicationRetryExhausted");
-            attemptCount = Field("registryPublicationAttemptCount");
-            originalDataRoot = Environment.GetEnvironmentVariable("UNITYCLI_DATA_DIR");
-            originalStarted = (bool)started.GetValue(null);
-            testRoot = Path.Combine(Directory.GetCurrentDirectory(), "Library", "UnityCli", "instance-publication-retry-tests");
-            if (Directory.Exists(testRoot)) Directory.Delete(testRoot, true);
-            Directory.CreateDirectory(Path.Combine(testRoot, "instances"));
-            Environment.SetEnvironmentVariable("UNITYCLI_DATA_DIR", testRoot);
-            started.SetValue(null, true);
-            cancel.Invoke(null, null);
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            cancel.Invoke(null, null);
-            started.SetValue(null, originalStarted);
-            Environment.SetEnvironmentVariable("UNITYCLI_DATA_DIR", originalDataRoot);
-            if (Directory.Exists(testRoot)) Directory.Delete(testRoot, true);
+            now = 0;
+            attempts.Clear();
+            publishedStates.Clear();
+            logs.Clear();
         }
 
         [Test]
-        public void TransientWriteFailureUsesLatestStateAndSucceedsOnOneRetry()
+        public void InitialRetryKeepsListenerClosedUntilTransitioningPublishesThenOpensOnce()
         {
-            var paths = Paths();
-            using (new FileStream(paths.Temporary, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-            {
-                Assert.That((bool)register.Invoke(null, new object[] { "transitioning" }), Is.False);
-                Assert.That((bool)register.Invoke(null, new object[] { "ready" }), Is.False, "a second request must update the pending state without another write attempt");
-                Assert.That((int)attemptCount.GetValue(null), Is.EqualTo(1));
-            }
+            attempts.Enqueue(Failure(true, "io"));
+            attempts.Enqueue(Success());
+            var retry = CreateRetry();
+            var gate = new BridgeInitialPublicationGate();
+            var startup = new BridgeStartupStateMachine();
+            startup.BeginRegistryPublication();
+            var listenerRetained = true;
+            var queueOpen = false;
+            var listenLoopStarts = 0;
+            gate.Start();
 
-            Thread.Sleep(300);
-            tick.Invoke(null, null);
-            Assert.That(File.Exists(paths.Registry), Is.True);
-            Assert.That(File.Exists(paths.Temporary), Is.False);
-            Assert.That((bool)exhausted.GetValue(null), Is.False);
-            Assert.That((int)attemptCount.GetValue(null), Is.EqualTo(0));
-            var record = ParseRecord(paths.Registry);
-            var sessions = (List<object>)record["sessions"];
-            var session = (Dictionary<string, object>)sessions[0];
-            Assert.That(session["lifecycle"], Is.EqualTo("ready"));
+            Assert.That(Apply(gate, retry.Request("transitioning"), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.Wait));
+            Assert.That(listenerRetained, Is.True);
+            Assert.That(queueOpen, Is.False);
+            Assert.That(listenLoopStarts, Is.EqualTo(0));
+            Assert.That(retry.Pending, Is.True);
+            Assert.That(retry.AttemptCount, Is.EqualTo(1));
+            Assert.That(startup.Phase, Is.EqualTo(BridgeStartupPhase.RegistryPublication));
+            Assert.That(startup.Tick(false,
+                () => throw new InvalidOperationException("prime must not replay"),
+                () => throw new InvalidOperationException("handoff must not replay")),
+                Is.EqualTo(BridgeStartupTransition.RegistryPublicationPending));
+
+            now = 0.24;
+            Assert.That(retry.Tick(), Is.EqualTo(InstancePublicationRetryOutcome.None));
+            now = 0.25;
+            Assert.That(Apply(gate, retry.Tick(), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.OpenQueueAndListen));
+            startup.CompleteRegistryPublication();
+            Assert.That(publishedStates, Is.EqualTo(new[] { "transitioning", "transitioning" }));
+            Assert.That(listenerRetained, Is.True);
+            Assert.That(queueOpen, Is.True);
+            Assert.That(listenLoopStarts, Is.EqualTo(1));
+            Assert.That(gate.Published, Is.True);
+            Assert.That(startup.Phase, Is.EqualTo(BridgeStartupPhase.None));
+            Assert.That(retry.Pending, Is.False);
+            Assert.That(retry.AttemptCount, Is.EqualTo(0));
+
+            Assert.That(gate.Apply(InstancePublicationRetryOutcome.Written), Is.EqualTo(BridgeInitialPublicationAction.None));
+            Assert.That(listenLoopStarts, Is.EqualTo(1));
+            Assert.That(logs.Exists(value => value.Contains("instance_publication_retry_succeeded attempts=2")), Is.True);
         }
 
         [Test]
-        public void PersistentWriteFailureStopsAtFourAndDoesNotStartAnotherChain()
+        public void PendingPeriodicPublicationKeepsOneChainAndUsesLatestRequestedState()
         {
-            var paths = Paths();
-            using (new FileStream(paths.Temporary, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-            {
-                Assert.That((bool)register.Invoke(null, new object[] { "ready" }), Is.False);
-                Thread.Sleep(300); tick.Invoke(null, null);
-                Thread.Sleep(550); tick.Invoke(null, null);
-                Thread.Sleep(1050); tick.Invoke(null, null);
-                Assert.That((int)attemptCount.GetValue(null), Is.EqualTo(4));
-                Assert.That((bool)exhausted.GetValue(null), Is.True);
-            }
+            attempts.Enqueue(Failure(true, "io"));
+            attempts.Enqueue(Success());
+            var retry = CreateRetry();
 
-            File.Delete(paths.Temporary);
-            Thread.Sleep(1100);
-            tick.Invoke(null, null);
-            Assert.That((bool)register.Invoke(null, new object[] { "ready" }), Is.False);
-            Assert.That((int)attemptCount.GetValue(null), Is.EqualTo(4));
-            Assert.That(File.Exists(paths.Registry), Is.False);
-            Assert.That(File.Exists(paths.Temporary), Is.False);
+            Assert.That(retry.Request("transitioning"), Is.EqualTo(InstancePublicationRetryOutcome.Pending));
+            Assert.That(retry.Request("ready"), Is.EqualTo(InstancePublicationRetryOutcome.Pending));
+            Assert.That(retry.AttemptCount, Is.EqualTo(1));
+            Assert.That(publishedStates, Is.EqualTo(new[] { "transitioning" }));
+            now = 0.25;
+
+            Assert.That(retry.Tick(), Is.EqualTo(InstancePublicationRetryOutcome.Written));
+            Assert.That(publishedStates, Is.EqualTo(new[] { "transitioning", "ready" }));
+            Assert.That(retry.AttemptCount, Is.EqualTo(0));
+        }
+
+        [TestCase(2L, 1L, 1L, 2L)]
+        [TestCase(1L, 2L, 1L, 2L)]
+        public void InitialStaleGenerationOrSequenceStopsOldListenerWithoutOpeningQueue(
+            long previousGeneration,
+            long previousSequence,
+            long generation,
+            long sequence)
+        {
+            var result = UnityCliBridge.RegistryPublicationResultForTests(
+                previousGeneration, previousSequence, generation, sequence);
+            Assert.That(result, Is.EqualTo(RegistryPublicationResult.StaleSkipped));
+            attempts.Enqueue(new InstancePublicationAttempt(result, false, "stale"));
+            var retry = CreateRetry();
+            var gate = new BridgeInitialPublicationGate();
+            var listenerRetained = true;
+            var queueOpen = false;
+            var listenLoopStarts = 0;
+            gate.Start();
+
+            Assert.That(Apply(gate, retry.Request("transitioning"), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.StopListener));
+
+            Assert.That(listenerRetained, Is.False);
+            Assert.That(queueOpen, Is.False);
+            Assert.That(listenLoopStarts, Is.EqualTo(0));
+            Assert.That(gate.Published, Is.False);
+            Assert.That(retry.Pending, Is.False);
+            Assert.That(retry.Exhausted, Is.False);
+            Assert.That(retry.AttemptCount, Is.EqualTo(0));
         }
 
         [Test]
-        public void CancelClearsExhaustionForTheNextDomainOwner()
+        public void RetryableFailureStopsListenerOnlyAfterFourthAttempt()
         {
-            var paths = Paths();
-            using (new FileStream(paths.Temporary, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            for (var index = 0; index < 4; index++) attempts.Enqueue(Failure(true, "lock-timeout"));
+            var retry = CreateRetry();
+            var gate = new BridgeInitialPublicationGate();
+            var listenerRetained = true;
+            var queueOpen = false;
+            var listenLoopStarts = 0;
+            gate.Start();
+
+            Assert.That(Apply(gate, retry.Request("transitioning"), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.Wait));
+            now = 0.25;
+            Assert.That(Apply(gate, retry.Tick(), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.Wait));
+            now = 0.75;
+            Assert.That(Apply(gate, retry.Tick(), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.Wait));
+            now = 1.75;
+            Assert.That(Apply(gate, retry.Tick(), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.StopListener));
+
+            Assert.That(retry.AttemptCount, Is.EqualTo(4));
+            Assert.That(retry.Exhausted, Is.True);
+            Assert.That(listenerRetained, Is.False);
+            Assert.That(queueOpen, Is.False);
+            Assert.That(listenLoopStarts, Is.EqualTo(0));
+            Assert.That(logs.Exists(value => value.Contains("instance_publication_retry_stopped")), Is.True);
+        }
+
+        [Test]
+        public void NonRetryableFailureStopsImmediatelyAndResetCreatesANewDomainChain()
+        {
+            attempts.Enqueue(Failure(false, "InvalidOperationException"));
+            var retry = CreateRetry();
+            var gate = new BridgeInitialPublicationGate();
+            var listenerRetained = true;
+            var queueOpen = false;
+            var listenLoopStarts = 0;
+            gate.Start();
+
+            Assert.That(Apply(gate, retry.Request("transitioning"), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.StopListener));
+            Assert.That(retry.Exhausted, Is.True);
+            Assert.That(retry.AttemptCount, Is.EqualTo(1));
+            Assert.That(listenerRetained, Is.False);
+
+            retry.Reset();
+            gate.Reset();
+            attempts.Enqueue(Success());
+            listenerRetained = true;
+            gate.Start();
+            Assert.That(Apply(gate, retry.Request("transitioning"), ref listenerRetained, ref queueOpen, ref listenLoopStarts),
+                Is.EqualTo(BridgeInitialPublicationAction.OpenQueueAndListen));
+            Assert.That(retry.Exhausted, Is.False);
+            Assert.That(queueOpen, Is.True);
+            Assert.That(listenLoopStarts, Is.EqualTo(1));
+        }
+
+        private UnityCliInstancePublicationRetry CreateRetry()
+        {
+            return new UnityCliInstancePublicationRetry(
+                4,
+                () => now,
+                state =>
+                {
+                    publishedStates.Add(state);
+                    if (attempts.Count == 0) throw new InvalidOperationException("Test registry boundary has no configured attempt.");
+                    return attempts.Dequeue();
+                },
+                failedAttempts => failedAttempts <= 1 ? 0.25 : failedAttempts == 2 ? 0.5 : 1.0,
+                logs.Add);
+        }
+
+        private static BridgeInitialPublicationAction Apply(
+            BridgeInitialPublicationGate gate,
+            InstancePublicationRetryOutcome outcome,
+            ref bool listenerRetained,
+            ref bool queueOpen,
+            ref int listenLoopStarts)
+        {
+            var action = gate.Apply(outcome);
+            if (action == BridgeInitialPublicationAction.OpenQueueAndListen)
             {
-                Assert.That((bool)register.Invoke(null, new object[] { "ready" }), Is.False);
+                queueOpen = true;
+                listenLoopStarts += 1;
             }
-            cancel.Invoke(null, null);
-            Assert.That((bool)exhausted.GetValue(null), Is.False);
-            Assert.That((int)attemptCount.GetValue(null), Is.EqualTo(0));
-            Assert.That((bool)register.Invoke(null, new object[] { "ready" }), Is.True);
-            Assert.That(File.Exists(paths.Registry), Is.True);
-            Assert.That(File.Exists(paths.Temporary), Is.False);
+            else if (action == BridgeInitialPublicationAction.StopListener)
+            {
+                listenerRetained = false;
+            }
+            return action;
         }
 
-        private (string Registry, string Temporary) Paths()
+        private static InstancePublicationAttempt Success()
         {
-            var id = (string)instanceId.Invoke(null, null);
-            var registry = Path.Combine(testRoot, "instances", id + ".json");
-            return (registry, registry + ".tmp");
+            return new InstancePublicationAttempt(RegistryPublicationResult.Written, false, "none");
         }
 
-        private Dictionary<string, object> ParseRecord(string path)
+        private static InstancePublicationAttempt Failure(bool retryable, string kind)
         {
-            var serializer = Type.GetType("UnityCli.UnityCliSerializer, UnityCli.Editor", true);
-            var parse = serializer.GetMethod("Parse", BindingFlags.Public | BindingFlags.Static);
-            return (Dictionary<string, object>)parse.Invoke(null, new object[] { File.ReadAllText(path, Encoding.UTF8) });
-        }
-
-        private MethodInfo Method(string name)
-        {
-            return bridgeType.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static) ?? throw new MissingMethodException(name);
-        }
-
-        private FieldInfo Field(string name)
-        {
-            return bridgeType.GetField(name, BindingFlags.NonPublic | BindingFlags.Static) ?? throw new MissingFieldException(name);
+            return new InstancePublicationAttempt(RegistryPublicationResult.Failed, retryable, kind);
         }
     }
 }

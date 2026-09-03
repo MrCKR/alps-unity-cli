@@ -29,14 +29,14 @@ async function oneCapabilityToolNames(domain: string): Promise<string[]> {
 
 test("cross-domain new tools keep contract entries with present C# handlers", () => {
   const newTools = [
-    "scene.unload", "scene.set-active", "scene.list-opened", "scene.data", "scene.view-frame",
+    "scene.unload", "scene.set-active", "scene.list-opened", "scene.view-frame",
     "go.set-parent", "prefab.instantiate", "prefab.unpack",
     "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.preview",
     "shader.list", "shader.get-data", "texture.generate",
     "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set",
     "build.scene.list", "build.scene.add", "build.scene.remove", "build.scene.enable", "build.scene.disable",
     "build.platform.get", "build.platform.set", "build.profile.list", "build.profile.create", "build.profile.switch", "build.profile.modify", "build.settings.get", "build.settings.set",
-    "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
+    "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
   ];
   for (const name of newTools) {
     const contract = findCommandContract(name);

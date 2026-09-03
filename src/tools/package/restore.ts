@@ -134,8 +134,8 @@ async function hash(path: string): Promise<string> { return createHash("sha256")
 
 export default defineTool<PackageRestoreRequest, PackageRestoreResult>({
   name: "package.restore", summary: "Restore a package directory from the latest package.deploy backup.",
-  description: "Restore a package previously deployed by package.deploy. If package.deploy backed up an existing package directory, package.restore replaces Packages/<packageName> with that backup. If deploy created a new package with no previous directory, restore removes the deployed package directory. Destructive: writes/deletes project package files and can trigger Unity import/compile. Supports --dry-run to preview effects without writing.",
-  group: "package", destructiveHint: true, supportsDryRun: true, sideEffects: ["project-file-write", "project-file-delete", "session-affecting"], playModeSupport: "session-affecting", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
+  description: "EditMode only. Restore the exact package.deploy backup, or remove the deployed directory when no predecessor existed. The durable worker applies one file plan, then Unity PackageManager Resolve, PackageInfo, target path, and tree-hash readback prove the imported terminal. dryRun previews effects; timeout never authorizes replay.",
+  group: "package", destructiveHint: true, supportsDryRun: true, sideEffects: ["project-file-write", "project-file-delete", "asset-import", "session-affecting"], playModeSupport: "editor-only", handler: "hybrid", supportStatus: "live-bridge", timeoutMs: 120_000,
   examples: [{ description: "Preview restoring a deployed package", argv: ["tools", "run", "package.restore", "--input", "{\"packageName\":\"com.acme.tool\"}", "--dry-run"] }],
   async execute(request, context) { return runPackageRestore(request, context); }
 });

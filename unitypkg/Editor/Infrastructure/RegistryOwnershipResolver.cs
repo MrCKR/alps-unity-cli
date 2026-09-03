@@ -1,147 +1,174 @@
 #if UNITY_EDITOR
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
+using System.Linq;
 using System.Reflection;
-using UnityEngine;
 
 namespace UnityCli
 {
+    /// <summary>Tool name、extension id、assembly identity 与 implementation Type 的一次性编译身份。</summary>
+    internal sealed class RegistryToolOwnership
+    {
+        internal RegistryToolOwnership(string source, string extensionId, Assembly assembly, Type implementationType)
+        {
+            Source = source;
+            ExtensionId = extensionId;
+            Assembly = assembly ?? throw new ArgumentNullException("assembly");
+            AssemblyIdentity = assembly.GetName().FullName;
+            ImplementationType = implementationType ?? throw new ArgumentNullException("implementationType");
+        }
+
+        public string Source { get; }
+        public string ExtensionId { get; }
+        public Assembly Assembly { get; }
+        public string AssemblyIdentity { get; }
+        public Type ImplementationType { get; }
+    }
+
+    /// <summary>generated exact inventory 决定 Extension owner；名称前缀和项目 assembly 名称不参与冒充。</summary>
     internal sealed class RegistryOwnershipResolver
     {
-        private readonly Dictionary<Type, string> extensionClaims;
+        private readonly HashSet<Assembly> candidateAssemblies;
+        private readonly Dictionary<Assembly, string> loadedExtensionAssemblies;
+        private readonly Dictionary<string, RegistryToolOwnership> actualPackageInventory = new Dictionary<string, RegistryToolOwnership>(StringComparer.Ordinal);
 
-        private RegistryOwnershipResolver(Dictionary<Type, string> extensionClaims)
+        private RegistryOwnershipResolver(HashSet<Assembly> candidateAssemblies, Dictionary<Assembly, string> loadedExtensionAssemblies)
         {
-            this.extensionClaims = extensionClaims;
+            this.candidateAssemblies = candidateAssemblies;
+            this.loadedExtensionAssemblies = loadedExtensionAssemblies;
         }
 
-        /// <summary>只在已证明可能贡献Tool的程序集内解析Extension类型owner。</summary>
-        public static RegistryOwnershipResolver Load(IEnumerable<Assembly> candidateAssemblies)
+        public static RegistryOwnershipResolver Load(IEnumerable<Assembly> candidates)
         {
-            if (candidateAssemblies == null) throw new ArgumentNullException("candidateAssemblies");
-            var claims = new Dictionary<string, string>(StringComparer.Ordinal);
-            var packageRoot = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Packages", "com.alpsckr.unitycli");
-            var extensionRoot = Path.Combine(packageRoot, "Extensions");
-            var installedIds = ReadInstalledExtensionIds(Path.Combine(packageRoot, "unitycli.extensions.manifest.json"));
-            if (!Directory.Exists(extensionRoot))
+            if (candidates == null) throw new ArgumentNullException("candidates");
+            var assemblies = new HashSet<Assembly>(candidates.Where(assembly => assembly != null));
+            var bridgeAssembly = typeof(UnityCliBridge).Assembly;
+            if (assemblies.Count == 0 || !assemblies.Contains(bridgeAssembly))
+                throw new InvalidOperationException("Tool provider metadata does not contain the UnityCLI Editor assembly.");
+
+            var expectedExtensions = InventoryEntries()
+                .Where(entry => entry.DescriptorOwner.StartsWith("extension:", StringComparison.Ordinal))
+                .GroupBy(entry => entry.DescriptorOwner.Substring("extension:".Length), StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(entry => entry.AssemblyName).Distinct(StringComparer.Ordinal).ToArray(),
+                    StringComparer.Ordinal);
+            foreach (var expected in expectedExtensions)
             {
-                if (installedIds.Count > 0) throw new InvalidOperationException("Extension registry has installed entries but no Extensions directory.");
-                return new RegistryOwnershipResolver(new Dictionary<Type, string>());
+                if (string.IsNullOrWhiteSpace(expected.Key) || expected.Value.Length != 1 || string.IsNullOrWhiteSpace(expected.Value[0]))
+                    throw new InvalidOperationException("Generated Extension inventory must map each extension id to one exact assembly identity: " + expected.Key + ".");
             }
 
-            var manifestIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var manifestPath in Directory.GetFiles(extensionRoot, "extension.json", SearchOption.AllDirectories))
+            var loadedExtensions = new Dictionary<Assembly, string>();
+            var loadedExtensionIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var assembly in assemblies)
             {
-                IDictionary<string, object> manifest;
-                try
+                var markers = assembly.GetCustomAttributes(typeof(UnityCliExtensionAssemblyAttribute), false)
+                    .Cast<UnityCliExtensionAssemblyAttribute>()
+                    .ToArray();
+                if (markers.Length > 1)
+                    throw new InvalidOperationException("Compiled assembly declares multiple UnityCLI Extension owners: " + assembly.GetName().Name + ".");
+                if (markers.Length == 0)
                 {
-                    manifest = UnityCliSerializer.Parse(File.ReadAllText(manifestPath)) as IDictionary<string, object>;
+                    if (expectedExtensions.Any(pair => string.Equals(pair.Value[0], assembly.GetName().Name, StringComparison.Ordinal)))
+                        throw new InvalidOperationException("Generated Extension assembly is loaded without its exact UnityCliExtensionAssembly marker: " + assembly.GetName().Name + ".");
+                    continue;
                 }
-                catch (Exception exception)
-                {
-                    throw new InvalidOperationException("Extension registry manifest is unreadable: " + manifestPath, exception);
-                }
-                if (manifest == null) throw new InvalidOperationException("Extension registry manifest must be a JSON object: " + manifestPath);
+                if (assembly == bridgeAssembly)
+                    throw new InvalidOperationException("The UnityCLI Editor assembly cannot declare an Extension owner.");
 
-                var extensionId = StringValue(manifest, "id");
-                var contributions = ObjectValue(manifest, "contributions");
-                var entries = contributions == null ? null : ArrayValue(contributions, "csharpEntries");
-                if (string.IsNullOrWhiteSpace(extensionId) || entries == null)
-                {
-                    throw new InvalidOperationException("Extension registry manifest has no id or contributions.csharpEntries: " + manifestPath);
-                }
-                if (!manifestIds.Add(extensionId)) throw new InvalidOperationException("Duplicate extension registry manifest id: " + extensionId);
-                if (!installedIds.Contains(extensionId)) throw new InvalidOperationException("Extension manifest is not claimed by the install manifest: " + extensionId);
-
-                foreach (var value in entries)
-                {
-                    var entry = value as IDictionary<string, object>;
-                    var typeName = entry == null ? null : StringValue(entry, "type");
-                    if (string.IsNullOrWhiteSpace(typeName)) throw new InvalidOperationException("Extension registry contains an empty C# type claim: " + manifestPath);
-                    string owner;
-                    if (claims.TryGetValue(typeName, out owner) && !string.Equals(owner, extensionId, StringComparison.Ordinal))
-                    {
-                        throw new InvalidOperationException("Extension registry type claim conflict for " + typeName + ": " + owner + " and " + extensionId + ".");
-                    }
-                    claims[typeName] = extensionId;
-                }
+                var extensionId = markers[0].ExtensionId;
+                string[] expectedAssemblyNames;
+                if (string.IsNullOrWhiteSpace(extensionId) || !expectedExtensions.TryGetValue(extensionId, out expectedAssemblyNames))
+                    throw new InvalidOperationException("Compiled assembly declares an unknown UnityCLI Extension owner: " + extensionId + ".");
+                if (!string.Equals(expectedAssemblyNames[0], assembly.GetName().Name, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Extension assembly marker does not match generated exact assembly identity: " + extensionId + ".");
+                if (!loadedExtensionIds.Add(extensionId))
+                    throw new InvalidOperationException("Multiple compiled assemblies declare the same UnityCLI Extension owner: " + extensionId + ".");
+                loadedExtensions.Add(assembly, extensionId);
             }
-
-            foreach (var extensionId in installedIds)
-            {
-                if (!manifestIds.Contains(extensionId)) throw new InvalidOperationException("Extension install manifest has an orphan entry: " + extensionId);
-            }
-
-            var loadedTypes = new Dictionary<string, List<Type>>(StringComparer.Ordinal);
-            foreach (var assembly in candidateAssemblies)
-            {
-                Type[] types;
-                try { types = assembly.GetTypes(); }
-                catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in Tool provider assembly " + assembly.FullName + ".", exception); }
-                catch (Exception exception) { throw new InvalidOperationException("Unable to inspect Tool provider assembly " + assembly.FullName + ".", exception); }
-                foreach (var type in types)
-                {
-                    if (type == null || type.FullName == null) continue;
-                    List<Type> matches;
-                    if (!loadedTypes.TryGetValue(type.FullName, out matches)) loadedTypes[type.FullName] = matches = new List<Type>();
-                    matches.Add(type);
-                }
-            }
-
-            var resolvedClaims = new Dictionary<Type, string>();
-            foreach (var claim in claims)
-            {
-                List<Type> matches;
-                if (!loadedTypes.TryGetValue(claim.Key, out matches)) throw new InvalidOperationException("Extension registry has an orphan C# type claim: " + claim.Key + " (" + claim.Value + ").");
-                if (matches.Count != 1) throw new InvalidOperationException("Extension registry C# type claim is ambiguous: " + claim.Key + " (" + claim.Value + ").");
-                resolvedClaims.Add(matches[0], claim.Value);
-            }
-            return new RegistryOwnershipResolver(resolvedClaims);
+            return new RegistryOwnershipResolver(assemblies, loadedExtensions);
         }
 
-        public string Resolve(Type implementationType)
+        /// <summary>每个 package Tool 在注册前绑定 generated owner、exact assembly 与 compiled Type。</summary>
+        public RegistryToolOwnership Resolve(Type implementationType, string toolName)
         {
             if (implementationType == null) throw new ArgumentNullException("implementationType");
-            string extensionId;
-            if (extensionClaims.TryGetValue(implementationType, out extensionId)) return "extension";
-            return implementationType.Assembly == typeof(UnityCliBridge).Assembly ? "built-in" : "project";
-        }
+            if (string.IsNullOrWhiteSpace(toolName)) throw new ArgumentException("Tool name is required.", "toolName");
+            var assembly = implementationType.Assembly;
+            if (!candidateAssemblies.Contains(assembly))
+                throw new InvalidOperationException("Tool implementation assembly is outside the provider metadata set: " + implementationType.FullName + ".");
 
-        private static HashSet<string> ReadInstalledExtensionIds(string path)
-        {
-            var result = new HashSet<string>(StringComparer.Ordinal);
-            if (!File.Exists(path)) return result;
-            var manifest = UnityCliSerializer.Parse(File.ReadAllText(path)) as IDictionary<string, object>;
-            var entries = manifest == null ? null : ArrayValue(manifest, "extensions");
-            if (entries == null) throw new InvalidOperationException("Extension install manifest is invalid: " + path);
-            foreach (var value in entries)
+            UnityCliToolInventoryEntry expected;
+            if (!UnityCliToolCompletionRegistry.TryGetInventory(toolName, out expected))
             {
-                var entry = value as IDictionary<string, object>;
-                var extensionId = entry == null ? null : StringValue(entry, "extensionId");
-                if (string.IsNullOrWhiteSpace(extensionId) || !result.Add(extensionId))
-                    throw new InvalidOperationException("Extension install manifest contains an invalid or duplicate entry: " + path);
+                if (assembly == typeof(UnityCliBridge).Assembly || loadedExtensionAssemblies.ContainsKey(assembly))
+                    throw new InvalidOperationException("Package Tool has no generated exact inventory entry: " + toolName + ".");
+                return new RegistryToolOwnership("project", null, assembly, implementationType);
             }
-            return result;
+
+            if (string.IsNullOrWhiteSpace(expected.AssemblyName) || string.IsNullOrWhiteSpace(expected.ImplementationType)
+                || !string.Equals(expected.AssemblyName, assembly.GetName().Name, StringComparison.Ordinal)
+                || !string.Equals(expected.ImplementationType, implementationType.FullName, StringComparison.Ordinal))
+                throw new InvalidOperationException("Tool owner does not match the generated exact assembly identity and implementation type: " + toolName + ".");
+
+            RegistryToolOwnership ownership;
+            if (string.Equals(expected.DescriptorOwner, "built-in", StringComparison.Ordinal))
+            {
+                if (assembly != typeof(UnityCliBridge).Assembly)
+                    throw new InvalidOperationException("Built-in Tool owner does not match its exact compiled assembly: " + toolName + ".");
+                ownership = new RegistryToolOwnership("built-in", null, assembly, implementationType);
+            }
+            else if (expected.DescriptorOwner.StartsWith("extension:", StringComparison.Ordinal))
+            {
+                var extensionId = expected.DescriptorOwner.Substring("extension:".Length);
+                string loadedExtensionId;
+                if (!loadedExtensionAssemblies.TryGetValue(assembly, out loadedExtensionId)
+                    || !string.Equals(loadedExtensionId, extensionId, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Extension Tool owner does not match its generated extension and exact compiled assembly: " + toolName + ".");
+                ownership = new RegistryToolOwnership("extension", extensionId, assembly, implementationType);
+            }
+            else
+            {
+                throw new InvalidOperationException("Live package Tool has a non-package generated owner: " + toolName + ".");
+            }
+
+            if (actualPackageInventory.ContainsKey(toolName))
+                throw new InvalidOperationException("Generated Tool inventory contains duplicate actual implementation: " + toolName + ".");
+            actualPackageInventory.Add(toolName, ownership);
+            return ownership;
         }
 
-        private static string StringValue(IDictionary<string, object> value, string key)
+        /// <summary>publication 前按已加载 compiled assembly 验证 expected/actual 全集，缺项、多项和跨 Extension 全部失败。</summary>
+        public void ValidateComplete()
         {
-            object result;
-            return value.TryGetValue(key, out result) ? result as string : null;
+            var bridgeAssemblyName = typeof(UnityCliBridge).Assembly.GetName().Name;
+            var expected = InventoryEntries()
+                .Where(entry => string.Equals(entry.AssemblyName, bridgeAssemblyName, StringComparison.Ordinal)
+                    || loadedExtensionAssemblies.Any(pair => string.Equals(pair.Key.GetName().Name, entry.AssemblyName, StringComparison.Ordinal)
+                        && string.Equals(pair.Value, entry.DescriptorOwner.StartsWith("extension:", StringComparison.Ordinal) ? entry.DescriptorOwner.Substring("extension:".Length) : string.Empty, StringComparison.Ordinal)))
+                .ToDictionary(entry => entry.ToolName, entry => entry, StringComparer.Ordinal);
+
+            var missing = expected.Keys.Where(name => !actualPackageInventory.ContainsKey(name)).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+            var extra = actualPackageInventory.Keys.Where(name => !expected.ContainsKey(name)).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+            if (missing.Length > 0 || extra.Length > 0)
+                throw new InvalidOperationException("Generated Tool inventory expected/actual set mismatch; missing=" + string.Join(",", missing) + "; extra=" + string.Join(",", extra) + ".");
+
+            foreach (var pair in expected)
+            {
+                var actual = actualPackageInventory[pair.Key];
+                var expectedOwner = pair.Value.DescriptorOwner;
+                var actualOwner = actual.Source == "extension" ? "extension:" + actual.ExtensionId : actual.Source;
+                if (!string.Equals(expectedOwner, actualOwner, StringComparison.Ordinal)
+                    || !string.Equals(pair.Value.AssemblyName, actual.Assembly.GetName().Name, StringComparison.Ordinal)
+                    || !string.Equals(pair.Value.ImplementationType, actual.ImplementationType.FullName, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Generated Tool inventory actual identity differs from expected identity: " + pair.Key + ".");
+            }
         }
 
-        private static IDictionary<string, object> ObjectValue(IDictionary<string, object> value, string key)
+        private static IEnumerable<UnityCliToolInventoryEntry> InventoryEntries()
         {
-            object result;
-            return value.TryGetValue(key, out result) ? result as IDictionary<string, object> : null;
-        }
-
-        private static IEnumerable ArrayValue(IDictionary<string, object> value, string key)
-        {
-            object result;
-            return value.TryGetValue(key, out result) ? result as IEnumerable : null;
+            return UnityCliToolCompletionRegistry.InventoryEntries();
         }
     }
 }

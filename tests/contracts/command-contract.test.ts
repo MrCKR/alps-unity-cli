@@ -13,11 +13,9 @@ const extensionsUrl = new URL("../../../extensions/", import.meta.url);
 
 const filledCsharpHandlerCommands = [
   "scene.active",
-  "scene.build-settings",
   "scene.create",
   "scene.load",
   "scene.save",
-  "go.inspect",
   "go.create",
   "go.modify",
   "go.duplicate",
@@ -65,7 +63,11 @@ test("command contract inventory agrees with metadata, bridge registry and exten
 test("command contract keeps representative TS-local, C# built-in, and extension entries", () => {
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
 
-  assert.equal(contracts.get("tools.group")?.handler_type, "offline");
+  assert.equal(contracts.get("tools.group"), undefined);
+  assert.equal(contracts.get("extension.status"), undefined);
+  assert.equal(contracts.get("project-tool.health")?.handler_type, "bridge");
+  assert.equal(contracts.get("project-tool.summary")?.handler_type, "bridge");
+  assert.equal(contracts.get("runtime-tool.describe")?.handler_type, "bridge");
   assert.equal(contracts.get("build.run")?.handler_type, "hybrid");
   assert.equal(contracts.get("scene.hierarchy")?.handler_type, "bridge");
   assert.equal(contracts.get("probuilder.ping")?.handler_type, "bridge");
@@ -148,7 +150,7 @@ test("C# registry extraction ignores similar comments and strings", () => {
 
 test("registered C# command inventory agrees with command contracts", async () => {
   // editor.state 是 TS-owned Tool；Unity 只注册不可发现的私有快照命令。
-  assert.deepEqual([...PRIVATE_BRIDGE_COMMANDS].sort(), ["internal.asset.refresh.start", "internal.asset.refresh.status", "internal.build.run.start", "internal.editor.compile.start", "internal.editor.compile.status", "internal.editor.refresh.start", "internal.editor.refresh.status", "internal.editor.state.snapshot", "internal.navmesh.bake.cancel", "internal.navmesh.bake.plan", "internal.navmesh.bake.snapshot", "internal.navmesh.bake.start", "internal.navmesh.bake.status", "internal.package.embed.start", "internal.package.embed.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.fail", "internal.package.files.prove", "internal.package.resolve.start", "internal.package.resolve.status", "internal.test.run.start", "internal.test.run.status"]);
+  assert.deepEqual([...PRIVATE_BRIDGE_COMMANDS].sort(), ["internal.asset.refresh.start", "internal.asset.refresh.status", "internal.build.run.start", "internal.doctor.business", "internal.doctor.catalog", "internal.doctor.compile", "internal.editor.compile.start", "internal.editor.compile.status", "internal.editor.refresh.start", "internal.editor.refresh.status", "internal.editor.state.snapshot", "internal.navmesh.bake.cancel", "internal.navmesh.bake.plan", "internal.navmesh.bake.snapshot", "internal.navmesh.bake.start", "internal.navmesh.bake.status", "internal.package.embed.start", "internal.package.embed.status", "internal.package.files.claim", "internal.package.files.commit", "internal.package.files.fail", "internal.package.files.prove", "internal.package.resolve.start", "internal.package.resolve.status", "internal.test.run.start", "internal.test.run.status"]);
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
   const csharpCommands = await registeredCsharpCommands(editorUrl);
   const extensionCsharpCommands = await registeredExtensionCsharpCommands();

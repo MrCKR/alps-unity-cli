@@ -21,7 +21,7 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "profiler.hierarchy", buildArgs: profilerHierarchyArgs },
   { group: "profiler", command: "rendering-stats", bridgeCommand: "project-tool.run", toolName: "profiler.rendering-stats", buildArgs: profilerArgs },
   { group: "profiler", command: "script-stats", bridgeCommand: "project-tool.run", toolName: "profiler.script-stats", buildArgs: profilerArgs },
-  { group: "profiler", command: "memory-snapshot.take", bridgeCommand: "project-tool.run", toolName: "profiler.memory-snapshot.take", buildArgs: profilerMemorySnapshotArgs, destructiveHint: true },
+  { group: "profiler", command: "memory-snapshot.take", bridgeCommand: "project-tool.run", toolName: "profiler.memory-snapshot.take", buildArgs: profilerMemorySnapshotArgs },
   { group: "profiler", command: "memory-snapshot.list", bridgeCommand: "project-tool.run", toolName: "profiler.memory-snapshot.list", buildArgs: profilerMemorySnapshotArgs },
   { group: "profiler", command: "memory-snapshot.compare", bridgeCommand: "project-tool.run", toolName: "profiler.memory-snapshot.compare", buildArgs: profilerMemorySnapshotCompareArgs },
   { group: "profiler", command: "frame-debugger.enable", bridgeCommand: "project-tool.run", toolName: "profiler.frame-debugger.enable", buildArgs: ({ flags }) => compactArgs({}) },
@@ -85,14 +85,22 @@ function profilerObjectMemoryArgs({ flags, positionalTarget }: Parameters<Bridge
 
 // memory-snapshot.take/list：path 可选
 function profilerMemorySnapshotArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path") });
+  const structured = structuredInput(flags);
+  return compactArgs({
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path"),
+    maxBytes: numberFlag(flags, "max-bytes") ?? numberField(flags, "maxBytes"),
+    pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
+    cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor"),
+    budget: structured.budget
+  });
 }
 
 // memory-snapshot.compare：两个快照路径（snapshotA/B 或 pathA/B 别名）
 function profilerMemorySnapshotCompareArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
     snapshotA: stringFlag(flags, "snapshot-a") ?? stringFlag(flags, "path-a") ?? stringField(flags, "snapshotA") ?? stringField(flags, "pathA"),
-    snapshotB: stringFlag(flags, "snapshot-b") ?? stringFlag(flags, "path-b") ?? stringField(flags, "snapshotB") ?? stringField(flags, "pathB")
+    snapshotB: stringFlag(flags, "snapshot-b") ?? stringFlag(flags, "path-b") ?? stringField(flags, "snapshotB") ?? stringField(flags, "pathB"),
+    budget: structuredInput(flags).budget
   });
 }
 
@@ -100,16 +108,19 @@ function profilerMemorySnapshotCompareArgs({ flags }: Parameters<BridgeCommandSp
 function profilerFrameDebuggerEventsArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
     pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
-    cursor: numberFlag(flags, "cursor") ?? numberField(flags, "cursor")
+    cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor"),
+    budget: structuredInput(flags).budget
   });
 }
 
-// hierarchy：指定帧/线程/广度 top/深度 depth
+// hierarchy：指定帧/线程、全局页大小、深度和 raw continuation。
 function profilerHierarchyArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
     frame: numberFlag(flags, "frame") ?? numberField(flags, "frame"),
     thread: numberFlag(flags, "thread") ?? numberField(flags, "thread"),
-    top: numberFlag(flags, "top") ?? numberField(flags, "top"),
-    depth: numberFlag(flags, "depth") ?? numberField(flags, "depth")
+    pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
+    depth: numberFlag(flags, "depth") ?? numberField(flags, "depth"),
+    cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor"),
+    budget: structuredInput(flags).budget
   });
 }

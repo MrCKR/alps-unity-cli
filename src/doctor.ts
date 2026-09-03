@@ -1,26 +1,71 @@
 /**
- * CLI command: doctor
+ * CLI control command: doctor.
  *
- * Diagnoses CLI → UnityPkg connectivity, instance health,
- * live Bridge preflight, configuration integrity, and capability discovery.
- * Transport endpoint and listener identity remain internal to instance selection.
+ * Registry/Health identity, main-thread pulse, admitted business work, catalog
+ * integrity, compilation, and extension installation are independent owners.
  */
 
 import { getString } from "./args.js";
+import { Buffer } from "node:buffer";
 import { access, stat } from "node:fs/promises";
-import { discoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { instanceSelectionFailure, obsoleteLocalStatePaths, readInstances, readInstancesWithRegistryDiagnostics, selectInstanceForFlags, type UnityInstance } from "./instances.js";
-import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
+import {
+  inspectInstanceHealth,
+  instanceSelectionFailure,
+  obsoleteLocalStatePaths,
+  readInstancesWithRegistryDiagnostics,
+  selectInstanceForFlags,
+  type InstanceHealthInspection,
+  type InstanceSelection,
+} from "./instances.js";
+import {
+  executeBridgePayload,
+  SessionSupervisor,
+  SessionSupervisorError,
+  type BridgeRuntime,
+  type RootAdmissionLease,
+} from "./bridge/index.js";
 import { EDITOR_STATE_OBSERVATION_BUDGET_MS } from "./bridge/session-supervisor.js";
-import { builtinToolMetadata } from "./tools/metadata/index.js";
-import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
-import { ExtensionRegistry, extensionAvailabilitySummary } from "./extensions/index.js";
+import { withObservationSelection } from "./bridge/types.js";
 import { extensionAvailabilityFlags } from "./extension-availability.js";
-import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
+import { readInstalledExtensions } from "./cli-commands/extensions.js";
+import { checkExtensionBundles, readExtensionInstallManifest, type ExtensionStatusCheck } from "./extensions/installer.js";
+import { EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT } from "./extensions/state-contract.js";
 import { failure, success } from "./output.js";
-import type { CliResult } from "./types.js";
+import type { CliError, CliResult } from "./types.js";
 
-export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime {
+const DOCTOR_BUSINESS_TIMEOUT_MS = 10_000;
+const DOCTOR_BUSINESS_COMPLETION = "doctor-business-read-v1";
+const DOCTOR_CATALOG_IDENTITY = "unity-cli-immutable-domain-catalog";
+const MAX_DOCTOR_CATALOG_TOOLS = 10_000;
+const MAX_DOCTOR_CATALOG_ASSEMBLIES = 100_000;
+const MAX_DOCTOR_CATALOG_RESPONSE_BYTES = 64 * 1024;
+
+interface DoctorCatalogProviderCounts {
+  builtIn: number;
+  extension: number;
+  projectInterface: number;
+  officialAttribute: number;
+}
+
+interface DoctorCatalogPublicationDiagnostics {
+  assemblyCount: number;
+  providerAssemblyCount: number;
+  elapsedMilliseconds: number;
+  discoveryPassCount: number;
+  assetDatabaseOperationCount: number;
+  sourceFileReadCount: number;
+  persistedToolValueOperationCount: number;
+  perToolSuccessLogCount: number;
+}
+
+interface DoctorCatalogData {
+  identity: typeof DOCTOR_CATALOG_IDENTITY;
+  toolCount: number;
+  providerCounts: DoctorCatalogProviderCounts;
+  publicationDiagnostics: DoctorCatalogPublicationDiagnostics;
+}
+
+export interface DoctorRuntime extends BridgeRuntime {
   dataDir: string;
   selectInstance?: typeof selectInstanceForFlags;
 }
@@ -32,369 +77,421 @@ export interface DoctorCheck {
   details?: Record<string, unknown>;
 }
 
+type SelectedHealth = {
+  selection?: InstanceSelection;
+  health?: InstanceHealthInspection;
+  error?: CliError;
+};
+
+type PrivateDoctorRead = { data: unknown } | DoctorCheck;
+
 export async function handleDoctorCommand(
   flags: Record<string, string | boolean>,
   runtime: DoctorRuntime,
   requestId: string
 ): Promise<CliResult> {
   const checks: DoctorCheck[] = [];
-
-  // Check 1: Instance registry
-  const instanceCheck = await checkInstanceRegistry(runtime.dataDir);
-  checks.push(instanceCheck);
-
-  // Check 2: Reduced v3 instance states
-  let readyInstances: UnityInstance[] = [];
-  if (instanceCheck.status !== "fail") {
-    const instances = await readInstances(runtime.dataDir);
-    readyInstances = instances.filter((instance) => instance.status === "ready");
-    checks.push(checkReadyInstances(instances, readyInstances));
-  } else {
-    checks.push({ name: "ready_instances", status: "warn", message: "Skipped: instance registry not available." });
-  }
-
-  // Check 3: Bridge connectivity follows the same strict --instance/CWD selector as business calls.
-  let bridgeReachable = false;
-  try {
-    const selection = await (runtime.selectInstance ?? selectInstanceForFlags)(flags, runtime.dataDir);
-    const bridgeCheck = await checkBridgeConnectivity(selection.instance.instanceId, requestId, runtime);
-    checks.push(bridgeCheck);
-    bridgeReachable = bridgeCheck.status === "pass";
-  } catch (error) {
-    const selectionFailure = instanceSelectionFailure(requestId, error);
-    const selectionError = selectionFailure && !selectionFailure.ok ? selectionFailure.error : undefined;
-    checks.push({
-      name: "bridge_connectivity",
-      status: "warn",
-      message: selectionError?.message ?? "No Unity project identity can be selected from --instance or CWD.",
-      details: selectionError ? { code: selectionError.code, details: selectionError.details } : undefined,
-    });
-  }
-
-  // Check 4: Data directory
   checks.push(await checkDataDirectory(runtime.dataDir));
-
-  // Check 5: Configuration integrity and obsolete local state
-  checks.push(await checkConfigIntegrity(readyInstances));
   checks.push(await checkObsoleteLocalState(runtime.dataDir));
 
-  const fingerprintCheck = checkBridgeFingerprintStatus(checks);
-  if (fingerprintCheck) {
-    checks.push(fingerprintCheck);
-  }
+  const selected = await inspectSelectedHealth(flags, runtime, requestId);
+  checks.push(await checkRegistryHealthIdentity(runtime.dataDir, selected));
+  checks.push(checkMainThreadPulse(selected));
+  checks.push(await checkBusinessDiagnostic(flags, runtime, requestId, selected));
+  checks.push(await checkCatalogIntegrity(flags, runtime, requestId, selected));
+  checks.push(await checkCompile(flags, runtime, requestId, selected));
+  checks.push(await checkExtensions(flags, runtime));
 
-  const compileCheck = checkCompileStatus(checks);
-  if (compileCheck) {
-    checks.push(compileCheck);
-  }
-
-  // Unified CLI/tools discovery surface
-  checks.push(await checkUnifiedDiscovery(flags, runtime, requestId, bridgeReachable));
-
-  // Extension package availability comes from physical project state.
-  checks.push(await checkExtensionAvailability(flags, runtime));
-
-  checks.push(checkExtensionRegistry());
-
-  const allPassed = checks.every((c) => c.status === "pass");
-  const hasWarnings = checks.some((c) => c.status === "warn");
-  const hasFailures = checks.some((c) => c.status === "fail");
-
-  const summary = hasFailures ? "fail" : hasWarnings ? "warn" : "pass";
-
-  const data: Record<string, unknown> = {
-    summary,
-    checks,
-    suggestions: buildSuggestions(checks)
-  };
-
-  return success(requestId, data);
+  const summary = checks.some((check) => check.status === "fail")
+    ? "fail"
+    : checks.some((check) => check.status === "warn") ? "warn" : "pass";
+  return success(requestId, { summary, checks, suggestions: buildSuggestions(checks) });
 }
 
-async function checkInstanceRegistry(dataDir: string): Promise<DoctorCheck> {
-  try {
-    const { instances, invalidRecordCount } = await readInstancesWithRegistryDiagnostics(dataDir);
-    if (invalidRecordCount > 0) {
-      return {
-        name: "instance_registry",
-        status: "warn",
-        message: `Instance registry contains ${instances.length} valid instance(s) and ignored ${invalidRecordCount} invalid or unreadable record(s).`,
-        details: { instanceCount: instances.length, invalidRecordCount },
-      };
-    }
-    if (instances.length === 0) {
-      return {
-        name: "instance_registry",
-        status: "warn",
-        message: "Instance registry is empty. No Unity instances registered.",
-        details: { instanceCount: 0 }
-      };
-    }
-    return {
-      name: "instance_registry",
-      status: "pass",
-      message: `Instance registry contains ${instances.length} instance(s).`,
-      details: { instanceCount: instances.length }
-    };
-  } catch (error) {
-    return {
-      name: "instance_registry",
-      status: "fail",
-      message: `Failed to read instance registry directory: ${error instanceof Error ? error.message : String(error)}`
-    };
-  }
-}
-
-function checkReadyInstances(instances: UnityInstance[], ready: UnityInstance[]): DoctorCheck {
-  const conflicts = instances.filter((instance) => instance.status === "conflict");
-  const unverifiable = instances.filter((instance) => instance.status === "unverifiable");
-  const blocked = instances.filter((instance) => instance.status === "blocked");
-  if (conflicts.length > 0) {
-    return {
-      name: "ready_instances",
-      status: "fail",
-      message: `${conflicts.length} project identity conflict(s) block live dispatch.`,
-      details: { readyCount: ready.length, conflictCount: conflicts.length, blockedCount: blocked.length }
-    };
-  }
-  if (unverifiable.length > 0) {
-    return {
-      name: "ready_instances",
-      status: "fail",
-      message: `${unverifiable.length} project identity observation(s) could not be verified safely.`,
-      details: { readyCount: ready.length, conflictCount: 0, unverifiableCount: unverifiable.length, blockedCount: blocked.length }
-    };
-  }
-  if (ready.length === 0) {
-    return {
-      name: "ready_instances",
-      status: "warn",
-      message: "No ready Unity Editor session found.",
-      details: {
-        readyCount: 0,
-        transitioningCount: instances.filter((instance) => instance.status === "transitioning").length,
-        unresponsiveCount: instances.filter((instance) => instance.status === "unresponsive").length,
-        blockedCount: blocked.length,
-        offlineCount: instances.filter((instance) => instance.status === "offline").length,
-      }
-    };
-  }
-  return {
-    name: "ready_instances",
-    status: "pass",
-    message: `${ready.length} ready instance(s) found.`,
-    details: {
-      readyCount: ready.length,
-      instances: ready.map((instance) => ({
-        instanceId: instance.instanceId,
-        canonicalProjectPath: instance.canonicalProjectPath,
-        editorSessionId: instance.editorSessionId,
-        publishedAt: instance.publishedAt,
-      }))
-    }
-  };
-}
-
-async function checkBridgeConnectivity(
-  instanceId: string,
+/** selector 与严格 Health v3 只执行一次，后续 check 共享脱敏结果但不共享严重性。 */
+async function inspectSelectedHealth(
+  flags: Record<string, string | boolean>,
+  runtime: DoctorRuntime,
   requestId: string,
-  runtime: BridgeRuntime
-): Promise<DoctorCheck> {
+): Promise<SelectedHealth> {
   try {
-    const result = await executeBridgePayload(
-      requestId,
-      "project-tool.run",
-      { name: "diagnose.preflight", input: {} },
-      { instance: instanceId, "timeout-ms": String(EDITOR_STATE_OBSERVATION_BUDGET_MS) },
-      runtime,
-      undefined,
-      // connectivity probe 与 editor.state 共享同一即时观察预算，由 supervisor 将 Bridge POST 限制为 3500ms。
-      { mode: "observeNow", mutation: false, defaultTimeoutMs: EDITOR_STATE_OBSERVATION_BUDGET_MS }
-    );
+    const selection = await (runtime.selectInstance ?? selectInstanceForFlags)(flags, runtime.dataDir);
+    return { selection, health: await inspectInstanceHealth(selection.instance) };
+  } catch (error) {
+    const projected = projectDoctorError(`${requestId}_identity`, error);
+    return { error: projected };
+  }
+}
 
-    if (result.ok) {
-      const wrapperData = result.data;
-      const bridgeResponse = wrapperData && typeof wrapperData === "object" && !Array.isArray(wrapperData)
-        && (wrapperData as Record<string, unknown>).result && typeof (wrapperData as Record<string, unknown>).result === "object"
-        ? (wrapperData as Record<string, unknown>).result
-        : wrapperData;
+async function checkRegistryHealthIdentity(dataDir: string, selected: SelectedHealth): Promise<DoctorCheck> {
+  let instanceCount = 0;
+  let invalidRecordCount = 0;
+  try {
+    const registry = await readInstancesWithRegistryDiagnostics(dataDir);
+    instanceCount = registry.instances.length;
+    invalidRecordCount = registry.invalidRecordCount;
+  } catch (error) {
+    return {
+      name: "registry_health_identity",
+      status: "fail",
+      message: `Instance registry could not be read: ${errorMessage(error)}`,
+      details: { code: "E_INSTANCE_REGISTRY_INVALID" },
+    };
+  }
+
+  if (!selected.selection) {
+    const error = selected.error;
+    const status: DoctorCheck["status"] = error?.code === "E_INSTANCE_CONFLICT" || error?.code === "E_INSTANCE_UNVERIFIABLE" ? "fail" : "warn";
+    return {
+      name: "registry_health_identity",
+      status,
+      message: error?.message ?? "No exact Editor identity was selected from Registry v3.",
+      details: {
+        code: error?.code ?? "E_INSTANCE_REQUIRED",
+        instanceCount,
+        invalidRecordCount,
+        transportVerified: false,
+      },
+    };
+  }
+
+  const identity = selected.selection.instance;
+  if (!selected.health?.transportVerified) {
+    return {
+      name: "registry_health_identity",
+      status: "fail",
+      message: `Registry v3 selected ${identity.instanceId}, but strict Health v3 transport identity was not verified.`,
+      details: {
+        code: "BRIDGE_CONNECTION_FAILED",
+        instanceId: identity.instanceId,
+        canonicalProjectPath: identity.canonicalProjectPath,
+        registryStatus: identity.status,
+        instanceCount,
+        invalidRecordCount,
+        transportVerified: false,
+      },
+    };
+  }
+
+  return {
+    name: "registry_health_identity",
+    status: invalidRecordCount > 0 ? "warn" : "pass",
+    message: invalidRecordCount > 0
+      ? `Strict Registry/Health identity is verified; ${invalidRecordCount} unrelated invalid registry record(s) were ignored.`
+      : "Strict Registry v3 and Health v3 transport identity are verified.",
+    details: {
+      instanceId: identity.instanceId,
+      canonicalProjectPath: identity.canonicalProjectPath,
+      editorSessionId: identity.editorSessionId,
+      registryStatus: identity.status,
+      instanceCount,
+      invalidRecordCount,
+      transportVerified: true,
+    },
+  };
+}
+
+function checkMainThreadPulse(selected: SelectedHealth): DoctorCheck {
+  const pulse = selected.health?.mainThread;
+  if (!selected.health?.transportVerified || !pulse) {
+    return {
+      name: "main_thread_pulse",
+      status: "warn",
+      message: "Main-thread pulse could not be evaluated independently of transport identity.",
+      details: { code: "E_MAIN_THREAD_PULSE_UNAVAILABLE", observed: false, fresh: false },
+    };
+  }
+  if (!pulse.fresh) {
+    return {
+      name: "main_thread_pulse",
+      status: "warn",
+      message: `Health v3 transport is reachable, but the Editor main-thread pulse is stale or absent (${pulse.lifecycle}).`,
+      details: { code: "E_MAIN_THREAD_UNRESPONSIVE", ...pulse },
+    };
+  }
+  return {
+    name: "main_thread_pulse",
+    status: pulse.lifecycle === "ready" ? "pass" : "warn",
+    message: pulse.lifecycle === "ready"
+      ? "The read-only Editor main-thread pulse is fresh."
+      : `The main-thread pulse is fresh while the Editor lifecycle is ${pulse.lifecycle}.`,
+    details: { ...pulse },
+  };
+}
+
+/** 此 check 独占 admission；其失败不得改写 Registry/Health check。 */
+async function checkBusinessDiagnostic(
+  flags: Record<string, string | boolean>,
+  runtime: DoctorRuntime,
+  requestId: string,
+  selected: SelectedHealth,
+): Promise<DoctorCheck> {
+  if (!selected.selection || !selected.health?.transportVerified || !selected.health.mainThread?.fresh) {
+    return skippedLiveCheck("business_diagnostic", "E_BUSINESS_DIAGNOSTIC_SKIPPED", "Business diagnostic was skipped because an exact fresh Editor session was not available.");
+  }
+
+  const childRequestId = `${requestId}_doctor_business`;
+  const input: Record<string, unknown> = {};
+  const selectedFlags = { ...flags, instance: selected.selection.instance.instanceId };
+  const supervisor = new SessionSupervisor(selectedFlags, runtime);
+  let admission: RootAdmissionLease | undefined;
+  try {
+    admission = await supervisor.acquireRootAdmission({
+      requestId: childRequestId,
+      command: "internal.doctor.business",
+      input,
+      dryRun: false,
+      target: "editor",
+      completionContractIdentity: DOCTOR_BUSINESS_COMPLETION,
+      timeoutMs: DOCTOR_BUSINESS_TIMEOUT_MS,
+      admissionAbsoluteDeadlineMs: Date.now() + DOCTOR_BUSINESS_TIMEOUT_MS,
+    });
+    const result = await executeBridgePayload(
+      childRequestId,
+      "internal.doctor.business",
+      input,
+      selectedFlags,
+      { ...runtime, rootAdmission: admission },
+      undefined,
+      { mode: "read", mutation: false, absoluteDeadlineMs: admission.executionAbsoluteDeadlineMs },
+    );
+    if (!result.ok) return failedLiveCheck("business_diagnostic", result.error);
+    const data = record(result.data);
+    if (data?.accepted !== true || typeof data.sceneLoaded !== "boolean" || typeof data.projectPath !== "string") {
+      return invalidLiveCheck("business_diagnostic", "Business diagnostic returned an invalid DTO.");
+    }
+    return {
+      name: "business_diagnostic",
+      status: "pass",
+      message: "An admission-bound read reached the Editor business layer.",
+      details: {
+        accepted: true,
+        projectPath: data.projectPath,
+        sceneLoaded: data.sceneLoaded,
+        activeScenePath: typeof data.activeScenePath === "string" ? data.activeScenePath : "",
+        playMode: data.playMode === true,
+      },
+    };
+  } catch (error) {
+    return failedLiveCheck("business_diagnostic", projectDoctorError(childRequestId, error));
+  } finally {
+    if (admission) await supervisor.completeRootAdmission(admission);
+  }
+}
+
+async function checkCatalogIntegrity(
+  flags: Record<string, string | boolean>,
+  runtime: DoctorRuntime,
+  requestId: string,
+  selected: SelectedHealth,
+): Promise<DoctorCheck> {
+  const result = await privateDoctorRead("catalog_integrity", "internal.doctor.catalog", flags, runtime, requestId, selected);
+  if (isDoctorCheck(result)) {
+    return result.details?.code === "E_TOOL_REGISTRY_UNHEALTHY" ? { ...result, status: "fail" } : result;
+  }
+  const data = doctorCatalogData(result.data);
+  if (!data) return invalidLiveCheck("catalog_integrity", "Catalog integrity read returned an invalid bounded DTO.");
+  return {
+    name: "catalog_integrity",
+    status: "pass",
+    message: `The immutable domain catalog contains ${data.toolCount} registered Tool(s).`,
+    details: {
+      identity: data.identity,
+      toolCount: data.toolCount,
+      providerCounts: data.providerCounts,
+      publicationDiagnostics: data.publicationDiagnostics,
+    },
+  };
+}
+
+async function checkCompile(
+  flags: Record<string, string | boolean>,
+  runtime: DoctorRuntime,
+  requestId: string,
+  selected: SelectedHealth,
+): Promise<DoctorCheck> {
+  const result = await privateDoctorRead("compile", "internal.doctor.compile", flags, runtime, requestId, selected);
+  if (isDoctorCheck(result)) return result;
+  const data = record(result.data);
+  const errors = Array.isArray(data?.compileErrors) && data.compileErrors.every((value) => typeof value === "string")
+    ? data.compileErrors as string[] : undefined;
+  const nextActions = Array.isArray(data?.nextActions) && data.nextActions.every((value) => typeof value === "string")
+    ? data.nextActions as string[] : undefined;
+  if (!data || typeof data.compiling !== "boolean" || typeof data.scanComplete !== "boolean"
+    || typeof data.hasCompileErrors !== "boolean" || !isNonNegativeInteger(data.compileErrorCount)
+    || typeof data.compileErrorsTruncated !== "boolean" || !errors || errors.length > 20 || !nextActions) {
+    return invalidLiveCheck("compile", "Compile diagnostic returned an invalid bounded DTO.");
+  }
+
+  const status: DoctorCheck["status"] = data.hasCompileErrors ? "fail" : data.compiling || !data.scanComplete ? "warn" : "pass";
+  const code = data.hasCompileErrors ? "E_UNITY_COMPILE_FAILED"
+    : data.compiling ? "E_UNITY_COMPILING"
+      : !data.scanComplete ? "E_COMPILE_DIAGNOSTICS_INCOMPLETE" : undefined;
+  return {
+    name: "compile",
+    status,
+    message: data.hasCompileErrors
+      ? `Unity reports ${data.compileErrorCount} compiler error(s).`
+      : data.compiling ? "Unity is compiling scripts."
+        : !data.scanComplete ? "Compile diagnostics were not scanned completely."
+          : "Unity scripts are not compiling and no compiler errors were found.",
+    details: {
+      ...(code ? { code } : {}),
+      compiling: data.compiling,
+      scanComplete: data.scanComplete,
+      hasCompileErrors: data.hasCompileErrors,
+      compileErrorCount: data.compileErrorCount,
+      compileErrorsTruncated: data.compileErrorsTruncated,
+      compileErrors: errors,
+      nextActions,
+    },
+  };
+}
+
+async function privateDoctorRead(
+  checkName: string,
+  command: string,
+  flags: Record<string, string | boolean>,
+  runtime: DoctorRuntime,
+  requestId: string,
+  selected: SelectedHealth,
+): Promise<PrivateDoctorRead> {
+  if (!selected.selection || !selected.health?.transportVerified || !selected.health.mainThread?.fresh) {
+    return skippedLiveCheck(checkName, "E_DOCTOR_READ_SKIPPED", `${checkName} was skipped because an exact fresh Editor session was not available.`);
+  }
+  const result = await executeBridgePayload(
+    `${requestId}_${checkName}`,
+    command,
+    {},
+    { ...flags, instance: selected.selection.instance.instanceId },
+    runtime,
+    undefined,
+    withObservationSelection({ mode: "observeNow", mutation: false, defaultTimeoutMs: EDITOR_STATE_OBSERVATION_BUDGET_MS }, selected.selection),
+  );
+  return result.ok ? { data: result.data } : failedLiveCheck(checkName, result.error);
+}
+
+async function checkExtensions(flags: Record<string, string | boolean>, runtime: DoctorRuntime): Promise<DoctorCheck> {
+  const resolvedFlags = await extensionAvailabilityFlags(flags, runtime);
+  const projectPath = getString(resolvedFlags, "project");
+  if (!projectPath) {
+    return {
+      name: "extensions",
+      status: "warn",
+      message: "Extension installation state is unknown because no project path was resolved.",
+      details: { code: "PROJECT_PATH_REQUIRED", projectResolved: false },
+    };
+  }
+
+  try {
+    const [enabled, manifest, physical] = await Promise.all([
+      readInstalledExtensions(projectPath),
+      readExtensionInstallManifest(projectPath),
+      checkExtensionBundles(projectPath),
+    ]);
+    const installedEntries = new Set(manifest.extensions.map((entry) => entry.extensionId));
+    const knownIds = new Set(physical.map((entry) => entry.extensionId));
+    const unknownInstalled = manifest.extensions.map((entry) => entry.extensionId).filter((id) => !knownIds.has(id));
+    const unknownEnabled = [...enabled].filter((id) => !knownIds.has(id));
+    const broken = physical.filter((entry) => (enabled.has(entry.extensionId) || installedEntries.has(entry.extensionId)) && !entry.installed);
+    const optional = physical.filter((entry) => !enabled.has(entry.extensionId) && !installedEntries.has(entry.extensionId));
+    const healthyInstalled = physical.filter((entry) => entry.installed).length;
+
+    if (unknownInstalled.length > 0 || unknownEnabled.length > 0 || broken.length > 0) {
+      const missingDependency = broken.some((entry) => entry.status === "missing_dependency");
+      const code = unknownInstalled.length > 0 ? "E_EXTENSION_UNKNOWN_INSTALLED"
+        : unknownEnabled.length > 0 ? "E_EXTENSION_STATE_INVALID"
+          : missingDependency ? "E_EXTENSION_DEPENDENCY_MISSING" : "E_EXTENSION_TARGET_PROJECTION_INVALID";
+      const nextActions = unknownInstalled.length > 0
+        ? ["Inspect unitycli.extensions.manifest.json and the matching extension directories.", "Remove unknown installed entries only after auditing their projected files."]
+        : unknownEnabled.length > 0
+          ? ["Inspect extensions.json and remove IDs that are not present in the CLI extension registry."]
+          : [...new Set(broken.flatMap((entry) => entry.nextActions))];
       return {
-        name: "bridge_connectivity",
-        status: "pass",
-        message: `Bridge identity is reachable for ${instanceId}.`,
-        details: { instanceId, bridgeResponse }
+        name: "extensions",
+        status: "fail",
+        message: `${broken.length + unknownInstalled.length + unknownEnabled.length} installed or enabled extension state(s) are broken.`,
+        details: {
+          code,
+          projectPath,
+          healthyInstalled,
+          optionalUninstalled: optional.length,
+          unknownInstalledCount: unknownInstalled.length,
+          unknownInstalled: unknownInstalled.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+          unknownInstalledTruncated: unknownInstalled.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+          unknownEnabledCount: unknownEnabled.length,
+          unknownEnabled: unknownEnabled.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT),
+          unknownEnabledTruncated: unknownEnabled.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+          brokenCount: broken.length,
+          broken: broken.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT).map(extensionDiagnostic),
+          brokenTruncated: broken.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+          nextActions,
+        },
+      };
+    }
+
+    if (optional.length > 0) {
+      return {
+        name: "extensions",
+        status: "warn",
+        message: `${optional.length} optional extension(s) are not installed; no installed or enabled extension is broken.`,
+        details: {
+          projectPath,
+          healthyInstalled,
+          optionalUninstalled: optional.length,
+          optional: optional.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT).map((entry) => ({
+            extensionId: entry.extensionId,
+            status: entry.status,
+            missingPackageIds: entry.missingPackageIds,
+          })),
+          optionalTruncated: optional.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
+        },
       };
     }
 
     return {
-      name: "bridge_connectivity",
-      status: "fail",
-      message: `Bridge for ${instanceId} returned error: ${result.error?.code ?? "unknown"} — ${result.error?.message ?? "no message"}`,
-      details: { instanceId, errorCode: result.error?.code, errorMessage: result.error?.message }
+      name: "extensions",
+      status: "pass",
+      message: `All ${healthyInstalled} installed extension(s) passed physical and dependency checks.`,
+      details: { projectPath, healthyInstalled, optionalUninstalled: 0 },
     };
   } catch (error) {
+    const projected = projectDoctorError("doctor_extensions", error);
     return {
-      name: "bridge_connectivity",
+      name: "extensions",
       status: "fail",
-      message: `Cannot reach bridge for ${instanceId}: ${error instanceof Error ? error.message : String(error)}`,
-      details: { instanceId, error: error instanceof Error ? error.message : String(error) }
+      message: projected.message,
+      details: { code: projected.code, projectPath, nextActions: projected.nextActions },
     };
   }
 }
 
-function checkBridgeFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
-  const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
-  const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
-  if (!bridgeResponse || typeof bridgeResponse !== "object") {
-    return undefined;
-  }
-  const customTools = (bridgeResponse as { customTools?: unknown }).customTools;
-  const fingerprint = customTools && typeof customTools === "object" ? (customTools as { fingerprint?: unknown }).fingerprint : undefined;
-  if (!fingerprint || typeof fingerprint !== "object") {
-    return undefined;
-  }
-  const blockedCount = numberProp(fingerprint, "blockedCount") ?? 0;
-  const toolCount = numberProp(fingerprint, "toolCount") ?? 0;
-  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : "pass";
+function extensionDiagnostic(entry: ExtensionStatusCheck): Record<string, unknown> {
   return {
-    name: "project_tool_fingerprint",
-    status,
-    message: status === "pass"
-      ? `Custom tool fingerprints match for ${toolCount} tool(s).`
-      : `Custom tool fingerprints are blocked for ${blockedCount} of ${toolCount} tool(s).`,
-    details: { fingerprint }
+    extensionId: entry.extensionId,
+    status: entry.status,
+    dependencyInstalled: entry.dependencyInstalled,
+    missingPackageIds: entry.missingPackageIds,
+    missingFileCount: entry.missingFiles.length,
+    changedFileCount: entry.changedFiles.length,
+    unknownFileCount: entry.unknownFiles.length,
+    nextActions: entry.nextActions,
   };
-}
-
-function checkCompileStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
-  const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
-  const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
-  if (!bridgeResponse || typeof bridgeResponse !== "object") {
-    return undefined;
-  }
-  const checksArray = (bridgeResponse as { checks?: unknown }).checks;
-  if (!Array.isArray(checksArray)) {
-    return undefined;
-  }
-  const compile = checksArray.find((entry): entry is Record<string, unknown> =>
-    typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).name === "compileStatus");
-  if (!compile) {
-    return undefined;
-  }
-  const compiling = compile.compiling === true;
-  const hasErrors = compile.hasCompileErrors === true;
-  const errors = Array.isArray(compile.compileErrors) ? compile.compileErrors.filter((e): e is string => typeof e === "string") : [];
-  const status: DoctorCheck["status"] = hasErrors ? "fail" : compiling ? "warn" : "pass";
-  const message = hasErrors
-    ? `Unity has compile errors (${errors.length} shown). Often caused by a broken extension under Packages/com.alpsckr.unitycli/Extensions.`
-    : compiling
-      ? "Unity is currently compiling scripts."
-      : "Unity scripts compiled cleanly.";
-  return {
-    name: "compile_status",
-    status,
-    message,
-    details: { compiling, hasCompileErrors: hasErrors, compileErrors: errors.slice(0, 10), nextActions: compile.nextActions }
-  };
-}
-
-function numberProp(value: unknown, key: string): number | undefined {
-  const raw = value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
-}
-
-function stringProp(value: unknown, key: string): string | undefined {
-  const raw = value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
-  return typeof raw === "string" ? raw : undefined;
 }
 
 async function checkDataDirectory(dataDir: string): Promise<DoctorCheck> {
   try {
     await access(dataDir);
-    const stats = await stat(dataDir);
-    if (!stats.isDirectory()) {
-      return { name: "data_directory", status: "fail", message: `Data path is not a directory: ${dataDir}` };
+    if (!(await stat(dataDir)).isDirectory()) {
+      return { name: "data_directory", status: "fail", message: `Data path is not a directory: ${dataDir}`, details: { code: "E_DATA_DIRECTORY_INVALID" } };
     }
-    return {
-      name: "data_directory",
-      status: "pass",
-      message: `Data directory exists: ${dataDir}`,
-      details: { dataDir }
-    };
+    return { name: "data_directory", status: "pass", message: `Data directory exists: ${dataDir}`, details: { dataDir } };
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError.code === "ENOENT") {
-      return {
-        name: "data_directory",
-        status: "warn",
-        message: `Data directory does not exist yet: ${dataDir}. It will be created on first use.`,
-        details: { dataDir }
-      };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { name: "data_directory", status: "warn", message: `Data directory does not exist yet: ${dataDir}.`, details: { dataDir } };
     }
-    return {
-      name: "data_directory",
-      status: "fail",
-      message: `Cannot access data directory: ${error instanceof Error ? error.message : String(error)}`
-    };
+    return { name: "data_directory", status: "fail", message: `Cannot access data directory: ${errorMessage(error)}`, details: { code: "E_DATA_DIRECTORY_INVALID" } };
   }
-}
-
-async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string, bridgeReachable: boolean): Promise<DoctorCheck> {
-  if (!bridgeReachable && runtime.projectTools === undefined) {
-    return {
-      name: "unified_tool_discovery",
-      status: "warn",
-      message: "Tool discovery is unavailable because no Unity instance is connected.",
-      details: { mode: "unavailable", toolCount: 0 }
-    };
-  }
-  const discovery = await discoverProjectTools(flags, runtime, `${requestId}_project_tools`, { requireBridge: true });
-  if (!discovery.ok) {
-    return {
-      name: "unified_tool_discovery",
-      status: "warn",
-      message: `Tool discovery failed: ${discovery.error?.code ?? "unknown"} — ${discovery.error?.message ?? "no message"}`,
-      details: { mode: "error", toolCount: 0, errorCode: discovery.error?.code, errorMessage: discovery.error?.message }
-    };
-  }
-
-  const localCount = builtinToolMetadata().length;
-  return {
-    name: "unified_tool_discovery",
-    status: "pass",
-    message: `The connected instance exposes ${localCount + discovery.tools.length} Tool descriptor(s).`,
-    details: { mode: discovery.mode, localCount, liveCount: discovery.tools.length, toolCount: localCount + discovery.tools.length }
-  };
-}
-
-async function checkConfigIntegrity(readyInstances: UnityInstance[]): Promise<DoctorCheck> {
-  const issues: string[] = [];
-
-  for (const instance of readyInstances) {
-    if (instance.canonicalizationVersion !== 1) issues.push(`Instance ${instance.instanceId}: unsupported canonicalizationVersion.`);
-    if (!/^unity-[0-9a-f]{64}$/.test(instance.instanceId)) issues.push(`Instance ${instance.instanceId}: invalid deterministic instanceId.`);
-    if (!instance.canonicalProjectPath) issues.push(`Instance ${instance.instanceId}: missing canonicalProjectPath.`);
-    if (!instance.editorSessionId) issues.push(`Instance ${instance.instanceId}: missing editorSessionId.`);
-    if (!instance.publishedAt) issues.push(`Instance ${instance.instanceId}: missing publishedAt.`);
-  }
-
-  if (issues.length > 0) {
-    return {
-      name: "config_integrity",
-      status: "warn",
-      message: `${issues.length} configuration issue(s) found.`,
-      details: { issues }
-    };
-  }
-
-  return {
-    name: "config_integrity",
-    status: "pass",
-    message: readyInstances.length > 0
-      ? `${readyInstances.length} instance(s) passed v3 identity checks.`
-      : "No ready instances to check.",
-    details: { checkedInstances: readyInstances.length }
-  };
 }
 
 /** 旧 active-target/alias/aggregate 文件只报告，不解析、不迁移。 */
@@ -410,151 +507,150 @@ async function checkObsoleteLocalState(dataDir: string): Promise<DoctorCheck> {
       };
 }
 
-async function checkExtensionAvailability(flags: Record<string, string | boolean>, runtime: { dataDir?: string }): Promise<DoctorCheck> {
-  const resolvedFlags = await extensionAvailabilityFlags(flags, runtime);
-  const projectPath = getString(resolvedFlags, "project");
-  if (!projectPath) {
-    return {
-      name: "extension_availability",
-      status: "warn",
-      message: "No project path provided. Cannot resolve extension availability. Pass --project <path>.",
-      details: { projectResolved: false }
-    };
+function projectDoctorError(requestId: string, error: unknown): CliError {
+  const selected = instanceSelectionFailure(requestId, error);
+  if (selected && !selected.ok) return selected.error;
+  if (error instanceof SessionSupervisorError) {
+    const projected = failure(requestId, error.code, error.message, error.nextActions, undefined, {
+      transient: error.transient,
+      retryAfterMs: error.retryAfterMs,
+    });
+    if (!projected.ok) return projected.error;
   }
+  const code = typeof error === "object" && error !== null && "code" in error && typeof (error as { code?: unknown }).code === "string"
+    ? (error as { code: string }).code : "BRIDGE_CONNECTION_FAILED";
+  const nextActions = typeof error === "object" && error !== null && "nextActions" in error && Array.isArray((error as { nextActions?: unknown }).nextActions)
+    ? (error as { nextActions: string[] }).nextActions : ["Run unitycli instances list and inspect the selected Editor session."];
+  const projected = failure(requestId, code, errorMessage(error), nextActions);
+  if (!projected.ok) return projected.error;
+  throw new Error("Doctor error projection unexpectedly succeeded.");
+}
 
-  const registry = new ExtensionRegistry();
-  let installedPackages: Map<string, string>;
-  try {
-    installedPackages = await readInstalledUnityPackages(projectPath);
-  } catch {
-    return {
-      name: "extension_availability",
-      status: "warn",
-      message: `Cannot read Unity packages from project: ${projectPath}.`,
-      details: { projectPath }
-    };
-  }
-
-  const summary = extensionAvailabilitySummary(registry, installedPackages);
-
-  const unavailableExtensions = summary.extensions.filter((e) => e.status === "unavailable");
-  const unknownExtensions = summary.extensions.filter((e) => e.status === "unknown");
-
-  if (unavailableExtensions.length > 0) {
-    return {
-      name: "extension_availability",
-      status: "fail",
-      message: `${unavailableExtensions.length} extension(s) have missing Unity package dependencies: ${unavailableExtensions.map((e) => e.name + " (missing: " + e.missingPackages.join(", ") + ")").join("; ")}.`,
-      details: {
-        projectPath,
-        projectResolved: true,
-        total: summary.total,
-        available: summary.available,
-        unavailable: summary.unavailable,
-        unknown: summary.unknown,
-        unavailableExtensions,
-        unknownExtensions
-      }
-    };
-  }
-
-  if (unknownExtensions.length > 0) {
-    return {
-      name: "extension_availability",
-      status: "warn",
-      message: `${unknownExtensions.length} extension(s) could not be resolved (no installed packages data): ${unknownExtensions.map((e) => e.name).join(", ")}.`,
-      details: {
-        projectPath,
-        projectResolved: true,
-        total: summary.total,
-        available: summary.available,
-        unavailable: summary.unavailable,
-        unknown: summary.unknown
-      }
-    };
-  }
-
+function failedLiveCheck(name: string, error: CliError): DoctorCheck {
   return {
-    name: "extension_availability",
-    status: "pass",
-    message: `All ${summary.total} extensions resolved: ${summary.available} available, ${summary.unavailable} unavailable, ${summary.unknown} unknown.`,
+    name,
+    status: error.transient ? "warn" : "fail",
+    message: `${error.code}: ${error.message}`,
     details: {
-      projectPath,
-      projectResolved: true,
-      total: summary.total,
-      available: summary.available,
-      unavailable: summary.unavailable,
-      unknown: summary.unknown,
-      extensions: summary.extensions
-    }
+      code: error.code,
+      transient: error.transient,
+      retryAfterMs: error.retryAfterMs,
+      nextActions: error.nextActions,
+    },
   };
 }
 
-function checkExtensionRegistry(): DoctorCheck {
-  const extensions = builtinExtensionMetadata();
-  const installed = extensions.filter((e) => e.status === "installed").length;
-  const available = extensions.filter((e) => e.status === "available").length;
-  return {
-    name: "extension_registry",
-    status: "pass",
-    message: `Extension registry loaded: ${extensions.length} extension(s) (${installed} installed, ${available} available).`,
-    details: { total: extensions.length, installed, available }
+function skippedLiveCheck(name: string, code: string, message: string): DoctorCheck {
+  return { name, status: "warn", message, details: { code } };
+}
+
+function invalidLiveCheck(name: string, message: string): DoctorCheck {
+  return { name, status: "fail", message, details: { code: "E_BRIDGE_RESPONSE_INVALID" } };
+}
+
+function isDoctorCheck(value: PrivateDoctorRead): value is DoctorCheck {
+  return "status" in value && "name" in value;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** catalog DTO 只接受唯一 published snapshot 的 aggregate，并校验 count parity 与固定 publication 边界。 */
+function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
+  const data = exactRecord(value, ["identity", "toolCount", "providerCounts", "publicationDiagnostics"]);
+  if (!data) return undefined;
+  const providerCounts = exactRecord(data.providerCounts, ["builtIn", "extension", "projectInterface", "officialAttribute"]);
+  const publication = exactRecord(data.publicationDiagnostics, [
+    "assemblyCount", "providerAssemblyCount", "elapsedMilliseconds", "discoveryPassCount",
+    "assetDatabaseOperationCount", "sourceFileReadCount", "persistedToolValueOperationCount", "perToolSuccessLogCount",
+  ]);
+  const serialized = JSON.stringify(data);
+  if (!providerCounts || !publication || serialized === undefined
+    || Buffer.byteLength(serialized, "utf8") > MAX_DOCTOR_CATALOG_RESPONSE_BYTES
+    || data.identity !== DOCTOR_CATALOG_IDENTITY
+    || !isNonNegativeInteger(data.toolCount) || data.toolCount > MAX_DOCTOR_CATALOG_TOOLS) return undefined;
+
+  if (!isNonNegativeInteger(providerCounts.builtIn) || !isNonNegativeInteger(providerCounts.extension)
+    || !isNonNegativeInteger(providerCounts.projectInterface) || !isNonNegativeInteger(providerCounts.officialAttribute)) return undefined;
+  const typedProviderCounts: DoctorCatalogProviderCounts = {
+    builtIn: providerCounts.builtIn,
+    extension: providerCounts.extension,
+    projectInterface: providerCounts.projectInterface,
+    officialAttribute: providerCounts.officialAttribute,
   };
+  if (Object.values(typedProviderCounts).some((count) => count > data.toolCount)
+    || Object.values(typedProviderCounts).reduce((sum, count) => sum + count, 0) !== data.toolCount
+    || !isNonNegativeInteger(publication.assemblyCount) || publication.assemblyCount > MAX_DOCTOR_CATALOG_ASSEMBLIES
+    || !isNonNegativeInteger(publication.providerAssemblyCount) || publication.providerAssemblyCount > publication.assemblyCount
+    || !isNonNegativeInteger(publication.elapsedMilliseconds)
+    || publication.discoveryPassCount !== 1
+    || publication.assetDatabaseOperationCount !== 0
+    || publication.sourceFileReadCount !== 0
+    || publication.persistedToolValueOperationCount !== 0
+    || publication.perToolSuccessLogCount !== 0) return undefined;
+  const typedPublication: DoctorCatalogPublicationDiagnostics = {
+    assemblyCount: publication.assemblyCount,
+    providerAssemblyCount: publication.providerAssemblyCount,
+    elapsedMilliseconds: publication.elapsedMilliseconds,
+    discoveryPassCount: publication.discoveryPassCount,
+    assetDatabaseOperationCount: publication.assetDatabaseOperationCount,
+    sourceFileReadCount: publication.sourceFileReadCount,
+    persistedToolValueOperationCount: publication.persistedToolValueOperationCount,
+    perToolSuccessLogCount: publication.perToolSuccessLogCount,
+  };
+
+  return {
+    identity: DOCTOR_CATALOG_IDENTITY,
+    toolCount: data.toolCount,
+    providerCounts: typedProviderCounts,
+    publicationDiagnostics: typedPublication,
+  };
+}
+
+function exactRecord(value: unknown, fields: readonly string[]): Record<string, unknown> | undefined {
+  const item = record(value);
+  if (!item) return undefined;
+  const allowed = new Set(fields);
+  const keys = Object.keys(item);
+  return keys.length === fields.length && keys.every((key) => allowed.has(key)) ? item : undefined;
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function buildSuggestions(checks: DoctorCheck[]): string[] {
   const suggestions: string[] = [];
-
   for (const check of checks) {
-    if (check.status === "fail" || check.status === "warn") {
-      switch (check.name) {
-        case "instance_registry":
-          if (check.status === "warn") {
-            suggestions.push("Open a Unity project with the UnityCLI Bridge package installed.");
-            suggestions.push("Run unitycli init package --project <UnityProject> to set up the Bridge.");
-          }
-          break;
-        case "ready_instances":
-          suggestions.push("Reopen the Unity Editor for the exact canonical project path if no session is active.");
-          suggestions.push("Run unitycli instances list to inspect transitioning, blocked, offline, or conflicting claims.");
-          break;
-        case "bridge_connectivity":
-          suggestions.push("Ensure Unity Editor is running with the UnityCLI Bridge package for the selected --instance or CWD project.");
-          suggestions.push("Run unitycli instances list to inspect identity, session, blocker, and transition state.");
-          break;
-        case "project_tool_fingerprint":
-          suggestions.push("Inspect unitycli doctor fingerprint details, then review project tool descriptor/handler code changes.");
-          suggestions.push("Apply the reported rePinValue only after accepting the exact Tool change.");
-          break;
-        case "data_directory":
-          suggestions.push("Run any unitycli command to auto-create the data directory.");
-          break;
-        case "config_integrity":
-          suggestions.push("Re-initialize the canonical registry claim by restarting Unity Editor.");
-          break;
-        case "obsolete_local_state":
-          suggestions.push("Delete only the reported obsolete config.json, aliases.json, or aggregate instances.json files after auditing them.");
-          break;
-        case "unified_tool_discovery":
-          suggestions.push("Run unitycli tools group to see tool groups.");
-          suggestions.push("Run unitycli tools group list <group> with a connected Unity instance to inspect its complete Tool descriptors.");
-          break;
-        case "extension_registry":
-          suggestions.push("Run unitycli extensions list to see available extensions.");
-          suggestions.push("Run unitycli extensions doctor to check extension status.");
-          break;
-        case "extension_availability":
-          suggestions.push("Run 'unitycli extensions doctor --project <path>' for detailed extension diagnostics.");
-          suggestions.push("Run 'unitycli extensions list --project <path>' to see all extensions and their status.");
-          suggestions.push("Install missing Unity packages manually via Unity Package Manager or Packages/manifest.json, then run the matching 'unitycli extensions install <id> --project <path>'.");
-          break;
-      }
+    if (check.status === "pass") continue;
+    switch (check.name) {
+      case "registry_health_identity":
+        suggestions.push("Run unitycli instances list and select the exact canonical project identity.");
+        break;
+      case "main_thread_pulse":
+        suggestions.push("Run unitycli tools run editor.state and wait for a fresh ready Editor pulse.");
+        break;
+      case "business_diagnostic":
+        suggestions.push("Use the business diagnostic error code and nextActions without treating it as a transport failure.");
+        break;
+      case "catalog_integrity":
+        suggestions.push("Fix the catalog publication failure, then let Unity compile and reload the domain.");
+        break;
+      case "compile":
+        suggestions.push("Fix the bounded compiler diagnostics or wait for compilation to finish.");
+        break;
+      case "extensions":
+        suggestions.push("Run unitycli extensions doctor --project <path> for installed extension details.");
+        break;
+      case "obsolete_local_state":
+        suggestions.push("Delete only the explicitly reported obsolete files after auditing them.");
+        break;
     }
   }
-
-  if (suggestions.length === 0) {
-    suggestions.push("All checks passed. No action needed.");
-  }
-
-  return suggestions;
+  return suggestions.length > 0 ? [...new Set(suggestions)] : ["All checks passed. No action needed."];
 }

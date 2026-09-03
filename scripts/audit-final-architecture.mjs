@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { collectPublicToolInventory } from "./lib/public-tool-inventory.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -42,6 +43,10 @@ function optionValue(name) {
 function countMatches(text, pattern) {
   const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
   return [...text.matchAll(new RegExp(pattern.source, flags))].length;
+}
+
+function escapePattern(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** 读取 extension manifest，并建立 capability ownership 真相表。 */
@@ -106,10 +111,130 @@ function namedTypeBodies(text, suffix) {
   return bodies;
 }
 
+/** JSON contract中只把descriptor entry自身的fingerprint视为top-level字段，业务schema同名字段不误报。 */
+function countStaticCatalogJsonFields(value, forbiddenFields) {
+  if (Array.isArray(value)) return value.reduce((total, item) => total + countStaticCatalogJsonFields(item, forbiddenFields), 0);
+  if (!value || typeof value !== "object") return 0;
+  const keys = Object.keys(value);
+  const forbiddenLower = new Set([...forbiddenFields].map((field) => field.toLowerCase()));
+  const descriptorEntry = (typeof value.name === "string" || typeof value.toolName === "string")
+    && (Object.hasOwn(value, "summary") || Object.hasOwn(value, "group") || Object.hasOwn(value, "inputSchema"));
+  const ownCount = keys.filter((key) => forbiddenLower.has(key.toLowerCase())
+    && (key.toLowerCase() !== "fingerprint" || descriptorEntry)).length;
+  return ownCount + Object.values(value).reduce((total, item) => total + countStaticCatalogJsonFields(item, forbiddenFields), 0);
+}
+
 /** 统计生产路径内禁止残留的符号或结构。 */
 function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
   const searchRoots = allTextFiles.map((path) => ({ path: repoPath(path), text: readText(path) }));
   const checks = [];
+  const forbiddenPerToolIdentifiers = [
+    ["Project", "Tool", "Handler", "Source"].join(""),
+    ["internal", "Descriptor", "Fingerprint"].join(""),
+    ["live", "Descriptor", "Fingerprint"].join(""),
+    ["expected", "Descriptor", "Fingerprint"].join(""),
+    ["Expected", "Descriptor", "Fingerprint"].join(""),
+    ["ToolDescriptor", ".", "Fingerprint"].join(""),
+    ["E", "_TOOL", "_DESCRIPTOR", "_CHANGED"].join(""),
+    ["E", "_TOOL", "_FINGERPRINT", "_MISMATCH"].join(""),
+  ];
+  const forbiddenIdentifierPattern = new RegExp(forbiddenPerToolIdentifiers.map(escapePattern).join("|"), "g");
+  const identifierResiduals = searchRoots
+    .map((entry) => ({ path: entry.path, count: countMatches(entry.text, forbiddenIdentifierPattern) }))
+    .filter((entry) => entry.count > 0);
+  checks.push({
+    id: "removedPerToolIdentifiers",
+    expected: 0,
+    actual: identifierResiduals.reduce((sum, entry) => sum + entry.count, 0),
+    files: identifierResiduals,
+  });
+
+  const removedCatalogIdentities = [
+    ["extension", "status"].join("."),
+    ["tools", "describe"].join("."),
+    ["tools", "group"].join("."),
+    ["tools", "group-list"].join("."),
+    ["tools", "search"].join("."),
+  ];
+  const removedIdentityPattern = new RegExp(`(?:"|')(?:${removedCatalogIdentities.map(escapePattern).join("|")})(?:"|')`, "g");
+  const generatedOrContractResiduals = searchRoots
+    .filter((entry) => entry.path.startsWith("contracts/")
+      || entry.path.startsWith("schemas/")
+      || entry.path.startsWith("scripts/")
+      || entry.path.includes("/.generated-")
+      || entry.path.includes("/Generated/")
+      || entry.path.endsWith(".g.cs"))
+    .map((entry) => ({ path: entry.path, count: countMatches(entry.text, removedIdentityPattern) }))
+    .filter((entry) => entry.count > 0);
+  checks.push({
+    id: "removedCatalogIdentitiesInGeneratedContracts",
+    expected: 0,
+    actual: generatedOrContractResiduals.reduce((sum, entry) => sum + entry.count, 0),
+    files: generatedOrContractResiduals,
+  });
+
+  const forbiddenStaticCatalogFields = [
+    ["descriptor", "Fingerprint"].join(""),
+    ["handler", "Fingerprint"].join(""),
+    ["finger", "print"].join(""),
+  ];
+  const staticCatalogFieldPattern = new RegExp(`(?:["'](?:${forbiddenStaticCatalogFields.join("|")})["']\\s*:|\\b(?:${forbiddenStaticCatalogFields.join("|")})\\s*(?:[?]?:|\\{|=))`, "gi");
+  const staticCatalogFieldResiduals = searchRoots
+    .filter((entry) => entry.path !== "scripts/audit-final-architecture.mjs")
+    .filter((entry) => entry.path.startsWith("contracts/")
+      || entry.path.startsWith("schemas/")
+      || entry.path.startsWith("scripts/")
+      || entry.path.includes("/.generated-")
+      || entry.path.includes("/Generated/")
+      || entry.path.endsWith(".g.cs"))
+    .map((entry) => {
+      if (!entry.path.endsWith(".json")) return { path: entry.path, count: countMatches(entry.text, staticCatalogFieldPattern) };
+      try { return { path: entry.path, count: countStaticCatalogJsonFields(JSON.parse(entry.text), new Set(forbiddenStaticCatalogFields)) }; }
+      catch { return { path: entry.path, count: 0 }; }
+    })
+    .filter((entry) => entry.count > 0);
+  checks.push({
+    id: "staticCatalogForbiddenFields",
+    expected: 0,
+    actual: staticCatalogFieldResiduals.reduce((sum, entry) => sum + entry.count, 0),
+    files: staticCatalogFieldResiduals,
+  });
+
+  const bridgeSource = searchRoots.find((entry) => entry.path === "unitypkg/Editor/UnityCliBridge.cs")?.text ?? "";
+  const staticConstructorStart = bridgeSource.indexOf("static UnityCliBridge()");
+  const staticConstructorEnd = bridgeSource.indexOf("private static", staticConstructorStart + 1);
+  const staticConstructor = staticConstructorStart >= 0 && staticConstructorEnd > staticConstructorStart
+    ? bridgeSource.slice(staticConstructorStart, staticConstructorEnd)
+      .replace("AssetDatabase.IsAssetImportWorkerProcess()", "AllowedAssetImportWorkerGuard()")
+    : bridgeSource;
+  const catalogRegistry = searchRoots.find((entry) => entry.path === "unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs")?.text ?? "";
+  const constructionStart = catalogRegistry.indexOf("private static void InitializeProjectToolCatalog()");
+  const constructionEnd = catalogRegistry.indexOf("private static bool ProjectToolCatalogMatches", constructionStart);
+  const constructionGraph = constructionStart >= 0 && constructionEnd > constructionStart
+    ? catalogRegistry.slice(constructionStart, constructionEnd)
+    : catalogRegistry;
+  const constructionOwnerPaths = [
+    "unitypkg/Editor/ProjectTools/IUnityCliTool.cs",
+    "unitypkg/Editor/ProjectTools/RegisteredTool.cs",
+    "unitypkg/Editor/Infrastructure/RegistryOwnershipResolver.cs",
+    "unitypkg/Editor/ProjectTools/OfficialAttributeToolRegistry.cs",
+    "unitypkg/Editor/ProjectTools/ProjectToolSchemaValidator.cs",
+    "unitypkg/Editor/ProjectTools/UnityCliSchemaDeriver.cs",
+    "unitypkg/Editor/Infrastructure/UnityCliSerializer.cs",
+  ];
+  const constructionOwnerSources = constructionOwnerPaths
+    .map((path) => searchRoots.find((entry) => entry.path === path)?.text ?? "")
+    .join("\n");
+  const observableConstructionGraph = `${staticConstructor}\n${constructionGraph}\n${constructionOwnerSources}`;
+  const forbiddenConstructionIo = /\b(?:AssetDatabase|EditorPrefs|SessionState|PlayerPrefs)\b|\b(?:File|Directory)\s*\.|WriteLog\([^\r\n]*(?:completed|registered|success)/gi;
+  const forbiddenConstructionCount = countMatches(observableConstructionGraph, forbiddenConstructionIo);
+  checks.push({
+    id: "catalogConstructionForbiddenIo",
+    expected: 0,
+    actual: forbiddenConstructionCount,
+    files: forbiddenConstructionCount > 0 ? [{ path: "unitypkg/Editor/ProjectTools catalog construction graph", count: forbiddenConstructionCount }] : [],
+  });
+  const legacyPatternRoots = searchRoots.filter((entry) => entry.path !== "scripts/audit-final-architecture.mjs");
   const patternChecks = [
     ["legacyToolAttribute", /\[UnityCliTool\s*\(/g],
     ["legacyContextAttribute", /\[UnityCliContext\s*\(/g],
@@ -140,14 +265,14 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
   ];
   for (const [id, pattern] of patternChecks) {
     const auditedRoots = id === "manualJsonParsers"
-      ? searchRoots.filter((entry) => entry.path !== "unitypkg/Editor/Infrastructure/UnityCliSerializer.cs")
+      ? legacyPatternRoots.filter((entry) => entry.path !== "unitypkg/Editor/Infrastructure/UnityCliSerializer.cs")
       : id === "removedJobHeadlessArchitecture"
-        ? searchRoots.filter((entry) => /^(?:src|unitypkg|extensions|docs|skills)\//.test(entry.path))
+        ? legacyPatternRoots.filter((entry) => /^(?:src|unitypkg|extensions|docs|skills)\//.test(entry.path))
       : id === "legacyCompatibilityFallback"
-        ? searchRoots.filter((entry) => entry.path.endsWith(".cs"))
+        ? legacyPatternRoots.filter((entry) => entry.path.endsWith(".cs"))
         : id === "probuilderSemanticDegradation"
-          ? searchRoots.filter((entry) => entry.path.startsWith("extensions/probuilder/unitypkg/Editor/ProBuilder/") && entry.path.endsWith(".cs"))
-          : searchRoots;
+          ? legacyPatternRoots.filter((entry) => entry.path.startsWith("extensions/probuilder/unitypkg/Editor/ProBuilder/") && entry.path.endsWith(".cs"))
+          : legacyPatternRoots;
     const matches = auditedRoots
       .map((entry) => ({ path: entry.path, count: countMatches(entry.text, pattern) }))
       .filter((entry) => entry.count > 0);
@@ -402,9 +527,22 @@ const csharpFiles = [
 const capabilityFiles = csharpFiles.map(csharpCapabilityFile).filter((entry) => entry.toolCount > 0);
 const multiCapabilityFiles = capabilityFiles.filter((entry) => entry.toolCount > 1);
 
-const textRoots = ["src", "unitypkg", "extensions", "tests", "docs", "skills"];
+const textRoots = ["src", "unitypkg", "extensions", "tests", "docs", "skills", "contracts", "schemas", "scripts"];
 const allTextFiles = textRoots.flatMap((root) => collectFiles(join(ROOT, root), (path) => /\.(?:cs|ts|js|mjs|cjs|json|md)$/.test(path)));
 const checks = residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles);
+
+const expectedCompiledInventory = collectPublicToolInventory(ROOT)
+  .filter((entry) => entry.descriptorOwner !== "ts-local")
+  .map((entry) => [entry.name, entry.descriptorOwner, entry.assemblyName, entry.implementationType]);
+const generatedInventoryPath = join(ROOT, "unitypkg", "Editor", "Generated", "UnityCliToolCompletionRegistry.g.cs");
+const generatedInventoryRows = existsSync(generatedInventoryPath)
+  ? [...readText(generatedInventoryPath).matchAll(/new UnityCliToolInventoryEntry\("([^"]+)", "([^"]+)", "([^"]+)", "([^"]+)"\)/g)]
+      .map((match) => [match[1], match[2], match[3], match[4]])
+  : [];
+const compiledInventoryMismatch = JSON.stringify(expectedCompiledInventory) === JSON.stringify(generatedInventoryRows)
+  ? []
+  : [{ path: repoPath(generatedInventoryPath), count: 1, expected: `${expectedCompiledInventory.length} exact generated Tool owner rows` }];
+checks.push({ id: "generatedCompiledToolInventory", expected: 0, actual: compiledInventoryMismatch.length, files: compiledInventoryMismatch });
 
 const builtInToolLayoutMismatches = capabilityFiles
   .filter((entry) => entry.toolCount === 1 && entry.path.startsWith("unitypkg/Editor/Tools/"))
@@ -434,8 +572,8 @@ checks.push({
 });
 
 const internalMetaRoutes = new Set([
-  "project-tool.list", "project-tool.run",
-  "runtime-tool.list", "runtime-tool.run",
+  "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run",
+  "runtime-tool.groups", "runtime-tool.summary", "runtime-tool.describe", "runtime-tool.list", "runtime-tool.run",
   "code.exec"
 ]);
 const contractCsharpTools = new Set(contract.commands

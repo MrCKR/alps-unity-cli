@@ -33,28 +33,25 @@ namespace UnityCli
         private const int PreferredPortRange = 4096;
         private const int PreferredPortRetryCount = 4;
         private const int DeterministicFallbackCount = 64;
-        private static readonly object QueueLock = new object();
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview" };
-        private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.build-settings", "scene.create", "scene.load", "scene.save" };
-        private static readonly string[] GameObjectCommands = { "go.find", "go.inspect", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
+        private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.create", "scene.load", "scene.save" };
+        private static readonly string[] GameObjectCommands = { "go.find", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
         private static readonly string[] AssetCommands = { "asset.search", "asset.info", "asset.create", "asset.import", "asset.modify", "asset.delete", "asset.duplicate", "asset.move", "asset.rename", "asset.refresh" };
-        private static readonly string[] DiagnoseCommands = { "diagnose.preflight" };
         private static readonly string[] ScreenshotCommands = { "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround" };
         private static readonly string[] PrefabCommands = { "prefab.info", "prefab.hierarchy", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close" };
         private static readonly string[] UiCommands = { "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy" };
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
-        private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.volume", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.probe-positions", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-quality", "graphics.pipeline-info" };
-        private static readonly string[] PhysicsCommands = { "physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint.add", "physics.joint.remove", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate" };
+        private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.volume", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.stats", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-info" };
+        private static readonly string[] PhysicsCommands = { "physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint.add", "physics.joint.remove", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.linecast", "physics.shapecast", "physics.validate" };
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop", "animator.get-info", "animator.get-parameter", "animator.set-parameter", "animator.crossfade", "animator.set-speed", "animator.set-enabled", "controller.create", "controller.add-state", "controller.add-transition", "controller.add-parameter", "controller.get-info", "controller.assign", "controller.add-layer", "controller.remove-layer", "controller.set-layer-weight", "controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
-        private static readonly string[] EditorCommands = { "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.console", "project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove" };
+        private static readonly string[] EditorCommands = { "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove" };
         private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify" };
         private static readonly string[] CodeCommands = { "code.exec" };
-        private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
-        private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };
-        private static readonly string[] ExtensionCommands = { "extension.status" };
+        private static readonly string[] ProjectToolCommands = { "project-tool.health", "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run" };
+        private static readonly string[] RuntimeToolCommands = { "runtime-tool.groups", "runtime-tool.summary", "runtime-tool.describe", "runtime-tool.list", "runtime-tool.run" };
         private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = "listener-" + Guid.NewGuid().ToString("N");
@@ -62,7 +59,7 @@ namespace UnityCli
         private static HttpListener listener;
         private static bool started;
         private static readonly BridgeStartupStateMachine StartupState = new BridgeStartupStateMachine();
-        private static bool projectToolsDiscovered;
+        private static readonly BridgeInitialPublicationGate InitialPublicationGate = new BridgeInitialPublicationGate();
         private static volatile bool domainReloading;
         private const double RegistryRefreshSeconds = 30.0;
         private static int port;
@@ -81,6 +78,11 @@ namespace UnityCli
         private static volatile bool cachedIsBuilding;
         private static volatile bool cachedIsPlayModeChanging;
         private static volatile bool playModeChanging = EditorApplication.isPlaying != EditorApplication.isPlayingOrWillChangePlaymode;
+        internal static void HitQueueTestBoundary(BridgeQueueState state, string name)
+        {
+            if (state == null) throw new ArgumentNullException("state");
+            state.TestHooks.Hit(name);
+        }
 
         static UnityCliBridge()
         {
@@ -88,6 +90,8 @@ namespace UnityCli
             if (AssetDatabase.IsAssetImportWorkerProcess()) return;
             WriteRuntimeLoadDiagnostics("static_constructor");
             UnityCliTransactionLog.RotateForNewSession();
+            InitializeProjectToolCatalog();
+            if (ProjectToolCatalogReady()) InitializeRuntimeExecutor();
             InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
@@ -107,6 +111,11 @@ namespace UnityCli
             EditorApplication.quitting += UnregisterAndStop;
             EditorApplication.playModeStateChanged += OnBridgePlayModeStateChanged;
             domainReloading = false;
+            lock (ProductionQueueState.QueueLock)
+            {
+                ProductionQueueState.QueuePublicationOpen = false;
+                ProductionQueueState.QueueSessionStopping = false;
+            }
             ScheduleBridgeStartup();
         }
 
@@ -175,11 +184,22 @@ namespace UnityCli
             StartListener();
         }
 
-        /// <summary>状态机调用的handoff attempt；返回后由调用方发布listener或fail closed。</summary>
+        /// <summary>handoff 与 Tool snapshot 均完成后才允许发布 listener；失败时整个 startup fail closed。</summary>
         private static bool CompleteBridgeStartup(out string handoffState, out string handoffError)
         {
             WriteLog("bridge_pipeline_handoff_started");
-            return UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError);
+            if (!UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError)) return false;
+            try
+            {
+                DiscoverProjectTools();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                handoffState = "tool-registry-unhealthy";
+                handoffError = exception.GetType().Name + ": " + exception.Message;
+                return false;
+            }
         }
 
         private static void StartListener()
@@ -191,15 +211,19 @@ namespace UnityCli
 
             try
             {
+                PrepareListenerGenerationForStart();
+                if (string.IsNullOrWhiteSpace(ListenerId)) throw new InvalidOperationException("Listener identity is unavailable.");
                 listener = new HttpListener();
                 port = StartHttpListener(listener);
                 started = true;
-                Task.Run(ListenLoop);
-                RegisterInstance("transitioning");
-                readyPublicationPending = true;
-                nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
-                WriteRuntimeLoadDiagnostics("listener_started");
-                WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
+                lock (ProductionQueueState.QueueLock)
+                {
+                    ProductionQueueState.QueueSessionStopping = false;
+                    ProductionQueueState.QueuePublicationOpen = false;
+                }
+                StartupState.BeginRegistryPublication();
+                InitialPublicationGate.Start();
+                HandleInitialPublicationOutcome(RegisterInstance("transitioning"));
             }
             catch (Exception exception)
             {
@@ -209,9 +233,44 @@ namespace UnityCli
             }
         }
 
+        /// <summary>首次registry成功后只开放一次queue并启动一次ListenLoop；永久失败才停止listener。</summary>
+        private static void HandleInitialPublicationOutcome(InstancePublicationRetryOutcome outcome)
+        {
+            if (outcome == InstancePublicationRetryOutcome.None) return;
+            var action = InitialPublicationGate.Apply(outcome);
+            if (action == BridgeInitialPublicationAction.Wait)
+            {
+                WriteRuntimeLoadDiagnostics("listener_registry_pending");
+                return;
+            }
+            if (action == BridgeInitialPublicationAction.StopListener)
+            {
+                StartupState.CompleteRegistryPublication();
+                StopListener();
+                WriteRuntimeLoadDiagnostics("listener_registry_failed");
+                WriteLog("bridge_start_failed initial registry publication exhausted listenerId=" + ListenerId);
+                return;
+            }
+            if (action != BridgeInitialPublicationAction.OpenQueueAndListen) return;
+            StartupState.CompleteRegistryPublication();
+            ProductionQueueState.ListenerId = ListenerId;
+            ProductionQueueState.ListenerGeneration = Math.Max(1, CurrentListenerGeneration());
+            lock (ProductionQueueState.QueueLock)
+            {
+                ProductionQueueState.QueueSessionStopping = false;
+                ProductionQueueState.QueuePublicationOpen = true;
+            }
+            Task.Run(ListenLoop);
+            readyPublicationPending = true;
+            nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
+            WriteRuntimeLoadDiagnostics("listener_started");
+            WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
+        }
+
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
+            var queuedBeforeReload = CloseQueuePublicationAndTakeQueuedWork();
             SaveAdmissionPoolBeforeReload();
             ReleaseActiveDirectMutationLease();
             UnityCliCompilationEventBroker.BeforeReload();
@@ -225,7 +284,7 @@ namespace UnityCli
             UnityCliNavMeshBakeCoordinator.BeforeReload();
             UnityCliOcclusionBakeCoordinator.BeforeReload();
             BridgeLifetime.Cancel();
-            CancelQueuedWork();
+            CancelQueuedWork(queuedBeforeReload);
             CancelPendingWaits("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
             if (!UnityCliProjectSettings.Current.BridgeAutoStart)
             {
@@ -241,6 +300,11 @@ namespace UnityCli
         private static void OnAfterAssemblyReload()
         {
             domainReloading = false;
+            lock (ProductionQueueState.QueueLock)
+            {
+                ProductionQueueState.QueuePublicationOpen = false;
+                ProductionQueueState.QueueSessionStopping = false;
+            }
             InitializeAdmissionPool();
             UnityCliSessionMutationLease.Initialize();
             UnityCliCompilationEventBroker.Initialize();
@@ -257,14 +321,12 @@ namespace UnityCli
             StartupState.Reset();
             WriteLog("bridge_after_assembly_reload scheduling bootstrap");
             ScheduleBridgeStartup();
-
-            // After domain reload, static fields are reset. Re-initialize the Runtime Executor
-            // and restore session state if we are already in Play Mode.
-            ReinitializeRuntimeExecutorAfterDomainReload();
         }
 
         private static void UnregisterAndStop()
         {
+            var queuedBeforeShutdown = CloseQueuePublicationAndTakeQueuedWork(true);
+            CancelQueuedWorkForShutdown(queuedBeforeShutdown);
             ShutdownAdmissionPool();
             ReleaseActiveDirectMutationLease();
             StartupState.Reset();
@@ -279,7 +341,6 @@ namespace UnityCli
             UnityCliNavMeshBakeCoordinator.Shutdown();
             UnityCliOcclusionBakeCoordinator.Shutdown();
             BridgeLifetime.Cancel();
-            CancelQueuedWork();
             CancelPendingWaits("E_UNITY_QUITTING", "Unity Editor is quitting.", "Restart Unity and retry the request.", 5000);
             DeleteInstanceRegistration();
             StopListener();
@@ -297,7 +358,7 @@ namespace UnityCli
             }
             if (state == PlayModeStateChange.EnteredPlayMode || state == PlayModeStateChange.EnteredEditMode)
                 UnityCliSessionMutationLease.TryFinalizeOwnedPlayModeRoot();
-            if (started)
+            if (started && InitialPublicationGate.Published)
             {
                 RegisterInstance(playModeChanging ? "transitioning" : "ready");
                 nextRegistryRefreshAt = EditorApplication.timeSinceStartup + RegistryRefreshSeconds;
@@ -340,7 +401,10 @@ namespace UnityCli
                 WriteLog("bridge_stop_failed " + exception.GetType().Name + ": " + exception.Message);
             }
             started = false;
+            lock (ProductionQueueState.QueueLock) ProductionQueueState.QueuePublicationOpen = false;
             readyPublicationPending = false;
+            StartupState.CompleteRegistryPublication();
+            InitialPublicationGate.Reset();
             CancelInstancePublicationRetry();
         }
 
@@ -349,7 +413,9 @@ namespace UnityCli
             try
             {
                 var data = await ExecuteData(request, cancellationToken);
-                // handler 返回后先让 coordinator 消费 completion evidence；超时后的已证明 mutation 仍可持久化 canonical terminal。
+                // Project Tool 的成功 envelope 已在其同一 deadline 与请求预算内完成；其他内部命令保持统一包装。
+                var serializedEnvelope = data as SerializedBridgeEnvelope;
+                if (serializedEnvelope != null) return serializedEnvelope.Json;
                 return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, data));
             }
             catch (BridgeCommandException exception)
@@ -383,7 +449,7 @@ namespace UnityCli
                 throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", null, new[] { "Wait for domain reload to complete and retry." }, true, 10000);
             }
 
-            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command);
+            var allowedDuringCompileOrImport = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command) || IsEditorStateSnapshotCommand(request.Command) || IsProjectToolCatalogReadCommand(request.Command) || IsDoctorAdmissionBypassCommand(request.Command);
             if (EditorApplication.isCompiling && !allowedDuringCompileOrImport)
             {
                 throw new BridgeCommandException("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", null, new[] { "Wait for Unity to finish compiling and retry." }, true, 5000);
@@ -399,14 +465,11 @@ namespace UnityCli
                 // 只在 PlayMode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续操作 Unity。
                 var allowedDuringPlayModeTransition = UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command)
                     || IsEditorStateSnapshotCommand(request.Command)
-                    || request.Command == "editor.console"
                     || request.Command == "editor.pause"
                     || request.Command == "editor.stop"
-                    || request.Command == "runtime-tool.list"
+                    || IsProjectToolCatalogReadCommand(request.Command)
                     || request.Command == "runtime-tool.run"
-                    || request.Command == "project-tool.list"
-                    || request.Command == "diagnose.preflight"
-                    || request.Command == "extension.status";
+                    || IsDoctorAdmissionBypassCommand(request.Command);
 
                 if (!allowedDuringPlayModeTransition)
                 {

@@ -9,6 +9,7 @@ import { failure } from "../src/output.js";
 import "../src/tools/.generated-registry.js";
 import "../src/tools/.generated-schemas.js";
 import { resolveCatalogIndependentInvocationTool, resolveCatalogIndependentOperabilityTool } from "../src/tools/catalog.js";
+import { handleToolsCommand } from "../src/tools/commands.js";
 import { dispatchTool, enrichTargetFailureWithDialogBlocker } from "../src/tools/dispatcher.js";
 import { findToolByName } from "../src/tools/metadata/index.js";
 
@@ -20,7 +21,7 @@ test("only exact Editor operability tools own catalog-independent descriptors", 
     assert.deepEqual(resolved, findToolByName(name));
     assert.equal(resolved?.handler, "offline");
   }
-  for (const name of ["dialogs", "editor.compile", "docs.get", "package.list"])
+  for (const name of ["dialogs", "editor.compile", "docs.get", "package.registry.set"])
     assert.equal(resolveCatalogIndependentOperabilityTool(name), undefined, name);
 });
 
@@ -80,8 +81,8 @@ test("tools describe learns exact Editor operability contracts without a live ca
   const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-dialog-recovery-describe-"));
   try {
     for (const name of OPERABILITY_TOOLS) {
-      assert.deepEqual(resolveCatalogIndependentInvocationTool("tools.describe", name), findToolByName("tools.describe"));
-      const result = await dispatchTool("tools.describe", undefined, { input: "{}" }, { dataDir, projectTools: [] }, `req_describe_${name.replaceAll(".", "_")}`, { name });
+      assert.deepEqual(resolveCatalogIndependentInvocationTool(name), findToolByName(name));
+      const result = await handleToolsCommand("describe", [name], {}, { dataDir, projectTools: [] }, `req_describe_${name.replaceAll(".", "_")}`);
       assert.equal(result.ok, true, JSON.stringify(result));
       if (result.ok) {
         const data = result.data as { name: string; inputSchema?: unknown };
@@ -89,7 +90,7 @@ test("tools describe learns exact Editor operability contracts without a live ca
         assert.ok(data.inputSchema);
       }
     }
-    assert.equal(resolveCatalogIndependentInvocationTool("tools.describe", "scene.hierarchy"), undefined);
+    assert.equal(resolveCatalogIndependentInvocationTool("scene.hierarchy"), undefined);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }
@@ -107,7 +108,7 @@ test("catalog failure leaves exact operability execution and describe routable b
       assert.equal(execution.ok, false, name);
       if (!execution.ok) assert.notEqual(execution.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET", name);
 
-      const describe = await dispatchTool("tools.describe", undefined, { input: "{}" }, { dataDir }, `req_catalog_describe_${name.replaceAll(".", "_")}`, { name });
+      const describe = await handleToolsCommand("describe", [name], {}, { dataDir }, `req_catalog_describe_${name.replaceAll(".", "_")}`);
       assert.equal(describe.ok, true, JSON.stringify(describe));
     }
 

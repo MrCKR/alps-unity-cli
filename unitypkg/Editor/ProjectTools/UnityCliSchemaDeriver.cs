@@ -38,7 +38,7 @@ namespace UnityCli
                     return new Dictionary<string, object> { { "type", "object" }, { "additionalProperties", AnyJsonSchema() } };
                 Type anyElement;
                 if (TryElementType(rawType, out anyElement))
-                    return new Dictionary<string, object> { { "type", "array" }, { "items", AnyJsonSchema() } };
+                    return ItemsRangeSchema(new Dictionary<string, object> { { "type", "array" }, { "items", AnyJsonSchema() } }, member, path);
                 return AnyJsonSchema();
             }
 
@@ -46,10 +46,10 @@ namespace UnityCli
             if (nullableType != null)
             {
                 if (member != null && member.IsDefined(typeof(UnityCliRequiredAttribute), true))
-                    return BuildSchema(nullableType, path, definitions, null, false);
+                    return BuildSchema(nullableType, path, definitions, member, false);
                 return new Dictionary<string, object>
                 {
-                    { "oneOf", new object[] { BuildSchema(nullableType, path, definitions, null, false), new Dictionary<string, object> { { "type", "null" } } } }
+                    { "oneOf", new object[] { BuildSchema(nullableType, path, definitions, member, false), new Dictionary<string, object> { { "type", "null" } } } }
                 };
             }
 
@@ -67,8 +67,8 @@ namespace UnityCli
             }
             if (rawType == typeof(char)) return TypeSchema("string");
             if (rawType == typeof(bool)) return TypeSchema("boolean");
-            if (IsInteger(rawType)) return IntegerSchema(rawType);
-            if (IsNumber(rawType)) return TypeSchema("number");
+            if (IsInteger(rawType)) return NumericRangeSchema(IntegerSchema(rawType), member, path);
+            if (IsNumber(rawType)) return NumericRangeSchema(TypeSchema("number"), member, path);
             if (rawType.IsEnum)
             {
                 return new Dictionary<string, object>
@@ -91,11 +91,11 @@ namespace UnityCli
             Type elementType;
             if (TryElementType(rawType, out elementType))
             {
-                return new Dictionary<string, object>
+                return ItemsRangeSchema(new Dictionary<string, object>
                 {
                     { "type", "array" },
                     { "items", BuildSchema(elementType, path + "[]", definitions, member, false) }
-                };
+                }, member, path);
             }
 
             if (rawType.IsPointer || rawType.IsByRef || rawType.IsGenericTypeDefinition || rawType.IsInterface || rawType.IsAbstract)
@@ -258,6 +258,35 @@ namespace UnityCli
                 { "minimum", minimum },
                 { "maximum", maximum }
             };
+        }
+
+        /// <summary>将声明式集合范围投影为 JSON Schema；非法特性使 descriptor 派生失败。</summary>
+        private static Dictionary<string, object> ItemsRangeSchema(Dictionary<string, object> schema, MemberInfo member, string path)
+        {
+            var range = member == null ? null : member.GetCustomAttributes(typeof(UnityCliItemsRangeAttribute), true).Cast<UnityCliItemsRangeAttribute>().SingleOrDefault();
+            if (range == null) return schema;
+            if (range.Minimum < 0 || range.Minimum > range.Maximum) throw Unsupported(path, "items range is invalid");
+            schema["minItems"] = range.Minimum;
+            schema["maxItems"] = range.Maximum;
+            return schema;
+        }
+
+        /// <summary>将声明式业务范围收窄到 CLR 可表示范围；非法特性使 descriptor 派生失败。</summary>
+        private static Dictionary<string, object> NumericRangeSchema(Dictionary<string, object> schema, MemberInfo member, string path)
+        {
+            var range = member == null ? null : member.GetCustomAttributes(typeof(UnityCliRangeAttribute), true).Cast<UnityCliRangeAttribute>().SingleOrDefault();
+            if (range == null) return schema;
+            if (range.Minimum > range.Maximum) throw Unsupported(path, "numeric range minimum exceeds maximum");
+            decimal existingMinimum;
+            decimal existingMaximum;
+            var minimum = schema.TryGetValue("minimum", out var rawMinimum) ? Convert.ToDecimal(rawMinimum) : decimal.MinValue;
+            var maximum = schema.TryGetValue("maximum", out var rawMaximum) ? Convert.ToDecimal(rawMaximum) : decimal.MaxValue;
+            existingMinimum = Math.Max(minimum, range.Minimum);
+            existingMaximum = Math.Min(maximum, range.Maximum);
+            if (existingMinimum > existingMaximum) throw Unsupported(path, "numeric range is outside CLR range");
+            schema["minimum"] = existingMinimum;
+            schema["maximum"] = existingMaximum;
+            return schema;
         }
 
         internal static void IntegerRange(Type type, out decimal minimum, out decimal maximum)

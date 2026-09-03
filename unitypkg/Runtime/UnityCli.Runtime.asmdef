@@ -2,7 +2,7 @@
   "name": "UnityCli.Runtime",
   "rootNamespace": "UnityCli",
   "references": ["UnityCli.Shared"],
-  "includePlatforms": ["WindowsStandalone32", "WindowsStandalone64"],
+  "includePlatforms": ["Editor", "WindowsStandalone32", "WindowsStandalone64"],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,

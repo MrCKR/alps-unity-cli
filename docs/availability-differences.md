@@ -38,7 +38,7 @@ catalog只包含必须由已打开Unity Editor或development Player提供的项�
 }
 ```
 
-`source` 只用于说明和审计，不影响 visibility、describe、execution 或公开路由。安装 Package/Extension 后重新运行原 discovery 命令。
+`source` 只用于说明和审计，不影响 visibility、describe、execution 或公开路由。Extension dependency gate 只接受 generated exact owner 与 compiled assembly identity 的闭合证明；不从名称前缀冒充 Extension。安装 Package/Extension 后重新运行原 discovery 命令。
 
 ## 项目注册能力
 
@@ -80,7 +80,7 @@ Unity API版本门禁不从major版本猜测。Tool仍在当前实例catalog中�
 
 ## Domain Reload
 
-Domain reload期间，Registry v3 lifecycle将实例归约为`transitioning`，listener generation随后交接；Health v3中该generation的首个Unity主线程pulse才允许归约为`ready`。CLI在原命令截止时间内等待首次记录或新ready generation，不读取固定时长marker，也不要求AI轮询。session supervisor只在同一`editorSessionId`内续接完全相同的请求；首次mutation POST后若session改变，不向新session重投，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。调用方先读取业务状态，再决定是否提交全新请求。
+Domain reload期间，Registry v3 lifecycle将实例归约为`transitioning`，listener generation随后交接；Health v3中该generation的首个Unity主线程pulse才允许归约为`ready`。CLI在原命令截止时间内等待首次记录或新ready generation，不读取固定时长marker，也不要求AI轮询。catalog discovery 会把 exact editor session、listener ID和generation绑定到整次顶层调用及root admission；首次业务POST前若发生变化，返回`E_TOOL_CATALOG_CHANGED`，不发送旧业务请求。session supervisor只在同一`editorSessionId`内续接完全相同的请求；首次mutation POST后若session改变，不向新session重投，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。调用方先读取业务状态，再决定是否提交全新请求。
 
 ## AI Agent 处理方式
 

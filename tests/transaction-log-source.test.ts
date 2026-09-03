@@ -60,7 +60,7 @@ test("transaction logging is wired into bridge completion and startup", async ()
     readFile(new URL("../unitypkg/Editor/UnityCliBridge.cs", import.meta.url), "utf8")
   ]);
 
-  assert.match(queue, /CompleteWorkItem\(BridgeWorkItem item\)[\s\S]*UnityCliTransactionLog\.Append\(item\.Request\.RequestId, item\.Request\.Command, Encoding\.UTF8\.GetString\(item\.RawRequestBytes\), item\.Response/s);
+  assert.match(queue, /CompleteWorkItem\(BridgeWorkItem item\)[\s\S]*item\.QueueState\.Sinks\.AppendTransaction\(item\.Request\.RequestId, item\.Request\.Command, Encoding\.UTF8\.GetString\(item\.RawRequestBytes\), item\.Response/s);
   assert.match(bridge, /WriteRuntimeLoadDiagnostics\("static_constructor"\);\s*UnityCliTransactionLog\.RotateForNewSession\(\);/s);
 });
 
