@@ -481,7 +481,7 @@ function schemaType(schema: unknown, rootSchema: Record<string, unknown>): strin
   return typeof type === "string" ? type : undefined;
 }
 
-/** command 保持 native exact 优先；attribute fallback 只读取第二个精确名称。 */
+/** command 在每个 target 的一次 exact describe 中保持 native 优先，再尝试官方 attribute 名称。 */
 async function resolveCommandCatalogTool(
   name: string,
   flags: Record<string, string | boolean>,
@@ -491,17 +491,14 @@ async function resolveCommandCatalogTool(
   absoluteDeadlineMs?: number,
 ): Promise<{ ok: true; tool?: ToolMetadata; context?: ToolInvocationContext } | (CliResult & { ok: false })> {
   const operability = resolveCatalogIndependentOperabilityTool(name);
-  const resolveExact = (candidate: string) => invocationContext
-    ? resolveCatalogToolForInvocation(candidate, flags, runtime, requestId, invocationContext)
-    : resolveCatalogTool(candidate, flags, runtime, requestId, absoluteDeadlineMs);
-  const exact = operability ? { ok: true as const, tool: operability, context: invocationContext } : await resolveExact(name);
-  if (!exact.ok || exact.tool || name.startsWith(ATTRIBUTE_PREFIX)) return exact;
-  // fallback 使用新的 exact catalog acquisition，但继续消费同一个顶层 admission deadline。
-  const attribute = await resolveExact(`${ATTRIBUTE_PREFIX}${name}`);
-  if (!attribute.ok || !attribute.tool || !isOfficialAttributeTool(attribute.tool)) {
-    return attribute.ok ? { ok: true, context: "context" in attribute ? attribute.context : invocationContext } : attribute;
-  }
-  return attribute;
+  if (operability) return { ok: true, tool: operability, context: invocationContext };
+  const fallbackName = name.startsWith(ATTRIBUTE_PREFIX) ? undefined : `${ATTRIBUTE_PREFIX}${name}`;
+  const resolved = invocationContext
+    ? await resolveCatalogToolForInvocation(name, flags, runtime, requestId, invocationContext, fallbackName)
+    : await resolveCatalogTool(name, flags, runtime, requestId, absoluteDeadlineMs, fallbackName);
+  if (!resolved.ok || !resolved.tool || resolved.tool.name === name) return resolved;
+  if (resolved.tool.name === fallbackName && isOfficialAttributeTool(resolved.tool)) return resolved;
+  return { ok: true, context: "context" in resolved ? resolved.context : invocationContext };
 }
 
 async function commandHelp(

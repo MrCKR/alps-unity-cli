@@ -95,15 +95,7 @@ namespace UnityCli
                 }
                 ownership.ValidateComplete();
 
-                var snapshot = PublishProjectToolCatalog(builder, (long)Math.Ceiling((DateTime.UtcNow - startedAt).TotalMilliseconds));
-                WriteLog("tool_catalog_initialized assemblies=" + snapshot.AssemblyCount.ToString(CultureInfo.InvariantCulture)
-                    + " providers=" + snapshot.ProviderAssemblyCount.ToString(CultureInfo.InvariantCulture)
-                    + " tools=" + snapshot.ToolCount.ToString(CultureInfo.InvariantCulture)
-                    + " builtIn=" + snapshot.BuiltInToolCount.ToString(CultureInfo.InvariantCulture)
-                    + " extension=" + snapshot.ExtensionToolCount.ToString(CultureInfo.InvariantCulture)
-                    + " projectInterface=" + snapshot.ProjectInterfaceToolCount.ToString(CultureInfo.InvariantCulture)
-                    + " officialAttribute=" + snapshot.OfficialAttributeToolCount.ToString(CultureInfo.InvariantCulture)
-                    + " elapsedMs=" + snapshot.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
+                PublishProjectToolCatalog(builder, (long)Math.Ceiling((DateTime.UtcNow - startedAt).TotalMilliseconds));
             }
             catch (Exception exception)
             {
@@ -123,11 +115,24 @@ namespace UnityCli
         /// <summary>候选完整 Publish 后才替换唯一 slot；任何第 N 项失败都保留既有 publication。</summary>
         private static UnityCliToolCatalogSnapshot PublishProjectToolCatalog(UnityCliToolCatalogBuilder builder, long elapsedMilliseconds)
         {
-            var candidate = builder.Publish(elapsedMilliseconds);
+            var candidate = builder.Publish(elapsedMilliseconds, WriteProjectToolCatalogInitializedLog);
             Volatile.Write(ref publishedProjectToolCatalog, candidate);
             Volatile.Write(ref projectToolCatalogHealth, new UnityCliToolCatalogHealthSnapshot(
                 true, candidate.Snapshot.ToolCount, string.Empty, string.Empty));
             return candidate.Snapshot;
+        }
+
+        /// <summary>候选提交前写入唯一 aggregate success log；失败时旧 publication 保持不变。</summary>
+        private static void WriteProjectToolCatalogInitializedLog(UnityCliToolCatalogSnapshot snapshot)
+        {
+            WriteLog("tool_catalog_initialized assemblies=" + snapshot.AssemblyCount.ToString(CultureInfo.InvariantCulture)
+                + " providers=" + snapshot.ProviderAssemblyCount.ToString(CultureInfo.InvariantCulture)
+                + " tools=" + snapshot.ToolCount.ToString(CultureInfo.InvariantCulture)
+                + " builtIn=" + snapshot.BuiltInToolCount.ToString(CultureInfo.InvariantCulture)
+                + " extension=" + snapshot.ExtensionToolCount.ToString(CultureInfo.InvariantCulture)
+                + " projectInterface=" + snapshot.ProjectInterfaceToolCount.ToString(CultureInfo.InvariantCulture)
+                + " officialAttribute=" + snapshot.OfficialAttributeToolCount.ToString(CultureInfo.InvariantCulture)
+                + " elapsedMs=" + snapshot.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
         }
 
         /// <summary>执行入口读取唯一 published executable table；失败 domain 内绝不重建。</summary>
@@ -364,6 +369,7 @@ namespace UnityCli
             public string ExpectedCatalogGeneration { get; set; }
             public string[] ReservedNames { get; set; }
             public string Name { get; set; }
+            public string FallbackName { get; set; }
         }
 
         /// <summary>continuation只绑定transport session与listener generation；Tool级identifier不参与stale判定。</summary>
@@ -472,17 +478,23 @@ namespace UnityCli
                 || (definition.Group ?? string.Empty).IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        /// <summary>exact describe只读取一次published snapshot，并且至多传输指定name的一份完整descriptor。</summary>
+        /// <summary>exact describe只读取一次published snapshot；native未命中时可返回一份指定fallback descriptor。</summary>
         private static object ProjectToolCatalogDescribe(UnityCli.Protocol.BridgeRequest request, bool runtimeOnly)
         {
-            RequireProjectToolCatalogInputKeys(request, "name");
+            RequireProjectToolCatalogInputKeys(request, "name", "fallbackName");
             var catalog = ProjectToolCatalogSnapshotReader.Read();
             var args = request.DeserializeArgs<ProjectToolCatalogArgs>() ?? new ProjectToolCatalogArgs();
             if (string.IsNullOrWhiteSpace(args.Name) || args.Name.Length > 256)
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe name is required and must not exceed 256 characters.");
+            if (args.FallbackName != null && (string.IsNullOrWhiteSpace(args.FallbackName) || args.FallbackName.Length > 256
+                || string.Equals(args.Name, args.FallbackName, StringComparison.Ordinal)))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe fallbackName must be distinct and must not exceed 256 characters.");
             var generation = ProjectToolCatalogGeneration();
-            var definition = catalog.Descriptors.FirstOrDefault(tool => string.Equals(tool.Name, args.Name, StringComparison.Ordinal));
-            var found = definition != null && (!runtimeOnly || definition.Target == "runtime" || definition.Target == "both");
+            Func<RegisteredToolDescriptor, bool> availableForTarget = tool => !runtimeOnly || tool.Target == "runtime" || tool.Target == "both";
+            var definition = catalog.Descriptors.FirstOrDefault(tool => string.Equals(tool.Name, args.Name, StringComparison.Ordinal) && availableForTarget(tool));
+            if (definition == null && args.FallbackName != null)
+                definition = catalog.Descriptors.FirstOrDefault(tool => string.Equals(tool.Name, args.FallbackName, StringComparison.Ordinal) && availableForTarget(tool));
+            var found = definition != null;
             var result = new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", found } };
             if (found)
             {

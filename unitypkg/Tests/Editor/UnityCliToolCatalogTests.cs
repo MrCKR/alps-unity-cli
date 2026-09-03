@@ -42,6 +42,8 @@ namespace UnityCli.Tests
             Assert.That(second, Is.SameAs(first));
             Assert.That((int)Field("projectToolCatalogConstructionCount").GetValue(null), Is.EqualTo(1));
             Assert.That(Int(first, "DiscoveryPassCount"), Is.EqualTo(1));
+            Assert.That(Int(first, "ProviderMetadataReadCount"), Is.EqualTo(Int(first, "ProviderAssemblyCount")));
+            Assert.That(Int(first, "AggregateSuccessLogCount"), Is.EqualTo(1));
             Assert.That(Int(first, "AssetDatabaseOperationCount"), Is.Zero);
             Assert.That(Int(first, "SourceFileReadCount"), Is.Zero);
             Assert.That(Int(first, "PersistedToolValueOperationCount"), Is.Zero);
@@ -69,21 +71,18 @@ namespace UnityCli.Tests
                 var builder = NewBuilder(400, 301);
                 for (var index = 0; index < 301; index++)
                     Add(builder, Definition("fixture.project." + index, "project", "native", "fixture"), "ProjectInterface");
-                Invoke(builder, "RecordAssetDatabaseOperation");
-                Invoke(builder, "RecordSourceFileRead");
-                Invoke(builder, "RecordPersistedToolValueOperation");
-                Invoke(builder, "RecordPerToolSuccessLog");
-
                 var snapshot = PublishThroughProductionSlot(builder, 12L);
                 Assert.That(ReadPublishedSnapshot(), Is.SameAs(snapshot));
                 Assert.That(Int(snapshot, "ProviderAssemblyCount"), Is.EqualTo(301));
                 Assert.That(Int(snapshot, "ProjectInterfaceToolCount"), Is.EqualTo(301));
                 Assert.That(Int(snapshot, "ToolCount"), Is.EqualTo(301));
                 Assert.That(Int(snapshot, "DiscoveryPassCount"), Is.EqualTo(1));
-                Assert.That(Int(snapshot, "AssetDatabaseOperationCount"), Is.EqualTo(1));
-                Assert.That(Int(snapshot, "SourceFileReadCount"), Is.EqualTo(1));
-                Assert.That(Int(snapshot, "PersistedToolValueOperationCount"), Is.EqualTo(1));
-                Assert.That(Int(snapshot, "PerToolSuccessLogCount"), Is.EqualTo(1));
+                Assert.That(Int(snapshot, "ProviderMetadataReadCount"), Is.EqualTo(301));
+                Assert.That(Int(snapshot, "AggregateSuccessLogCount"), Is.EqualTo(1));
+                Assert.That(Int(snapshot, "AssetDatabaseOperationCount"), Is.Zero);
+                Assert.That(Int(snapshot, "SourceFileReadCount"), Is.Zero);
+                Assert.That(Int(snapshot, "PersistedToolValueOperationCount"), Is.Zero);
+                Assert.That(Int(snapshot, "PerToolSuccessLogCount"), Is.Zero);
             }
             finally
             {
@@ -151,11 +150,11 @@ namespace UnityCli.Tests
             var duplicate = NewBuilder(1, 1);
             Add(duplicate, Definition("fixture.duplicate", "project", "native", "fixture"), "ProjectInterface");
             Assert.That(() => Add(duplicate, Definition("fixture.duplicate", "project", "native", "fixture"), "ProjectInterface"), Throws.TypeOf<TargetInvocationException>());
-            Assert.That(() => Invoke(duplicate, "Publish", 1L), Throws.TypeOf<TargetInvocationException>());
+            Assert.That(() => PublishThroughProductionSlot(duplicate, 1L), Throws.TypeOf<TargetInvocationException>());
 
             var oversized = NewBuilder(1, 1);
             Assert.That(() => Add(oversized, Definition("fixture." + new string('n', 249), "project", "native", "fixture"), "ProjectInterface"), Throws.TypeOf<TargetInvocationException>());
-            Assert.That(() => Invoke(oversized, "Publish", 1L), Throws.TypeOf<TargetInvocationException>());
+            Assert.That(() => PublishThroughProductionSlot(oversized, 1L), Throws.TypeOf<TargetInvocationException>());
         }
 
         [Test]

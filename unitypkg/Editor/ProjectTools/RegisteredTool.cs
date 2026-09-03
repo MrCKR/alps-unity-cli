@@ -204,7 +204,38 @@ namespace UnityCli
         UnityCliToolCatalogHealthSnapshot Read();
     }
 
-    /// <summary>一次 publication 的不可变 descriptor 投影与真实 discovery 计数。</summary>
+    internal enum UnityCliToolCatalogOperationKind
+    {
+        DiscoveryPass,
+        ProviderMetadataRead,
+        AssetDatabase,
+        SourceFileRead,
+        PersistedToolValue,
+        AggregateSuccessLog,
+        PerToolSuccessLog
+    }
+
+    /// <summary>候选构建期唯一操作账本；所有计数只能由生产动作发生点写入。</summary>
+    internal sealed class UnityCliToolCatalogOperationJournal
+    {
+        private readonly Dictionary<UnityCliToolCatalogOperationKind, int> counts =
+            new Dictionary<UnityCliToolCatalogOperationKind, int>();
+
+        internal void Record(UnityCliToolCatalogOperationKind operation)
+        {
+            int current;
+            counts.TryGetValue(operation, out current);
+            counts[operation] = checked(current + 1);
+        }
+
+        internal int Count(UnityCliToolCatalogOperationKind operation)
+        {
+            int count;
+            return counts.TryGetValue(operation, out count) ? count : 0;
+        }
+    }
+
+    /// <summary>一次 publication 的不可变 descriptor 投影与真实 discovery 操作计数。</summary>
     internal sealed class UnityCliToolCatalogSnapshot
     {
         internal UnityCliToolCatalogSnapshot(
@@ -216,11 +247,7 @@ namespace UnityCli
             int projectInterfaceToolCount,
             int officialAttributeToolCount,
             long elapsedMilliseconds,
-            int discoveryPassCount,
-            int assetDatabaseOperationCount,
-            int sourceFileReadCount,
-            int persistedToolValueOperationCount,
-            int perToolSuccessLogCount)
+            UnityCliToolCatalogOperationJournal operations)
         {
             Descriptors = new ReadOnlyCollection<RegisteredToolDescriptor>(
                 descriptors.OrderBy(item => item.Name, StringComparer.Ordinal).ToArray());
@@ -230,12 +257,15 @@ namespace UnityCli
             ExtensionToolCount = extensionToolCount;
             ProjectInterfaceToolCount = projectInterfaceToolCount;
             OfficialAttributeToolCount = officialAttributeToolCount;
+            if (operations == null) throw new ArgumentNullException("operations");
             ElapsedMilliseconds = Math.Max(0, elapsedMilliseconds);
-            DiscoveryPassCount = discoveryPassCount;
-            AssetDatabaseOperationCount = assetDatabaseOperationCount;
-            SourceFileReadCount = sourceFileReadCount;
-            PersistedToolValueOperationCount = persistedToolValueOperationCount;
-            PerToolSuccessLogCount = perToolSuccessLogCount;
+            DiscoveryPassCount = operations.Count(UnityCliToolCatalogOperationKind.DiscoveryPass);
+            ProviderMetadataReadCount = operations.Count(UnityCliToolCatalogOperationKind.ProviderMetadataRead);
+            AssetDatabaseOperationCount = operations.Count(UnityCliToolCatalogOperationKind.AssetDatabase);
+            SourceFileReadCount = operations.Count(UnityCliToolCatalogOperationKind.SourceFileRead);
+            PersistedToolValueOperationCount = operations.Count(UnityCliToolCatalogOperationKind.PersistedToolValue);
+            AggregateSuccessLogCount = operations.Count(UnityCliToolCatalogOperationKind.AggregateSuccessLog);
+            PerToolSuccessLogCount = operations.Count(UnityCliToolCatalogOperationKind.PerToolSuccessLog);
         }
 
         public IReadOnlyList<RegisteredToolDescriptor> Descriptors { get; }
@@ -248,9 +278,11 @@ namespace UnityCli
         public int OfficialAttributeToolCount { get; }
         public long ElapsedMilliseconds { get; }
         public int DiscoveryPassCount { get; }
+        public int ProviderMetadataReadCount { get; }
         public int AssetDatabaseOperationCount { get; }
         public int SourceFileReadCount { get; }
         public int PersistedToolValueOperationCount { get; }
+        public int AggregateSuccessLogCount { get; }
         public int PerToolSuccessLogCount { get; }
     }
 
@@ -290,6 +322,7 @@ namespace UnityCli
     {
         private readonly Dictionary<string, RegisteredTool> pending = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
         private readonly HashSet<string> providerMetadata = new HashSet<string>(StringComparer.Ordinal);
+        private readonly UnityCliToolCatalogOperationJournal operations = new UnityCliToolCatalogOperationJournal();
         private bool discoveryStarted;
         private bool faulted;
         private bool published;
@@ -299,11 +332,6 @@ namespace UnityCli
         private int extensionToolCount;
         private int projectInterfaceToolCount;
         private int officialAttributeToolCount;
-        private int discoveryPassCount;
-        private int assetDatabaseOperationCount;
-        private int sourceFileReadCount;
-        private int persistedToolValueOperationCount;
-        private int perToolSuccessLogCount;
 
         internal void BeginDiscovery(int loadedAssemblyCount, int candidateProviderAssemblyCount)
         {
@@ -311,7 +339,7 @@ namespace UnityCli
             if (loadedAssemblyCount < 1 || candidateProviderAssemblyCount < 1 || candidateProviderAssemblyCount > loadedAssemblyCount)
                 throw new ArgumentOutOfRangeException("candidateProviderAssemblyCount");
             discoveryStarted = true;
-            discoveryPassCount++;
+            operations.Record(UnityCliToolCatalogOperationKind.DiscoveryPass);
             assemblyCount = loadedAssemblyCount;
             expectedProviderAssemblyCount = candidateProviderAssemblyCount;
         }
@@ -322,12 +350,8 @@ namespace UnityCli
             if (!discoveryStarted || published || faulted || string.IsNullOrWhiteSpace(assemblyIdentity))
                 throw new InvalidOperationException("Tool provider metadata is not writable.");
             if (!providerMetadata.Add(assemblyIdentity)) throw new InvalidOperationException("Duplicate Tool provider assembly identity: " + assemblyIdentity + ".");
+            operations.Record(UnityCliToolCatalogOperationKind.ProviderMetadataRead);
         }
-
-        internal void RecordAssetDatabaseOperation() { assetDatabaseOperationCount++; }
-        internal void RecordSourceFileRead() { sourceFileReadCount++; }
-        internal void RecordPersistedToolValueOperation() { persistedToolValueOperationCount++; }
-        internal void RecordPerToolSuccessLog() { perToolSuccessLogCount++; }
 
         internal void Add(RegisteredTool definition, UnityCliToolProviderKind providerKind)
         {
@@ -355,14 +379,18 @@ namespace UnityCli
 
         internal void Abort() { faulted = true; }
 
-        internal UnityCliPublishedToolCatalog Publish(long elapsedMilliseconds)
+        internal UnityCliPublishedToolCatalog Publish(
+            long elapsedMilliseconds,
+            Action<UnityCliToolCatalogSnapshot> writeAggregateSuccessLog)
         {
             if (!discoveryStarted || faulted || published) throw new InvalidOperationException("Tool catalog cannot publish an incomplete or faulted table.");
+            if (writeAggregateSuccessLog == null) throw new ArgumentNullException("writeAggregateSuccessLog");
             if (providerMetadata.Count != expectedProviderAssemblyCount)
                 throw new InvalidOperationException("Tool catalog provider metadata does not match the discovered provider assembly set.");
             if (builtInToolCount + extensionToolCount + projectInterfaceToolCount + officialAttributeToolCount != pending.Count)
                 throw new InvalidOperationException("Tool catalog provider counts do not match the pending table.");
-            published = true;
+
+            operations.Record(UnityCliToolCatalogOperationKind.AggregateSuccessLog);
             var descriptors = pending.Values.Select(tool => new RegisteredToolDescriptor(tool));
             var snapshot = new UnityCliToolCatalogSnapshot(
                 descriptors,
@@ -373,11 +401,17 @@ namespace UnityCli
                 projectInterfaceToolCount,
                 officialAttributeToolCount,
                 elapsedMilliseconds,
-                discoveryPassCount,
-                assetDatabaseOperationCount,
-                sourceFileReadCount,
-                persistedToolValueOperationCount,
-                perToolSuccessLogCount);
+                operations);
+            try
+            {
+                writeAggregateSuccessLog(snapshot);
+            }
+            catch
+            {
+                faulted = true;
+                throw;
+            }
+            published = true;
             return new UnityCliPublishedToolCatalog(pending, snapshot);
         }
 

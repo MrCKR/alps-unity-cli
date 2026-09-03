@@ -145,7 +145,12 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
   ];
   const removedIdentityPattern = new RegExp(`(?:"|')(?:${removedCatalogIdentities.map(escapePattern).join("|")})(?:"|')`, "g");
   const generatedOrContractResiduals = searchRoots
-    .filter((entry) => entry.path.startsWith("contracts/") || entry.path.includes("/.generated-") || entry.path.includes("/Generated/") || entry.path.endsWith(".g.cs"))
+    .filter((entry) => entry.path.startsWith("contracts/")
+      || entry.path.startsWith("schemas/")
+      || entry.path.startsWith("scripts/")
+      || entry.path.includes("/.generated-")
+      || entry.path.includes("/Generated/")
+      || entry.path.endsWith(".g.cs"))
     .map((entry) => ({ path: entry.path, count: countMatches(entry.text, removedIdentityPattern) }))
     .filter((entry) => entry.count > 0);
   checks.push({

@@ -28,6 +28,7 @@ function collectCSharpTools(root) {
     ...filesUnder(root, "unitypkg/Editor/Tools", ".cs"),
     ...filesUnder(root, "extensions", ".cs"),
   ];
+  const extensionMetadata = new Map();
   const tools = [];
   for (const file of files) {
     const sourceText = fs.readFileSync(file, "utf8");
@@ -36,6 +37,14 @@ function collectCSharpTools(root) {
     if (!name) throw new Error(`${relativeSource(root, file)}: IUnityCliTool 缺少公开 Name`);
     const source = relativeSource(root, file);
     const extensionMatch = source.match(/^extensions\/([^/]+)\//);
+    let owner;
+    if (extensionMatch) {
+      owner = extensionMetadata.get(extensionMatch[1]);
+      if (!owner) {
+        owner = readExtensionMetadata(root, extensionMatch[1]);
+        extensionMetadata.set(extensionMatch[1], owner);
+      }
+    }
     const implementationMatch = sourceText.match(/\b(?:class|struct)\s+([A-Za-z0-9_]+)\s*:\s*IUnityCliTool\s*</);
     if (!implementationMatch) throw new Error(`${source}: IUnityCliTool implementation type is missing`);
     const namespaceMatch = sourceText.match(/\bnamespace\s+([A-Za-z0-9_.]+)\s*\{/);
@@ -45,12 +54,11 @@ function collectCSharpTools(root) {
     const namespaceName = namespaceMatch?.[1] ?? "";
     const containingType = containingTypeMatch?.[1];
     const implementationType = `${namespaceName ? `${namespaceName}.` : ""}${containingType ? `${containingType}+` : ""}${implementationMatch[1]}`;
-    const assemblyName = extensionMatch ? readExtensionAssemblyName(root, extensionMatch[1]) : "UnityCli.Editor";
     tools.push({
       name,
-      descriptorOwner: extensionMatch ? `extension:${extensionMatch[1]}` : "built-in",
+      descriptorOwner: owner?.descriptorOwner ?? "built-in",
       source,
-      assemblyName,
+      assemblyName: owner?.assemblyName ?? "UnityCli.Editor",
       implementationType,
       handler: "bridge",
       asyncSignals: collectAsyncSignals(sourceText, "csharp"),
@@ -59,16 +67,34 @@ function collectCSharpTools(root) {
   return tools;
 }
 
-/** 读取 extension asmdef 的编译 assembly identity。 */
-function readExtensionAssemblyName(root, extensionId) {
-  const files = filesUnder(root, `extensions/${extensionId}/unitypkg`, ".asmdef");
-  if (files.length !== 1) throw new Error(`extensions/${extensionId}: expected exactly one .asmdef, found ${files.length}`);
-  const manifest = JSON.parse(fs.readFileSync(files[0], "utf8"));
-  if (typeof manifest.name !== "string" || manifest.name.length === 0) throw new Error(`${relativeSource(root, files[0])}: asmdef name is required`);
-  return manifest.name;
+/** marker 是 Extension id 与 asmdef identity 的唯一生成 owner。 */
+function readExtensionMetadata(root, extensionId) {
+  const manifestPath = extensionManifestPath(root, extensionId);
+  if (!fs.existsSync(manifestPath)) throw new Error(`extensions/${extensionId}: extension.json is required`);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  if (manifest.id !== extensionId) throw new Error(`extensions/${extensionId}: manifest id must exactly match its directory`);
+
+  const asmdefFiles = filesUnder(root, `extensions/${extensionId}/unitypkg`, ".asmdef");
+  if (asmdefFiles.length !== 1) throw new Error(`extensions/${extensionId}: expected exactly one .asmdef, found ${asmdefFiles.length}`);
+  const asmdef = JSON.parse(fs.readFileSync(asmdefFiles[0], "utf8"));
+  if (typeof asmdef.name !== "string" || asmdef.name.length === 0) throw new Error(`${relativeSource(root, asmdefFiles[0])}: asmdef name is required`);
+
+  const markerPattern = /\[assembly:\s*UnityCli\.UnityCliExtensionAssembly\("([^"]+)"\)\s*\]/g;
+  const markers = [];
+  for (const file of filesUnder(root, `extensions/${extensionId}/unitypkg`, ".cs")) {
+    const sourceText = fs.readFileSync(file, "utf8");
+    for (const match of sourceText.matchAll(markerPattern)) markers.push({ file, extensionId: match[1] });
+  }
+  const expectedMarker = path.join(root, "extensions", extensionId, "unitypkg", "Editor", "UnityCliExtensionAssembly.cs");
+  if (markers.length !== 1 || path.resolve(markers[0].file) !== path.resolve(expectedMarker)) {
+    throw new Error(`extensions/${extensionId}: expected exactly one UnityCliExtensionAssembly marker at ${relativeSource(root, expectedMarker)}`);
+  }
+  if (markers[0].extensionId !== extensionId) throw new Error(`extensions/${extensionId}: assembly marker id must exactly match manifest id`);
+
+  return { extensionId, descriptorOwner: `extension:${extensionId}`, assemblyName: asmdef.name };
 }
 
-/** Extension manifest、asmdef 与源码 Tool/type 集合必须完全一致。 */
+/** Extension manifest、marker、asmdef 与源码 Tool identity 全集必须完全一致。 */
 function assertExtensionInventory(root, csharpTools) {
   const extensionsDirectory = path.join(root, "extensions");
   if (!fs.existsSync(extensionsDirectory)) return;
@@ -76,15 +102,14 @@ function assertExtensionInventory(root, csharpTools) {
     const manifestPath = extensionManifestPath(root, entry.name);
     if (!fs.existsSync(manifestPath)) continue;
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const owner = readExtensionMetadata(root, entry.name);
     const expectedTools = (manifest.contributions?.tools ?? []).map((item) => item.name).sort();
     const expectedTypes = (manifest.contributions?.csharpEntries ?? []).map((item) => item.type).sort();
-    const actual = csharpTools.filter((tool) => tool.descriptorOwner === `extension:${manifest.id}`);
+    const actual = csharpTools.filter((tool) => tool.descriptorOwner === owner.descriptorOwner);
     compareExactSet(`extensions/${entry.name} Tool inventory`, expectedTools, actual.map((tool) => tool.name).sort());
     compareExactSet(`extensions/${entry.name} implementation inventory`, expectedTypes, actual.map((tool) => tool.implementationType).sort());
-    const assemblyNames = [...new Set(actual.map((tool) => tool.assemblyName))];
-    if (actual.length > 0 && (assemblyNames.length !== 1 || assemblyNames[0] !== readExtensionAssemblyName(root, entry.name))) {
-      throw new Error(`extensions/${entry.name}: exact asmdef identity does not match Tool inventory`);
-    }
+    const unexpectedIdentity = actual.find((tool) => tool.descriptorOwner !== owner.descriptorOwner || tool.assemblyName !== owner.assemblyName);
+    if (unexpectedIdentity) throw new Error(`extensions/${entry.name}: Tool owner or exact asmdef identity does not match its assembly marker`);
   }
 }
 

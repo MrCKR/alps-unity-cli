@@ -107,8 +107,9 @@ export function readEditorCatalogDescriptor(
   requestId: string,
   name: string,
   absoluteDeadlineMs?: number,
+  fallbackName?: string,
 ): Promise<CatalogDescribeResult> {
-  return readCatalogDescriptor("editor", flags, runtime, requestId, name, absoluteDeadlineMs);
+  return readCatalogDescriptor("editor", flags, runtime, requestId, name, absoluteDeadlineMs, fallbackName);
 }
 
 export function readRuntimeCatalogDescriptor(
@@ -117,8 +118,9 @@ export function readRuntimeCatalogDescriptor(
   requestId: string,
   name: string,
   absoluteDeadlineMs?: number,
+  fallbackName?: string,
 ): Promise<CatalogDescribeResult> {
-  return readCatalogDescriptor("runtime", flags, runtime, requestId, name, absoluteDeadlineMs);
+  return readCatalogDescriptor("runtime", flags, runtime, requestId, name, absoluteDeadlineMs, fallbackName);
 }
 
 async function readCatalogSummary(
@@ -177,20 +179,31 @@ async function readCatalogDescriptor(
   requestId: string,
   name: string,
   absoluteDeadlineMs?: number,
+  fallbackName?: string,
 ): Promise<CatalogDescribeResult> {
   if (!name || name.length > 256) return schemaFailure(requestId, "Catalog describe name is required and must not exceed 256 characters.");
+  if (fallbackName !== undefined && (!fallbackName || fallbackName.length > 256 || fallbackName === name)) {
+    return schemaFailure(requestId, "Catalog describe fallbackName must be distinct and must not exceed 256 characters.");
+  }
   const fixture = target === "runtime" ? runtime.runtimeTools ?? runtime.projectTools : runtime.projectTools;
   if (fixture) {
     const tools = fixtureTools(target, fixture);
     const integrity = fixtureCatalogIntegrity(requestId, tools);
     if (integrity) return integrity;
-    return { ok: true, generation: fixtureGeneration(target, tools), tool: tools.find((tool) => tool.name === name) };
+    return {
+      ok: true,
+      generation: fixtureGeneration(target, tools),
+      tool: tools.find((tool) => tool.name === name) ?? (fallbackName ? tools.find((tool) => tool.name === fallbackName) : undefined),
+    };
   }
 
   const command = `${target === "editor" ? "project" : "runtime"}-tool.describe`;
-  const result = await executeBridgePayload(requestId, command, { name }, flags, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs });
+  const result = await executeBridgePayload(requestId, command, {
+    name,
+    ...(fallbackName ? { fallbackName } : {}),
+  }, flags, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs });
   if (!result.ok) return result as CliResult & { ok: false };
-  return parseDescriptorResponse(result.data, requestId, command, name, target);
+  return parseDescriptorResponse(result.data, requestId, command, name, target, fallbackName);
 }
 
 /** 测试注入仍执行真实筛选、generation 与 ownership 规则。 */
@@ -350,6 +363,7 @@ function parseDescriptorResponse(
   command: string,
   expectedName: string,
   target: "editor" | "runtime",
+  fallbackName?: string,
 ): CatalogDescribeResult {
   if (jsonByteLength(data) > MAX_CATALOG_DESCRIPTOR_BYTES) return unhealthySummary(requestId, `${command} exceeded the bounded exact descriptor transport size.`);
   const record = objectRecord(data);
@@ -360,7 +374,8 @@ function parseDescriptorResponse(
   }
   if (!record.found) return { ok: true, generation };
   const tool = projectDescriptorToToolMetadata(record.descriptor);
-  if (!tool || tool.name !== expectedName || target === "runtime" && tool.target !== "runtime" && tool.target !== "both") {
+  if (!tool || tool.name !== expectedName && tool.name !== fallbackName
+      || target === "runtime" && tool.target !== "runtime" && tool.target !== "both") {
     return unhealthySummary(requestId, `${command} returned a descriptor outside the exact requested identity.`);
   }
   return { ok: true, generation, tool };

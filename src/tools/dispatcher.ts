@@ -157,13 +157,14 @@ export async function resolveCatalogToolForInvocation(
   runtime: ToolsRuntime,
   requestId: string,
   context: ToolInvocationContext,
+  fallbackName?: string,
 ): Promise<({ ok: true; tool?: ToolMetadata; context: ToolInvocationContext }) | (CliResult & { ok: false })> {
   if (runtime.projectTools) {
-    const resolved = await resolveCatalogTool(name, flags, runtime, requestId, context.admissionAbsoluteDeadlineMs);
+    const resolved = await resolveCatalogTool(name, flags, runtime, requestId, context.admissionAbsoluteDeadlineMs, fallbackName);
     return resolved.ok ? { ...resolved, context } : resolved;
   }
   const acquired = await acquireCatalogAdmissions(
-    `catalog.resolve:${name}`, { name }, flags, runtime, requestId, context.timeoutMs,
+    `catalog.resolve:${name}`, { name, ...(fallbackName ? { fallbackName } : {}) }, flags, runtime, requestId, context.timeoutMs,
     context.admissionAbsoluteDeadlineMs, "catalog-resolution-v1",
   );
   if ("result" in acquired) return acquired.result as CliResult & { ok: false };
@@ -176,7 +177,7 @@ export async function resolveCatalogToolForInvocation(
   try {
     const resolved = await resolveCatalogTool(name, flags, {
       ...runtime, rootAdmission: primary, rootAdmissions: acquired.admissions,
-    }, requestId, context.admissionAbsoluteDeadlineMs);
+    }, requestId, context.admissionAbsoluteDeadlineMs, fallbackName);
     return resolved.ok
       ? { ...resolved, context: { ...context, discoveryProvenances: provenances } }
       : resolved;

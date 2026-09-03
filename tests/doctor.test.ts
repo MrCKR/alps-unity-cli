@@ -65,9 +65,10 @@ test("doctor warns about invalid registry records and continues with valid insta
   const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, {
     dataDir: fixture.dataDir,
     selectInstance: async () => ({ instance: (await readInstances(fixture.dataDir))[0]!, matchedBy: "instanceId" }),
-    bridgeExecute: async (payload: BridgeRequest) => payload.command === "project-tool.list"
-      ? { ok: true as const, requestId: payload.requestId, data: { tools: [] } }
-      : { ok: true as const, requestId: payload.requestId, data: { ready: true, toolCount: 0 } },
+    bridgeExecute: async (payload: BridgeRequest) => {
+      if (payload.command !== "project-tool.health") throw new Error(`Unexpected doctor Bridge command: ${payload.command}`);
+      return { ok: true as const, requestId: payload.requestId, data: { ready: true, toolCount: 0 } };
+    },
   } as never, "req_doctor_invalid_registry");
 
   assert.ok(result.ok, JSON.stringify(result));
@@ -90,8 +91,7 @@ test("doctor separates strict transport connectivity from read-only catalog heal
       await new Promise((resolve) => setTimeout(resolve, 1_500));
       return { ok: true as const, requestId: payload.requestId, data: { ready: true, toolCount: 327 } };
     }
-    if (payload.command === "project-tool.list") return { ok: true as const, requestId: payload.requestId, data: { tools: [] } };
-    return { ok: true as const, requestId: payload.requestId, data: {} };
+    throw new Error(`Unexpected doctor Bridge command: ${payload.command}`);
   };
   const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, {
     dataDir: fixture.dataDir,
@@ -104,20 +104,20 @@ test("doctor separates strict transport connectivity from read-only catalog heal
   assert.equal(data.checks.find((check) => check.name === "bridge_connectivity")?.status, "pass");
   assert.equal(data.checks.find((check) => check.name === "tool_catalog")?.status, "pass");
   assert.equal(data.checks.some((check) => check.name.includes("context")), false);
-  assert.ok(requests.some((request) => request.command === "project-tool.health"));
-  assert.equal(requests.some((request) => request.command === "project-tool.run"), false);
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.health"]);
   assert.doesNotMatch(JSON.stringify(result), /endpoint|listenerId|listenerGeneration|actualPort|logPath|warnCount|fingerprintMode/);
 });
 
-test("doctor keeps transport pass while catalog and discovery fail unhealthy", async (t) => {
+test("doctor keeps transport pass while the read-only catalog health is unhealthy", async (t) => {
   const fixture = await doctorFixture();
   t.after(() => fixture.health.close());
   const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, {
     dataDir: fixture.dataDir,
     selectInstance: async () => ({ instance: (await readInstances(fixture.dataDir))[0]!, matchedBy: "instanceId" }),
-    bridgeExecute: async (payload: BridgeRequest) => payload.command === "project-tool.health"
-      ? { ok: true as const, requestId: payload.requestId, data: { ready: false, toolCount: 0, failure: "bounded owner mismatch", nextActions: ["Reload the Unity domain."] } }
-      : { ok: false as const, requestId: payload.requestId, error: { code: "E_TOOL_REGISTRY_UNHEALTHY", message: "catalog unavailable", nextActions: ["Reload the Unity domain."], transient: true, retryAfterMs: 1000 } },
+    bridgeExecute: async (payload: BridgeRequest) => {
+      if (payload.command !== "project-tool.health") throw new Error(`Unexpected doctor Bridge command: ${payload.command}`);
+      return { ok: true as const, requestId: payload.requestId, data: { ready: false, toolCount: 0, failure: "bounded owner mismatch", nextActions: ["Reload the Unity domain."] } };
+    },
   } as never, "req_doctor_unhealthy_catalog");
 
   assert.ok(result.ok, JSON.stringify(result));
@@ -125,7 +125,6 @@ test("doctor keeps transport pass while catalog and discovery fail unhealthy", a
   assert.equal(checks.find((check) => check.name === "bridge_connectivity")?.status, "pass");
   assert.equal(checks.find((check) => check.name === "tool_catalog")?.status, "fail");
   assert.equal(checks.find((check) => check.name === "tool_catalog")?.details?.code, "E_TOOL_REGISTRY_UNHEALTHY");
-  assert.equal(checks.find((check) => check.name === "unified_tool_discovery")?.status, "warn");
   assert.match(checks.find((check) => check.name === "tool_catalog")?.message ?? "", /bounded owner mismatch/);
 });
 

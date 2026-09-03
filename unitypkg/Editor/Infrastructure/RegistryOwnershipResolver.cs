@@ -46,18 +46,46 @@ namespace UnityCli
             if (assemblies.Count == 0 || !assemblies.Contains(bridgeAssembly))
                 throw new InvalidOperationException("Tool provider metadata does not contain the UnityCLI Editor assembly.");
 
+            var expectedExtensions = InventoryEntries()
+                .Where(entry => entry.DescriptorOwner.StartsWith("extension:", StringComparison.Ordinal))
+                .GroupBy(entry => entry.DescriptorOwner.Substring("extension:".Length), StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(entry => entry.AssemblyName).Distinct(StringComparer.Ordinal).ToArray(),
+                    StringComparer.Ordinal);
+            foreach (var expected in expectedExtensions)
+            {
+                if (string.IsNullOrWhiteSpace(expected.Key) || expected.Value.Length != 1 || string.IsNullOrWhiteSpace(expected.Value[0]))
+                    throw new InvalidOperationException("Generated Extension inventory must map each extension id to one exact assembly identity: " + expected.Key + ".");
+            }
+
             var loadedExtensions = new Dictionary<Assembly, string>();
+            var loadedExtensionIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var assembly in assemblies)
             {
-                var extensionIds = InventoryEntries()
-                    .Where(entry => entry.DescriptorOwner.StartsWith("extension:", StringComparison.Ordinal)
-                        && string.Equals(entry.AssemblyName, assembly.GetName().Name, StringComparison.Ordinal))
-                    .Select(entry => entry.DescriptorOwner.Substring("extension:".Length))
-                    .Distinct(StringComparer.Ordinal)
+                var markers = assembly.GetCustomAttributes(typeof(UnityCliExtensionAssemblyAttribute), false)
+                    .Cast<UnityCliExtensionAssemblyAttribute>()
                     .ToArray();
-                if (extensionIds.Length > 1)
-                    throw new InvalidOperationException("Generated Extension inventory maps one compiled assembly to multiple extension ids: " + assembly.GetName().Name + ".");
-                if (extensionIds.Length == 1) loadedExtensions.Add(assembly, extensionIds[0]);
+                if (markers.Length > 1)
+                    throw new InvalidOperationException("Compiled assembly declares multiple UnityCLI Extension owners: " + assembly.GetName().Name + ".");
+                if (markers.Length == 0)
+                {
+                    if (expectedExtensions.Any(pair => string.Equals(pair.Value[0], assembly.GetName().Name, StringComparison.Ordinal)))
+                        throw new InvalidOperationException("Generated Extension assembly is loaded without its exact UnityCliExtensionAssembly marker: " + assembly.GetName().Name + ".");
+                    continue;
+                }
+                if (assembly == bridgeAssembly)
+                    throw new InvalidOperationException("The UnityCLI Editor assembly cannot declare an Extension owner.");
+
+                var extensionId = markers[0].ExtensionId;
+                string[] expectedAssemblyNames;
+                if (string.IsNullOrWhiteSpace(extensionId) || !expectedExtensions.TryGetValue(extensionId, out expectedAssemblyNames))
+                    throw new InvalidOperationException("Compiled assembly declares an unknown UnityCLI Extension owner: " + extensionId + ".");
+                if (!string.Equals(expectedAssemblyNames[0], assembly.GetName().Name, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Extension assembly marker does not match generated exact assembly identity: " + extensionId + ".");
+                if (!loadedExtensionIds.Add(extensionId))
+                    throw new InvalidOperationException("Multiple compiled assemblies declare the same UnityCLI Extension owner: " + extensionId + ".");
+                loadedExtensions.Add(assembly, extensionId);
             }
             return new RegistryOwnershipResolver(assemblies, loadedExtensions);
         }

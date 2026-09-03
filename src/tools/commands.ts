@@ -27,15 +27,15 @@ export async function handleToolsCommand(
       const group = positional[1];
       if (!group) return failure(requestId, "TOOLS_GROUP_LIST_NAME_REQUIRED", "Pass a group name: unitycli tools group list <group>.", ["Run unitycli tools group to see all tool groups."]);
       const page = pageSeed(flags);
-      return dispatchCatalogProjection("tools.group-list", { group, ...page }, flags, runtime, requestId, (rootRuntime) =>
-        projectCatalogPage(`tools.group-list:${group}`, page, flags, rootRuntime, requestId, {
+      return dispatchCatalogProjection("catalog.group-list", { group, ...page }, flags, runtime, requestId, (rootRuntime) =>
+        projectCatalogPage(`catalog.group-list:${group}`, page, flags, rootRuntime, requestId, {
           group,
           includeExtensionAvailability: true,
           extraData: { summary: groupSummary(group) },
           projectItem: (tool) => ({ name: tool.name, summary: tool.summary, ...(tool.available === false ? { available: false } : {}) }),
         }, catalogDeadline(rootRuntime)));
     }
-    return dispatchCatalogProjection("tools.group", {}, flags, runtime, requestId, (rootRuntime) =>
+    return dispatchCatalogProjection("catalog.groups", {}, flags, runtime, requestId, (rootRuntime) =>
       projectCatalogGroups(flags, rootRuntime, requestId, catalogDeadline(rootRuntime)));
   }
   if (command === "search") {
@@ -47,8 +47,8 @@ export async function handleToolsCommand(
     ], { path: "$.keyword", expected: "1..16 keywords, each 1..128 characters", actual: keyword });
     const normalizedKeyword = tokens.join("|");
     const page = pageSeed(flags);
-    return dispatchCatalogProjection("tools.search", { keyword: normalizedKeyword, ...page }, flags, runtime, requestId, (rootRuntime) =>
-      projectCatalogPage(`tools.search:${normalizedKeyword.toLowerCase()}`, page, flags, rootRuntime, requestId, {
+    return dispatchCatalogProjection("catalog.search", { keyword: normalizedKeyword, ...page }, flags, runtime, requestId, (rootRuntime) =>
+      projectCatalogPage(`catalog.search:${normalizedKeyword.toLowerCase()}`, page, flags, rootRuntime, requestId, {
         keyword: normalizedKeyword,
         projectItem: (tool) => ({ name: tool.name, summary: tool.summary, group: tool.group }),
       }, catalogDeadline(rootRuntime)));
@@ -57,7 +57,7 @@ export async function handleToolsCommand(
     const name = positional[0] ?? getString(flags, "name") ?? getString(flags, "tool") ?? "";
     if (!name) return failure(requestId, "TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unitycli tools describe <tool>.", ["Run unitycli tools group to see tool groups."]);
     if (resolveCatalogIndependentOperabilityTool(name)) return projectCatalogDescribe(name, flags, runtime, requestId);
-    return dispatchCatalogProjection("tools.describe", { name }, flags, runtime, requestId, (rootRuntime) =>
+    return dispatchCatalogProjection("catalog.describe", { name }, flags, runtime, requestId, (rootRuntime) =>
       projectCatalogDescribe(name, flags, rootRuntime, requestId, catalogDeadline(rootRuntime)));
   }
   return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools group, tools group list <group>, tools describe <tool>, tools run <tool>, or tools search <k1|k2|...>.", [

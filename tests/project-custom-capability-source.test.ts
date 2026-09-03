@@ -55,7 +55,7 @@ test("catalog construction publishes one executable slot with an immutable descr
     readFile(ownershipPath, "utf8"),
   ]);
   assert.match(registry, /var builder = new UnityCliToolCatalogBuilder\(\)/);
-  assert.match(registry, /var candidate = builder\.Publish\(elapsedMilliseconds\)[\s\S]*Volatile\.Write\(ref publishedProjectToolCatalog, candidate\)/);
+  assert.match(registry, /var candidate = builder\.Publish\(elapsedMilliseconds, WriteProjectToolCatalogInitializedLog\)[\s\S]*Volatile\.Write\(ref publishedProjectToolCatalog, candidate\)/);
   assert.match(registry, /ReadPublishedProjectToolCatalogSnapshot\(\)[\s\S]*\.Snapshot/);
   assert.match(registered, /IUnityCliToolCatalogSnapshotReader[\s\S]*UnityCliToolCatalogSnapshot Read\(\)/);
   assert.match(registered, /ReadOnlyCollection<RegisteredToolDescriptor>/);
@@ -64,6 +64,11 @@ test("catalog construction publishes one executable slot with an immutable descr
   assert.doesNotMatch(registered.slice(registered.indexOf("internal sealed class RegisteredTool"), registered.indexOf("internal sealed class RegisteredToolDescriptor")), /\{ get; set; \}/);
   assert.match(registered, /faulted = true[\s\S]*cannot publish an incomplete or faulted table/);
   assert.match(registered, /providerMetadata\.Count != expectedProviderAssemblyCount/);
+  assert.match(registered, /operations\.Record\(UnityCliToolCatalogOperationKind\.DiscoveryPass\)/);
+  assert.match(registered, /operations\.Record\(UnityCliToolCatalogOperationKind\.ProviderMetadataRead\)/);
+  assert.match(registered, /operations\.Record\(UnityCliToolCatalogOperationKind\.AggregateSuccessLog\)/);
+  assert.equal((registered.match(/operations\.Record\(/g) ?? []).length, 3);
+  assert.match(registered, /writeAggregateSuccessLog\(snapshot\)[\s\S]*published = true/);
   assert.match(ownership, /TryGetInventory\(toolName, out expected\)/);
   assert.match(ownership, /expected\.ImplementationType, implementationType\.FullName/);
   assert.match(ownership, /expected\/actual set mismatch/);
@@ -86,18 +91,27 @@ test("later descriptor reads and executable runs remain on the same publication"
 });
 
 test("unified generation emits exact C# owner inventory before runtime publication", async () => {
-  const [generator, inventory, ownership] = await Promise.all([
+  const extensionIds = ["cinemachine", "hdrp", "probuilder", "urp", "vfx-graph"];
+  const [generator, inventory, ownership, ...markers] = await Promise.all([
     readFile("scripts/gen-tool-completion-registry.mjs", "utf8"),
     readFile("scripts/lib/public-tool-inventory.mjs", "utf8"),
     readFile(ownershipPath, "utf8"),
+    ...extensionIds.map((id) => readFile(`extensions/${id}/unitypkg/Editor/UnityCliExtensionAssembly.cs`, "utf8")),
   ]);
+  assert.match(inventory, /UnityCliExtensionAssembly/);
+  assert.match(inventory, /descriptorOwner/);
   assert.match(inventory, /assemblyName/);
   assert.match(inventory, /implementationType/);
   assert.match(generator, /UnityCliToolInventoryEntry/);
   assert.match(generator, /TryGetInventory/);
   assert.match(generator, /InventoryEntries/);
+  assert.match(ownership, /GetCustomAttributes\(typeof\(UnityCliExtensionAssemblyAttribute\)/);
   assert.match(ownership, /expected\/actual set mismatch/);
+  assert.match(ownership, /loaded without its exact assembly marker/);
   assert.doesNotMatch(ownership, /StartsWith\(ExtensionAssemblyPrefix/);
+  for (let index = 0; index < extensionIds.length; index += 1) {
+    assert.match(markers[index], new RegExp(`\\[assembly:\\s*UnityCli\\.UnityCliExtensionAssembly\\("${extensionIds[index]}"\\)\\s*\\]`));
+  }
 });
 
 test("typed custom Tools retain async schema, completion, availability, and execution contracts", async () => {

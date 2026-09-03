@@ -43,7 +43,7 @@ export interface RootAdmissionRequest {
 }
 
 /** 准入指纹绑定业务identity但排除尚未创建的执行deadline。 */
-export function rootAdmissionFingerprint(request: Pick<RootAdmissionRequest, "requestId" | "command" | "input" | "dryRun" | "target" | "completionContractIdentity">, instanceId: string): string {
+export function rootAdmissionFingerprint(request: Pick<RootAdmissionRequest, "requestId" | "command" | "input" | "dryRun" | "target" | "completionContractIdentity" | "captureDiscoveryProvenance" | "expectedDiscoveryProvenance">, instanceId: string): string {
   return createHash("sha256").update(canonicalJson({
     requestId: request.requestId,
     command: request.command,

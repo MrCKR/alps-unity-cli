@@ -44,11 +44,8 @@ unitycli tools run my.custom-tool --input '{}'
 ### 诊断
 
 ```powershell
-# 检查 CLI 控制面、Bridge 连接和项目工具完整性
+# 分别检查 CLI 控制面、Bridge transport 与已发布项目 Tool catalog 健康状态
 unitycli doctor
-
-# 诊断预检（Unity Bridge 工具）
-unitycli tools run diagnose.preflight
 ```
 
 ## 扩展包命令

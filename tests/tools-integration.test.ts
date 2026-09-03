@@ -243,6 +243,21 @@ test("private summary and exact protocols fail closed on extra payload and wrong
   assert.equal(wrongExact.ok, false);
   if (!wrongExact.ok) assert.equal(wrongExact.error.code, "E_TOOL_REGISTRY_UNHEALTHY");
 
+  let fallbackCalls = 0;
+  const fallbackExact = await readEditorCatalogDescriptor({}, {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      fallbackCalls += 1;
+      assert.deepEqual(payload.input, { name: "scene.active", fallbackName: live.name });
+      return {
+        ok: true,
+        requestId: payload.requestId,
+        data: { catalogGeneration: "g".repeat(64), found: true, descriptor: bridgeDescriptor(live) },
+      };
+    },
+  }, "req_fallback_exact", "scene.active", undefined, live.name);
+  assert.equal(fallbackExact.ok, true, JSON.stringify(fallbackExact));
+  assert.equal(fallbackCalls, 1);
+
   const oversizedExact = await readEditorCatalogDescriptor({}, {
     bridgeExecute: async (payload: BridgeRequest) => ({
       ok: true,

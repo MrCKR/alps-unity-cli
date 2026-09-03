@@ -84,26 +84,31 @@ export async function resolveCatalogTool(
   runtime: ToolCatalogRuntime,
   requestId: string,
   absoluteDeadlineMs?: number,
+  fallbackName?: string,
 ): Promise<{ ok: true; tool?: ToolMetadata } | (CliResult & { ok: false })> {
   const operabilityTool = resolveCatalogIndependentOperabilityTool(name);
   if (operabilityTool) return { ok: true, tool: operabilityTool };
 
   const localTool = findToolByName(name);
+  const localFallbackTool = fallbackName ? findToolByName(fallbackName) : undefined;
   const editorAdmission = runtime.rootAdmissions?.editor ?? (runtime.rootAdmission?.target === "editor" ? runtime.rootAdmission : undefined);
   const runtimeAdmission = runtime.rootAdmissions?.runtime ?? (runtime.rootAdmission?.target === "runtime" ? runtime.rootAdmission : undefined);
   const editorRuntime = { ...runtime, rootAdmission: editorAdmission };
   const runtimeTargetRuntime = { ...runtime, rootAdmission: runtimeAdmission };
-  const editor = await readEditorCatalogDescriptor(flags, editorRuntime, editorAdmission?.requestId ?? `${requestId}_editor_descriptor`, name, absoluteDeadlineMs);
+  const editor = await readEditorCatalogDescriptor(flags, editorRuntime, editorAdmission?.requestId ?? `${requestId}_editor_descriptor`, name, absoluteDeadlineMs, fallbackName);
   if (!editor.ok && editor.error.code !== "E_INSTANCE_NOT_RUNNING") return editor;
-  const runtimeDescriptor = await readRuntimeCatalogDescriptor(flags, runtimeTargetRuntime, runtimeAdmission?.requestId ?? `${requestId}_runtime_descriptor`, name, absoluteDeadlineMs);
+  const runtimeDescriptor = await readRuntimeCatalogDescriptor(flags, runtimeTargetRuntime, runtimeAdmission?.requestId ?? `${requestId}_runtime_descriptor`, name, absoluteDeadlineMs, fallbackName);
   if (!runtimeDescriptor.ok && runtimeDescriptor.error.code !== "E_RUNTIME_NOT_RUNNING") return runtimeDescriptor;
   if (!editor.ok && !runtimeDescriptor.ok) return editor;
 
+  const candidates = [localTool, localFallbackTool, editor.ok ? editor.tool : undefined, runtimeDescriptor.ok ? runtimeDescriptor.tool : undefined];
+  const selectedName = candidates.some((tool) => tool?.name === name) ? name : fallbackName;
+  const selected = (tool: ToolMetadata | undefined): ToolMetadata[] => tool && tool.name === selectedName ? [tool] : [];
   const merged = mergeLiveToolCatalog(
     requestId,
-    localTool ? [localTool] : [],
-    editor.ok && editor.tool ? [editor.tool] : [],
-    runtimeDescriptor.ok && runtimeDescriptor.tool ? [runtimeDescriptor.tool] : [],
+    selected(localTool).concat(selected(localFallbackTool)),
+    selected(editor.ok ? editor.tool : undefined),
+    selected(runtimeDescriptor.ok ? runtimeDescriptor.tool : undefined),
   );
   return merged.ok ? { ok: true, tool: merged.tools[0] } : merged;
 }
