@@ -2492,6 +2492,33 @@
       ]
     },
     {
+      "toolName": "editor.console",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/editor/console.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.console 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "editor.console 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "editor.dialog.click",
       "descriptorOwner": "ts-local",
       "source": "src/tools/editor/dialog/click.ts",
@@ -3118,6 +3145,33 @@
       ]
     },
     {
+      "toolName": "go.inspect",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/go/inspect.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "go.inspect 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "go.inspect 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "go.look-at",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/go/look-at.cs",
@@ -3443,6 +3497,33 @@
       ]
     },
     {
+      "toolName": "graphics.pipeline-quality",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/graphics/pipeline-quality.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "graphics.pipeline-quality 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "graphics.pipeline-quality 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "graphics.pipeline-settings",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/graphics/pipeline-settings.cs",
@@ -3455,6 +3536,33 @@
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
         "description": "graphics.pipeline-settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "graphics.probe-positions",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/graphics/probe-positions.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "graphics.probe-positions 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "graphics.probe-positions 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3536,6 +3644,33 @@
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
         "description": "graphics.scene-debug 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "graphics.settings",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/graphics/settings.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "graphics.settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "graphics.settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3767,6 +3902,60 @@
       ]
     },
     {
+      "toolName": "graphics.stats-counters",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/graphics/stats-counters.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "graphics.stats-counters 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "graphics.stats-counters 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "graphics.stats-memory",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/graphics/stats-memory.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "graphics.stats-memory 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "graphics.stats-memory 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "graphics.volume",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/graphics/volume.cs",
@@ -3977,6 +4166,33 @@
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
         "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "instances.list",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/instances/list.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "instances.list 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "instances.list 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
       },
       "asyncSignals": [
         "value-task"
@@ -4559,6 +4775,34 @@
       ]
     },
     {
+      "toolName": "package.info",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/info.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "package.info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "async",
+        "await"
+      ]
+    },
+    {
       "toolName": "package.install",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/install.ts",
@@ -4588,6 +4832,33 @@
       ]
     },
     {
+      "toolName": "package.list",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/list.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "package.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "async"
+      ]
+    },
+    {
       "toolName": "package.registry.clear",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/registry-clear.ts",
@@ -4600,6 +4871,34 @@
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
         "description": "package.registry.clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "async",
+        "await"
+      ]
+    },
+    {
+      "toolName": "package.registry.get",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/registry-get.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.registry.get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "package.registry.get 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4758,6 +5057,34 @@
       ]
     },
     {
+      "toolName": "package.scoped-registry.list",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/scoped-registry-list.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.scoped-registry.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "package.scoped-registry.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "async",
+        "await"
+      ]
+    },
+    {
       "toolName": "package.scoped-registry.remove",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/scoped-registry-remove.ts",
@@ -4770,6 +5097,63 @@
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
         "description": "package.scoped-registry.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "async",
+        "await"
+      ]
+    },
+    {
+      "toolName": "package.search",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/search.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.search 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "package.search 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "promise",
+        "async",
+        "await"
+      ]
+    },
+    {
+      "toolName": "package.status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.status 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "package.status 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -5014,6 +5398,33 @@
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
         "description": "physics.raycast 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "physics.raycast-all",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/physics/raycast-all.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "physics.raycast-all 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "physics.raycast-all 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7955,6 +8366,33 @@
       ]
     },
     {
+      "toolName": "scene.build-settings",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/scene/build-settings.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "scene.build-settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "scene.build-settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "scene.create",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/scene/create.cs",
@@ -7967,6 +8405,33 @@
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
         "description": "scene.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "scene.data",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/scene/data.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "scene.data 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "scene.data 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -8847,6 +9312,33 @@
         "promise",
         "async",
         "await"
+      ]
+    },
+    {
+      "toolName": "tests.list",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/tests/list.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "tests.list 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "tests.list 的 typed result 与 output schema validation 共同证明读取终态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "只读 Tool 不跨重载恢复；调用失败后由调用方在 fresh session 重新读取。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "读取超时返回 E_EXECUTION_TIMEOUT；未发生业务 effect，调用方可在新请求中重新读取。"
+      },
+      "asyncSignals": [
+        "value-task"
       ]
     },
     {

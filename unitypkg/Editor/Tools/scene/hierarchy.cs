@@ -71,7 +71,7 @@ namespace UnityCli
         {
             Name = "scene.hierarchy",
             Summary = "Read a lightweight, paged hierarchy of active scene GameObjects.",
-            Description = "Read a lightweight, paged hierarchy in Edit or Play mode. Use parent for one subtree, clamp maxDepth to 0..16, filter by query/name/component, and request component previews only when needed. pageSize is clamped to 1..500 with numeric nextCursor. Read one selected object with scene.gameobject; use object.get-data or component.get for deep fields.",
+            Description = "Read a lightweight, paged hierarchy in Edit or Play mode. Use parent for one subtree, maxDepth to limit recursion, query/name/component filters to narrow results, and includeComponents only when component previews are needed. Read one selected object with scene.gameobject; use object.get-data or component.get for deep fields.",
             Group = "scene",
             DestructiveHint = false,
             Target = "editor",
@@ -80,7 +80,7 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "List a bounded hierarchy page", Input = new Request { PageSize = 25, MaxDepth = 1 } },
+                new ToolExample { Description = "List one hierarchy page", Input = new Request { PageSize = 25, MaxDepth = 1 } },
                 new ToolExample { Description = "Find camera nodes by component type", Input = new Request { ComponentType = "Camera", PageSize = 10 } }
             }
         };

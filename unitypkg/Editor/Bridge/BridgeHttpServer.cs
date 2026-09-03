@@ -442,6 +442,7 @@ namespace UnityCli
                     || request.Command == "runtime-tool.list"
                     || request.Command == "runtime-tool.run"
                     || request.Command == "project-tool.list"
+                    || request.Command == "diagnose.preflight"
                     || request.Command == "extension.status";
 
                 WriteLog("http_play_mode_guard requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlayingOrWillChange=" + Bool(cachedIsPlayingOrWillChangePlaymode) + " cachedIsPlaying=" + Bool(cachedIsPlaying) + " transitionAllowed=" + Bool(allowedDuringPlayModeTransition));

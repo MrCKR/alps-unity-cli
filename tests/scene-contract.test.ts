@@ -31,8 +31,8 @@ test("scene live descriptors expose expected read/write semantics", async () => 
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "scene.active", summary: "Read active scene.", description: "Read active scene.", group: "scene", outputSchema: { type: "object", properties: { scene: { type: "object" } } } }),
     makeLiveTool({ name: "scene.list-opened", summary: "List opened scenes.", description: "List opened scenes.", group: "scene", outputSchema: { type: "object", properties: { scenes: { type: "array" } } } }),
-    makeLiveTool({ name: "scene.gameobject", summary: "Read one GameObject summary.", description: "Read one selected GameObject after bounded hierarchy discovery.", group: "scene", outputSchema: { type: "object", properties: { gameObject: { type: "object" } } } }),
-    makeLiveTool({ name: "scene.hierarchy", summary: "Read a bounded hierarchy page.", description: "Read a bounded hierarchy page with numeric continuation.", group: "scene", outputSchema: { type: "object", properties: { items: { type: "array" } } } }),
+    makeLiveTool({ name: "scene.gameobject", summary: "Read one GameObject summary.", description: "Read one selected GameObject after hierarchy discovery.", group: "scene", outputSchema: { type: "object", properties: { gameObject: { type: "object" } } } }),
+    makeLiveTool({ name: "scene.hierarchy", summary: "Read a hierarchy page.", description: "Read a lightweight hierarchy page.", group: "scene", outputSchema: { type: "object", properties: { items: { type: "array" } } } }),
     makeLiveTool({ name: "scene.create", summary: "Create a scene.", description: "Create a scene.", group: "scene", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
     makeLiveTool({ name: "scene.save", summary: "Save a scene.", description: "Save a scene.", group: "scene", destructiveHint: true, supportsDryRun: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "scene.unload", summary: "Unload a scene.", description: "Unload a scene.", group: "scene", supportsDryRun: true, playModeSupport: "session-affecting" }),
@@ -106,19 +106,17 @@ test("scene.load resolves a unique scene asset name before opening", async () =>
   assert.match(load, /Input = new Request \{ Name = "Main" \}/);
 });
 
-test("scene.gameobject and bounded hierarchy are the retained typed readers", async () => {
+test("scene.gameobject and scene.hierarchy are the retained typed readers", async () => {
   const listSource = await readFile(new URL("../unitypkg/Editor/Tools/scene/list-opened.cs", import.meta.url), "utf8");
   const gameObjectSource = await readFile(new URL("../unitypkg/Editor/Tools/scene/gameobject.cs", import.meta.url), "utf8");
   const hierarchySource = await readFile(new URL("../unitypkg/Editor/Tools/scene/hierarchy.cs", import.meta.url), "utf8");
   assert.match(listSource, /class SceneListOpenedTool : IUnityCliTool</);
   assert.match(gameObjectSource, /Name = "scene\.gameobject"[\s\S]*PlayModeSupport = "supported"/);
-  assert.match(gameObjectSource, /bounded scene\.hierarchy or go\.find discovery/);
-  assert.match(hierarchySource, /Math\.Min\(request\.MaxDepth \?\? 1, 16\)/);
-  assert.match(hierarchySource, /Math\.Min\(request\.PageSize \?\? 50, 500\)/);
-  assert.match(hierarchySource, /NextCursor = next/);
+  assert.match(gameObjectSource, /scene\.hierarchy or go\.find discovery/);
+  assert.match(hierarchySource, /Name = "scene\.hierarchy"[\s\S]*PlayModeSupport = "supported"/);
 });
 
-test("scene bridge spec forwards structured file, GameObject, and bounded hierarchy input", async () => {
+test("scene bridge spec forwards structured file, GameObject, and hierarchy input", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/scene.js", import.meta.url), "utf8");
   assert.match(spec, /stringValue\(structured\.path\)/, "sceneFileArgs should forward structured path");
   assert.match(spec, /numberValue\(structured\.maxDepth\)/, "sceneHierarchyArgs should forward structured maxDepth");

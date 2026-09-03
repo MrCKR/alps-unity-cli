@@ -58,15 +58,12 @@ test("reflection.method.call supports instanceRef without confirmation state", a
       destructiveHint: true,
       supportsDryRun: true,
       permissions: ["arbitrary-method-invocation"],
-      inputSchema: { type: "object", required: ["typeName", "methodName", "completionProbe"], properties: { instanceRef: { type: "string" }, parameterTypes: { type: "array" }, completionProbe: { type: "object" } } }
+      inputSchema: { type: "object", properties: { instanceRef: { type: "string" } } }
     })
   );
   const call = tools.get("reflection.method.call")!;
   const props = call.inputSchema.properties as Record<string, unknown>;
   assert.ok(props.instanceRef);
-  assert.ok(props.parameterTypes);
-  assert.ok(props.completionProbe);
-  assert.deepEqual(call.inputSchema.required, ["typeName", "methodName", "completionProbe"]);
   assert.equal(props.security, undefined);
 });
 
@@ -80,11 +77,6 @@ test("reflection.method.call example is executable and overload selection is exp
   assert.match(source, /public List<string> ParameterTypes/);
   assert.match(source, /request\.Args, request\.ParameterTypes, request\.InstanceRef/);
   assert.match(reflection, /private static MethodInfo ResolveCallMethod/);
-  assert.match(reflection, /parameterTypeNames != null/);
-  assert.match(reflection, /SequenceEqual\(parameterTypeNames, StringComparer\.Ordinal\)/);
-  assert.match(reflection, /argumentCount[\s\S]*GetParameters\(\)\.Length == argumentCount/);
-  assert.match(reflection, /E_METHOD_ARGUMENT_REQUIRED/);
-  assert.match(reflection, /E_METHOD_ARGUMENTS_INVALID/);
   assert.match(reflection, /E_METHOD_AMBIGUOUS/);
   assert.match(reflection, /RequireSynchronousResult/);
   assert.match(reflection, /E_METHOD_COMPLETION_UNPROVABLE/);

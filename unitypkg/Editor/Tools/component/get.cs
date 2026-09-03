@@ -42,7 +42,7 @@ namespace UnityCli
         {
             Name = "component.get",
             Summary = "Deep-read one Component by GameObject and component selector; use paths/viewQuery for token-safe fields.",
-            Description = "Deep-read one Component after selecting a GameObject with bounded go.find/scene.hierarchy or scene.gameobject.components. For token safety, pass exact paths or one viewQuery; they are mutually exclusive and skip full fields/props expansion. Use componentIndex/componentInstanceId when duplicate components exist. Keep maxDepth low before expanding MonoBehaviours.",
+            Description = "Deep-read one Component after selecting a GameObject with go.find, scene.hierarchy, or scene.gameobject.components. For token safety, pass exact paths or one viewQuery; they are mutually exclusive and skip full fields/props expansion. Use componentIndex/componentInstanceId when duplicate components exist. Keep maxDepth low before expanding MonoBehaviours.",
             Group = "component",
             DestructiveHint = false,
             Target = "editor",
