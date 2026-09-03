@@ -35,7 +35,7 @@ namespace UnityCli
         {
             public bool PrefabStageOpen { get; set; }
             public long ReturnedCount { get; set; }
-            public List<Item> Items { get; set; }
+            [UnityCliItemsRange(0, 500)] public List<Item> Items { get; set; }
             public PageInfo PageInfo { get; set; }
             public UnityCliRequestBudgetUsage Budget { get; set; }
         }

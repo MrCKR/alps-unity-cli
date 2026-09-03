@@ -15,7 +15,7 @@ namespace UnityCli
         public sealed class Result
         {
             public long TotalEvents { get; set; }
-            public List<FrameDebuggerEvent> Events { get; set; }
+            [UnityCliItemsRange(0, 500)] public List<FrameDebuggerEvent> Events { get; set; }
             public string Note { get; set; }
             public bool Truncated { get; set; }
             public UnityCliRequestBudgetUsage Budget { get; set; }

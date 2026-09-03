@@ -17,7 +17,7 @@ namespace UnityCli
         public sealed class Result
         {
             public bool Cleared { get; set; }
-            public List<ConsoleEntry> Items { get; set; }
+            [UnityCliItemsRange(0, 500)] public List<ConsoleEntry> Items { get; set; }
             public long RawEntryCount { get; set; }
             public bool Truncated { get; set; }
             public string Note { get; set; }

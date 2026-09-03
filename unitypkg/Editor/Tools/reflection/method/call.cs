@@ -16,7 +16,7 @@ namespace UnityCli
             [UnityCliRequired]
             public string MethodName { get; set; }
             [UnityCliAnyJson] public object Args { get; set; }
-            public List<string> ParameterTypes { get; set; }
+            [UnityCliItemsRange(0, 256)] public List<string> ParameterTypes { get; set; }
             [UnityCliAnyJson] public Dictionary<string, object> InstanceRef { get; set; }
             [UnityCliRequired] public UnityCliCompletionProbe CompletionProbe { get; set; }
             public UnityCliReadBudgetInput Budget { get; set; }
@@ -25,7 +25,7 @@ namespace UnityCli
         public sealed class Result
         {
             [UnityCliAnyJson] public object Data { get; set; }
-            public List<PlannedEffect> PlannedEffects { get; set; }
+            [UnityCliItemsRange(0, 1)] public List<PlannedEffect> PlannedEffects { get; set; }
             public UnityCliCompletionProbeReadback Completion { get; set; }
         }
 

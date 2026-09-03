@@ -28,7 +28,7 @@ namespace UnityCli
         public sealed class Result
         {
             public SceneSummary Scene { get; set; }
-            public List<HierarchyItem> Items { get; set; }
+            [UnityCliItemsRange(0, 500)] public List<HierarchyItem> Items { get; set; }
             public PageInfo PageInfo { get; set; }
             public UnityCliRequestBudgetUsage Budget { get; set; }
         }
@@ -48,8 +48,8 @@ namespace UnityCli
             public long ChildCount { get; set; }
             public bool ChildrenTruncated { get; set; }
             public long? ComponentCount { get; set; }
-            public List<string> ComponentTypes { get; set; }
-            public List<string> Components { get; set; }
+            [UnityCliItemsRange(0, ObjectRefResolver.AbsoluteMaxBatchItems)] public List<string> ComponentTypes { get; set; }
+            [UnityCliItemsRange(0, ObjectRefResolver.AbsoluteMaxBatchItems)] public List<string> Components { get; set; }
         }
 
         public sealed class PageInfo

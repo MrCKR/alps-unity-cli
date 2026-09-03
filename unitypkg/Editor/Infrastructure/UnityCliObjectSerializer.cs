@@ -200,7 +200,7 @@ namespace UnityCli
                 if (value == null) { error = "cannot index null value"; return null; }
                 var token = indexer.Trim();
                 if (!token.StartsWith("[", StringComparison.Ordinal) || !token.EndsWith("]", StringComparison.Ordinal)) { error = "invalid index syntax: " + indexer; return null; }
-                token = UnescapeDictionaryPathKey(token.Substring(1, token.Length - 2).Trim().Trim('"')); 
+                token = UnescapeDictionaryPathKey(token.Substring(1, token.Length - 2).Trim().Trim('"'));
                 if (value is IList list)
                 {
                     if (!budget.TryConsumeGetter()) { error = BudgetError(budget); return null; }
@@ -310,7 +310,7 @@ namespace UnityCli
             private static void ExpandDictionary(IDictionary dictionary, SerializedMember member, Options options, HashSet<object> active, int depth, UnityCliRequestBudget budget)
             {
                 member.IsDictionary = true;
-                if (!budget.TryConsumeGetter()) { Truncate(member, budget, member.Path); return; }
+                if (!budget.TryConsumeGetter()) { TruncateNonResumableDictionary(member); return; }
                 var count = dictionary.Count;
                 member.ArrayLength = count;
                 member.HasKnownTotal = true;
@@ -320,26 +320,32 @@ namespace UnityCli
                 {
                     while (emitted < options.MaxArrayItems)
                     {
-                        if (!budget.TryConsumeScannedRecord()) { Truncate(member, budget, member.Path); return; }
+                        if (!budget.TryConsumeScannedRecord()) { TruncateNonResumableDictionary(member); return; }
                         if (!enumerator.MoveNext()) return;
-                        if (!budget.TryConsumeGetter()) { Truncate(member, budget, member.Path); return; }
+                        if (!budget.TryConsumeGetter()) { TruncateNonResumableDictionary(member); return; }
                         var entry = enumerator.Entry;
                         var key = Convert.ToString(entry.Key, CultureInfo.InvariantCulture);
                         var entryPath = DictionaryEntryPath(member.Path, key);
-                        if (!budget.TryReserveSerializedUtf8(key)) { Truncate(member, budget, entryPath); return; }
+                        if (!budget.TryReserveSerializedUtf8(key)) { TruncateNonResumableDictionary(member); return; }
                         member.DictionaryEntries.Add(new SerializedMember.KV { Key = key, Value = ToMember(entry.Value, entryPath, null, options, active, depth + 1, budget) });
                         emitted++;
-                        if (budget.IsExhausted) { Truncate(member, budget, entryPath); return; }
+                        if (budget.IsExhausted) { TruncateNonResumableDictionary(member); return; }
                     }
                     if (emitted < count)
                     {
-                        if (!budget.TryConsumeScannedRecord() || !enumerator.MoveNext() || !budget.TryConsumeGetter()) { Truncate(member, budget, member.Path); return; }
-                        var nextEntry = enumerator.Entry;
                         member.Truncated = true;
-                        member.NextPath = DictionaryEntryPath(member.Path, Convert.ToString(nextEntry.Key, CultureInfo.InvariantCulture));
+                        member.NextPath = null;
+                        member.Error = "non-resumable-dictionary-truncation";
                     }
                 }
                 finally { (enumerator as IDisposable)?.Dispose(); }
+            }
+
+            private static void TruncateNonResumableDictionary(SerializedMember member)
+            {
+                member.Truncated = true;
+                member.NextPath = null;
+                member.Error = "non-resumable-dictionary-truncation";
             }
 
             /// <summary>非 IList enumerable 只流式返回当前片段；它没有可重放的索引语义，截断时不发布 nextPath。</summary>
@@ -462,14 +468,14 @@ namespace UnityCli
                 for (var depth = 0; current != null && depth < AbsoluteMaxTypeHierarchyDepth; depth++)
                 {
                     if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                    foreach (var field in current.GetTypeInfo().DeclaredFields)
+                    foreach (var field in UnityCliReflectionSnapshot.DeclaredFields(current, budget, AbsoluteMaxMemberCandidates))
                     {
                         ConsumeMemberCandidateBudget(budget);
                         if (!field.IsPublic || field.IsStatic || !names.Add("F:" + field.Name)) continue;
                         AddMemberCandidate(candidates, new MemberCandidate(field, false, true, field.FieldType), ref metadataBytes);
                     }
                     if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                    foreach (var property in current.GetTypeInfo().DeclaredProperties)
+                    foreach (var property in UnityCliReflectionSnapshot.DeclaredProperties(current, budget, AbsoluteMaxMemberCandidates))
                     {
                         ConsumeMemberCandidateBudget(budget);
                         var getter = property.GetMethod;

@@ -60,6 +60,78 @@ namespace UnityCli
         }
     }
 
+    /// <summary>callback 结果工厂必须先赢得一次性 terminal ownership；迟到 callback 不能执行 publication。</summary>
+    internal sealed class UnityCliCallbackPublication<T>
+    {
+        private readonly object sync = new object();
+        private bool terminal;
+        private bool completed;
+        private bool failed;
+        private T result;
+        private Exception exception;
+
+        internal bool TryComplete(Func<T> createResult, Func<bool> unavailable = null)
+        {
+            lock (sync)
+            {
+                if (terminal || unavailable != null && unavailable())
+                {
+                    terminal = true;
+                    return false;
+                }
+                terminal = true;
+                try
+                {
+                    result = createResult == null ? default : createResult();
+                    completed = true;
+                }
+                catch (Exception error)
+                {
+                    exception = error;
+                    failed = true;
+                }
+                return true;
+            }
+        }
+
+        internal bool TryFail(Exception error, Func<bool> unavailable = null)
+        {
+            lock (sync)
+            {
+                if (terminal || unavailable != null && unavailable())
+                {
+                    terminal = true;
+                    return false;
+                }
+                terminal = true;
+                exception = error;
+                failed = true;
+                return true;
+            }
+        }
+
+        internal bool TryAbandon()
+        {
+            lock (sync)
+            {
+                if (terminal) return false;
+                terminal = true;
+                return true;
+            }
+        }
+
+        internal void Read(out bool isCompleted, out bool isFailed, out T value, out Exception error)
+        {
+            lock (sync)
+            {
+                isCompleted = completed;
+                isFailed = failed;
+                value = result;
+                error = exception;
+            }
+        }
+    }
+
     internal sealed class UnityCliWaiter : IUnityCliWaiter
     {
         private readonly string requestId;
@@ -392,14 +464,9 @@ namespace UnityCli
 
         private sealed class CallbackWait<T> : PendingWaitBase<T>
         {
-            private readonly object callbackLock = new object();
             private readonly DateTime deadlineUtc;
             private readonly CancellationToken callbackCancellationToken;
-            private bool callbackCompleted;
-            private bool callbackFailed;
-            private bool callbackTerminal;
-            private T callbackResult;
-            private Exception callbackException;
+            private readonly UnityCliCallbackPublication<T> publication = new UnityCliCallbackPublication<T>();
             private readonly Action onAbandoned;
 
             public CallbackWait(string requestId, string owner, Action<Func<Func<T>, bool>, Func<Exception, bool>> start, TimeSpan timeout, CancellationToken cancellationToken, Action onAbandoned)
@@ -413,24 +480,22 @@ namespace UnityCli
 
             protected override bool Advance(DateTime utcNow)
             {
+                if (utcNow >= deadlineUtc && publication.TryAbandon())
+                {
+                    NotifyAbandoned();
+                    return Fail(new UnityCliBridge.BridgeCommandException(
+                        "E_EXECUTION_TIMEOUT",
+                        "Callback wait timed out.",
+                        "Retry or reduce scope.",
+                        transient: false,
+                        retryAfterMs: 0));
+                }
+
                 bool completed;
                 bool failed;
-                bool abandoned = false;
                 T result;
                 Exception exception;
-                lock (callbackLock)
-                {
-                    completed = callbackCompleted;
-                    failed = callbackFailed;
-                    result = callbackResult;
-                    exception = callbackException;
-                    if (!completed && !failed && utcNow >= deadlineUtc)
-                    {
-                        callbackTerminal = true;
-                        abandoned = true;
-                    }
-                }
-                if (abandoned) NotifyAbandoned();
+                publication.Read(out completed, out failed, out result, out exception);
                 if (failed) return Fail(exception ?? new Exception("Callback wait failed."));
                 if (completed) return Succeed(result);
                 if (utcNow >= deadlineUtc)
@@ -447,26 +512,20 @@ namespace UnityCli
 
             public override void Cancel(Exception exception)
             {
-                var abandoned = false;
-                var completed = false;
-                var failed = false;
-                T result = default;
-                Exception callbackError = null;
-                lock (callbackLock)
+                if (publication.TryAbandon())
                 {
-                    completed = callbackCompleted;
-                    failed = callbackFailed;
-                    result = callbackResult;
-                    callbackError = callbackException;
-                    if (!callbackTerminal)
-                    {
-                        callbackTerminal = true;
-                        abandoned = true;
-                    }
+                    NotifyAbandoned();
+                    base.Cancel(exception);
+                    return;
                 }
+
+                bool completed;
+                bool failed;
+                T result;
+                Exception callbackError;
+                publication.Read(out completed, out failed, out result, out callbackError);
                 if (completed) { Succeed(result); return; }
                 if (failed) { Fail(callbackError ?? exception); return; }
-                if (abandoned) NotifyAbandoned();
                 base.Cancel(exception);
             }
 
@@ -476,45 +535,19 @@ namespace UnityCli
                 catch { /* abandonment cleanup must not replace the scheduler terminal */ }
             }
 
-            /// <summary>在 callback lock 内先取得 terminal ownership，再执行结果工厂；拒绝的迟到 callback 不得产生 publication。</summary>
             private bool OnComplete(Func<T> createResult)
             {
-                lock (callbackLock)
-                {
-                    if (callbackTerminal || IsCompleted || callbackCancellationToken.IsCancellationRequested || DateTime.UtcNow >= deadlineUtc)
-                    {
-                        callbackTerminal = true;
-                        return false;
-                    }
-                    callbackTerminal = true;
-                    try
-                    {
-                        callbackResult = createResult == null ? default : createResult();
-                        callbackCompleted = true;
-                    }
-                    catch (Exception exception)
-                    {
-                        callbackException = exception;
-                        callbackFailed = true;
-                    }
-                    return true;
-                }
+                return publication.TryComplete(createResult, CallbackUnavailable);
             }
 
             private bool OnFail(Exception exception)
             {
-                lock (callbackLock)
-                {
-                    if (callbackTerminal || IsCompleted || callbackCancellationToken.IsCancellationRequested || DateTime.UtcNow >= deadlineUtc)
-                    {
-                        callbackTerminal = true;
-                        return false;
-                    }
-                    callbackTerminal = true;
-                    callbackException = exception;
-                    callbackFailed = true;
-                    return true;
-                }
+                return publication.TryFail(exception, CallbackUnavailable);
+            }
+
+            private bool CallbackUnavailable()
+            {
+                return IsCompleted || callbackCancellationToken.IsCancellationRequested || DateTime.UtcNow >= deadlineUtc;
             }
         }
 

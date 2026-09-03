@@ -23,7 +23,7 @@ namespace UnityCli
             public sealed class Result
             {
                 public GameObjectRef GameObject { get; set; }
-                public List<ComponentInfo> Components { get; set; }
+                [UnityCliItemsRange(0, ObjectRefResolver.AbsoluteMaxBatchItems)] public List<ComponentInfo> Components { get; set; }
                 public long Count { get; set; }
             }
 

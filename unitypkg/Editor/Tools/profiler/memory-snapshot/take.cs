@@ -24,7 +24,7 @@ namespace UnityCli
             public long SizeBytes { get; set; }
             public long RetainedCountLimit { get; set; }
             public long RetainedBytesLimit { get; set; }
-            public List<ProfilerPlannedEffect> PlannedEffects { get; set; }
+            [UnityCliItemsRange(0, 1)] public List<ProfilerPlannedEffect> PlannedEffects { get; set; }
         }
 
         public ToolDescriptor Describe() => new()

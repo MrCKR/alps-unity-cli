@@ -519,7 +519,7 @@ namespace UnityCli
                 terminalBudget.CheckpointOrThrow();
                 RecordToolCompletionEvidence(request, definition, result, terminalData);
                 terminalBudget.CheckpointOrThrow();
-                var terminalJson = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, terminalData), terminalBudget, toolTimeout.Token);
+                var terminalJson = SerializeTerminalSuccess(request.RequestId, terminalData, terminalBudget, toolTimeout.Token);
                 terminalBudget.CheckpointOrThrow();
                 return new SerializedBridgeEnvelope(terminalJson);
             }
@@ -547,6 +547,26 @@ namespace UnityCli
                     new[] { "Fix the Tool result DTO or completion driver before retrying." });
             }
             }
+        }
+
+        /// <summary>最终 envelope 的自描述字节数最多经过8次定点收敛，且每次都服从同一 deadline 与预算。</summary>
+        internal static string SerializeTerminalSuccess(string requestId, object terminalData, UnityCliRequestBudget budget, CancellationToken cancellationToken)
+        {
+            if (budget == null) throw new ArgumentNullException("budget");
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                budget.CheckpointOrThrow();
+                long actualBytes;
+                var json = UnityCliSerializer.Serialize(
+                    UnityCli.Protocol.ProtocolEnvelopeFactory.Success(requestId, terminalData),
+                    budget,
+                    cancellationToken,
+                    out actualBytes);
+                if (actualBytes == budget.ActualSerializedUtf8Bytes) return json;
+                budget.ObserveActualSerializedUtf8Bytes(actualBytes);
+            }
+
+            throw new InvalidOperationException("Final envelope UTF-8 byte accounting did not converge.");
         }
 
         /// <summary>成功 Tool 已在自身 deadline 与预算内完成最终 envelope 序列化。</summary>

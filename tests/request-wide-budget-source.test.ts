@@ -17,18 +17,19 @@ test("request budget owns all six counters and injectable monotonic time", async
   assert.match(budget, /IUnityCliMonotonicClock/);
   assert.match(budget, /CancellationToken/);
   assert.match(budget, /TryReserveSerializedUtf8Bytes/);
+  assert.match(budget, /EstimatedSerializedUtf8Bytes/);
+  assert.match(budget, /ActualSerializedUtf8Bytes/);
   assert.doesNotMatch(budget, /Thread\.Sleep/);
 });
 
-test("console scene and GameObject discovery page raw positions without full result materialization", async () => {
+test("console is bounded non-resumable while scene and GameObject discovery page raw positions", async () => {
   const [consoleGet, editorSupport, hierarchy, goFind] = await Promise.all([
     source("Tools/console/get.cs"), source("Tools/editor/EditorToolSupport.cs"),
     source("Tools/scene/hierarchy.cs"), source("Tools/go/find.cs"),
   ]);
   assert.match(editorSupport, /rawIndex/);
-  assert.match(editorSupport, /CreateConsoleCursor[\s\S]*topFingerprint/);
-  assert.match(editorSupport, /TruncatedPage\(rawCount,[\s\S]*CreateConsoleCursor/);
-  assert.match(consoleGet, /NextCursor/);
+  assert.match(editorSupport, /intentionally non-resumable/);
+  assert.doesNotMatch(editorSupport + consoleGet, /CreateConsoleCursor|NextCursor/);
   assert.doesNotMatch(consoleGet, /Skip\(|Take\(|ToList\(/);
   assert.doesNotMatch(hierarchy, /allItems|CollectHierarchy|Skip\(|Take\(|OrderBy/);
   assert.doesNotMatch(goFind, /FindObjectsOfType|GetComponentsInChildren|Concat\(|Skip\(|Take\(|ToList\(/);
@@ -73,9 +74,10 @@ test("profiler and snapshot paths remain raw-paged and governed", async () => {
   assert.match(snapshots, /RetainedSnapshotCount = 100/);
   assert.match(snapshots, /RetainedSnapshotBytes = 8L \* 1024L \* 1024L \* 1024L/);
   assert.match(snapshots, /PublicationLock/);
-  assert.ok(snapshots.indexOf("length > requestedMaxBytes") < snapshots.indexOf("File.Move(source, finalPath)"));
-  assert.match(take, /MemorySnapshotTerminal/);
-  assert.match(take, /TryAbandon/);
+  assert.ok(snapshots.indexOf("ValidateSnapshotLength(length, requestedMaxBytes)") < snapshots.indexOf("File.Move(source, finalPath)"));
+  assert.doesNotMatch(take, /MemorySnapshotTerminal/);
+  assert.match(take, /ctx\.Wait\.ForCallback/);
+  assert.match(take, /complete\(\(\) =>/);
   assert.match(list, /NextCursor/);
   assert.doesNotMatch(take + list, /temporaryCachePath|MemoryCaptures|Directory\.GetFiles/);
 });
@@ -95,7 +97,7 @@ test("reflection pages bind assembly generation and budgeted member definitions"
   assert.match(typeTool + methodTool, /UnityCliReadBudgetInput/);
 });
 
-test("continuations bind listener generation and callback waits expose abandonment cleanup", async () => {
+test("continuations bind listener generation and callback waits use atomic publication ownership", async () => {
   const [generation, waiter] = await Promise.all([
     source("Infrastructure/UnityCliReadGeneration.cs"),
     source("Infrastructure/UnityCliWaiter.cs"),
@@ -103,6 +105,8 @@ test("continuations bind listener generation and callback waits expose abandonme
   assert.match(generation, /ListenerId/);
   assert.match(generation, /CurrentListenerGeneration/);
   assert.match(waiter, /Action onAbandoned/);
+  assert.match(waiter, /UnityCliCallbackPublication<T>/);
+  assert.match(waiter, /TryAbandon/);
   assert.match(waiter, /NotifyAbandoned/);
 });
 
@@ -122,6 +126,25 @@ test("screenshot artifact IO is chunked and temporary allocations are guarded", 
     assert.match(value, /Release\(\)/);
     assert.match(value, /DestroyImmediate/);
   }
+});
+
+test("EditMode regressions call production paging serialization ownership and handler cores", async () => {
+  const tests = await readFile(new URL("../unitypkg/Tests/Editor/UnityCliRequestBudgetTests.cs", import.meta.url), "utf8");
+  for (const productionCall of [
+    "ObjectRefResolver.BoundedSceneRoots",
+    "SceneGameObjectComponentsTool",
+    "ObjectSerializer.Serialize",
+    "TypeSchemaGenerator.Generate",
+    "EditorToolSupport.ReadConsolePage",
+    "ReflectionInvoker.PrepareCall",
+    "SerializeTerminalSuccess",
+    "ProfilerMemorySnapshotSupport.ApplyRetention",
+    "ProfilerMemorySnapshotSupport.CleanupOrphanPass",
+    "PendingCapturePublication",
+    "CreateTextureWithOwnership",
+    "InitializeOwnedView",
+  ]) assert.ok(tests.includes(productionCall), `missing production regression call: ${productionCall}`);
+  assert.doesNotMatch(tests, /MemorySnapshotTerminal|Thread\.Sleep/);
 });
 
 test("command projections preserve opaque cursors and nested budgets", async () => {

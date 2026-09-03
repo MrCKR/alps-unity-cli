@@ -138,12 +138,18 @@ namespace UnityCli
                 {
                     if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; return TruncatedSchema(type, context); }
                     var values = new List<object>();
-                    foreach (var value in Enum.GetNames(type))
+                    foreach (var value in UnityCliReflectionSnapshot.EnumNames(type, context.Budget, MaximumSchemaMemberCandidates))
                     {
                         if (!context.TryMember() || !context.Budget.TryReserveSerializedUtf8(value)) { context.Truncated = true; break; }
                         values.Add(value);
                     }
-                    return new Dictionary<string, object> { { "type", "string" }, { "typeName", FriendlyTypeName(type, context) }, { "enum", values }, { "truncated", context.Truncated } };
+                    var enumSchema = new Dictionary<string, object>
+                    {
+                        { "type", "string" }, { "typeName", FriendlyTypeName(type, context) }, { "enum", values },
+                        { "truncated", context.Truncated }, { "continuationSupported", false }
+                    };
+                    if (context.Truncated) enumSchema["truncationReason"] = "non-resumable-enum-truncation";
+                    return enumSchema;
                 }
 
                 if (TryGetDictionaryTypes(type, context, out var keyType, out var dictionaryValueType))
@@ -216,7 +222,7 @@ namespace UnityCli
                 {
                     if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; schema["truncated"] = true; return schema; }
                     var values = new List<object>();
-                    foreach (var value in Enum.GetNames(keyType))
+                    foreach (var value in UnityCliReflectionSnapshot.EnumNames(keyType, context.Budget, MaximumSchemaMemberCandidates))
                     {
                         if (!context.TryMember() || !context.Budget.TryReserveSerializedUtf8(value)) { context.Truncated = true; schema["truncated"] = true; break; }
                         values.Add(value);
@@ -238,7 +244,7 @@ namespace UnityCli
                 if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; schema["truncated"] = true; return; }
                 schema["genericTypeDefinition"] = FriendlyTypeName(type.GetGenericTypeDefinition(), context);
                 var values = new List<object>();
-                foreach (var argument in type.GetGenericArguments())
+                foreach (var argument in UnityCliReflectionSnapshot.GenericArguments(type, context.Budget, MaximumTypeHierarchyDepth))
                 {
                     if (!context.TryMember()) { context.Truncated = true; schema["truncated"] = true; break; }
                     values.Add(FriendlyTypeName(argument, context));
@@ -253,25 +259,25 @@ namespace UnityCli
                 valueType = null;
                 if (type == null || type == typeof(string)) return false;
                 if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; return false; }
-                if (TryGetDictionaryCandidate(type, out keyType, out valueType)) return true;
+                if (TryGetDictionaryCandidate(type, context, out keyType, out valueType)) return true;
                 var examined = 0;
-                foreach (var candidate in type.GetTypeInfo().ImplementedInterfaces)
+                foreach (var candidate in UnityCliReflectionSnapshot.Interfaces(type, context.Budget, MaximumInterfaces))
                 {
-                    if (examined++ >= MaximumInterfaces) throw new UnityCliRequestBudgetExceededException("reflectionCalls");
+                    examined++;
                     if (!context.Budget.TryConsumeScannedRecord() || !context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; return false; }
-                    if (TryGetDictionaryCandidate(candidate, out keyType, out valueType)) return true;
+                    if (TryGetDictionaryCandidate(candidate, context, out keyType, out valueType)) return true;
                 }
                 return false;
             }
 
-            private static bool TryGetDictionaryCandidate(Type candidate, out Type keyType, out Type valueType)
+            private static bool TryGetDictionaryCandidate(Type candidate, SchemaContext context, out Type keyType, out Type valueType)
             {
                 keyType = null;
                 valueType = null;
                 if (!candidate.IsGenericType) return false;
                 var definition = candidate.GetGenericTypeDefinition();
                 if (definition != typeof(IDictionary<,>) && definition != typeof(IReadOnlyDictionary<,>)) return false;
-                var arguments = candidate.GetGenericArguments();
+                var arguments = UnityCliReflectionSnapshot.GenericArguments(candidate, context.Budget, 2);
                 keyType = arguments[0];
                 valueType = arguments[1];
                 return true;
@@ -282,25 +288,25 @@ namespace UnityCli
                 if (type == null || type == typeof(string)) return null;
                 if (!context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; return null; }
                 if (type.IsArray) return type.GetElementType();
-                var direct = GetEnumerableCandidate(type);
+                var direct = GetEnumerableCandidate(type, context);
                 if (direct != null) return direct;
                 var examined = 0;
-                foreach (var candidate in type.GetTypeInfo().ImplementedInterfaces)
+                foreach (var candidate in UnityCliReflectionSnapshot.Interfaces(type, context.Budget, MaximumInterfaces))
                 {
-                    if (examined++ >= MaximumInterfaces) throw new UnityCliRequestBudgetExceededException("reflectionCalls");
+                    examined++;
                     if (!context.Budget.TryConsumeScannedRecord() || !context.Budget.TryConsumeReflectionCall()) { context.Truncated = true; return null; }
-                    var element = GetEnumerableCandidate(candidate);
+                    var element = GetEnumerableCandidate(candidate, context);
                     if (element != null) return element;
                 }
                 return typeof(IEnumerable).IsAssignableFrom(type) ? typeof(object) : null;
             }
 
-            private static Type GetEnumerableCandidate(Type candidate)
+            private static Type GetEnumerableCandidate(Type candidate, SchemaContext context)
             {
                 if (!candidate.IsGenericType) return null;
                 var definition = candidate.GetGenericTypeDefinition();
                 return definition == typeof(IEnumerable<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>)
-                    ? candidate.GetGenericArguments()[0]
+                    ? UnityCliReflectionSnapshot.GenericArguments(candidate, context.Budget, 1)[0]
                     : null;
             }
 
@@ -353,13 +359,13 @@ namespace UnityCli
                 {
                     if (depth++ >= MaximumTypeHierarchyDepth) throw new UnityCliRequestBudgetExceededException("reflectionCalls");
                     if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                    foreach (var field in current.GetTypeInfo().DeclaredFields)
+                    foreach (var field in UnityCliReflectionSnapshot.DeclaredFields(current, budget, MaximumSchemaMemberCandidates))
                     {
                         ConsumeSchemaMemberMetadata(field.Name, field.FieldType, budget, ref examined, ref metadataBytes);
                         if (!field.IsPublic || field.IsStatic || candidates.ContainsKey(field.Name)) continue;
                         candidates[field.Name] = new SchemaMemberCandidate(field.Name, field.FieldType, depth, false);
                     }
-                    foreach (var property in current.GetTypeInfo().DeclaredProperties)
+                    foreach (var property in UnityCliReflectionSnapshot.DeclaredProperties(current, budget, MaximumSchemaMemberCandidates))
                     {
                         ConsumeSchemaMemberMetadata(property.Name, property.PropertyType, budget, ref examined, ref metadataBytes);
                         var getter = property.GetGetMethod(false);
@@ -421,8 +427,7 @@ namespace UnityCli
                     var baseName = definition.FullName ?? definition.Name;
                     var tick = baseName.IndexOf('`');
                     if (tick >= 0) baseName = baseName.Substring(0, tick);
-                    var arguments = type.GetGenericArguments();
-                    if (arguments.Length > MaximumTypeHierarchyDepth) throw new UnityCliRequestBudgetExceededException("reflectionCalls");
+                    var arguments = UnityCliReflectionSnapshot.GenericArguments(type, context.Budget, MaximumTypeHierarchyDepth);
                     var names = new string[arguments.Length];
                     for (var index = 0; index < arguments.Length; index++) names[index] = FriendlyTypeName(arguments[index], context, depth + 1);
                     value = baseName + "<" + string.Join(",", names) + ">";
@@ -526,7 +531,7 @@ namespace UnityCli
                     throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Type not found: " + typeName, "Pass a full type name such as UnityEngine.Transform.");
                 }
                 if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                var methods = type.GetMethods(bindings);
+                var methods = UnityCliReflectionSnapshot.Methods(type, bindings, budget, MaximumExaminedCallMethods);
                 var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Reflection() + "\0" + type.AssemblyQualifiedName + "\0"
                     + ((int)bindings).ToString(CultureInfo.InvariantCulture) + "\0" + methodName + "\0" + methods.Length.ToString(CultureInfo.InvariantCulture));
                 var index = 0;
@@ -601,7 +606,24 @@ namespace UnityCli
                     instance = ResolveCallInstance(instanceRef, type, budget);
                     if (instance == null) throw new BridgeCommandException("E_METHOD_INSTANCE_REQUIRED", "Instance method " + methodName + " requires an instance reference.", "Pass instanceRef with instanceId/assetPath/path.");
                 }
+                PrebudgetInvocationResult(type, candidate.Method, candidate.Parameters, budget);
                 return new PreparedMethodCall { Type = type, Method = candidate.Method, Parameters = candidate.Parameters, Arguments = arguments, Instance = instance };
+            }
+
+            /// <summary>effect 前为固定审计外壳和参数回读保留最低容量，避免确定可知的 post-effect 预算失败。</summary>
+            private static void PrebudgetInvocationResult(Type type, MethodInfo method, ParameterInfo[] parameters, UnityCliRequestBudget budget)
+            {
+                budget.CheckpointOrThrow();
+                var minimumNodes = checked(1L + parameters.Length);
+                if (budget.RemainingNodes < minimumNodes) throw new UnityCliRequestBudgetExceededException("nodes");
+                if (budget.RemainingGetters < parameters.Length) throw new UnityCliRequestBudgetExceededException("getters");
+                if (budget.RemainingReflectionCalls < parameters.Length) throw new UnityCliRequestBudgetExceededException("reflectionCalls");
+                var fixedBytes = 512L + checked((long)parameters.Length * 256L);
+                if (!budget.TryReserveSerializedUtf8(type.FullName)
+                    || !budget.TryReserveSerializedUtf8(method.Name)
+                    || !budget.TryReserveSerializedUtf8(method.ReturnType.FullName)
+                    || !budget.TryReserveSerializedUtf8Bytes(fixedBytes))
+                    throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "serializedUtf8Bytes");
             }
 
             /// <summary>跨 effect barrier 后只执行一次已准备的方法并返回审计值树。</summary>
@@ -689,7 +711,7 @@ namespace UnityCli
                 {
                     if (depth++ >= MaximumCallTypeHierarchyDepth) throw new UnityCliRequestBudgetExceededException("reflectionCalls");
                     if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                    foreach (var method in current.GetTypeInfo().DeclaredMethods)
+                    foreach (var method in UnityCliReflectionSnapshot.DeclaredMethods(current, budget, MaximumExaminedCallMethods))
                     {
                         if (examinedMethods++ >= MaximumExaminedCallMethods) throw new UnityCliRequestBudgetExceededException("scannedRecords");
                         if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
@@ -885,6 +907,78 @@ namespace UnityCli
                 if (type != null) return type;
             }
             return null;
+        }
+    }
+
+    /// <summary>先冻结带硬上限的反射集合，再允许调用方逐项计费或分页。</summary>
+    internal static class UnityCliReflectionSnapshot
+    {
+        internal static FieldInfo[] DeclaredFields(Type type, UnityCliRequestBudget budget, int maximum)
+        {
+            if (type == null) throw new ArgumentNullException("type");
+            budget.CheckpointOrThrow();
+            var items = type.GetTypeInfo().DeclaredFields.ToArray();
+            EnsureBounded(items.Length, maximum);
+            return items;
+        }
+
+        internal static PropertyInfo[] DeclaredProperties(Type type, UnityCliRequestBudget budget, int maximum)
+        {
+            if (type == null) throw new ArgumentNullException("type");
+            budget.CheckpointOrThrow();
+            var items = type.GetTypeInfo().DeclaredProperties.ToArray();
+            EnsureBounded(items.Length, maximum);
+            return items;
+        }
+
+        internal static MethodInfo[] DeclaredMethods(Type type, UnityCliRequestBudget budget, int maximum)
+        {
+            if (type == null) throw new ArgumentNullException("type");
+            budget.CheckpointOrThrow();
+            var items = type.GetTypeInfo().DeclaredMethods.ToArray();
+            EnsureBounded(items.Length, maximum);
+            return items;
+        }
+
+        internal static MethodInfo[] Methods(Type type, BindingFlags bindings, UnityCliRequestBudget budget, int maximum)
+        {
+            if (type == null) throw new ArgumentNullException("type");
+            budget.CheckpointOrThrow();
+            var items = type.GetMethods(bindings);
+            EnsureBounded(items.Length, maximum);
+            return items;
+        }
+
+        internal static Type[] Interfaces(Type type, UnityCliRequestBudget budget, int maximum)
+        {
+            if (type == null) throw new ArgumentNullException("type");
+            budget.CheckpointOrThrow();
+            var items = type.GetInterfaces();
+            EnsureBounded(items.Length, maximum);
+            return items;
+        }
+
+        internal static Type[] GenericArguments(Type type, UnityCliRequestBudget budget, int maximum)
+        {
+            if (type == null) throw new ArgumentNullException("type");
+            budget.CheckpointOrThrow();
+            var items = type.GetGenericArguments();
+            EnsureBounded(items.Length, maximum);
+            return items;
+        }
+
+        internal static string[] EnumNames(Type type, UnityCliRequestBudget budget, int maximum)
+        {
+            if (type == null) throw new ArgumentNullException("type");
+            budget.CheckpointOrThrow();
+            var items = Enum.GetNames(type);
+            EnsureBounded(items.Length, maximum);
+            return items;
+        }
+
+        private static void EnsureBounded(int count, int maximum)
+        {
+            if (maximum < 0 || count > maximum) throw new UnityCliRequestBudgetExceededException("nodes");
         }
     }
 }

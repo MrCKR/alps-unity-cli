@@ -150,7 +150,7 @@ namespace UnityCli
         {
             var values = new Dictionary<string, object>();
             if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-            foreach (var property in component.GetType().GetTypeInfo().DeclaredProperties)
+            foreach (var property in UnityCliReflectionSnapshot.DeclaredProperties(component.GetType(), budget, ObjectSerializer.AbsoluteMaxMembers))
             {
                 if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 if (!property.CanRead || property.GetIndexParameters().Length > 0) continue;

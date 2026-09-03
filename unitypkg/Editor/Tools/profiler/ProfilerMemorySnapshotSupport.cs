@@ -177,10 +177,11 @@ namespace UnityCli
                 if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 var length = info.Length;
                 if (length <= 0L) throw Error("E_PROFILER_SNAPSHOT_ARTIFACT_MISSING", "MemoryProfiler did not produce a non-empty snapshot.", "Check disk space and Unity Console before retrying.");
-                if (length > AbsoluteSnapshotBytes || length > requestedMaxBytes)
+                try { ValidateSnapshotLength(length, requestedMaxBytes); }
+                catch
                 {
                     DeleteStrict(source, "E_PROFILER_SNAPSHOT_PENDING_CLEANUP_FAILED", "Failed to remove an oversized pending snapshot.");
-                    throw Error("E_PROFILER_SNAPSHOT_LIMIT_EXCEEDED", "Snapshot exceeds the requested or 4 GiB per-artifact ceiling.", "Increase maxBytes within 4 GiB or reduce captured state.");
+                    throw;
                 }
                 if (File.Exists(finalPath)) throw Error("E_OUTPUT_EXISTS", "Snapshot output already exists: " + finalPath, "Choose another snapshot file name.");
                 budget.CheckpointOrThrow();
@@ -201,6 +202,15 @@ namespace UnityCli
                 if (publishedLength <= 0L) throw Error("E_PROFILER_SNAPSHOT_ARTIFACT_MISSING", "Published snapshot is empty after retention verification.", "Inspect storage and retry the capture.");
                 return published;
             }
+        }
+
+        /// <summary>在任何 publication 前复用同一 4 GiB 与调用方 ceiling 判定。</summary>
+        internal static void ValidateSnapshotLength(long length, long requestedMaxBytes)
+        {
+            if (length <= 0L)
+                throw Error("E_PROFILER_SNAPSHOT_ARTIFACT_MISSING", "MemoryProfiler did not produce a non-empty snapshot.", "Check disk space and Unity Console before retrying.");
+            if (length > AbsoluteSnapshotBytes || length > requestedMaxBytes)
+                throw Error("E_PROFILER_SNAPSHOT_LIMIT_EXCEEDED", "Snapshot exceeds the requested or 4 GiB per-artifact ceiling.", "Increase maxBytes within 4 GiB or reduce captured state.");
         }
 
         /// <summary>每次 publication 后最多观察 108 个本产品文件，保留连续的最新 100 且总量不超过 8 GiB。</summary>
@@ -349,7 +359,7 @@ namespace UnityCli
                 CancellationToken.None);
         }
 
-        private static bool CleanupOrphanPass()
+        internal static bool CleanupOrphanPass()
         {
             var allClean = true;
             List<string> pending;

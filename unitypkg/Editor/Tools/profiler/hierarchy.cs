@@ -23,7 +23,7 @@ namespace UnityCli
         {
             public long Frame { get; set; }
             public long Thread { get; set; }
-            public List<HierarchyItem> Items { get; set; }
+            [UnityCliItemsRange(0, 500)] public List<HierarchyItem> Items { get; set; }
             public PageInfo PageInfo { get; set; }
             public UnityCliRequestBudgetUsage Budget { get; set; }
         }
@@ -191,7 +191,7 @@ namespace UnityCli
 
         private sealed class TraversalFrame { internal int ParentId; internal int NextChild; internal int Depth; }
 
-        private sealed class RawHierarchyAccessor : IDisposable
+        internal sealed class RawHierarchyAccessor : IDisposable
         {
             private readonly object view;
             private readonly PropertyInfo validProperty;
@@ -246,8 +246,15 @@ namespace UnityCli
                 object view;
                 try { view = method.Invoke(null, new object[] { frame, thread }); }
                 catch (Exception exception) { throw Unavailable("Failed to open RawFrameDataView: " + exception.Message); }
+                return InitializeOwnedView(view, value => new RawHierarchyAccessor(value, value.GetType(), budget));
+            }
+
+            /// <summary>raw view 初始化成功才转移 ownership；成员绑定失败必须立即释放原 view。</summary>
+            internal static T InitializeOwnedView<T>(object view, Func<object, T> initialize)
+            {
                 if (view == null) throw NoData();
-                try { return new RawHierarchyAccessor(view, view.GetType(), budget); }
+                if (initialize == null) throw new ArgumentNullException("initialize");
+                try { return initialize(view); }
                 catch
                 {
                     (view as IDisposable)?.Dispose();

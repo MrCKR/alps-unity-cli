@@ -14,7 +14,9 @@ namespace UnityCli
             public sealed class GameObjectInfo
             {
                 public long Id { get; set; } public string Name { get; set; } public string Path { get; set; } public bool Active { get; set; } public string Tag { get; set; } public long Layer { get; set; }
-                public TransformInfo Transform { get; set; } public List<ComponentInfo> Components { get; set; } public List<GameObjectRef> Children { get; set; }
+                public TransformInfo Transform { get; set; }
+                [UnityCliItemsRange(0, ObjectRefResolver.AbsoluteMaxBatchItems)] public List<ComponentInfo> Components { get; set; }
+                [UnityCliItemsRange(0, 100000)] public List<GameObjectRef> Children { get; set; }
             }
             public sealed class GameObjectRef { public long Id { get; set; } public string Name { get; set; } public string Path { get; set; } }
             public sealed class TransformInfo { public VectorInfo Position { get; set; } public VectorInfo Rotation { get; set; } public VectorInfo Scale { get; set; } }

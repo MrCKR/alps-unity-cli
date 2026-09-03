@@ -36,16 +36,34 @@ namespace UnityCli
         [UnityCliRange(1L, UnityCliRequestBudget.AbsoluteMaxSerializedUtf8Bytes)] public long? MaxSerializedUtf8Bytes { get; set; }
     }
 
-    /// <summary>请求预算实际消耗；只包含稳定计数，不包含内部时钟或取消状态。</summary>
+    /// <summary>请求预算实际消耗；估算输出与最终 envelope 的实际 UTF-8 字节分别报告。</summary>
     public sealed class UnityCliRequestBudgetUsage
     {
-        public long ScannedRecords { get; set; }
-        public long Nodes { get; set; }
-        public long Getters { get; set; }
-        public long ReflectionCalls { get; set; }
-        public long MainThreadMilliseconds { get; set; }
-        public long EstimatedSerializedUtf8Bytes { get; set; }
-        public string ExhaustedDimension { get; set; }
+        private readonly UnityCliRequestBudget liveBudget;
+        private long scannedRecords;
+        private long nodes;
+        private long getters;
+        private long reflectionCalls;
+        private long mainThreadMilliseconds;
+        private long estimatedSerializedUtf8Bytes;
+        private long actualSerializedUtf8Bytes;
+        private string exhaustedDimension;
+
+        public UnityCliRequestBudgetUsage() { }
+
+        internal UnityCliRequestBudgetUsage(UnityCliRequestBudget liveBudget)
+        {
+            this.liveBudget = liveBudget;
+        }
+
+        public long ScannedRecords { get { return liveBudget == null ? scannedRecords : liveBudget.ScannedRecords; } set { scannedRecords = value; } }
+        public long Nodes { get { return liveBudget == null ? nodes : liveBudget.Nodes; } set { nodes = value; } }
+        public long Getters { get { return liveBudget == null ? getters : liveBudget.Getters; } set { getters = value; } }
+        public long ReflectionCalls { get { return liveBudget == null ? reflectionCalls : liveBudget.ReflectionCalls; } set { reflectionCalls = value; } }
+        public long MainThreadMilliseconds { get { return liveBudget == null ? mainThreadMilliseconds : liveBudget.MainThreadMilliseconds; } set { mainThreadMilliseconds = value; } }
+        public long EstimatedSerializedUtf8Bytes { get { return liveBudget == null ? estimatedSerializedUtf8Bytes : liveBudget.EstimatedSerializedUtf8Bytes; } set { estimatedSerializedUtf8Bytes = value; } }
+        public long ActualSerializedUtf8Bytes { get { return liveBudget == null ? actualSerializedUtf8Bytes : liveBudget.ActualSerializedUtf8Bytes; } set { actualSerializedUtf8Bytes = value; } }
+        public string ExhaustedDimension { get { return liveBudget == null ? exhaustedDimension : liveBudget.ExhaustedDimension; } set { exhaustedDimension = value; } }
     }
 
     /// <summary>可注入的单调时钟，生产使用 Stopwatch，测试使用手工时钟。</summary>
@@ -123,6 +141,8 @@ namespace UnityCli
             lastClockMilliseconds = this.clock.ElapsedMilliseconds;
         }
 
+        private long actualSerializedUtf8Bytes;
+
         public long MaxSerializedUtf8Bytes { get { return maxSerializedUtf8Bytes; } }
         public long RemainingScannedRecords { get { return Math.Max(0L, maxScannedRecords - scannedRecords); } }
         public long RemainingNodes { get { return Math.Max(0L, maxNodes - nodes); } }
@@ -130,6 +150,13 @@ namespace UnityCli
         public long RemainingReflectionCalls { get { return Math.Max(0L, maxReflectionCalls - reflectionCalls); } }
         public bool IsExhausted { get { return exhaustedDimension != null; } }
         public string ExhaustedDimension { get { return exhaustedDimension; } }
+        internal long ScannedRecords { get { return scannedRecords; } }
+        internal long Nodes { get { return nodes; } }
+        internal long Getters { get { return getters; } }
+        internal long ReflectionCalls { get { return reflectionCalls; } }
+        internal long MainThreadMilliseconds { get { return Math.Max(0L, mainThreadMilliseconds); } }
+        internal long EstimatedSerializedUtf8Bytes { get { return serializedUtf8Bytes; } }
+        internal long ActualSerializedUtf8Bytes { get { return actualSerializedUtf8Bytes; } }
 
         public bool TryConsumeScannedRecord() { return TryConsume(ref scannedRecords, maxScannedRecords, "scannedRecords"); }
         public bool TryConsumeNode() { return TryConsume(ref nodes, maxNodes, "nodes"); }
@@ -197,18 +224,16 @@ namespace UnityCli
             }
         }
 
+        /// <summary>记录最终成功 envelope 的实际 UTF-8 长度；调用方负责在返回前使自描述长度收敛。</summary>
+        internal void ObserveActualSerializedUtf8Bytes(long bytes)
+        {
+            ValidateSerializedUtf8Bytes(bytes);
+            actualSerializedUtf8Bytes = bytes;
+        }
+
         public UnityCliRequestBudgetUsage Usage()
         {
-            return new UnityCliRequestBudgetUsage
-            {
-                ScannedRecords = scannedRecords,
-                Nodes = nodes,
-                Getters = getters,
-                ReflectionCalls = reflectionCalls,
-                MainThreadMilliseconds = Math.Max(0L, mainThreadMilliseconds),
-                EstimatedSerializedUtf8Bytes = serializedUtf8Bytes,
-                ExhaustedDimension = exhaustedDimension
-            };
+            return new UnityCliRequestBudgetUsage(this);
         }
 
         private bool TryConsume(ref long current, long maximum, string dimension)

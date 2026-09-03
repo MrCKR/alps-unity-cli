@@ -37,11 +37,19 @@ namespace UnityCli
         /// <summary>在请求的取消、主线程与实际 UTF-8 ceiling 内增量构造最终 JSON。</summary>
         public static string Serialize(object value, UnityCliRequestBudget budget, CancellationToken cancellationToken)
         {
+            long ignored;
+            return Serialize(value, budget, cancellationToken, out ignored);
+        }
+
+        /// <summary>返回序列化结果及同一次增量写入得到的精确 UTF-8 字节数。</summary>
+        internal static string Serialize(object value, UnityCliRequestBudget budget, CancellationToken cancellationToken, out long utf8Bytes)
+        {
             if (budget == null) throw new ArgumentNullException("budget");
             budget.CheckpointOrThrow();
             var writer = new BudgetedJsonWriter(budget, cancellationToken);
             WriteBudgetedValue(writer, value, budget, cancellationToken);
             budget.CheckpointOrThrow();
+            utf8Bytes = writer.Utf8Bytes;
             return writer.ToString();
         }
 
@@ -214,8 +222,8 @@ namespace UnityCli
             var depth = 0;
             for (var current = type; current != null && current != typeof(object); current = current.BaseType)
             {
-                if (++depth > 32) throw new UnityCliRequestBudgetExceededException("typeDepth");
-                foreach (var property in current.GetTypeInfo().DeclaredProperties)
+                if (++depth > 32) throw new UnityCliRequestBudgetExceededException("nodes");
+                foreach (var property in UnityCliReflectionSnapshot.DeclaredProperties(current, budget, MaximumProtocolMembers))
                 {
                     if (!budget.TryConsumeReflectionCall() || !budget.TryConsumeScannedRecord())
                         throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
@@ -223,7 +231,7 @@ namespace UnityCli
                     if (property.GetMethod == null || !property.GetMethod.IsPublic || property.GetIndexParameters().Length != 0) continue;
                     AddBudgetedMember(members, property);
                 }
-                foreach (var field in current.GetTypeInfo().DeclaredFields)
+                foreach (var field in UnityCliReflectionSnapshot.DeclaredFields(current, budget, MaximumProtocolMembers))
                 {
                     if (!budget.TryConsumeReflectionCall() || !budget.TryConsumeScannedRecord())
                         throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
@@ -246,14 +254,14 @@ namespace UnityCli
         {
             var name = ToCamelCase(member.Name);
             if (!members.ContainsKey(name)) members.Add(name, member);
-            if (members.Count > MaximumProtocolMembers) throw new UnityCliRequestBudgetExceededException("memberCandidates");
+            if (members.Count > MaximumProtocolMembers) throw new UnityCliRequestBudgetExceededException("nodes");
         }
 
         private static void CountMemberMetadata(MemberInfo member, ref int metadataBytes)
         {
             var declaring = member.DeclaringType == null ? string.Empty : member.DeclaringType.FullName;
             metadataBytes += Encoding.UTF8.GetByteCount(member.Name ?? string.Empty) + Encoding.UTF8.GetByteCount(declaring ?? string.Empty);
-            if (metadataBytes > MaximumMemberMetadataUtf8Bytes) throw new UnityCliRequestBudgetExceededException("memberMetadataUtf8Bytes");
+            if (metadataBytes > MaximumMemberMetadataUtf8Bytes) throw new UnityCliRequestBudgetExceededException("serializedUtf8Bytes");
         }
 
         private static void WriteBudgetedString(BudgetedJsonWriter writer, string value)
@@ -310,6 +318,8 @@ namespace UnityCli
                 builder.Append(value);
                 utf8Bytes = next;
             }
+
+            internal long Utf8Bytes { get { return utf8Bytes; } }
 
             public override string ToString() { return builder.ToString(); }
         }

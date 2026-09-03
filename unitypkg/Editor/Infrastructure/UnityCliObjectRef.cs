@@ -44,8 +44,9 @@ namespace UnityCli
         /// </summary>
         internal static class ObjectRefResolver
         {
-            private const int MaximumRootSnapshotItems = 4096;
-            private const int MaximumComponentSnapshotItems = 4096;
+            internal const int AbsoluteMaxBatchItems = 4096;
+            private const int MaximumRootSnapshotItems = AbsoluteMaxBatchItems;
+            private const int MaximumComponentSnapshotItems = AbsoluteMaxBatchItems;
             private const int MaximumRootSnapshotGenerations = 64;
             private static readonly Dictionary<string, GameObject[]> RootSnapshots = new Dictionary<string, GameObject[]>(StringComparer.Ordinal);
 
