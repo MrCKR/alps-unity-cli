@@ -12,6 +12,8 @@ export interface GeneratedToolCompletionContract {
   timeoutError: string;
   outcomeUnknownPolicy: string;
   completionDriverId: string;
+  assemblyName?: string;
+  implementationType?: string;
   journalPolicy: "required" | "none";
   mutation: boolean;
 }
@@ -28,6 +30,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimationClipTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -42,6 +46,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimationClipCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -56,6 +62,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimationClipModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -70,6 +78,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimationPlayTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -84,6 +94,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimationStateTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -98,6 +110,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimationStopTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -112,6 +126,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimatorCrossfadeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -126,6 +142,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimatorGetInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -140,6 +158,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimatorGetParameterTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -154,6 +174,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimatorSetEnabledTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -168,6 +190,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimatorSetParameterTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -182,6 +206,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AnimatorSetSpeedTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -196,6 +222,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -210,6 +238,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetDeleteTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -224,6 +254,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetDuplicateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -238,6 +270,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetGetComponentsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -252,6 +286,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetGetDataTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -266,6 +302,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetImportTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -280,6 +318,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetImportSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -294,6 +334,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetImportSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -308,6 +350,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -322,6 +366,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -336,6 +382,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetMoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -350,6 +398,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetPreviewTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -378,6 +428,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetRenameTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -392,6 +444,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetSearchTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -406,6 +460,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.AssetSearchBuiltInTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -420,6 +476,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildPlatformGetTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -434,6 +492,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildPlatformSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -448,6 +508,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildProfileCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -462,6 +524,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildProfileListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -476,6 +540,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildProfileModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -490,6 +556,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildProfileSwitchTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -518,6 +586,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildSceneAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -532,6 +602,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildSceneDisableTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -546,6 +618,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildSceneEnableTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -560,6 +634,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildSceneListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -574,6 +650,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildSceneRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -588,6 +666,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildSettingsGetTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -602,6 +682,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.BuildSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -616,6 +698,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.CameraCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -630,6 +714,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.CameraInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -644,6 +730,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.CameraLensTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -658,6 +746,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.CameraListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -672,6 +762,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.CameraMultiviewTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -686,6 +778,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.CameraScreenshotTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -700,6 +794,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.CameraTargetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -714,6 +810,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.AimTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -728,6 +826,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.BlendTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -742,6 +842,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.BodyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -756,6 +858,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.BrainEnsureTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -770,6 +874,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.BrainStatusTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -784,6 +890,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.CreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -798,6 +906,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.ExtensionAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -812,6 +922,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.ExtensionListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -826,6 +938,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.ExtensionRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -840,6 +954,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.LensTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -854,6 +970,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.NoiseTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -868,6 +986,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.PingTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -882,6 +1002,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.PriorityTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -896,6 +1018,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Cinemachine.Editor",
+    "implementationType": "UnityCli.Cinemachine.TargetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -924,6 +1048,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ComponentAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -938,6 +1064,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ComponentGetTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -952,6 +1080,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ComponentListTypesTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -966,6 +1096,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ComponentModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -980,6 +1112,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ComponentRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -994,6 +1128,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ComponentSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1008,6 +1144,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ConsoleClearTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1022,6 +1160,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ConsoleGetTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1036,6 +1176,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerAddBlendTreeChildTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1050,6 +1192,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerAddLayerTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1064,6 +1208,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerAddParameterTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1078,6 +1224,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerAddStateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1092,6 +1240,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerAddTransitionTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1106,6 +1256,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerAssignTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1120,6 +1272,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1134,6 +1288,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerCreateBlendTree1DTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1148,6 +1304,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerCreateBlendTree2DTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1162,6 +1320,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerGetInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1176,6 +1336,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerRemoveLayerTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1190,36 +1352,10 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ControllerSetLayerWeightTool",
     "journalPolicy": "required",
     "mutation": true
-  },
-  {
-    "toolName": "diagnose.capabilities",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "diagnose.preflight",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
   },
   {
     "toolName": "docs.get",
@@ -1260,6 +1396,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.Tools.Editor.EditorActiveToolTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1274,6 +1412,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorActiveToolSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1288,6 +1428,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorAutoTickSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1304,20 +1446,6 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "completionDriverId": "active-operation-terminal-readback-v1",
     "journalPolicy": "required",
     "mutation": true
-  },
-  {
-    "toolName": "editor.console",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
   },
   {
     "toolName": "editor.dialog.click",
@@ -1358,6 +1486,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorFocusTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1372,6 +1502,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorMenuTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1386,6 +1518,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.Tools.Editor.EditorMenuItemsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1400,6 +1534,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorPauseTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1414,6 +1550,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorPlayTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1428,6 +1566,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorRedoTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1456,6 +1596,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorResolutionTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1470,6 +1612,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorSearchTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1484,6 +1628,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UnityCliBridge+EditorSelectionTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1498,6 +1644,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorSelectionSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1526,6 +1674,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorStopTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1540,6 +1690,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.Tools.Editor.EditorToolStatesTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1554,6 +1706,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.EditorUndoTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1568,20 +1722,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "extension.status",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.Tools.Editor.EditorWindowsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1596,6 +1738,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GameObjectCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1610,6 +1754,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GameObjectDeleteTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1624,6 +1770,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GameObjectDuplicateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1638,20 +1786,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "go.inspect",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GameObjectFindTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1666,6 +1802,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GameObjectLookAtTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1680,6 +1818,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GameObjectModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1694,6 +1834,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GameObjectMoveRelativeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1708,6 +1850,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GameObjectSetParentTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1722,6 +1866,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsBakeCancelTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1736,6 +1882,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsBakeClearTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1750,6 +1898,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsBakeReflectionProbeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1764,6 +1914,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsBakeSettingsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1778,6 +1930,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsBakeStartTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1792,6 +1946,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsBakeStatusTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1806,6 +1962,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsLightProbeGroupTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1820,22 +1978,10 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsPipelineInfoTool",
     "journalPolicy": "none",
     "mutation": false
-  },
-  {
-    "toolName": "graphics.pipeline-quality",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "required",
-    "mutation": true
   },
   {
     "toolName": "graphics.pipeline-settings",
@@ -1848,20 +1994,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "required",
-    "mutation": true
-  },
-  {
-    "toolName": "graphics.probe-positions",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsPipelineSettingsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1876,6 +2010,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsQualityTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1890,6 +2026,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsReflectionProbeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1904,20 +2042,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "required",
-    "mutation": true
-  },
-  {
-    "toolName": "graphics.settings",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsSceneDebugTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1932,6 +2058,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsSkyboxGetTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1946,6 +2074,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsSkyboxSetAmbientTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1960,6 +2090,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsSkyboxSetFogTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1974,6 +2106,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsSkyboxSetMaterialTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1988,6 +2122,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsSkyboxSetPropertiesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2002,6 +2138,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsSkyboxSetReflectionTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2016,6 +2154,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsSkyboxSetSunTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2030,34 +2170,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "graphics.stats-counters",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "graphics.stats-memory",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsStatsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2072,6 +2186,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.GraphicsVolumeTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2086,6 +2202,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Hdrp.Editor",
+    "implementationType": "UnityCli.HdrpSettingsGetTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2100,6 +2218,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Hdrp.Editor",
+    "implementationType": "UnityCli.HdrpSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2114,6 +2234,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Hdrp.Editor",
+    "implementationType": "UnityCli.HdrpVolumeAddEffectTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2128,6 +2250,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Hdrp.Editor",
+    "implementationType": "UnityCli.HdrpVolumeCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2142,6 +2266,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Hdrp.Editor",
+    "implementationType": "UnityCli.HdrpVolumeInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2156,6 +2282,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Hdrp.Editor",
+    "implementationType": "UnityCli.HdrpVolumeListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2170,22 +2298,10 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Hdrp.Editor",
+    "implementationType": "UnityCli.HdrpVolumeSetTool",
     "journalPolicy": "required",
     "mutation": true
-  },
-  {
-    "toolName": "instances.list",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
   },
   {
     "toolName": "material.assign",
@@ -2198,6 +2314,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.MaterialAssignTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2212,6 +2330,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.MaterialCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2226,6 +2346,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.MaterialInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2240,6 +2362,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.MaterialSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2254,6 +2378,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.MaterialSetRendererColorTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2296,6 +2422,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.NavMeshBakeClearTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2324,6 +2452,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.NavMeshSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2338,6 +2468,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.NavMeshSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2366,6 +2498,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ObjectGetDataTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2380,6 +2514,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ObjectModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2422,6 +2558,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.OcclusionBakeClearTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2482,20 +2620,6 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.info",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
     "toolName": "package.install",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
@@ -2510,20 +2634,6 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.list",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
     "toolName": "package.registry.clear",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
@@ -2536,20 +2646,6 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "completionDriverId": "atomic-typed-result-v1",
     "journalPolicy": "required",
     "mutation": true
-  },
-  {
-    "toolName": "package.registry.get",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
   },
   {
     "toolName": "package.registry.set",
@@ -2622,20 +2718,6 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.scoped-registry.list",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
     "toolName": "package.scoped-registry.remove",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
@@ -2650,34 +2732,6 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.search",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "package.status",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
     "toolName": "physics.assign-material",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
@@ -2688,6 +2742,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsAssignMaterialTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2702,6 +2758,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsCollisionMatrixTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2716,6 +2774,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsForceTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2730,6 +2790,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsJointAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2744,6 +2806,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsJointRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2758,6 +2822,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsLinecastTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2772,6 +2838,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsMaterialTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2786,6 +2854,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsOverlapTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2800,20 +2870,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "physics.raycast-all",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsRaycastTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2828,6 +2886,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsRigidbodyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2842,6 +2902,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsSettingsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2856,6 +2918,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsShapecastTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2870,6 +2934,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsSimulationTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2884,6 +2950,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PhysicsValidateTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2898,6 +2966,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2912,6 +2982,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabHierarchyTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2926,6 +2998,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2940,6 +3014,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabInstantiateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2954,6 +3030,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2968,6 +3046,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabOverridesApplyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2982,6 +3062,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabOverridesRevertTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2996,6 +3078,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.Tools.Prefab.PrefabStageTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3010,6 +3094,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabStageCloseTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3024,6 +3110,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabStageOpenTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3038,6 +3126,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabStageSaveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3052,6 +3142,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabUnpackTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3066,6 +3158,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.PrefabVariantCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3080,6 +3174,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.AppendVerticesToEdgeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3094,6 +3190,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.AutoSmoothTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3108,6 +3206,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.BevelEdgesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3122,6 +3222,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.BridgeEdgesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3136,6 +3238,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.CenterPivotTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3150,6 +3254,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.CombineMeshesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3164,6 +3270,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.ConnectElementsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3178,6 +3286,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.ConvertToProBuilderTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3192,6 +3302,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.CreatePolyShapeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3206,6 +3318,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.CreatePolygonTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3220,6 +3334,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.CreateShapeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3234,6 +3350,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.DeleteFacesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3248,6 +3366,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.DetachFacesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3262,6 +3382,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.DuplicateAndFlipTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3276,6 +3398,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.ExtrudeEdgesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3290,6 +3414,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.ExtrudeFacesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3304,6 +3430,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.FlipNormalsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3318,6 +3446,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.FreezeTransformTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3332,6 +3462,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.InsertVertexTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3346,6 +3478,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.MergeFacesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3360,6 +3494,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.MergeObjectsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3374,6 +3510,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.MergeVerticesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3388,6 +3526,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.MeshInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3402,6 +3542,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.MoveVerticesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3416,6 +3558,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.PingTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3430,6 +3574,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.RepairMeshTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3444,6 +3590,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.ProBuilderSceneTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3458,6 +3606,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.SelectFacesTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3472,6 +3622,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.SetFaceColorTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3486,6 +3638,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.SetFaceMaterialTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3500,6 +3654,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.SetFaceUvsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3514,6 +3670,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.SetPivotTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3528,6 +3686,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.SetSmoothingTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3542,6 +3702,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.SplitVerticesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3556,6 +3718,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.SubdivideTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3570,6 +3734,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.ValidateMeshTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3584,6 +3750,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.ProBuilder.Editor",
+    "implementationType": "UnityCli.ProBuilder.WeldVerticesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3598,6 +3766,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerAreasTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3612,6 +3782,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerCaptureTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3626,6 +3798,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerClearTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3640,6 +3814,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerCounterTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3654,6 +3830,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerDeepTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3668,6 +3846,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerExportTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3682,6 +3862,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerFrameTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3696,6 +3878,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerFrameDebuggerDisableTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3710,6 +3894,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerFrameDebuggerEnableTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3724,6 +3910,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerFrameDebuggerEventsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3738,6 +3926,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerHierarchyTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3752,6 +3942,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerLoadTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3766,6 +3958,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerMemoryTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3780,6 +3974,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerMemorySnapshotCompareTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3794,6 +3990,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerMemorySnapshotListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3808,6 +4006,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerMemorySnapshotTakeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3822,6 +4022,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerModuleEnableTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3836,6 +4038,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerModulesTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3850,6 +4054,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerObjectMemoryTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3864,6 +4070,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerPauseTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3878,6 +4086,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerRenderingStatsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3892,6 +4102,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerScriptStatsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3906,6 +4118,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerStartTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3920,6 +4134,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerStatusTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3934,6 +4150,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProfilerStopTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3948,6 +4166,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectAudioSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3962,6 +4182,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectAudioSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -3976,6 +4198,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.Tools.Project.ProjectInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -3990,6 +4214,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectInputSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4004,6 +4230,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectInputSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4018,6 +4246,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectLayerAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4032,6 +4262,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectLayerRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4046,6 +4278,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.Tools.Project.ProjectLayersTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4060,6 +4294,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectPlayerSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4074,6 +4310,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectPlayerSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4088,6 +4326,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectTagAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4102,6 +4342,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectTagRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4116,6 +4358,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.Tools.Project.ProjectTagsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4130,6 +4374,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectTimeSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4144,6 +4390,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ProjectTimeSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4200,6 +4448,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ReflectionMethodCallTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4214,6 +4464,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ReflectionMethodFindTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4340,20 +4592,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "scene.build-settings",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneActiveTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4368,22 +4608,10 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneCreateTool",
     "journalPolicy": "required",
     "mutation": true
-  },
-  {
-    "toolName": "scene.data",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
   },
   {
     "toolName": "scene.gameobject",
@@ -4396,6 +4624,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UnityCliBridge+SceneGameObjectTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4410,6 +4640,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UnityCliBridge+SceneGameObjectComponentTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4424,6 +4656,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UnityCliBridge+SceneGameObjectComponentsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4438,6 +4672,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneHierarchyTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4452,6 +4688,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneListOpenedTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4466,6 +4704,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneLoadTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4480,6 +4720,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneMoveObjectTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4494,6 +4736,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneSaveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4508,6 +4752,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneSetActiveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4522,6 +4768,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneUnloadTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4536,6 +4784,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneValidateTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4550,6 +4800,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.SceneViewFrameTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4564,6 +4816,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScreenshotEditorElementTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4578,6 +4832,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScreenshotGameViewTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4592,6 +4848,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScreenshotIsolatedObjectTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4606,6 +4864,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScreenshotOrbitTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4620,6 +4880,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScreenshotSceneViewTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4634,6 +4896,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScreenshotScreenTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4648,6 +4912,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScreenshotSurroundTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4662,6 +4928,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScriptableObjectCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4676,6 +4944,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScriptableObjectInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4690,6 +4960,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScriptableObjectListTypesTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4704,6 +4976,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ScriptableObjectModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4718,6 +4992,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ShaderCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4732,6 +5008,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ShaderDeleteTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4746,6 +5024,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ShaderGetDataTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4760,6 +5040,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ShaderInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4774,6 +5056,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ShaderListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4788,6 +5072,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ShaderReadTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4802,6 +5088,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.ShaderUpdateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4834,20 +5122,6 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "tests.list",
-    "descriptorOwner": "built-in",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
     "toolName": "texture.create",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
@@ -4858,6 +5132,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TextureCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4872,6 +5148,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TextureDeleteTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4886,6 +5164,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TextureGenerateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4900,6 +5180,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TextureImportSettingsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4914,6 +5196,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TextureInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4928,6 +5212,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TextureModifyTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4942,6 +5228,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TextureSpriteTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4956,6 +5244,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TimelineClipAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4970,6 +5260,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TimelineCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4984,6 +5276,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TimelineInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4998,64 +5292,10 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TimelineTrackAddTool",
     "journalPolicy": "required",
     "mutation": true
-  },
-  {
-    "toolName": "tools.describe",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "tools.group",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "tools.group-list",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
-    "toolName": "tools.search",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
   },
   {
     "toolName": "type.schema",
@@ -5068,6 +5308,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.TypeSchemaTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5082,6 +5324,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiAttachDocumentTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5096,6 +5340,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiButtonCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5110,6 +5356,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiCanvasCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5124,6 +5372,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiCreatePanelSettingsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5138,6 +5388,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiDetachDocumentTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5152,6 +5404,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiDocumentCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5166,6 +5420,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiDocumentDeleteTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5180,6 +5436,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiDocumentInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5194,6 +5452,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiDocumentUpdateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5208,6 +5468,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiGetVisualTreeTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5222,6 +5484,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiHierarchyTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5236,6 +5500,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiImageCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5250,6 +5516,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiLinkStylesheetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5264,6 +5532,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiListDocumentsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5278,6 +5548,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiModifyVisualElementTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5292,6 +5564,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiRenderPreviewTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5306,6 +5580,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiTextCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5320,6 +5596,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Editor",
+    "implementationType": "UnityCli.UiUpdatePanelSettingsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5334,6 +5612,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpFeatureAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5348,6 +5628,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpFeatureConfigureTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5362,6 +5644,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpFeatureListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5376,6 +5660,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpFeatureRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5390,6 +5676,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpFeatureToggleTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5404,6 +5692,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpSettingsGetTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5418,6 +5708,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5432,6 +5724,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpVolumeAddEffectTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5446,6 +5740,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpVolumeCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5460,6 +5756,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpVolumeInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5474,6 +5772,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpVolumeListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5488,6 +5788,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.Urp.Editor",
+    "implementationType": "UnityCli.UrpVolumeSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5502,6 +5804,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxControlPauseTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5516,6 +5820,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxControlPlayTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5530,6 +5836,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxControlReinitializeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5544,6 +5852,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxControlSetRateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5558,6 +5868,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxControlSetSeedTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5572,6 +5884,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxControlStopTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5586,6 +5900,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxEffectAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5600,6 +5916,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxEffectAssignTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5614,6 +5932,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxEffectInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5628,6 +5948,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxGraphCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5642,6 +5964,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxGraphInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5656,6 +5980,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxLineCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5670,6 +5996,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxLinePositionsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5684,6 +6012,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParameterTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5698,6 +6028,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticleCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5712,6 +6044,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticleEmissionTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5726,6 +6060,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticleInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5740,6 +6076,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticleMainTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5754,6 +6092,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticleShapeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5768,6 +6108,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticleClearTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5782,6 +6124,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticlePauseTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5796,6 +6140,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticlePlayTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5810,6 +6156,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxParticleStopTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5824,6 +6172,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxTemplateCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5838,6 +6188,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxTemplateListTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -5852,6 +6204,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxTrailCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5866,6 +6220,8 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "timeoutError": "E_EXECUTION_TIMEOUT",
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
+    "assemblyName": "UnityCli.Extensions.VfxGraph.Editor",
+    "implementationType": "UnityCli.VfxTrailSetTool",
     "journalPolicy": "required",
     "mutation": true
   }
