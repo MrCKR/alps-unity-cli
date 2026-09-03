@@ -112,7 +112,6 @@ export async function projectCatalogPage(
   if (!primary) return targets.offline!;
 
   const pageNames = primary.pageNames;
-  if (!pageNames) return catalogConflict(requestId, "catalog", "target omitted its signed page-name projection");
   const pageNameSet = new Set(pageNames);
   const overlay = targets.editor?.ok && targets.runtime?.ok ? runtimeAvailabilityOverlay(targets.editor, targets.runtime, requestId) : undefined;
   if (overlay && "failure" in overlay) return overlay.failure;
@@ -148,11 +147,11 @@ export async function projectCatalogPage(
     ...(targets.runtime?.ok ? { runtime: targets.runtime.generation } : {}),
   };
   const tokens = {
-    ...(targets.editor?.ok && targets.editor.continuationToken ? { editor: targets.editor.continuationToken } : {}),
-    ...(targets.runtime?.ok && targets.runtime.continuationToken ? { runtime: targets.runtime.continuationToken } : {}),
+    ...(targets.editor?.ok ? { editor: targets.editor.continuationToken } : {}),
+    ...(targets.runtime?.ok ? { runtime: targets.runtime.continuationToken } : {}),
   };
   const cursorText = request.cursor ?? "start";
-  const nextCursor = hasMore && tools.length > 0 && Object.keys(tokens).length > 0
+  const nextCursor = hasMore && tools.length > 0
     ? encodeCursor({ version: 1, operation, generations, tokens })
     : undefined;
   if (hasMore && !nextCursor) return catalogConflict(requestId, tools[tools.length - 1]?.name ?? "catalog", "target omitted its signed continuation token");
@@ -239,14 +238,7 @@ async function targetSummaries(
   }, absoluteDeadlineMs);
   if (!editor.ok && !OFFLINE_CODES.has(editor.error.code)) return { failure: editor };
 
-  const runtimeTarget = await readRuntimeCatalogSummary(flags, runtimeForTarget(runtime, "runtime"), requestIdForTarget(runtime, requestId, "runtime"), editor.ok ? {
-    group: query.group,
-    keyword: query.keyword,
-    afterName: editor.cursorBoundary,
-    limit: query.limit,
-    expectedGeneration: query.expectedRuntimeGeneration,
-    reservedNames: query.reservedNames,
-  } : {
+  const runtimeTarget = await readRuntimeCatalogSummary(flags, runtimeForTarget(runtime, "runtime"), requestIdForTarget(runtime, requestId, "runtime"), {
     group: query.group,
     keyword: query.keyword,
     limit: query.limit,
@@ -298,9 +290,8 @@ function validateTargetContinuity(cursor: CatalogCursor | undefined, targets: Ta
   if (!cursor) return undefined;
   if (Boolean(cursor.generations.editor) !== Boolean(targets.editor?.ok)
       || Boolean(cursor.generations.runtime) !== Boolean(targets.runtime?.ok)) return catalogChanged(requestId);
-  if (targets.editor?.ok) {
-    if (!cursor.tokens.editor || cursor.tokens.runtime) return catalogChanged(requestId);
-  } else if (targets.runtime?.ok && (!cursor.tokens.runtime || cursor.tokens.editor)) return catalogChanged(requestId);
+  if (Boolean(cursor.tokens.editor) !== Boolean(targets.editor?.ok)
+      || Boolean(cursor.tokens.runtime) !== Boolean(targets.runtime?.ok)) return catalogChanged(requestId);
   return undefined;
 }
 

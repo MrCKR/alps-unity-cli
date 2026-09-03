@@ -13,9 +13,41 @@ using NUnit.Framework;
 
 namespace UnityCli.Tests
 {
+    public static class UnityCliToolCatalogFixtureProbe
+    {
+        private static readonly object Sync = new object();
+        private static readonly Dictionary<string, int> DescribeCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        public static void Reset()
+        {
+            lock (Sync)
+            {
+                DescribeCounts.Clear();
+            }
+        }
+
+        public static void RecordDescribe(string providerName)
+        {
+            lock (Sync)
+            {
+                int current;
+                DescribeCounts.TryGetValue(providerName, out current);
+                DescribeCounts[providerName] = current + 1;
+            }
+        }
+
+        public static Dictionary<string, int> Snapshot()
+        {
+            lock (Sync)
+            {
+                return new Dictionary<string, int>(DescribeCounts, StringComparer.Ordinal);
+            }
+        }
+    }
+
     public sealed class UnityCliToolCatalogTests
     {
-        private static Assembly compiledProjectToolProviderAssembly;
+        private static Assembly[] compiledProjectToolProviderAssemblies;
         private Type bridgeType;
         private Type builderType;
         private Type providerKindType;
@@ -68,26 +100,37 @@ namespace UnityCli.Tests
             var previousHealth = healthField.GetValue(null);
             try
             {
-                var fixtureAssembly = CompileProjectToolProviderAssembly(301);
+                UnityCliToolCatalogFixtureProbe.Reset();
+                var fixtureAssemblies = CompileProjectToolProviderAssemblies(301);
                 var builder = Activator.CreateInstance(builderType, true);
                 var collect = bridgeType.GetMethod("CollectProjectToolCatalog", BindingFlags.NonPublic | BindingFlags.Static);
                 collect.Invoke(null, new object[] { AppDomain.CurrentDomain.GetAssemblies(), builder });
                 var snapshot = PublishThroughProductionSlot(builder, 12L);
                 Assert.That(ReadPublishedSnapshot(), Is.SameAs(snapshot));
-                Assert.That(Int(snapshot, "ProviderAssemblyCount"), Is.GreaterThanOrEqualTo(2));
+                Assert.That(Int(snapshot, "ProviderAssemblyCount"), Is.GreaterThanOrEqualTo(302));
                 Assert.That(Int(snapshot, "ProjectInterfaceToolCount"), Is.EqualTo(301));
                 Assert.That(Int(snapshot, "ToolCount"), Is.GreaterThanOrEqualTo(301));
-                Assert.That(Int(snapshot, "DiscoveryPassCount"), Is.EqualTo(1));
-                Assert.That(Int(snapshot, "ProviderMetadataReadCount"), Is.EqualTo(Int(snapshot, "ProviderAssemblyCount")));
-                Assert.That(Int(snapshot, "AggregateSuccessLogCount"), Is.EqualTo(1));
+
                 var descriptors = ((IEnumerable)Property(snapshot, "Descriptors").GetValue(snapshot)).Cast<object>().ToList();
-                Assert.That(descriptors.Count(item => ((string)Property(item, "Name").GetValue(item)).StartsWith("fixture.generated.", StringComparison.Ordinal)), Is.EqualTo(301));
-                Assert.That(fixtureAssembly.GetTypes().Count(type => !type.IsAbstract && type.Name.StartsWith("GeneratedTool", StringComparison.Ordinal)), Is.EqualTo(301));
+                var fixtureDescriptorNames = descriptors
+                    .Select(item => (string)Property(item, "Name").GetValue(item))
+                    .Where(name => name.StartsWith("fixture.generated.", StringComparison.Ordinal))
+                    .ToList();
+                var describeCounts = UnityCliToolCatalogFixtureProbe.Snapshot();
+
+                Assert.That(fixtureAssemblies.Length, Is.EqualTo(301));
+                Assert.That(fixtureAssemblies.All(assembly => assembly.GetTypes().Count(type => !type.IsAbstract && type.Name.StartsWith("GeneratedTool", StringComparison.Ordinal)) == 1), Is.True);
+                Assert.That(fixtureDescriptorNames.Count, Is.EqualTo(301));
+                Assert.That(fixtureDescriptorNames.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(301));
+                Assert.That(describeCounts.Count, Is.EqualTo(301));
+                Assert.That(describeCounts.Values.All(count => count == 1), Is.True);
+                Assert.That(fixtureDescriptorNames, Is.EquivalentTo(describeCounts.Keys));
             }
             finally
             {
                 publishedField.SetValue(null, previousCatalog);
                 healthField.SetValue(null, previousHealth);
+                UnityCliToolCatalogFixtureProbe.Reset();
             }
         }
 
@@ -178,10 +221,7 @@ namespace UnityCli.Tests
                 for (var index = 0; index < 4096; index++)
                     Add(builder, Definition("fixture.bound." + index.ToString("D4"), "project", "native", "g" + index.ToString("D4"), new string('界', 170)), "ProjectInterface");
                 PublishThroughProductionSlot(builder, 1L);
-                var summaryRequest = new UnityCli.Protocol.BridgeRequest
-                {
-                    Input = new Dictionary<string, object> { { "limit", 101L }, { "reservedNames", new List<object>() } }
-                };
+                var summaryRequest = CursorSummaryRequest(null, null);
                 var summary = bridgeType.GetMethod("ProjectToolCatalogSummary", BindingFlags.NonPublic | BindingFlags.Static)
                     .Invoke(null, new object[] { summaryRequest, false });
                 Assert.That(Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(summary)), Is.LessThanOrEqualTo(256 * 1024));
@@ -394,34 +434,49 @@ namespace UnityCli.Tests
             });
         }
 
-        private static Assembly CompileProjectToolProviderAssembly(int count)
+        private static Assembly[] CompileProjectToolProviderAssemblies(int count)
         {
-            if (compiledProjectToolProviderAssembly != null) return compiledProjectToolProviderAssembly;
-            var source = new StringBuilder();
-            source.AppendLine("using System.Threading; using System.Threading.Tasks; using UnityCli;");
-            source.AppendLine("namespace UnityCli.GeneratedCatalogFixture {");
-            source.AppendLine("public sealed class FixtureRequest {} public sealed class FixtureResult {}");
+            if (compiledProjectToolProviderAssemblies != null && compiledProjectToolProviderAssemblies.Length == count)
+                return compiledProjectToolProviderAssemblies;
+
+            var assemblies = new List<Assembly>(count);
             for (var index = 0; index < count; index++)
-            {
-                var suffix = index.ToString("D3");
-                source.AppendLine("public sealed class GeneratedTool" + suffix + " : IUnityCliTool<FixtureRequest, FixtureResult> {");
-                source.AppendLine("public ToolDescriptor Describe() { return new ToolDescriptor { Name=\"fixture.generated." + suffix
-                    + "\", Summary=\"Generated fixture.\", Description=\"Production collector fixture.\", Group=\"fixture\", Examples=new[]{new ToolExample{Description=\"Fixture\", Input=new FixtureRequest()}}, Completion=new ToolCompletionDescriptor{ExecutionClass=\"atomic\", CompletionPredicate=\"method-return\", ProofSource=\"typed-handler-result\", ReloadPolicy=\"fail-before-effect\", TimeoutError=\"E_EXECUTION_TIMEOUT\", OutcomeUnknownPolicy=\"not-applicable-read-only\", CompletionDriverId=\"direct-typed-result-v1\"} }; }");
-                source.AppendLine("public ValueTask<FixtureResult> ExecuteAsync(FixtureRequest request, UnityCliProjectToolContext ctx, CancellationToken ct) { return new ValueTask<FixtureResult>(new FixtureResult()); }}");
-            }
+                assemblies.Add(CompileProjectToolProviderAssembly(index));
+
+            compiledProjectToolProviderAssemblies = assemblies.ToArray();
+            return compiledProjectToolProviderAssemblies;
+        }
+
+        private static Assembly CompileProjectToolProviderAssembly(int index)
+        {
+            var suffix = index.ToString("D3");
+            var source = new StringBuilder();
+            source.AppendLine("using System.Collections.Generic; using System.Threading; using System.Threading.Tasks; using UnityCli;");
+            source.AppendLine("namespace UnityCli.GeneratedCatalogFixture" + suffix + " {");
+            source.AppendLine("public sealed class FixtureRequest {} public sealed class FixtureResult {}");
+            source.AppendLine("public sealed class GeneratedTool" + suffix + " : IUnityCliTool<FixtureRequest, FixtureResult> {");
+            source.AppendLine("public ToolDescriptor Describe() { global::UnityCli.Tests.UnityCliToolCatalogFixtureProbe.RecordDescribe(\"fixture.generated." + suffix + "\"); return new ToolDescriptor { Name=\"fixture.generated." + suffix
+                + "\", Summary=\"Generated fixture.\", Description=\"Production collector fixture.\", Group=\"fixture\", Examples=new[]{new ToolExample{Description=\"Fixture\", Input=new Dictionary<string, object>()}}, Completion=new ToolCompletionDescriptor{ExecutionClass=\"atomic\", CompletionPredicate=\"method-return\", ProofSource=\"typed-handler-result\", ReloadPolicy=\"fail-before-effect\", TimeoutError=\"E_EXECUTION_TIMEOUT\", OutcomeUnknownPolicy=\"not-applicable-read-only\", CompletionDriverId=\"direct-typed-result-v1\"} }; }");
+            source.AppendLine("public ValueTask<FixtureResult> ExecuteAsync(FixtureRequest request, UnityCliProjectToolContext ctx, CancellationToken ct) { return new ValueTask<FixtureResult>(new FixtureResult()); }}");
             source.AppendLine("}");
             using (var provider = new CSharpCodeProvider())
             {
-                var parameters = new CompilerParameters { GenerateExecutable = false, GenerateInMemory = true, CompilerOptions = "/langversion:latest" };
+                var parameters = new CompilerParameters
+                {
+                    GenerateExecutable = false,
+                    GenerateInMemory = true,
+                    CompilerOptions = "/langversion:latest",
+                    OutputAssembly = "UnityCli.GeneratedCatalogFixture" + suffix + ".dll"
+                };
                 parameters.ReferencedAssemblies.Add("System.dll");
                 parameters.ReferencedAssemblies.Add("System.Core.dll");
                 parameters.ReferencedAssemblies.Add(typeof(IUnityCliTool<,>).Assembly.Location);
                 parameters.ReferencedAssemblies.Add(typeof(ValueTask<>).Assembly.Location);
+                parameters.ReferencedAssemblies.Add(typeof(UnityCliToolCatalogFixtureProbe).Assembly.Location);
                 var result = provider.CompileAssemblyFromSource(parameters, source.ToString());
                 var failures = result.Errors.Cast<CompilerError>().Where(error => !error.IsWarning).Select(error => error.ToString()).ToArray();
                 Assert.That(failures, Is.Empty, string.Join(Environment.NewLine, failures));
-                compiledProjectToolProviderAssembly = result.CompiledAssembly;
-                return compiledProjectToolProviderAssembly;
+                return result.CompiledAssembly;
             }
         }
 

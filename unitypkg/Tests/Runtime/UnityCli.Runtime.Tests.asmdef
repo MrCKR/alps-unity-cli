@@ -5,8 +5,7 @@
     "UnityCli.Runtime"
   ],
   "includePlatforms": [
-    "WindowsStandalone32",
-    "WindowsStandalone64"
+    "Editor"
   ],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

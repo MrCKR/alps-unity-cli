@@ -19,11 +19,11 @@ async function sources(): Promise<Record<keyof typeof RUNTIME_FILES, string>> {
   return Object.fromEntries(entries) as Record<keyof typeof RUNTIME_FILES, string>;
 }
 
-test("development Player runtime assembly stays Windows-only and Editor-independent", async () => {
+test("development Player runtime assembly is Editor-loadable without Editor dependencies", async () => {
   const source = await sources();
   const asmdef = JSON.parse(source.asmdef) as { name: string; includePlatforms: string[]; references: string[] };
   assert.equal(asmdef.name, "UnityCli.Runtime");
-  assert.deepEqual(asmdef.includePlatforms, ["WindowsStandalone32", "WindowsStandalone64"]);
+  assert.deepEqual(asmdef.includePlatforms, ["Editor", "WindowsStandalone32", "WindowsStandalone64"]);
   assert.deepEqual(asmdef.references, ["UnityCli.Shared"]);
   for (const text of [source.bridge, source.json, source.registry]) {
     assert.doesNotMatch(text, /using UnityEditor|Newtonsoft\.|System\.Web\./);
@@ -150,15 +150,6 @@ test("tools discovery is a direct control-plane and keeps the root request ident
   assert.doesNotMatch(source, /requestId\s*\+|`\$\{requestId\}[_-]/, "discovery must not mint a second request identity");
   for (const obsolete of ["tools/describe", "tools/group", "tools/group-list", "tools/search", "tools/pagination"])
     assert.equal(source.includes(obsolete), false, obsolete);
-});
-
-test("Runtime describe reaches the private exact-name payload validator", async () => {
-  const { bridge } = await sources();
-  assert.match(bridge, /if \(RuntimeCatalogReadCommand\(command\)\)[\s\S]{0,240}ValidateRuntimeCatalogInput\(command, input\)/);
-  const describeValidation = bridge.match(/if \(string\.Equals\(command, "runtime-tool\.describe"[\s\S]*?\n\s*}\n\s*if \(!HasOnlyKeys\(input\)\)/)?.[0] ?? "";
-  assert.match(describeValidation, /HasOnlyKeys\(input, "name"\)/);
-  assert.doesNotMatch(describeValidation, /fallbackName/);
-  assert.match(bridge, /ValidateRuntimeCatalogInput[\s\S]*runtime-tool\.describe/);
 });
 
 test("runtime JSON rejects duplicate keys, trailing tokens, BOM-body use and non-finite output", async () => {

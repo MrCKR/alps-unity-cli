@@ -372,7 +372,6 @@ namespace UnityCli
         {
             public string Group { get; set; }
             public string Keyword { get; set; }
-            public string AfterName { get; set; }
             public int Limit { get; set; }
             public string ExpectedCatalogGeneration { get; set; }
             public string[] ReservedNames { get; set; }
@@ -453,8 +452,11 @@ namespace UnityCli
         /// <summary>summary由目标domain签发opaque continuation；CLI不持有可编辑边界。</summary>
         private static object ProjectToolCatalogSummary(UnityCli.Protocol.BridgeRequest request, bool runtimeOnly)
         {
-            RequireProjectToolCatalogInputKeys(request, "group", "keyword", "afterName", "limit", "expectedCatalogGeneration", "reservedNames",
+            RequireProjectToolCatalogInputKeys(request, "group", "keyword", "limit", "expectedCatalogGeneration", "reservedNames",
                 "localNames", "cursorContext", "cursorToken");
+            var summaryInput = request.Input as IDictionary<string, object>;
+            if (!summaryInput.ContainsKey("reservedNames") || !summaryInput.ContainsKey("localNames") || !summaryInput.ContainsKey("cursorContext"))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog summary input is missing its cursor context fields.");
             var catalog = ProjectToolCatalogSnapshotReader.Read();
             var args = request.DeserializeArgs<ProjectToolCatalogArgs>() ?? new ProjectToolCatalogArgs();
             if (args.Limit < 1 || args.Limit > 101)
@@ -462,7 +464,7 @@ namespace UnityCli
             RequireNoReservedProjectToolNames(catalog, args);
             var generation = ProjectToolCatalogGeneration();
             RequireProjectToolCatalogGeneration(args, generation);
-            if (Utf8ByteCount(args.Group) > 256 || Utf8ByteCount(args.AfterName) > 256 || Utf8ByteCount(args.Keyword) > 2048)
+            if (Utf8ByteCount(args.Group) > 256 || Utf8ByteCount(args.Keyword) > 2048)
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog summary filters exceed their bounded UTF-8 string limits.");
             var tokens = (args.Keyword ?? string.Empty).Split('|').Select(token => token.Trim()).Where(token => token.Length > 0).ToArray();
             if (tokens.Length > 16 || tokens.Any(token => Utf8ByteCount(token) > 128))
@@ -474,18 +476,6 @@ namespace UnityCli
                 .ToList();
             var nativeNames = new HashSet<string>(catalog.Descriptors.Where(definition => definition.ContractProfile != "official-attribute").Select(definition => definition.Name), StringComparer.Ordinal);
             foreach (var reservedName in args.ReservedNames ?? new string[0]) nativeNames.Add(reservedName);
-
-            if (string.IsNullOrEmpty(args.CursorContext))
-            {
-                var remaining = matches.Where(definition => string.IsNullOrEmpty(args.AfterName) || string.CompareOrdinal(definition.Name, args.AfterName) > 0).ToList();
-                var legacyTools = remaining.Take(args.Limit).Select(definition => (object)ProjectToolRoutingSummaryData(definition, runtimeOnly, nativeNames)).ToList();
-                var legacyData = new Dictionary<string, object>
-                {
-                    { "catalogGeneration", generation }, { "total", (long)matches.Count },
-                    { "hasMore", remaining.Count > args.Limit }, { "tools", legacyTools }
-                };
-                return BoundCatalogSummaryData(legacyData, legacyTools, remaining.Count > args.Limit);
-            }
 
             var localNames = ValidateCatalogCursorLocalNames(args);
             var scope = ProjectToolCatalogCursorScope(generation, args, runtimeOnly, localNames);
@@ -502,20 +492,6 @@ namespace UnityCli
             return BoundSignedCatalogSummaryData(generation, matches.Count, combinedNames, offset, pageNames, tools, scope);
         }
 
-        /// <summary>按完整data JSON的UTF-8字节数裁剪legacy summary，next边界保持准确。</summary>
-        private static object BoundCatalogSummaryData(Dictionary<string, object> data, List<object> tools, bool hasMore)
-        {
-            while (CatalogDataUtf8Bytes(data) > 256 * 1024 && tools.Count > 0)
-            {
-                tools.RemoveAt(tools.Count - 1);
-                data["hasMore"] = true;
-            }
-            if (CatalogDataUtf8Bytes(data) > 256 * 1024)
-                throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool catalog summary cannot fit the bounded UTF-8 transport size.");
-            if (!hasMore && tools.Count == Convert.ToInt32(data["total"], CultureInfo.InvariantCulture)) data["hasMore"] = false;
-            return data;
-        }
-
         /// <summary>签名页在序列化预算内同步裁剪pageNames与live summaries，token指向真实末项。</summary>
         private static object BoundSignedCatalogSummaryData(
             string generation, int liveTotal, List<string> combinedNames, int offset, List<string> pageNames,
@@ -530,7 +506,6 @@ namespace UnityCli
                 {
                     { "catalogGeneration", generation }, { "total", (long)liveTotal },
                     { "hasMore", end < combinedNames.Count }, { "tools", tools },
-                    { "cursorOffset", (long)offset }, { "cursorBoundary", offset > 0 ? combinedNames[offset - 1] : string.Empty },
                     { "pageNames", pageNames.Cast<object>().ToList() },
                     { "continuationToken", SignProjectToolCatalogCursor(scope, end, boundary) }
                 };
@@ -554,9 +529,8 @@ namespace UnityCli
             var reserved = new HashSet<string>(args.ReservedNames ?? new string[0], StringComparer.Ordinal);
             if (values.Any(value => !reserved.Contains(value)))
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog local names must be a subset of reserved package-local names.");
-            if (Utf8ByteCount(args.CursorContext) != 64 || args.CursorContext.Any(value => !Uri.IsHexDigit(value))
-                || !string.IsNullOrEmpty(args.AfterName))
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog cursor context or boundary input is invalid.");
+            if (Utf8ByteCount(args.CursorContext) != 64 || args.CursorContext.Any(value => !Uri.IsHexDigit(value)))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog cursor context is invalid.");
             return values;
         }
 
@@ -591,7 +565,8 @@ namespace UnityCli
                     throw InvalidProjectToolCatalogCursor();
                 offset = parsedOffset;
                 boundary = Encoding.UTF8.GetString(Convert.FromBase64String(fields[2]));
-                if (Utf8ByteCount(boundary) > 256) throw InvalidProjectToolCatalogCursor();
+                if (Utf8ByteCount(boundary) > 256 || (offset == 0) != string.IsNullOrEmpty(boundary))
+                    throw InvalidProjectToolCatalogCursor();
             }
             catch (BridgeCommandException) { throw; }
             catch { throw InvalidProjectToolCatalogCursor(); }

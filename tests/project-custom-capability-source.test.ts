@@ -127,14 +127,20 @@ test("typed custom Tools retain async schema, completion, availability, and exec
   assert.match(registry, /\{ "available", ToolAvailableNow\(definition\) \}/);
 });
 
-test("legacy project Context registries and authoring docs are absent", async () => {
+test("legacy project Context registries are absent while retained Tool owners stay on runtime-tool routes", async () => {
+  const [runtimeDomain, dispatcher] = await Promise.all([
+    readFile(runtimeBridgeDomainPath, "utf8"),
+    readFile(toolDispatcherPath, "utf8"),
+  ]);
   for (const path of [
     "unitypkg/Editor/ProjectContexts",
     "unitypkg/Editor/Contexts",
     "src/contexts",
-    "src/bridge/domains/context.ts",
     "skills/unitycli/references/custom-contexts.md",
   ]) await assert.rejects(access(path), { code: "ENOENT" });
+  assert.match(runtimeDomain, /bridgeCommand: "runtime-tool\.describe"/);
+  assert.match(runtimeDomain, /bridgeCommand: "runtime-tool\.run"/);
+  assert.match(dispatcher, /if \(localMetadata\?\.handler === "bridge-runtime"\) \{[\s\S]*return dispatchResolved\(localMetadata, input\);[\s\S]*\}/);
 });
 
 test("generated C#/TS, contracts, schemas, scripts, product source, docs, and tests contain no removed per-Tool identifiers", async () => {

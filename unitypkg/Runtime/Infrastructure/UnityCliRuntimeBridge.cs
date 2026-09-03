@@ -429,12 +429,13 @@ namespace UnityCli
             }
             if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
             {
-                if (!HasOnlyKeys(input, "group", "keyword", "afterName", "limit", "expectedCatalogGeneration", "reservedNames", "localNames", "cursorContext", "cursorToken"))
+                if (!HasOnlyKeys(input, "group", "keyword", "limit", "expectedCatalogGeneration", "reservedNames", "localNames", "cursorContext", "cursorToken"))
                     throw new FormatException("Runtime catalog summary input contains an unknown field.");
+                if (!input.ContainsKey("reservedNames") || !input.ContainsKey("localNames") || !input.ContainsKey("cursorContext"))
+                    throw new FormatException("Runtime catalog summary input is missing its cursor context fields.");
                 var limit = ReadLong(input, "limit");
                 if (limit < 1L || limit > 101L) throw new FormatException("Catalog summary limit must be an integer in [1,101].");
                 OptionalRuntimeCatalogString(input, "group", 256);
-                OptionalRuntimeCatalogString(input, "afterName", 256);
                 OptionalRuntimeCatalogString(input, "keyword", 2048);
                 OptionalRuntimeCatalogString(input, "cursorContext", 64);
                 OptionalRuntimeCatalogString(input, "cursorToken", 8192);
@@ -462,12 +463,8 @@ namespace UnityCli
             var reservedNames = RuntimeCatalogStringList(input, "reservedNames", false);
             if (localNames.Any(name => !reservedNames.Contains(name))) throw new FormatException("Catalog local names must be a subset of reserved names.");
             var context = ReadString(input, "cursorContext");
-            if (string.IsNullOrEmpty(context)) return new Dictionary<string, object>
-            {
-                { "catalogGeneration", generation }, { "total", 0L }, { "hasMore", false }, { "tools", new List<object>() }
-            };
-            if (context.Length != 64 || context.Any(value => !Uri.IsHexDigit(value))
-                || !string.IsNullOrEmpty(ReadString(input, "afterName"))) throw new FormatException("Runtime catalog cursor context is invalid.");
+            if (string.IsNullOrEmpty(context) || context.Length != 64 || context.Any(value => !Uri.IsHexDigit(value)))
+                throw new FormatException("Runtime catalog cursor context is invalid.");
             var scope = Sha256(generation + "\n" + context + "\n" + (ReadString(input, "group") ?? string.Empty) + "\n"
                 + (ReadString(input, "keyword") ?? string.Empty) + "\n" + string.Join("\n", localNames) + "\n--reserved--\n"
                 + string.Join("\n", reservedNames));
@@ -482,8 +479,7 @@ namespace UnityCli
             var data = new Dictionary<string, object>
             {
                 { "catalogGeneration", generation }, { "total", 0L }, { "hasMore", end < localNames.Count },
-                { "tools", new List<object>() }, { "cursorOffset", (long)offset },
-                { "cursorBoundary", boundary }, { "pageNames", pageNames.Cast<object>().ToList() },
+                { "tools", new List<object>() }, { "pageNames", pageNames.Cast<object>().ToList() },
                 { "continuationToken", SignRuntimeCatalogCursor(scope, end, end > 0 ? localNames[end - 1] : string.Empty) }
             };
             if (Encoding.UTF8.GetByteCount(UnityCliRuntimeJson.Serialize(data)) > 256 * 1024)
@@ -527,6 +523,8 @@ namespace UnityCli
                     throw new RuntimeCatalogCursorException();
                 offset = parsed;
                 boundary = Encoding.UTF8.GetString(Convert.FromBase64String(fields[2]));
+                if (Encoding.UTF8.GetByteCount(boundary) > 256 || (offset == 0) != string.IsNullOrEmpty(boundary))
+                    throw new RuntimeCatalogCursorException();
             }
             catch (RuntimeCatalogCursorException) { throw; }
             catch { throw new RuntimeCatalogCursorException(); }

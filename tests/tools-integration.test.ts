@@ -95,9 +95,9 @@ test("each discovery root performs one bounded catalog transport per target", as
       calls.set(payload.command, (calls.get(payload.command) ?? 0) + 1);
       if (payload.command.endsWith(".groups")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, groups: payload.command.startsWith("project") ? [{ name: live.group, toolCount: 1 }] : [] } };
       if (payload.command.endsWith(".summary")) {
-        const input = payload.input as { limit: number; localNames?: string[] };
+        const input = payload.input as { limit: number; localNames: string[] };
         const liveNames = payload.command.startsWith("project") ? [summary.name] : [];
-        const allNames = [...new Set([...(input.localNames ?? []), ...liveNames])].sort();
+        const allNames = [...new Set([...input.localNames, ...liveNames])].sort();
         const pageNames = allNames.slice(0, input.limit);
         const data = {
           catalogGeneration: `${payload.command}-generation`,
@@ -105,13 +105,11 @@ test("each discovery root performs one bounded catalog transport per target", as
           hasMore: allNames.length > input.limit,
           tools: payload.command.startsWith("project") && pageNames.includes(summary.name) ? [summary] : [],
         };
-        return { ok: true as const, requestId: payload.requestId, data: input.localNames ? {
+        return { ok: true as const, requestId: payload.requestId, data: {
           ...data,
-          cursorOffset: 0,
-          cursorBoundary: "",
           pageNames,
           continuationToken: `${payload.command}-opaque`,
-        } : data };
+        } };
       }
       if (payload.command.endsWith(".describe")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, found: payload.command.startsWith("project"), ...(payload.command.startsWith("project") ? { descriptor: descriptorPayload } : {}) } };
       throw new Error(`unexpected catalog command ${payload.command}`);

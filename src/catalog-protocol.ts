@@ -14,12 +14,11 @@ const fixtureCursorSecret = randomBytes(32);
 export interface CatalogSummaryQuery {
   group?: string;
   keyword?: string;
-  afterName?: string;
   limit: number;
   expectedGeneration?: string;
   reservedNames: string[];
-  localNames?: string[];
-  cursorContext?: string;
+  localNames: string[];
+  cursorContext: string;
   cursorToken?: string;
 }
 
@@ -45,10 +44,8 @@ export type CatalogSummaryResult = {
   total: number;
   tools: CatalogRoutingSummary[];
   hasMore: boolean;
-  cursorOffset: number;
-  cursorBoundary?: string;
-  pageNames?: string[];
-  continuationToken?: string;
+  pageNames: string[];
+  continuationToken: string;
 } | (CliResult & { ok: false });
 
 export type CatalogGroupsResult = {
@@ -147,7 +144,6 @@ async function readCatalogSummary(
   const result = await executeBridgePayload(requestId, command, {
     ...(query.group ? { group: query.group } : {}),
     ...(query.keyword ? { keyword: query.keyword } : {}),
-    ...(query.afterName ? { afterName: query.afterName } : {}),
     limit: query.limit,
     ...(query.expectedGeneration ? { expectedCatalogGeneration: query.expectedGeneration } : {}),
     reservedNames: query.reservedNames,
@@ -236,18 +232,6 @@ function summarizeFixture(
       .some((value) => value.toLowerCase().includes(token))))
   ).sort(compareToolName);
   const nativeNames = new Set([...tools.filter((item) => item.contractProfile !== "official-attribute").map((item) => item.name), ...query.reservedNames]);
-  if (!query.cursorContext) {
-    const remaining = query.afterName ? matches.filter((tool) => tool.name > query.afterName!) : matches;
-    return {
-      ok: true,
-      generation,
-      total: matches.length,
-      tools: remaining.slice(0, query.limit).map((tool) => routingSummary(tool, nativeNames)),
-      hasMore: remaining.length > query.limit,
-      cursorOffset: 0,
-    };
-  }
-
   const scope = fixtureCursorScope(target, generation, query);
   const cursor = query.cursorToken ? verifyFixtureCursor(query.cursorToken, scope) : { offset: 0, boundary: "" };
   if (!cursor) return invalidCursor(requestId);
@@ -263,8 +247,6 @@ function summarizeFixture(
     total: matches.length,
     tools: matches.filter((tool) => pageNames.has(tool.name)).map((tool) => routingSummary(tool, nativeNames)),
     hasMore,
-    cursorOffset: cursor.offset,
-    cursorBoundary: cursor.boundary,
     pageNames: combinedNames.slice(cursor.offset, end),
     continuationToken: signFixtureCursor(scope, end, combinedNames[end - 1] ?? cursor.boundary),
   };
@@ -345,23 +327,16 @@ function parseSummaryResponse(data: unknown, requestId: string, command: string,
   const total = numberField(record, "total");
   const hasMore = record?.hasMore;
   const rawTools = record?.tools;
-  const cursorOffset = record?.cursorOffset ?? 0;
   const continuationToken = record?.continuationToken;
   const rawPageNames = record?.pageNames;
-  const cursorBoundary = record?.cursorBoundary;
-  const allowedKeys = query.cursorContext
-    ? ["catalogGeneration", "total", "hasMore", "tools", "cursorOffset", "cursorBoundary", "pageNames", "continuationToken"]
-    : ["catalogGeneration", "total", "hasMore", "tools"];
+  const allowedKeys = ["catalogGeneration", "total", "hasMore", "tools", "pageNames", "continuationToken"];
   if (!record || !hasOnlyKeys(record, allowedKeys)
       || !generation || utf8ByteLength(generation) > 128 || total === undefined || !Number.isSafeInteger(total) || total < 0
       || typeof hasMore !== "boolean" || !Array.isArray(rawTools) || rawTools.length > query.limit || rawTools.length > total
-      || !Number.isSafeInteger(cursorOffset) || Number(cursorOffset) < 0
-      || query.cursorContext && (typeof cursorBoundary !== "string" || utf8ByteLength(cursorBoundary) > 256
-        || !Array.isArray(rawPageNames) || rawPageNames.length > query.limit
-        || rawPageNames.some((name) => typeof name !== "string" || !name || utf8ByteLength(name) > 256)
-        || !strictlySortedUnique(rawPageNames as string[])
-        || typeof continuationToken !== "string" || !continuationToken || utf8ByteLength(continuationToken) > 8192)
-      || continuationToken !== undefined && typeof continuationToken !== "string") {
+      || !Array.isArray(rawPageNames) || rawPageNames.length > query.limit
+      || rawPageNames.some((name) => typeof name !== "string" || !name || utf8ByteLength(name) > 256)
+      || !strictlySortedUnique(rawPageNames as string[])
+      || typeof continuationToken !== "string" || !continuationToken || utf8ByteLength(continuationToken) > 8192) {
     return unhealthySummary(requestId, `${command} returned an invalid bounded summary envelope.`);
   }
   const tools: CatalogRoutingSummary[] = [];
@@ -369,7 +344,6 @@ function parseSummaryResponse(data: unknown, requestId: string, command: string,
     const parsed = parseRoutingSummary(rawTools[index]);
     if (!parsed) return unhealthySummary(requestId, `${command} tools[${index}] is not a routing summary.`);
     if (query.group && parsed.group !== query.group) return unhealthySummary(requestId, `${command} tools[${index}] escaped the requested group.`);
-    if (query.afterName && compareText(parsed.name, query.afterName) <= 0) return unhealthySummary(requestId, `${command} tools[${index}] did not advance the continuation boundary.`);
     tools.push(parsed);
   }
   if (!strictlySortedUnique(tools.map((tool) => tool.name))) {
@@ -381,10 +355,8 @@ function parseSummaryResponse(data: unknown, requestId: string, command: string,
     total,
     tools,
     hasMore,
-    cursorOffset: Number(cursorOffset),
-    ...(typeof cursorBoundary === "string" ? { cursorBoundary } : {}),
-    ...(Array.isArray(rawPageNames) ? { pageNames: rawPageNames as string[] } : {}),
-    ...(typeof continuationToken === "string" ? { continuationToken } : {}),
+    pageNames: rawPageNames as string[],
+    continuationToken: continuationToken as string,
   };
 }
 
@@ -501,8 +473,9 @@ function verifyFixtureCursor(token: string, scope: string): { offset: number; bo
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return undefined;
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
     if (Object.keys(parsed).some((key) => !["scope", "offset", "boundary"].includes(key))
-        || parsed.scope !== scope || !Number.isSafeInteger(parsed.offset) || Number(parsed.offset) < 1
-        || typeof parsed.boundary !== "string" || !parsed.boundary || utf8ByteLength(parsed.boundary) > 256) return undefined;
+        || parsed.scope !== scope || !Number.isSafeInteger(parsed.offset) || Number(parsed.offset) < 0
+        || typeof parsed.boundary !== "string" || utf8ByteLength(parsed.boundary) > 256
+        || Number(parsed.offset) === 0 !== (parsed.boundary === "")) return undefined;
     return { offset: Number(parsed.offset), boundary: parsed.boundary };
   } catch {
     return undefined;
@@ -542,17 +515,17 @@ function validateSummaryQuery(requestId: string, query: CatalogSummaryQuery): (C
   if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > MAX_CATALOG_PAGE_FETCH) {
     return schemaFailure(requestId, "Catalog summary limit must be an integer in [1,101].");
   }
-  if (utf8ByteLength(query.group ?? "") > 256 || utf8ByteLength(query.afterName ?? "") > 256 || utf8ByteLength(query.keyword ?? "") > 2048) {
+  if (utf8ByteLength(query.group ?? "") > 256 || utf8ByteLength(query.keyword ?? "") > 2048) {
     return schemaFailure(requestId, "Catalog summary filters exceed their bounded string limits.");
   }
   const tokens = searchTokens(query.keyword);
   if (tokens.length > 16 || tokens.some((token) => utf8ByteLength(token) > 128)) {
     return schemaFailure(requestId, "Catalog search accepts at most 16 keywords of at most 128 UTF-8 bytes each.");
   }
-  if (query.localNames && (query.localNames.length > 4096 || query.localNames.some((name) => !name || utf8ByteLength(name) > 256)
-      || !strictlySortedUnique(query.localNames))) return schemaFailure(requestId, "Catalog local names must be a bounded ordinally sorted set.");
-  if (query.cursorContext !== undefined && !/^[a-f0-9]{64}$/.test(query.cursorContext)) return schemaFailure(requestId, "Catalog cursor context must be a SHA-256 value.");
-  if (query.cursorToken !== undefined && (!query.cursorContext || !query.cursorToken || utf8ByteLength(query.cursorToken) > 8192)) {
+  if (query.localNames.length > 4096 || query.localNames.some((name) => !name || utf8ByteLength(name) > 256)
+      || !strictlySortedUnique(query.localNames)) return schemaFailure(requestId, "Catalog local names must be a bounded ordinally sorted set.");
+  if (!/^[a-f0-9]{64}$/.test(query.cursorContext)) return schemaFailure(requestId, "Catalog cursor context must be a SHA-256 value.");
+  if (query.cursorToken !== undefined && (!query.cursorToken || utf8ByteLength(query.cursorToken) > 8192)) {
     return schemaFailure(requestId, "Catalog continuation token is invalid.");
   }
   return validateGenerationAndReservedNames(requestId, query.expectedGeneration, query.reservedNames);
