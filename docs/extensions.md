@@ -43,10 +43,7 @@ unitycli tools run my.custom-tool --input '{}'
 
 ### 诊断
 
-```powershell
-# 分别检查 CLI 控制面、Bridge transport 与已发布项目 Tool catalog 健康状态
-unitycli doctor
-```
+`unitycli doctor` 独立报告 Registry/Health transport identity、主线程 pulse、业务准入、catalog integrity、编译与 Extension 状态。可选但未安装的 Extension 只产生提示；已安装或已启用的损坏 Extension 才使 Extension check 失败。
 
 ## 扩展包命令
 
@@ -56,7 +53,7 @@ unitycli doctor
 unitycli extensions list --project <path>          # 列出扩展状态
 unitycli extensions install <name> --project <path> # 安装已满足依赖的 Unity 侧扩展目录
 unitycli extensions remove <name> --project <path>  # 只移除 manifest 管理的 bundle 文件
-unitycli extensions doctor --project <path>         # 深度校验全部 source/managed-file hash
+unitycli extensions doctor --project <path>         # 扩展诊断
 ```
 
 ### init 自动检测
@@ -90,10 +87,7 @@ unitycli extensions doctor --project <path>         # 深度校验全部 source/
 当扩展依赖的 Unity Package 未安装或不满足 manifest 的精确版本时：
 
 - 扩展工具通过 `tools group/list/describe/run` 暴露；缺依赖时 `tools describe` 返回 `available: false`、`unavailableReason` 和 `requiresPackages`
-- 每次调用冻结一份packages-lock/install manifest输入；group或command摘要页对每个distinct extension最多做一次target proof，普通扩展Tool执行只检查所选extension。selected dependency gate复用generated Tool owner与exact compiled assembly identity，不从Tool名称前缀推断owner
-- selected target proof只校验该extension的managed files与unknown files，不读取source tree；`extensions list`返回`integrity:"shallow"`且不计算source/managed-file hash，完整全extension source与target hash只由显式`extensions doctor`执行并返回`integrity:"full"`
 - 执行时返回错误，`error.nextActions` 指向手动安装 Unity Package 与随后运行 `extensions install <id>`
-- 发布前generated inventory必须同时匹配Tool name、extension id、assembly identity和implementation type；缺项、多项或跨Extension归属会使catalog fail closed
 - 不自动安装 Unity Package，不产生静默失败
 
 ```json

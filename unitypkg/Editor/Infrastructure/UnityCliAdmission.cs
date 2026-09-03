@@ -1832,6 +1832,7 @@ namespace UnityCli
         private static bool AdmissionRecoveryCommand(string command)
         {
             return IsProjectToolCatalogReadCommand(command) || command == "internal.editor.state.snapshot"
+                || IsDoctorAdmissionBypassCommand(command)
                 || UnityCliCompileCoordinator.IsCommand(command) || UnityCliLiveBuildCoordinator.IsCommand(command)
                 || UnityCliLiveRefreshCoordinator.IsCommand(command) || UnityCliAssetRefreshCoordinator.IsCommand(command)
                 || UnityCliPackageEmbedCoordinator.IsCommand(command) || UnityCliPackageResolveCoordinator.IsCommand(command)
@@ -1842,6 +1843,7 @@ namespace UnityCli
 
         private static bool AdmissionBypassCommand(string command)
         {
+            if (IsDoctorAdmissionBypassCommand(command)) return true;
             switch (command)
             {
                 case "project-tool.health":
@@ -1853,7 +1855,6 @@ namespace UnityCli
                 case "runtime-tool.summary":
                 case "runtime-tool.describe":
                 case "runtime-tool.list":
-                case "diagnose.preflight":
                 case "internal.editor.state.snapshot":
                 case "internal.editor.compile.status":
                 case "internal.editor.refresh.status":

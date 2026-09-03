@@ -2277,61 +2277,6 @@
       ]
     },
     {
-      "toolName": "diagnose.capabilities",
-      "descriptorOwner": "ts-local",
-      "source": "src/tools/diagnose/capabilities.ts",
-      "deliveryMode": "direct-terminal",
-      "executionClass": "atomic",
-      "completionPredicate": {
-        "kind": "typed-business-terminal",
-        "description": "diagnose.capabilities 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
-      },
-      "proofSource": {
-        "kind": "typed-result-and-effect-readback",
-        "description": "diagnose.capabilities 的 typed result、output schema validation 与工具拥有的 effect readback。"
-      },
-      "reloadPolicy": {
-        "kind": "caller-responsibility",
-        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
-      },
-      "timeoutError": "E_EXECUTION_TIMEOUT",
-      "outcomeUnknownPolicy": {
-        "kind": "caller-responsibility",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
-      },
-      "asyncSignals": [
-        "async",
-        "await"
-      ]
-    },
-    {
-      "toolName": "diagnose.preflight",
-      "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/diagnose/preflight.cs",
-      "deliveryMode": "direct-terminal",
-      "executionClass": "atomic",
-      "completionPredicate": {
-        "kind": "typed-business-terminal",
-        "description": "diagnose.preflight 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
-      },
-      "proofSource": {
-        "kind": "typed-result-and-effect-readback",
-        "description": "diagnose.preflight 的 typed result、output schema validation 与工具拥有的 effect readback。"
-      },
-      "reloadPolicy": {
-        "kind": "caller-responsibility",
-        "description": "跨重载续接由 coordinator 的 active-operation 状态与调用方负责；普通 Tool 不保留请求级恢复状态。"
-      },
-      "timeoutError": "E_EXECUTION_TIMEOUT",
-      "outcomeUnknownPolicy": {
-        "kind": "caller-responsibility",
-        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责检查受影响业务状态后决定后续操作。"
-      },
-      "asyncSignals": [
-        "value-task"
-      ]
-    },
-    {
       "toolName": "docs.get",
       "descriptorOwner": "ts-local",
       "source": "src/tools/docs/get.ts",

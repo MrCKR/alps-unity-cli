@@ -219,3 +219,43 @@ test("code.exec preserves execution timeout and scrubs internal error details", 
   assert.doesNotMatch(JSON.stringify(result), /54321|endpoint|listenerGeneration/);
   assert.match(JSON.stringify(result), /Third Party Dialog/);
 });
+
+test("code.exec preserves nested runtime cause fields and stable error semantics", async () => {
+  const causes = [
+    { depth: 0, exceptionType: "System.Reflection.TargetInvocationException", message: "Invocation failed.", stackTrace: "outer" },
+    { depth: 1, exceptionType: "NUnit.Framework.AssertionException", message: "Expected 2 but was 1.", stackTrace: "inner" },
+  ];
+  const result = await execute(["tools", "run", "code.exec", "--input", JSON.stringify({ code: "throw new Exception();" })], {
+    ...offline,
+    bridgeExecute: async (payload: BridgeRequest) => ({
+      ok: false as const,
+      requestId: payload.requestId,
+      error: {
+        code: "E_CODE_RUNTIME_EXCEPTION",
+        message: "Expected 2 but was 1.",
+        nextActions: ["Inspect the bounded runtime exception cause chain and affected business state."],
+        transient: false,
+        retryAfterMs: 0,
+        details: {
+          diagnostics: [],
+          exceptionType: "NUnit.Framework.AssertionException",
+          message: "Expected 2 but was 1.",
+          stackTrace: "inner",
+          causes,
+          causeChainTruncated: false,
+          stdout: "",
+          stderr: "",
+        },
+      },
+    }),
+  } as never);
+
+  assert.ok(!result.ok);
+  assert.equal(result.error.code, "E_CODE_RUNTIME_EXCEPTION");
+  assert.equal(result.error.message, "Expected 2 but was 1.");
+  assert.equal(result.error.transient, false);
+  assert.equal(result.error.retryAfterMs, 0);
+  assert.deepEqual((result.error.details as { causes: unknown }).causes, causes);
+  assert.equal((result.error.details as { causeChainTruncated: boolean }).causeChainTruncated, false);
+  assert.deepEqual(result.error.nextActions, ["Inspect the bounded runtime exception cause chain and affected business state."]);
+});

@@ -81,13 +81,9 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录或已删除的控制面identity | 重新运行 `tools group` / `tools search <k1|k2|...>`；discovery使用顶层`tools`子命令，不通过`tools run` |
-| `E_TOOL_REGISTRY_UNHEALTHY` | 当前实例 Tool catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复 Tool 定义并让 Unity compile/reload 后重新 discovery；该错误不表示 Bridge transport 不可达 |
-| `E_EXTENSION_INVENTORY_MISMATCH` | generated Extension owner、exact compiled assembly、implementation type与manifest contribution未形成闭合集合 | 重新生成统一 inventory并让 Unity reload |
-| `E_DISCOVERY_CURSOR_INVALID` | discovery cursor损坏或属于其他查询 | 从当前查询第一页重新读取 |
-| `E_TOOL_CATALOG_CHANGED` | continuation或同一顶层调用绑定的catalog generation、editor session、listener或listener generation已变化 | 从当前查询第一页重新读取；不要发送旧调用的业务请求 |
+| `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search <k1|k2|...>` |
+| `E_TOOL_REGISTRY_UNHEALTHY` | 当前实例 Tool catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
 | `E_SCHEMA_INVALID` | 输入不符合 schema | 查看对应 `tools describe` 的 inputSchema |
-| `E_EXTENSION_SCAN_TIMEOUT` | `extensions doctor`未在immutable deadline内完成有界文件树检查 | 清理异常文件树或在文件系统稳定后增大`--timeout-ms`重新诊断 |
 
 ### 可选预览错误
 
@@ -196,7 +192,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_UNITY_COMPILE_REQUIRES_EDIT_MODE` | `editor.compile` 在稳定 Play Mode 或 queued-before-effect PlayMode 中被拒绝 |
 | `E_UNITY_COMPILE_FAILED` | owned compilation cycle 完成且包含 compiler error；details 带本次 diagnostics |
 | `E_CODE_COMPILE_FAILED` | Runtime Code 编译失败 |
-| `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常 |
+| `E_CODE_RUNTIME_EXCEPTION` | Runtime Code 执行异常；message 指向最深可操作 cause，details.causes 为循环安全且受深度/字节限制的 cause chain |
 | `E_IO_ERROR` | IO 错误 |
 
 ## AI Agent 错误处理流程
@@ -213,7 +209,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 - Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
 - Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search <k1|k2|...>` 或 `tools describe`
 - 弹窗 blocker 的 `nextActions` 必须指向先 `tools run editor.dialogs`，再 `tools run editor.dialog.click`；不得要求人工处理、预定义按钮列表、launch-only 入口或额外确认
-- 诊断错误的 `nextActions` 必须指向 `doctor`；catalog unhealthy 时由 doctor 的只读 health snapshot 提供 bounded failure 与 reload nextAction，不恢复 preflight aggregate
+- 诊断错误的 `nextActions` 必须指向顶层 `doctor` 或对应 owner（`instances list`、`editor.state`、`extensions doctor`、Unity Console）
 
 ## JSON 字段命名
 

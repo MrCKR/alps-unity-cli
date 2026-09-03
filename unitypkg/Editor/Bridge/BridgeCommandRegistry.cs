@@ -129,6 +129,7 @@ namespace UnityCli
             var registry = new BridgeCommandRegistry();
             RegisterCodeExecCommand(registry);
             RegisterEditorStateSnapshotCommand(registry);
+            RegisterDoctorDiagnosticCommands(registry);
             RegisterInstanceCleanupCommand(registry);
             UnityCliCompileCoordinator.Register(registry);
             UnityCliLiveBuildCoordinator.Register(registry);

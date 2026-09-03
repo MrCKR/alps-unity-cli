@@ -901,8 +901,12 @@ namespace UnityCli
         /// <summary>Context/catalog/health 类请求没有 business mutation，不得创建 request journal。</summary>
         private static bool IsReadOnlyBridgeCommand(string command)
         {
-            if (IsEditorStateSnapshotCommand(command)) return true;
-            return IsProjectToolCatalogReadCommand(command);
+            if (IsEditorStateSnapshotCommand(command) || IsDoctorDiagnosticCommand(command)) return true;
+            return IsProjectToolCatalogReadCommand(command)
+                || string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal)
+                || string.Equals(command, "runtime-tool.list", StringComparison.Ordinal);
         }
 
         private static Dictionary<string, object> ValidateCoordinatedTerminal(string response, string requestId)

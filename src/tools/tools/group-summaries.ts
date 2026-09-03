@@ -11,7 +11,6 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   component: "Add, get, list, modify, remove, and set components on scene objects.",
   console: "Read and clear captured Unity console log output.",
   controller: "Animator controller layers, states, transitions, blend trees, and parameters.",
-  diagnose: "CLI, target, and Bridge capability diagnostics.",
   docs: "Offline documentation lookup and search.",
   editor: "Unity Editor refresh, diagnostics, and session controls.",
   extension: "Inspect installed UnityCLI extensions and their contributed tools.",

@@ -3,7 +3,6 @@ import type { ToolHandler, ToolMetadata, ToolSupportStatus } from "./types.js";
 
 const OFFLINE_TOOL_PREFIXES = ["docs.", "reflect."];
 const OFFLINE_TOOL_NAMES = new Set([
-  "diagnose.capabilities",
   "editor.dialog.click",
   "package.bridge-remove",
   "package.deploy",

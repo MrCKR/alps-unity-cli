@@ -4,7 +4,7 @@ import { buildBridgeSpecs } from "./domains/build.js";
 import { cameraBridgeSpecs } from "./domains/camera.js";
 import { codeBridgeSpecs } from "./domains/code.js";
 import { consoleBridgeSpecs } from "./domains/console.js";
-import { diagnoseBridgeSpecs } from "./domains/diagnose.js";
+import { doctorBridgeSpecs } from "./domains/doctor.js";
 import { editorBridgeSpecs } from "./domains/editor.js";
 import { gameObjectBridgeSpecs } from "./domains/game-object.js";
 import { graphicsBridgeSpecs } from "./domains/graphics.js";
@@ -51,7 +51,7 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...animationBridgeSpecs,
   ...uiBridgeSpecs,
   ...editorBridgeSpecs,
-  ...diagnoseBridgeSpecs,
+  ...doctorBridgeSpecs,
   ...codeBridgeSpecs,
   ...objectBridgeSpecs,
   ...reflectionBridgeSpecs,

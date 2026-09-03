@@ -59,14 +59,21 @@ namespace UnityCli
 
             var result = ExecuteCodeSource(request, source, cancellationToken);
             WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
-            object envelope = result.Ok
-                ? (object)UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, result.Data)
-                : UnityCli.Protocol.ProtocolEnvelopeFactory.Error(request.RequestId, result.ErrorCode, BoundedText(result.ErrorMessage, 4096), result.Details, result.NextActions);
-            var serialized = UnityCliSerializer.Serialize(envelope);
-            if (Encoding.UTF8.GetByteCount(serialized) > MaxCodeTerminalBytes)
-                return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(request.RequestId, "E_EXECUTION_TIMEOUT", "Runtime Code completed, but its bounded terminal could not be represented safely.", null, new[] { "Inspect the affected business state before submitting another mutation." }));
+            var serialized = SerializeCodeExecutionResult(request.RequestId, result);
             if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "code.exec", ResolveRequestCompletionContract(request), result.Data);
             return serialized;
+        }
+
+        /// <summary>所有 code.exec terminal 统一经过同一 Bridge envelope 与总 byte 上限。</summary>
+        private static string SerializeCodeExecutionResult(string requestId, CodeExecutionResult result)
+        {
+            object envelope = result.Ok
+                ? (object)UnityCli.Protocol.ProtocolEnvelopeFactory.Success(requestId, result.Data)
+                : UnityCli.Protocol.ProtocolEnvelopeFactory.Error(requestId, result.ErrorCode, BoundedText(result.ErrorMessage, 4096), result.Details, result.NextActions);
+            var serialized = UnityCliSerializer.Serialize(envelope);
+            return Encoding.UTF8.GetByteCount(serialized) <= MaxCodeTerminalBytes
+                ? serialized
+                : UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime Code completed, but its bounded terminal could not be represented safely.", null, new[] { "Inspect the affected business state before submitting another mutation." }));
         }
 
         // 编译源码并执行约定的 Run 方法，收集编译诊断、输出和运行时异常。
@@ -101,7 +108,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, ExceptionDetails(exception, "", ""), "Check Unity/Editor/project assembly references and --refs.");
+                return ExceptionFailure("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: ", exception, "", "", "Check Unity/Editor/project assembly references and --refs.");
             }
 
             var compiledAssembly = Assembly.Load(assemblyBytes);
@@ -182,10 +189,10 @@ namespace UnityCli
             {
                 if (ReferenceEquals(exception, effectBarrierException)
                     || ReferenceEquals(exception, completionProbeException)) throw;
-                return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", BoundedText(exception.Message, 4096), ExceptionDetails(exception, stdout.ToString(), stderr.ToString()), "Inspect the bounded runtime exception and affected business state.");
+                return ExceptionFailure("E_CODE_RUNTIME_EXCEPTION", string.Empty, exception, stdout.ToString(), stderr.ToString(), "Inspect the bounded runtime exception cause chain and affected business state.");
             }
             try { return CodeExecutionResult.Success(CodeSuccessData(stdout.ToString(), stderr.ToString(), stdout.Truncated, stderr.Truncated, returnValue, completion)); }
-            catch (Exception exception) { return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", BoundedText(exception.Message, 4096), ExceptionDetails(exception, stdout.ToString(), stderr.ToString()), "Inspect the bounded return-value conversion failure and affected business state."); }
+            catch (Exception exception) { return ExceptionFailure("E_CODE_RUNTIME_EXCEPTION", string.Empty, exception, stdout.ToString(), stderr.ToString(), "Inspect the bounded return-value conversion cause chain and affected business state."); }
         }
 
         /// <summary>caller effect紧前同时重验immutable deadline、cancel token与exact direct lease。</summary>
@@ -531,13 +538,21 @@ namespace UnityCli
             };
         }
 
-        // 构造包含诊断、输出和堆栈的运行时异常详情。
-        private static Dictionary<string, object> ExceptionDetails(Exception exception, string stdout, string stderr)
+        /// <summary>错误 code 保持稳定，公开 message 与兼容字段统一指向最深可操作 cause。</summary>
+        private static CodeExecutionResult ExceptionFailure(string code, string prefix, Exception exception, string stdout, string stderr, string nextAction)
+        {
+            var projection = UnityCliExceptionProjection.Project(exception);
+            return CodeExecutionResult.Fail(code, prefix + projection.PublicMessage, ExceptionDetails(projection, stdout, stderr), nextAction);
+        }
+
+        // cause chain 由 Shared helper 统一执行循环、深度和 UTF-8 byte 上限。
+        private static Dictionary<string, object> ExceptionDetails(UnityCliExceptionProjection.Result projection, string stdout, string stderr)
         {
             return new Dictionary<string, object>
             {
-                { "diagnostics", Array.Empty<object>() }, { "exceptionType", BoundedText(exception.GetType().FullName, 512) },
-                { "message", BoundedText(exception.Message, 4096) }, { "stackTrace", BoundedText(exception.StackTrace, 16384) },
+                { "diagnostics", Array.Empty<object>() }, { "exceptionType", projection.DeepestExceptionType },
+                { "message", projection.DeepestMessage }, { "stackTrace", projection.DeepestStackTrace },
+                { "causes", projection.Causes }, { "causeChainTruncated", projection.Truncated },
                 { "stdout", stdout }, { "stderr", stderr }
             };
         }

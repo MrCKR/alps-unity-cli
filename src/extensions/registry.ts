@@ -7,6 +7,7 @@
  */
 
 import { BUILTIN_EXTENSION_MANIFESTS } from "./.generated-registry-data.js";
+import { EXTENSION_ID_MAX_UTF8_BYTES, isValidExtensionId } from "./state-contract.js";
 import type {
   ExtensionId,
   ExtensionManifest,
@@ -282,18 +283,10 @@ function buildNextActions(
  * Validate an extension manifest for required fields and constraints.
  */
 export function validateManifest(manifest: ExtensionManifest): void {
-  if (!manifest.id || typeof manifest.id !== "string") {
+  if (!isValidExtensionId(manifest.id)) {
     throw new ExtensionRegistryError(
       "INVALID_MANIFEST",
-      "Extension manifest requires a non-empty 'id' field.",
-      ["Use a kebab-case identifier, e.g. 'probuilder'."]
-    );
-  }
-
-  if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(manifest.id)) {
-    throw new ExtensionRegistryError(
-      "INVALID_MANIFEST",
-      `Extension ID must be kebab-case (lowercase letters, digits, hyphens): ${manifest.id}`,
+      `Extension ID must be kebab-case (lowercase letters, digits, hyphens) and fit ${EXTENSION_ID_MAX_UTF8_BYTES} UTF-8 bytes: ${manifest.id ?? "<missing>"}`,
       ["Use a format like 'probuilder', 'vfx-graph', 'urp'."]
     );
   }
