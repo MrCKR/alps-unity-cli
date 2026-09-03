@@ -9,10 +9,14 @@ import { blockersFromDetails, StructuredToolError } from "../errors.js";
 export interface EditorRefreshRequest { compile?: boolean; }
 export interface EditorRefreshResult {
   changed: boolean;
+  importObserved: boolean;
   compilationTriggered: boolean;
-  sourceFileCount: number;
-  sourceFingerprint: string;
-  dependencyVersion: string;
+  generation: {
+    dependencyBefore: number;
+    dependencyAfter: number;
+    processedBefore: number;
+    processedAfter: number;
+  };
   editorState: { status: "ready"; compile: false; import: false; };
 }
 export interface EditorRefreshDryRunResult {
@@ -26,7 +30,7 @@ type BridgeData = { data?: unknown };
 export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefreshDryRunResult>({
   name: "editor.refresh",
   summary: "Refresh the open Unity Editor and return stable import and compile readback.",
-  description: "Refreshes assets in the selected live Editor once, then waits for import and compilation to become stable. compile=true requests script compilation once after Refresh returns; compilationTriggered reports only a compilation cycle actually observed by Unity.",
+  description: "Refreshes the selected Editor once and proves completion with Unity-owned global artifact dependency/processed generations; it never recursively reads Assets, hashes file bytes, or calls per-file dependency hashing. changed reports a generation change, importObserved reports Unity import activity or generation movement, and unchanged/no-import remains an explicit successful result. compile=true requests one attributed compilation cycle. The same execution deadline and cancellation govern dispatch, import/compile stability, reload recovery and terminal readback. Editor-only; may trigger asset refresh, compilation and domain reload.",
   group: "editor",
   target: "editor",
   destructiveHint: false,
@@ -114,7 +118,7 @@ async function bridge(requestId: string, command: string, input: RecordValue, fl
     dataDir: context.dataDir,
     rootAdmission: context.rootAdmission,
     bridgeExecute: context.bridgeExecute,
-  }, undefined, invocation);
+  }, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live refresh bridge failed." });
   return { data: result.data };
 }
@@ -135,15 +139,21 @@ function terminalResult(root: RecordValue, requestId: string): EditorRefreshResu
   }
   const data = record(envelope.data);
   const editor = record(data.editorState);
-  if (typeof data.changed !== "boolean" || typeof data.compilationTriggered !== "boolean"
-    || !nonnegativeInteger(data.sourceFileCount) || !sha256(data.sourceFingerprint)
-    || !sha256(data.dependencyVersion) || editor.status !== "ready" || editor.compile !== false || editor.import !== false) throw invalid();
+  const generation = record(data.generation);
+  if (typeof data.changed !== "boolean" || typeof data.importObserved !== "boolean" || typeof data.compilationTriggered !== "boolean"
+    || !nonnegativeInteger(generation.dependencyBefore) || !nonnegativeInteger(generation.dependencyAfter)
+    || !nonnegativeInteger(generation.processedBefore) || !nonnegativeInteger(generation.processedAfter)
+    || editor.status !== "ready" || editor.compile !== false || editor.import !== false) throw invalid();
   return {
     changed: data.changed,
+    importObserved: data.importObserved,
     compilationTriggered: data.compilationTriggered,
-    sourceFileCount: data.sourceFileCount as number,
-    sourceFingerprint: data.sourceFingerprint as string,
-    dependencyVersion: data.dependencyVersion as string,
+    generation: {
+      dependencyBefore: generation.dependencyBefore,
+      dependencyAfter: generation.dependencyAfter,
+      processedBefore: generation.processedBefore,
+      processedAfter: generation.processedAfter,
+    },
     editorState: { status: "ready", compile: false, import: false },
   };
 }
@@ -174,7 +184,6 @@ function invalid(): StructuredToolError {
 function record(value: unknown): RecordValue { return value && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {}; }
 function recordOrUndefined(value: unknown): RecordValue | undefined { const result = record(value); return Object.keys(result).length > 0 ? result : undefined; }
 function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
-function sha256(value: unknown): value is string { return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value); }
 function nonnegativeInteger(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
 function childId(root: string, suffix: string): string { return root.length + suffix.length <= 200 ? root + suffix : `${root.slice(0, 160)}_${createHash("sha256").update(root).digest("hex").slice(0, 24)}${suffix}`; }
 function delay(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }

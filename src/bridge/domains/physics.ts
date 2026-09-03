@@ -12,7 +12,6 @@ export const physicsBridgeSpecs: BridgeCommandSpec[] = [
   { group: "physics", command: "overlap", bridgeCommand: "project-tool.run", toolName: "physics.overlap", buildArgs: physicsArgs },
   { group: "physics", command: "rigidbody", bridgeCommand: "project-tool.run", toolName: "physics.rigidbody", buildArgs: physicsArgs },
   { group: "physics", command: "raycast", bridgeCommand: "project-tool.run", toolName: "physics.raycast", buildArgs: physicsArgs },
-  { group: "physics", command: "raycast-all", bridgeCommand: "project-tool.run", toolName: "physics.raycast-all", buildArgs: physicsArgs },
   { group: "physics", command: "linecast", bridgeCommand: "project-tool.run", toolName: "physics.linecast", buildArgs: physicsArgs },
   { group: "physics", command: "shapecast", bridgeCommand: "project-tool.run", toolName: "physics.shapecast", buildArgs: physicsArgs },
   { group: "physics", command: "validate", bridgeCommand: "project-tool.run", toolName: "physics.validate", buildArgs: physicsValidateArgs },
@@ -47,7 +46,7 @@ function boolField(flags: BridgeFlags, key: string): boolean | undefined {
 }
 
 function physicsArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  if (command === "physics.raycast" || command === "physics.overlap" || command === "physics.raycast-all" || command === "physics.shapecast") {
+  if (command === "physics.raycast" || command === "physics.overlap" || command === "physics.shapecast") {
     return compactArgs({
       target: stringFlag(flags, "target") ?? stringField(flags, "target"),
       shape: stringFlag(flags, "shape") ?? stringField(flags, "shape"),

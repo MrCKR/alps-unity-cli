@@ -4,6 +4,10 @@ import { compactArgs, numberFlag, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const projectToolBridgeSpecs: BridgeCommandSpec[] = [
+  { group: "project-tool", command: "health", bridgeCommand: "project-tool.health", buildArgs: projectToolListArgs, internal: true },
+  { group: "project-tool", command: "groups", bridgeCommand: "project-tool.groups", buildArgs: projectToolListArgs, internal: true },
+  { group: "project-tool", command: "summary", bridgeCommand: "project-tool.summary", buildArgs: projectToolListArgs, internal: true },
+  { group: "project-tool", command: "describe", bridgeCommand: "project-tool.describe", buildArgs: projectToolListArgs, internal: true },
   { group: "project-tool", command: "list", bridgeCommand: "project-tool.list", buildArgs: projectToolListArgs, internal: true },
   { group: "project-tool", command: "run", bridgeCommand: "project-tool.run", buildArgs: projectToolRunArgs, internal: true }
 ];

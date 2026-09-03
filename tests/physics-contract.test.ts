@@ -16,7 +16,6 @@ const PHYSICS_COMMANDS = [
   "physics.material",
   "physics.overlap",
   "physics.raycast",
-  "physics.raycast-all",
   "physics.rigidbody",
   "physics.settings",
   "physics.shapecast",
@@ -31,7 +30,6 @@ test("physics group exposes the independent tools via contract discovery", () =>
 test("physics live descriptors expose representative semantics", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "physics.raycast", summary: "Raycast in the physics scene.", description: "Raycast in the physics scene.", group: "physics", examples: [{ argv: ["tools", "run", "physics.raycast", "--input", "{}"], description: "" }] }),
-    makeLiveTool({ name: "physics.raycast-all", summary: "Raycast all hits.", description: "Raycast all hits.", group: "physics", examples: [{ argv: ["tools", "run", "physics.raycast-all", "--input", "{}"], description: "" }] }),
     makeLiveTool({ name: "physics.linecast", summary: "Linecast in the physics scene.", description: "Linecast in the physics scene.", group: "physics", examples: [{ argv: ["tools", "run", "physics.linecast", "--input", "{}"], description: "" }] }),
     makeLiveTool({ name: "physics.shapecast", summary: "Shapecast in the physics scene.", description: "Supports CircleCast/BoxCast/CapsuleCast.", group: "physics", examples: [{ argv: ["tools", "run", "physics.shapecast", "--input", "{}"], description: "" }] }),
     makeLiveTool({ name: "physics.overlap", summary: "Overlap query.", description: "Overlap query supporting mode 2d and 3d.", group: "physics", examples: [{ argv: ["tools", "run", "physics.overlap", "--input", "{}"], description: "" }] }),
@@ -47,7 +45,7 @@ test("physics live descriptors expose representative semantics", async () => {
     makeLiveTool({ name: "physics.rigidbody", summary: "Read or mutate rigidbody state.", description: "Read rigidbody state without adding or modifying components.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] })
   );
 
-  for (const name of ["physics.raycast", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.overlap", "physics.validate"]) {
+  for (const name of ["physics.raycast", "physics.linecast", "physics.shapecast", "physics.overlap", "physics.validate"]) {
     const tool = tools.get(name)!;
     assert.equal(tool.destructiveHint, false, `${name} non-destructive`);
     assert.equal(tool.playModeSupport, "supported", `${name} play mode supported`);
@@ -89,7 +87,7 @@ test("physics live descriptors expose representative semantics", async () => {
 });
 
 test("bridge specs resolve for physics tools", () => {
-  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint-add", "physics.joint.add"], ["joint-remove", "physics.joint.remove"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["raycast-all", "physics.raycast-all"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
+  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint-add", "physics.joint.add"], ["joint-remove", "physics.joint.remove"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
     const spec = bridgeCommandRegistry.lookup("physics", cmd);
     assert.equal(spec?.bridgeCommand, "project-tool.run", `physics ${cmd} should route via project-tool.run`);
     assert.equal(spec?.toolName, expected, `physics ${cmd} toolName should match`);
@@ -118,6 +116,16 @@ test("physics.validate C# wraps result in structured tool result", async () => {
   assert.match(source, /class PhysicsValidateTool : IUnityCliTool</, "PhysicsValidateTool should exist");
   assert.match(source, /public sealed class Result/, "physics.validate should expose a structured result DTO");
   assert.match(source, /public System\.Threading\.Tasks\.ValueTask<Result> ExecuteAsync\(Request request, UnityCliProjectToolContext ctx, System\.Threading\.CancellationToken ct = default\)/, "physics.validate should return structured business fields through the unified async signature");
+});
+
+test("physics.raycast all=true returns the same typed query and truthful all-hit readback", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/raycast.cs", import.meta.url), "utf8");
+  assert.match(source, /public bool All \{ get; set; \}/);
+  assert.match(source, /all=true returns every hit sorted by distance/);
+  assert.match(source, /Physics2D\.RaycastAll[\s\S]*Hit = hits\.Length > 0[\s\S]*HitCount = hits\.Length/);
+  assert.match(source, /Physics\.RaycastAll[\s\S]*Array\.Sort[\s\S]*Hit = hits\.Length > 0[\s\S]*HitCount = hits\.Length/);
+  assert.match(source, /Return all 3D hits[\s\S]*All = true/);
+  assert.doesNotMatch(source, /ray\); adjust/);
 });
 
 test("physics.rigidbody mutation reports the attached component", async () => {

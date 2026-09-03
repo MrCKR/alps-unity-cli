@@ -4,6 +4,7 @@
  */
 
 import type { BridgeRuntime } from "../bridge/index.js";
+import { isRegisteredToolName, MAX_TOOL_NAME_UTF8_BYTES } from "../tool-name.js";
 import type { ToolMetadata, PlayModeSupport, ToolHandler } from "./metadata/types.js";
 
 // ─── 工具定义输入(defineTool 接收的形态)────────────────────────────────
@@ -83,7 +84,7 @@ const registry = new Map<string, RegisteredTool>();
  * 返回原 definition(便于文件 default 导出)。
  */
 export function defineTool<TReq, TRes>(definition: ToolDefinition<TReq, TRes>): ToolDefinition<TReq, TRes> {
-  if (!definition.name) throw new Error("defineTool requires name");
+  if (!isRegisteredToolName(definition.name)) throw new Error(`defineTool name must use the registered Tool syntax and fit ${MAX_TOOL_NAME_UTF8_BYTES} UTF-8 bytes`);
   if (registry.has(definition.name)) {
     throw new Error(`duplicate defineTool registration: ${definition.name}`);
   }

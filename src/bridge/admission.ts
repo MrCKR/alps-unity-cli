@@ -1,6 +1,15 @@
 import { createHash } from "node:crypto";
 import type { InstanceTarget } from "../instances.js";
 
+export interface DiscoveryProvenance {
+  readonly target: InstanceTarget;
+  readonly instanceId: string;
+  readonly sessionId: string;
+  readonly editorSessionId?: string;
+  readonly listenerId: string;
+  readonly listenerGeneration: number;
+}
+
 export interface RootAdmissionLease {
   readonly requestId: string;
   readonly command: string;
@@ -10,6 +19,9 @@ export interface RootAdmissionLease {
   readonly instanceId: string;
   readonly canonicalProjectPath: string;
   readonly sessionId: string;
+  readonly listenerId: string;
+  readonly listenerGeneration: number;
+  readonly discoveryProvenance?: DiscoveryProvenance;
   token: string;
   consumed: boolean;
   grantExpiresAtMs: number;
@@ -24,12 +36,14 @@ export interface RootAdmissionRequest {
   dryRun: boolean;
   target: InstanceTarget;
   completionContractIdentity: string;
+  captureDiscoveryProvenance?: boolean;
+  expectedDiscoveryProvenance?: DiscoveryProvenance;
   timeoutMs: number;
   admissionAbsoluteDeadlineMs: number;
 }
 
 /** 准入指纹绑定业务identity但排除尚未创建的执行deadline。 */
-export function rootAdmissionFingerprint(request: Pick<RootAdmissionRequest, "requestId" | "command" | "input" | "dryRun" | "target" | "completionContractIdentity">, instanceId: string): string {
+export function rootAdmissionFingerprint(request: Pick<RootAdmissionRequest, "requestId" | "command" | "input" | "dryRun" | "target" | "completionContractIdentity" | "captureDiscoveryProvenance" | "expectedDiscoveryProvenance">, instanceId: string): string {
   return createHash("sha256").update(canonicalJson({
     requestId: request.requestId,
     command: request.command,
@@ -38,6 +52,8 @@ export function rootAdmissionFingerprint(request: Pick<RootAdmissionRequest, "re
     instanceId,
     target: request.target,
     completionContractIdentity: request.completionContractIdentity,
+    captureDiscoveryProvenance: request.captureDiscoveryProvenance === true,
+    expectedDiscoveryProvenance: request.expectedDiscoveryProvenance ?? null,
     completionContractVersion: 1,
   }), "utf8").digest("hex");
 }

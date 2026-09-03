@@ -15,13 +15,10 @@ const GRAPHICS_COMMANDS = [
   "graphics.bake-status",
   "graphics.light-probe-group",
   "graphics.pipeline-info",
-  "graphics.pipeline-quality",
   "graphics.pipeline-settings",
-  "graphics.probe-positions",
   "graphics.quality",
   "graphics.reflection-probe",
   "graphics.scene-debug",
-  "graphics.settings",
   "graphics.skybox-get",
   "graphics.skybox-set-ambient",
   "graphics.skybox-set-fog",
@@ -30,12 +27,10 @@ const GRAPHICS_COMMANDS = [
   "graphics.skybox-set-reflection",
   "graphics.skybox-set-sun",
   "graphics.stats",
-  "graphics.stats-counters",
-  "graphics.stats-memory",
   "graphics.volume"
 ];
 
-test("graphics group exposes all 26 tools via contract discovery", () => {
+test("graphics group exposes dedicated quality, pipeline, probe, and unified stats tools", () => {
   assert.deepEqual(contractToolNames("graphics"), [...GRAPHICS_COMMANDS].sort());
 });
 
@@ -44,27 +39,21 @@ test("graphics live descriptors expose representative play mode semantics", asyn
     makeLiveTool({ name: "graphics.pipeline-info", summary: "Read render pipeline and quality info.", description: "Read render pipeline and quality info.", group: "graphics" }),
     makeLiveTool({ name: "graphics.skybox-get", summary: "Read skybox settings.", description: "Read skybox settings.", group: "graphics" }),
     makeLiveTool({ name: "graphics.stats", summary: "Read graphics stats.", description: "Read graphics stats.", group: "graphics" }),
-    makeLiveTool({ name: "graphics.stats-counters", summary: "Read graphics counters.", description: "Read graphics counters.", group: "graphics" }),
-    makeLiveTool({ name: "graphics.stats-memory", summary: "Read graphics memory stats.", description: "Read graphics memory stats.", group: "graphics" }),
+    makeLiveTool({ name: "graphics.light-probe-group", summary: "Read or set light probes.", description: "Read or set one LightProbeGroup with fresh readback.", group: "graphics", sideEffects: ["scene-modify"] }),
+    makeLiveTool({ name: "graphics.reflection-probe", summary: "Read or configure a reflection probe.", description: "Read or configure one ReflectionProbe with fresh readback.", group: "graphics", sideEffects: ["scene-modify"] }),
     makeLiveTool({ name: "graphics.bake-status", summary: "Read bake status.", description: "Read bake status.", group: "graphics" }),
     makeLiveTool({ name: "graphics.volume", summary: "Read volume profile state.", description: "Read volume profile state.", group: "graphics" }),
     makeLiveTool({ name: "graphics.bake-settings", summary: "Read or update bake settings.", description: "Read or update persistent LightingSettings.", group: "graphics", destructiveHint: true, playModeSupport: "editor-only", sideEffects: ["scene-modify"] }),
-    makeLiveTool({ name: "graphics.quality", summary: "Mutate quality settings.", description: "Mutate quality settings.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
-    makeLiveTool({ name: "graphics.settings", summary: "Mutate graphics settings.", description: "Mutate graphics settings.", group: "graphics", destructiveHint: true, playModeSupport: "editor-only", sideEffects: ["settings-write"] }),
-    makeLiveTool({ name: "graphics.pipeline-quality", summary: "Mutate pipeline quality settings.", description: "Mutate pipeline quality settings.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
-    makeLiveTool({ name: "graphics.pipeline-settings", summary: "Mutate pipeline settings.", description: "Mutate pipeline settings.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] })
+    makeLiveTool({ name: "graphics.quality", summary: "Read or mutate QualitySettings.", description: "Dedicated QualitySettings read/write with fresh readback.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["settings-write"] }),
+    makeLiveTool({ name: "graphics.pipeline-settings", summary: "Read or mutate the default pipeline.", description: "Dedicated render pipeline read/write with fresh path and GUID readback.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["settings-write", "asset-import"] })
   );
 
-  for (const name of ["graphics.pipeline-info", "graphics.skybox-get", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.bake-status", "graphics.volume"]) {
+  for (const name of ["graphics.pipeline-info", "graphics.skybox-get", "graphics.stats", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.bake-status", "graphics.volume"]) {
     assert.equal(tools.get(name)?.playModeSupport, "supported", `${name} should be supported`);
   }
-  for (const name of ["graphics.quality", "graphics.pipeline-quality", "graphics.pipeline-settings"]) {
+  for (const name of ["graphics.quality", "graphics.pipeline-settings"]) {
     assert.equal(tools.get(name)?.playModeSupport, "session-affecting", `${name} should disclose graphics settings writes`);
   }
-  const settings = tools.get("graphics.settings")!;
-  assert.equal(settings.destructiveHint, true);
-  assert.equal(settings.playModeSupport, "editor-only");
-  assert.ok(settings.sideEffects?.includes("settings-write"));
   const bakeSettings = tools.get("graphics.bake-settings")!;
   assert.equal(bakeSettings.destructiveHint, true);
   assert.equal(bakeSettings.playModeSupport, "editor-only");
@@ -114,6 +103,26 @@ test("skybox property writes reject non-Assets materials and persist before read
   const source = await readFile(new URL("../unitypkg/Editor/Tools/graphics/skybox-set-properties.cs", import.meta.url), "utf8");
   assert.match(source, /!skyboxPath\.StartsWith\("Assets\/", System\.StringComparison\.OrdinalIgnoreCase\)/, "builtin and package materials must fail before the effect barrier");
   assert.match(source, /E_SKYBOX_ASSET_PATH_INVALID[\s\S]*ctx\.CommitEffect\(\)[\s\S]*EditorUtility\.SetDirty\(skybox\)[\s\S]*AssetDatabase\.SaveAssetIfDirty\(skybox\)[\s\S]*ReloadAsset<Material>/, "skybox writes must persist the exact asset before fresh readback");
+});
+
+test("graphics dedicated replacements expose fresh mutation readback and bounded unified stats", async () => {
+  const [quality, pipeline, lightProbe, reflectionProbe, stats] = await Promise.all([
+    readFile(new URL("../unitypkg/Editor/Tools/graphics/quality.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/Tools/graphics/pipeline-settings.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/Tools/graphics/light-probe-group.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/Tools/graphics/reflection-probe.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/Tools/graphics/stats.cs", import.meta.url), "utf8"),
+  ]);
+  assert.match(quality, /PlayModeSupport = "session-affecting"/);
+  assert.match(quality, /BuildQualitySettings\(\)[\s\S]*E_QUALITY_STATE_MISMATCH/);
+  assert.match(pipeline, /PlayModeSupport = "session-affecting"/);
+  assert.match(pipeline, /ReloadAsset<RenderPipelineAsset>[\s\S]*E_RENDER_PIPELINE_STATE_MISMATCH/);
+  assert.match(lightProbe, /PlayModeSupport = "supported"[\s\S]*BuildProbeTarget[\s\S]*BuildProbePositions/);
+  assert.match(lightProbe, /E_LIGHT_PROBE_GROUP_STATE_MISMATCH/);
+  assert.match(reflectionProbe, /PlayModeSupport = "supported"[\s\S]*BuildProbeTarget/);
+  assert.match(reflectionProbe, /E_REFLECTION_PROBE_STATE_MISMATCH/);
+  assert.match(stats, /Read one unified render counter and memory snapshot/);
+  assert.match(stats, /PlayModeSupport = "supported"/);
 });
 
 test("graphics C# keeps current pipeline/quality/bake implementation details", async () => {

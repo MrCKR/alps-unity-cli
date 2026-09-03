@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 
 import { handleExtensionsCommand } from "../../src/cli-commands/extensions.js";
 import { readInstalledExtensions, writeInstalledExtensions } from "../../src/cli-commands/extensions.js";
+import { EXTENSION_STATE_MAX_UTF8_BYTES } from "../../src/extensions/state-contract.js";
 import type { CliResult } from "../../src/types.js";
 
 const requestId = "test_req_ext_cmd_001";
@@ -372,11 +373,18 @@ test("extensions doctor detects unknown enabled extensions", async () => {
   try {
     const result = await handleExtensionsCommand("doctor", [], { project }, emptyRuntime, requestId);
     assert.ok(result.ok);
-    const data = result.data as { healthy: boolean; checks: Array<{ id: string; issues: string[] }> };
+    const data = result.data as {
+      healthy: boolean;
+      unknownEnabled: { total: number; sample: string[]; truncated: boolean };
+      issueTotal: number;
+      issues: string[];
+      issuesTruncated: boolean;
+    };
     assert.equal(data.healthy, false);
-    const unknownCheck = data.checks.find((c) => c.id === "nonexistent-extension")!;
-    assert.ok(unknownCheck);
-    assert.ok(unknownCheck.issues.some((i) => i.includes("not registered")));
+    assert.deepEqual(data.unknownEnabled, { total: 1, sample: ["nonexistent-extension"], truncated: false });
+    assert.equal(data.issueTotal, 1);
+    assert.ok(data.issues.some((issue) => issue.includes("not registered")));
+    assert.equal(data.issuesTruncated, false);
   } finally {
     await rm(project, { recursive: true, force: true });
   }
@@ -447,8 +455,18 @@ test("writeInstalledExtensions creates nested directories", async () => {
 test("readInstalledExtensions fails closed for malformed state", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-ext-store-"));
   try {
-    await mkdir(join(project, "Packages", "com.alpsckr.unitycli"), { recursive: true });
-    await writeFile(join(project, "Packages", "com.alpsckr.unitycli", "extensions.json"), "not valid json");
+    const packageRoot = join(project, "Packages", "com.alpsckr.unitycli");
+    const statePath = join(packageRoot, "extensions.json");
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(statePath, "not valid json");
+    await assert.rejects(() => readInstalledExtensions(project), { code: "E_EXTENSION_STATE_INVALID" });
+    await writeFile(statePath, JSON.stringify({ extensions: ["probuilder\n"] }));
+    await assert.rejects(() => readInstalledExtensions(project), { code: "E_EXTENSION_STATE_INVALID" });
+    await writeFile(statePath, JSON.stringify({ extensions: ["a".repeat(129)] }));
+    await assert.rejects(() => readInstalledExtensions(project), { code: "E_EXTENSION_STATE_INVALID" });
+    await writeFile(statePath, JSON.stringify({ extensions: Array.from({ length: 257 }, (_, index) => `extension-${index}`) }));
+    await assert.rejects(() => readInstalledExtensions(project), { code: "E_EXTENSION_STATE_INVALID" });
+    await writeFile(statePath, " ".repeat(EXTENSION_STATE_MAX_UTF8_BYTES + 1));
     await assert.rejects(() => readInstalledExtensions(project), { code: "E_EXTENSION_STATE_INVALID" });
   } finally {
     await rm(project, { recursive: true, force: true });

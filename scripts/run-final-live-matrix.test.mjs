@@ -981,8 +981,8 @@ test("playmode resolve blocked tools exactly cover package file mutations", () =
     "package.deploy", "package.embed", "package.install", "package.remove", "package.resolve", "package.restore",
     "package.scoped-registry.add", "package.scoped-registry.remove"
   ]);
-  // 只读 package 能力不得被误封：list/info/search 在 PlayMode 下仍可调用。
-  for (const name of ["package.list", "package.info", "package.search", "package.search-remote", "package.bridge-remove"]) {
+  // 不依赖Unity Resolve的本地清理能力不得被误封。
+  for (const name of ["package.registry.clear", "package.registry.set", "package.bridge-remove"]) {
     assert.equal(PLAYMODE_RESOLVE_BLOCKED_TOOLS.has(name), false, name);
   }
 });

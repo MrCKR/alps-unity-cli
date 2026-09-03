@@ -263,7 +263,8 @@ namespace UnityCli
                     };
                     RecordDirectCompletionEvidence(request.RequestId, "internal.instances.prune", InstanceCleanupCompletion, result);
                     return new System.Threading.Tasks.ValueTask<object>(result);
-                });
+                },
+                UnityCliBridgeQueuePolicy.WorkClass.Mutation);
         }
 
         private static bool IsInstanceCleanupCommand(string command)

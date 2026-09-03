@@ -74,6 +74,14 @@ unitycli tools run editor.compile --input '{"refresh":true,"includeWarnings":tru
 
 accepted、queued、phase、run ID 和 listener 字段仅属于内部 coordinator，不会成为公开成功。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh 或 compile。
 
+### `editor.refresh`
+
+`editor.refresh` 不递归读取 `Assets`、不计算文件byte hash，也不逐文件调用dependency hash。它在同一 execution deadline/cancel 下读取 Unity-owned global artifact dependency/processed generation，调用一次 `AssetDatabase.Refresh`，观察 import/compile/reload，并在Editor稳定后返回 before/after generation。`changed=false`、`importObserved=false` 是明确成功，不会伪造文件总数或内容指纹；Play Mode 在effect前返回 `E_TOOL_PLAYMODE_UNAVAILABLE`。
+
+### Memory snapshots
+
+`profiler.memory-snapshot.take` 只写 `Library/UnityCli/memory-snapshots/<name>.snap`。`path` 必须是简单 `.snap` 文件名，单文件上限4 GiB；catalog保留最新100个且总量不超过8 GiB。capture先写同根pending文件，callback成功后串行publication；timeout、cancel、reload、write fault和late callback共享唯一终态并清理orphan。`profiler.memory-snapshot.list`只分页读取该有界目录，不接受任意搜索路径。
+
 ## 实例 Tool 完整性
 
 实例 registry 中的 Tool 在 discovery 时整体校验 descriptor 完整性和名称 ownership；malformed、重复或冲突目录返回 `E_TOOL_REGISTRY_UNHEALTHY`，不会静默形成部分 catalog。项目注册 Tool 在执行前继续经过内部完整性校验。正常 descriptor 与成功 envelope 只提供调用所需信息；校验不匹配时，结构化错误会提供恢复步骤。
@@ -99,10 +107,11 @@ unitycli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
 通用规则：
 
 - discovery 的 `tools group list`、`tools search` 和省略name的`command`列表默认每页20项、最大100项；继续读取时将`pageInfo.nextCursor`原值传回CLI `--cursor`。
-- 业务列表/层级工具优先传 JSON `pageSize`、`cursor`、`parent`、`query`、`componentType` 或 `className`。继续读取时将输出里的 `pageInfo.nextCursor` 原值传回 `cursor`；两者保持相同 JSON 类型。`hasMore`、`truncated` 或 `childrenTruncated` 表示还有更深或更多内容。
-- 深度序列化工具（`object.get-data`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`，并保持 `maxDepth` 较低。数组、列表和字典受 `maxArrayItems` 限制；输出里的 `totalCount`、`returnedCount`、`truncated`、`nextPath` 用于判断是否需要继续按路径读取。CLR 的 `NaN`、正无穷和负无穷无法作为 JSON number，会在 AnyJson 值节点中分别表示为字符串 `"NaN"`、`"Infinity"`、`"-Infinity"`。
+- `console.get`、`scene.hierarchy`、`go.find`、`profiler.hierarchy`、`profiler.frame-debugger.events`、`profiler.memory-snapshot.list`、`type.schema` 和 `reflection.method.find` 使用 opaque string `nextCursor`。游标绑定原始位置、selector 与 Unity/assembly generation；必须原样传回，改变 selector 或 generation 后返回 `E_CONTINUATION_STALE`。`truncated=true` 表示还有原始位置；不能把当前页数量当作总数。
+- 深度序列化工具（`object.get-data`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`。`maxDepth` 为 `0..16`，`maxArrayItems` 为 `1..1000`，`paths` 最多128条并保持输入顺序；cycle/depth 在展开前裁决，所有路径共享同一预算，非 `IList` enumerable 不会预 materialize。`truncated` 与 `nextPath` 表示被截断子树。
+- 上述 Unity 主线程读取默认共用 `10000` scanned records、`4096` nodes、`2048` getters、`4096` reflection calls、`250ms` monotonic main-thread work 和 `1 MiB` serialized UTF-8。`budget` 可收紧或提高到公开上限 `100000`、`20000`、`10000`、`20000`、`2000ms`、`8 MiB`；零、负数或超限值在读取/effect前返回 `E_SCHEMA_INVALID` 或 `E_REQUEST_BUDGET_INVALID`。
 - 文本源码工具（如 `shader.read`）使用 `offset` 和 `maxBytes` 分段读取。输出 `truncated=true` 时，下一次把 `nextOffset` 作为新的 `offset`。
-- 截图和相机工具默认返回 artifact 路径。只有确实需要内联图片时才传 `inlineBase64:true`；图片超过 Bridge 内联上限时会省略 `imageBase64` 并返回 warning，继续使用 artifact 路径。
+- 截图/相机捕获的单图边长最多8192且最多16777216像素，capture count最多36。完整计划必须在首个effect前满足默认33554432 total pixels、128 MiB peak temporary memory、64 MiB artifact bytes；公开上限为67108864、256 MiB、256 MiB。`orbit`逐图释放，`surround`逐图写入contact sheet后释放，不同时保留所有tile。内联图片仍限512 KiB。
 
 示例：
 
@@ -126,7 +135,7 @@ unitycli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","m
 | 只读工具 | 检查输出数据是否符合预期 |
 | 修改工具 | 重新调用只读工具确认变更 |
 | Live Editor Tool | 读取能力自己的终态业务数据，必要时用读取型Tool验证 |
-| 诊断工具 | 检查 doctor 或 preflight |
+| 诊断控制面 | 检查 `doctor` 的独立 Registry/Health、pulse、business、catalog、compile 与 Extension checks |
 
 ## 错误处理
 

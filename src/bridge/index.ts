@@ -4,14 +4,14 @@ import { instanceSelectionFailure } from "../instances.js";
 import { BridgeArgumentError } from "./args.js";
 import { bridgeCommandRegistry } from "./registry.js";
 import { getBoolean } from "../args.js";
-import { observationSelectionFrom, transitionBindingAllowed, type BridgeCommandSpec, type BridgeDescriptorBinding, type BridgeError, type BridgeFlags, type BridgeInvocationOptions, type BridgeRequest, type BridgeResponse, type BridgeRuntime } from "./types.js";
+import { observationSelectionFrom, transitionBindingAllowed, type BridgeCommandSpec, type BridgeError, type BridgeFlags, type BridgeInvocationOptions, type BridgeRequest, type BridgeResponse, type BridgeRuntime } from "./types.js";
 import { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "./session-supervisor.js";
 
 export { BridgeCommandRegistry, bridgeCommandRegistry } from "./registry.js";
 export { rootAdmissionFingerprint } from "./admission.js";
-export type { RootAdmissionLease, RootAdmissionRequest } from "./admission.js";
+export type { DiscoveryProvenance, RootAdmissionLease, RootAdmissionRequest } from "./admission.js";
 export { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "./session-supervisor.js";
-export type { BridgeCommandSpec, BridgeDescriptorBinding, BridgeInvocationOptions, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
+export type { BridgeCommandSpec, BridgeInvocationOptions, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 
 export async function executeBridgeCommand(
   requestId: string,
@@ -19,7 +19,6 @@ export async function executeBridgeCommand(
   flags: BridgeFlags,
   positionalTarget: string | undefined,
   runtime: BridgeRuntime,
-  descriptorBinding?: BridgeDescriptorBinding,
   invocation: BridgeInvocationOptions = {}
 ): Promise<CliResult> {
   try {
@@ -32,7 +31,7 @@ export async function executeBridgeCommand(
       args = { name: spec.toolName, input: args };
       bridgeCommand = spec.bridgeCommand;
     }
-    return executeBridgePayload(requestId, bridgeCommand, args, flags, runtime, descriptorBinding, invocation);
+    return executeBridgePayload(requestId, bridgeCommand, args, flags, runtime, invocation);
   } catch (error) {
     if (error instanceof BridgeArgumentError) {
       return failure(requestId, error.code, error.message, error.nextActions);
@@ -47,18 +46,13 @@ export async function executeBridgePayload(
   args: Record<string, unknown>,
   flags: BridgeFlags,
   runtime: BridgeRuntime,
-  descriptorBinding?: BridgeDescriptorBinding,
   invocation: BridgeInvocationOptions = {}
 ): Promise<CliResult> {
   const requested = requestedTimeoutMs(flags, args);
   const timeoutMs = requested ?? invocation.defaultTimeoutMs;
-  const rawInput = requested !== undefined && Object.prototype.hasOwnProperty.call(args, "timeoutMs")
+  const input = requested !== undefined && Object.prototype.hasOwnProperty.call(args, "timeoutMs")
     ? Object.fromEntries(Object.entries(args).filter(([key]) => key !== "timeoutMs"))
     : args;
-  // 调用即授权；live 指纹只保证调用落在已校验的当前 descriptor。
-  const input = descriptorBinding?.liveDescriptorFingerprint && (command === "project-tool.run" || command === "runtime-tool.run")
-    ? { ...rawInput, expectedDescriptorFingerprint: descriptorBinding.liveDescriptorFingerprint }
-    : rawInput;
   const supervisor = new SessionSupervisor(selectionFlags(command, flags), runtime);
 
   try {

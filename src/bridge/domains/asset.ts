@@ -63,12 +63,14 @@ function assetGetDataArgs({ flags, positionalTarget }: Parameters<BridgeCommandS
     assetPath: positionalTarget ?? stringFlag(flags, "asset-path") ?? stringFlag(flags, "path") ?? structured.assetPath,
     path: structured.path,
     maxDepth: numberFlag(flags, "max-depth") ?? structured.maxDepth,
+    maxArrayItems: numberFlag(flags, "max-array-items") ?? structured.maxArrayItems,
     includeFields: boolFlag(flags, "include-fields") ?? structured.includeFields,
     includeProperties: boolFlag(flags, "include-properties") ?? structured.includeProperties,
     deepSerialization: boolFlag(flags, "deep-serialization") ?? structured.deepSerialization,
     paths: structured.paths,
     viewQuery: structured.viewQuery,
-    namePattern: stringFlag(flags, "name-pattern") ?? structured.namePattern
+    namePattern: stringFlag(flags, "name-pattern") ?? structured.namePattern,
+    budget: structured.budget
   });
 }
 

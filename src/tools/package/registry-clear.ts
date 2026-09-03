@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { clearRegistry, readSnapshot } from "../../package-manager.js";
+import { clearRegistry } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
 
 export interface PackageRegistryClearRequest {

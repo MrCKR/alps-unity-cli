@@ -63,7 +63,7 @@ object、array和任意JSON值必须是有效JSON。字段大小写和下划线�
 ```powershell
 # 省略name时只返回有界路由摘要；参数在单命令help中读取
 unitycli command --project-path C:\path\MyProject --page-size 20
-unitycli command --project-path C:\path\MyProject --page-size 20 --cursor 20
+unitycli command --project-path C:\path\MyProject --page-size 20 --cursor <nextCursor>
 
 unitycli command --project-path C:\path\MyProject <name> ...
 unitycli command --timeout 120 <name> ...
@@ -71,10 +71,11 @@ unitycli command <name> ... --timeout-ms 120000 --dry-run
 ```
 
 - `--project-path <path>`绑定现有canonical项目实例，不直连endpoint，也不写入active target。
-- 省略name时，`--page-size`默认20、最大100；存在`pageInfo.nextCursor`时将其原值传回`--cursor`。列表项不展开parameters，使用`command <name> --help`读取参数。
+- 省略name时，`--page-size`默认20、最大100；`pageInfo.nextCursor`绑定原查询与catalog generation，必须原值传回`--cursor`。列表项不展开parameters，使用`command <name> --help`读取参数。
 - `--timeout <seconds>`位于name前；`--timeout-ms <milliseconds>`使用本项目执行控制语义。
 - `--dry-run`、`--runtime`、`--artifact-dir`和`--instance`仍是执行/选择控制项，不进入Tool business input。
 - stdout默认是单行紧凑JSON；`--pretty`只增加缩进，不改变envelope字段。
+- catalog summary/group响应只含bounded routing fields；exact descriptor响应有界且仅在同一 generation 内有效。
 
 ## 等价性
 
@@ -85,7 +86,7 @@ unitycli tools run UnityPipeline_test --input '{"mode":"EditMode"}'
 unitycli command test --mode EditMode
 ```
 
-两种语法共享instance选择、availability、schema终检、risk metadata、dry-run、timeout、descriptor fingerprint、completion contract、Bridge执行和错误码。command语法兼容不承诺补齐当前catalog中不存在的官方命令，也不改变本项目JSON输出格式。
+两种语法共享instance选择、当前domain的immutable Tool table、availability、schema终检、risk metadata、dry-run、timeout、completion contract、Bridge执行和错误码。每次顶层调用的live discovery会冻结exact editor session、listener ID和generation provenance；同一 provenance 会贯穿 root admission，并在首次业务POST前校验，发生reload或listener交接时在 effect 前返回`E_TOOL_CATALOG_CHANGED`。这些字段是私有 transport 绑定，不进入业务input、公开describe或error details。command语法不承诺补齐当前catalog中不存在的官方命令，也不改变本项目JSON输出格式。
 
 ## Pipeline与Bridge启动
 

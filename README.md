@@ -126,9 +126,9 @@ unitycli extensions doctor --project C:\path\UnityProject
 Discovery lists default to 20 items, allow at most 100, and continue with `pageInfo.nextCursor`:
 
 ```powershell
-unitycli tools group list <group> --page-size 20 --instance <id|projectPath|alias>
-unitycli tools search '<k1|k2|...>' --page-size 20 --instance <id|projectPath|alias>
-unitycli command --project-path C:\path\UnityProject --page-size 20
+unitycli tools group list <group> --page-size 20 --cursor <nextCursor> --instance <id|projectPath|alias>
+unitycli tools search '<k1|k2|...>' --page-size 20 --cursor <nextCursor> --instance <id|projectPath|alias>
+unitycli command --project-path C:\path\UnityProject --page-size 20 --cursor <nextCursor>
 ```
 
 In PowerShell, quote pipe-separated search keywords with single quotes.

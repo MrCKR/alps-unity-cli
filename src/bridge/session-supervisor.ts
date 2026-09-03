@@ -12,7 +12,7 @@ import {
   type RegistrySession,
   type UnityInstance,
 } from "../instances.js";
-import { rootAdmissionFingerprint, type RootAdmissionLease, type RootAdmissionRequest } from "./admission.js";
+import { rootAdmissionFingerprint, type DiscoveryProvenance, type RootAdmissionLease, type RootAdmissionRequest } from "./admission.js";
 import type { BridgeFlags, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 
 export const EDITOR_STATE_OBSERVATION_BUDGET_MS = 10_000;
@@ -232,6 +232,13 @@ export class SessionSupervisor {
         instanceId: INJECTED_INSTANCE_ID,
         canonicalProjectPath: process.cwd(),
         sessionId: "injected-session",
+        listenerId: "injected-listener",
+        listenerGeneration: 1,
+        discoveryProvenance: request.expectedDiscoveryProvenance ?? (request.captureDiscoveryProvenance ? {
+          target: request.target, instanceId: INJECTED_INSTANCE_ID, sessionId: "injected-session",
+          ...(request.target === "editor" ? { editorSessionId: "injected-session" } : {}),
+          listenerId: "injected-listener", listenerGeneration: 1,
+        } : undefined),
         token: "injected-admission",
         consumed: false,
         grantExpiresAtMs: this.dependencies.now() + 2_000,
@@ -242,6 +249,7 @@ export class SessionSupervisor {
 
     const target = await this.resolveTarget(request.target, request.admissionAbsoluteDeadlineMs, startedAtMs, request.admissionAbsoluteDeadlineMs, false);
     let binding = await this.bind(target, request.admissionAbsoluteDeadlineMs, false, target.initialSelection);
+    requireDiscoveryProvenance(request.expectedDiscoveryProvenance, binding);
     const fingerprint = rootAdmissionFingerprint(request, binding.instanceId);
     for (;;) {
       const remainingMs = remainingBudget(request.admissionAbsoluteDeadlineMs, this.dependencies.now());
@@ -250,6 +258,7 @@ export class SessionSupervisor {
         const reply = await this.dependencies.acquire(binding, request, fingerprint, remainingMs);
         if (!attestationMatches(binding, reply.attestation)) {
           binding = await this.bindReplacement(target, request.admissionAbsoluteDeadlineMs, binding);
+          requireDiscoveryProvenance(request.expectedDiscoveryProvenance, binding);
           continue;
         }
         if (reply.granted && reply.token) {
@@ -262,6 +271,10 @@ export class SessionSupervisor {
             instanceId: binding.instanceId,
             canonicalProjectPath: binding.canonicalProjectPath,
             sessionId: binding.sessionId,
+            listenerId: binding.listenerId,
+            listenerGeneration: binding.listenerGeneration,
+            discoveryProvenance: request.expectedDiscoveryProvenance
+              ?? (request.captureDiscoveryProvenance ? provenanceFromBinding(binding) : undefined),
             token: reply.token,
             consumed: false,
             grantExpiresAtMs: this.dependencies.now() + reply.grantExpiresInMs,
@@ -278,6 +291,7 @@ export class SessionSupervisor {
         await this.dependencies.sleep(Math.min(admissionPollDelay(this.dependencies.random()), remainingAfterFailureMs));
         clearInstanceHealthCache();
         binding = await this.bind(target, request.admissionAbsoluteDeadlineMs, false, undefined);
+        requireDiscoveryProvenance(request.expectedDiscoveryProvenance, binding);
       }
     }
   }
@@ -290,7 +304,8 @@ export class SessionSupervisor {
       const selection = await this.dependencies.selectObservation({ instance: admission.instanceId }, this.runtime.dataDir ?? defaultDataDir(), remainingBudget(deadlineMs, this.dependencies.now()), admission.target);
       if (!selection.instance.activeSession) return;
       const binding = bindingFrom(selection.instance);
-      if (binding.sessionId !== admission.sessionId) return;
+      if (binding.sessionId !== admission.sessionId || binding.listenerId !== admission.listenerId
+          || binding.listenerGeneration !== admission.listenerGeneration) return;
       const reply = await this.dependencies.revoke(binding, admission, remainingBudget(deadlineMs, this.dependencies.now()));
       if (!attestationMatches(binding, reply.attestation)) return;
     } catch {
@@ -348,6 +363,7 @@ export class SessionSupervisor {
       if (mode === "execute" && template.mutation !== false && dispatchAttempted && binding.sessionId !== dispatchSessionId) {
         throw await this.executionTimeoutWithObservation(target.instanceId, binding, absoluteDeadlineMs, "The selected Unity process session changed after the first mutation POST; automatic redelivery is forbidden.");
       }
+      assertAdmissionBinding(template.rootAdmission, binding);
       try {
         dispatchAttempted = true;
         postAttempts += 1;
@@ -411,6 +427,8 @@ export class SessionSupervisor {
         dryRun: false,
         target: admission.target,
         completionContractIdentity: admission.completionContractIdentity,
+        captureDiscoveryProvenance: admission.discoveryProvenance !== undefined,
+        expectedDiscoveryProvenance: admission.discoveryProvenance,
         timeoutMs: remainingMs,
         admissionAbsoluteDeadlineMs: absoluteDeadlineMs,
       };
@@ -800,11 +818,45 @@ function attestationMatches(binding: ValidatedBinding, attestation: TransportAtt
 
 function assertAdmissionBinding(admission: RootAdmissionLease | undefined, binding: ValidatedBinding): void {
   if (!admission) return;
-  if (admission.instanceId !== binding.instanceId || admission.target !== binding.target || admission.sessionId !== binding.sessionId) {
-    throw new SessionSupervisorError("E_EXECUTION_TIMEOUT", "The admitted Unity root no longer matches the selected target session.", [
-      "Inspect the selected Unity session and affected business state before submitting a new request.",
-    ], { instanceId: admission.instanceId, outcome: "unknown" });
-  }
+  const matches = admission.instanceId === binding.instanceId
+    && admission.target === binding.target
+    && admission.sessionId === binding.sessionId
+    && admission.listenerId === binding.listenerId
+    && admission.listenerGeneration === binding.listenerGeneration;
+  if (matches) return;
+  if (admission.discoveryProvenance && !admission.consumed) throw staleDiscoveryProvenance(admission.discoveryProvenance);
+  throw new SessionSupervisorError("E_EXECUTION_TIMEOUT", "The admitted Unity root no longer matches the selected target session.", [
+    "Inspect the selected Unity session and affected business state before submitting a new request.",
+  ], { instanceId: admission.instanceId, outcome: "unknown" });
+}
+
+/** discovery 和首次业务 POST 必须归属于同一 exact listener generation。 */
+function requireDiscoveryProvenance(expected: DiscoveryProvenance | undefined, binding: ValidatedBinding): void {
+  if (!expected) return;
+  const matches = expected.target === binding.target
+    && expected.instanceId === binding.instanceId
+    && expected.sessionId === binding.sessionId
+    && expected.listenerId === binding.listenerId
+    && expected.listenerGeneration === binding.listenerGeneration
+    && (binding.target !== "editor" || expected.editorSessionId === binding.sessionId);
+  if (!matches) throw staleDiscoveryProvenance(expected);
+}
+
+function provenanceFromBinding(binding: ValidatedBinding): DiscoveryProvenance {
+  return {
+    target: binding.target,
+    instanceId: binding.instanceId,
+    sessionId: binding.sessionId,
+    ...(binding.target === "editor" ? { editorSessionId: binding.sessionId } : {}),
+    listenerId: binding.listenerId,
+    listenerGeneration: binding.listenerGeneration,
+  };
+}
+
+function staleDiscoveryProvenance(expected: DiscoveryProvenance): SessionSupervisorError {
+  return new SessionSupervisorError("E_TOOL_CATALOG_CHANGED", "The Unity listener generation changed after Tool discovery and before the first business request was sent.", [
+    "Restart this top-level tools or command invocation against the current Unity generation.",
+  ], { instanceId: expected.instanceId, phase: "admission", businessRequestSent: false });
 }
 
 function admissionPollDelay(randomValue: number): number {
@@ -820,7 +872,7 @@ function admissionBusy(instanceId: string, timeoutMs: number): SessionSupervisor
 
 /** runtime-tool namespace 始终绑定独立 development Player；其余命令绑定 Editor。 */
 function bridgeTarget(command: string): InstanceTarget {
-  return command === "runtime-tool.list" || command === "runtime-tool.run" ? "runtime" : "editor";
+  return command.startsWith("runtime-tool.") ? "runtime" : "editor";
 }
 
 function normalizeTimeoutMs(value: number | undefined, mode: SessionSupervisorMode): number {

@@ -28,3 +28,11 @@ test("refresh maps unconfirmed outcomes to execution timeout and clears active s
   assert.match(source, /result cannot be confirmed/);
   assert.match(skeleton, /UnityCliActiveOperation\.Clear\(Scope\)/);
 });
+
+test("refresh uses bounded Unity-owned artifact generations instead of recursive file proof", async () => {
+  const source = await readFile(coordinatorPath, "utf8");
+  assert.match(source, /AssetDatabase\.GlobalArtifactDependencyVersion/);
+  assert.match(source, /AssetDatabase\.GlobalArtifactProcessedVersion/);
+  assert.match(source, /"importObserved"/);
+  assert.doesNotMatch(source, /Directory\.GetFiles|SearchOption\.AllDirectories|GetAssetDependencyHash|HashFile|sourceFingerprint|sourceFileCount/);
+});

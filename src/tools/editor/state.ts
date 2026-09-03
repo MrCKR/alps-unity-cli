@@ -63,7 +63,7 @@ interface EditorStateReadDependencies {
 export default defineTool<EditorStateRequest, EditorStateResult>({
   name: "editor.state",
   summary: "Read the selected Unity Editor session state, progress, and external blockers without waiting.",
-  description: "Read selected Unity project identity and active Editor session. Input must be empty. This read-only Tool never waits, refreshes Unity, writes a journal, or dismisses dialogs. It combines bounded main-thread snapshot, Registry v3, verified process identity, and Windows modal observation to classify transition, blocker, unresponsive, unverifiable, offline, and verified conflict. Ready proves only current session state; after a started mutation timeout, read affected business state before a new request.",
+  description: "Read one selected Unity project's active Editor session without waiting. Input must be empty. This read-only Tool combines a bounded main-thread snapshot, Registry v3, verified process identity, and Windows modal observation; it never refreshes Unity, writes a journal, or dismisses dialogs. Use top-level instances list for registry inventory. After a started mutation timeout, inspect the affected business state before a new request.",
   group: "editor",
   destructiveHint: false,
   sideEffects: [],
@@ -196,7 +196,7 @@ async function probeBridge(context: EditorStateReadContext, observationDeadlineM
   if (remaining(observationDeadlineMs) <= 0) return undefined;
   // selector 只在外层执行一次；私有 Symbol 调用字段保留真实 instanceId，不会进入 Bridge body。
   // snapshot是准入独立观察；父级hybrid Tool的业务lease不得进入该private POST。
-  const result = await executeBridgePayload(context.requestId, "internal.editor.state.snapshot", {}, { instance: selection.instance.instanceId }, { bridgeExecute: context.bridgeExecute, dataDir: context.dataDir }, undefined, withObservationSelection({ mode: "observeNow", mutation: false, observationAbsoluteDeadlineMs: observationDeadlineMs }, selection));
+  const result = await executeBridgePayload(context.requestId, "internal.editor.state.snapshot", {}, { instance: selection.instance.instanceId }, { bridgeExecute: context.bridgeExecute, dataDir: context.dataDir }, withObservationSelection({ mode: "observeNow", mutation: false, observationAbsoluteDeadlineMs: observationDeadlineMs }, selection));
   if (!result.ok || !result.data || typeof result.data !== "object" || Array.isArray(result.data)) return undefined;
   const data = result.data as Record<string, unknown>;
   const snapshot = parseSnapshot(data.snapshot ?? data, session);

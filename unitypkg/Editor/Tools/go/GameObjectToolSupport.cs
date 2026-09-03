@@ -34,8 +34,8 @@ namespace UnityCli
         {
             var options = new UnityCliBridge.ObjectSerializer.Options
             {
-                MaxDepth = request.MaxDepth ?? 4,
-                MaxArrayItems = Math.Max(0, Math.Min(request.MaxArrayItems ?? 50, 1000)),
+                MaxDepth = request.MaxDepth ?? UnityCliBridge.ObjectSerializer.DefaultMaxDepth,
+                MaxArrayItems = request.MaxArrayItems ?? UnityCliBridge.ObjectSerializer.DefaultMaxArrayItems,
                 IncludeFields = request.IncludeFields ?? true,
                 IncludeProperties = request.IncludeProperties ?? true,
                 DeepSerialization = request.DeepSerialization ?? true
@@ -46,7 +46,7 @@ namespace UnityCli
             }
             if (request.Paths != null)
             {
-                options.Paths = new HashSet<string>(request.Paths.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()));
+                options.Paths = request.Paths.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()).ToList();
             }
             var query = request.ViewQuery as Dictionary<string, object>;
             if (query != null)
@@ -55,7 +55,7 @@ namespace UnityCli
                 if (query.TryGetValue("path", out value)) options.ViewPath = value as string;
                 if (query.TryGetValue("namePattern", out value)) options.NamePattern = value as string;
                 if (query.TryGetValue("typeFilter", out value)) options.TypeFilter = value as string;
-                if (query.TryGetValue("maxDepth", out value) && value != null) options.MaxDepth = Math.Max(0, Convert.ToInt32(value, CultureInfo.InvariantCulture));
+                if (query.TryGetValue("maxDepth", out value) && value != null) options.MaxDepth = UnityCliBridge.ObjectSerializer.ParseMaxDepth(value);
             }
             if (!string.IsNullOrEmpty(request.NamePattern))
             {
@@ -117,6 +117,17 @@ namespace UnityCli
             return new GameObjectRef { Id = gameObject.GetInstanceID(), Name = gameObject.name, Path = HierarchyPath(gameObject) };
         }
 
+        /// <summary>在同一请求预算内构造 GameObject 引用，祖先每一步都在读取前计费。</summary>
+        public static GameObjectRef BuildGameObjectRef(GameObject gameObject, UnityCliRequestBudget budget)
+        {
+            if (budget == null) throw new ArgumentNullException("budget");
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var id = gameObject.GetInstanceID();
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var name = gameObject.name;
+            return new GameObjectRef { Id = id, Name = name, Path = HierarchyPath(gameObject, budget) };
+        }
+
         /// <summary>构造 Transform 摘要(position/rotation/scale)。</summary>
         public static TransformInfo BuildTransformInfo(Transform transform)
         {
@@ -143,6 +154,16 @@ namespace UnityCli
         {
             var property = component.GetType().GetProperty("enabled", BindingFlags.Instance | BindingFlags.Public);
             return property == null || (bool)property.GetValue(component, null);
+        }
+
+        /// <summary>在反射和 getter 前计费后读取 enabled；没有该属性的组件视为启用。</summary>
+        public static bool ComponentEnabled(Component component, UnityCliRequestBudget budget)
+        {
+            if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var property = component.GetType().GetProperty("enabled", BindingFlags.Instance | BindingFlags.Public);
+            if (property == null) return true;
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            return (bool)property.GetValue(component, null);
         }
 
         /// <summary>构造 GameObject 详情(id/name/path/active/tag/layer/transform/components/children)。</summary>
@@ -217,6 +238,24 @@ namespace UnityCli
             while (current != null)
             {
                 names.Push(current.name);
+                current = current.parent;
+            }
+            return string.Join("/", names.ToArray());
+        }
+
+        /// <summary>祖先链逐步读取并收取 scan/getter/UTF-8 预算。</summary>
+        public static string HierarchyPath(GameObject gameObject, UnityCliRequestBudget budget)
+        {
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var names = new Stack<string>();
+            var current = gameObject.transform;
+            while (current != null)
+            {
+                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var name = current.name;
+                if (!budget.TryReserveSerializedUtf8(name)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                names.Push(name);
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 current = current.parent;
             }
             return string.Join("/", names.ToArray());
@@ -297,6 +336,17 @@ namespace UnityCli
                 if (type != null) return type;
             }
             return null;
+        }
+
+        /// <summary>读取型搜索只尝试 exact/full Unity namespaces，避免为短名调用 Assembly.GetTypes 全量扫描。</summary>
+        public static Type ResolveComponentType(string componentName, UnityCliRequestBudget budget)
+        {
+            var type = UnityCliBridge.TypeSchemaGenerator.ResolveType(componentName, budget)
+                ?? UnityCliBridge.TypeSchemaGenerator.ResolveType("UnityEngine." + componentName, budget)
+                ?? UnityCliBridge.TypeSchemaGenerator.ResolveType("UnityEngine.UI." + componentName, budget);
+            if (type == null || !typeof(Component).IsAssignableFrom(type))
+                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_TYPE_NOT_FOUND", "Component type not found within the bounded exact namespaces: " + componentName, "Pass a full component type name.");
+            return type;
         }
 
         /// <summary>按短名、FullName 或 UnityEngine namespace 名解析 Component Type。</summary>

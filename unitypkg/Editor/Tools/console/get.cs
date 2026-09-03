@@ -1,27 +1,59 @@
 #if UNITY_EDITOR
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using UnityEditor;
-using UnityEditor.Compilation;
-using UnityEngine;
 
 namespace UnityCli
 {
-    /// <summary>console.get — 读取 Console 日志(支持过滤和分页)。</summary>
+    /// <summary>console.get — 按稳定 raw Console 位置执行有界过滤与续页。</summary>
     public class ConsoleGetTool : IUnityCliTool<ConsoleGetTool.Request, ConsoleGetTool.Result>
     {
-        public sealed class Request { public string Type { get; set; } public string Filter { get; set; } public int? Count { get; set; } public int? Cursor { get; set; } }
-        public sealed class Result { public List<ConsoleEntry> Items { get; set; } public PageInfo PageInfo { get; set; } }
-        public ToolDescriptor Describe() => new() { Name = "console.get", Summary = "Read Unity Console entries with type filter, text search, and cursor paging.", Description = "Read Console entries newest-first. type filters by error/warning/log. filter does case-insensitive text search. cursor for pagination.", Group = "console",DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Read errors", Input = new Request { Type = "error", Count = 10 } } } };
-        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request r, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        public sealed class Request
         {
-            var count = Math.Max(1, Math.Min(r.Count ?? 50, 500));
-            var cursor = Math.Max(0, r.Cursor ?? 0);
-            var items = EditorToolSupport.ReadConsoleEntries(r.Type, r.Filter, count + cursor);
-            var paged = items.Skip(cursor).Take(count).ToList();
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Items = paged, PageInfo = new PageInfo { PageSize = count, Cursor = cursor, Total = items.Count, NextCursor = cursor + paged.Count < items.Count ? (long?)(cursor + paged.Count) : null } });
+            [UnityCliStringEnum("all", "error", "warning", "assert", "log")]
+            public string Type { get; set; }
+            public string Filter { get; set; }
+            [UnityCliRange(1L, 500L)] public int? Count { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
+        }
+
+        public sealed class Result
+        {
+            [UnityCliItemsRange(0, 500)] public List<ConsoleEntry> Items { get; set; }
+            public long RawEntryCount { get; set; }
+            public bool Truncated { get; set; }
+            public string Note { get; set; }
+            public UnityCliRequestBudgetUsage Budget { get; set; }
+        }
+
+        public ToolDescriptor Describe() => new()
+        {
+            Name = "console.get",
+            Summary = "Read one bounded, non-resumable Unity Console snapshot under request-wide limits.",
+            Description = "Read Console entries newest-first from one Unity snapshot window without materializing the Console. count defaults to 50 and is limited to 1..500. Filtering advances over raw positions and every entry uses the shared scan/reflection/getter/main-thread/UTF-8 budget. Unity exposes no reliable generation covering external Console clear/rebuild, so this tool intentionally has no cursor; truncated=true means start a fresh snapshot with a larger count or budget. rawEntryCount is Unity's raw count, not a filtered total. Read-only in Edit and Play Mode.",
+            Group = "console",
+            DestructiveHint = false,
+            Target = "editor",
+            PlayModeSupport = "supported",
+            DefaultTimeoutMs = 30000,
+            MaxTimeoutMs = 600000,
+            Examples = new[]
+            {
+                new ToolExample { Description = "Read a bounded error page", Input = new Request { Type = "error", Count = 50 } }
+            }
+        };
+
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        {
+            request = request ?? new Request();
+            var pageSize = request.Count ?? 50;
+            var page = EditorToolSupport.ReadConsolePage(request.Type, request.Filter, pageSize, ctx.UseReadBudget(request.Budget));
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            {
+                Items = page.Items,
+                RawEntryCount = page.RawEntryCount,
+                Truncated = page.Truncated,
+                Note = page.Note,
+                Budget = page.Budget
+            });
         }
     }
 }

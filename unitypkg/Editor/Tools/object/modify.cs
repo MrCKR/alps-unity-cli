@@ -23,14 +23,15 @@ namespace UnityCli
             public string Component { get; set; }
             public string ComponentType { get; set; }
             [UnityCliAnyJson] public List<object> PathPatches { get; set; }
-            public int? MaxDepth { get; set; }
-            public int? MaxArrayItems { get; set; }
+            [UnityCliRange(0L, 16L)] public int? MaxDepth { get; set; }
+            [UnityCliRange(1L, 1000L)] public int? MaxArrayItems { get; set; }
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
-            public List<string> Paths { get; set; }
+            [UnityCliItemsRange(0, 128)] public List<string> Paths { get; set; }
             [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
@@ -71,7 +72,8 @@ namespace UnityCli
         public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ObjectToolSupport.EnsureEditorNotBusy("object.modify");
-            var target = UnityCliBridge.ObjectRefResolver.ResolveObject(request);
+            var readBudget = ctx.UseReadBudget(request.Budget);
+            var target = UnityCliBridge.ObjectRefResolver.ResolveObject(request, readBudget);
             if (EditorApplication.isPlaying && EditorUtility.IsPersistent(target))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "object.modify cannot modify persistent assets during Play Mode.", "Target a scene object or exit Play Mode before modifying an asset.");
@@ -112,7 +114,7 @@ namespace UnityCli
             if (observedTarget == null) throw new UnityCliBridge.BridgeCommandException("E_OBJECT_MODIFY_STATE_MISMATCH", "Target could not be fresh-resolved after patch.", "Retry after the Editor is idle.");
             UnityCliBridge.ObjectPatch.VerifyFreshSerializedProperties(observedTarget, request.PathPatches);
             var options = ObjectToolSupport.BuildSerializerOptions(request);
-            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedTarget, options);
+            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(observedTarget, options, readBudget);
 
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

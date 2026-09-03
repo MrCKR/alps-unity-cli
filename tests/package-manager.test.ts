@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { ensurePackageBridge, checkPackageBridge, deployPackageSource, hashPackageTree, inspectPackageAssemblyConflicts, inspectPackageBridge, inspectPackageDeploymentFiles, PackageManagerError, preparePackageBridgeInstall, removePackageBridge, restoreDeployedPackage, searchRegistry, verifyPackageSourceIntegrity } from "../src/package-manager.js";
+import { ensurePackageBridge, checkPackageBridge, deployPackageSource, hashPackageTree, inspectPackageAssemblyConflicts, inspectPackageBridge, inspectPackageDeploymentFiles, PackageManagerError, preparePackageBridgeInstall, removePackageBridge, restoreDeployedPackage, verifyPackageSourceIntegrity } from "../src/package-manager.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -17,20 +17,6 @@ async function makeUnityProject(): Promise<string> {
   }, null, 2), "utf8");
   return project;
 }
-
-test("searchRegistry projects only the declared public package fields", async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async () => new Response(JSON.stringify({
-    objects: [{ package: { name: "com.acme.tool", version: "1.2.3", description: "Tool", author: { name: "Private" }, links: { npm: "https://example.invalid" } } }]
-  }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
-  try {
-    assert.deepEqual(await searchRegistry("https://registry.example.test", "acme"), [
-      { name: "com.acme.tool", version: "1.2.3", description: "Tool" }
-    ]);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
 
 test("ensurePackageBridge copies unitypkg contents to Packages/com.alpsckr.unitycli", async () => {
   const project = await makeUnityProject();

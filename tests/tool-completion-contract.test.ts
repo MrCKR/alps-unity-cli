@@ -63,11 +63,18 @@ test("generated TypeScript completion registry is exact contract material", asyn
     descriptorOwner: entry.descriptorOwner,
   })).sort((left, right) => left.toolName.localeCompare(right.toolName));
   const generated = [...GENERATED_TOOL_COMPLETION_CONTRACTS].sort((left, right) => left.toolName.localeCompare(right.toolName));
-  assert.deepEqual(generated.map(({ completionDriverId: _driver, journalPolicy: _journal, mutation: _mutation, ...entry }) => entry), normalized);
+  assert.deepEqual(generated.map(({ completionDriverId: _driver, journalPolicy: _journal, mutation: _mutation, assemblyName: _assembly, implementationType: _type, ...entry }) => entry), normalized);
   for (const entry of generated) {
     assert.ok(entry.completionDriverId, entry.toolName);
     assert.ok(["none", "required"].includes(entry.journalPolicy), entry.toolName);
     assert.equal(typeof entry.mutation, "boolean", entry.toolName);
+    if (entry.descriptorOwner === "built-in" || entry.descriptorOwner.startsWith("extension:")) {
+      assert.ok(entry.assemblyName, `${entry.toolName}.assemblyName`);
+      assert.ok(entry.implementationType, `${entry.toolName}.implementationType`);
+    } else {
+      assert.equal(entry.assemblyName, undefined, `${entry.toolName}.assemblyName`);
+      assert.equal(entry.implementationType, undefined, `${entry.toolName}.implementationType`);
+    }
   }
 });
 

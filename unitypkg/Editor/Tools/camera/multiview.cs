@@ -16,9 +16,11 @@ namespace UnityCli
         {
             public string Targets { get; set; }
             public string Output { get; set; }
-            public int? Width { get; set; }
-            public int? Height { get; set; }
+            [UnityCliRange(1L, 8192L)] public int? Width { get; set; }
+            [UnityCliRange(1L, 8192L)] public int? Height { get; set; }
             public string Format { get; set; }
+            public ScreenshotBudgetInput Limits { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
@@ -26,13 +28,14 @@ namespace UnityCli
             public List<CameraCapture> Captures { get; set; }
             public long Count { get; set; }
             public List<CameraPlannedEffect> PlannedEffects { get; set; }
+            public ScreenshotCapturePlan CapturePlan { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "camera.multiview",
             Summary = "Capture one PNG/JPG artifact per named Camera into an output directory for multiview review.",
-            Description = "Capture one PNG/JPG artifact per named Camera into an output directory for side-by-side scene review. Returns artifact paths instead of inline image bytes; keep target count and resolution small for token and disk efficiency.",
+            Description = "Capture 1..16 named Cameras to PNG/JPG artifacts. Each dimension is 1..8192 and each image is at most 16777216 pixels. Before the first effect, the aggregate plan must fit default ceilings of 33554432 total pixels, 128 MiB temporary memory and 64 MiB artifacts; public maxima are 67108864, 256 MiB and 256 MiB. All textures are released after each capture. Available in Edit and Play Mode with session render effects.",
             Group = "camera",
             DestructiveHint = true,
             SideEffects = new[] { "artifact-write", "render-texture" },
@@ -52,11 +55,14 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "camera.multiview requires targets.", "Run tools run camera.list, then pass comma-separated camera names, hierarchy paths, or instance ids.");
             }
+            var requestBudget = ctx.UseReadBudget(request.Budget);
             var names = request.Targets.Split(new[] { ',' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (names.Length < 1 || names.Length > 16)
+                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_LIMIT_INVALID", "camera.multiview targets must contain 1..16 cameras.", "Reduce the target list before retrying.");
             var cameras = new List<Camera>();
             foreach (var name in names)
             {
-                var camera = CameraToolSupport.ResolveCamera(name.Trim());
+                var camera = CameraToolSupport.ResolveCamera(name.Trim(), requestBudget);
                 if (camera == null)
                 {
                     throw new UnityCliBridge.BridgeCommandException("E_CAMERA_NOT_FOUND", "Camera not found: " + name.Trim(), "Run tools run camera.list, then retry with camera names, hierarchy paths, or instance ids from the result.");
@@ -67,6 +73,7 @@ namespace UnityCli
             var width = CameraToolSupport.ClampScreenshotDimension(request.Width ?? 1280, "width");
             var height = CameraToolSupport.ClampScreenshotDimension(request.Height ?? 720, "height");
             var format = CameraToolSupport.NormalizeFormat(request.Format, Path.Combine(outputDir, "capture.png"));
+            var captureBudget = ScreenshotToolSupport.PrepareCaptureBudget(width, height, cameras.Count, false, request.Limits, requestBudget);
             var captures = new List<CameraCapture>();
             var effects = new List<CameraPlannedEffect>();
             var plans = new List<KeyValuePair<int, string>>();
@@ -83,13 +90,13 @@ namespace UnityCli
             {
                 var camera = EditorUtility.InstanceIDToObject(plan.Key) as Camera;
                 if (camera == null) throw new UnityCliBridge.BridgeCommandException("E_CAMERA_NOT_FOUND", "Camera disappeared before capture.", "Retry after the Editor is idle.");
-                var capture = CameraToolSupport.CaptureCamera(camera, width, height, false, 95, plan.Value, format, true, false);
+                var capture = CameraToolSupport.CaptureCamera(camera, width, height, false, 95, plan.Value, format, true, false, captureBudget);
                 if (!File.Exists(plan.Value) || new FileInfo(plan.Value).Length == 0)
                     throw new UnityCliBridge.BridgeCommandException("E_MULTIVIEW_ARTIFACT_MISSING", "Camera capture artifact was not observed: " + plan.Value, "Check the output directory and retry.");
                 captures.Add(capture);
                 effects.Add(new CameraPlannedEffect { Type = "camera.multiview", Property = "capture", Path = plan.Value });
             }
-            return new System.Threading.Tasks.ValueTask<Result>(new Result { Captures = captures, Count = captures.Count, PlannedEffects = effects });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Captures = captures, Count = captures.Count, PlannedEffects = effects, CapturePlan = captureBudget.Plan });
         }
     }
 }
