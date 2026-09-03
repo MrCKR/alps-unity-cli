@@ -228,87 +228,89 @@ namespace UnityCli
             }
         }
 
-        /// <summary>实际linked-list扫描、锁外control proof与锁内identity复核共用唯一生产路径。</summary>
+        /// <summary>control proof在锁外冻结；每个linked-list节点在lane访问当下完成唯一policy检查。</summary>
         private static List<BridgeWorkItem> SelectQueuedStarts(BridgeQueueState state, DurableMutationBarrierProof barrier, bool remove, out int queueDepth, out List<ControlQueueRejection> rejections)
         {
-            List<BridgeWorkItem> snapshotItems;
-            int runningOrdinaryReads;
-            bool mutationRunning;
+            bool hasControlWork;
+            lock (state.QueueLock) hasControlWork = state.ControlQueue.Count > 0;
+            var controlContext = LoadControlDecisionContext(state, barrier, hasControlWork);
+            var barrierState = barrier == null ? UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable : barrier.State;
+            var snapshotItems = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick);
+            var selected = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxStartsPerTick);
+            rejections = new List<ControlQueueRejection>();
             var safeStatusVisits = 0;
             var controlVisits = 0;
             var fifoVisits = 0;
             lock (state.QueueLock)
             {
-                snapshotItems = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxNodesExaminedPerTick);
-                var prioritySafeStatus = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick);
-                var safeCursor = state.SafeStatusQueue.First;
-                while (safeCursor != null && safeStatusVisits < UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick)
+                var runningOrdinaryReads = state.RunningWork.Count(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
+                var mutationRunning = state.RunningWork.Any(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Mutation
+                    || item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Control);
+                var accumulator = UnityCliBridgeQueuePolicy.BeginSelection(runningOrdinaryReads, mutationRunning, barrierState);
+                var seen = new HashSet<BridgeWorkItem>();
+
+                var fifoCursor = state.WorkQueue.First;
+                while (fifoCursor != null && fifoVisits < UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick)
                 {
-                    prioritySafeStatus.Add(safeCursor.Value);
-                    safeStatusVisits += 1;
-                    safeCursor = safeCursor.Next;
+                    ExamineQueueCandidate(fifoCursor.Value, controlContext, seen, snapshotItems, accumulator);
+                    fifoVisits += 1;
+                    fifoCursor = fifoCursor.Next;
                 }
-                var priorityControl = new List<BridgeWorkItem>(UnityCliBridgeQueuePolicy.MaxControlNodesExaminedPerTick);
+
                 var controlLimit = Math.Min(state.ControlQueue.Count, UnityCliBridgeQueuePolicy.MaxControlNodesExaminedPerTick);
                 var controlCursor = state.ControlScanCursor;
                 if (controlCursor == null || controlCursor.List != state.ControlQueue) controlCursor = state.ControlQueue.First;
                 while (controlCursor != null && controlVisits < controlLimit)
                 {
-                    priorityControl.Add(controlCursor.Value);
+                    ExamineQueueCandidate(controlCursor.Value, controlContext, seen, snapshotItems, accumulator);
                     controlVisits += 1;
                     controlCursor = controlCursor.Next ?? state.ControlQueue.First;
                 }
                 state.ControlScanCursor = state.ControlQueue.Count == 0 ? null : controlCursor;
-                var seen = new HashSet<BridgeWorkItem>();
-                var cursor = state.WorkQueue.First;
-                while (cursor != null && fifoVisits < UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick)
-                {
-                    var item = cursor.Value;
-                    if (seen.Add(item)) snapshotItems.Add(item);
-                    fifoVisits += 1;
-                    cursor = cursor.Next;
-                }
-                foreach (var item in priorityControl)
-                    if (seen.Add(item)) snapshotItems.Add(item);
-                foreach (var item in prioritySafeStatus)
-                    if (seen.Add(item)) snapshotItems.Add(item);
-                runningOrdinaryReads = state.RunningWork.Count(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.OrdinaryRead);
-                mutationRunning = state.RunningWork.Any(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Mutation
-                    || item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Control);
-                queueDepth = state.WorkQueue.Count;
-            }
-            state.RecordQueueNodesExamined(safeStatusVisits, controlVisits, fifoVisits);
-            rejections = new List<ControlQueueRejection>();
-            if (snapshotItems.Count == 0) return new List<BridgeWorkItem>();
 
-            var controlRoots = LoadControlRoots(state, snapshotItems);
-            var policyNodes = snapshotItems.Select(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Control
-                ? item.PolicyNode.WithControlDisposition(ControlDisposition(item, barrier, controlRoots))
-                : item.PolicyNode).ToArray();
-            var barrierState = barrier == null ? UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable : barrier.State;
-            var selection = UnityCliBridgeQueuePolicy.SelectStarts(policyNodes, runningOrdinaryReads, mutationRunning, barrierState);
-            var selected = new List<BridgeWorkItem>(selection.Starts.Count);
-            lock (state.QueueLock)
-            {
+                var safeCursor = state.SafeStatusQueue.First;
+                while (safeCursor != null && safeStatusVisits < UnityCliBridgeQueuePolicy.MaxSafeStatusNodesExaminedPerTick)
+                {
+                    ExamineQueueCandidate(safeCursor.Value, controlContext, seen, snapshotItems, accumulator);
+                    safeStatusVisits += 1;
+                    safeCursor = safeCursor.Next;
+                }
+
+                state.RecordQueueNodesExamined(safeStatusVisits, controlVisits, fifoVisits);
+                var selection = accumulator.Complete();
                 foreach (var decision in selection.Rejects)
                 {
                     var item = snapshotItems[decision.QueueIndex];
                     if (item.QueueNode == null || item.QueueNode.List != state.WorkQueue) continue;
                     rejections.Add(new ControlQueueRejection(item, decision.Disposition));
-                    if (!remove) continue;
-                    RemoveQueuedItemUnderLock(state, item);
+                    if (remove) RemoveQueuedItemUnderLock(state, item);
                 }
                 foreach (var decision in selection.Starts)
                 {
                     var item = snapshotItems[decision.QueueIndex];
                     if (item.QueueNode == null || item.QueueNode.List != state.WorkQueue) continue;
                     selected.Add(item);
-                    if (!remove) continue;
-                    RemoveQueuedItemUnderLock(state, item);
+                    if (remove) RemoveQueuedItemUnderLock(state, item);
                 }
                 queueDepth = state.WorkQueue.Count;
             }
             return selected;
+        }
+
+        /// <summary>同一WorkItem跨lane只做一次policy检查，lane节点访问仍按各自预算计数。</summary>
+        private static void ExamineQueueCandidate(
+            BridgeWorkItem item,
+            ControlDecisionContext controlContext,
+            ISet<BridgeWorkItem> seen,
+            ICollection<BridgeWorkItem> snapshotItems,
+            UnityCliBridgeQueuePolicy.TickSelectionAccumulator accumulator)
+        {
+            if (!seen.Add(item)) return;
+            var node = item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Control
+                ? item.PolicyNode.WithControlDisposition(ControlDisposition(item, controlContext))
+                : item.PolicyNode;
+            accumulator.Examine(node);
+            snapshotItems.Add(item);
         }
 
         internal static string[] PreviewQueuedStartRequestIdsForTests(BridgeQueueState state)
@@ -350,33 +352,44 @@ namespace UnityCli
             return removed.Select(value => value.Item.Request.RequestId).ToArray();
         }
 
-        private static Dictionary<string, ControlRootObservation> LoadControlRoots(BridgeQueueState state, IEnumerable<BridgeWorkItem> items)
+        private static readonly string[] DurableControlRootScopes =
+        {
+            "test-run", "package-resolve", "navmesh-bake", "occlusion-bake"
+        };
+
+        /// <summary>固定scope的durable root与lease proof在QueueLock外一次冻结，lane访问只做纯裁决。</summary>
+        private static ControlDecisionContext LoadControlDecisionContext(BridgeQueueState state, DurableMutationBarrierProof barrier, bool hasControlWork)
         {
             var roots = new Dictionary<string, ControlRootObservation>(StringComparer.Ordinal);
-            foreach (var scope in items.Where(item => item.WorkClass == UnityCliBridgeQueuePolicy.WorkClass.Control)
-                .Select(item => ControlRootScope(item.Request.Command)).Where(scope => scope != null).Distinct(StringComparer.Ordinal))
+            if (!hasControlWork || barrier == null || barrier.State == UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable)
+                return new ControlDecisionContext(barrier, roots, false, false);
+            foreach (var scope in DurableControlRootScopes)
             {
                 try { roots[scope] = new ControlRootObservation(true, state.LoadOperation(scope)); }
                 catch { roots[scope] = new ControlRootObservation(false, null); }
             }
-            return roots;
+            var leaseReadable = false;
+            var leaseOwned = false;
+            if (barrier.State == UnityCliBridgeQueuePolicy.DurableMutationBarrier.Held)
+                leaseReadable = state.TryIsLeaseOwned(barrier.RequestId, barrier.RequestDigest, out leaseOwned);
+            return new ControlDecisionContext(barrier, roots, leaseReadable, leaseOwned);
         }
 
-        private static UnityCliBridgeQueuePolicy.ControlDisposition ControlDisposition(BridgeWorkItem item, DurableMutationBarrierProof barrier, IDictionary<string, ControlRootObservation> roots)
+        private static UnityCliBridgeQueuePolicy.ControlDisposition ControlDisposition(BridgeWorkItem item, ControlDecisionContext context)
         {
             int remainingMs;
             if (item == null || item.Request == null || !item.Request.TryDeadlineRemainingMs(out remainingMs) || remainingMs <= 0)
                 return UnityCliBridgeQueuePolicy.ControlDisposition.ExpireDeadline;
+            var barrier = context == null ? null : context.Barrier;
             if (barrier == null || barrier.State == UnityCliBridgeQueuePolicy.DurableMutationBarrier.Unreadable)
                 return UnityCliBridgeQueuePolicy.ControlDisposition.Pending;
             var scope = ControlRootScope(item.Request.Command);
             ControlRootObservation observation;
-            if (scope == null || roots == null || !roots.TryGetValue(scope, out observation) || !observation.Readable)
+            if (scope == null || !context.Roots.TryGetValue(scope, out observation) || !observation.Readable)
                 return UnityCliBridgeQueuePolicy.ControlDisposition.Pending;
             if (barrier.State == UnityCliBridgeQueuePolicy.DurableMutationBarrier.Clear)
                 return UnityCliBridgeQueuePolicy.ControlDisposition.RejectParentUnavailable;
-            bool leaseOwned;
-            if (!item.QueueState.TryIsLeaseOwned(barrier.RequestId, barrier.RequestDigest, out leaseOwned) || !leaseOwned)
+            if (!context.LeaseReadable || !context.LeaseOwned)
                 return UnityCliBridgeQueuePolicy.ControlDisposition.Pending;
             var root = observation.Root;
             if (root == null
@@ -419,6 +432,27 @@ namespace UnityCli
                 nextActions: new[] { "Inspect the exact parent status before submitting another control request." }));
             item.MarkNoEffectRejected();
             CompleteWorkItem(item);
+        }
+
+        /// <summary>一次tick在QueueLock外冻结的control durable proof。</summary>
+        private sealed class ControlDecisionContext
+        {
+            internal ControlDecisionContext(
+                DurableMutationBarrierProof barrier,
+                IDictionary<string, ControlRootObservation> roots,
+                bool leaseReadable,
+                bool leaseOwned)
+            {
+                Barrier = barrier;
+                Roots = roots;
+                LeaseReadable = leaseReadable;
+                LeaseOwned = leaseOwned;
+            }
+
+            internal DurableMutationBarrierProof Barrier;
+            internal IDictionary<string, ControlRootObservation> Roots;
+            internal bool LeaseReadable;
+            internal bool LeaseOwned;
         }
 
         private sealed class ControlRootObservation
@@ -507,8 +541,11 @@ namespace UnityCli
             BridgeWorkItem item = null;
             try
             {
+                HitQueueTestBoundary(state, "before-queue-lock");
                 lock (state.QueueLock)
                 {
+                    try
+                    {
                     if (!state.QueuePublicationOpen)
                     {
                         if (state.QueueSessionStopping)
@@ -521,6 +558,8 @@ namespace UnityCli
                     {
                         if (!string.Equals(existing.RequestDigest, digest, StringComparison.Ordinal))
                             throw new BridgeCommandException("E_REQUEST_ID_REUSED", "requestId is already bound to different request bytes.", "Generate a new requestId before retrying this command.");
+                        if (state.HasCompensationTombstone(request.RequestId, digest))
+                            throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Exact pre-queue admission compensation is still pending; duplicate attachment is forbidden.");
                         if (!TryAuthorizeCompletionPendingAttach(state, reservation, existing))
                             AuthorizeAdmissionForQueue(state, reservation, request);
                         if (!SameAdmissionOwner(existing.AdmissionOwner, reservation.Owner))
@@ -531,7 +570,7 @@ namespace UnityCli
                         return existing;
                     }
                     AuthorizeAdmissionForQueue(state, reservation, request);
-                    if (!reservation.NewlyConsumed && reservation.Owner != null && state.HasCompensationContinuation(reservation.Owner))
+                    if (state.HasCompensationTombstone(request.RequestId, digest))
                         throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Exact pre-queue admission compensation is still pending; duplicate publication is forbidden.");
                     var bypass = reservation.IsBypass && reservation.Owner == null;
                     UnityCliBridgeQueuePolicy.BypassAdmissionDecision bypassDecision = null;
@@ -578,13 +617,27 @@ namespace UnityCli
                     created = true;
                     queueDepth = state.WorkQueue.Count;
                     return item;
+                    }
+                    catch
+                    {
+                        if (reservation.NewlyConsumed && reservation.Owner != null && !reservation.QueuePublished)
+                        {
+                            try { state.TrackCompensationContinuation(reservation.Owner); }
+                            catch
+                            {
+                                state.QueuePublicationOpen = false;
+                                throw;
+                            }
+                            HitQueueTestBoundary(state, "after-publication-compensation-tombstone");
+                        }
+                        throw;
+                    }
                 }
             }
             catch
             {
                 if (item != null && !reservation.QueuePublished) item.DisposeUnpublished();
                 var compensationRequired = reservation.NewlyConsumed && reservation.Owner != null && !reservation.QueuePublished;
-                if (compensationRequired) state.TrackCompensationContinuation(reservation.Owner);
                 try
                 {
                     if (compensationRequired && !PersistAdmissionCompletionIntent(state, reservation.Owner))

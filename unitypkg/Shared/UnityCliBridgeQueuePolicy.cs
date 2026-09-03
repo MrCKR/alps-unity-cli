@@ -244,37 +244,48 @@ namespace UnityCli
                 : new BypassAdmissionDecision(BypassAdmissionOutcome.Enqueue, -1);
         }
 
-        /// <summary>按队列顺序选择本tick唯一可移除并尝试启动的节点，不修改调用方集合。</summary>
-        public static TickSelection SelectStarts(
-            IReadOnlyList<QueueNode> queued,
-            int runningOrdinaryReads,
-            bool mutationRunning,
-            DurableMutationBarrier durableMutationBarrier)
+        /// <summary>lane遍历每访问一个唯一节点就完成一次policy检查，避免production再次扫描候选集合。</summary>
+        public sealed class TickSelectionAccumulator
         {
-            if (queued == null) throw new ArgumentNullException("queued");
-            if (runningOrdinaryReads < 0) throw new ArgumentOutOfRangeException("runningOrdinaryReads");
-            ValidateEnum(durableMutationBarrier, "durableMutationBarrier");
+            private readonly int runningOrdinaryReads;
+            private readonly bool mutationRunning;
+            private readonly DurableMutationBarrier durableMutationBarrier;
+            private readonly List<QueueNode> examinedNodes = new List<QueueNode>(MaxNodesExaminedPerTick);
+            private readonly List<int> earlierOrdinaryReadIndices = new List<int>();
+            private readonly List<int> safeStatusIndices = new List<int>(MaxSafeStatusStartsPerTick);
+            private readonly List<RejectDecision> rejects = new List<RejectDecision>();
+            private readonly HashSet<string> nodeIds = new HashSet<string>(StringComparer.Ordinal);
+            private int firstMutationIndex = -1;
+            private int firstAuthorizedControlIndex = -1;
+            private bool completed;
 
-            var examined = Math.Min(queued.Count, MaxNodesExaminedPerTick);
-            var examinedNodes = new List<QueueNode>(examined);
-            var firstMutationIndex = -1;
-            var earlierOrdinaryReadIndices = new List<int>();
-            var safeStatusIndices = new List<int>(MaxSafeStatusStartsPerTick);
-            var rejects = new List<RejectDecision>();
-            var rejected = new bool[examined];
-            var nodeIds = new HashSet<string>(StringComparer.Ordinal);
-            for (var index = 0; index < examined; index++)
+            internal TickSelectionAccumulator(int runningOrdinaryReads, bool mutationRunning, DurableMutationBarrier durableMutationBarrier)
             {
-                var node = queued[index];
-                if (node == null) throw new ArgumentException("Examined queue prefix contains null.", "queued");
-                if (!nodeIds.Add(node.NodeId)) throw new ArgumentException("Examined queue prefix contains duplicate nodeId.", "queued");
+                if (runningOrdinaryReads < 0) throw new ArgumentOutOfRangeException("runningOrdinaryReads");
+                ValidateEnum(durableMutationBarrier, "durableMutationBarrier");
+                this.runningOrdinaryReads = runningOrdinaryReads;
+                this.mutationRunning = mutationRunning;
+                this.durableMutationBarrier = durableMutationBarrier;
+            }
+
+            private bool HasCapacity { get { return examinedNodes.Count < MaxNodesExaminedPerTick; } }
+
+            /// <summary>调用方已访问lane节点时同步记录唯一候选及其完整eligibility。</summary>
+            public void Examine(QueueNode node)
+            {
+                if (completed) throw new InvalidOperationException("Tick selection is already complete.");
+                if (!HasCapacity) throw new InvalidOperationException("Tick selection exceeded its fixed node bound.");
+                if (node == null) throw new ArgumentException("Examined queue prefix contains null.", "node");
+                if (!nodeIds.Add(node.NodeId)) throw new ArgumentException("Examined queue prefix contains duplicate nodeId.", "node");
+                var index = examinedNodes.Count;
                 examinedNodes.Add(node);
                 if (node.Class == WorkClass.Control && IsTerminalControlDisposition(node.ControlDecision))
                 {
-                    rejected[index] = true;
                     rejects.Add(new RejectDecision(node.NodeId, index, node.ControlDecision));
-                    continue;
+                    return;
                 }
+                if (firstAuthorizedControlIndex < 0 && node.Class == WorkClass.Control && node.ControlAuthorized)
+                    firstAuthorizedControlIndex = index;
                 if (firstMutationIndex < 0 && (node.Class == WorkClass.Mutation || node.Class == WorkClass.Control))
                     firstMutationIndex = index;
                 if (node.Class == WorkClass.SafeStatus && safeStatusIndices.Count < MaxSafeStatusStartsPerTick)
@@ -283,48 +294,72 @@ namespace UnityCli
                     earlierOrdinaryReadIndices.Add(index);
             }
 
-            var selected = new bool[examined];
-            foreach (var index in safeStatusIndices) selected[index] = true;
-            var remainingStarts = MaxStartsPerTick - safeStatusIndices.Count;
-            var regularBarrierClear = !mutationRunning && durableMutationBarrier == DurableMutationBarrier.Clear;
-            if (!mutationRunning && durableMutationBarrier == DurableMutationBarrier.Held && remainingStarts > 0)
+            /// <summary>基于已检查节点完成本tick的唯一启动与拒绝裁决。</summary>
+            public TickSelection Complete()
             {
-                for (var index = 0; index < examined && remainingStarts > 0; index++)
+                if (completed) throw new InvalidOperationException("Tick selection is already complete.");
+                completed = true;
+                var selectedIndices = new List<int>(MaxStartsPerTick);
+                selectedIndices.AddRange(safeStatusIndices);
+                var remainingStarts = MaxStartsPerTick - selectedIndices.Count;
+                var regularBarrierClear = !mutationRunning && durableMutationBarrier == DurableMutationBarrier.Clear;
+                if (!mutationRunning && durableMutationBarrier == DurableMutationBarrier.Held
+                    && remainingStarts > 0 && firstAuthorizedControlIndex >= 0)
                 {
-                    var node = examinedNodes[index];
-                    if (rejected[index] || node.Class != WorkClass.Control || !node.ControlAuthorized) continue;
-                    selected[index] = true;
+                    selectedIndices.Add(firstAuthorizedControlIndex);
                     remainingStarts -= 1;
-                    break;
                 }
-            }
 
-            if (regularBarrierClear && remainingStarts > 0)
-            {
-                if (firstMutationIndex < 0 || earlierOrdinaryReadIndices.Count > 0)
+                if (regularBarrierClear && remainingStarts > 0)
                 {
-                    foreach (var index in earlierOrdinaryReadIndices)
+                    if (firstMutationIndex < 0 || earlierOrdinaryReadIndices.Count > 0)
                     {
-                        if (remainingStarts == 0) break;
-                        selected[index] = true;
+                        foreach (var index in earlierOrdinaryReadIndices)
+                        {
+                            if (remainingStarts == 0) break;
+                            selectedIndices.Add(index);
+                            remainingStarts -= 1;
+                        }
+                    }
+                    else if (runningOrdinaryReads == 0 && examinedNodes[firstMutationIndex].Class == WorkClass.Mutation)
+                    {
+                        selectedIndices.Add(firstMutationIndex);
                         remainingStarts -= 1;
                     }
                 }
-                else if (runningOrdinaryReads == 0 && examinedNodes[firstMutationIndex].Class == WorkClass.Mutation)
-                {
-                    selected[firstMutationIndex] = true;
-                    remainingStarts -= 1;
-                }
-            }
 
-            var starts = new List<StartDecision>(MaxStartsPerTick - remainingStarts);
-            for (var index = 0; index < examined; index++)
-            {
-                if (!selected[index]) continue;
-                var node = examinedNodes[index];
-                starts.Add(new StartDecision(node.NodeId, index, node.Class));
+                selectedIndices.Sort();
+                var starts = new List<StartDecision>(selectedIndices.Count);
+                foreach (var index in selectedIndices)
+                {
+                    var node = examinedNodes[index];
+                    starts.Add(new StartDecision(node.NodeId, index, node.Class));
+                }
+                return new TickSelection(starts, rejects, examinedNodes.Count);
             }
-            return new TickSelection(starts, rejects, examined);
+        }
+
+        /// <summary>创建与一次production lane遍历同生命周期的增量选择器。</summary>
+        public static TickSelectionAccumulator BeginSelection(
+            int runningOrdinaryReads,
+            bool mutationRunning,
+            DurableMutationBarrier durableMutationBarrier)
+        {
+            return new TickSelectionAccumulator(runningOrdinaryReads, mutationRunning, durableMutationBarrier);
+        }
+
+        /// <summary>按队列顺序选择本tick唯一可移除并尝试启动的节点，不修改调用方集合。</summary>
+        public static TickSelection SelectStarts(
+            IReadOnlyList<QueueNode> queued,
+            int runningOrdinaryReads,
+            bool mutationRunning,
+            DurableMutationBarrier durableMutationBarrier)
+        {
+            if (queued == null) throw new ArgumentNullException("queued");
+            var accumulator = BeginSelection(runningOrdinaryReads, mutationRunning, durableMutationBarrier);
+            var examined = Math.Min(queued.Count, MaxNodesExaminedPerTick);
+            for (var index = 0; index < examined; index++) accumulator.Examine(queued[index]);
+            return accumulator.Complete();
         }
 
         private static bool IsTerminalControlDisposition(ControlDisposition disposition)

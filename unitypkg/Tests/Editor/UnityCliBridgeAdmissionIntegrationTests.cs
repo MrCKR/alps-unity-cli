@@ -257,6 +257,93 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void PublicationFaultTombstoneBlocksDuplicateBeforeDurableCompensation()
+        {
+            var request = Request("queue-publication-duplicate-race");
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            var tombstoneEntered = new ManualResetEventSlim(false);
+            var releaseTombstone = new ManualResetEventSlim(false);
+            var intentEntered = new ManualResetEventSlim(false);
+            var releaseIntent = new ManualResetEventSlim(false);
+            var duplicateBeforeLock = new ManualResetEventSlim(false);
+            var duplicateEntered = new ManualResetEventSlim(false);
+            var tombstoneTrackedUnderLock = false;
+            state.TestHooks.ExpectOnce("before-queue-publication", () => { throw new InvalidOperationException("injected publication fault"); });
+            state.TestHooks.ExpectOnce("after-publication-compensation-tombstone", () =>
+            {
+                tombstoneTrackedUnderLock = UnityCliBridge.QueueLockHeldForTests(state);
+                tombstoneEntered.Set();
+                releaseTombstone.Wait();
+            });
+            state.TestHooks.ExpectOnce("before-state-persist-intent", () =>
+            {
+                intentEntered.Set();
+                releaseIntent.Wait();
+            });
+
+            var publicationTask = Task.Run<Exception>(() =>
+            {
+                try
+                {
+                    bool created;
+                    Enqueue(request, raw, grant.Token, deadline, out created);
+                    return null;
+                }
+                catch (Exception exception) { return exception; }
+            });
+            Task<UnityCliBridge.BridgeCommandException> duplicateTask = null;
+            try
+            {
+                Assert.That(tombstoneEntered.Wait(5000), Is.True);
+                Assert.That(tombstoneTrackedUnderLock, Is.True);
+                Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+                state.TestHooks.ExpectOnce("before-queue-lock", () => duplicateBeforeLock.Set());
+                state.TestHooks.ExpectOnce("before-existing-lookup", () => duplicateEntered.Set());
+                duplicateTask = Task.Run<UnityCliBridge.BridgeCommandException>(() =>
+                {
+                    try
+                    {
+                        bool created;
+                        Enqueue(request, raw, grant.Token, deadline, out created);
+                        return null;
+                    }
+                    catch (UnityCliBridge.BridgeCommandException exception) { return exception; }
+                });
+                Assert.That(duplicateBeforeLock.Wait(5000), Is.True);
+                Assert.That(duplicateEntered.IsSet, Is.False, "duplicate must remain behind QueueLock until the tombstone is visible");
+                releaseTombstone.Set();
+                Assert.That(intentEntered.Wait(5000), Is.True);
+                Assert.That(duplicateEntered.Wait(5000), Is.True);
+                Assert.That(duplicateTask.Wait(5000), Is.True);
+                Assert.That(duplicateTask.Result, Is.Not.Null);
+                Assert.That(duplicateTask.Result.Code, Is.EqualTo("E_EXECUTION_TIMEOUT"));
+                Assert.That(pool.Capture().Active, Is.EqualTo(1));
+                Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+                Assert.That(state.WorkQueue, Is.Empty);
+            }
+            finally
+            {
+                releaseTombstone.Set();
+                releaseIntent.Set();
+            }
+
+            Assert.That(publicationTask.Wait(5000), Is.True);
+            Assert.That(publicationTask.Result, Is.TypeOf<InvalidOperationException>());
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+
+            var successorGrant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(successorGrant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            var successor = Enqueue(request, raw, successorGrant.Token, deadline, out var successorCreated);
+            Assert.That(successorCreated, Is.True);
+            Assert.That(successor, Is.Not.Null);
+            UnityCliBridge.ShutdownQueuedWorkForTests(state);
+        }
+
+        [Test]
         public void RecoveryBlockedAuthorizationRevokesItsExactGrantBeforeQueueRejection()
         {
             var request = Request("queue-recovery-blocked-authorization");
@@ -317,6 +404,47 @@ namespace UnityCli.Tests
             Assert.That(pool.Capture().Active, Is.EqualTo(0));
             Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
             Assert.That(state.Sinks.TransactionCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void CompensationRetryDoesNotDeletePublishedSuccessorOwner()
+        {
+            var request = Request("queue-compensation-successor-owner");
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            state.TestHooks.ExpectOnce("before-queue-publication", () => { throw new InvalidOperationException("injected publication fault"); });
+            state.TestHooks.ExpectOnce("before-admission-compensation-persist", () => { throw new IOException("injected pool persistence fault"); });
+
+            var failure = Assert.Throws<UnityCliBridge.BridgeCommandException>(() =>
+            {
+                bool created;
+                Enqueue(request, raw, grant.Token, deadline, out created);
+            });
+
+            Assert.That(failure.Code, Is.EqualTo("E_EXECUTION_TIMEOUT"));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+            var successorRequest = Request(request.RequestId);
+            successorRequest.Input = new Dictionary<string, object> { { "successor", true } };
+            var successorRaw = RequestBytes(successorRequest);
+            var successorGrant = pool.Acquire(successorRequest.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(successorGrant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            var successor = Enqueue(successorRequest, successorRaw, successorGrant.Token, Deadline(successorRequest), out var successorCreated);
+            Assert.That(successorCreated, Is.True);
+
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
+            Assert.That(UnityCliBridge.PreviewQueuedStartRequestIdsForTests(state), Is.EqualTo(new[] { successorRequest.RequestId }));
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(successor, Success(successorRequest.RequestId)), Is.True);
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
         }
 
         [Test]

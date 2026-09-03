@@ -123,13 +123,15 @@ namespace UnityCli
             }
         }
 
-        internal bool HasCompensationContinuation(UnityCliBridge.AdmissionOwnerIdentity identity)
+        /// <summary>同一requestId与不可变请求字节在旧owner补偿完成前不得绑定到任何新WorkItem。</summary>
+        internal bool HasCompensationTombstone(string requestId, string requestDigest)
         {
-            if (identity == null) return false;
+            if (string.IsNullOrEmpty(requestId) || string.IsNullOrEmpty(requestDigest)) return false;
             lock (SettlementLock)
             {
-                PendingCompletionIntent pending;
-                return pendingCompletionIntents.TryGetValue(IntentKey(identity), out pending) && pending.Compensation;
+                return pendingCompletionIntents.Values.Any(pending => pending.Compensation
+                    && string.Equals(pending.Owner.RequestId, requestId, StringComparison.Ordinal)
+                    && string.Equals(pending.Owner.RequestDigest, requestDigest, StringComparison.Ordinal));
             }
         }
 
