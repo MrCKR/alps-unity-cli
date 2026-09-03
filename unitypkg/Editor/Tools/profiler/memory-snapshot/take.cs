@@ -40,37 +40,40 @@ namespace UnityCli
         public async ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default)
         {
             request = request ?? new Request();
-            var profilerType = ProfilerToolSupport.MemoryProfilerType();
+            var requestBudget = ctx.UseReadBudget(request.Budget);
+            requestBudget.CheckpointOrThrow();
+            var profilerType = ProfilerToolSupport.MemoryProfilerType(requestBudget);
             if (profilerType == null) throw new UnityCliBridge.BridgeCommandException("E_PROFILER_PACKAGE_MISSING", "Package com.unity.memoryprofiler is required for memory snapshots.", "Install com.unity.memoryprofiler through Package Manager.");
             var finalPath = ProfilerMemorySnapshotSupport.ResolveFinalPath(request.Path, ctx.RequestId);
-            var pendingPath = ProfilerMemorySnapshotSupport.PendingPath(ctx.RequestId);
             if (File.Exists(finalPath)) throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Snapshot output already exists: " + finalPath, "Choose another .snap file name.");
             var maxBytes = request.MaxBytes ?? ProfilerMemorySnapshotSupport.AbsoluteSnapshotBytes;
-            var binding = ResolveTakeSnapshot(profilerType, pendingPath);
-            var requestBudget = ctx.UseReadBudget(request.Budget);
-            var terminal = new MemorySnapshotTerminal();
-
-            ctx.CommitEffect();
-            ProfilerMemorySnapshotSupport.PrepareRoot();
+            var pendingPath = ProfilerMemorySnapshotSupport.AcquirePendingPath(ctx.RequestId);
+            SnapshotBinding binding;
+            try
+            {
+                binding = ResolveTakeSnapshot(profilerType, pendingPath, requestBudget);
+                ctx.CommitEffect();
+            }
+            catch
+            {
+                ProfilerMemorySnapshotSupport.ReleasePendingPath(pendingPath);
+                throw;
+            }
             try
             {
                 var result = await ctx.Wait.ForCallback<Result>((complete, fail) =>
                 {
                     var callback = new Action<string, bool>((capturedPath, succeeded) =>
                     {
-                        if (!terminal.TryOwnCallback())
+                        try
                         {
-                            ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
-                            return;
-                        }
-                        var accepted = complete(() =>
-                        {
-                            try
+                            var accepted = complete(() =>
                             {
                                 requestBudget.ResumeAfterWait();
                                 requestBudget.CheckpointOrThrow();
                                 if (!succeeded) throw ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_FAILED", "MemoryProfiler reported snapshot failure.", "Inspect Unity Console before retrying.");
                                 var info = ProfilerMemorySnapshotSupport.Publish(capturedPath, pendingPath, finalPath, maxBytes, requestBudget);
+                                if (!requestBudget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(requestBudget.ExhaustedDimension);
                                 return new Result
                                 {
                                     Path = finalPath,
@@ -79,53 +82,53 @@ namespace UnityCli
                                     RetainedBytesLimit = ProfilerMemorySnapshotSupport.RetainedSnapshotBytes,
                                     PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.memory-snapshot.take", Path = finalPath } }
                                 };
-                            }
-                            catch
-                            {
-                                ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
-                                throw;
-                            }
-                        });
-                        if (!accepted) ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
+                            });
+                            if (!accepted) ProfilerMemorySnapshotSupport.RequestPendingCleanup(pendingPath);
+                        }
+                        finally
+                        {
+                            ProfilerMemorySnapshotSupport.ReleasePendingPath(pendingPath);
+                        }
                     });
                     binding.SetCallback(callback);
                     try { binding.Invoke(); }
                     catch (TargetInvocationException exception)
                     {
-                        if (terminal.TryOwnCallback()) fail(exception.InnerException ?? exception);
-                        ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
+                        fail(exception.InnerException ?? exception);
+                        ProfilerMemorySnapshotSupport.ReleasePendingPath(pendingPath);
                     }
                     catch (Exception exception)
                     {
-                        if (terminal.TryOwnCallback()) fail(ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_FAILED", "Snapshot capture failed: " + exception.Message, "Inspect Unity Console and the Memory Profiler package."));
-                        ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
+                        fail(ProfilerMemorySnapshotSupport.Error("E_PROFILER_SNAPSHOT_FAILED", "Snapshot capture failed: " + exception.Message, "Inspect Unity Console and the Memory Profiler package."));
+                        ProfilerMemorySnapshotSupport.ReleasePendingPath(pendingPath);
                     }
-                }, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct, () =>
-                {
-                    if (terminal.TryAbandon()) ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
-                });
+                }, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct, () => ProfilerMemorySnapshotSupport.RequestPendingCleanup(pendingPath));
                 requestBudget.ResumeAfterWait();
                 return result;
             }
             catch
             {
-                terminal.TryAbandon();
-                ProfilerMemorySnapshotSupport.DeleteNoThrow(pendingPath);
+                ProfilerMemorySnapshotSupport.RequestPendingCleanup(pendingPath);
                 throw;
             }
         }
 
-        private static SnapshotBinding ResolveTakeSnapshot(Type profilerType, string pendingPath)
+        private static SnapshotBinding ResolveTakeSnapshot(Type profilerType, string pendingPath, UnityCliRequestBudget budget)
         {
             var callbackType = typeof(Action<string, bool>);
-            var captureFlagsType = ProfilerToolSupport.FindType("Unity.Profiling.Memory.CaptureFlags")
-                ?? ProfilerToolSupport.FindType("UnityEngine.Profiling.Memory.Experimental.CaptureFlags");
+            var captureFlagsType = ProfilerToolSupport.FindType("Unity.Profiling.Memory.CaptureFlags", budget)
+                ?? ProfilerToolSupport.FindType("UnityEngine.Profiling.Memory.Experimental.CaptureFlags", budget);
             MethodInfo method = null;
             object[] args = null;
-            if (captureFlagsType != null) method = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType, captureFlagsType });
+            if (captureFlagsType != null)
+            {
+                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                method = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType, captureFlagsType });
+            }
             if (method != null) args = new object[] { pendingPath, null, Enum.ToObject(captureFlagsType, 0) };
             else
             {
+                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 method = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType });
                 if (method != null) args = new object[] { pendingPath, null };
             }

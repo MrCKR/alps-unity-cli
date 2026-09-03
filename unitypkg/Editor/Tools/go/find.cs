@@ -112,8 +112,8 @@ namespace UnityCli
             int? layer = null;
             if (method == "by_component") componentType = GameObjectToolSupport.ResolveComponentType(searchTerm, budget);
             if (method == "by_layer") layer = GameObjectToolSupport.ParseLayer(searchTerm);
-            var prefabTraversal = prefabOpen ? new UnityCliHierarchyPager.Traversal(prefabStage.scene, prefabStage.prefabContentsRoot, int.MaxValue) : null;
-            var sceneTraversal = new UnityCliHierarchyPager.LoadedSceneTraversal(prefabOpen ? prefabStage.scene.handle : 0);
+            var prefabTraversal = prefabOpen ? new UnityCliHierarchyPager.Traversal(prefabStage.scene, prefabStage.prefabContentsRoot, int.MaxValue, budget) : null;
+            var sceneTraversal = new UnityCliHierarchyPager.LoadedSceneTraversal(budget, prefabOpen ? prefabStage.scene.handle : 0);
             GameObject current;
             var phase = prefabOpen ? "prefab" : "scene";
             if (string.IsNullOrEmpty(request.Cursor)) current = prefabOpen ? prefabStage.prefabContentsRoot : sceneTraversal.First(budget);
@@ -147,7 +147,8 @@ namespace UnityCli
                 }
             }
 
-            var nextCursor = UnityCliHierarchyPager.Cursor("go.find", generation, phase, current);
+            if (items.Count == 0 && current != null) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
+            var nextCursor = UnityCliHierarchyPager.Cursor("go.find", generation, phase, current, budget);
             return new System.Threading.Tasks.ValueTask<Result>(ResultPage(items, pageSize, request.Cursor, nextCursor, generation, prefabOpen, budget));
         }
 

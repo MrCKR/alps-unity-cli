@@ -30,17 +30,43 @@ namespace UnityCli
         internal const int RetainedSnapshotCount = 100;
         internal const long RetainedSnapshotBytes = 8L * 1024L * 1024L * 1024L;
         internal const long AbsoluteSnapshotBytes = 4L * 1024L * 1024L * 1024L;
-        private const int MaximumObservedFiles = RetainedSnapshotCount + 8;
+        private const int MaximumObservedFiles = 1024;
+        private const int PendingSlotCount = 8;
+        private const int MaximumLegacyOrphansPerPass = 1024;
         private static readonly object PublicationLock = new object();
+        private static readonly object PendingLock = new object();
+        private static readonly HashSet<string> ActivePendingSlots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> PendingCleanup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static int cleanupScheduled;
+        internal static string RootOverrideForTests;
+        internal static Action<string> DeleteFileOverrideForTests;
 
         static ProfilerMemorySnapshotSupport()
         {
-            CleanupOrphansNoThrow();
+            ScheduleOrphanCleanup();
         }
 
         internal static string Root
         {
-            get { return Path.GetFullPath(Path.Combine(ProfilerToolSupport.ProjectRoot(), "Library", "UnityCli", "memory-snapshots")); }
+            get
+            {
+                var root = string.IsNullOrWhiteSpace(RootOverrideForTests)
+                    ? Path.Combine(ProfilerToolSupport.ProjectRoot(), "Library", "UnityCli", "memory-snapshots")
+                    : RootOverrideForTests;
+                return Path.GetFullPath(root);
+            }
+        }
+
+        /// <summary>测试结束时清除故障注入和固定slot占用，避免跨case污染。</summary>
+        internal static void ResetTestOverrides()
+        {
+            RootOverrideForTests = null;
+            DeleteFileOverrideForTests = null;
+            lock (PendingLock)
+            {
+                ActivePendingSlots.Clear();
+                PendingCleanup.Clear();
+            }
         }
 
         internal static string ResolveFinalPath(string requestedName, string requestId)
@@ -75,9 +101,60 @@ namespace UnityCli
             return false;
         }
 
-        internal static string PendingPath(string requestId)
+        /// <summary>每个domain最多占用8个固定pending slot；未收到callback的slot不复用，避免迟到writer污染新请求。</summary>
+        internal static string AcquirePendingPath(string requestId)
         {
-            return Path.Combine(Root, ".pending-" + UnityCliContinuationToken.Fingerprint(requestId ?? string.Empty) + ".snap");
+            PrepareRoot();
+            var fingerprint = UnityCliContinuationToken.Fingerprint(requestId ?? string.Empty);
+            var start = (int)(unchecked((uint)StringComparer.Ordinal.GetHashCode(fingerprint)) % PendingSlotCount);
+            lock (PendingLock)
+            {
+                for (var offset = 0; offset < PendingSlotCount; offset++)
+                {
+                    var path = PendingSlotPath((start + offset) % PendingSlotCount);
+                    if (!ActivePendingSlots.Add(path)) continue;
+                    try
+                    {
+                        DeleteStrict(path, "E_PROFILER_SNAPSHOT_PENDING_CLEANUP_FAILED", "Failed to prepare the bounded snapshot pending slot.");
+                        return path;
+                    }
+                    catch
+                    {
+                        ActivePendingSlots.Remove(path);
+                        throw;
+                    }
+                }
+            }
+            throw Error("E_PROFILER_SNAPSHOT_PENDING_SLOTS_BUSY", "All bounded memory snapshot pending slots are awaiting callbacks.", "Wait for the outstanding Memory Profiler callbacks or reload the Editor domain before retrying.");
+        }
+
+        internal static void ReleasePendingPath(string path)
+        {
+            lock (PendingLock) ActivePendingSlots.Remove(Path.GetFullPath(path));
+            RequestPendingCleanup(path);
+        }
+
+        internal static void RequestPendingCleanup(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            try
+            {
+                DeleteStrict(path, "E_PROFILER_SNAPSHOT_PENDING_CLEANUP_FAILED", "Failed to clean the bounded snapshot pending slot.");
+                lock (PendingLock) PendingCleanup.Remove(Path.GetFullPath(path));
+            }
+            catch
+            {
+                lock (PendingLock)
+                {
+                    if (PendingCleanup.Count < PendingSlotCount) PendingCleanup.Add(Path.GetFullPath(path));
+                }
+                ScheduleOrphanCleanup();
+            }
+        }
+
+        private static string PendingSlotPath(int slot)
+        {
+            return Path.Combine(Root, ".pending-" + slot.ToString("00", CultureInfo.InvariantCulture) + ".snap");
         }
 
         internal static void PrepareRoot()
@@ -102,19 +179,26 @@ namespace UnityCli
                 if (length <= 0L) throw Error("E_PROFILER_SNAPSHOT_ARTIFACT_MISSING", "MemoryProfiler did not produce a non-empty snapshot.", "Check disk space and Unity Console before retrying.");
                 if (length > AbsoluteSnapshotBytes || length > requestedMaxBytes)
                 {
-                    DeleteNoThrow(source);
+                    DeleteStrict(source, "E_PROFILER_SNAPSHOT_PENDING_CLEANUP_FAILED", "Failed to remove an oversized pending snapshot.");
                     throw Error("E_PROFILER_SNAPSHOT_LIMIT_EXCEEDED", "Snapshot exceeds the requested or 4 GiB per-artifact ceiling.", "Increase maxBytes within 4 GiB or reduce captured state.");
                 }
                 if (File.Exists(finalPath)) throw Error("E_OUTPUT_EXISTS", "Snapshot output already exists: " + finalPath, "Choose another snapshot file name.");
                 budget.CheckpointOrThrow();
                 File.Move(source, finalPath);
-                var published = new FileInfo(finalPath);
                 try
                 {
                     budget.CheckpointOrThrow();
                     ApplyRetention(finalPath, budget);
                 }
-                catch { DeleteNoThrow(finalPath); throw; }
+                catch
+                {
+                    DeleteStrict(finalPath, "E_PROFILER_SNAPSHOT_ROLLBACK_FAILED", "Snapshot retention failed and the published artifact could not be rolled back.");
+                    throw;
+                }
+                var published = new FileInfo(finalPath);
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var publishedLength = published.Length;
+                if (publishedLength <= 0L) throw Error("E_PROFILER_SNAPSHOT_ARTIFACT_MISSING", "Published snapshot is empty after retention verification.", "Inspect storage and retry the capture.");
                 return published;
             }
         }
@@ -147,9 +231,9 @@ namespace UnityCli
             for (var index = 0; index < files.Count; index++)
             {
                 if (retained.Contains(index)) continue;
-                DeleteNoThrow(files[index].FullName);
+                DeleteStrict(files[index].FullName, "E_PROFILER_SNAPSHOT_RETENTION_DELETE_FAILED", "Failed to delete an artifact excluded by snapshot retention.");
             }
-            if (!File.Exists(newestPath)) throw Error("E_PROFILER_SNAPSHOT_LIMIT_EXCEEDED", "The new snapshot cannot fit the latest-100/8-GiB retention policy.", "Reduce snapshot size before retrying.");
+            VerifyRetentionPostcondition(newestPath, budget);
         }
 
         internal static List<FileInfo> Catalog(UnityCliRequestBudget budget)
@@ -173,14 +257,45 @@ namespace UnityCli
             return UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Session("profiler.memory-snapshot.list") + "\0" + string.Join("\n", values.ToArray()));
         }
 
-        internal static void DeleteNoThrow(string path)
+        /// <summary>publication/retention/rollback删除失败必须返回稳定错误，禁止吞掉后继续宣称成功。</summary>
+        internal static void DeleteStrict(string path, string errorCode, string message)
         {
             try
             {
                 var fullPath = Path.GetFullPath(path);
-                if (fullPath.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && File.Exists(fullPath)) File.Delete(fullPath);
+                if (!fullPath.StartsWith(Root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("path is outside the governed snapshot root");
+                if (File.Exists(fullPath))
+                {
+                    if (DeleteFileOverrideForTests != null) DeleteFileOverrideForTests(fullPath);
+                    else File.Delete(fullPath);
+                }
+                if (File.Exists(fullPath)) throw new IOException("file still exists after deletion");
             }
-            catch { }
+            catch (Exception exception)
+            {
+                throw Error(errorCode, message + " " + exception.Message, "Inspect the exact governed file and storage permissions before retrying.");
+            }
+        }
+
+        /// <summary>删除后重新枚举并验证count、total bytes、single file和newest存在性。</summary>
+        private static void VerifyRetentionPostcondition(string newestPath, UnityCliRequestBudget budget)
+        {
+            var verified = BoundedFiles(budget);
+            long totalBytes = 0L;
+            var newestExists = false;
+            foreach (var file in verified)
+            {
+                if (!budget.TryConsumeGetters(2)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var length = file.Length;
+                if (length <= 0L || length > AbsoluteSnapshotBytes)
+                    throw Error("E_PROFILER_SNAPSHOT_RETENTION_VERIFY_FAILED", "Snapshot retention contains an empty or oversized artifact.", "Inspect the governed snapshot directory before retrying.");
+                totalBytes = checked(totalBytes + length);
+                if (string.Equals(file.FullName, newestPath, StringComparison.OrdinalIgnoreCase)) newestExists = true;
+            }
+            if (!newestExists || verified.Count > RetainedSnapshotCount || totalBytes > RetainedSnapshotBytes)
+                throw Error("E_PROFILER_SNAPSHOT_RETENTION_VERIFY_FAILED", "Snapshot retention postcondition is not count<=100, total<=8GiB with the newest artifact present.", "Inspect the governed snapshot directory before retrying.");
+            budget.CheckpointOrThrow();
         }
 
         private static void SortNewest(List<FileInfo> files, UnityCliRequestBudget budget)
@@ -222,20 +337,52 @@ namespace UnityCli
             return result;
         }
 
-        private static void CleanupOrphans()
+        /// <summary>单个scheduler任务持续处理固定slot和旧candidate orphan；每tick工作有1024项硬上限。</summary>
+        private static void ScheduleOrphanCleanup()
         {
-            if (!Directory.Exists(Root)) return;
-            var count = 0;
-            foreach (var path in Directory.EnumerateFiles(Root, ".pending-*.snap", SearchOption.TopDirectoryOnly))
-            {
-                DeleteNoThrow(path);
-                if (++count > 8) throw Error("E_PROFILER_SNAPSHOT_ORPHANS_UNBOUNDED", "Snapshot orphan count exceeds the active-request bound.", "Inspect the governed snapshot directory before retrying.");
-            }
+            if (Interlocked.CompareExchange(ref cleanupScheduled, 1, 0) != 0) return;
+            UnityCliWaitScheduler.Until(
+                "memory-snapshot-orphan-cleanup",
+                "profiler.memory-snapshot",
+                CleanupOrphanPass,
+                TimeSpan.FromDays(3650),
+                CancellationToken.None);
         }
 
-        private static void CleanupOrphansNoThrow()
+        private static bool CleanupOrphanPass()
         {
-            try { CleanupOrphans(); } catch { }
+            var allClean = true;
+            List<string> pending;
+            lock (PendingLock) pending = new List<string>(PendingCleanup);
+            foreach (var path in pending)
+            {
+                try
+                {
+                    DeleteStrict(path, "E_PROFILER_SNAPSHOT_PENDING_CLEANUP_FAILED", "Failed to clean a bounded snapshot pending slot.");
+                    lock (PendingLock) PendingCleanup.Remove(path);
+                }
+                catch { allClean = false; }
+            }
+            if (!Directory.Exists(Root)) return allClean && CompleteCleanupSchedule();
+            var observed = 0;
+            foreach (var path in Directory.EnumerateFiles(Root, ".pending-*.snap", SearchOption.TopDirectoryOnly))
+            {
+                if (++observed > MaximumLegacyOrphansPerPass) { allClean = false; break; }
+                lock (PendingLock) if (ActivePendingSlots.Contains(Path.GetFullPath(path))) continue;
+                try { DeleteStrict(path, "E_PROFILER_SNAPSHOT_PENDING_CLEANUP_FAILED", "Failed to clean a snapshot orphan."); }
+                catch { allClean = false; }
+            }
+            return allClean && CompleteCleanupSchedule();
+        }
+
+        private static bool CompleteCleanupSchedule()
+        {
+            lock (PendingLock)
+            {
+                if (PendingCleanup.Count != 0) return false;
+                Interlocked.Exchange(ref cleanupScheduled, 0);
+                return true;
+            }
         }
 
         private static string SafeName(string value)
@@ -254,15 +401,6 @@ namespace UnityCli
         {
             return new UnityCliBridge.BridgeCommandException(code, message, nextAction);
         }
-    }
-
-    /// <summary>callback、timeout/cancel 和 late callback 竞争同一个 CAS terminal。</summary>
-    internal sealed class MemorySnapshotTerminal
-    {
-        private int state;
-        internal bool TryOwnCallback() { return Interlocked.CompareExchange(ref state, 1, 0) == 0; }
-        internal bool TryAbandon() { return Interlocked.CompareExchange(ref state, 2, 0) == 0; }
-        internal bool IsAbandoned { get { return Volatile.Read(ref state) == 2; } }
     }
 }
 #endif

@@ -64,6 +64,7 @@ namespace UnityCli
         {
             request = request ?? new Request();
             var budget = ctx.UseReadBudget(request.Budget);
+            if (!request.Frame.HasValue && (!budget.TryConsumeReflectionCall() || !budget.TryConsumeGetter())) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             var frame = request.Frame ?? ProfilerToolSupport.ProfilerDriverIntProperty("lastFrameIndex", -1);
             var threadIndex = request.Thread ?? 0;
             var pageSize = request.PageSize ?? 50;
@@ -71,9 +72,7 @@ namespace UnityCli
             var accessor = RawHierarchyAccessor.Open(frame, threadIndex, budget);
             try
             {
-                var rootName = accessor.SampleCount > 0 ? accessor.Name(0, budget) : string.Empty;
-                var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Session("profiler.hierarchy") + "\0" + frame.ToString(CultureInfo.InvariantCulture)
-                    + "\0" + threadIndex.ToString(CultureInfo.InvariantCulture) + "\0" + accessor.SampleCount.ToString(CultureInfo.InvariantCulture) + "\0" + rootName);
+                var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Session("profiler.hierarchy") + "\0" + accessor.CaptureIdentity);
                 var stack = string.IsNullOrEmpty(request.Cursor)
                     ? new List<TraversalFrame> { new TraversalFrame { ParentId = 0, NextChild = 0, Depth = 0 } }
                     : ParseCursor(request.Cursor, generation, accessor, maxDepth, budget);
@@ -88,6 +87,7 @@ namespace UnityCli
                     }
                     items.Add(item);
                 }
+                if (items.Count == 0 && stack.Count > 0) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
                 var nextCursor = stack.Count == 0 ? null : UnityCliContinuationToken.Create("profiler.hierarchy", generation, EncodeStack(stack));
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
@@ -200,25 +200,40 @@ namespace UnityCli
             private readonly MethodInfo childAtMethod;
             private readonly MethodInfo nameMethod;
             private readonly MethodInfo millisecondsMethod;
+            private readonly string captureIdentity;
 
             private RawHierarchyAccessor(object view, Type type, UnityCliRequestBudget budget)
             {
                 this.view = view;
                 validProperty = ReflectProperty(type, "valid", budget);
                 var sampleCountProperty = ReflectProperty(type, "sampleCount", budget);
+                var frameIndexProperty = ReflectProperty(type, "frameIndex", budget);
+                var threadIndexProperty = ReflectProperty(type, "threadIndex", budget);
+                var frameStartTimeProperty = ReflectProperty(type, "frameStartTimeMs", budget);
+                var frameTimeProperty = ReflectProperty(type, "frameTimeMs", budget);
                 childCountMethod = ReflectMethod(type, "GetSampleChildrenCount", new[] { typeof(int) }, budget);
                 childAtMethod = ReflectMethod(type, "GetSampleChildAt", new[] { typeof(int), typeof(int) }, budget);
                 nameMethod = ReflectMethod(type, "GetSampleName", new[] { typeof(int) }, budget);
                 millisecondsMethod = ReflectMethod(type, "GetSampleTimeMs", new[] { typeof(int) }, budget);
-                if (sampleCountProperty == null || childCountMethod == null || childAtMethod == null || nameMethod == null || millisecondsMethod == null)
-                    throw Unavailable("RawFrameDataView child-at members are unavailable.");
+                if (sampleCountProperty == null || frameIndexProperty == null || threadIndexProperty == null || frameStartTimeProperty == null || frameTimeProperty == null
+                    || childCountMethod == null || childAtMethod == null || nameMethod == null || millisecondsMethod == null)
+                    throw Unavailable("RawFrameDataView capture identity or child-at members are unavailable.");
                 if (validProperty != null && !ReadBool(validProperty, view, budget)) throw NoData();
-                if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                sampleCount = Convert.ToInt32(sampleCountProperty.GetValue(view, null), CultureInfo.InvariantCulture);
+                var identityValues = new object[5];
+                var identityProperties = new[] { frameIndexProperty, threadIndexProperty, frameStartTimeProperty, frameTimeProperty, sampleCountProperty };
+                for (var index = 0; index < identityProperties.Length; index++)
+                {
+                    if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    identityValues[index] = identityProperties[index].GetValue(view, null);
+                }
+                sampleCount = Convert.ToInt32(identityValues[4], CultureInfo.InvariantCulture);
                 if (sampleCount <= 0) throw NoData();
+                captureIdentity = string.Join("\0", Array.ConvertAll(identityValues, value => Convert.ToString(value, CultureInfo.InvariantCulture)));
+                if (!budget.TryReserveSerializedUtf8(captureIdentity)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             }
 
             internal int SampleCount { get { return sampleCount; } }
+            internal string CaptureIdentity { get { return captureIdentity; } }
 
             internal static RawHierarchyAccessor Open(int frame, int thread, UnityCliRequestBudget budget)
             {
@@ -232,7 +247,12 @@ namespace UnityCli
                 try { view = method.Invoke(null, new object[] { frame, thread }); }
                 catch (Exception exception) { throw Unavailable("Failed to open RawFrameDataView: " + exception.Message); }
                 if (view == null) throw NoData();
-                return new RawHierarchyAccessor(view, view.GetType(), budget);
+                try { return new RawHierarchyAccessor(view, view.GetType(), budget); }
+                catch
+                {
+                    (view as IDisposable)?.Dispose();
+                    throw;
+                }
             }
 
             internal int ChildCount(int sample, UnityCliRequestBudget budget) { return Convert.ToInt32(Invoke(childCountMethod, new object[] { sample }, budget), CultureInfo.InvariantCulture); }

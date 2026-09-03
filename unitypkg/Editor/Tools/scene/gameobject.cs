@@ -9,7 +9,7 @@ namespace UnityCli
         /// <summary>scene.gameobject 只读 Tool：只读单个 GameObject 摘要。</summary>
         public sealed class SceneGameObjectTool : IUnityCliTool<SceneGameObjectTool.Request, SceneGameObjectTool.Result>
         {
-            public sealed class Request { public string Target { get; set; } public int Id { get; set; } public string Path { get; set; } public bool IncludeComponents { get; set; } = true; }
+            public sealed class Request { public string Target { get; set; } public int Id { get; set; } public string Path { get; set; } public bool IncludeComponents { get; set; } = true; public UnityCliReadBudgetInput Budget { get; set; } }
             public sealed class Result { public GameObjectInfo GameObject { get; set; } }
             public sealed class GameObjectInfo
             {
@@ -42,33 +42,52 @@ namespace UnityCli
             public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
             {
                 request = request ?? new Request();
-                var gameObject = ResolveSceneContextGameObject(request.Target, request.Id == 0 ? (int?)null : request.Id, request.Path);
-                return new System.Threading.Tasks.ValueTask<Result>(new Result { GameObject = SceneGameObjectInfoFrom(gameObject, request.IncludeComponents) });
+                var budget = ctx.UseReadBudget(request.Budget);
+                var gameObject = ResolveSceneContextGameObject(request.Target, request.Id == 0 ? (int?)null : request.Id, request.Path, budget);
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { GameObject = SceneGameObjectInfoFrom(gameObject, request.IncludeComponents, budget) });
             }
         }
 
         // 构造 GameObject DTO；includeComponents=false 时组件列表保持空集合。
-        private static SceneGameObjectTool.GameObjectInfo SceneGameObjectInfoFrom(GameObject gameObject, bool includeComponents)
+        private static SceneGameObjectTool.GameObjectInfo SceneGameObjectInfoFrom(GameObject gameObject, bool includeComponents, UnityCliRequestBudget budget)
         {
+            if (!budget.TryConsumeGetters(6)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var transform = gameObject.transform;
             var info = new SceneGameObjectTool.GameObjectInfo
             {
-                Id = gameObject.GetInstanceID(), Name = gameObject.name, Path = HierarchyPath(gameObject), Active = gameObject.activeSelf, Tag = gameObject.tag, Layer = gameObject.layer,
-                Transform = new SceneGameObjectTool.TransformInfo
-                {
-                    Position = SceneVectorInfoFrom(gameObject.transform.position), Rotation = SceneVectorInfoFrom(gameObject.transform.eulerAngles), Scale = SceneVectorInfoFrom(gameObject.transform.localScale)
-                },
+                Id = gameObject.GetInstanceID(), Name = gameObject.name, Path = HierarchyPath(gameObject, budget), Active = gameObject.activeSelf, Tag = gameObject.tag, Layer = gameObject.layer,
+                Transform = new SceneGameObjectTool.TransformInfo(),
                 Components = new List<SceneGameObjectTool.ComponentInfo>(), Children = new List<SceneGameObjectTool.GameObjectRef>()
             };
+            if (!budget.TryConsumeGetters(3)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            info.Transform.Position = SceneVectorInfoFrom(transform.position);
+            info.Transform.Rotation = SceneVectorInfoFrom(transform.eulerAngles);
+            info.Transform.Scale = SceneVectorInfoFrom(transform.localScale);
             if (includeComponents)
             {
-                foreach (var component in gameObject.GetComponents<Component>())
+                foreach (var component in ObjectRefResolver.BoundedComponents(gameObject, budget))
                 {
-                    info.Components.Add(new SceneGameObjectTool.ComponentInfo { Type = component == null ? "MissingScript" : component.GetType().Name, FullName = component == null ? null : component.GetType().FullName, Enabled = component != null && ComponentEnabled(component) });
+                    if (component == null)
+                    {
+                        info.Components.Add(new SceneGameObjectTool.ComponentInfo { Type = "MissingScript", Enabled = false });
+                        continue;
+                    }
+                    if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    var componentType = component.GetType();
+                    info.Components.Add(new SceneGameObjectTool.ComponentInfo { Type = componentType.Name, FullName = componentType.FullName, Enabled = ComponentEnabled(component, budget) });
                 }
             }
-            foreach (Transform child in gameObject.transform)
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var childCount = transform.childCount;
+            if (childCount > budget.RemainingScannedRecords) throw new UnityCliRequestBudgetExceededException("scannedRecords");
+            for (var index = 0; index < childCount; index++)
             {
-                info.Children.Add(new SceneGameObjectTool.GameObjectRef { Id = child.gameObject.GetInstanceID(), Name = child.gameObject.name, Path = HierarchyPath(child.gameObject) });
+                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var child = transform.GetChild(index);
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var childObject = child.gameObject;
+                if (!budget.TryConsumeGetters(2)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                info.Children.Add(new SceneGameObjectTool.GameObjectRef { Id = childObject.GetInstanceID(), Name = childObject.name, Path = HierarchyPath(childObject, budget) });
             }
             return info;
         }

@@ -28,7 +28,7 @@ namespace UnityCli
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
-            public List<string> Paths { get; set; }
+            [UnityCliItemsRange(0, 128)] public List<string> Paths { get; set; }
             [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
             public UnityCliReadBudgetInput Budget { get; set; }

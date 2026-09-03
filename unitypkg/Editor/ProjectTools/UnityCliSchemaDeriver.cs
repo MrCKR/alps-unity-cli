@@ -38,7 +38,7 @@ namespace UnityCli
                     return new Dictionary<string, object> { { "type", "object" }, { "additionalProperties", AnyJsonSchema() } };
                 Type anyElement;
                 if (TryElementType(rawType, out anyElement))
-                    return new Dictionary<string, object> { { "type", "array" }, { "items", AnyJsonSchema() } };
+                    return ItemsRangeSchema(new Dictionary<string, object> { { "type", "array" }, { "items", AnyJsonSchema() } }, member, path);
                 return AnyJsonSchema();
             }
 
@@ -91,11 +91,11 @@ namespace UnityCli
             Type elementType;
             if (TryElementType(rawType, out elementType))
             {
-                return new Dictionary<string, object>
+                return ItemsRangeSchema(new Dictionary<string, object>
                 {
                     { "type", "array" },
                     { "items", BuildSchema(elementType, path + "[]", definitions, member, false) }
-                };
+                }, member, path);
             }
 
             if (rawType.IsPointer || rawType.IsByRef || rawType.IsGenericTypeDefinition || rawType.IsInterface || rawType.IsAbstract)
@@ -258,6 +258,17 @@ namespace UnityCli
                 { "minimum", minimum },
                 { "maximum", maximum }
             };
+        }
+
+        /// <summary>将声明式集合范围投影为 JSON Schema；非法特性使 descriptor 派生失败。</summary>
+        private static Dictionary<string, object> ItemsRangeSchema(Dictionary<string, object> schema, MemberInfo member, string path)
+        {
+            var range = member == null ? null : member.GetCustomAttributes(typeof(UnityCliItemsRangeAttribute), true).Cast<UnityCliItemsRangeAttribute>().SingleOrDefault();
+            if (range == null) return schema;
+            if (range.Minimum < 0 || range.Minimum > range.Maximum) throw Unsupported(path, "items range is invalid");
+            schema["minItems"] = range.Minimum;
+            schema["maxItems"] = range.Maximum;
+            return schema;
         }
 
         /// <summary>将声明式业务范围收窄到 CLR 可表示范围；非法特性使 descriptor 派生失败。</summary>

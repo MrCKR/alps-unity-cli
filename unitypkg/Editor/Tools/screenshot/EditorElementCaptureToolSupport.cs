@@ -123,7 +123,8 @@ namespace UnityCli
         private static VisualElement Resolve(VisualElement root, string selector, UnityCliRequestBudget budget)
         {
             var tokens = selector.Replace(">", " > ").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            var segments = tokens.Count(token => token != ">");
+            var segments = 0;
+            foreach (var token in tokens) if (token != ">") segments++;
             if (segments < 1 || segments > 16) throw Error("E_EDITOR_ELEMENT_SELECTOR_INVALID", "selector must contain 1..16 simple segments.");
             var current = new List<VisualElement> { root };
             var direct = false;
@@ -134,12 +135,10 @@ namespace UnityCli
                 var next = new List<VisualElement>();
                 foreach (var parent in current)
                 {
-                    var values = direct ? parent.Children() : Descendants(parent);
-                    foreach (var value in values)
+                    foreach (var value in TraverseChildren(parent, !direct, budget))
                     {
                         if (++visited > 10000) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "selector scan exceeded 10000 UI elements.");
-                        if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeNode()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                        if (Matches(value, token)) next.Add(value);
+                        if (Matches(value, token, budget)) next.Add(value);
                         if (next.Count > 256) throw Error("E_EDITOR_ELEMENT_LIMIT_EXCEEDED", "selector produced more than 256 intermediate matches.");
                     }
                 }
@@ -164,22 +163,38 @@ namespace UnityCli
             return result;
         }
 
-        private static IEnumerable<VisualElement> Descendants(VisualElement root)
+        /// <summary>用(parent,nextChildIndex)逐子节点DFS，任何childCount和索引读取前先消费同一请求预算。</summary>
+        private static IEnumerable<VisualElement> TraverseChildren(VisualElement root, bool recursive, UnityCliRequestBudget budget)
         {
-            var stack = new Stack<VisualElement>();
-            for (var index = root.childCount - 1; index >= 0; index--) stack.Push(root[index]);
+            var stack = new Stack<VisualElementTraversalFrame>();
+            stack.Push(CreateTraversalFrame(root, budget));
             while (stack.Count > 0)
             {
-                var value = stack.Pop();
+                var frame = stack.Peek();
+                if (frame.NextChildIndex >= frame.ChildCount)
+                {
+                    stack.Pop();
+                    continue;
+                }
+                if (!budget.TryCheckpoint() || !budget.TryConsumeScannedRecord() || !budget.TryConsumeNode() || !budget.TryConsumeGetter())
+                    throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var value = frame.Parent[frame.NextChildIndex++];
                 yield return value;
-                for (var index = value.childCount - 1; index >= 0; index--) stack.Push(value[index]);
+                if (recursive) stack.Push(CreateTraversalFrame(value, budget));
             }
         }
 
-        private static bool Matches(VisualElement value, string simple)
+        private static VisualElementTraversalFrame CreateTraversalFrame(VisualElement parent, UnityCliRequestBudget budget)
+        {
+            if (!budget.TryCheckpoint() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            return new VisualElementTraversalFrame(parent, parent.childCount);
+        }
+
+        private static bool Matches(VisualElement value, string simple, UnityCliRequestBudget budget)
         {
             var typeEnd = simple.IndexOfAny(new[] { '#', '.' });
             var type = typeEnd < 0 ? simple : simple.Substring(0, typeEnd);
+            if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             if (!string.IsNullOrEmpty(type) && type != "*" && !string.Equals(value.GetType().Name, type, StringComparison.Ordinal)) return false;
             var position = Math.Max(0, typeEnd);
             while (position < simple.Length)
@@ -188,11 +203,25 @@ namespace UnityCli
                 var next = simple.IndexOfAny(new[] { '#', '.' }, position);
                 var name = simple.Substring(position, (next < 0 ? simple.Length : next) - position);
                 if (string.IsNullOrEmpty(name)) return false;
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 if (marker == '#' && !string.Equals(value.name, name, StringComparison.Ordinal)) return false;
                 if (marker == '.' && !value.ClassListContains(name)) return false;
                 position = next < 0 ? simple.Length : next;
             }
             return true;
+        }
+
+        private sealed class VisualElementTraversalFrame
+        {
+            internal readonly VisualElement Parent;
+            internal readonly int ChildCount;
+            internal int NextChildIndex;
+
+            internal VisualElementTraversalFrame(VisualElement parent, int childCount)
+            {
+                Parent = parent;
+                ChildCount = childCount;
+            }
         }
 #endif
 

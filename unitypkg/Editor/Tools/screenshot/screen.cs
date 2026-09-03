@@ -53,24 +53,31 @@ namespace UnityCli
             ctx.CommitEffect();
             ScreenshotToolSupport.CreateScreenshotDirectory(outputPath);
             captureBudget.BeginCapture(width, height);
+            var pendingPath = outputPath + ".unitycli.pending";
+            DeletePendingStrict(pendingPath);
 
-            // ScreenCapture 抓最终合成画面（含屏幕空间 UI），在帧末异步落盘。
-            ScreenCapture.CaptureScreenshot(outputPath, superSize);
+            // ScreenCapture 只能写pending；旧final永远不能满足fresh-write proof。
+            ScreenCapture.CaptureScreenshot(pendingPath, superSize);
 
-            var written = await ctx.Wait.Until(() => File.Exists(outputPath) && new FileInfo(outputPath).Length > 0, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
+            var written = await ctx.Wait.Until(() => File.Exists(pendingPath) && new FileInfo(pendingPath).Length > 0, TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)), ct);
             ctx.ReadBudget.ResumeAfterWait();
             if (!written)
+            {
+                DeletePendingStrict(pendingPath);
                 throw new UnityCliBridge.BridgeCommandException("E_EXECUTION_TIMEOUT", "ScreenCapture did not write the screenshot before the deadline.", "Retry with a larger timeout, or use screenshot.game-view for camera-only capture.");
+            }
 
             ScreenshotArtifactProof artifact;
             try
             {
-                captureBudget.ChargeArtifact(new FileInfo(outputPath).Length);
-                artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(outputPath, "png", captureBudget);
+                captureBudget.ChargeArtifact(new FileInfo(pendingPath).Length);
+                artifact = ScreenshotToolSupport.VerifyScreenshotArtifact(pendingPath, "png", captureBudget);
+                PublishPending(pendingPath, outputPath);
+                artifact.Path = outputPath;
             }
             catch
             {
-                try { File.Delete(outputPath); } catch { }
+                DeletePendingStrict(pendingPath);
                 throw;
             }
             var dimensions = ReadPngDimensions(outputPath);
@@ -85,6 +92,34 @@ namespace UnityCli
                 ScreenshotToolSupport.MaybeAppendInline(result, bytes, (int)dimensions.width, (int)dimensions.height, "image/png", true, captureBudget);
             }
             return result;
+        }
+
+        /// <summary>同目录固定pending slot以原子rename发布；失败时保留原final。</summary>
+        internal static void PublishPending(string pendingPath, string outputPath)
+        {
+            try
+            {
+                if (File.Exists(outputPath)) File.Replace(pendingPath, outputPath, null, true);
+                else File.Move(pendingPath, outputPath);
+            }
+            catch (Exception exception)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_PUBLISH_FAILED", "Failed to atomically publish screenshot output: " + exception.Message, "Inspect output permissions and retry after the pending slot is clean.");
+            }
+        }
+
+        /// <summary>pending删除失败必须显式终止，不能积累或被后续capture复用。</summary>
+        internal static void DeletePendingStrict(string pendingPath)
+        {
+            try
+            {
+                if (File.Exists(pendingPath)) File.Delete(pendingPath);
+                if (File.Exists(pendingPath)) throw new IOException("pending path still exists after deletion");
+            }
+            catch (Exception exception)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_SCREENSHOT_PENDING_CLEANUP_FAILED", "Failed to clean screenshot pending output: " + exception.Message, "Remove the reported pending file after checking its exact path, then retry.");
+            }
         }
 
         // 从落盘 PNG 的 IHDR 读取实际宽高（大端），用于报告 Game View 实际分辨率。

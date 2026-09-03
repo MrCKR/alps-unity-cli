@@ -179,17 +179,20 @@ namespace UnityCli
             var previousTarget = camera.targetTexture;
             var previousActive = RenderTexture.active;
             RenderTexture renderTexture = null;
-            Texture2D texture = null;
             try
             {
                 renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
-                texture = new Texture2D(width, height, TextureFormat.RGB24, false);
                 camera.targetTexture = renderTexture;
                 camera.Render();
                 RenderTexture.active = renderTexture;
-                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-                texture.Apply();
-                return texture;
+                return CreateTextureWithOwnership(
+                    () => new Texture2D(width, height, TextureFormat.RGB24, false),
+                    texture =>
+                    {
+                        texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                        texture.Apply();
+                    },
+                    texture => UnityEngine.Object.DestroyImmediate(texture));
             }
             finally
             {
@@ -206,6 +209,29 @@ namespace UnityCli
             return sheet;
         }
 
+        /// <summary>只有完整populate成功才转移texture ownership；任何异常都同步销毁新资源。</summary>
+        internal static Texture2D CreateTextureWithOwnership(
+            Func<Texture2D> create,
+            Action<Texture2D> populate,
+            Action<Texture2D> destroy)
+        {
+            if (create == null) throw new ArgumentNullException("create");
+            if (populate == null) throw new ArgumentNullException("populate");
+            if (destroy == null) throw new ArgumentNullException("destroy");
+            var texture = create();
+            var ownershipTransferred = false;
+            try
+            {
+                populate(texture);
+                ownershipTransferred = true;
+                return texture;
+            }
+            finally
+            {
+                if (!ownershipTransferred && texture != null) destroy(texture);
+            }
+        }
+
         /// <summary>逐 tile 写入 sheet 后 caller 立即释放 tile，避免同时持有全部捕获纹理。</summary>
         public static void CopyContactSheetTile(Texture2D sheet, Texture2D tile, int index, int tileWidth, int tileHeight)
         {
@@ -215,33 +241,58 @@ namespace UnityCli
             sheet.SetPixels32(column * tileWidth, row * tileHeight, tileWidth, tileHeight, pixels);
         }
 
+        /// <summary>逐节点和逐child读取渲染边界，组件数组仅在已验证cardinality与剩余预算后创建。</summary>
         public static Bounds TargetRenderBounds(GameObject gameObject, UnityCliRequestBudget budget)
         {
-            var stack = new Stack<Transform>();
-            stack.Push(gameObject.transform);
+            if (!budget.TryConsumeGetters(2)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var root = gameObject.transform;
+            var stack = new Stack<TransformTraversalFrame>();
+            stack.Push(new TransformTraversalFrame(root));
             var found = false;
-            var bounds = new Bounds(gameObject.transform.position, Vector3.one);
+            var bounds = new Bounds(root.position, Vector3.one);
             while (stack.Count > 0)
             {
-                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeNode() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                var current = stack.Pop();
-                var renderers = current.GetComponents<Renderer>();
-                foreach (var renderer in renderers)
+                var frame = stack.Peek();
+                if (!frame.Entered)
                 {
-                    if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                    if (renderer == null || !renderer.gameObject.activeInHierarchy) continue;
-                    if (!found) { bounds = renderer.bounds; found = true; }
-                    else bounds.Encapsulate(renderer.bounds);
+                    if (!budget.TryCheckpoint() || !budget.TryConsumeScannedRecord() || !budget.TryConsumeNode() || !budget.TryConsumeGetters(2))
+                        throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    frame.Entered = true;
+                    frame.ChildCount = frame.Transform.childCount;
+                    var components = UnityCliBridge.ObjectRefResolver.BoundedComponents(frame.Transform.gameObject, budget);
+                    foreach (var component in components)
+                    {
+                        var renderer = component as Renderer;
+                        if (renderer == null) continue;
+                        if (!budget.TryConsumeGetters(2)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                        if (!renderer.gameObject.activeInHierarchy) continue;
+                        var rendererBounds = renderer.bounds;
+                        if (!found) { bounds = rendererBounds; found = true; }
+                        else bounds.Encapsulate(rendererBounds);
+                    }
                 }
-                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                var childCount = current.childCount;
-                for (var index = childCount - 1; index >= 0; index--)
+                if (frame.NextChildIndex >= frame.ChildCount)
                 {
-                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                    stack.Push(current.GetChild(index));
+                    stack.Pop();
+                    continue;
                 }
+                if (!budget.TryCheckpoint() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                stack.Push(new TransformTraversalFrame(frame.Transform.GetChild(frame.NextChildIndex++)));
             }
             return bounds;
+        }
+
+        private sealed class TransformTraversalFrame
+        {
+            internal readonly Transform Transform;
+            internal bool Entered;
+            internal int ChildCount;
+            internal int NextChildIndex;
+
+            internal TransformTraversalFrame(Transform transform)
+            {
+                Transform = transform;
+            }
         }
 
         public static void MaybeAppendInline(ScreenshotCaptureResult result, byte[] bytes, int width, int height, string mimeType, bool inlineBase64, ScreenshotCaptureBudget budget)

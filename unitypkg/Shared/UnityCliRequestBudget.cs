@@ -16,6 +16,15 @@ namespace UnityCli
         public long Maximum { get; private set; }
     }
 
+    /// <summary>为集合协议字段声明公开元素数量范围，并由 schema 与执行前校验共同强制。</summary>
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false, Inherited = true)]
+    public sealed class UnityCliItemsRangeAttribute : Attribute
+    {
+        public UnityCliItemsRangeAttribute(int minimum, int maximum) { Minimum = minimum; Maximum = maximum; }
+        public int Minimum { get; private set; }
+        public int Maximum { get; private set; }
+    }
+
     /// <summary>公开读取预算输入；调用方可以收紧预算，但不能超过产品冻结上限。</summary>
     public sealed class UnityCliReadBudgetInput
     {
@@ -35,7 +44,7 @@ namespace UnityCli
         public long Getters { get; set; }
         public long ReflectionCalls { get; set; }
         public long MainThreadMilliseconds { get; set; }
-        public long SerializedUtf8Bytes { get; set; }
+        public long EstimatedSerializedUtf8Bytes { get; set; }
         public string ExhaustedDimension { get; set; }
     }
 
@@ -115,6 +124,10 @@ namespace UnityCli
         }
 
         public long MaxSerializedUtf8Bytes { get { return maxSerializedUtf8Bytes; } }
+        public long RemainingScannedRecords { get { return Math.Max(0L, maxScannedRecords - scannedRecords); } }
+        public long RemainingNodes { get { return Math.Max(0L, maxNodes - nodes); } }
+        public long RemainingGetters { get { return Math.Max(0L, maxGetters - getters); } }
+        public long RemainingReflectionCalls { get { return Math.Max(0L, maxReflectionCalls - reflectionCalls); } }
         public bool IsExhausted { get { return exhaustedDimension != null; } }
         public string ExhaustedDimension { get { return exhaustedDimension; } }
 
@@ -122,6 +135,12 @@ namespace UnityCli
         public bool TryConsumeNode() { return TryConsume(ref nodes, maxNodes, "nodes"); }
         public bool TryConsumeGetter() { return TryConsume(ref getters, maxGetters, "getters"); }
         public bool TryConsumeReflectionCall() { return TryConsume(ref reflectionCalls, maxReflectionCalls, "reflectionCalls"); }
+
+        /// <summary>在批量 API 调用前一次性保留可验证 cardinality，避免先物化后超限。</summary>
+        public bool TryConsumeScannedRecords(long count) { return TryConsumeMany(ref scannedRecords, maxScannedRecords, count, "scannedRecords"); }
+        public bool TryConsumeNodes(long count) { return TryConsumeMany(ref nodes, maxNodes, count, "nodes"); }
+        public bool TryConsumeGetters(long count) { return TryConsumeMany(ref getters, maxGetters, count, "getters"); }
+        public bool TryConsumeReflectionCalls(long count) { return TryConsumeMany(ref reflectionCalls, maxReflectionCalls, count, "reflectionCalls"); }
 
         /// <summary>在原始读取前检查取消与单调 elapsed；false 表示调用方必须返回 continuation。</summary>
         public bool TryCheckpoint()
@@ -167,8 +186,8 @@ namespace UnityCli
             return true;
         }
 
-        /// <summary>Tool 返回后按最终 JSON 做精确 UTF-8 ceiling 裁决。</summary>
-        public void ObserveFinalSerializedUtf8Bytes(long bytes)
+        /// <summary>序列化器增量检查最终 JSON 的实际 UTF-8 长度，不覆盖 Tool 侧估算。</summary>
+        public void ValidateSerializedUtf8Bytes(long bytes)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (bytes < 0L || bytes > maxSerializedUtf8Bytes)
@@ -176,12 +195,10 @@ namespace UnityCli
                 Exhaust("serializedUtf8Bytes");
                 throw new UnityCliRequestBudgetExceededException("serializedUtf8Bytes");
             }
-            serializedUtf8Bytes = bytes;
         }
 
         public UnityCliRequestBudgetUsage Usage()
         {
-            TryCheckpoint();
             return new UnityCliRequestBudgetUsage
             {
                 ScannedRecords = scannedRecords,
@@ -189,21 +206,26 @@ namespace UnityCli
                 Getters = getters,
                 ReflectionCalls = reflectionCalls,
                 MainThreadMilliseconds = Math.Max(0L, mainThreadMilliseconds),
-                SerializedUtf8Bytes = serializedUtf8Bytes,
+                EstimatedSerializedUtf8Bytes = serializedUtf8Bytes,
                 ExhaustedDimension = exhaustedDimension
             };
         }
 
         private bool TryConsume(ref long current, long maximum, string dimension)
         {
+            return TryConsumeMany(ref current, maximum, 1L, dimension);
+        }
+
+        private bool TryConsumeMany(ref long current, long maximum, long count, string dimension)
+        {
             cancellationToken.ThrowIfCancellationRequested();
             if (!TryCheckpoint()) return false;
-            if (current >= maximum)
+            if (count < 0L || count > maximum - current)
             {
                 Exhaust(dimension);
                 return false;
             }
-            current += 1L;
+            current += count;
             return true;
         }
 

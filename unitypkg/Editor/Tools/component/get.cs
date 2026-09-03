@@ -26,7 +26,7 @@ namespace UnityCli
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
-            public List<string> Paths { get; set; }
+            [UnityCliItemsRange(0, 128)] public List<string> Paths { get; set; }
             [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
             public UnityCliReadBudgetInput Budget { get; set; }
@@ -63,10 +63,15 @@ namespace UnityCli
             var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request, budget);
             var options = GameObjectToolSupport.BuildSerializerOptions(request);
             var data = UnityCliBridge.ObjectSerializer.Serialize(component, options, budget);
+            if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var typeName = component.GetType().FullName;
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var gameObject = component.gameObject;
+            var gameObjectRef = GameObjectToolSupport.BuildGameObjectRef(gameObject, budget);
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                TypeName = component.GetType().FullName,
-                GameObject = GameObjectToolSupport.BuildGameObjectRef(component.gameObject),
+                TypeName = typeName,
+                GameObject = gameObjectRef,
                 Data = data
             });
         }

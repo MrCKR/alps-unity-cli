@@ -88,7 +88,11 @@ namespace UnityCli
                     return value is IDictionary<string, object> ? null : Failure(path, "object", ActualType(value));
                 Type anyElement;
                 if (UnityCliSchemaDeriver.TryElementType(rawType, out anyElement))
-                    return value is IList ? null : Failure(path, "array", ActualType(value));
+                {
+                    var anyItems = value as IList;
+                    if (anyItems == null) return Failure(path, "array", ActualType(value));
+                    return ValidateItemsRange(anyItems, path, member);
+                }
                 return null;
             }
 
@@ -149,6 +153,8 @@ namespace UnityCli
             {
                 var items = value as IList;
                 if (items == null) return Failure(path, "array", ActualType(value));
+                var rangeFailure = ValidateItemsRange(items, path, member);
+                if (rangeFailure != null) return rangeFailure;
                 for (var index = 0; index < items.Count; index++)
                 {
                     var failure = ValidateValue(items[index], elementType, path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]", null);
@@ -225,6 +231,18 @@ namespace UnityCli
         private static UnityCliRangeAttribute NumericRange(MemberInfo member)
         {
             return member == null ? null : member.GetCustomAttributes(typeof(UnityCliRangeAttribute), true).Cast<UnityCliRangeAttribute>().SingleOrDefault();
+        }
+
+        /// <summary>在 DTO 构造和 Tool 调用前强制集合数量边界。</summary>
+        private static SchemaValidationFailure ValidateItemsRange(IList items, string path, MemberInfo member)
+        {
+            var range = member == null ? null : member.GetCustomAttributes(typeof(UnityCliItemsRangeAttribute), true).Cast<UnityCliItemsRangeAttribute>().SingleOrDefault();
+            if (range == null) return null;
+            if (range.Minimum < 0 || range.Minimum > range.Maximum)
+                throw new InvalidOperationException("Invalid UnityCliItemsRangeAttribute on " + member.DeclaringType.FullName + "." + member.Name + ".");
+            return items.Count < range.Minimum || items.Count > range.Maximum
+                ? Failure(path, "array length " + range.Minimum.ToString(CultureInfo.InvariantCulture) + ".." + range.Maximum.ToString(CultureInfo.InvariantCulture), items.Count.ToString(CultureInfo.InvariantCulture))
+                : null;
         }
 
         private static SchemaValidationFailure Failure(string path, string expected, string actual, string message = null)

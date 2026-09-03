@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
@@ -21,6 +22,13 @@ namespace UnityCli
             internal const int AbsoluteMaxArrayItems = 1000;
             internal const int AbsoluteMaxMembers = 256;
             internal const int AbsoluteMaxPaths = 128;
+            private const int AbsoluteMaxMemberCandidates = 512;
+            private const int AbsoluteMaxMemberMetadataUtf8Bytes = 64 * 1024;
+            private const int AbsoluteMaxCachedMemberTypes = 128;
+            private const int AbsoluteMaxTypeHierarchyDepth = 32;
+            private static readonly object MemberCacheLock = new object();
+            private static readonly Dictionary<Type, MemberCandidate[]> MemberCandidateCache = new Dictionary<Type, MemberCandidate[]>();
+            private static string memberCacheGeneration;
 
             public sealed class Options
             {
@@ -136,6 +144,7 @@ namespace UnityCli
                 if (normalized.StartsWith("#/", StringComparison.Ordinal)) normalized = normalized.Substring(2);
                 if (normalized.StartsWith("$.", StringComparison.Ordinal)) normalized = normalized.Substring(2);
                 if (normalized.StartsWith("$/", StringComparison.Ordinal)) normalized = normalized.Substring(2);
+                if (normalized.StartsWith("$[", StringComparison.Ordinal)) normalized = normalized.Substring(1);
                 return normalized.Replace('/', '.').Trim('.');
             }
 
@@ -191,7 +200,7 @@ namespace UnityCli
                 if (value == null) { error = "cannot index null value"; return null; }
                 var token = indexer.Trim();
                 if (!token.StartsWith("[", StringComparison.Ordinal) || !token.EndsWith("]", StringComparison.Ordinal)) { error = "invalid index syntax: " + indexer; return null; }
-                token = token.Substring(1, token.Length - 2).Trim().Trim('"');
+                token = UnescapeDictionaryPathKey(token.Substring(1, token.Length - 2).Trim().Trim('"')); 
                 if (value is IList list)
                 {
                     if (!budget.TryConsumeGetter()) { error = BudgetError(budget); return null; }
@@ -316,18 +325,24 @@ namespace UnityCli
                         if (!budget.TryConsumeGetter()) { Truncate(member, budget, member.Path); return; }
                         var entry = enumerator.Entry;
                         var key = Convert.ToString(entry.Key, CultureInfo.InvariantCulture);
-                        var entryPath = member.Path + "[" + key + "]";
+                        var entryPath = DictionaryEntryPath(member.Path, key);
                         if (!budget.TryReserveSerializedUtf8(key)) { Truncate(member, budget, entryPath); return; }
                         member.DictionaryEntries.Add(new SerializedMember.KV { Key = key, Value = ToMember(entry.Value, entryPath, null, options, active, depth + 1, budget) });
                         emitted++;
                         if (budget.IsExhausted) { Truncate(member, budget, entryPath); return; }
                     }
-                    if (emitted < count) { member.Truncated = true; member.NextPath = member.Path + "[" + emitted.ToString(CultureInfo.InvariantCulture) + "]"; }
+                    if (emitted < count)
+                    {
+                        if (!budget.TryConsumeScannedRecord() || !enumerator.MoveNext() || !budget.TryConsumeGetter()) { Truncate(member, budget, member.Path); return; }
+                        var nextEntry = enumerator.Entry;
+                        member.Truncated = true;
+                        member.NextPath = DictionaryEntryPath(member.Path, Convert.ToString(nextEntry.Key, CultureInfo.InvariantCulture));
+                    }
                 }
                 finally { (enumerator as IDisposable)?.Dispose(); }
             }
 
-            /// <summary>非 IList enumerable 直接逐项 MoveNext；绝不 ToList 或预先求总数。</summary>
+            /// <summary>非 IList enumerable 只流式返回当前片段；它没有可重放的索引语义，截断时不发布 nextPath。</summary>
             private static void ExpandEnumerable(IEnumerable enumerable, SerializedMember member, Options options, HashSet<object> active, int depth, UnityCliRequestBudget budget)
             {
                 member.IsArray = true;
@@ -337,17 +352,20 @@ namespace UnityCli
                 {
                     while (index < options.MaxArrayItems)
                     {
-                        if (!budget.TryConsumeScannedRecord()) { Truncate(member, budget, member.Path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]"); return; }
+                        if (!budget.TryConsumeScannedRecord()) { TruncateNonResumableEnumerable(member, budget); return; }
                         if (!enumerator.MoveNext()) { member.ArrayLength = index; return; }
-                        if (!budget.TryConsumeGetter()) { Truncate(member, budget, member.Path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]"); return; }
+                        if (!budget.TryConsumeGetter()) { TruncateNonResumableEnumerable(member, budget); return; }
                         var itemPath = member.Path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]";
                         member.ArrayItems.Add(ToMember(enumerator.Current, itemPath, null, options, active, depth + 1, budget));
                         index++;
-                        if (budget.IsExhausted) { Truncate(member, budget, itemPath); return; }
+                        if (budget.IsExhausted) { TruncateNonResumableEnumerable(member, budget); return; }
                     }
                     member.ArrayLength = index;
+                    if (!budget.TryConsumeScannedRecord()) { TruncateNonResumableEnumerable(member, budget); return; }
+                    if (!enumerator.MoveNext()) return;
                     member.Truncated = true;
-                    member.NextPath = member.Path + "[" + index.ToString(CultureInfo.InvariantCulture) + "]";
+                    member.NextPath = null;
+                    member.Error = "non-resumable-enumerable-truncation";
                 }
                 finally { (enumerator as IDisposable)?.Dispose(); }
             }
@@ -355,52 +373,144 @@ namespace UnityCli
             private static void ExpandMembers(object obj, Type type, SerializedMember member, Options options, HashSet<object> active, int depth, UnityCliRequestBudget budget)
             {
                 var memberCount = 0;
-                if (options.IncludeFields)
+                foreach (var candidate in GetMemberCandidates(type, budget))
                 {
-                    if (!budget.TryConsumeReflectionCall()) { Truncate(member, budget, member.Path); return; }
-                    foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
-                    {
-                        if (memberCount >= AbsoluteMaxMembers) { member.Truncated = true; member.NextPath = member.Path + "." + field.Name; return; }
-                        if (!MemberAllowed(field.Name, options)) continue;
-                        if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) { Truncate(member, budget, member.Path + "." + field.Name); return; }
-                        try
-                        {
-                            var child = ToMember(field.GetValue(obj), member.Path + "." + field.Name, field.FieldType.FullName, options, active, depth + 1, budget);
-                            if (TypeAllowed(child.TypeName, options))
-                            {
-                                if (!budget.TryReserveSerializedUtf8(field.Name)) { Truncate(member, budget, member.Path + "." + field.Name); return; }
-                                member.Fields.Add(new SerializedMember.KV { Key = field.Name, Value = child });
-                                memberCount++;
-                            }
-                            if (budget.IsExhausted) { Truncate(member, budget, member.Path + "." + field.Name); return; }
-                        }
-                        catch (UnityCliRequestBudgetExceededException) { Truncate(member, budget, member.Path + "." + field.Name); return; }
-                        catch (Exception exception) { member.Fields.Add(new SerializedMember.KV { Key = field.Name, Value = ErrorMember(member.Path + "." + field.Name, exception.Message) }); memberCount++; }
-                    }
-                }
-                if (!options.IncludeProperties) return;
-                if (!budget.TryConsumeReflectionCall()) { Truncate(member, budget, member.Path); return; }
-                foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
-                {
-                    if (memberCount >= AbsoluteMaxMembers) { member.Truncated = true; member.NextPath = member.Path + "." + property.Name; return; }
-                    if (!property.CanRead || property.GetIndexParameters().Length > 0 || !MemberAllowed(property.Name, options)) continue;
-                    if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) { Truncate(member, budget, member.Path + "." + property.Name); return; }
+                    if ((candidate.IsProperty && !options.IncludeProperties) || (!candidate.IsProperty && !options.IncludeFields)) continue;
+                    if (!MemberAllowed(candidate.Name, options)) continue;
+                    if (memberCount >= AbsoluteMaxMembers) { member.Truncated = true; member.NextPath = member.Path + "." + candidate.Name; return; }
+                    var candidatePath = member.Path + "." + candidate.Name;
+                    if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) { Truncate(member, budget, candidatePath); return; }
                     try
                     {
-                        var child = ToMember(property.GetValue(obj, null), member.Path + "." + property.Name, property.PropertyType.FullName, options, active, depth + 1, budget);
+                        var value = candidate.IsProperty
+                            ? ((PropertyInfo)candidate.Member).GetValue(obj, null)
+                            : ((FieldInfo)candidate.Member).GetValue(obj);
+                        var child = ToMember(value, candidatePath, candidate.ValueTypeName, options, active, depth + 1, budget);
                         if (TypeAllowed(child.TypeName, options))
                         {
-                            child.ReadOnly = !property.CanWrite;
-                            child.Writable = property.CanWrite;
-                            if (!budget.TryReserveSerializedUtf8(property.Name)) { Truncate(member, budget, member.Path + "." + property.Name); return; }
-                            member.Props.Add(new SerializedMember.KV { Key = property.Name, Value = child });
+                            child.ReadOnly = candidate.IsProperty && !candidate.CanWrite;
+                            child.Writable = candidate.IsProperty && candidate.CanWrite;
+                            if (!budget.TryReserveSerializedUtf8(candidate.Name)) { Truncate(member, budget, candidatePath); return; }
+                            var destination = candidate.IsProperty ? member.Props : member.Fields;
+                            destination.Add(new SerializedMember.KV { Key = candidate.Name, Value = child });
                             memberCount++;
                         }
-                        if (budget.IsExhausted) { Truncate(member, budget, member.Path + "." + property.Name); return; }
+                        if (budget.IsExhausted) { Truncate(member, budget, candidatePath); return; }
                     }
-                    catch (UnityCliRequestBudgetExceededException) { Truncate(member, budget, member.Path + "." + property.Name); return; }
-                    catch (Exception exception) { member.Props.Add(new SerializedMember.KV { Key = property.Name, Value = ErrorMember(member.Path + "." + property.Name, exception.Message) }); memberCount++; }
+                    catch (UnityCliRequestBudgetExceededException) { Truncate(member, budget, candidatePath); return; }
+                    catch (Exception exception)
+                    {
+                        var destination = candidate.IsProperty ? member.Props : member.Fields;
+                        destination.Add(new SerializedMember.KV { Key = candidate.Name, Value = ErrorMember(candidatePath, exception.Message) });
+                        memberCount++;
+                    }
                 }
+            }
+
+            private static string DictionaryEntryPath(string path, string key)
+            {
+                var value = key ?? string.Empty;
+                var builder = new StringBuilder(value.Length + 8);
+                foreach (var character in value)
+                {
+                    if (char.IsLetterOrDigit(character) || character == '_' || character == '-') builder.Append(character);
+                    else builder.Append("\\u").Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
+                }
+                return path + "[\"" + builder + "\"]";
+            }
+
+            private static string UnescapeDictionaryPathKey(string value)
+            {
+                if (string.IsNullOrEmpty(value) || value.IndexOf("\\u", StringComparison.Ordinal) < 0) return value;
+                var builder = new StringBuilder(value.Length);
+                for (var index = 0; index < value.Length; index++)
+                {
+                    if (value[index] == '\\' && index + 5 < value.Length && value[index + 1] == 'u'
+                        && int.TryParse(value.Substring(index + 2, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var code))
+                    {
+                        builder.Append((char)code);
+                        index += 5;
+                    }
+                    else builder.Append(value[index]);
+                }
+                return builder.ToString();
+            }
+
+            /// <summary>逐项扫描 declared metadata，并把单次 domain reload 内的有界结果复用给后续读取。</summary>
+            private static MemberCandidate[] GetMemberCandidates(Type type, UnityCliRequestBudget budget)
+            {
+                MemberCandidate[] cached;
+                var generation = UnityCliReadGeneration.Reflection();
+                lock (MemberCacheLock)
+                {
+                    if (!string.Equals(memberCacheGeneration, generation, StringComparison.Ordinal))
+                    {
+                        MemberCandidateCache.Clear();
+                        memberCacheGeneration = generation;
+                    }
+                    if (MemberCandidateCache.TryGetValue(type, out cached))
+                    {
+                        if (!budget.TryConsumeScannedRecords(cached.Length)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                        return cached;
+                    }
+                }
+
+                var candidates = new List<MemberCandidate>();
+                var names = new HashSet<string>(StringComparer.Ordinal);
+                var metadataBytes = 0;
+                var current = type;
+                for (var depth = 0; current != null && depth < AbsoluteMaxTypeHierarchyDepth; depth++)
+                {
+                    if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    foreach (var field in current.GetTypeInfo().DeclaredFields)
+                    {
+                        ConsumeMemberCandidateBudget(budget);
+                        if (!field.IsPublic || field.IsStatic || !names.Add("F:" + field.Name)) continue;
+                        AddMemberCandidate(candidates, new MemberCandidate(field, false, true, field.FieldType), ref metadataBytes);
+                    }
+                    if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    foreach (var property in current.GetTypeInfo().DeclaredProperties)
+                    {
+                        ConsumeMemberCandidateBudget(budget);
+                        var getter = property.GetMethod;
+                        if (getter == null || !getter.IsPublic || getter.IsStatic || property.GetIndexParameters().Length > 0 || !names.Add("P:" + property.Name)) continue;
+                        AddMemberCandidate(candidates, new MemberCandidate(property, true, property.CanWrite, property.PropertyType), ref metadataBytes);
+                    }
+                    if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    current = current.GetTypeInfo().BaseType;
+                }
+                if (current != null) throw MetadataLimit("type hierarchy depth");
+                candidates.Sort((left, right) =>
+                {
+                    var nameOrder = string.CompareOrdinal(left.Name, right.Name);
+                    return nameOrder != 0 ? nameOrder : left.IsProperty.CompareTo(right.IsProperty);
+                });
+                cached = candidates.ToArray();
+                lock (MemberCacheLock)
+                {
+                    if (MemberCandidateCache.Count >= AbsoluteMaxCachedMemberTypes) MemberCandidateCache.Clear();
+                    MemberCandidateCache[type] = cached;
+                }
+                return cached;
+            }
+
+            private static void ConsumeMemberCandidateBudget(UnityCliRequestBudget budget)
+            {
+                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            }
+
+            private static void AddMemberCandidate(List<MemberCandidate> candidates, MemberCandidate candidate, ref int metadataBytes)
+            {
+                if (candidates.Count >= AbsoluteMaxMemberCandidates) throw MetadataLimit("member count");
+                metadataBytes += Encoding.UTF8.GetByteCount(candidate.Name ?? string.Empty);
+                metadataBytes += Encoding.UTF8.GetByteCount(candidate.ValueTypeName ?? string.Empty);
+                if (metadataBytes > AbsoluteMaxMemberMetadataUtf8Bytes) throw MetadataLimit("metadata bytes");
+                candidates.Add(candidate);
+            }
+
+            private static BridgeCommandException MetadataLimit(string dimension)
+            {
+                return new BridgeCommandException("E_REQUEST_BUDGET_EXCEEDED", "Object member metadata exceeded its bounded " + dimension + ".", "Use paths, nameFilters, or a narrower object type.");
             }
 
             private static void Truncate(SerializedMember member, UnityCliRequestBudget budget, string nextPath)
@@ -408,6 +518,13 @@ namespace UnityCli
                 member.Truncated = true;
                 member.NextPath = nextPath;
                 if (member.Error == null && budget.IsExhausted) member.Error = BudgetError(budget);
+            }
+
+            private static void TruncateNonResumableEnumerable(SerializedMember member, UnityCliRequestBudget budget)
+            {
+                member.Truncated = true;
+                member.NextPath = null;
+                member.Error = budget.IsExhausted ? BudgetError(budget) + ";non-resumable-enumerable" : "non-resumable-enumerable-truncation";
             }
 
             private static string BudgetError(UnityCliRequestBudget budget) { return "request-budget-exhausted:" + (budget.ExhaustedDimension ?? "unknown"); }
@@ -556,6 +673,24 @@ namespace UnityCli
                 internal static readonly ReferenceComparer Instance = new ReferenceComparer();
                 public new bool Equals(object left, object right) { return ReferenceEquals(left, right); }
                 public int GetHashCode(object value) { return System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value); }
+            }
+
+            private sealed class MemberCandidate
+            {
+                internal MemberCandidate(MemberInfo member, bool isProperty, bool canWrite, Type valueType)
+                {
+                    Member = member;
+                    IsProperty = isProperty;
+                    CanWrite = canWrite;
+                    Name = member.Name;
+                    ValueTypeName = valueType == null ? null : valueType.FullName;
+                }
+
+                internal MemberInfo Member { get; private set; }
+                internal bool IsProperty { get; private set; }
+                internal bool CanWrite { get; private set; }
+                internal string Name { get; private set; }
+                internal string ValueTypeName { get; private set; }
             }
 
             private sealed class SerializedMember

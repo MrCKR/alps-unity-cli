@@ -45,108 +45,127 @@ namespace UnityCli
             };
         }
 
-        /// <summary>按 raw LogEntries 索引向后扫描；页满或预算耗尽都返回指向下一 raw 位置的 sentinel。</summary>
-        public static ConsoleReadPage ReadConsolePage(string scope, string typeFilter, string textFilter, int pageSize, string cursor, UnityCliRequestBudget budget)
+        /// <summary>在 Unity 固定读取窗口中按 raw index 扫描；外部 clear 无可靠 generation，因此截断明确不可续页。</summary>
+        public static ConsoleReadPage ReadConsolePage(string typeFilter, string textFilter, int pageSize, UnityCliRequestBudget budget)
         {
             if (budget == null) throw new ArgumentNullException("budget");
             budget.CheckpointOrThrow();
-            var generation = UnityCliReadGeneration.Session(scope);
             var entryType = FindConsoleType("UnityEditor.LogEntry", budget);
             var logEntries = FindConsoleType("UnityEditor.LogEntries", budget);
             if (entryType == null || logEntries == null)
             {
                 if (budget.IsExhausted) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                return ConsoleReadPage.Empty(generation, budget.Usage());
+                return ConsoleReadPage.Empty(budget.Usage());
             }
+            const BindingFlags flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
             if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-            var getEntry = logEntries.GetMethod("GetEntryInternal", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            var getEntry = logEntries.GetMethod("GetEntryInternal", flags);
             if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-            var countMethod = logEntries.GetMethod("GetCount", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (getEntry == null || countMethod == null) return ConsoleReadPage.Empty(generation, budget.Usage());
-            if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-            var rawCount = Convert.ToInt32(countMethod.Invoke(null, null), CultureInfo.InvariantCulture);
-            var upperBound = rawCount - 1;
-            var nextIndex = upperBound;
-            string expectedTopFingerprint = null;
-            if (!string.IsNullOrEmpty(cursor))
-            {
-                string position;
-                if (!UnityCliContinuationToken.TryParse(cursor, scope, generation, out position)) throw StaleConsoleCursor();
-                var parts = position.Split(new[] { ':' }, 3);
-                if (parts.Length != 3 || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out upperBound)
-                    || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out nextIndex)) throw StaleConsoleCursor();
-                expectedTopFingerprint = string.IsNullOrEmpty(parts[2]) ? null : parts[2];
-                if (upperBound < 0 || nextIndex < 0 || nextIndex > upperBound || rawCount <= upperBound) throw StaleConsoleCursor();
-            }
-            if (rawCount == 0) return ConsoleReadPage.Empty(generation, budget.Usage());
-
-            ConsoleFields fields;
-            try { fields = ConsoleFields.Create(entryType, budget); }
-            catch (UnityCliRequestBudgetExceededException)
-            {
-                var sentinel = cursor ?? CreateConsoleCursor(scope, generation, upperBound, upperBound, string.Empty);
-                return ConsoleReadPage.TruncatedPage(rawCount, sentinel, generation, budget.Usage());
-            }
+            var start = logEntries.GetMethod("StartGettingEntries", flags);
+            if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var end = logEntries.GetMethod("EndGettingEntries", flags);
+            if (getEntry == null || start == null || end == null)
+                throw new UnityCliBridge.BridgeCommandException("E_CONSOLE_API_UNAVAILABLE", "Unity Console snapshot methods are unavailable in this Editor generation.", "Use a supported Unity Editor version.");
+            var fields = ConsoleFields.Create(entryType, budget);
             var entry = Activator.CreateInstance(entryType);
-            string topFingerprint = null;
-            if (!TryReadConsoleEntry(getEntry, entry, upperBound, fields, budget, out var top))
-                return ConsoleReadPage.TruncatedPage(rawCount, cursor ?? CreateConsoleCursor(scope, generation, upperBound, upperBound, string.Empty), generation, budget.Usage());
-            topFingerprint = ConsoleFingerprint(top);
-            if (expectedTopFingerprint != null && !string.Equals(expectedTopFingerprint, topFingerprint, StringComparison.Ordinal)) throw StaleConsoleCursor();
+            if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            var rawCount = Convert.ToInt32(start.Invoke(null, null), CultureInfo.InvariantCulture);
+            try
+            {
+                return ReadConsolePage(typeFilter, textFilter, pageSize, budget,
+                    new ReflectionConsoleSnapshotAdapter(rawCount, getEntry, entry, fields));
+            }
+            finally
+            {
+                try { end.Invoke(null, null); }
+                catch (Exception exception)
+                {
+                    throw new UnityCliBridge.BridgeCommandException("E_CONSOLE_SNAPSHOT_CLOSE_FAILED", "Unity Console snapshot could not be closed: " + exception.GetType().Name + ".", "Retry after the Editor Console becomes available.");
+                }
+            }
+        }
 
+        /// <summary>生产分页核心只按raw index读取当前项，不复制完整Console集合。</summary>
+        internal static ConsoleReadPage ReadConsolePage(
+            string typeFilter,
+            string textFilter,
+            int pageSize,
+            UnityCliRequestBudget budget,
+            IConsoleSnapshotAdapter snapshot)
+        {
+            if (budget == null) throw new ArgumentNullException("budget");
+            if (snapshot == null) throw new ArgumentNullException("snapshot");
+            if (pageSize <= 0) throw new ArgumentOutOfRangeException("pageSize");
+            var rawCount = snapshot.Count;
+            var scanIndex = rawCount - 1;
+            var items = new List<ConsoleEntry>(Math.Min(pageSize, rawCount));
             var includeAllTypes = string.IsNullOrEmpty(typeFilter) || string.Equals(typeFilter, "all", StringComparison.OrdinalIgnoreCase);
-            var items = new List<ConsoleEntry>();
-            var scanIndex = nextIndex;
             while (scanIndex >= 0 && items.Count < pageSize)
             {
                 ConsoleEntry item;
-                if (scanIndex == upperBound) item = top;
-                else if (!TryReadConsoleEntry(getEntry, entry, scanIndex, fields, budget, out item)) break;
-                var currentIndex = scanIndex;
+                if (!snapshot.TryRead(scanIndex, budget, out item)) break;
                 scanIndex--;
                 if (!includeAllTypes && !string.Equals(item.Type, typeFilter, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!string.IsNullOrEmpty(textFilter)
                     && item.Message.IndexOf(textFilter, StringComparison.OrdinalIgnoreCase) < 0
                     && item.File.IndexOf(textFilter, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                if (!budget.TryReserveSerializedUtf8(item.Message) || !budget.TryReserveSerializedUtf8(item.File))
-                {
-                    scanIndex = currentIndex;
-                    break;
-                }
+                if (!budget.TryReserveSerializedUtf8(item.Message) || !budget.TryReserveSerializedUtf8(item.File)) break;
                 items.Add(item);
             }
-
-            var hasRawRemainder = scanIndex >= 0;
-            var nextCursor = hasRawRemainder ? CreateConsoleCursor(scope, generation, upperBound, scanIndex, topFingerprint) : null;
+            if (items.Count == 0 && rawCount > 0 && budget.IsExhausted)
+                throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
+            var truncated = scanIndex >= 0;
             return new ConsoleReadPage
             {
                 Items = items,
                 RawEntryCount = rawCount,
-                NextCursor = nextCursor,
-                Truncated = hasRawRemainder,
-                Generation = generation,
+                Truncated = truncated,
+                Note = truncated ? "Snapshot truncated; Console entries are intentionally non-resumable because Unity exposes no observable external clear generation." : null,
                 Budget = budget.Usage()
             };
         }
 
-        private static bool TryReadConsoleEntry(MethodInfo getEntry, object target, int rawIndex, ConsoleFields fields, UnityCliRequestBudget budget, out ConsoleEntry result)
+        internal interface IConsoleSnapshotAdapter
         {
-            result = null;
-            if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) return false;
-            getEntry.Invoke(null, new object[] { rawIndex, target });
-            if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) return false;
-            var mode = Convert.ToInt32(fields.Mode.GetValue(target), CultureInfo.InvariantCulture);
-            if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) return false;
-            var message = Convert.ToString(fields.Message.GetValue(target), CultureInfo.InvariantCulture) ?? string.Empty;
-            if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) return false;
-            var file = Convert.ToString(fields.File.GetValue(target), CultureInfo.InvariantCulture) ?? string.Empty;
-            result = new ConsoleEntry { RawIndex = rawIndex, Type = ConsoleLevel(mode), Message = message, File = file, Count = 1L };
-            return true;
+            int Count { get; }
+            bool TryRead(int rawIndex, UnityCliRequestBudget budget, out ConsoleEntry result);
+        }
+
+        private sealed class ReflectionConsoleSnapshotAdapter : IConsoleSnapshotAdapter
+        {
+            private readonly MethodInfo getEntry;
+            private readonly object target;
+            private readonly ConsoleFields fields;
+
+            internal ReflectionConsoleSnapshotAdapter(int count, MethodInfo getEntry, object target, ConsoleFields fields)
+            {
+                Count = count;
+                this.getEntry = getEntry;
+                this.target = target;
+                this.fields = fields;
+            }
+
+            public int Count { get; private set; }
+
+            public bool TryRead(int rawIndex, UnityCliRequestBudget budget, out ConsoleEntry result)
+            {
+                result = null;
+                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall()) return false;
+                getEntry.Invoke(null, new object[] { rawIndex, target });
+                if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) return false;
+                var mode = Convert.ToInt32(fields.Mode.GetValue(target), CultureInfo.InvariantCulture);
+                if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) return false;
+                var message = Convert.ToString(fields.Message.GetValue(target), CultureInfo.InvariantCulture) ?? string.Empty;
+                if (!budget.TryConsumeGetter() || !budget.TryConsumeReflectionCall()) return false;
+                var file = Convert.ToString(fields.File.GetValue(target), CultureInfo.InvariantCulture) ?? string.Empty;
+                result = new ConsoleEntry { RawIndex = rawIndex, Type = ConsoleLevel(mode), Message = message, File = file, Count = 1L };
+                return true;
+            }
         }
 
         private static Type FindConsoleType(string fullName, UnityCliRequestBudget budget)
         {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var assembly in UnityCliAssemblySnapshot.Get(budget))
             {
                 if (!budget.TryConsumeReflectionCall()) return null;
                 Type type = null;
@@ -154,22 +173,6 @@ namespace UnityCli
                 if (type != null) return type;
             }
             return null;
-        }
-
-        private static string CreateConsoleCursor(string scope, string generation, int upperBound, int nextIndex, string topFingerprint)
-        {
-            return UnityCliContinuationToken.Create(scope, generation,
-                upperBound.ToString(CultureInfo.InvariantCulture) + ":" + nextIndex.ToString(CultureInfo.InvariantCulture) + ":" + (topFingerprint ?? string.Empty));
-        }
-
-        private static string ConsoleFingerprint(ConsoleEntry entry)
-        {
-            return UnityCliContinuationToken.Fingerprint(entry.RawIndex.ToString(CultureInfo.InvariantCulture) + "\0" + entry.Type + "\0" + entry.Message + "\0" + entry.File);
-        }
-
-        private static UnityCliBridge.BridgeCommandException StaleConsoleCursor()
-        {
-            return new UnityCliBridge.BridgeCommandException("E_CONTINUATION_STALE", "The Console continuation no longer identifies the same raw log generation.", "Start a new console.get read without cursor.");
         }
 
         private sealed class ConsoleFields
@@ -227,19 +230,13 @@ namespace UnityCli
     {
         public List<ConsoleEntry> Items { get; set; }
         public long RawEntryCount { get; set; }
-        public string NextCursor { get; set; }
         public bool Truncated { get; set; }
-        public string Generation { get; set; }
+        public string Note { get; set; }
         public UnityCliRequestBudgetUsage Budget { get; set; }
 
-        internal static ConsoleReadPage Empty(string generation, UnityCliRequestBudgetUsage usage)
+        internal static ConsoleReadPage Empty(UnityCliRequestBudgetUsage usage)
         {
-            return new ConsoleReadPage { Items = new List<ConsoleEntry>(), RawEntryCount = 0L, Truncated = false, Generation = generation, Budget = usage };
-        }
-
-        internal static ConsoleReadPage TruncatedPage(long rawEntryCount, string cursor, string generation, UnityCliRequestBudgetUsage usage)
-        {
-            return new ConsoleReadPage { Items = new List<ConsoleEntry>(), RawEntryCount = rawEntryCount, NextCursor = cursor, Truncated = true, Generation = generation, Budget = usage };
+            return new ConsoleReadPage { Items = new List<ConsoleEntry>(), RawEntryCount = 0L, Truncated = false, Budget = usage };
         }
     }
     public sealed class EditorPlannedEffect { public string Type { get; set; } public string Path { get; set; } public string Action { get; set; } public string Name { get; set; } }

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Globalization;
+using System.Reflection;
 using System.Threading;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -31,6 +32,7 @@ namespace UnityCli
             EditorApplication.playModeStateChanged += delegate { InvalidateHierarchy(); };
             CompilationPipeline.compilationFinished += delegate { InvalidateReflection(); };
             AssemblyReloadEvents.beforeAssemblyReload += InvalidateReflection;
+            AppDomain.CurrentDomain.AssemblyLoad += delegate { InvalidateReflection(); };
         }
 
         internal static string Hierarchy(Scene scene)
@@ -42,7 +44,7 @@ namespace UnityCli
         internal static string Reflection()
         {
             return UnityCliContinuationToken.Fingerprint(
-                UnityCliBridge.ReadGenerationIdentity() + "\0" + AppDomain.CurrentDomain.GetAssemblies().Length.ToString(CultureInfo.InvariantCulture) + "\0" + Interlocked.Read(ref reflectionGeneration).ToString(CultureInfo.InvariantCulture));
+                UnityCliBridge.ReadGenerationIdentity() + "\0" + Interlocked.Read(ref reflectionGeneration).ToString(CultureInfo.InvariantCulture));
         }
 
         internal static string Session(string scope)
@@ -58,6 +60,37 @@ namespace UnityCli
         internal static void InvalidateReflection()
         {
             Interlocked.Increment(ref reflectionGeneration);
+        }
+    }
+
+    /// <summary>AppDomain没有逐项程序集API；每个reflection generation仅创建一次有1024项硬上限的snapshot。</summary>
+    internal static class UnityCliAssemblySnapshot
+    {
+        private const int MaximumAssemblies = 1024;
+        private static readonly object SnapshotLock = new object();
+        private static string generation;
+        private static Assembly[] assemblies;
+
+        internal static Assembly[] Get(UnityCliRequestBudget budget)
+        {
+            if (budget == null) throw new ArgumentNullException("budget");
+            var currentGeneration = UnityCliReadGeneration.Reflection();
+            Assembly[] snapshot;
+            lock (SnapshotLock)
+            {
+                if (assemblies == null || !string.Equals(generation, currentGeneration, StringComparison.Ordinal))
+                {
+                    if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    snapshot = AppDomain.CurrentDomain.GetAssemblies();
+                    if (snapshot.Length > MaximumAssemblies)
+                        throw new UnityCliBridge.BridgeCommandException("E_REFLECTION_LIMIT_EXCEEDED", "Loaded assembly count exceeds the 1024-item reflection snapshot bound.", "Reduce loaded assemblies before retrying the bounded reflection request.");
+                    assemblies = snapshot;
+                    generation = currentGeneration;
+                }
+                snapshot = assemblies;
+            }
+            if (!budget.TryConsumeScannedRecords(snapshot.Length)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+            return snapshot;
         }
     }
 }

@@ -44,6 +44,11 @@ namespace UnityCli
         /// </summary>
         internal static class ObjectRefResolver
         {
+            private const int MaximumRootSnapshotItems = 4096;
+            private const int MaximumComponentSnapshotItems = 4096;
+            private const int MaximumRootSnapshotGenerations = 64;
+            private static readonly Dictionary<string, GameObject[]> RootSnapshots = new Dictionary<string, GameObject[]>(StringComparer.Ordinal);
+
             /// <summary>解析任意 UnityEngine.Object 引用。</summary>
             public static UnityEngine.Object ResolveObject(IUnityCliObjectReferenceInput request, UnityCliRequestBudget budget)
             {
@@ -156,10 +161,7 @@ namespace UnityCli
                 var componentIndex = request.ComponentIndex;
                 if (componentIndex.HasValue)
                 {
-                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                    var components = gameObject.GetComponents<Component>();
-                    for (var index = 0; index < components.Length; index++)
-                        if (!budget.TryConsumeScannedRecord()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    var components = BoundedComponents(gameObject, budget);
                     if (componentIndex.Value < 0 || componentIndex.Value >= components.Length)
                     {
                         throw new BridgeCommandException("E_OBJECTREF_COMPONENT_INDEX_OUT_OF_RANGE",
@@ -199,13 +201,17 @@ namespace UnityCli
                 if (segments.Length == 0) return null;
                 if (segments.Length > 256) throw new BridgeCommandException("E_OBJECTREF_PATH_INVALID", "Exact hierarchy paths are limited to 256 segments.", "Pass an instance id for deeper objects.");
                 GameObject match = null;
-                for (var sceneIndex = 0; sceneIndex < SceneManager.sceneCount; sceneIndex++)
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var sceneCount = SceneManager.sceneCount;
+                for (var sceneIndex = 0; sceneIndex < sceneCount; sceneIndex++)
                 {
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var scene = SceneManager.GetSceneAt(sceneIndex);
+                    if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     if (!scene.isLoaded) continue;
-                    foreach (var root in scene.GetRootGameObjects())
+                    foreach (var root in BoundedSceneRoots(scene, budget))
                     {
-                        if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                        if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                         if (!string.Equals(root.name, segments[0], StringComparison.Ordinal)) continue;
                         var current = root.transform;
                         var resolved = true;
@@ -231,6 +237,42 @@ namespace UnityCli
                     }
                 }
                 return match;
+            }
+
+            /// <summary>批量根对象 getter 只在已验证 cardinality 后调用，并在同一层级 generation 复用有限快照。</summary>
+            internal static GameObject[] BoundedSceneRoots(Scene scene, UnityCliRequestBudget budget)
+            {
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var rootCount = scene.rootCount;
+                if (rootCount < 0 || rootCount > MaximumRootSnapshotItems || !budget.TryConsumeScannedRecords(rootCount))
+                    throw new UnityCliRequestBudgetExceededException(rootCount > MaximumRootSnapshotItems ? "rootSnapshotItems" : budget.ExhaustedDimension);
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var generation = UnityCliReadGeneration.Hierarchy(scene);
+                GameObject[] cached;
+                if (RootSnapshots.TryGetValue(generation, out cached))
+                {
+                    if (cached.Length != rootCount) throw new BridgeCommandException("E_READ_GENERATION_CHANGED", "Scene roots changed while resolving the exact path.", "Retry the read from the beginning.");
+                    return cached;
+                }
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var roots = scene.GetRootGameObjects();
+                if (roots.Length != rootCount) throw new BridgeCommandException("E_READ_GENERATION_CHANGED", "Scene roots changed while building the bounded snapshot.", "Retry the read from the beginning.");
+                if (RootSnapshots.Count >= MaximumRootSnapshotGenerations) RootSnapshots.Clear();
+                RootSnapshots[generation] = roots;
+                return roots;
+            }
+
+            /// <summary>组件数组在 materialize 前验证数量并一次性占用扫描预算。</summary>
+            internal static Component[] BoundedComponents(GameObject gameObject, UnityCliRequestBudget budget)
+            {
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var componentCount = gameObject.GetComponentCount();
+                if (componentCount < 0 || componentCount > MaximumComponentSnapshotItems || !budget.TryConsumeScannedRecords(componentCount))
+                    throw new UnityCliRequestBudgetExceededException(componentCount > MaximumComponentSnapshotItems ? "componentSnapshotItems" : budget.ExhaustedDimension);
+                if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var components = gameObject.GetComponents<Component>();
+                if (components.Length != componentCount) throw new BridgeCommandException("E_READ_GENERATION_CHANGED", "GameObject components changed while building the bounded snapshot.", "Retry the read from the beginning.");
+                return components;
             }
 
             private static void ThrowExactAmbiguousPath(string path, GameObject first, GameObject second, UnityCliRequestBudget budget)

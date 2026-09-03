@@ -19,6 +19,7 @@ namespace UnityCli
             public List<string> ParameterTypes { get; set; }
             [UnityCliAnyJson] public Dictionary<string, object> InstanceRef { get; set; }
             [UnityCliRequired] public UnityCliCompletionProbe CompletionProbe { get; set; }
+            public UnityCliReadBudgetInput Budget { get; set; }
         }
 
         public sealed class Result
@@ -39,7 +40,7 @@ namespace UnityCli
         {
             Name = "reflection.method.call",
             Summary = "Call one synchronous C# method in the live Editor and prove declared state through a read Tool.",
-            Description = "Resolve the exact type, overload, arguments, and optional instance before invoking one synchronous method. completionProbe is mandatory and proves declared before/after state through an eligible read Tool in the same Editor turn. Task/ValueTask, iterator, yield, and AsyncOperation methods are rejected; a method return value is never accepted as completion proof.",
+            Description = "Resolve the exact type, overload, arguments, and optional instance under one request budget before invoking one synchronous method. completionProbe is mandatory and proves declared before/after state through an eligible read Tool in the same Editor turn. Candidate methods, parameters, signatures, reflection work, monotonic main-thread time, and output bytes are globally bounded in dry-run and execution. Task/ValueTask, iterator, yield, and AsyncOperation methods are rejected; a method return value is never accepted as completion proof.",
             Group = "reflection",
             DestructiveHint = true,
             SideEffects = new[] { "arbitrary-method-invocation" },
@@ -79,13 +80,14 @@ namespace UnityCli
                     "Run tools run reflection.method.find to discover methods, then retry with the required target fields.");
             }
 
+            var readBudget = ctx.UseReadBudget(request.Budget);
             var bindings = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-            // overload、参数与 instance 都是可预见校验，必须在 effect barrier 前完成。
+            // overload、参数与 instance 都是可预见校验，必须在 effect barrier 前完成并使用同一 budget。
             var prepared = UnityCliBridge.ReflectionInvoker.PrepareCall(
                 request.TypeName, request.MethodName,
-                request.Args, request.ParameterTypes, request.InstanceRef, bindings);
+                request.Args, request.ParameterTypes, request.InstanceRef, bindings, readBudget);
 
-            // dry-run 必须在任何反射调用前返回，任意方法即使看似只读也不能在预览阶段执行。
+            // dry-run 只完成有界 preparation，不执行目标方法。
             if (ctx.DryRun)
             {
                 return new System.Threading.Tasks.ValueTask<Result>(new Result
@@ -97,7 +99,6 @@ namespace UnityCli
                 });
             }
 
-            var readBudget = ctx.UseReadBudget();
             Dictionary<string, object> data = null;
             var completion = ctx.RunCompletionProbe(request.CompletionProbe, () => data = UnityCliBridge.ReflectionInvoker.InvokePrepared(prepared, readBudget));
             return new System.Threading.Tasks.ValueTask<Result>(new Result

@@ -8,7 +8,7 @@ namespace UnityCli
         /// <summary>scene.gameobject.component 只读 Tool：只读一个组件预览。</summary>
         public sealed class SceneGameObjectComponentTool : IUnityCliTool<SceneGameObjectComponentTool.Request, SceneGameObjectComponentTool.Result>
         {
-            public sealed class Request { public string Target { get; set; } public int Id { get; set; } public string Path { get; set; } public string Component { get; set; } }
+            public sealed class Request { public string Target { get; set; } public int Id { get; set; } public string Path { get; set; } public string Component { get; set; } public UnityCliReadBudgetInput Budget { get; set; } }
             public sealed class Result { public GameObjectRef GameObject { get; set; } public ComponentInfo Component { get; set; } }
             public sealed class GameObjectRef { public long Id { get; set; } public string Name { get; set; } public string Path { get; set; } }
             public sealed class ComponentInfo
@@ -44,16 +44,19 @@ namespace UnityCli
             public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
             {
                 request = request ?? new Request();
-                var gameObject = ResolveSceneContextGameObject(request.Target, request.Id == 0 ? (int?)null : request.Id, request.Path);
+                var budget = ctx.UseReadBudget(request.Budget);
+                var gameObject = ResolveSceneContextGameObject(request.Target, request.Id == 0 ? (int?)null : request.Id, request.Path, budget);
                 if (string.IsNullOrEmpty(request.Component))
                     throw new BridgeCommandException("E_COMPONENT_TYPE_REQUIRED", "scene.gameobject.component requires component.", "Pass input component with a Unity component type name.");
-                var component = ResolveComponent(gameObject, request.Component);
+                var component = ResolveSceneContextComponent(gameObject, request.Component, budget);
                 if (component == null)
                     throw new BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + request.Component, "Run tools run scene.gameobject.components with the same target/path/id to list available component names.");
+                if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var componentType = component.GetType();
                 var result = new Result
                 {
-                    GameObject = new GameObjectRef { Id = gameObject.GetInstanceID(), Name = gameObject.name, Path = HierarchyPath(gameObject) },
-                    Component = new ComponentInfo { Type = component.GetType().Name, FullName = component.GetType().FullName, Enabled = ComponentEnabled(component), Properties = SceneContextComponentReadableProperties(component) }
+                    GameObject = new GameObjectRef { Id = ConsumeSceneGetter(budget, gameObject.GetInstanceID), Name = ConsumeSceneGetter(budget, () => gameObject.name), Path = HierarchyPath(gameObject, budget) },
+                    Component = new ComponentInfo { Type = componentType.Name, FullName = componentType.FullName, Enabled = ComponentEnabled(component, budget), Properties = SceneContextComponentReadableProperties(component, budget) }
                 };
                 return new System.Threading.Tasks.ValueTask<Result>(result);
             }

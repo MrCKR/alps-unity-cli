@@ -12,7 +12,6 @@ namespace UnityCli
             public string Type { get; set; }
             public string Filter { get; set; }
             [UnityCliRange(1L, 500L)] public int? Count { get; set; }
-            public string Cursor { get; set; }
             public UnityCliReadBudgetInput Budget { get; set; }
         }
 
@@ -20,17 +19,16 @@ namespace UnityCli
         {
             public List<ConsoleEntry> Items { get; set; }
             public long RawEntryCount { get; set; }
-            public string NextCursor { get; set; }
             public bool Truncated { get; set; }
-            public string Generation { get; set; }
+            public string Note { get; set; }
             public UnityCliRequestBudgetUsage Budget { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
         {
             Name = "console.get",
-            Summary = "Read filtered Unity Console entries with stable raw-position continuation and request-wide bounds.",
-            Description = "Read Console entries newest-first without materializing the Console. count defaults to 50 and is limited to 1..500. Filtering advances over raw positions, so sparse 100k-entry Consoles remain bounded by budget.maxScannedRecords (default 10000, maximum 100000), maxReflectionCalls (default 4096, maximum 20000), maxMainThreadMilliseconds (default 250, maximum 2000), and maxSerializedUtf8Bytes (default 1 MiB, maximum 8 MiB). A non-null nextCursor is a sentinel that identifies the next raw entry even when no matching item was returned; pass it unchanged. rawEntryCount is Unity's raw count, not a filtered total. Old cursors fail with E_CONTINUATION_STALE after the bound Console generation changes. Read-only in Edit and Play Mode.",
+            Summary = "Read one bounded, non-resumable Unity Console snapshot under request-wide limits.",
+            Description = "Read Console entries newest-first from one Unity snapshot window without materializing the Console. count defaults to 50 and is limited to 1..500. Filtering advances over raw positions and every entry uses the shared scan/reflection/getter/main-thread/UTF-8 budget. Unity exposes no reliable generation covering external Console clear/rebuild, so this tool intentionally has no cursor; truncated=true means start a fresh snapshot with a larger count or budget. rawEntryCount is Unity's raw count, not a filtered total. Read-only in Edit and Play Mode.",
             Group = "console",
             DestructiveHint = false,
             Target = "editor",
@@ -47,14 +45,13 @@ namespace UnityCli
         {
             request = request ?? new Request();
             var pageSize = request.Count ?? 50;
-            var page = EditorToolSupport.ReadConsolePage("console.get", request.Type, request.Filter, pageSize, request.Cursor, ctx.UseReadBudget(request.Budget));
+            var page = EditorToolSupport.ReadConsolePage(request.Type, request.Filter, pageSize, ctx.UseReadBudget(request.Budget));
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Items = page.Items,
                 RawEntryCount = page.RawEntryCount,
-                NextCursor = page.NextCursor,
                 Truncated = page.Truncated,
-                Generation = page.Generation,
+                Note = page.Note,
                 Budget = page.Budget
             });
         }

@@ -2,7 +2,6 @@
 using System;
 using System.Globalization;
 using System.Reflection;
-using System.Threading;
 
 namespace UnityCli
 {
@@ -20,15 +19,12 @@ namespace UnityCli
             ? null
             : UtilityType?.GetMethod("GetFrameEventData", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(int), EventDataType.MakeByRefType() }, null)
                 ?? UtilityType?.GetMethod("GetFrameEventData", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(int), EventDataType }, null);
-        private static long generation = 1L;
 
         public static bool Available => UtilityType != null && StateType != null && EventCountProp != null && EnabledProp != null && EnableMethod != null;
-        public static long Generation => Interlocked.Read(ref generation);
 
         public static void SetEnabled(bool value)
         {
             EnableMethod.Invoke(null, new object[] { value, 0 });
-            Interlocked.Increment(ref generation);
         }
 
         public static bool GetEnabled()

@@ -349,7 +349,9 @@ namespace UnityCli
             try
             {
                 var data = await ExecuteData(request, cancellationToken);
-                // handler 返回后先让 coordinator 消费 completion evidence；超时后的已证明 mutation 仍可持久化 canonical terminal。
+                // Project Tool 的成功 envelope 已在其同一 deadline 与请求预算内完成；其他内部命令保持统一包装。
+                var serializedEnvelope = data as SerializedBridgeEnvelope;
+                if (serializedEnvelope != null) return serializedEnvelope.Json;
                 return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, data));
             }
             catch (BridgeCommandException exception)

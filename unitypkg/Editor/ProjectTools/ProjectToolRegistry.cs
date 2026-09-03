@@ -425,11 +425,11 @@ namespace UnityCli
             object result;
             object parsedInput;
             UnityCliProjectToolContext executionContext = null;
+            using (var toolTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
             try
             {
                 WriteLog("custom_tool_run requestId=" + request.RequestId + " name=" + name + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
-                using (var toolTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-                {
                     toolTimeout.CancelAfter(timeoutMs);
                     parsedInput = UnityCliSerializer.Deserialize(inputJson, definition.RequestType);
                     var effectPreparation = PrepareToolEffect(request, definition.CompletionContract, parsedInput);
@@ -448,7 +448,6 @@ namespace UnityCli
                     result = await definition.InvokeAsync(parsedInput, executionContext, toolTimeout.Token);
                     if (toolTimeout.IsCancellationRequested && !executionContext.EffectCommitted)
                         throw new OperationCanceledException(toolTimeout.Token);
-                }
             }
             catch (BridgeCommandException bce)
             {
@@ -502,9 +501,10 @@ namespace UnityCli
             // method 返回后仍可能在序列化 getter、schema 或 completion driver 中失败；整个 postcondition 区域必须服从同一 effect 边界。
             try
             {
-                var outputJson = UnityCliSerializer.Serialize(result);
-                if (executionContext != null && executionContext.ReadBudget != null)
-                    executionContext.ReadBudget.ObserveFinalSerializedUtf8Bytes(Encoding.UTF8.GetByteCount(outputJson));
+                var terminalBudget = executionContext.ReadBudget ?? executionContext.UseReadBudget();
+                terminalBudget.CheckpointOrThrow();
+                var outputJson = UnityCliSerializer.Serialize(result, terminalBudget, toolTimeout.Token);
+                terminalBudget.CheckpointOrThrow();
                 var outputError = ValidateProjectToolOutput(definition, outputJson);
                 if (outputError != null)
                 {
@@ -514,9 +514,14 @@ namespace UnityCli
                         new Dictionary<string, object> { { "toolName", definition.Name }, { "path", outputError.Path }, { "expected", outputError.Expected }, { "actual", outputError.Actual } },
                         new[] { "Fix the Tool result DTO or completion driver before retrying." });
                 }
+                terminalBudget.CheckpointOrThrow();
                 var terminalData = CompleteProjectToolSuccess(request, definition, result);
+                terminalBudget.CheckpointOrThrow();
                 RecordToolCompletionEvidence(request, definition, result, terminalData);
-                return terminalData;
+                terminalBudget.CheckpointOrThrow();
+                var terminalJson = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, terminalData), terminalBudget, toolTimeout.Token);
+                terminalBudget.CheckpointOrThrow();
+                return new SerializedBridgeEnvelope(terminalJson);
             }
             catch (BridgeCommandException exception)
             {
@@ -541,6 +546,14 @@ namespace UnityCli
                     new Dictionary<string, object> { { "toolName", definition.Name }, { "stage", "postcondition" } },
                     new[] { "Fix the Tool result DTO or completion driver before retrying." });
             }
+            }
+        }
+
+        /// <summary>成功 Tool 已在自身 deadline 与预算内完成最终 envelope 序列化。</summary>
+        private sealed class SerializedBridgeEnvelope
+        {
+            internal SerializedBridgeEnvelope(string json) { Json = json; }
+            internal string Json { get; private set; }
         }
 
         /// <summary>内部 raw discovery 需要 completion contract；公开投影与 static capture 会移除此字段。</summary>

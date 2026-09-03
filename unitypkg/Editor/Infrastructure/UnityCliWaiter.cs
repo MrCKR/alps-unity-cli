@@ -394,6 +394,7 @@ namespace UnityCli
         {
             private readonly object callbackLock = new object();
             private readonly DateTime deadlineUtc;
+            private readonly CancellationToken callbackCancellationToken;
             private bool callbackCompleted;
             private bool callbackFailed;
             private bool callbackTerminal;
@@ -405,6 +406,7 @@ namespace UnityCli
                 : base(requestId, owner, cancellationToken)
             {
                 this.onAbandoned = onAbandoned;
+                callbackCancellationToken = cancellationToken;
                 deadlineUtc = DateTime.UtcNow.Add(timeout < TimeSpan.Zero ? TimeSpan.Zero : timeout);
                 start?.Invoke(OnComplete, OnFail);
             }
@@ -479,7 +481,11 @@ namespace UnityCli
             {
                 lock (callbackLock)
                 {
-                    if (callbackTerminal || IsCompleted) return false;
+                    if (callbackTerminal || IsCompleted || callbackCancellationToken.IsCancellationRequested || DateTime.UtcNow >= deadlineUtc)
+                    {
+                        callbackTerminal = true;
+                        return false;
+                    }
                     callbackTerminal = true;
                     try
                     {
@@ -499,7 +505,11 @@ namespace UnityCli
             {
                 lock (callbackLock)
                 {
-                    if (callbackTerminal || IsCompleted) return false;
+                    if (callbackTerminal || IsCompleted || callbackCancellationToken.IsCancellationRequested || DateTime.UtcNow >= deadlineUtc)
+                    {
+                        callbackTerminal = true;
+                        return false;
+                    }
                     callbackTerminal = true;
                     callbackException = exception;
                     callbackFailed = true;

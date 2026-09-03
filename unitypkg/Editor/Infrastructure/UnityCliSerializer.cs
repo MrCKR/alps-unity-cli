@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 
 namespace UnityCli
 {
@@ -31,6 +32,17 @@ namespace UnityCli
             var builder = new StringBuilder();
             WriteValue(builder, value);
             return builder.ToString();
+        }
+
+        /// <summary>在请求的取消、主线程与实际 UTF-8 ceiling 内增量构造最终 JSON。</summary>
+        public static string Serialize(object value, UnityCliRequestBudget budget, CancellationToken cancellationToken)
+        {
+            if (budget == null) throw new ArgumentNullException("budget");
+            budget.CheckpointOrThrow();
+            var writer = new BudgetedJsonWriter(budget, cancellationToken);
+            WriteBudgetedValue(writer, value, budget, cancellationToken);
+            budget.CheckpointOrThrow();
+            return writer.ToString();
         }
 
         private static void WriteValue(StringBuilder builder, object value)
@@ -102,6 +114,204 @@ namespace UnityCli
                 WriteValue(builder, memberValue);
             }
             builder.Append('}');
+        }
+
+        private const int MaximumProtocolMembers = 256;
+        private const int MaximumDictionaryEntries = 4096;
+        private const int MaximumMemberMetadataUtf8Bytes = 64 * 1024;
+        private const int MaximumCachedProtocolTypes = 128;
+        private static readonly object BudgetedMemberCacheLock = new object();
+        private static readonly Dictionary<Type, MemberInfo[]> BudgetedMemberCache = new Dictionary<Type, MemberInfo[]>();
+
+        /// <summary>请求态序列化逐项处理集合和成员，任何候选都先计入同一预算。</summary>
+        private static void WriteBudgetedValue(BudgetedJsonWriter writer, object value, UnityCliRequestBudget budget, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            budget.CheckpointOrThrow();
+            if (value == null) { writer.Append("null"); return; }
+
+            var type = value.GetType();
+            if (type == typeof(string) || type == typeof(char)) { WriteBudgetedString(writer, Convert.ToString(value, CultureInfo.InvariantCulture)); return; }
+            if (type == typeof(bool)) { writer.Append((bool)value ? "true" : "false"); return; }
+            if (type.IsEnum) { WriteBudgetedString(writer, Enum.GetName(type, value)); return; }
+            if (UnityCliSchemaDeriver.IsInteger(type)) { writer.Append(Convert.ToString(value, CultureInfo.InvariantCulture)); return; }
+            if (type == typeof(decimal)) { writer.Append(((decimal)value).ToString(CultureInfo.InvariantCulture)); return; }
+            if (type == typeof(double) || type == typeof(float))
+            {
+                var number = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                if (double.IsNaN(number) || double.IsInfinity(number)) throw new FormatException("JSON does not support non-finite numbers.");
+                writer.Append(number.ToString("R", CultureInfo.InvariantCulture));
+                return;
+            }
+
+            var dictionary = value as IDictionary;
+            if (dictionary != null)
+            {
+                var entries = new List<DictionaryEntry>();
+                foreach (DictionaryEntry entry in dictionary)
+                {
+                    if (!budget.TryConsumeScannedRecord() || entries.Count >= MaximumDictionaryEntries)
+                        throw new UnityCliRequestBudgetExceededException(entries.Count >= MaximumDictionaryEntries ? "dictionaryEntries" : budget.ExhaustedDimension);
+                    entries.Add(entry);
+                }
+                entries.Sort((left, right) => string.CompareOrdinal(Convert.ToString(left.Key, CultureInfo.InvariantCulture), Convert.ToString(right.Key, CultureInfo.InvariantCulture)));
+                writer.Append("{");
+                for (var index = 0; index < entries.Count; index++)
+                {
+                    if (index > 0) writer.Append(",");
+                    WriteBudgetedString(writer, Convert.ToString(entries[index].Key, CultureInfo.InvariantCulture));
+                    writer.Append(":");
+                    WriteBudgetedValue(writer, entries[index].Value, budget, cancellationToken);
+                }
+                writer.Append("}");
+                return;
+            }
+
+            var enumerable = value as IEnumerable;
+            if (enumerable != null)
+            {
+                writer.Append("[");
+                var first = true;
+                foreach (var item in enumerable)
+                {
+                    if (!budget.TryConsumeScannedRecord()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    if (!first) writer.Append(",");
+                    first = false;
+                    WriteBudgetedValue(writer, item, budget, cancellationToken);
+                }
+                writer.Append("]");
+                return;
+            }
+
+            writer.Append("{");
+            var firstMember = true;
+            foreach (var member in BudgetedSerializableMembers(type, budget))
+            {
+                if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeReflectionCall() || !budget.TryConsumeGetter())
+                    throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                var memberValue = UnityCliSchemaDeriver.GetMemberValue(member, value);
+                if (memberValue == null) continue;
+                if (!firstMember) writer.Append(",");
+                firstMember = false;
+                WriteBudgetedString(writer, ToCamelCase(member.Name));
+                writer.Append(":");
+                WriteBudgetedValue(writer, memberValue, budget, cancellationToken);
+            }
+            writer.Append("}");
+        }
+
+        /// <summary>缓存只活在当前 domain generation，且类型数、成员数与 metadata 字节均有硬上限。</summary>
+        private static IReadOnlyList<MemberInfo> BudgetedSerializableMembers(Type type, UnityCliRequestBudget budget)
+        {
+            lock (BudgetedMemberCacheLock)
+            {
+                MemberInfo[] cached;
+                if (BudgetedMemberCache.TryGetValue(type, out cached)) return cached;
+            }
+
+            var members = new Dictionary<string, MemberInfo>(StringComparer.Ordinal);
+            var metadataBytes = 0;
+            var depth = 0;
+            for (var current = type; current != null && current != typeof(object); current = current.BaseType)
+            {
+                if (++depth > 32) throw new UnityCliRequestBudgetExceededException("typeDepth");
+                foreach (var property in current.GetTypeInfo().DeclaredProperties)
+                {
+                    if (!budget.TryConsumeReflectionCall() || !budget.TryConsumeScannedRecord())
+                        throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    CountMemberMetadata(property, ref metadataBytes);
+                    if (property.GetMethod == null || !property.GetMethod.IsPublic || property.GetIndexParameters().Length != 0) continue;
+                    AddBudgetedMember(members, property);
+                }
+                foreach (var field in current.GetTypeInfo().DeclaredFields)
+                {
+                    if (!budget.TryConsumeReflectionCall() || !budget.TryConsumeScannedRecord())
+                        throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    CountMemberMetadata(field, ref metadataBytes);
+                    if (!field.IsPublic || field.IsStatic) continue;
+                    AddBudgetedMember(members, field);
+                }
+            }
+
+            var result = members.Values.OrderBy(member => ToCamelCase(member.Name), StringComparer.Ordinal).ToArray();
+            lock (BudgetedMemberCacheLock)
+            {
+                if (BudgetedMemberCache.Count >= MaximumCachedProtocolTypes) BudgetedMemberCache.Clear();
+                BudgetedMemberCache[type] = result;
+            }
+            return result;
+        }
+
+        private static void AddBudgetedMember(IDictionary<string, MemberInfo> members, MemberInfo member)
+        {
+            var name = ToCamelCase(member.Name);
+            if (!members.ContainsKey(name)) members.Add(name, member);
+            if (members.Count > MaximumProtocolMembers) throw new UnityCliRequestBudgetExceededException("memberCandidates");
+        }
+
+        private static void CountMemberMetadata(MemberInfo member, ref int metadataBytes)
+        {
+            var declaring = member.DeclaringType == null ? string.Empty : member.DeclaringType.FullName;
+            metadataBytes += Encoding.UTF8.GetByteCount(member.Name ?? string.Empty) + Encoding.UTF8.GetByteCount(declaring ?? string.Empty);
+            if (metadataBytes > MaximumMemberMetadataUtf8Bytes) throw new UnityCliRequestBudgetExceededException("memberMetadataUtf8Bytes");
+        }
+
+        private static void WriteBudgetedString(BudgetedJsonWriter writer, string value)
+        {
+            writer.Append("\"");
+            if (value != null)
+            {
+                var runStart = 0;
+                for (var index = 0; index < value.Length; index++)
+                {
+                    string escaped = null;
+                    switch (value[index])
+                    {
+                        case '"': escaped = "\\\""; break;
+                        case '\\': escaped = "\\\\"; break;
+                        case '\b': escaped = "\\b"; break;
+                        case '\f': escaped = "\\f"; break;
+                        case '\n': escaped = "\\n"; break;
+                        case '\r': escaped = "\\r"; break;
+                        case '\t': escaped = "\\t"; break;
+                        default:
+                            if (value[index] < 0x20) escaped = "\\u" + ((int)value[index]).ToString("x4", CultureInfo.InvariantCulture);
+                            break;
+                    }
+                    if (escaped == null) continue;
+                    if (index > runStart) writer.Append(value.Substring(runStart, index - runStart));
+                    writer.Append(escaped);
+                    runStart = index + 1;
+                }
+                if (runStart < value.Length) writer.Append(value.Substring(runStart));
+            }
+            writer.Append("\"");
+        }
+
+        private sealed class BudgetedJsonWriter
+        {
+            private readonly StringBuilder builder = new StringBuilder();
+            private readonly UnityCliRequestBudget budget;
+            private readonly CancellationToken cancellationToken;
+            private long utf8Bytes;
+
+            internal BudgetedJsonWriter(UnityCliRequestBudget budget, CancellationToken cancellationToken)
+            {
+                this.budget = budget;
+                this.cancellationToken = cancellationToken;
+            }
+
+            internal void Append(string value)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                budget.CheckpointOrThrow();
+                var next = checked(utf8Bytes + Encoding.UTF8.GetByteCount(value ?? string.Empty));
+                budget.ValidateSerializedUtf8Bytes(next);
+                builder.Append(value);
+                utf8Bytes = next;
+            }
+
+            public override string ToString() { return builder.ToString(); }
         }
 
         // PascalCase → camelCase:仅首字母小写(对生成 DTO 的标准 PascalCase 足够)。
