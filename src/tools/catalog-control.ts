@@ -24,7 +24,7 @@ import { groupSummary } from "./tools/group-summaries.js";
 
 export const DEFAULT_CATALOG_PAGE_SIZE = 20;
 export const MAX_CATALOG_PAGE_SIZE = 100;
-const MAX_CATALOG_CURSOR_LENGTH = 8192;
+const MAX_CATALOG_CURSOR_LENGTH = 24 * 1024;
 
 export interface CatalogPageRequest {
   pageSize?: number;
@@ -34,8 +34,8 @@ export interface CatalogPageRequest {
 interface CatalogCursor {
   version: 1;
   operation: string;
-  afterName: string;
   generations: { local: string; editor?: string; runtime?: string };
+  tokens: { editor?: string; runtime?: string };
 }
 
 const OFFLINE_CODES = new Set(["E_INSTANCE_NOT_RUNNING", "E_RUNTIME_NOT_RUNNING"]);
@@ -65,7 +65,7 @@ export async function projectCatalogGroups(
   return success(requestId, { count: groups.length, groups });
 }
 
-/** group/search/command listing 共享 generation-bound、raw-name continuation。 */
+/** group/search/command listing 共享由目标generation签发的opaque continuation。 */
 export async function projectCatalogPage(
   operation: string,
   request: CatalogPageRequest,
@@ -90,16 +90,19 @@ export async function projectCatalogPage(
   if (cursor && cursor.generations.local !== localGeneration) return catalogChanged(requestId);
 
   const localMatches = filterLocalTools(localTools, filter).sort((left, right) => compareText(left.name, right.name));
-  const localRemaining = cursor ? localMatches.filter((tool) => compareText(tool.name, cursor.afterName) > 0) : localMatches;
-  const localPage = localRemaining.slice(0, pageSize + 1).map(localRoutingSummary);
   const localNames = localTools.map((tool) => tool.name).sort(compareText);
+  const localMatchNames = localMatches.map((tool) => tool.name);
+  const cursorContext = catalogCursorContext(operation, filter, localGeneration, localMatchNames);
   const targets = await targetSummaries(flags, runtime, requestId, {
     group: filter.group,
     keyword: filter.keyword,
-    afterName: cursor?.afterName,
-    limit: Math.min(MAX_CATALOG_PAGE_FETCH, pageSize + 1),
+    limit: Math.min(MAX_CATALOG_PAGE_FETCH, pageSize),
     expectedEditorGeneration: cursor?.generations.editor,
     expectedRuntimeGeneration: cursor?.generations.runtime,
+    editorCursorToken: cursor?.tokens.editor,
+    runtimeCursorToken: cursor?.tokens.runtime,
+    cursorContext,
+    localNames: localMatchNames,
     reservedNames: localNames,
   }, absoluteDeadlineMs);
   if ("failure" in targets) return targets.failure;
@@ -108,12 +111,19 @@ export async function projectCatalogPage(
   const primary = targets.editor?.ok ? targets.editor : targets.runtime?.ok ? targets.runtime : undefined;
   if (!primary) return targets.offline!;
 
+  const pageNames = primary.pageNames;
+  if (!pageNames) return catalogConflict(requestId, "catalog", "target omitted its signed page-name projection");
+  const pageNameSet = new Set(pageNames);
   const overlay = targets.editor?.ok && targets.runtime?.ok ? runtimeAvailabilityOverlay(targets.editor, targets.runtime, requestId) : undefined;
   if (overlay && "failure" in overlay) return overlay.failure;
   const primaryTools = primary.tools.map((tool) => overlay instanceof Map && overlay.has(tool.name) ? { ...tool, ...overlay.get(tool.name) } : tool);
+  const localPage = localMatches.filter((tool) => pageNameSet.has(tool.name)).map(localRoutingSummary);
   const merged = mergeSummarySources(localPage, primaryTools, requestId);
   if ("failure" in merged) return merged.failure;
-  const tools = merged.tools.slice(0, pageSize);
+  const tools = merged.tools;
+  if (tools.length !== pageNames.length || tools.some((tool, index) => tool.name !== pageNames[index])) {
+    return catalogConflict(requestId, tools[0]?.name ?? "catalog", "target signed page projection does not match the merged catalog");
+  }
 
   if (filter.includeExtensionAvailability && tools.some((tool) => extensionIdForToolName(tool.name))) {
     try {
@@ -131,16 +141,21 @@ export async function projectCatalogPage(
 
   const total = localMatches.length + primary.total;
   if (filter.group && total === 0) return failure(requestId, "E_TOOL_GROUP_NOT_FOUND", `Tool group not found: ${filter.group}.`, ["Run unitycli tools group to see all tool groups."]);
-  const hasMore = merged.tools.length > pageSize || localRemaining.length > pageSize + 1 || primary.hasMore;
+  const hasMore = primary.hasMore;
   const generations = {
     local: localGeneration,
     ...(targets.editor?.ok ? { editor: targets.editor.generation } : {}),
     ...(targets.runtime?.ok ? { runtime: targets.runtime.generation } : {}),
   };
+  const tokens = {
+    ...(targets.editor?.ok && targets.editor.continuationToken ? { editor: targets.editor.continuationToken } : {}),
+    ...(targets.runtime?.ok && targets.runtime.continuationToken ? { runtime: targets.runtime.continuationToken } : {}),
+  };
   const cursorText = request.cursor ?? "start";
-  const nextCursor = hasMore && tools.length > 0
-    ? encodeCursor({ version: 1, operation, afterName: tools[tools.length - 1].name, generations })
+  const nextCursor = hasMore && tools.length > 0 && Object.keys(tokens).length > 0
+    ? encodeCursor({ version: 1, operation, generations, tokens })
     : undefined;
+  if (hasMore && !nextCursor) return catalogConflict(requestId, tools[tools.length - 1]?.name ?? "catalog", "target omitted its signed continuation token");
   return success(requestId, {
     ...(filter.extraData ?? {}),
     [filter.collectionName ?? "tools"]: filter.projectItem ? tools.map(filter.projectItem) : tools,
@@ -200,10 +215,13 @@ async function targetSummaries(
   query: {
     group?: string;
     keyword?: string;
-    afterName?: string;
     limit: number;
     expectedEditorGeneration?: string;
     expectedRuntimeGeneration?: string;
+    editorCursorToken?: string;
+    runtimeCursorToken?: string;
+    cursorContext: string;
+    localNames: string[];
     reservedNames: string[];
   },
   absoluteDeadlineMs?: number,
@@ -212,20 +230,31 @@ async function targetSummaries(
   const editor = await readEditorCatalogSummary(flags, editorRuntime, requestIdForTarget(runtime, requestId, "editor"), {
     group: query.group,
     keyword: query.keyword,
-    afterName: query.afterName,
     limit: query.limit,
     expectedGeneration: query.expectedEditorGeneration,
     reservedNames: query.reservedNames,
+    localNames: query.localNames,
+    cursorContext: query.cursorContext,
+    cursorToken: query.editorCursorToken,
   }, absoluteDeadlineMs);
   if (!editor.ok && !OFFLINE_CODES.has(editor.error.code)) return { failure: editor };
 
-  const runtimeTarget = await readRuntimeCatalogSummary(flags, runtimeForTarget(runtime, "runtime"), requestIdForTarget(runtime, requestId, "runtime"), {
+  const runtimeTarget = await readRuntimeCatalogSummary(flags, runtimeForTarget(runtime, "runtime"), requestIdForTarget(runtime, requestId, "runtime"), editor.ok ? {
     group: query.group,
     keyword: query.keyword,
-    afterName: query.afterName,
+    afterName: editor.cursorBoundary,
     limit: query.limit,
     expectedGeneration: query.expectedRuntimeGeneration,
     reservedNames: query.reservedNames,
+  } : {
+    group: query.group,
+    keyword: query.keyword,
+    limit: query.limit,
+    expectedGeneration: query.expectedRuntimeGeneration,
+    reservedNames: query.reservedNames,
+    localNames: query.localNames,
+    cursorContext: query.cursorContext,
+    cursorToken: query.runtimeCursorToken,
   }, absoluteDeadlineMs);
   if (!runtimeTarget.ok && !OFFLINE_CODES.has(runtimeTarget.error.code)) return { failure: runtimeTarget };
   return {
@@ -267,8 +296,11 @@ function requestIdForTarget(runtime: ToolCatalogRuntime, requestId: string, targ
 
 function validateTargetContinuity(cursor: CatalogCursor | undefined, targets: TargetSummaries, requestId: string): CliResult | undefined {
   if (!cursor) return undefined;
-  if (Boolean(cursor.generations.editor) !== Boolean(targets.editor?.ok)) return catalogChanged(requestId);
-  if (Boolean(cursor.generations.runtime) !== Boolean(targets.runtime?.ok)) return catalogChanged(requestId);
+  if (Boolean(cursor.generations.editor) !== Boolean(targets.editor?.ok)
+      || Boolean(cursor.generations.runtime) !== Boolean(targets.runtime?.ok)) return catalogChanged(requestId);
+  if (targets.editor?.ok) {
+    if (!cursor.tokens.editor || cursor.tokens.runtime) return catalogChanged(requestId);
+  } else if (targets.runtime?.ok && (!cursor.tokens.runtime || cursor.tokens.editor)) return catalogChanged(requestId);
   return undefined;
 }
 
@@ -339,17 +371,36 @@ function decodeCursor(value: string): CatalogCursor | undefined {
   try {
     const parsed = JSON.parse(Buffer.from(value.slice(3), "base64url").toString("utf8")) as Partial<CatalogCursor>;
     const generations = parsed.generations;
-    if (!parsed || Object.keys(parsed).some((key) => !["version", "operation", "afterName", "generations"].includes(key))
+    const tokens = parsed.tokens;
+    if (!parsed || Object.keys(parsed).some((key) => !["version", "operation", "generations", "tokens"].includes(key))
         || parsed.version !== 1 || typeof parsed.operation !== "string" || !parsed.operation || parsed.operation.length > 2300
-        || typeof parsed.afterName !== "string" || !parsed.afterName || parsed.afterName.length > 256
         || !generations || Object.keys(generations).some((key) => !["local", "editor", "runtime"].includes(key))
         || typeof generations.local !== "string" || !generations.local || generations.local.length > 128
         || (generations.editor !== undefined && (typeof generations.editor !== "string" || !generations.editor || generations.editor.length > 128))
-        || (generations.runtime !== undefined && (typeof generations.runtime !== "string" || !generations.runtime || generations.runtime.length > 128))) return undefined;
+        || (generations.runtime !== undefined && (typeof generations.runtime !== "string" || !generations.runtime || generations.runtime.length > 128))
+        || !tokens || Object.keys(tokens).some((key) => !["editor", "runtime"].includes(key))
+        || (tokens.editor !== undefined && (typeof tokens.editor !== "string" || !tokens.editor || tokens.editor.length > MAX_CATALOG_CURSOR_LENGTH))
+        || (tokens.runtime !== undefined && (typeof tokens.runtime !== "string" || !tokens.runtime || tokens.runtime.length > MAX_CATALOG_CURSOR_LENGTH))) return undefined;
     return parsed as CatalogCursor;
   } catch {
     return undefined;
   }
+}
+
+/** scope同时绑定operation、query与本地catalog generation，不能跨命令复用。 */
+function catalogCursorContext(
+  operation: string,
+  filter: { group?: string; keyword?: string },
+  localGeneration: string,
+  localNames: string[],
+): string {
+  return createHash("sha256").update(JSON.stringify({
+    operation,
+    group: filter.group ?? "",
+    keyword: filter.keyword ?? "",
+    localGeneration,
+    localNames,
+  }), "utf8").digest("hex");
 }
 
 function filterLocalTools(

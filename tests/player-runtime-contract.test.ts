@@ -140,17 +140,25 @@ test("Runtime controls stay session-only and package-gated", async () => {
   assert.doesNotMatch(tools, /Type\.GetType\([^\n]*requested|GetMethod\([^\n]*requested/);
 });
 
-test("nested tools discovery uses distinct immutable runtime request identities", async () => {
-  const files = {
-    "src/tools/tools/describe.ts": "_describe_execution",
-    "src/tools/tools/group.ts": "_group_execution",
-    "src/tools/tools/group-list.ts": "_group_list_execution",
-    "src/tools/tools/search.ts": "_search_execution",
-  };
-  for (const [path, suffix] of Object.entries(files)) {
-    const source = await readFile(path, "utf8");
-    assert.ok(source.includes(`context.requestId}${suffix}`), path);
-  }
+test("tools discovery is a direct control-plane and keeps the root request identity", async () => {
+  const source = await readFile("src/tools/commands.ts", "utf8");
+  assert.match(source, /projectCatalogGroups\(flags, rootRuntime, requestId/);
+  assert.match(source, /projectCatalogPage\([^\n]+[\s\S]*rootRuntime, requestId/);
+  assert.match(source, /projectCatalogDescribe\(name, flags, rootRuntime, requestId/);
+  assert.equal(source.match(/dispatchTool\(/g)?.length, 1, "only tools run may enter the Tool dispatcher");
+  assert.match(source, /if \(command === "run"\)[\s\S]{0,240}return dispatchTool\(/);
+  assert.doesNotMatch(source, /requestId\s*\+|`\$\{requestId\}[_-]/, "discovery must not mint a second request identity");
+  for (const obsolete of ["tools/describe", "tools/group", "tools/group-list", "tools/search", "tools/pagination"])
+    assert.equal(source.includes(obsolete), false, obsolete);
+});
+
+test("Runtime describe reaches the private exact-name payload validator", async () => {
+  const { bridge } = await sources();
+  assert.match(bridge, /if \(RuntimeCatalogReadCommand\(command\)\)[\s\S]{0,240}ValidateRuntimeCatalogInput\(command, input\)/);
+  const describeValidation = bridge.match(/if \(string\.Equals\(command, "runtime-tool\.describe"[\s\S]*?\n\s*}\n\s*if \(!HasOnlyKeys\(input\)\)/)?.[0] ?? "";
+  assert.match(describeValidation, /HasOnlyKeys\(input, "name"\)/);
+  assert.doesNotMatch(describeValidation, /fallbackName/);
+  assert.match(bridge, /ValidateRuntimeCatalogInput[\s\S]*runtime-tool\.describe/);
 });
 
 test("runtime JSON rejects duplicate keys, trailing tokens, BOM-body use and non-finite output", async () => {

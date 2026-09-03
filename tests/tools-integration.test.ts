@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { BridgeRequest, RootAdmissionLease, RootAdmissionRequest } from "../src/bridge/index.js";
-import { readEditorCatalogDescriptor, readEditorCatalogSummary } from "../src/catalog-protocol.js";
+import { readEditorCatalogDescriptor, readEditorCatalogSummary, readRuntimeCatalogDescriptor } from "../src/catalog-protocol.js";
 import { execute } from "../src/cli.js";
 import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
@@ -94,7 +94,25 @@ test("each discovery root performs one bounded catalog transport per target", as
     bridgeExecute: async (payload: BridgeRequest) => {
       calls.set(payload.command, (calls.get(payload.command) ?? 0) + 1);
       if (payload.command.endsWith(".groups")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, groups: payload.command.startsWith("project") ? [{ name: live.group, toolCount: 1 }] : [] } };
-      if (payload.command.endsWith(".summary")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, total: payload.command.startsWith("project") ? 1 : 0, hasMore: false, tools: payload.command.startsWith("project") ? [summary] : [] } };
+      if (payload.command.endsWith(".summary")) {
+        const input = payload.input as { limit: number; localNames?: string[] };
+        const liveNames = payload.command.startsWith("project") ? [summary.name] : [];
+        const allNames = [...new Set([...(input.localNames ?? []), ...liveNames])].sort();
+        const pageNames = allNames.slice(0, input.limit);
+        const data = {
+          catalogGeneration: `${payload.command}-generation`,
+          total: liveNames.length,
+          hasMore: allNames.length > input.limit,
+          tools: payload.command.startsWith("project") && pageNames.includes(summary.name) ? [summary] : [],
+        };
+        return { ok: true as const, requestId: payload.requestId, data: input.localNames ? {
+          ...data,
+          cursorOffset: 0,
+          cursorBoundary: "",
+          pageNames,
+          continuationToken: `${payload.command}-opaque`,
+        } : data };
+      }
       if (payload.command.endsWith(".describe")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, found: payload.command.startsWith("project"), ...(payload.command.startsWith("project") ? { descriptor: descriptorPayload } : {}) } };
       throw new Error(`unexpected catalog command ${payload.command}`);
     },
@@ -206,6 +224,20 @@ test("summary protocol bounds a large catalog before transport projection", asyn
   assert.equal(result.hasMore, true);
   assert.ok(Buffer.byteLength(JSON.stringify(result.tools), "utf8") < 128 * 1024);
   assert.ok(result.tools.every((tool) => !Object.hasOwn(tool, "outputSchema") && !Object.hasOwn(tool, "inputSchema")));
+
+  const multibyte = await readEditorCatalogSummary({}, { projectTools: [makeLiveTool({
+    name: "fixture.multibyte",
+    summary: `${"界".repeat(170)}ab`,
+    group: "fixture",
+  })] }, "req_multibyte_summary", { limit: 101, reservedNames: [] });
+  assert.equal(multibyte.ok, true, JSON.stringify(multibyte));
+  const oversizedMultibyte = await readEditorCatalogSummary({}, { projectTools: [makeLiveTool({
+    name: "fixture.multibyte-too-large",
+    summary: `${"界".repeat(170)}abc`,
+    group: "fixture",
+  })] }, "req_multibyte_summary_large", { limit: 101, reservedNames: [] });
+  assert.equal(oversizedMultibyte.ok, false);
+  if (!oversizedMultibyte.ok) assert.equal(oversizedMultibyte.error.code, "E_TOOL_REGISTRY_UNHEALTHY");
 });
 
 test("private summary and exact protocols fail closed on extra payload and wrong identity", async () => {
@@ -257,6 +289,18 @@ test("private summary and exact protocols fail closed on extra payload and wrong
   }, "req_fallback_exact", "scene.active", undefined, live.name);
   assert.equal(fallbackExact.ok, true, JSON.stringify(fallbackExact));
   assert.equal(fallbackCalls, 1);
+
+  let runtimeDescribeCalls = 0;
+  const runtimeExact = await readRuntimeCatalogDescriptor({}, {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      runtimeDescribeCalls += 1;
+      assert.equal(payload.command, "runtime-tool.describe");
+      assert.deepEqual(payload.input, { name: live.name });
+      return { ok: true, requestId: payload.requestId, data: { catalogGeneration: "r".repeat(64), found: false } };
+    },
+  }, "req_runtime_exact", live.name);
+  assert.equal(runtimeExact.ok, true, JSON.stringify(runtimeExact));
+  assert.equal(runtimeDescribeCalls, 1);
 
   const oversizedExact = await readEditorCatalogDescriptor({}, {
     bridgeExecute: async (payload: BridgeRequest) => ({
@@ -382,6 +426,20 @@ test("discovery pagination returns stable continuation pages and rejects invalid
   assert.equal(firstData.pageInfo.total, 25);
   assert.match(firstData.pageInfo.nextCursor ?? "", /^v1\./);
   assert.equal(firstData.tools.length, 20);
+
+  const alterSignedBoundary = (cursor: string, boundary: string): string => {
+    const outer = JSON.parse(Buffer.from(cursor.slice(3), "base64url").toString("utf8")) as { tokens: { editor: string } };
+    const [payload, signature] = outer.tokens.editor.split(".");
+    const inner = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
+    inner.boundary = boundary;
+    outer.tokens.editor = `${Buffer.from(JSON.stringify(inner), "utf8").toString("base64url")}.${signature}`;
+    return `v1.${Buffer.from(JSON.stringify(outer), "utf8").toString("base64url")}`;
+  };
+  for (const boundary of [projectTools[24].name, "fixture.page-unknown-boundary"]) {
+    const altered = await execute(["tools", "search", "page-hit", "--cursor", alterSignedBoundary(firstData.pageInfo.nextCursor!, boundary)], runtime as never);
+    assert.equal(altered.ok, false, boundary);
+    if (!altered.ok) assert.equal(altered.error.code, "E_DISCOVERY_CURSOR_INVALID", boundary);
+  }
 
   const second = await execute(["tools", "search", "page-hit", "--cursor", firstData.pageInfo.nextCursor!], runtime as never);
   assert.ok(second.ok, JSON.stringify(second));

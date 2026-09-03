@@ -208,11 +208,7 @@ namespace UnityCli
     {
         DiscoveryPass,
         ProviderMetadataRead,
-        AssetDatabase,
-        SourceFileRead,
-        PersistedToolValue,
-        AggregateSuccessLog,
-        PerToolSuccessLog
+        AggregateSuccessLog
     }
 
     /// <summary>候选构建期唯一操作账本；所有计数只能由生产动作发生点写入。</summary>
@@ -261,11 +257,7 @@ namespace UnityCli
             ElapsedMilliseconds = Math.Max(0, elapsedMilliseconds);
             DiscoveryPassCount = operations.Count(UnityCliToolCatalogOperationKind.DiscoveryPass);
             ProviderMetadataReadCount = operations.Count(UnityCliToolCatalogOperationKind.ProviderMetadataRead);
-            AssetDatabaseOperationCount = operations.Count(UnityCliToolCatalogOperationKind.AssetDatabase);
-            SourceFileReadCount = operations.Count(UnityCliToolCatalogOperationKind.SourceFileRead);
-            PersistedToolValueOperationCount = operations.Count(UnityCliToolCatalogOperationKind.PersistedToolValue);
             AggregateSuccessLogCount = operations.Count(UnityCliToolCatalogOperationKind.AggregateSuccessLog);
-            PerToolSuccessLogCount = operations.Count(UnityCliToolCatalogOperationKind.PerToolSuccessLog);
         }
 
         public IReadOnlyList<RegisteredToolDescriptor> Descriptors { get; }
@@ -279,11 +271,7 @@ namespace UnityCli
         public long ElapsedMilliseconds { get; }
         public int DiscoveryPassCount { get; }
         public int ProviderMetadataReadCount { get; }
-        public int AssetDatabaseOperationCount { get; }
-        public int SourceFileReadCount { get; }
-        public int PersistedToolValueOperationCount { get; }
         public int AggregateSuccessLogCount { get; }
-        public int PerToolSuccessLogCount { get; }
     }
 
     /// <summary>doctor 可独立读取的 bounded health；失败时不暴露 executable table。</summary>
@@ -421,12 +409,15 @@ namespace UnityCli
                 || string.IsNullOrWhiteSpace(definition.Description) || string.IsNullOrWhiteSpace(definition.Group)
                 || definition.CloneExamples() == null || definition.InvokeAsync == null)
                 throw new ArgumentException("Tool registration requires name, summary, description, group, examples, and a typed async invoker.");
-            if (definition.Name.Length > 256 || definition.Summary.Length > 512 || definition.Group.Length > 256
-                || definition.Description.Length > 65536
-                || Encoding.UTF8.GetByteCount(definition.InputSchema ?? string.Empty) > 1024 * 1024
-                || Encoding.UTF8.GetByteCount(definition.OutputSchema ?? string.Empty) > 1024 * 1024
-                || Encoding.UTF8.GetByteCount(definition.ExamplesJson ?? string.Empty) > 256 * 1024)
-                throw new ArgumentException("Tool descriptor exceeds a catalog transport bound: " + definition.Name);
+            if (Utf8ByteCount(definition.Name) > 256 || Utf8ByteCount(definition.Summary) > 512
+                || Utf8ByteCount(definition.Group) > 256 || Utf8ByteCount(definition.Description) > 65536
+                || Utf8ByteCount(definition.InputSchema) > 1024 * 1024
+                || Utf8ByteCount(definition.OutputSchema) > 1024 * 1024
+                || Utf8ByteCount(definition.ExamplesJson) > 256 * 1024
+                || !BoundedStringList(definition.SideEffects, 128, 256)
+                || !BoundedStringList(definition.Permissions, 128, 256)
+                || !BoundedStringList(definition.RequiresPackages, 128, 256))
+                throw new ArgumentException("Tool descriptor exceeds a UTF-8 catalog transport bound: " + definition.Name);
             if (definition.RequestType == null || definition.ResultType == null
                 || string.IsNullOrWhiteSpace(definition.InputSchema) || string.IsNullOrWhiteSpace(definition.OutputSchema)
                 || !(UnityCliSerializer.Parse(definition.InputSchema) is IDictionary<string, object>)
@@ -485,6 +476,21 @@ namespace UnityCli
             if ((providerKind == UnityCliToolProviderKind.OfficialAttribute && (!usesOfficialName || !usesOfficialGroup))
                 || (providerKind != UnityCliToolProviderKind.OfficialAttribute && (usesOfficialName || usesOfficialGroup)))
                 throw new InvalidOperationException("Tool provider kind does not match the reserved official attribute namespace: " + definition.Name);
+        }
+
+        /// <summary>descriptor field bound统一按wire UTF-8字节计算。</summary>
+        private static int Utf8ByteCount(string value)
+        {
+            return Encoding.UTF8.GetByteCount(value ?? string.Empty);
+        }
+
+        /// <summary>限制公开字符串数组的条目数与单项UTF-8大小。</summary>
+        private static bool BoundedStringList(IEnumerable<string> values, int maximumCount, int maximumItemBytes)
+        {
+            if (values == null) return true;
+            var items = values.ToArray();
+            return items.Length <= maximumCount
+                && items.All(value => !string.IsNullOrWhiteSpace(value) && Utf8ByteCount(value) <= maximumItemBytes);
         }
     }
 }

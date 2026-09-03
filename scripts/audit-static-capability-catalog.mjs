@@ -18,6 +18,7 @@ if (Object.hasOwn(catalog, "contexts")) failures.push("Static catalog contains f
 const forbiddenDescriptorFields = new Set([
   "artifactKinds", "capabilityType", "cliCommand", "completionContract", "defaultTimeoutMs", "handler",
   "maxTimeoutMs", "refreshBehavior", "supportStatus", "supportsJob", "version",
+  ["descriptor", "Fingerprint"].join(""), ["handler", "Fingerprint"].join(""), ["finger", "print"].join(""),
   ["Project", "Tool", "Handler", "Source"].join(""),
   ["internal", "Descriptor", "Fingerprint"].join(""),
   ["live", "Descriptor", "Fingerprint"].join(""),
@@ -27,6 +28,7 @@ const forbiddenOutputFields = new Set([
   "actualPort", "audit", "bridgeCommand", "bridgeEndpoint", "bridgeEndpointUrl", "bridgeUrl", "command", "commandLine",
   "endpoint", "endpointUrl", "execution", "handler", "hwnd", "listenerGeneration", "listenerId", "logPath", "logs",
   "ownerHwnd", "port", "preferredPort", "route", "routing", "sourceListenerGeneration", "windowsCommandLine",
+  ["descriptor", "Fingerprint"].join(""), ["handler", "Fingerprint"].join(""),
   ["Project", "Tool", "Handler", "Source"].join(""),
   ["internal", "Descriptor", "Fingerprint"].join(""),
   ["live", "Descriptor", "Fingerprint"].join(""),

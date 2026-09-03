@@ -97,7 +97,7 @@ export async function resolveCatalogTool(
   const runtimeTargetRuntime = { ...runtime, rootAdmission: runtimeAdmission };
   const editor = await readEditorCatalogDescriptor(flags, editorRuntime, editorAdmission?.requestId ?? `${requestId}_editor_descriptor`, name, absoluteDeadlineMs, fallbackName);
   if (!editor.ok && editor.error.code !== "E_INSTANCE_NOT_RUNNING") return editor;
-  const runtimeDescriptor = await readRuntimeCatalogDescriptor(flags, runtimeTargetRuntime, runtimeAdmission?.requestId ?? `${requestId}_runtime_descriptor`, name, absoluteDeadlineMs, fallbackName);
+  const runtimeDescriptor = await readRuntimeCatalogDescriptor(flags, runtimeTargetRuntime, runtimeAdmission?.requestId ?? `${requestId}_runtime_descriptor`, name, absoluteDeadlineMs);
   if (!runtimeDescriptor.ok && runtimeDescriptor.error.code !== "E_RUNTIME_NOT_RUNNING") return runtimeDescriptor;
   if (!editor.ok && !runtimeDescriptor.ok) return editor;
 

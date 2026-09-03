@@ -25,10 +25,16 @@ namespace UnityCli
         private const int MaxRequestsPerFrame = 16;
         private const int RegistryRefreshSeconds = 30;
         private static UnityCliRuntimeBridge current;
+
+        private sealed class RuntimeCatalogCursorException : FormatException
+        {
+            internal RuntimeCatalogCursorException() : base("The Runtime catalog continuation is altered, stale, or belongs to another query.") { }
+        }
         private readonly ConcurrentQueue<PendingRequest> pending = new ConcurrentQueue<PendingRequest>();
         private readonly object requestCacheSync = new object();
         private readonly Dictionary<string, PendingRequest> requestCache = new Dictionary<string, PendingRequest>(StringComparer.Ordinal);
         private readonly CancellationTokenSource stopping = new CancellationTokenSource();
+        private readonly byte[] catalogCursorSecret = CreateCatalogCursorSecret();
         private long requestOrder;
         private long mainThreadPulseSequence;
         private long mainThreadPulseTimestamp;
@@ -365,7 +371,7 @@ namespace UnityCli
                     }
                     if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
                     {
-                        pendingRequest.Completion.TrySetResult(Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "total", 0L }, { "hasMore", false }, { "tools", new List<object>() } })); return;
+                        pendingRequest.Completion.TrySetResult(Success(requestId, RuntimeCatalogSummaryData(input, generation))); return;
                     }
                     if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
                     {
@@ -390,6 +396,7 @@ namespace UnityCli
                 pendingRequest.Completion.TrySetResult(Error(requestId, "E_TOOL_NOT_FOUND", "Runtime bridge command is not approved.", new[] { "Use the public Tool catalog to select a Runtime Tool." }));
             }
             catch (UnityCliRuntimeToolException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, exception.Code, exception.Message, new[] { "Run tools describe for the selected Runtime Tool and inspect the current Player session." })); }
+            catch (RuntimeCatalogCursorException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_DISCOVERY_CURSOR_INVALID", exception.Message, new[] { "Restart this exact discovery query from its first page." })); }
             catch (FormatException exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_SCHEMA_INVALID", exception.Message, new[] { "Use the Runtime bridge request schema." })); }
             catch (Exception exception) { pendingRequest.Completion.TrySetResult(Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime command failed before a terminal result was proven.", new[] { "Inspect Player logs and retry after the runtime is ready." })); Debug.LogWarning("UnityCli runtime main-thread command failed: " + exception.GetType().Name); }
             finally { if (pendingRequest.AdmissionOwner != null) CompleteRuntimeAdmissionRoot(pendingRequest.AdmissionOwner); }
@@ -407,12 +414,12 @@ namespace UnityCli
         private static void ValidateRuntimeCatalogInput(string command, Dictionary<string, object> input)
         {
             var expected = ReadString(input, "expectedCatalogGeneration");
-            if (expected != null && expected.Length > 128) throw new FormatException("Catalog generation exceeds its bounded string limit.");
+            if (expected != null && Encoding.UTF8.GetByteCount(expected) > 128) throw new FormatException("Catalog generation exceeds its bounded string limit.");
             object reservedValue;
             if (input.TryGetValue("reservedNames", out reservedValue))
             {
                 var reserved = reservedValue as List<object>;
-                if (reserved == null || reserved.Count > 4096 || reserved.Any(value => !(value is string) || string.IsNullOrWhiteSpace((string)value) || ((string)value).Length > 256))
+                if (reserved == null || reserved.Count > 4096 || reserved.Any(value => !(value is string) || string.IsNullOrWhiteSpace((string)value) || Encoding.UTF8.GetByteCount((string)value) > 256))
                     throw new FormatException("Catalog reserved names exceed their bounded item or string limits.");
             }
             if (string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal))
@@ -422,26 +429,149 @@ namespace UnityCli
             }
             if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
             {
-                if (!HasOnlyKeys(input, "group", "keyword", "afterName", "limit", "expectedCatalogGeneration", "reservedNames"))
+                if (!HasOnlyKeys(input, "group", "keyword", "afterName", "limit", "expectedCatalogGeneration", "reservedNames", "localNames", "cursorContext", "cursorToken"))
                     throw new FormatException("Runtime catalog summary input contains an unknown field.");
                 var limit = ReadLong(input, "limit");
                 if (limit < 1L || limit > 101L) throw new FormatException("Catalog summary limit must be an integer in [1,101].");
                 OptionalRuntimeCatalogString(input, "group", 256);
                 OptionalRuntimeCatalogString(input, "afterName", 256);
                 OptionalRuntimeCatalogString(input, "keyword", 2048);
+                OptionalRuntimeCatalogString(input, "cursorContext", 64);
+                OptionalRuntimeCatalogString(input, "cursorToken", 8192);
                 var keyword = ReadString(input, "keyword") ?? string.Empty;
                 var tokens = keyword.Split('|').Select(token => token.Trim()).Where(token => token.Length > 0).ToArray();
-                if (tokens.Length > 16 || tokens.Any(token => token.Length > 128))
-                    throw new FormatException("Catalog search accepts at most 16 keywords of at most 128 characters each.");
+                if (tokens.Length > 16 || tokens.Any(token => Encoding.UTF8.GetByteCount(token) > 128))
+                    throw new FormatException("Catalog search accepts at most 16 keywords of at most 128 UTF-8 bytes each.");
+                RuntimeCatalogStringList(input, "localNames", true);
                 return;
             }
             if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
             {
                 if (!HasOnlyKeys(input, "name")) throw new FormatException("Runtime catalog describe input contains an unknown field.");
-                RequiredString(input, "name", 256);
+                var name = RequiredString(input, "name", 256);
+                if (Encoding.UTF8.GetByteCount(name) > 256) throw new FormatException("Runtime catalog describe name exceeds 256 UTF-8 bytes.");
                 return;
             }
             if (!HasOnlyKeys(input)) throw new FormatException("Runtime catalog list input contains an unknown field.");
+        }
+
+        /// <summary>Runtime空live catalog仍签发本listener generation的opaque continuation并证明local page边界。</summary>
+        private Dictionary<string, object> RuntimeCatalogSummaryData(Dictionary<string, object> input, string generation)
+        {
+            var localNames = RuntimeCatalogStringList(input, "localNames", true);
+            var reservedNames = RuntimeCatalogStringList(input, "reservedNames", false);
+            if (localNames.Any(name => !reservedNames.Contains(name))) throw new FormatException("Catalog local names must be a subset of reserved names.");
+            var context = ReadString(input, "cursorContext");
+            if (string.IsNullOrEmpty(context)) return new Dictionary<string, object>
+            {
+                { "catalogGeneration", generation }, { "total", 0L }, { "hasMore", false }, { "tools", new List<object>() }
+            };
+            if (context.Length != 64 || context.Any(value => !Uri.IsHexDigit(value))
+                || !string.IsNullOrEmpty(ReadString(input, "afterName"))) throw new FormatException("Runtime catalog cursor context is invalid.");
+            var scope = Sha256(generation + "\n" + context + "\n" + (ReadString(input, "group") ?? string.Empty) + "\n"
+                + (ReadString(input, "keyword") ?? string.Empty) + "\n" + string.Join("\n", localNames) + "\n--reserved--\n"
+                + string.Join("\n", reservedNames));
+            int offset;
+            string boundary;
+            ReadRuntimeCatalogCursor(ReadString(input, "cursorToken"), scope, out offset, out boundary);
+            if (offset > localNames.Count || offset > 0 && !string.Equals(localNames[offset - 1], boundary, StringComparison.Ordinal))
+                throw new RuntimeCatalogCursorException();
+            var limit = (int)ReadLong(input, "limit");
+            var pageNames = localNames.Skip(offset).Take(limit).ToList();
+            var end = offset + pageNames.Count;
+            var data = new Dictionary<string, object>
+            {
+                { "catalogGeneration", generation }, { "total", 0L }, { "hasMore", end < localNames.Count },
+                { "tools", new List<object>() }, { "cursorOffset", (long)offset },
+                { "cursorBoundary", boundary }, { "pageNames", pageNames.Cast<object>().ToList() },
+                { "continuationToken", SignRuntimeCatalogCursor(scope, end, end > 0 ? localNames[end - 1] : string.Empty) }
+            };
+            if (Encoding.UTF8.GetByteCount(UnityCliRuntimeJson.Serialize(data)) > 256 * 1024)
+                throw new FormatException("Runtime catalog summary exceeds the bounded UTF-8 transport size.");
+            return data;
+        }
+
+        /// <summary>解析并按UTF-8预算校验Runtime catalog名称集合。</summary>
+        private static List<string> RuntimeCatalogStringList(Dictionary<string, object> input, string key, bool requireSorted)
+        {
+            object raw;
+            if (!input.TryGetValue(key, out raw)) return new List<string>();
+            var values = raw as List<object>;
+            if (values == null || values.Count > 4096 || values.Any(value => !(value is string)
+                || string.IsNullOrWhiteSpace((string)value) || Encoding.UTF8.GetByteCount((string)value) > 256))
+                throw new FormatException("Runtime catalog field " + key + " is invalid.");
+            var result = values.Cast<string>().ToList();
+            if (requireSorted && !result.SequenceEqual(result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)))
+                throw new FormatException("Runtime catalog local names must be ordinally sorted and unique.");
+            return result;
+        }
+
+        /// <summary>验证当前Player listener签发的continuation并恢复边界。</summary>
+        private void ReadRuntimeCatalogCursor(string token, string scope, out int offset, out string boundary)
+        {
+            offset = 0;
+            boundary = string.Empty;
+            if (string.IsNullOrEmpty(token)) return;
+            try
+            {
+                var parts = token.Split('.');
+                if (parts.Length != 2) throw new RuntimeCatalogCursorException();
+                var signature = RuntimeBase64UrlDecode(parts[1]);
+                byte[] expected;
+                using (var hmac = new HMACSHA256(catalogCursorSecret)) expected = hmac.ComputeHash(Encoding.UTF8.GetBytes(parts[0]));
+                if (!RuntimeFixedTimeEqual(signature, expected)) throw new RuntimeCatalogCursorException();
+                var fields = Encoding.UTF8.GetString(RuntimeBase64UrlDecode(parts[0])).Split('\n');
+                int parsed;
+                if (fields.Length != 3 || !string.Equals(fields[0], scope, StringComparison.Ordinal)
+                    || !int.TryParse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture, out parsed) || parsed < 0)
+                    throw new RuntimeCatalogCursorException();
+                offset = parsed;
+                boundary = Encoding.UTF8.GetString(Convert.FromBase64String(fields[2]));
+            }
+            catch (RuntimeCatalogCursorException) { throw; }
+            catch { throw new RuntimeCatalogCursorException(); }
+        }
+
+        /// <summary>使用当前Player listener secret签发opaque continuation。</summary>
+        private string SignRuntimeCatalogCursor(string scope, int offset, string boundary)
+        {
+            var payloadText = scope + "\n" + offset.ToString(CultureInfo.InvariantCulture) + "\n"
+                + Convert.ToBase64String(Encoding.UTF8.GetBytes(boundary ?? string.Empty));
+            var payload = RuntimeBase64UrlEncode(Encoding.UTF8.GetBytes(payloadText));
+            byte[] signature;
+            using (var hmac = new HMACSHA256(catalogCursorSecret)) signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+            return payload + "." + RuntimeBase64UrlEncode(signature);
+        }
+
+        /// <summary>secret不落盘，Player listener重启后旧token失效。</summary>
+        private static byte[] CreateCatalogCursorSecret()
+        {
+            var bytes = new byte[32];
+            using (var random = RandomNumberGenerator.Create()) random.GetBytes(bytes);
+            return bytes;
+        }
+
+        /// <summary>编码URL安全token片段。</summary>
+        private static string RuntimeBase64UrlEncode(byte[] value)
+        {
+            return Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        /// <summary>解码URL安全token片段。</summary>
+        private static byte[] RuntimeBase64UrlDecode(string value)
+        {
+            var normalized = value.Replace('-', '+').Replace('_', '/');
+            normalized = normalized.PadRight(normalized.Length + (4 - normalized.Length % 4) % 4, '=');
+            return Convert.FromBase64String(normalized);
+        }
+
+        /// <summary>常量步数比较Runtime token签名。</summary>
+        private static bool RuntimeFixedTimeEqual(byte[] left, byte[] right)
+        {
+            if (left == null || right == null || left.Length != right.Length) return false;
+            var difference = 0;
+            for (var index = 0; index < left.Length; index++) difference |= left[index] ^ right[index];
+            return difference == 0;
         }
 
         private static void OptionalRuntimeCatalogString(Dictionary<string, object> input, string key, int maximum)
@@ -449,7 +579,7 @@ namespace UnityCli
             object value;
             if (!input.TryGetValue(key, out value)) return;
             var text = value as string;
-            if (text == null || text.Length > maximum) throw new FormatException("Runtime catalog field " + key + " is invalid.");
+            if (text == null || Encoding.UTF8.GetByteCount(text) > maximum) throw new FormatException("Runtime catalog field " + key + " is invalid.");
         }
 
         private void CompleteRuntimeAdmissionRoot(UnityCliAdmissionPool.ConsumedIdentity identity)

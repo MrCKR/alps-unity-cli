@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { BridgeRequest } from "../src/bridge/index.js";
+import type { BridgeRequest, RootAdmissionLease, RootAdmissionRequest } from "../src/bridge/index.js";
 import { execute } from "../src/cli.js";
 import { builtinToolMetadata, type ToolMetadata } from "../src/tools/metadata/index.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
@@ -220,6 +220,94 @@ test("command名称选择保持native exact优先且不做相似能力映射", a
   assert.deepEqual(requests.map((request) => (request.input as { name: string }).name), ["eval", "UnityPipeline_eval"]);
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.error.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+});
+
+test("online command resolution uses exact Runtime describe without injected projectTools or extra business posts", async () => {
+  const native = makeLiveTool({ name: "fixture.native", summary: "Native fixture.", description: "Resolve one native fixture.", group: "fixture" });
+  const attribute = attributeEvalTool();
+  const descriptors = new Map([native, attribute].map((tool) => [tool.name, {
+    name: tool.name,
+    summary: tool.summary,
+    description: tool.description,
+    group: tool.group,
+    source: tool.source,
+    inputSchema: tool.inputSchema,
+    outputSchema: tool.outputSchema,
+    destructiveHint: tool.destructiveHint,
+    supportsDryRun: tool.supportsDryRun ?? false,
+    examples: tool.examples,
+    target: tool.target ?? "editor",
+    availabilityScope: tool.availabilityScope ?? "editorSession",
+    playModeSupport: tool.playModeSupport ?? "supported",
+    contractProfile: tool.contractProfile ?? "native",
+    defaultTimeoutMs: tool.timeoutMs ?? 30_000,
+    completionContract: tool.completionContract,
+  }]));
+  const requests: BridgeRequest[] = [];
+  const runtime = {
+    dataDir,
+    createSessionSupervisor: () => ({
+      acquireRootAdmission: async (request: RootAdmissionRequest): Promise<RootAdmissionLease> => ({
+        requestId: request.requestId,
+        command: request.command,
+        rootFingerprint: (request.target === "editor" ? "a" : "b").repeat(64),
+        completionContractIdentity: request.completionContractIdentity,
+        target: request.target,
+        instanceId: `unity-${(request.target === "editor" ? "c" : "d").repeat(64)}`,
+        canonicalProjectPath: "c:\\fixture",
+        sessionId: `session-${request.target}`,
+        listenerId: `listener-${request.target}`,
+        listenerGeneration: 1,
+        token: (request.target === "editor" ? "e" : "f").repeat(64),
+        consumed: false,
+        grantExpiresAtMs: Date.now() + 30_000,
+        executionAbsoluteDeadlineMs: Date.now() + 30_000,
+        injected: true,
+      }),
+      completeRootAdmission: async () => undefined,
+    }),
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      if (payload.command === "project-tool.describe") {
+        const input = payload.input as { name: string; fallbackName?: string };
+        const selected = descriptors.get(input.name) ?? (input.fallbackName ? descriptors.get(input.fallbackName) : undefined);
+        return { ok: true as const, requestId: payload.requestId, data: {
+          catalogGeneration: "e".repeat(64), found: Boolean(selected), ...(selected ? { descriptor: selected } : {}),
+        } };
+      }
+      if (payload.command === "runtime-tool.describe") {
+        assert.deepEqual(Object.keys(payload.input as object), ["name"]);
+        return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: "r".repeat(64), found: false } };
+      }
+      if (payload.command === "runtime-tool.run") return { ok: true as const, requestId: payload.requestId, data: { result: {
+        runtimeSessionId: "runtime-session", buildId: "build", observedAt: "2026-01-01T00:00:00Z", unityVersion: "6000.0", platform: "WindowsPlayer", productName: "Fixture", applicationVersion: "1",
+        scene: { name: "Scene", buildIndex: 0, isLoaded: true }, frame: { frameCount: 1, realtimeSinceStartup: 1, targetFrameRate: 60 },
+        time: { timeScale: 1, time: 1, unscaledTime: 1 }, screen: { width: 1, height: 1, dpi: 96, fullScreen: false, focused: true },
+        memory: { totalAllocatedBytes: 1, totalReservedBytes: 1, totalUnusedReservedBytes: 0 },
+      } } };
+      return { ok: true as const, requestId: payload.requestId, data: { result: {} } };
+    },
+  };
+  assert.equal(Object.hasOwn(runtime, "projectTools"), false);
+
+  for (const argv of [
+    ["command", native.name],
+    ["command", "runtime.state"],
+    ["command", "eval", "--code", "return 1;"],
+    ["command", "eval", "--help"],
+    ["command", "runtime.state", "--help"],
+  ]) {
+    const result = await execute(argv, runtime as never);
+    assert.equal(result.ok, true, `${argv.join(" ")}: ${JSON.stringify(result)}`);
+  }
+
+  const runtimeDescribes = requests.filter((request) => request.command === "runtime-tool.describe");
+  assert.ok(runtimeDescribes.length >= 5);
+  assert.ok(runtimeDescribes.every((request) => JSON.stringify(request.input) === JSON.stringify({ name: (request.input as { name: string }).name })));
+  const editorShort = requests.find((request) => request.command === "project-tool.describe" && (request.input as { name: string }).name === "eval");
+  assert.deepEqual(editorShort?.input, { name: "eval", fallbackName: "UnityPipeline_eval" });
+  const business = requests.filter((request) => request.command.endsWith("-tool.run"));
+  assert.deepEqual(business.map((request) => request.command), ["project-tool.run", "runtime-tool.run", "project-tool.run"]);
 });
 
 test("command在effect前拒绝未知、缺值、重复与positional溢出", async () => {

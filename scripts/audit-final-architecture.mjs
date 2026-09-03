@@ -111,6 +111,19 @@ function namedTypeBodies(text, suffix) {
   return bodies;
 }
 
+/** JSON contract中只把descriptor entry自身的fingerprint视为top-level字段，业务schema同名字段不误报。 */
+function countStaticCatalogJsonFields(value, forbiddenFields) {
+  if (Array.isArray(value)) return value.reduce((total, item) => total + countStaticCatalogJsonFields(item, forbiddenFields), 0);
+  if (!value || typeof value !== "object") return 0;
+  const keys = Object.keys(value);
+  const forbiddenLower = new Set([...forbiddenFields].map((field) => field.toLowerCase()));
+  const descriptorEntry = (typeof value.name === "string" || typeof value.toolName === "string")
+    && (Object.hasOwn(value, "summary") || Object.hasOwn(value, "group") || Object.hasOwn(value, "inputSchema"));
+  const ownCount = keys.filter((key) => forbiddenLower.has(key.toLowerCase())
+    && (key.toLowerCase() !== "fingerprint" || descriptorEntry)).length;
+  return ownCount + Object.values(value).reduce((total, item) => total + countStaticCatalogJsonFields(item, forbiddenFields), 0);
+}
+
 /** 统计生产路径内禁止残留的符号或结构。 */
 function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
   const searchRoots = allTextFiles.map((path) => ({ path: repoPath(path), text: readText(path) }));
@@ -158,6 +171,68 @@ function residualChecks(allTextFiles, csharpFiles, multiCapabilityFiles) {
     expected: 0,
     actual: generatedOrContractResiduals.reduce((sum, entry) => sum + entry.count, 0),
     files: generatedOrContractResiduals,
+  });
+
+  const forbiddenStaticCatalogFields = [
+    ["descriptor", "Fingerprint"].join(""),
+    ["handler", "Fingerprint"].join(""),
+    ["finger", "print"].join(""),
+  ];
+  const staticCatalogFieldPattern = new RegExp(`(?:["'](?:${forbiddenStaticCatalogFields.join("|")})["']\\s*:|\\b(?:${forbiddenStaticCatalogFields.join("|")})\\s*(?:[?]?:|\\{|=))`, "gi");
+  const staticCatalogFieldResiduals = searchRoots
+    .filter((entry) => entry.path !== "scripts/audit-final-architecture.mjs")
+    .filter((entry) => entry.path.startsWith("contracts/")
+      || entry.path.startsWith("schemas/")
+      || entry.path.startsWith("scripts/")
+      || entry.path.includes("/.generated-")
+      || entry.path.includes("/Generated/")
+      || entry.path.endsWith(".g.cs"))
+    .map((entry) => {
+      if (!entry.path.endsWith(".json")) return { path: entry.path, count: countMatches(entry.text, staticCatalogFieldPattern) };
+      try { return { path: entry.path, count: countStaticCatalogJsonFields(JSON.parse(entry.text), new Set(forbiddenStaticCatalogFields)) }; }
+      catch { return { path: entry.path, count: 0 }; }
+    })
+    .filter((entry) => entry.count > 0);
+  checks.push({
+    id: "staticCatalogForbiddenFields",
+    expected: 0,
+    actual: staticCatalogFieldResiduals.reduce((sum, entry) => sum + entry.count, 0),
+    files: staticCatalogFieldResiduals,
+  });
+
+  const bridgeSource = searchRoots.find((entry) => entry.path === "unitypkg/Editor/UnityCliBridge.cs")?.text ?? "";
+  const staticConstructorStart = bridgeSource.indexOf("static UnityCliBridge()");
+  const staticConstructorEnd = bridgeSource.indexOf("private static", staticConstructorStart + 1);
+  const staticConstructor = staticConstructorStart >= 0 && staticConstructorEnd > staticConstructorStart
+    ? bridgeSource.slice(staticConstructorStart, staticConstructorEnd)
+      .replace("AssetDatabase.IsAssetImportWorkerProcess()", "AllowedAssetImportWorkerGuard()")
+    : bridgeSource;
+  const catalogRegistry = searchRoots.find((entry) => entry.path === "unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs")?.text ?? "";
+  const constructionStart = catalogRegistry.indexOf("private static void InitializeProjectToolCatalog()");
+  const constructionEnd = catalogRegistry.indexOf("private static bool ProjectToolCatalogMatches", constructionStart);
+  const constructionGraph = constructionStart >= 0 && constructionEnd > constructionStart
+    ? catalogRegistry.slice(constructionStart, constructionEnd)
+    : catalogRegistry;
+  const constructionOwnerPaths = [
+    "unitypkg/Editor/ProjectTools/IUnityCliTool.cs",
+    "unitypkg/Editor/ProjectTools/RegisteredTool.cs",
+    "unitypkg/Editor/Infrastructure/RegistryOwnershipResolver.cs",
+    "unitypkg/Editor/ProjectTools/OfficialAttributeToolRegistry.cs",
+    "unitypkg/Editor/ProjectTools/ProjectToolSchemaValidator.cs",
+    "unitypkg/Editor/ProjectTools/UnityCliSchemaDeriver.cs",
+    "unitypkg/Editor/Infrastructure/UnityCliSerializer.cs",
+  ];
+  const constructionOwnerSources = constructionOwnerPaths
+    .map((path) => searchRoots.find((entry) => entry.path === path)?.text ?? "")
+    .join("\n");
+  const observableConstructionGraph = `${staticConstructor}\n${constructionGraph}\n${constructionOwnerSources}`;
+  const forbiddenConstructionIo = /\b(?:AssetDatabase|EditorPrefs|SessionState|PlayerPrefs)\b|\b(?:File|Directory)\s*\.|WriteLog\([^\r\n]*(?:completed|registered|success)/gi;
+  const forbiddenConstructionCount = countMatches(observableConstructionGraph, forbiddenConstructionIo);
+  checks.push({
+    id: "catalogConstructionForbiddenIo",
+    expected: 0,
+    actual: forbiddenConstructionCount,
+    files: forbiddenConstructionCount > 0 ? [{ path: "unitypkg/Editor/ProjectTools catalog construction graph", count: forbiddenConstructionCount }] : [],
   });
   const legacyPatternRoots = searchRoots.filter((entry) => entry.path !== "scripts/audit-final-architecture.mjs");
   const patternChecks = [

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { executeBridgePayload } from "./bridge/index.js";
 import { failure } from "./output.js";
 import { projectDescriptorToToolMetadata, type ProjectToolRuntime } from "./project-tool-discovery.js";
@@ -9,6 +9,7 @@ export const MAX_CATALOG_PAGE_FETCH = 101;
 const MAX_CATALOG_SUMMARY_BYTES = 256 * 1024;
 const MAX_CATALOG_GROUPS_BYTES = 2 * 1024 * 1024;
 const MAX_CATALOG_DESCRIPTOR_BYTES = 3 * 1024 * 1024;
+const fixtureCursorSecret = randomBytes(32);
 
 export interface CatalogSummaryQuery {
   group?: string;
@@ -17,6 +18,9 @@ export interface CatalogSummaryQuery {
   limit: number;
   expectedGeneration?: string;
   reservedNames: string[];
+  localNames?: string[];
+  cursorContext?: string;
+  cursorToken?: string;
 }
 
 export interface CatalogRoutingSummary {
@@ -41,6 +45,10 @@ export type CatalogSummaryResult = {
   total: number;
   tools: CatalogRoutingSummary[];
   hasMore: boolean;
+  cursorOffset: number;
+  cursorBoundary?: string;
+  pageNames?: string[];
+  continuationToken?: string;
 } | (CliResult & { ok: false });
 
 export type CatalogGroupsResult = {
@@ -118,9 +126,8 @@ export function readRuntimeCatalogDescriptor(
   requestId: string,
   name: string,
   absoluteDeadlineMs?: number,
-  fallbackName?: string,
 ): Promise<CatalogDescribeResult> {
-  return readCatalogDescriptor("runtime", flags, runtime, requestId, name, absoluteDeadlineMs, fallbackName);
+  return readCatalogDescriptor("runtime", flags, runtime, requestId, name, absoluteDeadlineMs);
 }
 
 async function readCatalogSummary(
@@ -144,6 +151,9 @@ async function readCatalogSummary(
     limit: query.limit,
     ...(query.expectedGeneration ? { expectedCatalogGeneration: query.expectedGeneration } : {}),
     reservedNames: query.reservedNames,
+    ...(query.localNames ? { localNames: query.localNames } : {}),
+    ...(query.cursorContext ? { cursorContext: query.cursorContext } : {}),
+    ...(query.cursorToken ? { cursorToken: query.cursorToken } : {}),
   }, flags, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs });
   if (!result.ok) return result as CliResult & { ok: false };
   return parseSummaryResponse(result.data, requestId, command, query);
@@ -181,8 +191,8 @@ async function readCatalogDescriptor(
   absoluteDeadlineMs?: number,
   fallbackName?: string,
 ): Promise<CatalogDescribeResult> {
-  if (!name || name.length > 256) return schemaFailure(requestId, "Catalog describe name is required and must not exceed 256 characters.");
-  if (fallbackName !== undefined && (!fallbackName || fallbackName.length > 256 || fallbackName === name)) {
+  if (!name || utf8ByteLength(name) > 256) return schemaFailure(requestId, "Catalog describe name is required and must not exceed 256 UTF-8 bytes.");
+  if (fallbackName !== undefined && (!fallbackName || utf8ByteLength(fallbackName) > 256 || fallbackName === name)) {
     return schemaFailure(requestId, "Catalog describe fallbackName must be distinct and must not exceed 256 characters.");
   }
   const fixture = target === "runtime" ? runtime.runtimeTools ?? runtime.projectTools : runtime.projectTools;
@@ -198,12 +208,10 @@ async function readCatalogDescriptor(
   }
 
   const command = `${target === "editor" ? "project" : "runtime"}-tool.describe`;
-  const result = await executeBridgePayload(requestId, command, {
-    name,
-    ...(fallbackName ? { fallbackName } : {}),
-  }, flags, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs });
+  const input = target === "editor" && fallbackName ? { name, fallbackName } : { name };
+  const result = await executeBridgePayload(requestId, command, input, flags, runtime, undefined, { mode: "read", mutation: false, absoluteDeadlineMs });
   if (!result.ok) return result as CliResult & { ok: false };
-  return parseDescriptorResponse(result.data, requestId, command, name, target, fallbackName);
+  return parseDescriptorResponse(result.data, requestId, command, name, target, target === "editor" ? fallbackName : undefined);
 }
 
 /** 测试注入仍执行真实筛选、generation 与 ownership 规则。 */
@@ -227,14 +235,38 @@ function summarizeFixture(
     && (tokens.length === 0 || tokens.some((token) => [tool.name, tool.summary, tool.description, tool.group]
       .some((value) => value.toLowerCase().includes(token))))
   ).sort(compareToolName);
-  const remaining = query.afterName ? matches.filter((tool) => tool.name > query.afterName!) : matches;
   const nativeNames = new Set([...tools.filter((item) => item.contractProfile !== "official-attribute").map((item) => item.name), ...query.reservedNames]);
+  if (!query.cursorContext) {
+    const remaining = query.afterName ? matches.filter((tool) => tool.name > query.afterName!) : matches;
+    return {
+      ok: true,
+      generation,
+      total: matches.length,
+      tools: remaining.slice(0, query.limit).map((tool) => routingSummary(tool, nativeNames)),
+      hasMore: remaining.length > query.limit,
+      cursorOffset: 0,
+    };
+  }
+
+  const scope = fixtureCursorScope(target, generation, query);
+  const cursor = query.cursorToken ? verifyFixtureCursor(query.cursorToken, scope) : { offset: 0, boundary: "" };
+  if (!cursor) return invalidCursor(requestId);
+  const localNames = query.localNames ?? [];
+  const combinedNames = [...new Set([...localNames, ...matches.map((tool) => tool.name)])].sort(compareText);
+  if (cursor.offset > combinedNames.length || cursor.offset > 0 && combinedNames[cursor.offset - 1] !== cursor.boundary) return invalidCursor(requestId);
+  const end = Math.min(cursor.offset + query.limit, combinedNames.length);
+  const pageNames = new Set(combinedNames.slice(cursor.offset, end));
+  const hasMore = end < combinedNames.length;
   return {
     ok: true,
     generation,
     total: matches.length,
-    tools: remaining.slice(0, query.limit).map((tool) => routingSummary(tool, nativeNames)),
-    hasMore: remaining.length > query.limit,
+    tools: matches.filter((tool) => pageNames.has(tool.name)).map((tool) => routingSummary(tool, nativeNames)),
+    hasMore,
+    cursorOffset: cursor.offset,
+    cursorBoundary: cursor.boundary,
+    pageNames: combinedNames.slice(cursor.offset, end),
+    continuationToken: signFixtureCursor(scope, end, combinedNames[end - 1] ?? cursor.boundary),
   };
 }
 
@@ -270,7 +302,7 @@ function fixtureTools(target: "editor" | "runtime", fixture: ToolMetadata[]): Re
 function fixtureCatalogIntegrity(requestId: string, tools: ResolvedToolMetadata[]): (CliResult & { ok: false }) | undefined {
   const names = new Set<string>();
   for (const tool of tools) {
-    if (tool.name.length > 256 || tool.summary.length > 512 || tool.group.length > 256) return failure(requestId, "E_TOOL_REGISTRY_UNHEALTHY", `Tool ${tool.name} exceeds a catalog routing field bound.`, ["Shorten the Tool name, group, or summary before retrying discovery."]) as CliResult & { ok: false };
+    if (utf8ByteLength(tool.name) > 256 || utf8ByteLength(tool.summary) > 512 || utf8ByteLength(tool.group) > 256) return failure(requestId, "E_TOOL_REGISTRY_UNHEALTHY", `Tool ${tool.name} exceeds a catalog routing field bound.`, ["Shorten the Tool name, group, or summary before retrying discovery."]) as CliResult & { ok: false };
     if (names.has(tool.name)) return failure(requestId, "E_TOOL_SCHEMA_CONFLICT", `Tool catalog conflict for ${tool.name}: duplicate live registrations use the same name.`, ["Fix the duplicate Tool registration, then retry discovery."]) as CliResult & { ok: false };
     names.add(tool.name);
     const attribute = tool.contractProfile === "official-attribute";
@@ -313,10 +345,23 @@ function parseSummaryResponse(data: unknown, requestId: string, command: string,
   const total = numberField(record, "total");
   const hasMore = record?.hasMore;
   const rawTools = record?.tools;
-  if (!record || !hasOnlyKeys(record, ["catalogGeneration", "total", "hasMore", "tools"])
-      || !generation || generation.length > 128 || total === undefined || !Number.isSafeInteger(total) || total < 0
+  const cursorOffset = record?.cursorOffset ?? 0;
+  const continuationToken = record?.continuationToken;
+  const rawPageNames = record?.pageNames;
+  const cursorBoundary = record?.cursorBoundary;
+  const allowedKeys = query.cursorContext
+    ? ["catalogGeneration", "total", "hasMore", "tools", "cursorOffset", "cursorBoundary", "pageNames", "continuationToken"]
+    : ["catalogGeneration", "total", "hasMore", "tools"];
+  if (!record || !hasOnlyKeys(record, allowedKeys)
+      || !generation || utf8ByteLength(generation) > 128 || total === undefined || !Number.isSafeInteger(total) || total < 0
       || typeof hasMore !== "boolean" || !Array.isArray(rawTools) || rawTools.length > query.limit || rawTools.length > total
-      || hasMore && rawTools.length !== query.limit) {
+      || !Number.isSafeInteger(cursorOffset) || Number(cursorOffset) < 0
+      || query.cursorContext && (typeof cursorBoundary !== "string" || utf8ByteLength(cursorBoundary) > 256
+        || !Array.isArray(rawPageNames) || rawPageNames.length > query.limit
+        || rawPageNames.some((name) => typeof name !== "string" || !name || utf8ByteLength(name) > 256)
+        || !strictlySortedUnique(rawPageNames as string[])
+        || typeof continuationToken !== "string" || !continuationToken || utf8ByteLength(continuationToken) > 8192)
+      || continuationToken !== undefined && typeof continuationToken !== "string") {
     return unhealthySummary(requestId, `${command} returned an invalid bounded summary envelope.`);
   }
   const tools: CatalogRoutingSummary[] = [];
@@ -330,7 +375,17 @@ function parseSummaryResponse(data: unknown, requestId: string, command: string,
   if (!strictlySortedUnique(tools.map((tool) => tool.name))) {
     return unhealthySummary(requestId, `${command} summary names must be unique and ordinally sorted.`);
   }
-  return { ok: true, generation, total, tools, hasMore };
+  return {
+    ok: true,
+    generation,
+    total,
+    tools,
+    hasMore,
+    cursorOffset: Number(cursorOffset),
+    ...(typeof cursorBoundary === "string" ? { cursorBoundary } : {}),
+    ...(Array.isArray(rawPageNames) ? { pageNames: rawPageNames as string[] } : {}),
+    ...(typeof continuationToken === "string" ? { continuationToken } : {}),
+  };
 }
 
 function parseGroupsResponse(data: unknown, requestId: string, command: string): CatalogGroupsResult {
@@ -338,7 +393,7 @@ function parseGroupsResponse(data: unknown, requestId: string, command: string):
   const record = objectRecord(data);
   const generation = stringField(record, "catalogGeneration");
   const rawGroups = record?.groups;
-  if (!record || !hasOnlyKeys(record, ["catalogGeneration", "groups"]) || !generation || generation.length > 128
+  if (!record || !hasOnlyKeys(record, ["catalogGeneration", "groups"]) || !generation || utf8ByteLength(generation) > 128
       || !Array.isArray(rawGroups) || rawGroups.length > 4096) {
     return unhealthySummary(requestId, `${command} returned an invalid group envelope.`);
   }
@@ -347,7 +402,7 @@ function parseGroupsResponse(data: unknown, requestId: string, command: string):
     const item = objectRecord(rawGroups[index]);
     const name = stringField(item, "name");
     const toolCount = numberField(item, "toolCount");
-    if (!item || !hasOnlyKeys(item, ["name", "toolCount"]) || !name || name.length > 256
+    if (!item || !hasOnlyKeys(item, ["name", "toolCount"]) || !name || utf8ByteLength(name) > 256
         || toolCount === undefined || !Number.isSafeInteger(toolCount) || toolCount < 1) {
       return unhealthySummary(requestId, `${command} groups[${index}] is invalid.`);
     }
@@ -368,7 +423,7 @@ function parseDescriptorResponse(
   if (jsonByteLength(data) > MAX_CATALOG_DESCRIPTOR_BYTES) return unhealthySummary(requestId, `${command} exceeded the bounded exact descriptor transport size.`);
   const record = objectRecord(data);
   const generation = stringField(record, "catalogGeneration");
-  if (!record || !generation || generation.length > 128 || typeof record.found !== "boolean"
+  if (!record || !generation || utf8ByteLength(generation) > 128 || typeof record.found !== "boolean"
       || !hasOnlyKeys(record, record.found ? ["catalogGeneration", "found", "descriptor"] : ["catalogGeneration", "found"])) {
     return unhealthySummary(requestId, `${command} returned an invalid exact descriptor envelope.`);
   }
@@ -392,12 +447,12 @@ function parseRoutingSummary(value: unknown): CatalogRoutingSummary | undefined 
   const available = record?.available;
   const unavailableReason = record?.unavailableReason;
   if (!record || !hasOnlyKeys(record, ["name", "summary", "group", "target", "contractProfile", "commandName", "available", "unavailableReason"])
-      || !name || name.length > 256 || !summary || summary.length > 512 || !group || group.length > 256
+      || !name || utf8ByteLength(name) > 256 || !summary || utf8ByteLength(summary) > 512 || !group || utf8ByteLength(group) > 256
       || !(target === "editor" || target === "runtime" || target === "both")
       || !(contractProfile === "native" || contractProfile === "official-attribute")
-      || (commandName !== undefined && (typeof commandName !== "string" || !commandName || commandName.length > 256))
+      || (commandName !== undefined && (typeof commandName !== "string" || !commandName || utf8ByteLength(commandName) > 256))
       || (available !== undefined && available !== false)
-      || (available === false && (typeof unavailableReason !== "string" || !unavailableReason || unavailableReason.length > 2048))
+      || (available === false && (typeof unavailableReason !== "string" || !unavailableReason || utf8ByteLength(unavailableReason) > 2048))
       || (available !== false && unavailableReason !== undefined)) return undefined;
   const usesAttributePrefix = name.startsWith("UnityPipeline_");
   const usesAttributeGroup = group === "UnityPipeline";
@@ -414,6 +469,51 @@ function parseRoutingSummary(value: unknown): CatalogRoutingSummary | undefined 
     ...(typeof commandName === "string" ? { commandName } : {}),
     ...(available === false ? { available: false, unavailableReason: unavailableReason as string } : {}),
   };
+}
+
+/** 注入fixture使用同形scope，确保测试不会绕过cursor integrity。 */
+function fixtureCursorScope(target: "editor" | "runtime", generation: string, query: CatalogSummaryQuery): string {
+  return createHash("sha256").update(JSON.stringify({
+    target,
+    generation,
+    cursorContext: query.cursorContext,
+    group: query.group ?? "",
+    keyword: query.keyword ?? "",
+    localNames: query.localNames ?? [],
+    reservedNames: query.reservedNames,
+  }), "utf8").digest("hex");
+}
+
+/** fixture secret仅活在当前测试进程，不进入产品持久状态。 */
+function signFixtureCursor(scope: string, offset: number, boundary: string): string {
+  const payload = Buffer.from(JSON.stringify({ scope, offset, boundary }), "utf8").toString("base64url");
+  const signature = createHmac("sha256", fixtureCursorSecret).update(payload, "utf8").digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+/** 验证fixture token签名并恢复其不可编辑边界。 */
+function verifyFixtureCursor(token: string, scope: string): { offset: number; boundary: string } | undefined {
+  try {
+    const [payload, signature, extra] = token.split(".");
+    if (!payload || !signature || extra !== undefined) return undefined;
+    const actual = Buffer.from(signature, "base64url");
+    const expected = createHmac("sha256", fixtureCursorSecret).update(payload, "utf8").digest();
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return undefined;
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
+    if (Object.keys(parsed).some((key) => !["scope", "offset", "boundary"].includes(key))
+        || parsed.scope !== scope || !Number.isSafeInteger(parsed.offset) || Number(parsed.offset) < 1
+        || typeof parsed.boundary !== "string" || !parsed.boundary || utf8ByteLength(parsed.boundary) > 256) return undefined;
+    return { offset: Number(parsed.offset), boundary: parsed.boundary };
+  } catch {
+    return undefined;
+  }
+}
+
+/** 统一fixture与live target的cursor拒绝语义。 */
+function invalidCursor(requestId: string): CliResult & { ok: false } {
+  return failure(requestId, "E_DISCOVERY_CURSOR_INVALID", "The target rejected an altered or cross-query discovery continuation.", [
+    "Restart this exact discovery query from its first page."
+  ]) as CliResult & { ok: false };
 }
 
 function requireGeneration(requestId: string, expected: string | undefined, actual: string): (CliResult & { ok: false }) | undefined {
@@ -442,12 +542,18 @@ function validateSummaryQuery(requestId: string, query: CatalogSummaryQuery): (C
   if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > MAX_CATALOG_PAGE_FETCH) {
     return schemaFailure(requestId, "Catalog summary limit must be an integer in [1,101].");
   }
-  if ((query.group?.length ?? 0) > 256 || (query.afterName?.length ?? 0) > 256 || (query.keyword?.length ?? 0) > 2048) {
+  if (utf8ByteLength(query.group ?? "") > 256 || utf8ByteLength(query.afterName ?? "") > 256 || utf8ByteLength(query.keyword ?? "") > 2048) {
     return schemaFailure(requestId, "Catalog summary filters exceed their bounded string limits.");
   }
   const tokens = searchTokens(query.keyword);
-  if (tokens.length > 16 || tokens.some((token) => token.length > 128)) {
-    return schemaFailure(requestId, "Catalog search accepts at most 16 keywords of at most 128 characters each.");
+  if (tokens.length > 16 || tokens.some((token) => utf8ByteLength(token) > 128)) {
+    return schemaFailure(requestId, "Catalog search accepts at most 16 keywords of at most 128 UTF-8 bytes each.");
+  }
+  if (query.localNames && (query.localNames.length > 4096 || query.localNames.some((name) => !name || utf8ByteLength(name) > 256)
+      || !strictlySortedUnique(query.localNames))) return schemaFailure(requestId, "Catalog local names must be a bounded ordinally sorted set.");
+  if (query.cursorContext !== undefined && !/^[a-f0-9]{64}$/.test(query.cursorContext)) return schemaFailure(requestId, "Catalog cursor context must be a SHA-256 value.");
+  if (query.cursorToken !== undefined && (!query.cursorContext || !query.cursorToken || utf8ByteLength(query.cursorToken) > 8192)) {
+    return schemaFailure(requestId, "Catalog continuation token is invalid.");
   }
   return validateGenerationAndReservedNames(requestId, query.expectedGeneration, query.reservedNames);
 }
@@ -457,8 +563,8 @@ function validateGenerationAndReservedNames(
   generation: string | undefined,
   reservedNames: string[],
 ): (CliResult & { ok: false }) | undefined {
-  if ((generation?.length ?? 0) > 128) return schemaFailure(requestId, "Catalog generation exceeds its bounded string limit.");
-  if (reservedNames.length > 4096 || reservedNames.some((name) => !name || name.length > 256)) {
+  if (utf8ByteLength(generation ?? "") > 128) return schemaFailure(requestId, "Catalog generation exceeds its bounded string limit.");
+  if (reservedNames.length > 4096 || reservedNames.some((name) => !name || utf8ByteLength(name) > 256)) {
     return schemaFailure(requestId, "Catalog reserved names exceed their bounded item or string limits.");
   }
   return undefined;
@@ -475,6 +581,11 @@ function searchTokens(keyword: string | undefined): string[] {
 function jsonByteLength(value: unknown): number {
   try { return Buffer.byteLength(JSON.stringify(value), "utf8"); }
   catch { return Number.POSITIVE_INFINITY; }
+}
+
+/** catalog public string limits全部按wire UTF-8字节计算。 */
+function utf8ByteLength(value: string): number {
+  return Buffer.byteLength(value, "utf8");
 }
 
 function objectRecord(value: unknown): Record<string, unknown> | undefined {

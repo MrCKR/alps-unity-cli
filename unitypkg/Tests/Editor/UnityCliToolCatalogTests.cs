@@ -1,17 +1,21 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections;
+using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CSharp;
 using NUnit.Framework;
 
 namespace UnityCli.Tests
 {
     public sealed class UnityCliToolCatalogTests
     {
+        private static Assembly compiledProjectToolProviderAssembly;
         private Type bridgeType;
         private Type builderType;
         private Type providerKindType;
@@ -44,10 +48,6 @@ namespace UnityCli.Tests
             Assert.That(Int(first, "DiscoveryPassCount"), Is.EqualTo(1));
             Assert.That(Int(first, "ProviderMetadataReadCount"), Is.EqualTo(Int(first, "ProviderAssemblyCount")));
             Assert.That(Int(first, "AggregateSuccessLogCount"), Is.EqualTo(1));
-            Assert.That(Int(first, "AssetDatabaseOperationCount"), Is.Zero);
-            Assert.That(Int(first, "SourceFileReadCount"), Is.Zero);
-            Assert.That(Int(first, "PersistedToolValueOperationCount"), Is.Zero);
-            Assert.That(Int(first, "PerToolSuccessLogCount"), Is.Zero);
 
             var descriptor = FirstTool(first);
             foreach (var privateExecutionMember in new[] { "InvokeAsync", "RequestType", "ResultType", "OfficialAttributeBinding", "OwnerIdentity" })
@@ -68,21 +68,21 @@ namespace UnityCli.Tests
             var previousHealth = healthField.GetValue(null);
             try
             {
-                var builder = NewBuilder(400, 301);
-                for (var index = 0; index < 301; index++)
-                    Add(builder, Definition("fixture.project." + index, "project", "native", "fixture"), "ProjectInterface");
+                var fixtureAssembly = CompileProjectToolProviderAssembly(301);
+                var builder = Activator.CreateInstance(builderType, true);
+                var collect = bridgeType.GetMethod("CollectProjectToolCatalog", BindingFlags.NonPublic | BindingFlags.Static);
+                collect.Invoke(null, new object[] { AppDomain.CurrentDomain.GetAssemblies(), builder });
                 var snapshot = PublishThroughProductionSlot(builder, 12L);
                 Assert.That(ReadPublishedSnapshot(), Is.SameAs(snapshot));
-                Assert.That(Int(snapshot, "ProviderAssemblyCount"), Is.EqualTo(301));
+                Assert.That(Int(snapshot, "ProviderAssemblyCount"), Is.GreaterThanOrEqualTo(2));
                 Assert.That(Int(snapshot, "ProjectInterfaceToolCount"), Is.EqualTo(301));
-                Assert.That(Int(snapshot, "ToolCount"), Is.EqualTo(301));
+                Assert.That(Int(snapshot, "ToolCount"), Is.GreaterThanOrEqualTo(301));
                 Assert.That(Int(snapshot, "DiscoveryPassCount"), Is.EqualTo(1));
-                Assert.That(Int(snapshot, "ProviderMetadataReadCount"), Is.EqualTo(301));
+                Assert.That(Int(snapshot, "ProviderMetadataReadCount"), Is.EqualTo(Int(snapshot, "ProviderAssemblyCount")));
                 Assert.That(Int(snapshot, "AggregateSuccessLogCount"), Is.EqualTo(1));
-                Assert.That(Int(snapshot, "AssetDatabaseOperationCount"), Is.Zero);
-                Assert.That(Int(snapshot, "SourceFileReadCount"), Is.Zero);
-                Assert.That(Int(snapshot, "PersistedToolValueOperationCount"), Is.Zero);
-                Assert.That(Int(snapshot, "PerToolSuccessLogCount"), Is.Zero);
+                var descriptors = ((IEnumerable)Property(snapshot, "Descriptors").GetValue(snapshot)).Cast<object>().ToList();
+                Assert.That(descriptors.Count(item => ((string)Property(item, "Name").GetValue(item)).StartsWith("fixture.generated.", StringComparison.Ordinal)), Is.EqualTo(301));
+                Assert.That(fixtureAssembly.GetTypes().Count(type => !type.IsAbstract && type.Name.StartsWith("GeneratedTool", StringComparison.Ordinal)), Is.EqualTo(301));
             }
             finally
             {
@@ -158,6 +158,117 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void MultibyteDescriptorBoundsAndCompleteCatalogEnvelopesUseUtf8Bytes()
+        {
+            var accepted = NewBuilder(1, 1);
+            Assert.That(() => Add(accepted, Definition("fixture." + new string('n', 248), "project", "native", new string('组', 85), new string('界', 170) + "ab"), "ProjectInterface"), Throws.Nothing);
+
+            var rejected = NewBuilder(1, 1);
+            Assert.That(() => Add(rejected, Definition("fixture.utf8.too-long", "project", "native", new string('组', 85), new string('界', 170) + "abc"), "ProjectInterface"),
+                Throws.TypeOf<TargetInvocationException>());
+            var rejectedGroup = NewBuilder(1, 1);
+            Assert.That(() => Add(rejectedGroup, Definition("fixture.utf8.group-too-long", "project", "native", new string('组', 86)), "ProjectInterface"),
+                Throws.TypeOf<TargetInvocationException>());
+
+            var previousCatalog = publishedField.GetValue(null);
+            var previousHealth = healthField.GetValue(null);
+            try
+            {
+                var builder = NewBuilder(4096, 1);
+                for (var index = 0; index < 4096; index++)
+                    Add(builder, Definition("fixture.bound." + index.ToString("D4"), "project", "native", "g" + index.ToString("D4"), new string('界', 170)), "ProjectInterface");
+                PublishThroughProductionSlot(builder, 1L);
+                var summaryRequest = new UnityCli.Protocol.BridgeRequest
+                {
+                    Input = new Dictionary<string, object> { { "limit", 101L }, { "reservedNames", new List<object>() } }
+                };
+                var summary = bridgeType.GetMethod("ProjectToolCatalogSummary", BindingFlags.NonPublic | BindingFlags.Static)
+                    .Invoke(null, new object[] { summaryRequest, false });
+                Assert.That(Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(summary)), Is.LessThanOrEqualTo(256 * 1024));
+                Assert.That(((IList)((IDictionary<string, object>)summary)["tools"]).Count, Is.EqualTo(101));
+                Assert.That((bool)((IDictionary<string, object>)summary)["hasMore"], Is.True);
+
+                var groupsRequest = new UnityCli.Protocol.BridgeRequest
+                {
+                    Input = new Dictionary<string, object> { { "reservedNames", new List<object>() } }
+                };
+                var groups = bridgeType.GetMethod("ProjectToolCatalogGroups", BindingFlags.NonPublic | BindingFlags.Static)
+                    .Invoke(null, new object[] { groupsRequest, false });
+                Assert.That(Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(groups)), Is.LessThanOrEqualTo(2 * 1024 * 1024));
+                Assert.That(((IList)((IDictionary<string, object>)groups)["groups"]).Count, Is.EqualTo(4096));
+            }
+            finally
+            {
+                publishedField.SetValue(null, previousCatalog);
+                healthField.SetValue(null, previousHealth);
+            }
+        }
+
+        [Test]
+        public void SerializedSummaryBudgetTruncatesWithAnAccurateSignedBoundary()
+        {
+            var names = Enumerable.Range(0, 101).Select(index => "fixture.bytes." + index.ToString("D3")).ToList();
+            var pageNames = names.ToList();
+            var tools = names.Select(name => (object)new Dictionary<string, object>
+            {
+                { "name", name }, { "summary", new string('界', 170) + "ab" }, { "group", "fixture" },
+                { "target", "editor" }, { "contractProfile", "native" }, { "commandName", name },
+                { "available", false }, { "unavailableReason", new string('界', 682) }
+            }).ToList();
+            var bounded = (IDictionary<string, object>)bridgeType.GetMethod("BoundSignedCatalogSummaryData", BindingFlags.NonPublic | BindingFlags.Static)
+                .Invoke(null, new object[] { new string('g', 64), 101, names, 0, pageNames, tools, new string('s', 64) });
+            Assert.That(Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(bounded)), Is.LessThanOrEqualTo(256 * 1024));
+            var emittedNames = ((IEnumerable)bounded["pageNames"]).Cast<object>().Select(Convert.ToString).ToList();
+            Assert.That(emittedNames.Count, Is.InRange(1, 100));
+            Assert.That((bool)bounded["hasMore"], Is.True);
+            var tokenFields = Encoding.UTF8.GetString(FromBase64Url(((string)bounded["continuationToken"]).Split('.')[0])).Split('\n');
+            Assert.That(Encoding.UTF8.GetString(Convert.FromBase64String(tokenFields[2])), Is.EqualTo(emittedNames.Last()));
+        }
+
+        [Test]
+        public void EditorContinuationRejectsAlteredExistingAndUnknownBoundariesInSameGeneration()
+        {
+            var previousCatalog = publishedField.GetValue(null);
+            var previousHealth = healthField.GetValue(null);
+            try
+            {
+                var builder = NewBuilder(1, 1);
+                foreach (var name in new[] { "fixture.cursor.a", "fixture.cursor.b", "fixture.cursor.c" })
+                    Add(builder, Definition(name, "project", "native", "fixture"), "ProjectInterface");
+                PublishThroughProductionSlot(builder, 1L);
+                var summary = bridgeType.GetMethod("ProjectToolCatalogSummary", BindingFlags.NonPublic | BindingFlags.Static);
+                var firstRequest = CursorSummaryRequest(null, null);
+                var first = (IDictionary<string, object>)summary.Invoke(null, new object[] { firstRequest, false });
+                var token = (string)first["continuationToken"];
+                var generation = (string)first["catalogGeneration"];
+                foreach (var boundary in new[] { "fixture.cursor.c", "fixture.cursor.unknown" })
+                {
+                    var request = CursorSummaryRequest(generation, AlterCursorBoundary(token, boundary));
+                    var exception = Assert.Throws<TargetInvocationException>(() => summary.Invoke(null, new object[] { request, false }));
+                    Assert.That(((UnityCliBridge.BridgeCommandException)exception.InnerException).Code, Is.EqualTo("E_DISCOVERY_CURSOR_INVALID"), boundary);
+                }
+            }
+            finally
+            {
+                publishedField.SetValue(null, previousCatalog);
+                healthField.SetValue(null, previousHealth);
+            }
+        }
+
+        [Test]
+        public void EditorDescribeAcceptsOneExactFallbackWhileRuntimeDescribeRejectsIt()
+        {
+            var describe = bridgeType.GetMethod("ProjectToolCatalogDescribe", BindingFlags.NonPublic | BindingFlags.Static);
+            var request = new UnityCli.Protocol.BridgeRequest
+            {
+                Input = new Dictionary<string, object> { { "name", "fixture.missing" }, { "fallbackName", "fixture.also-missing" } }
+            };
+            Assert.That(() => describe.Invoke(null, new object[] { request, false }), Throws.Nothing);
+            var exception = Assert.Throws<TargetInvocationException>(() => describe.Invoke(null, new object[] { request, true }));
+            Assert.That(((UnityCliBridge.BridgeCommandException)exception.InnerException).Code, Is.EqualTo("E_SCHEMA_INVALID"));
+        }
+
+        [Test]
         public void PrivateCatalogReadersRejectUnknownInputBeforeSnapshotProjection()
         {
             var request = new UnityCli.Protocol.BridgeRequest
@@ -181,6 +292,38 @@ namespace UnityCli.Tests
         }
 
         private void InstanceOfficialMethod() { }
+        private static UnityCli.Protocol.BridgeRequest CursorSummaryRequest(string generation, string token)
+        {
+            var input = new Dictionary<string, object>
+            {
+                { "limit", 1L }, { "reservedNames", new List<object>() }, { "localNames", new List<object>() },
+                { "cursorContext", new string('a', 64) }
+            };
+            if (generation != null) input["expectedCatalogGeneration"] = generation;
+            if (token != null) input["cursorToken"] = token;
+            return new UnityCli.Protocol.BridgeRequest { Input = input };
+        }
+
+        private static string AlterCursorBoundary(string token, string boundary)
+        {
+            var parts = token.Split('.');
+            var payload = Encoding.UTF8.GetString(FromBase64Url(parts[0])).Split('\n');
+            payload[2] = Convert.ToBase64String(Encoding.UTF8.GetBytes(boundary));
+            return ToBase64Url(Encoding.UTF8.GetBytes(string.Join("\n", payload))) + "." + parts[1];
+        }
+
+        private static string ToBase64Url(byte[] value)
+        {
+            return Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        private static byte[] FromBase64Url(string value)
+        {
+            var normalized = value.Replace('-', '+').Replace('_', '/');
+            normalized = normalized.PadRight(normalized.Length + (4 - normalized.Length % 4) % 4, '=');
+            return Convert.FromBase64String(normalized);
+        }
+
         private static void StaticOfficialMethod() { }
 
         private object ReadPublishedSnapshot()
@@ -209,12 +352,12 @@ namespace UnityCli.Tests
             return builder;
         }
 
-        private object Definition(string name, string source, string profile, string group)
+        private object Definition(string name, string source, string profile, string group, string summary = "Fixture summary.")
         {
             var descriptor = new ToolDescriptor
             {
                 Name = name,
-                Summary = "Fixture summary.",
+                Summary = summary,
                 Description = "Fixture descriptor for production catalog publication validation.",
                 Group = group,
                 DestructiveHint = false,
@@ -249,6 +392,37 @@ namespace UnityCli.Tests
                 descriptor, ownership, "{}", "{}", "editorSession", profile,
                 typeof(Dictionary<string, object>), typeof(Dictionary<string, object>), Completion(name, source), binding, invoke
             });
+        }
+
+        private static Assembly CompileProjectToolProviderAssembly(int count)
+        {
+            if (compiledProjectToolProviderAssembly != null) return compiledProjectToolProviderAssembly;
+            var source = new StringBuilder();
+            source.AppendLine("using System.Threading; using System.Threading.Tasks; using UnityCli;");
+            source.AppendLine("namespace UnityCli.GeneratedCatalogFixture {");
+            source.AppendLine("public sealed class FixtureRequest {} public sealed class FixtureResult {}");
+            for (var index = 0; index < count; index++)
+            {
+                var suffix = index.ToString("D3");
+                source.AppendLine("public sealed class GeneratedTool" + suffix + " : IUnityCliTool<FixtureRequest, FixtureResult> {");
+                source.AppendLine("public ToolDescriptor Describe() { return new ToolDescriptor { Name=\"fixture.generated." + suffix
+                    + "\", Summary=\"Generated fixture.\", Description=\"Production collector fixture.\", Group=\"fixture\", Examples=new[]{new ToolExample{Description=\"Fixture\", Input=new FixtureRequest()}}, Completion=new ToolCompletionDescriptor{ExecutionClass=\"atomic\", CompletionPredicate=\"method-return\", ProofSource=\"typed-handler-result\", ReloadPolicy=\"fail-before-effect\", TimeoutError=\"E_EXECUTION_TIMEOUT\", OutcomeUnknownPolicy=\"not-applicable-read-only\", CompletionDriverId=\"direct-typed-result-v1\"} }; }");
+                source.AppendLine("public ValueTask<FixtureResult> ExecuteAsync(FixtureRequest request, UnityCliProjectToolContext ctx, CancellationToken ct) { return new ValueTask<FixtureResult>(new FixtureResult()); }}");
+            }
+            source.AppendLine("}");
+            using (var provider = new CSharpCodeProvider())
+            {
+                var parameters = new CompilerParameters { GenerateExecutable = false, GenerateInMemory = true, CompilerOptions = "/langversion:latest" };
+                parameters.ReferencedAssemblies.Add("System.dll");
+                parameters.ReferencedAssemblies.Add("System.Core.dll");
+                parameters.ReferencedAssemblies.Add(typeof(IUnityCliTool<,>).Assembly.Location);
+                parameters.ReferencedAssemblies.Add(typeof(ValueTask<>).Assembly.Location);
+                var result = provider.CompileAssemblyFromSource(parameters, source.ToString());
+                var failures = result.Errors.Cast<CompilerError>().Where(error => !error.IsWarning).Select(error => error.ToString()).ToArray();
+                Assert.That(failures, Is.Empty, string.Join(Environment.NewLine, failures));
+                compiledProjectToolProviderAssembly = result.CompiledAssembly;
+                return compiledProjectToolProviderAssembly;
+            }
         }
 
         private object Completion(string name, string source)

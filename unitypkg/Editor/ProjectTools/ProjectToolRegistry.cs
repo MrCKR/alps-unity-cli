@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +33,7 @@ namespace UnityCli
         private static UnityCliToolCatalogHealthSnapshot projectToolCatalogHealth = new UnityCliToolCatalogHealthSnapshot(
             false, 0, "catalog was not initialized", "Let Unity compile and reload the domain before retrying.");
         private static int projectToolCatalogConstructionCount;
+        private static readonly byte[] projectToolCatalogCursorSecret = CreateProjectToolCatalogCursorSecret();
         internal static IUnityCliToolCatalogSnapshotReader ProjectToolCatalogSnapshotReader { get; } = new PublishedToolCatalogSnapshotReader();
         internal static IUnityCliToolCatalogHealthSnapshotReader ProjectToolCatalogHealthSnapshotReader { get; } = new PublishedToolCatalogHealthSnapshotReader();
 
@@ -74,27 +76,7 @@ namespace UnityCli
             var builder = new UnityCliToolCatalogBuilder();
             try
             {
-                var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                var officialRoots = ConfigureOfficialAuthoringApi(assemblies);
-                var candidates = ToolProviderAssemblies(assemblies, officialRoots);
-                builder.BeginDiscovery(assemblies.Length, candidates.Count);
-                var ownership = RegistryOwnershipResolver.Load(candidates);
-                foreach (var assembly in candidates)
-                {
-                    builder.RecordProviderMetadata(assembly.GetName().FullName);
-                    Type[] types;
-                    try { types = assembly.GetTypes(); }
-                    catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in Tool provider assembly " + assembly.FullName + ".", exception); }
-                    catch (Exception exception) { throw new InvalidOperationException("Unable to inspect Tool provider assembly " + assembly.FullName + ".", exception); }
-                    foreach (var type in types)
-                    {
-                        if (type == null) continue;
-                        TryRegisterInterfaceProjectTool(builder, ownership, assembly, type);
-                        TryRegisterOfficialAttributeTools(builder, ownership, assembly, type);
-                    }
-                }
-                ownership.ValidateComplete();
-
+                CollectProjectToolCatalog(AppDomain.CurrentDomain.GetAssemblies(), builder);
                 PublishProjectToolCatalog(builder, (long)Math.Ceiling((DateTime.UtcNow - startedAt).TotalMilliseconds));
             }
             catch (Exception exception)
@@ -105,6 +87,32 @@ namespace UnityCli
                     false, 0, failure, "Fix the Tool definition, then let Unity compile and reload the domain before retrying."));
                 WriteLog("tool_catalog_initialization_failed error=" + failure);
             }
+        }
+
+        /// <summary>生产与大目录fixture共享同一assembly筛选、owner解析、类型扫描和pending table构造。</summary>
+        private static void CollectProjectToolCatalog(Assembly[] assemblies, UnityCliToolCatalogBuilder builder)
+        {
+            if (assemblies == null) throw new ArgumentNullException("assemblies");
+            if (builder == null) throw new ArgumentNullException("builder");
+            var officialRoots = ConfigureOfficialAuthoringApi(assemblies);
+            var candidates = ToolProviderAssemblies(assemblies, officialRoots);
+            builder.BeginDiscovery(assemblies.Length, candidates.Count);
+            var ownership = RegistryOwnershipResolver.Load(candidates);
+            foreach (var assembly in candidates)
+            {
+                builder.RecordProviderMetadata(assembly.GetName().FullName);
+                Type[] types;
+                try { types = assembly.GetTypes(); }
+                catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in Tool provider assembly " + assembly.FullName + ".", exception); }
+                catch (Exception exception) { throw new InvalidOperationException("Unable to inspect Tool provider assembly " + assembly.FullName + ".", exception); }
+                foreach (var type in types)
+                {
+                    if (type == null) continue;
+                    TryRegisterInterfaceProjectTool(builder, ownership, assembly, type);
+                    TryRegisterOfficialAttributeTools(builder, ownership, assembly, type);
+                }
+            }
+            ownership.ValidateComplete();
         }
 
         private static bool ProjectToolCatalogReady()
@@ -368,6 +376,9 @@ namespace UnityCli
             public int Limit { get; set; }
             public string ExpectedCatalogGeneration { get; set; }
             public string[] ReservedNames { get; set; }
+            public string[] LocalNames { get; set; }
+            public string CursorContext { get; set; }
+            public string CursorToken { get; set; }
             public string Name { get; set; }
             public string FallbackName { get; set; }
         }
@@ -381,7 +392,7 @@ namespace UnityCli
         /// <summary>generation变化时 continuation 必须稳定失败，不能混合两代目录。</summary>
         private static void RequireProjectToolCatalogGeneration(ProjectToolCatalogArgs args, string generation)
         {
-            if (args != null && (args.ExpectedCatalogGeneration ?? string.Empty).Length > 128)
+            if (args != null && Utf8ByteCount(args.ExpectedCatalogGeneration) > 128)
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog generation exceeds its bounded string limit.");
             if (args != null && !string.IsNullOrEmpty(args.ExpectedCatalogGeneration)
                 && !string.Equals(args.ExpectedCatalogGeneration, generation, StringComparison.Ordinal))
@@ -393,7 +404,7 @@ namespace UnityCli
         private static void RequireNoReservedProjectToolNames(UnityCliToolCatalogSnapshot catalog, ProjectToolCatalogArgs args)
         {
             var reservedNames = (args == null ? null : args.ReservedNames) ?? new string[0];
-            if (reservedNames.Length > 4096 || reservedNames.Any(name => string.IsNullOrWhiteSpace(name) || name.Length > 256))
+            if (reservedNames.Length > 4096 || reservedNames.Any(name => string.IsNullOrWhiteSpace(name) || Utf8ByteCount(name) > 256))
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog reserved names exceed their bounded item or string limits.");
             var reserved = new HashSet<string>(reservedNames, StringComparer.Ordinal);
             var conflict = catalog.Descriptors.Select(tool => tool.Name).FirstOrDefault(reserved.Contains);
@@ -434,13 +445,16 @@ namespace UnityCli
             if (groups.Count > 4096)
                 throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool catalog exceeds the bounded group count.", null,
                     new[] { "Reduce invalid project Tool group fragmentation, then let Unity reload the domain." });
-            return new Dictionary<string, object> { { "catalogGeneration", generation }, { "groups", groups } };
+            var data = new Dictionary<string, object> { { "catalogGeneration", generation }, { "groups", groups } };
+            RequireCatalogDataBudget(data, 2 * 1024 * 1024, "Tool catalog groups exceed the bounded UTF-8 transport size.");
+            return data;
         }
 
-        /// <summary>summary只读取一次published snapshot，先筛选和裁剪再构造有界路由字段。</summary>
+        /// <summary>summary由目标domain签发opaque continuation；CLI不持有可编辑边界。</summary>
         private static object ProjectToolCatalogSummary(UnityCli.Protocol.BridgeRequest request, bool runtimeOnly)
         {
-            RequireProjectToolCatalogInputKeys(request, "group", "keyword", "afterName", "limit", "expectedCatalogGeneration", "reservedNames");
+            RequireProjectToolCatalogInputKeys(request, "group", "keyword", "afterName", "limit", "expectedCatalogGeneration", "reservedNames",
+                "localNames", "cursorContext", "cursorToken");
             var catalog = ProjectToolCatalogSnapshotReader.Read();
             var args = request.DeserializeArgs<ProjectToolCatalogArgs>() ?? new ProjectToolCatalogArgs();
             if (args.Limit < 1 || args.Limit > 101)
@@ -448,26 +462,206 @@ namespace UnityCli
             RequireNoReservedProjectToolNames(catalog, args);
             var generation = ProjectToolCatalogGeneration();
             RequireProjectToolCatalogGeneration(args, generation);
-            if ((args.Group ?? string.Empty).Length > 256 || (args.AfterName ?? string.Empty).Length > 256
-                || (args.Keyword ?? string.Empty).Length > 2048)
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog summary filters exceed their bounded string limits.");
+            if (Utf8ByteCount(args.Group) > 256 || Utf8ByteCount(args.AfterName) > 256 || Utf8ByteCount(args.Keyword) > 2048)
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog summary filters exceed their bounded UTF-8 string limits.");
             var tokens = (args.Keyword ?? string.Empty).Split('|').Select(token => token.Trim()).Where(token => token.Length > 0).ToArray();
-            if (tokens.Length > 16 || tokens.Any(token => token.Length > 128))
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog search accepts at most 16 keywords of at most 128 characters each.");
+            if (tokens.Length > 16 || tokens.Any(token => Utf8ByteCount(token) > 128))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog search accepts at most 16 keywords of at most 128 UTF-8 bytes each.");
             var matches = ProjectToolCatalogDefinitions(catalog, runtimeOnly)
                 .Where(definition => string.IsNullOrEmpty(args.Group) || string.Equals(definition.Group, args.Group, StringComparison.Ordinal))
                 .Where(definition => tokens.Length == 0 || tokens.Any(token => ProjectToolCatalogMatches(definition, token)))
                 .OrderBy(definition => definition.Name, StringComparer.Ordinal)
                 .ToList();
-            var remaining = matches.Where(definition => string.IsNullOrEmpty(args.AfterName) || string.CompareOrdinal(definition.Name, args.AfterName) > 0).ToList();
             var nativeNames = new HashSet<string>(catalog.Descriptors.Where(definition => definition.ContractProfile != "official-attribute").Select(definition => definition.Name), StringComparer.Ordinal);
             foreach (var reservedName in args.ReservedNames ?? new string[0]) nativeNames.Add(reservedName);
-            var tools = remaining.Take(args.Limit).Select(definition => (object)ProjectToolRoutingSummaryData(definition, runtimeOnly, nativeNames)).ToList();
-            return new Dictionary<string, object>
+
+            if (string.IsNullOrEmpty(args.CursorContext))
             {
-                { "catalogGeneration", generation }, { "total", (long)matches.Count },
-                { "hasMore", remaining.Count > args.Limit }, { "tools", tools }
-            };
+                var remaining = matches.Where(definition => string.IsNullOrEmpty(args.AfterName) || string.CompareOrdinal(definition.Name, args.AfterName) > 0).ToList();
+                var legacyTools = remaining.Take(args.Limit).Select(definition => (object)ProjectToolRoutingSummaryData(definition, runtimeOnly, nativeNames)).ToList();
+                var legacyData = new Dictionary<string, object>
+                {
+                    { "catalogGeneration", generation }, { "total", (long)matches.Count },
+                    { "hasMore", remaining.Count > args.Limit }, { "tools", legacyTools }
+                };
+                return BoundCatalogSummaryData(legacyData, legacyTools, remaining.Count > args.Limit);
+            }
+
+            var localNames = ValidateCatalogCursorLocalNames(args);
+            var scope = ProjectToolCatalogCursorScope(generation, args, runtimeOnly, localNames);
+            int offset;
+            string boundary;
+            ReadProjectToolCatalogCursor(args.CursorToken, scope, out offset, out boundary);
+            var combinedNames = localNames.Concat(matches.Select(definition => definition.Name)).Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal).ToList();
+            if (offset > combinedNames.Count || offset > 0 && !string.Equals(combinedNames[offset - 1], boundary, StringComparison.Ordinal))
+                throw InvalidProjectToolCatalogCursor();
+            var pageNames = combinedNames.Skip(offset).Take(args.Limit).ToList();
+            var pageSet = new HashSet<string>(pageNames, StringComparer.Ordinal);
+            var tools = matches.Where(definition => pageSet.Contains(definition.Name))
+                .Select(definition => (object)ProjectToolRoutingSummaryData(definition, runtimeOnly, nativeNames)).ToList();
+            return BoundSignedCatalogSummaryData(generation, matches.Count, combinedNames, offset, pageNames, tools, scope);
+        }
+
+        /// <summary>按完整data JSON的UTF-8字节数裁剪legacy summary，next边界保持准确。</summary>
+        private static object BoundCatalogSummaryData(Dictionary<string, object> data, List<object> tools, bool hasMore)
+        {
+            while (CatalogDataUtf8Bytes(data) > 256 * 1024 && tools.Count > 0)
+            {
+                tools.RemoveAt(tools.Count - 1);
+                data["hasMore"] = true;
+            }
+            if (CatalogDataUtf8Bytes(data) > 256 * 1024)
+                throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool catalog summary cannot fit the bounded UTF-8 transport size.");
+            if (!hasMore && tools.Count == Convert.ToInt32(data["total"], CultureInfo.InvariantCulture)) data["hasMore"] = false;
+            return data;
+        }
+
+        /// <summary>签名页在序列化预算内同步裁剪pageNames与live summaries，token指向真实末项。</summary>
+        private static object BoundSignedCatalogSummaryData(
+            string generation, int liveTotal, List<string> combinedNames, int offset, List<string> pageNames,
+            List<object> tools, string scope)
+        {
+            Dictionary<string, object> data;
+            while (true)
+            {
+                var end = offset + pageNames.Count;
+                var boundary = end > 0 ? combinedNames[end - 1] : string.Empty;
+                data = new Dictionary<string, object>
+                {
+                    { "catalogGeneration", generation }, { "total", (long)liveTotal },
+                    { "hasMore", end < combinedNames.Count }, { "tools", tools },
+                    { "cursorOffset", (long)offset }, { "cursorBoundary", offset > 0 ? combinedNames[offset - 1] : string.Empty },
+                    { "pageNames", pageNames.Cast<object>().ToList() },
+                    { "continuationToken", SignProjectToolCatalogCursor(scope, end, boundary) }
+                };
+                if (CatalogDataUtf8Bytes(data) <= 256 * 1024) return data;
+                if (pageNames.Count == 0)
+                    throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Tool catalog summary cannot fit the bounded UTF-8 transport size.");
+                var removed = pageNames[pageNames.Count - 1];
+                pageNames.RemoveAt(pageNames.Count - 1);
+                var toolIndex = tools.FindLastIndex(value => string.Equals(((Dictionary<string, object>)value)["name"] as string, removed, StringComparison.Ordinal));
+                if (toolIndex >= 0) tools.RemoveAt(toolIndex);
+            }
+        }
+
+        /// <summary>校验CLI提供的已筛选local名称只来自reserved ownership集合。</summary>
+        private static List<string> ValidateCatalogCursorLocalNames(ProjectToolCatalogArgs args)
+        {
+            var values = (args.LocalNames ?? new string[0]).ToList();
+            if (values.Count > 4096 || values.Any(value => string.IsNullOrWhiteSpace(value) || Utf8ByteCount(value) > 256)
+                || !values.SequenceEqual(values.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog local names must be a bounded ordinally sorted set.");
+            var reserved = new HashSet<string>(args.ReservedNames ?? new string[0], StringComparer.Ordinal);
+            if (values.Any(value => !reserved.Contains(value)))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog local names must be a subset of reserved package-local names.");
+            if (Utf8ByteCount(args.CursorContext) != 64 || args.CursorContext.Any(value => !Uri.IsHexDigit(value))
+                || !string.IsNullOrEmpty(args.AfterName))
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog cursor context or boundary input is invalid.");
+            return values;
+        }
+
+        /// <summary>把目标generation、query和local投影视图绑定到签名scope。</summary>
+        private static string ProjectToolCatalogCursorScope(string generation, ProjectToolCatalogArgs args, bool runtimeOnly, List<string> localNames)
+        {
+            return Sha256Hex(generation + "\n" + (runtimeOnly ? "runtime" : "editor") + "\n" + args.CursorContext + "\n"
+                + (args.Group ?? string.Empty) + "\n" + (args.Keyword ?? string.Empty) + "\n"
+                + string.Join("\n", localNames) + "\n--reserved--\n" + string.Join("\n", args.ReservedNames ?? new string[0]));
+        }
+
+        /// <summary>验证opaque token并恢复目标签发的序号与前页边界。</summary>
+        private static void ReadProjectToolCatalogCursor(string token, string scope, out int offset, out string boundary)
+        {
+            offset = 0;
+            boundary = string.Empty;
+            if (string.IsNullOrEmpty(token)) return;
+            if (Utf8ByteCount(token) > 8192) throw InvalidProjectToolCatalogCursor();
+            try
+            {
+                var parts = token.Split('.');
+                if (parts.Length != 2) throw InvalidProjectToolCatalogCursor();
+                var payloadBytes = FromBase64Url(parts[0]);
+                var signature = FromBase64Url(parts[1]);
+                byte[] expected;
+                using (var hmac = new HMACSHA256(projectToolCatalogCursorSecret)) expected = hmac.ComputeHash(Encoding.UTF8.GetBytes(parts[0]));
+                if (!FixedTimeEqual(signature, expected)) throw InvalidProjectToolCatalogCursor();
+                var fields = Encoding.UTF8.GetString(payloadBytes).Split('\n');
+                int parsedOffset;
+                if (fields.Length != 3 || !string.Equals(fields[0], scope, StringComparison.Ordinal)
+                    || !int.TryParse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture, out parsedOffset) || parsedOffset < 0)
+                    throw InvalidProjectToolCatalogCursor();
+                offset = parsedOffset;
+                boundary = Encoding.UTF8.GetString(Convert.FromBase64String(fields[2]));
+                if (Utf8ByteCount(boundary) > 256) throw InvalidProjectToolCatalogCursor();
+            }
+            catch (BridgeCommandException) { throw; }
+            catch { throw InvalidProjectToolCatalogCursor(); }
+        }
+
+        /// <summary>使用当前domain secret签发不可由CLI改写的continuation。</summary>
+        private static string SignProjectToolCatalogCursor(string scope, int offset, string boundary)
+        {
+            var payloadText = scope + "\n" + offset.ToString(CultureInfo.InvariantCulture) + "\n"
+                + Convert.ToBase64String(Encoding.UTF8.GetBytes(boundary ?? string.Empty));
+            var payload = ToBase64Url(Encoding.UTF8.GetBytes(payloadText));
+            byte[] signature;
+            using (var hmac = new HMACSHA256(projectToolCatalogCursorSecret)) signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+            return payload + "." + ToBase64Url(signature);
+        }
+
+        /// <summary>统一返回可机器分支的cursor拒绝错误。</summary>
+        private static BridgeCommandException InvalidProjectToolCatalogCursor()
+        {
+            return new BridgeCommandException("E_DISCOVERY_CURSOR_INVALID", "The target rejected an altered or cross-query discovery continuation.", null,
+                new[] { "Restart this exact discovery query from its first page." });
+        }
+
+        /// <summary>secret只活在当前domain内，reload后旧token自然失效。</summary>
+        private static byte[] CreateProjectToolCatalogCursorSecret()
+        {
+            var bytes = new byte[32];
+            using (var random = RandomNumberGenerator.Create()) random.GetBytes(bytes);
+            return bytes;
+        }
+
+        /// <summary>编码URL安全token片段。</summary>
+        private static string ToBase64Url(byte[] value)
+        {
+            return Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        /// <summary>解码URL安全token片段。</summary>
+        private static byte[] FromBase64Url(string value)
+        {
+            var normalized = value.Replace('-', '+').Replace('_', '/');
+            normalized = normalized.PadRight(normalized.Length + (4 - normalized.Length % 4) % 4, '=');
+            return Convert.FromBase64String(normalized);
+        }
+
+        /// <summary>常量步数比较签名，避免提前返回泄露首个差异位置。</summary>
+        private static bool FixedTimeEqual(byte[] left, byte[] right)
+        {
+            if (left == null || right == null || left.Length != right.Length) return false;
+            var difference = 0;
+            for (var index = 0; index < left.Length; index++) difference |= left[index] ^ right[index];
+            return difference == 0;
+        }
+
+        /// <summary>所有catalog string bound统一按wire UTF-8字节计算。</summary>
+        private static int Utf8ByteCount(string value)
+        {
+            return Encoding.UTF8.GetByteCount(value ?? string.Empty);
+        }
+
+        /// <summary>以真实Bridge serializer计算完整data大小。</summary>
+        private static int CatalogDataUtf8Bytes(object data)
+        {
+            return Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(data));
+        }
+
+        /// <summary>完整data超出consumer预算时在返回前失败。</summary>
+        private static void RequireCatalogDataBudget(object data, int maximumBytes, string message)
+        {
+            if (CatalogDataUtf8Bytes(data) > maximumBytes) throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", message);
         }
 
         private static bool ProjectToolCatalogMatches(RegisteredToolDescriptor definition, string token)
@@ -481,14 +675,15 @@ namespace UnityCli
         /// <summary>exact describe只读取一次published snapshot；native未命中时可返回一份指定fallback descriptor。</summary>
         private static object ProjectToolCatalogDescribe(UnityCli.Protocol.BridgeRequest request, bool runtimeOnly)
         {
-            RequireProjectToolCatalogInputKeys(request, "name", "fallbackName");
+            if (runtimeOnly) RequireProjectToolCatalogInputKeys(request, "name");
+            else RequireProjectToolCatalogInputKeys(request, "name", "fallbackName");
             var catalog = ProjectToolCatalogSnapshotReader.Read();
             var args = request.DeserializeArgs<ProjectToolCatalogArgs>() ?? new ProjectToolCatalogArgs();
-            if (string.IsNullOrWhiteSpace(args.Name) || args.Name.Length > 256)
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe name is required and must not exceed 256 characters.");
-            if (args.FallbackName != null && (string.IsNullOrWhiteSpace(args.FallbackName) || args.FallbackName.Length > 256
+            if (string.IsNullOrWhiteSpace(args.Name) || Utf8ByteCount(args.Name) > 256)
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe name is required and must not exceed 256 UTF-8 bytes.");
+            if (args.FallbackName != null && (string.IsNullOrWhiteSpace(args.FallbackName) || Utf8ByteCount(args.FallbackName) > 256
                 || string.Equals(args.Name, args.FallbackName, StringComparison.Ordinal)))
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe fallbackName must be distinct and must not exceed 256 characters.");
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe fallbackName must be distinct and must not exceed 256 UTF-8 bytes.");
             var generation = ProjectToolCatalogGeneration();
             Func<RegisteredToolDescriptor, bool> availableForTarget = tool => !runtimeOnly || tool.Target == "runtime" || tool.Target == "both";
             var definition = catalog.Descriptors.FirstOrDefault(tool => string.Equals(tool.Name, args.Name, StringComparison.Ordinal) && availableForTarget(tool));
@@ -498,12 +693,11 @@ namespace UnityCli
             var result = new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", found } };
             if (found)
             {
-                var descriptor = ProjectToolDescriptorData(definition);
-                if (Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(descriptor)) > 3 * 1024 * 1024)
-                    throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Exact Tool descriptor exceeds the bounded transport size.", null,
-                        new[] { "Reduce the Tool schema or examples, then let Unity reload the domain." });
-                result["descriptor"] = descriptor;
+                result["descriptor"] = ProjectToolDescriptorData(definition);
             }
+            if (CatalogDataUtf8Bytes(result) > 3 * 1024 * 1024)
+                throw new BridgeCommandException("E_TOOL_REGISTRY_UNHEALTHY", "Exact Tool descriptor exceeds the bounded UTF-8 transport size.", null,
+                    new[] { "Reduce the Tool schema or examples, then let Unity reload the domain." });
             return result;
         }
 
