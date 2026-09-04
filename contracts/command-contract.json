@@ -228,6 +228,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "asset.refresh.status",
+      "group": "asset",
+      "command": "refresh.status",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "asset.rename",
       "group": "asset",
       "command": "rename",
@@ -270,6 +279,15 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.player.status",
+      "group": "build",
+      "command": "player.status",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -914,6 +932,15 @@
       "command": "play",
       "handler_type": "bridge",
       "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "editor.play-mode.status",
+      "group": "editor",
+      "command": "play-mode.status",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
       "destructive": false,
       "timeout": 30000
     },
@@ -1563,6 +1590,15 @@
       "timeout": 120000
     },
     {
+      "bridgeCommand": "package.install.status",
+      "group": "package",
+      "command": "install.status",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "package.registry.clear",
       "group": "package",
       "command": "registry.clear",
@@ -1588,6 +1624,15 @@
       "csharp_handler": "none",
       "destructive": true,
       "timeout": 120000
+    },
+    {
+      "bridgeCommand": "package.remove.status",
+      "group": "package",
+      "command": "remove.status",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "destructive": false,
+      "timeout": 30000
     },
     {
       "bridgeCommand": "package.resolve",
@@ -1623,6 +1668,15 @@
       "handler_type": "offline",
       "csharp_handler": "none",
       "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "package.update.status",
+      "group": "package",
+      "command": "update.status",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -3094,6 +3148,15 @@
       "csharp_handler": "none",
       "destructive": false,
       "timeout": 600000
+    },
+    {
+      "bridgeCommand": "test.run.status",
+      "group": "test",
+      "command": "run.status",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "destructive": false,
+      "timeout": 30000
     },
     {
       "bridgeCommand": "texture.create",
