@@ -38,8 +38,7 @@ namespace UnityCli.Tests
             Assert.That(Convert.ToInt64(result["toolCount"]), Is.EqualTo(expectedToolCount));
             Assert.That(result["providerCounts"], Is.InstanceOf<IDictionary<string, object>>());
             Assert.That(result["publicationDiagnostics"], Is.InstanceOf<IDictionary<string, object>>());
-            var serialized = Type.GetType("UnityCli.UnityCliSerializer, UnityCli.Editor", true)
-                .GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { result }) as string;
+            var serialized = UnityCli.UnityCliSerializer.Serialize(result);
             Assert.That(Encoding.UTF8.GetByteCount(serialized), Is.LessThanOrEqualTo(64 * 1024));
             Assert.That(serialized, Does.Not.Contain("fingerprint").IgnoreCase);
             Assert.That(serialized, Does.Not.Contain("rePinValue"));

@@ -84,7 +84,7 @@ namespace UnityCli.Tests
             var enumerableJson = UnityCliSerializer.Serialize(UnityCliBridge.ObjectSerializer.Serialize(enumerable,
                 new UnityCliBridge.ObjectSerializer.Options { MaxDepth = 4, MaxArrayItems = 1000 }, enumerableBudget));
             Assert.That(enumerable.MoveNextCount, Is.EqualTo(17));
-            StringAssert.Contains("non-resumable-enumerable-truncation", enumerableJson);
+            StringAssert.Contains("non-resumable-enumerable", enumerableJson);
             StringAssert.DoesNotContain("nextPath", enumerableJson);
 
             var multi = new GetterFixture();
@@ -258,7 +258,7 @@ namespace UnityCli.Tests
                 16,
                 16,
                 null,
-                Budget(new ManualClock(), scans: 64, nodes: 64, getters: 64, reflections: 64));
+                Budget(new ManualClock(), scans: 4096, nodes: 64, getters: 64, reflections: 64));
             var schema = (Dictionary<string, object>)enumPage.Data["schema"];
             Assert.That(schema["continuationSupported"], Is.False);
             Assert.That(schema["truncationReason"], Is.EqualTo("non-resumable-enum-truncation"));

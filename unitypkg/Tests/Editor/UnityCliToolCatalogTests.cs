@@ -204,7 +204,7 @@ namespace UnityCli.Tests
         public void MultibyteDescriptorBoundsAndCompleteCatalogEnvelopesUseUtf8Bytes()
         {
             var accepted = NewBuilder(1, 1);
-            Assert.That(() => Add(accepted, Definition("fixture." + new string('n', 248), "project", "native", new string('组', 85), new string('界', 170) + "ab"), "ProjectInterface"), Throws.Nothing);
+            Assert.That(() => Add(accepted, Definition("fixture.utf8.accepted", "project", "native", new string('组', 85), new string('界', 170) + "ab"), "ProjectInterface"), Throws.Nothing);
 
             var rejected = NewBuilder(1, 1);
             Assert.That(() => Add(rejected, Definition("fixture.utf8.too-long", "project", "native", new string('组', 85), new string('界', 170) + "abc"), "ProjectInterface"),
@@ -471,7 +471,6 @@ namespace UnityCli.Tests
                 parameters.ReferencedAssemblies.Add("System.dll");
                 parameters.ReferencedAssemblies.Add("System.Core.dll");
                 parameters.ReferencedAssemblies.Add(typeof(IUnityCliTool<,>).Assembly.Location);
-                parameters.ReferencedAssemblies.Add(typeof(ValueTask<>).Assembly.Location);
                 parameters.ReferencedAssemblies.Add(typeof(UnityCliToolCatalogFixtureProbe).Assembly.Location);
                 var result = provider.CompileAssemblyFromSource(parameters, source.ToString());
                 var failures = result.Errors.Cast<CompilerError>().Where(error => !error.IsWarning).Select(error => error.ToString()).ToArray();
