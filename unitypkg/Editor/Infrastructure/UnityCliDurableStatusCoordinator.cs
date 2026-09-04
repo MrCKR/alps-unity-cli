@@ -101,6 +101,12 @@ namespace UnityCli
                 };
             }
 
+            private static string Text(Dictionary<string, object> value, string key)
+            {
+                object item;
+                return value != null && value.TryGetValue(key, out item) ? item as string : null;
+            }
+
             private static bool IsSafeRequestId(string requestId)
             {
                 if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 200) return false;
