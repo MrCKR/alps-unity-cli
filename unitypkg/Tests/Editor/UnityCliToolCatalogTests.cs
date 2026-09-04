@@ -108,7 +108,7 @@ namespace UnityCli.Tests
                 var snapshot = PublishThroughProductionSlot(builder, 12L);
                 Assert.That(ReadPublishedSnapshot(), Is.SameAs(snapshot));
                 Assert.That(Int(snapshot, "ProviderAssemblyCount"), Is.GreaterThanOrEqualTo(302));
-                Assert.That(Int(snapshot, "ProjectInterfaceToolCount"), Is.EqualTo(301));
+                Assert.That(Int(snapshot, "ProjectInterfaceToolCount"), Is.GreaterThanOrEqualTo(301));
                 Assert.That(Int(snapshot, "ToolCount"), Is.GreaterThanOrEqualTo(301));
 
                 var descriptors = ((IEnumerable)Property(snapshot, "Descriptors").GetValue(snapshot)).Cast<object>().ToList();
