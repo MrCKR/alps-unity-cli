@@ -54,11 +54,11 @@ test("durable status fails closed on malformed state and preserves bridge errors
   const tool = findDefineTool("asset.refresh.status");
   assert.ok(tool);
   await assert.rejects(
-    () => tool.execute({ requestId: "root-invalid" }, context(async (payload: BridgeRequest): Promise<BridgeResponse> => ({ ok: true, requestId: payload.requestId, data: { state: "completed" } }))),
+    async () => await tool.execute({ requestId: "root-invalid" }, context(async (payload: BridgeRequest): Promise<BridgeResponse> => ({ ok: true, requestId: payload.requestId, data: { state: "completed" } }))),
     (error: unknown) => error instanceof StructuredToolError && error.code === "E_BRIDGE_PROTOCOL",
   );
   await assert.rejects(
-    () => tool.execute({ requestId: "root-missing" }, context(async (payload: BridgeRequest): Promise<BridgeResponse> => ({ ok: false, requestId: payload.requestId, error: { code: "E_REQUEST_NOT_FOUND", message: "missing", nextActions: ["Check requestId."] } }))),
+    async () => await tool.execute({ requestId: "root-missing" }, context(async (payload: BridgeRequest): Promise<BridgeResponse> => ({ ok: false, requestId: payload.requestId, error: { code: "E_REQUEST_NOT_FOUND", message: "missing", nextActions: ["Check requestId."], transient: false, retryAfterMs: 0 } }))),
     (error: unknown) => error instanceof StructuredToolError && error.code === "E_REQUEST_NOT_FOUND",
   );
 });

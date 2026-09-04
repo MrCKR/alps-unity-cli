@@ -7,6 +7,6 @@ export default defineTool<DurableStatusRequest, DurableStatusResult>({
   description: "Reads the active phase or exact terminal envelope for one asset.refresh root in the current Editor session. The original public requestId is the only business input; internal request digests are never exposed, and this Tool never replays the import effect.",
   group: "asset", destructiveHint: false, target: "editor", playModeSupport: "supported", timeoutMs: 30_000,
   handler: "bridge", supportStatus: "live-bridge",
-  examples: [{ description: "Read an asset refresh after response loss", input: { requestId: "asset-refresh-root-01" } }],
+  examples: [{ description: "Read an asset refresh after response loss", argv: ["tools", "run", "asset.refresh.status", "--input", "{\"requestId\":\"asset-refresh-root-01\"}"] }],
   execute: (request, context) => readDurableStatus("internal.asset.refresh.public-status", request, context),
 });
