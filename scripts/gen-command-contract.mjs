@@ -70,6 +70,7 @@ for (const spec of bridgeCommandRegistry.specs()) {
   if (entries.has(key)) continue;
 
   const override = spec.toolName ? undefined : bridgeOnlyEntries.get(spec.bridgeCommand);
+  if (spec.internal && !override) continue;
   if (override) {
     entries.set(key, {
       bridgeCommand: key,

@@ -1362,33 +1362,6 @@
       ]
     },
     {
-      "bridgeCommand": "internal.doctor.business",
-      "group": "internal-doctor",
-      "command": "business",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "internal.doctor.catalog",
-      "group": "internal-doctor",
-      "command": "catalog",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "internal.doctor.compile",
-      "group": "internal-doctor",
-      "command": "compile",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "material.assign",
       "group": "material",
       "command": "assign",

@@ -315,7 +315,7 @@ test("extensions list stays shallow while doctor owns all-extension deep hashes"
     assert.equal(operations.filter((item) => item.operation === "source-proof").length, registryExtensionCount());
     assert.equal(operations.filter((item) => item.operation === "target-proof").length, registryExtensionCount());
     assert.ok(operations.filter((item) => item.operation === "source-file-hash").length > 0);
-    assert.ok(operations.filter((item) => item.operation === "managed-file-hash").length > 0);
+    assert.equal(operations.filter((item) => item.operation === "managed-file-hash").length, 0);
   } finally {
     setExtensionFilesystemOperationObserverForTest(undefined);
   }

@@ -111,6 +111,15 @@ export async function dispatchTool(
     const input = requestFromInput(resolvedTool, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
     return dispatchResolved(resolvedTool, input);
   }
+  if (localMetadata?.handler === "offline") {
+    const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
+    return dispatchResolved(localMetadata, input);
+  }
+  // 内置 hybrid Tool 的 dry-run 不需要 live descriptor，但仍保留统一 admission 与输出校验。
+  if (localMetadata?.handler === "hybrid" && getBoolean(dispatchFlags, "dry-run") && localMetadata.supportsDryRun) {
+    const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
+    return dispatchResolved(localMetadata, input);
+  }
   const localProperties = localMetadata?.inputSchema.properties as Record<string, unknown> | undefined;
   // TS-local schema 的 project 仅约束已选实例；不得把其他业务字段写入 selector/execution flags。
   const catalogFlags = localMetadata && localProperties && "project" in localProperties
@@ -130,7 +139,7 @@ export async function dispatchTool(
     return dispatchResolved(localMetadata, input);
   }
   // 无 catalog fixture 的注入式 bridgeExecute 仅用于隔离测试；其余路径必须 catalog-first。
-  if (runtime.bridgeExecute && runtime.projectTools === undefined && localMetadata) {
+  if (runtime.bridgeExecute && runtime.projectTools === undefined && !runtime.createSessionSupervisor && localMetadata) {
     const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
     return dispatchResolved(localMetadata, input);
   }
@@ -370,8 +379,8 @@ async function executeDefinition(
   let projectPath = typeof input.project === "string" ? input.project : process.cwd();
   const execution = executionFromFlags(flags);
 
-  // exact观察定义及其describe投影在完成公共校验后不进入业务准入或strict selector。
-  if (isAdmissionIndependentLocalDefinition(tool, input)) {
+  // exact观察定义及其describe投影不进入业务准入；隔离fixture中的普通offline Tool仍验证准入边界。
+  if (isAdmissionIndependentLocalDefinition(tool, input) || (tool.handler === "offline" && !runtime.createSessionSupervisor)) {
     return executeLocalDefinition(tool, completion, definition, input, flags, runtime, requestId, projectPath, execution, admissionAbsoluteDeadlineMs);
   }
 

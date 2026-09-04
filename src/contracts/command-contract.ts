@@ -89,7 +89,7 @@ export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry,
   const registryCommands = new Set<string>();
   const registryToolNames = new Set<string>();
   for (const spec of registry.specs()) {
-    if (skipGroups?.has(spec.group)) continue;
+    if (skipGroups?.has(spec.group) || PRIVATE_BRIDGE_COMMANDS.has(spec.bridgeCommand)) continue;
     registryCommands.add(spec.bridgeCommand);
     if (spec.toolName) registryToolNames.add(spec.toolName);
     const contract = findCommandContract(spec.toolName ?? spec.bridgeCommand);

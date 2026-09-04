@@ -113,8 +113,8 @@ test("resolved live descriptor owns the default input and admission deadline", a
 
 test("dispatcher keeps the non-code input deadline before live descriptor resolution", async () => {
   const source = await readFile("src/tools/dispatcher.ts", "utf8");
-  assert.match(source, /const localMetadata = findToolByName\(name\);[\s\S]*const timeoutMetadata = resolvedTool \?\? localMetadata;[\s\S]*const defaultTimeoutMs = name === "code\.exec" \? 60_000 : 30_000;[\s\S]*const admissionTimeoutMs = Math\.max\(1, executionFromFlags\(flags\)\.timeoutMs \?\? timeoutMetadata\?\.timeoutMs \?\? defaultTimeoutMs\);[\s\S]*const admissionAbsoluteDeadlineMs = dispatchStartedAtMs \+ admissionTimeoutMs;[\s\S]*parseTypedInput\(flags, requestId, name === "code\.exec" \? 1024 \* 1024 : undefined, admissionAbsoluteDeadlineMs\)/);
-  assert.match(source, /resolveCatalogTool\(name, catalogFlags, runtime, requestId, admissionAbsoluteDeadlineMs\)/);
+  assert.match(source, /const localMetadata = findToolByName\(name\);[\s\S]*const timeoutMetadata = resolvedTool \?\? localMetadata;[\s\S]*const defaultTimeoutMs = name === "code\.exec" \? 60_000 : 30_000;[\s\S]*beginToolInvocation\(flags, requestId, \{ timeoutMs: timeoutMetadata\?\.timeoutMs \?\? defaultTimeoutMs \}, dispatchStartedAtMs\);[\s\S]*const admissionAbsoluteDeadlineMs = started\.context\.admissionAbsoluteDeadlineMs;[\s\S]*parseTypedInput\(flags, requestId, name === "code\.exec" \? 1024 \* 1024 : undefined, admissionAbsoluteDeadlineMs\)/);
+  assert.match(source, /resolveCatalogToolForInvocation\(name, catalogFlags, runtime, requestId, started\.context\)/);
 });
 
 test("ordinary Tool open stdin returns one timeout envelope before dispatch", async (context) => {

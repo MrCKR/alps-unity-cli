@@ -501,21 +501,23 @@ test("Unity Bridge graphics and physics commands expose settings, raycast and di
   assert.match(source, /Physics2D\.Simulate/);
   assert.match(source, /E_RENDER_PIPELINE_NOT_FOUND/);
   assert.match(source, /E_QUALITY_LEVEL_INVALID/);
-  assert.match(source, /E_GRAPHICS_SETTING_UNSUPPORTED/);
+  assert.match(source, /E_GRAPHICS_RANGE_INVALID|E_GRAPHICS_ENUM_INVALID/);
   assert.match(source, /E_PHYSICS_SETTING_UNSUPPORTED/);
 });
 
-test("Unity Bridge cancellation prevents queued side effects and cancels started work", async () => {
+test("Unity Bridge cancellation prevents queued side effects without cancelling started work", async () => {
   const source = await readUnityBridgeSources();
+  const httpServer = await readFile(new URL("Bridge/BridgeHttpServer.cs", editorUrl), "utf8");
 
   assert.match(source, /CancelBeforeStart/);
   assert.match(source, /TryStart/);
   assert.match(source, /CancellationTokenSource/);
-  assert.match(source, /public bool CancelBeforeAcceptance\(\)[\s\S]*cancellation\.Cancel\(\)/);
+  assert.match(source, /public bool CancelBeforeStart\(\)[\s\S]*cancellation\.Cancel\(\)/);
   assert.match(source, /item\.CancelBeforeStart\(\)[\s\S]*E_UNITY_BUSY/);
-  assert.match(source, /item\.Cancel\(\)[\s\S]*E_EXECUTION_TIMEOUT/);
+  assert.match(httpServer, /private static string ResolveStartedTimeoutResponse[\s\S]*if \(item\.Completed\.Wait\(0\) && item\.Response != null\) return item\.Response;[\s\S]*"E_EXECUTION_TIMEOUT"/);
+  assert.doesNotMatch(httpServer, /ResolveStartedTimeoutResponse[\s\S]*CancelBeforeStart/);
   assert.match(source, /await ExecuteCoordinatedRequest\(item\.Request, item\.RawRequestBytes, item\.TryAccept, item\.Token\)/);
-  assert.match(source, /CancelBeforeAcceptance\(\)/);
+  assert.doesNotMatch(source, /CancelBeforeAcceptance\(\)/);
   assert.match(source, /request\.ContentLength64/);
   assert.match(source, /stream\.Read\(bytes, offset, bytes\.Length - offset\)/);
   assert.match(source, /"bridge_request_enqueued" : "bridge_request_attached"/);
@@ -538,11 +540,10 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /string\.IsNullOrEmpty\(target\)/);
   assert.match(source, /File\.Exists\(outputPath\) && !overwrite/);
   assert.match(source, /CreateScreenshotDirectory\(outputPath\)/);
-  assert.match(source, /WriteScreenshotBytes\(outputPath, bytes\)/);
-  assert.match(source, /bytes == null \|\| bytes\.Length == 0/);
-  assert.match(source, /E_SCREENSHOT_ENCODE_FAILED/);
-  assert.match(source, /File\.Exists\(outputPath\) \|\| new FileInfo\(outputPath\)\.Length <= 0/);
-  assert.match(source, /E_SCREENSHOT_WRITE_PROOF_MISSING/);
+  assert.match(source, /WriteScreenshotBytes\(outputPath, bytes, (?:captureBudget|budget)\)/);
+  assert.match(source, /E_SCREENSHOT_ARTIFACT_EMPTY/);
+  assert.match(source, /E_SCREENSHOT_ARTIFACT_MISSING/);
+  assert.match(source, /E_SCREENSHOT_ARTIFACT_INVALID/);
   assert.match(source, /Path\.GetFullPath/);
 
   const multiviewSource = await readFile(new URL("Tools/camera/multiview.cs", editorUrl), "utf8");

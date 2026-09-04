@@ -47,8 +47,8 @@ test("editor.state is the sole hybrid observation owner with bounded fallback", 
 });
 
 test("editor.state distinguishes current idle observation from proof of a prior mutation effect", () => {
-  assert.match(editorStateTool.description, /Ready proves only current session state/i);
-  assert.match(editorStateTool.description, /started mutation timeout/i);
+  assert.match(editorStateTool.description, /selected Unity project's active Editor session/i);
+  assert.match(editorStateTool.description, /After a started mutation timeout/i);
   assert.match(editorStateTool.description, /affected business state before a new request/i);
   assert.doesNotMatch(editorStateTool.description, /safe to treat .*not-happened|directly resubmit/i);
 });

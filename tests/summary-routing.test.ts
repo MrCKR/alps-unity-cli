@@ -85,7 +85,7 @@ test("local read Tool descriptions are route-specific", () => {
     assert.ok(wordCount(tool.description) <= 70, `${name} description is too long`);
     for (const pattern of GENERIC_PATTERNS) assert.doesNotMatch(tool.description, pattern);
   }
-  assert.match(tools.find((entry) => entry.name === "editor.state")!.description, /selected Unity project identity/i);
+  assert.match(tools.find((entry) => entry.name === "editor.state")!.description, /selected Unity project's active Editor session/i);
   assert.match(tools.find((entry) => entry.name === "editor.dialogs")!.description, /Windows modal dialogs/i);
 });
 

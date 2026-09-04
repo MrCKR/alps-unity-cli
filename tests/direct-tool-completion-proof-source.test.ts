@@ -28,12 +28,10 @@ test("camera captures and texture generation prove their observed artifacts", as
   const multiview = await readTool("Tools/camera/multiview.cs");
   const generate = await readTool("Tools/texture/generate.cs");
 
-  assert.match(camera, /bytes == null \|\| bytes\.Length == 0/);
-  assert.match(camera, /E_SCREENSHOT_ENCODE_FAILED/);
-  assert.match(camera, /if \(!File\.Exists\(outputPath\)\) throw new UnityCliBridge\.BridgeCommandException\("E_SCREENSHOT_WRITE_PROOF_MISSING"/);
-  assert.match(camera, /var bytes = File\.ReadAllBytes\(outputPath\)/);
-  assert.match(camera, /bytes\.Length >= 8/);
-  assert.match(camera, /E_SCREENSHOT_WRITE_PROOF_MISSING/);
+  assert.match(camera, /ScreenshotToolSupport\.WriteScreenshotBytes\(outputPath, bytes, budget\)/);
+  assert.match(camera, /E_SCREENSHOT_ARTIFACT_EMPTY/);
+  assert.match(camera, /E_SCREENSHOT_ARTIFACT_MISSING/);
+  assert.match(camera, /E_SCREENSHOT_ARTIFACT_INVALID/);
   assert.match(multiview, /CameraToolSupport\.NormalizeFormat\(request\.Format, Path\.Combine\(outputDir, "capture\.png"\)\)/);
   assert.match(multiview, /plans\.Add\(new KeyValuePair<int, string>\(camera\.GetInstanceID\(\), outputPath\)\)/);
   assert.match(multiview, /EditorUtility\.InstanceIDToObject\(plan\.Key\) as Camera/);

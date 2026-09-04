@@ -15,6 +15,17 @@ export function makeLiveTool(overrides: Partial<ToolMetadata> & Pick<ToolMetadat
   };
   return {
     ...tool,
+    completionContract: tool.completionContract ?? {
+      executionClass: "atomic",
+      completionPredicate: "typed-business-terminal",
+      proofSource: "typed-result-and-effect-readback",
+      reloadPolicy: "caller-responsibility",
+      timeoutError: "E_EXECUTION_TIMEOUT",
+      outcomeUnknownPolicy: "caller-responsibility",
+      completionDriverId: "atomic-typed-result-v1",
+      journalPolicy: "none",
+      mutation: Boolean(tool.destructiveHint),
+    },
     examples: tool.examples ?? [{
       description: `Run ${tool.name}.`,
       argv: ["tools", "run", tool.name, "--input", "{}"]

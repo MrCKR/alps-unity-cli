@@ -219,7 +219,7 @@ test("C# component deep handlers return typed Result via IUnityCliTool", async (
   const { readFile } = await import("node:fs/promises");
   const getSource = await readFile(new URL("../unitypkg/Editor/Tools/component/get.cs", import.meta.url), "utf8");
   assert.match(getSource, /BuildSerializerOptions\(request\)/, "component.get should build shared serializer options from its typed request DTO");
-  assert.match(getSource, /ObjectSerializer\.Serialize\(component, options\)/, "component.get should serialize the component");
+  assert.match(getSource, /ObjectSerializer\.Serialize\(component, options, budget\)/, "component.get should serialize the component with the request-wide budget");
   const modifySource = await readFile(new URL("../unitypkg/Editor/Tools/component/modify.cs", import.meta.url), "utf8");
   assert.match(modifySource, /DryRun/, "component.modify should support dry-run");
   assert.match(modifySource, /ObjectPatch\.ApplyVerifiedSerializedPatches/, "component.modify should apply prevalidated serialized path patches");

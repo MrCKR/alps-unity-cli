@@ -89,7 +89,7 @@ test("raw code.exec dry-run cannot compile source and normal execution rechecks 
   assert.match(runtimeCode, /executeBridgePayload[\s\S]*absoluteDeadlineMs \}\);/);
   assert.match(runtimeCode, /function normalizeTimeout[\s\S]*return Math\.trunc\(value\)/);
   assert.doesNotMatch(runtimeCode, /Math\.min\(Math\.trunc\(value\), 600_000\)/);
-  assert.match(dispatcher, /codeInputDeadlineMs[\s\S]*name === "code\.exec" \? 1024 \* 1024/);
+  assert.match(dispatcher, /parseTypedInput\(flags, requestId, name === "code\.exec" \? 1024 \* 1024 : undefined, [^)]+\)/);
   assert.match(dispatcher, /readBoundedInputFile[\s\S]*beforeInputDeadline[\s\S]*handle\.read/);
   assert.match(dispatcher, /readStdin\(maxBytes, absoluteDeadlineMs\)[\s\S]*InputDeadlineExceeded/);
   assert.match(dispatcher, /E_CODE_INPUT_TOO_LARGE/);

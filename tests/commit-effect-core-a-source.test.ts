@@ -38,7 +38,7 @@ test("core A mutation Tools own a commit-effect boundary", async () => {
       assert.ok(dryRun < 0 || commit > dryRun, `${file.pathname} commits before its dry-run guard`);
     }
   }
-  assert.match(sharedBuildScene, /if \(!ctx\.DryRun\)\s*\{\s*ctx\.CommitEffect\(\)/);
+  assert.match(sharedBuildScene, /if \(!ctx\.DryRun && changed\)\s*\{\s*ctx\.CommitEffect\(\)/);
   for (const { file, source } of readOnly) {
     assert.doesNotMatch(executeBody(source), /ctx\.CommitEffect\(\)/, `${file.pathname} is read-only but commits an effect`);
   }

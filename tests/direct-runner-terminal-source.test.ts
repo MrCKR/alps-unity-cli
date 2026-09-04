@@ -29,8 +29,9 @@ test("Build target and scene no-ops produce approved request-specific terminals"
   ]);
   assert.match(dtos, /BuildPlatformResult[^\n]*bool Changed[^\n]*string NoOpReason/);
   assert.match(dtos, /BuildSceneMutationResult[^\n]*bool Changed[^\n]*string NoOpReason/);
-  assert.match(platform, /changed = EditorUserBuildSettings\.activeBuildTarget != target/);
-  assert.match(scene, /NoOpReason = !ctx\.DryRun && !changed \? "scene-already-enabled" : null/);
+  assert.match(platform, /var changed = EditorUserBuildSettings\.activeBuildTarget != target/);
+  assert.match(platform, /NoOpReason = changed \? null : "active-target-already-matched"/);
+  assert.match(scene, /NoOpReason = !changed \? "scene-already-(?:enabled|disabled)" : null/);
 });
 
 test("C# Tool runner reports effect-barrier timeouts uniformly", async () => {

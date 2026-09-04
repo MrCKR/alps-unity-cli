@@ -93,6 +93,6 @@ test("reflection and profiler load commit at their first irreversible effect", a
     readFile(new URL("Tools/reflection/method/call.cs", editorUrl), "utf8"),
     readFile(new URL("Tools/profiler/load.cs", editorUrl), "utf8")
   ]);
-  assert.match(reflection, /PrepareCall\([\s\S]*ctx\.RunCompletionProbe\(request\.CompletionProbe, \(\) => data = UnityCliBridge\.ReflectionInvoker\.InvokePrepared\(prepared\)\)/);
+  assert.match(reflection, /PrepareCall\([\s\S]*ctx\.RunCompletionProbe\(request\.CompletionProbe, \(\) => data = UnityCliBridge\.ReflectionInvoker\.InvokePrepared\(prepared(?:, readBudget)?\)\)/);
   assert.match(profilerLoad, /ctx\.CommitEffect\(\);\s*ProfilerToolSupport\.SetProfilerSessionEnabled\(false\)/s);
 });

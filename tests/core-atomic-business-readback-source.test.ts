@@ -111,7 +111,7 @@ test("adjacent core tools expose observed business objects after mutation", asyn
   assert.match(buildSettings, /var result = BuildSettingsToolSupport\.Read\(\)/);
   assert.match(importSettings, /TextureToolSupport\.LoadTextureAsset\(path\)/);
   assert.match(importSettings, /BuildTextureImportSettings\(TextureToolSupport\.RequireTextureImporter\(path\)\)/);
-  assert.match(objectModify, /ObjectSerializer\.Serialize\(observedTarget, options\)/);
+  assert.match(objectModify, /ObjectSerializer\.Serialize\(observedTarget, options, readBudget\)/);
   assert.match(componentSet, /GameObjectToolSupport\.BuildComponentSummary\(observedComponent\)/);
   assert.match(gameObjectModify, /GameObjectToolSupport\.BuildGameObjectDetail\(observed\)/);
   assert.match(gameObjectModify, /GameObject = details\[0\], ModifiedCount = 1/);

@@ -143,6 +143,6 @@ test("doctor private diagnostics read the immutable catalog owner and keep compi
   assert.match(doctorHandler, /ProjectToolCatalogSnapshotReader\.Read\(\)/);
   assert.match(doctorHandler, /providerCounts[\s\S]*publicationDiagnostics[\s\S]*DiscoveryPassCount[\s\S]*PerToolSuccessLogCount/);
   assert.doesNotMatch(doctorHandler, /DiscoverProjectTools|RefreshProjectToolFingerprint|ProjectToolDescriptorData|rePinValue|blockedTools/);
-  assert.doesNotMatch(registry, /CatalogSnapshotReader|ProjectToolCatalogDiagnosticState|ProjectToolCatalogBlockedDiagnostic|projectToolCatalogDiagnostics/);
+  assert.doesNotMatch(registry, /ProjectToolCatalogDiagnosticState|ProjectToolCatalogBlockedDiagnostic|projectToolCatalogDiagnostics/);
   assert.doesNotMatch(bridge, /projectToolCatalogDiagnostics/);
 });

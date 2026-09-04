@@ -11,7 +11,7 @@ test("refresh persists and resumes only its active operation", async () => {
   const skeleton = await readFile(skeletonPath, "utf8");
   // refresh 收编进统一骨架：scope 声明与业务状态机在协调器内，active 文件与 lease 生命周期由骨架承担。
   assert.match(source, /Scope \{ get \{ return "refresh"; \} \}/);
-  assert.match(source, /BeforeReload\(\) \{ Instance\.Update\(x => x\["reloadObserved"\] = true\); \}/);
+  assert.match(source, /BeforeReload\(\)\s*\{\s*Instance\.Update\(\w+ => \w+\["reloadObserved"\] = true\);\s*\}/);
   assert.match(source, /UnityCliReloadOperation/);
   assert.match(skeleton, /UnityCliActiveOperation\.Exists\(Scope\)/);
   assert.match(skeleton, /UnityCliActiveOperation\.Load\(Scope\)/);

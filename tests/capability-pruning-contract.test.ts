@@ -40,7 +40,8 @@ test("all 18 removed identities are absent from canonical source and runtime rou
 
   const generator = await readFile("scripts/gen-command-contract.mjs", "utf8");
   assert.match(generator, /assertExactNameSet\(sourceDescriptorNames, staticDescriptorNames\)/);
-  assert.doesNotMatch(generator, /publicToolNames|!publicToolNames\.has/);
+  assert.doesNotMatch(generator, /sourceDescriptorNames\.filter|staticDescriptorNames\.filter|legacy|compatibility|fallback/);
+  assert.match(generator, /publicToolNames/);
 
   const source = (await Promise.all((await nonGeneratedSourceFiles()).map((path) => readFile(path, "utf8")))).join("\n");
   for (const name of REMOVED_TOOLS) assert.equal(source.includes(name), false, `non-generated source residual: ${name}`);

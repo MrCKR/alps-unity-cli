@@ -9,15 +9,15 @@ process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 const dataDir = "Z:/definitely-missing-unity-cli-data";
 const completionContract = {
-  executionClass: "atomic" as const,
-  completionPredicate: "method-return",
-  proofSource: "official-attribute-return",
-  reloadPolicy: "fail-closed",
+  executionClass: "external" as const,
+  completionPredicate: "attributed-method-return-v1",
+  proofSource: "official-attributed-method-return",
+  reloadPolicy: "outcome-unknown-after-dispatch",
   timeoutError: "E_EXECUTION_TIMEOUT",
-  outcomeUnknownPolicy: "fail-closed",
-  completionDriverId: "official-attribute.method-return",
-  journalPolicy: "none" as const,
-  mutation: false,
+  outcomeUnknownPolicy: "method-may-still-be-running",
+  completionDriverId: "official-method-return-v1",
+  journalPolicy: "required" as const,
+  mutation: true,
 };
 
 function attributeEvalTool(overrides: Partial<ToolMetadata> = {}): ToolMetadata {
@@ -29,6 +29,14 @@ function attributeEvalTool(overrides: Partial<ToolMetadata> = {}): ToolMetadata 
     source: "project",
     contractProfile: "official-attribute",
     completionContract,
+    destructiveHint: true,
+    supportsDryRun: false,
+    sideEffects: ["arbitrary-method-invocation"],
+    permissions: ["execute-user-code"],
+    requiresPackages: [],
+    target: "editor",
+    playModeSupport: "unknown",
+    availabilityScope: "editorSession",
     inputSchema: {
       type: "object",
       properties: {
