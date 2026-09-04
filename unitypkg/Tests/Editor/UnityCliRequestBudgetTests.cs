@@ -84,7 +84,8 @@ namespace UnityCli.Tests
             var enumerableJson = UnityCliSerializer.Serialize(UnityCliBridge.ObjectSerializer.Serialize(enumerable,
                 new UnityCliBridge.ObjectSerializer.Options { MaxDepth = 4, MaxArrayItems = 1000 }, enumerableBudget));
             Assert.That(enumerable.MoveNextCount, Is.EqualTo(17));
-            StringAssert.Contains("nextPath", enumerableJson);
+            StringAssert.Contains("non-resumable-enumerable-truncation", enumerableJson);
+            StringAssert.DoesNotContain("nextPath", enumerableJson);
 
             var multi = new GetterFixture();
             var pathBudget = Budget(new ManualClock(), getters: 1, reflections: 32, nodes: 32);
@@ -248,7 +249,7 @@ namespace UnityCli.Tests
                 new UnityCliBridge.ObjectSerializer.Options { MaxDepth = 4, MaxArrayItems = 1 },
                 Budget(new ManualClock(), scans: 32, nodes: 32, getters: 32, reflections: 32)));
             StringAssert.Contains("non-resumable-dictionary-truncation", dictionaryJson);
-            StringAssert.Contains("\"nextPath\":null", dictionaryJson);
+            StringAssert.DoesNotContain("nextPath", dictionaryJson);
 
             var enumPage = UnityCliBridge.TypeSchemaGenerator.Generate(
                 typeof(Issue042Enum).FullName,
@@ -269,7 +270,7 @@ namespace UnityCli.Tests
         {
             var adapter = new EmptyConsoleSnapshot(100000);
             var budget = Budget(new ManualClock(), scans: 3, nodes: 32, getters: 32, reflections: 32);
-            Assert.Throws<UnityCliRequestBudgetExceededException>(() => EditorToolSupport.ReadConsolePage(null, null, 10, budget, adapter));
+            Assert.Throws<UnityCliRequestBudgetExceededException>(() => EditorToolSupport.ReadConsolePage("error", null, 10, budget, adapter));
             Assert.That(adapter.ReadCount, Is.EqualTo(3));
             Assert.That(budget.ExhaustedDimension, Is.EqualTo("scannedRecords"));
         }
@@ -521,9 +522,11 @@ namespace UnityCli.Tests
             internal int ReadCount { get; private set; }
             public bool TryRead(int rawIndex, UnityCliRequestBudget budget, out ConsoleEntry result)
             {
-                ReadCount++;
                 result = null;
-                return false;
+                if (!budget.TryConsumeScannedRecord()) return false;
+                ReadCount++;
+                result = new ConsoleEntry { Type = "log", Message = string.Empty, File = string.Empty };
+                return true;
             }
         }
 

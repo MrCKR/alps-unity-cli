@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "ed586dccd33dd5a9fd495842aea3f7fde114c9c6fbb063309d915cd766f661bf",
+  "sourceHash": "55e633232d77395c432db686faf3f2db8f8286b5361c35d28e9b3e59d8c52a16",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -81,8 +81,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliAdmission.cs",
-      "size": 133443,
-      "sha256": "d3e797616c3aec5d4ca8fa5cd86568d6baa4e0d0c3978c449784d209567f7cba"
+      "size": 133874,
+      "sha256": "fa2f16d01fef962060952bef32196ab7b9115710a4a246f53ccb1f55f75ada3e"
     },
     {
       "path": "Editor/Infrastructure/UnityCliArtifacts.cs",
@@ -1976,8 +1976,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliRequestBudgetTests.cs",
-      "size": 30342,
-      "sha256": "adc4ad44af871641dcb886b0621c13b45625d8ad5fd6cb9f6fe0e37da36f2b93"
+      "size": 30611,
+      "sha256": "d363cab271ed9003afc13c1dd60df0534e6c5b048737d48794ea8cf13c253700"
     },
     {
       "path": "Tests/Editor/UnityCliRuntimeBridgeIntegrationTests.cs",

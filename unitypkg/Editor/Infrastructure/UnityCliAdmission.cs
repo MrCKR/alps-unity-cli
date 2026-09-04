@@ -798,7 +798,7 @@ namespace UnityCli
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission cleanup marker owner state is outside its exact transfer window.");
             }
             if (current.OwnerState != intended) return PersistAdmissionOwnerTransfer(state, markerScope, marker, current, intended);
-            marker["admissionTransferCommitted"] = true;
+            WriteAdmissionOwnerFields(marker, current, intended, true);
             state.SaveOperation(markerScope, marker);
             if (!PersistAdmissionPoolState(state)) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Admission marker reconciliation persistence was not confirmed.");
             return current;
@@ -878,6 +878,10 @@ namespace UnityCli
                 var terminalScope = markerScope.EndsWith("-admission-owner", StringComparison.Ordinal)
                     ? markerScope.Substring(0, markerScope.Length - "-admission-owner".Length)
                     : markerScope;
+                if (terminalScope.EndsWith("-terminal-cleanup", StringComparison.Ordinal))
+                    terminalScope = terminalScope.Substring(0, terminalScope.Length - "-terminal-cleanup".Length);
+                if (terminalScope.EndsWith("-pre-effect-cleanup", StringComparison.Ordinal))
+                    terminalScope = terminalScope.Substring(0, terminalScope.Length - "-pre-effect-cleanup".Length);
                 object terminal;
                 return state.TryGetTerminal(terminalScope, owner.RequestId, AdmissionTopDigest(owner), out terminal);
             }
