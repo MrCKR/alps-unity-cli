@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "8fb0151414cd478b94a50fa740fa5e1cc8e0d9214fcb48918c6bb73d6b129771",
+  "sourceHash": "45e445a2544c9b6ea0c54fa06be38b79a46e4bc8dffbe521328f0e73ce5ae729",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -1976,8 +1976,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliRequestBudgetTests.cs",
-      "size": 30602,
-      "sha256": "a96edec02ebc0eb53cbf28cff6b303d63a8100a03590f36b84a4e93ad94ad838"
+      "size": 30604,
+      "sha256": "f43e0574bf2e6e6283b945ee3ab63a57ed5c02b21d096124524600a706788bb2"
     },
     {
       "path": "Tests/Editor/UnityCliRuntimeBridgeIntegrationTests.cs",
@@ -1986,8 +1986,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliToolCatalogTests.cs",
-      "size": 30330,
-      "sha256": "598a8e9a6d00a2e65d9f41d0b4c7f0aac0d01c34887d29e772c0dc51568bfd23"
+      "size": 30405,
+      "sha256": "9ea1bfa1620649abda3c18f220481a4d815bf9cd2fcf2387e1c70a7633ad5fa3"
     },
     {
       "path": "Tests/Runtime/UnityCli.Runtime.Tests.asmdef",

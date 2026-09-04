@@ -258,7 +258,7 @@ namespace UnityCli.Tests
                 16,
                 16,
                 null,
-                Budget(new ManualClock(), scans: 4096, nodes: 64, getters: 64, reflections: 64));
+                Budget(new ManualClock(), scans: 4096, nodes: 64, getters: 64, reflections: 4096));
             var schema = (Dictionary<string, object>)enumPage.Data["schema"];
             Assert.That(schema["continuationSupported"], Is.False);
             Assert.That(schema["truncationReason"], Is.EqualTo("non-resumable-enum-truncation"));

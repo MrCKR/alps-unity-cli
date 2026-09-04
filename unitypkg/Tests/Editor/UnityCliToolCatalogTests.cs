@@ -222,6 +222,7 @@ namespace UnityCli.Tests
                     Add(builder, Definition("fixture.bound." + index.ToString("D4"), "project", "native", "g" + index.ToString("D4"), new string('界', 170)), "ProjectInterface");
                 PublishThroughProductionSlot(builder, 1L);
                 var summaryRequest = CursorSummaryRequest(null, null);
+                summaryRequest.Input["limit"] = 101;
                 var summary = bridgeType.GetMethod("ProjectToolCatalogSummary", BindingFlags.NonPublic | BindingFlags.Static)
                     .Invoke(null, new object[] { summaryRequest, false });
                 Assert.That(Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(summary)), Is.LessThanOrEqualTo(256 * 1024));
@@ -456,7 +457,7 @@ namespace UnityCli.Tests
             source.AppendLine("public sealed class FixtureRequest {} public sealed class FixtureResult {}");
             source.AppendLine("public sealed class GeneratedTool" + suffix + " : IUnityCliTool<FixtureRequest, FixtureResult> {");
             source.AppendLine("public ToolDescriptor Describe() { global::UnityCli.Tests.UnityCliToolCatalogFixtureProbe.RecordDescribe(\"fixture.generated." + suffix + "\"); return new ToolDescriptor { Name=\"fixture.generated." + suffix
-                + "\", Summary=\"Generated fixture.\", Description=\"Production collector fixture.\", Group=\"fixture\", Examples=new[]{new ToolExample{Description=\"Fixture\", Input=new Dictionary<string, object>()}}, Completion=new ToolCompletionDescriptor{ExecutionClass=\"atomic\", CompletionPredicate=\"method-return\", ProofSource=\"typed-handler-result\", ReloadPolicy=\"fail-before-effect\", TimeoutError=\"E_EXECUTION_TIMEOUT\", OutcomeUnknownPolicy=\"not-applicable-read-only\", CompletionDriverId=\"direct-typed-result-v1\"} }; }");
+                + "\", Summary=\"Generated fixture.\", Description=\"Production collector fixture.\", Group=\"fixture\", Examples=new[]{new ToolExample{Description=\"Fixture\", Input=new Dictionary<string, object>()}}, Completion=new ToolCompletionDescriptor{ExecutionClass=\"atomic\", CompletionPredicate=\"typed-business-terminal\", ProofSource=\"typed-result-and-effect-readback\", ReloadPolicy=\"caller-responsibility\", TimeoutError=\"E_EXECUTION_TIMEOUT\", OutcomeUnknownPolicy=\"caller-responsibility\", CompletionDriverId=\"atomic-typed-result-v1\"} }; }");
             source.AppendLine("public ValueTask<FixtureResult> ExecuteAsync(FixtureRequest request, UnityCliProjectToolContext ctx, CancellationToken ct) { return new ValueTask<FixtureResult>(new FixtureResult()); }}");
             source.AppendLine("}");
             using (var provider = new CSharpCodeProvider())
