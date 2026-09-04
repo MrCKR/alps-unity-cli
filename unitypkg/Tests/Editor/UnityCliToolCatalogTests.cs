@@ -222,7 +222,7 @@ namespace UnityCli.Tests
                     Add(builder, Definition("fixture.bound." + index.ToString("D4"), "project", "native", "g" + index.ToString("D4"), new string('界', 170)), "ProjectInterface");
                 PublishThroughProductionSlot(builder, 1L);
                 var summaryRequest = CursorSummaryRequest(null, null);
-                summaryRequest.Input["limit"] = 101;
+                ((IDictionary<string, object>)summaryRequest.Input)["limit"] = 101;
                 var summary = bridgeType.GetMethod("ProjectToolCatalogSummary", BindingFlags.NonPublic | BindingFlags.Static)
                     .Invoke(null, new object[] { summaryRequest, false });
                 Assert.That(Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(summary)), Is.LessThanOrEqualTo(256 * 1024));
