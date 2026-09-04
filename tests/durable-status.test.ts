@@ -13,7 +13,6 @@ const cases = [
   ["editor.play-mode.status", "internal.editor.play-mode.public-status"],
   ["package.install.status", "internal.package.install.public-status"],
   ["package.remove.status", "internal.package.remove.public-status"],
-  ["package.update.status", "internal.package.update.public-status"],
   ["test.run.status", "internal.test.run.public-status"],
 ] as const;
 

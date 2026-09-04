@@ -67,8 +67,7 @@ namespace UnityCli.Tests
             {
                 "internal.asset.refresh.public-status", "internal.build.player.public-status",
                 "internal.editor.play-mode.public-status", "internal.package.install.public-status",
-                "internal.package.remove.public-status", "internal.package.update.public-status",
-                "internal.test.run.public-status"
+                "internal.package.remove.public-status", "internal.test.run.public-status"
             };
             foreach (var command in commands)
                 Assert.That(UnityCliBridgeQueuePolicy.IsSafeStatusCommand(command), Is.True, command);

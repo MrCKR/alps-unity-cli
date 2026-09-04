@@ -4839,33 +4839,6 @@
       ]
     },
     {
-      "toolName": "package.update.status",
-      "descriptorOwner": "ts-local",
-      "source": "src/tools/package/update-status.ts",
-      "deliveryMode": "direct-terminal",
-      "executionClass": "atomic",
-      "completionPredicate": {
-        "kind": "typed-business-terminal",
-        "description": "package.update.status returns one bounded same-session active phase or exact durable terminal envelope."
-      },
-      "proofSource": {
-        "kind": "typed-result-and-effect-readback",
-        "description": "The domain-bound SafeStatus command reads the active journal or first-terminal-wins cache without acquiring the mutation lease."
-      },
-      "reloadPolicy": {
-        "kind": "caller-responsibility",
-        "description": "The read never replays an effect; an Editor process restart invalidates the previous session mechanism state."
-      },
-      "timeoutError": "E_EXECUTION_TIMEOUT",
-      "outcomeUnknownPolicy": {
-        "kind": "caller-responsibility",
-        "description": "A status read failure does not alter business state; inspect the selected Editor session before another read."
-      },
-      "asyncSignals": [
-        "promise"
-      ]
-    },
-    {
       "toolName": "physics.assign-material",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/physics/assign-material.cs",

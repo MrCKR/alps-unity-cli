@@ -17,14 +17,12 @@ namespace UnityCli
             internal const string EditorPlayModeCommand = "internal.editor.play-mode.public-status";
             internal const string PackageInstallCommand = "internal.package.install.public-status";
             internal const string PackageRemoveCommand = "internal.package.remove.public-status";
-            internal const string PackageUpdateCommand = "internal.package.update.public-status";
             internal const string TestRunCommand = "internal.test.run.public-status";
 
             internal static bool IsCommand(string command)
             {
                 return command == AssetRefreshCommand || command == BuildPlayerCommand || command == EditorPlayModeCommand
-                    || command == PackageInstallCommand || command == PackageRemoveCommand
-                    || command == PackageUpdateCommand || command == TestRunCommand;
+                    || command == PackageInstallCommand || command == PackageRemoveCommand || command == TestRunCommand;
             }
 
             internal static void Register(BridgeCommandRegistry registry)
@@ -34,7 +32,6 @@ namespace UnityCli
                 registry.Register<BridgeRequest>("internal.editor.play-mode.public-status", "internal", false, 30000, CoordinatorOwned, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
                 registry.Register<BridgeRequest>("internal.package.install.public-status", "internal", false, 30000, CoordinatorOwned, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
                 registry.Register<BridgeRequest>("internal.package.remove.public-status", "internal", false, 30000, CoordinatorOwned, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
-                registry.Register<BridgeRequest>("internal.package.update.public-status", "internal", false, 30000, CoordinatorOwned, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
                 registry.Register<BridgeRequest>("internal.test.run.public-status", "internal", false, 30000, CoordinatorOwned, UnityCliBridgeQueuePolicy.WorkClass.SafeStatus);
             }
 
@@ -59,7 +56,6 @@ namespace UnityCli
                         case EditorPlayModeCommand: data = ReadEditorPlayModeStatus(args.RequestId); break;
                         case PackageInstallCommand: data = UnityCliPackageResolveCoordinator.ReadPublicStatus(args.RequestId, "install"); break;
                         case PackageRemoveCommand: data = UnityCliPackageResolveCoordinator.ReadPublicStatus(args.RequestId, "remove"); break;
-                        case PackageUpdateCommand: data = UnityCliPackageResolveCoordinator.ReadPublicStatus(args.RequestId, "update"); break;
                         case TestRunCommand: data = ReadScope("test-run", args.RequestId); break;
                         default: throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Durable status command is not registered.");
                     }

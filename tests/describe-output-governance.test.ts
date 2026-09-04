@@ -70,7 +70,7 @@ test("TS-local descriptor registry owns exactly the current package-local tools"
     "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
     "occlusion.bake-status", "package.bridge-remove", "package.deploy",
     "package.embed", "package.install", "package.install.status", "package.registry.clear", "package.registry.set", "package.remove", "package.remove.status",
-    "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove", "package.update.status",
+    "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove",
     "reflect.member", "reflect.search", "reflect.type", "runtime.console", "runtime.input.key", "runtime.input.pointer",
     "runtime.log", "runtime.state", "runtime.target-framerate.set", "runtime.time-scale.set", "runtime.ui.capture-element",
     "test.cancel", "test.run", "test.run.status"

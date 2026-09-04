@@ -32,7 +32,6 @@ import "./package/resolve.js";
 import "./package/restore.js";
 import "./package/scoped-registry-add.js";
 import "./package/scoped-registry-remove.js";
-import "./package/update-status.js";
 import "./reflect/member.js";
 import "./reflect/search.js";
 import "./reflect/type.js";

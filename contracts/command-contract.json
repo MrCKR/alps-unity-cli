@@ -1671,15 +1671,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "package.update.status",
-      "group": "package",
-      "command": "update.status",
-      "handler_type": "hybrid",
-      "csharp_handler": "none",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "physics.assign-material",
       "group": "physics",
       "command": "assign-material",

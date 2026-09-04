@@ -184,7 +184,6 @@ namespace UnityCli
                 case "internal.editor.play-mode.public-status":
                 case "internal.package.install.public-status":
                 case "internal.package.remove.public-status":
-                case "internal.package.update.public-status":
                 case "internal.test.run.public-status":
                 case "internal.package.embed.status":
                 case "internal.package.resolve.status":

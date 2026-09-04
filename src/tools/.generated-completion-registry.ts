@@ -2802,20 +2802,6 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
-    "toolName": "package.update.status",
-    "descriptorOwner": "ts-local",
-    "deliveryMode": "direct-terminal",
-    "executionClass": "atomic",
-    "completionPredicate": "typed-business-terminal",
-    "proofSource": "typed-result-and-effect-readback",
-    "reloadPolicy": "caller-responsibility",
-    "timeoutError": "E_EXECUTION_TIMEOUT",
-    "outcomeUnknownPolicy": "caller-responsibility",
-    "completionDriverId": "atomic-typed-result-v1",
-    "journalPolicy": "none",
-    "mutation": false
-  },
-  {
     "toolName": "physics.assign-material",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",

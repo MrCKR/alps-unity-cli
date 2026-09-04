@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "d9e2658d85268df581c398801cd3d5033bd4c7cd8188c72e2b6c1f4e0232c251",
+  "sourceHash": "ae69880389c2c68c757607622f3277c217cdbf71b72ffda2bd867ff1b373bb04",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -126,8 +126,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliDurableStatusCoordinator.cs",
-      "size": 7444,
-      "sha256": "2048a47b4abcae1549dac36d53906adbfc345da79e54441144a92e3cc34ba5d3"
+      "size": 6965,
+      "sha256": "6191fc9c0d0c77fe54fb10116474b6137a982def897c3d8426a49d6677984c0a"
     },
     {
       "path": "Editor/Infrastructure/UnityCliEditorStateSnapshot.cs",
@@ -1901,8 +1901,8 @@
     },
     {
       "path": "Shared/UnityCliBridgeQueuePolicy.cs",
-      "size": 19967,
-      "sha256": "ad7bf90500f057d112ab0a1f44d4fb774f0ea419ff6dd92e6d9716522133b791"
+      "size": 19905,
+      "sha256": "0510042ca344c104f1d1db049f3fbfab3146cc4c24ef36d8eb7d748862a6c608"
     },
     {
       "path": "Shared/UnityCliBridgeWorkItemState.cs",
@@ -1966,8 +1966,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliDurableStatusTests.cs",
-      "size": 3468,
-      "sha256": "1378e8e5039d131bd5887438bc696ee8f3e94a60aa61810c5322fb7da29b3ff4"
+      "size": 3411,
+      "sha256": "45ba58f272d616326e031df18dd5aa461d1535738572eed3652423d74a94f0cf"
     },
     {
       "path": "Tests/Editor/UnityCliExceptionProjectionTests.cs",

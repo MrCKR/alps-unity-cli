@@ -39,7 +39,6 @@ const ROOT_TRANSITION_COMMANDS = new Set([
   "internal.editor.play-mode.public-status",
   "internal.package.install.public-status",
   "internal.package.remove.public-status",
-  "internal.package.update.public-status",
   "internal.test.run.public-status",
   "internal.package.embed.start",
   "internal.package.embed.status",
