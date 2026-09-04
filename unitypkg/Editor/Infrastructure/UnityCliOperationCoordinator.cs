@@ -131,7 +131,7 @@ namespace UnityCli
                 return ExecutionTimeoutEnvelope(request.RequestId, "The request was not accepted before the execution deadline elapsed.");
             }
 
-            try { SaveDirectMutationAcceptedRoot(request.RequestId, requestDigest, request.Command); }
+            try { SaveDirectMutationAcceptedRoot(request.RequestId, requestDigest, contract.ToolName); }
             catch (Exception exception)
             {
                 ScheduleDirectMutationPreEffectCleanup(request.RequestId, requestDigest);
