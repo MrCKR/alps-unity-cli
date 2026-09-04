@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "766196f4c8d77846f940a3b4c6b6f716076f8619f57e67574fca82b9fef22e97",
+  "sourceHash": "46c824d9aa17acfd0e1b76a23ca9d5188393b970ee7f863de834fda5d7a63bde",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -161,8 +161,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliLiveBuildCoordinator.cs",
-      "size": 37570,
-      "sha256": "68401e44388a9ca6ef85384c14963ac1cf0dec3509589e94e00b7d272b7b6a17"
+      "size": 37542,
+      "sha256": "00f6ef588372230af41d5feba1463ea356abc0566436f8d98b2fbde60e0838c7"
     },
     {
       "path": "Editor/Infrastructure/UnityCliLiveRefreshCoordinator.cs",
