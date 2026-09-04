@@ -1,8 +1,8 @@
 #if UNITY_EDITOR
 using System;
 using System.Globalization;
-using System.Reflection;
 using System.Threading;
+using ReflectionAssembly = System.Reflection.Assembly;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine.SceneManagement;
@@ -69,13 +69,13 @@ namespace UnityCli
         private const int MaximumAssemblies = 1024;
         private static readonly object SnapshotLock = new object();
         private static string generation;
-        private static Assembly[] assemblies;
+        private static ReflectionAssembly[] assemblies;
 
-        internal static Assembly[] Get(UnityCliRequestBudget budget)
+        internal static ReflectionAssembly[] Get(UnityCliRequestBudget budget)
         {
             if (budget == null) throw new ArgumentNullException("budget");
             var currentGeneration = UnityCliReadGeneration.Reflection();
-            Assembly[] snapshot;
+            ReflectionAssembly[] snapshot;
             lock (SnapshotLock)
             {
                 if (assemblies == null || !string.Equals(generation, currentGeneration, StringComparison.Ordinal))

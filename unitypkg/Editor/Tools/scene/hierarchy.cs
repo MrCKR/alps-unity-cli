@@ -48,8 +48,8 @@ namespace UnityCli
             public long ChildCount { get; set; }
             public bool ChildrenTruncated { get; set; }
             public long? ComponentCount { get; set; }
-            [UnityCliItemsRange(0, ObjectRefResolver.AbsoluteMaxBatchItems)] public List<string> ComponentTypes { get; set; }
-            [UnityCliItemsRange(0, ObjectRefResolver.AbsoluteMaxBatchItems)] public List<string> Components { get; set; }
+            [UnityCliItemsRange(0, UnityCliBridge.ObjectRefResolver.AbsoluteMaxBatchItems)] public List<string> ComponentTypes { get; set; }
+            [UnityCliItemsRange(0, UnityCliBridge.ObjectRefResolver.AbsoluteMaxBatchItems)] public List<string> Components { get; set; }
         }
 
         public sealed class PageInfo
