@@ -23,6 +23,7 @@ test("build.run maps a null EditorBuildSettings scene array to the stable empty-
   const source = await readFile("unitypkg/Editor/Infrastructure/UnityCliLiveBuildCoordinator.cs", "utf8");
   assert.match(source, /EditorBuildSettings\.scenes \?\? Array\.Empty<EditorBuildSettingsScene>\(\)/);
   assert.match(source, /scenes\.Length == 0[\s\S]*E_BUILD_SCENES_EMPTY/);
+  assert.match(source, /build_entry_failed[\s\S]*E_EXECUTION_FAILED/);
   assert.match(source, /build_unhandled_exception[\s\S]*E_EXECUTION_FAILED/);
   assert.doesNotMatch(source, /BridgeCommandException\("E_BRIDGE_COMMAND_FAILED", ex\.Message/);
 });

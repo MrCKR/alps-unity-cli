@@ -129,9 +129,20 @@ namespace UnityCli
             internal static void BeforeReload() { }
             internal static void Shutdown() { reloadRecoveryPending = false; }
 
-            internal static Task<string> Execute(BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAccept, CancellationToken cancellationToken)
+            internal static async Task<string> Execute(BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAccept, CancellationToken cancellationToken)
             {
-                return Execute(ProductionQueueState, request, rawRequestBytes, tryAccept, cancellationToken, BuildExecutionDependencies.Production());
+                try
+                {
+                    return await Execute(ProductionQueueState, request, rawRequestBytes, tryAccept, cancellationToken, BuildExecutionDependencies.Production());
+                }
+                catch (Exception exception)
+                {
+                    WriteLog("build_entry_failed requestId=" + request.RequestId + " exception=" + exception);
+                    return SerializeBridgeExceptionEnvelope(request.RequestId, new BridgeCommandException(
+                        "E_EXECUTION_FAILED",
+                        "Build request preparation failed before a trusted coordinator terminal was available.",
+                        "Inspect UnityCliBridge.log and Build Settings before retrying build.run."));
+                }
             }
 
             internal static async Task<string> Execute(BridgeQueueState queueState, BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAccept, CancellationToken cancellationToken, BuildExecutionDependencies dependencies)
