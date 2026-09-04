@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "1c291578cba6cfce79316b7d3cad9e5462bcfd19819b6fd15c1bbfaffd62137c",
+  "sourceHash": "c893520aecaa2aa2d35e32a3e059b7cad30f82be7ed2d7d21699994a416ad3d9",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -1931,8 +1931,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliAdmissionCoordinatorIntegrationTests.cs",
-      "size": 78113,
-      "sha256": "ffa8ec712b66b3d0cffa0f853f86a608b750aeaf539b2f56c366c271a8339694"
+      "size": 78089,
+      "sha256": "9adcf5ec9ead8cd1ad3636394c47326a1ba31a7ad7e0cc31905a335a8f94a616"
     },
     {
       "path": "Tests/Editor/UnityCliAdmissionPoolTests.cs",
@@ -1946,8 +1946,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliBridgeAdmissionIntegrationTests.cs",
-      "size": 67920,
-      "sha256": "3d06cff7dc5316f9526aadcd0663985c0a5135bd7e5e01a2c3ecf10012bb82e0"
+      "size": 67896,
+      "sha256": "dacb670e3612648e6392caf1968d6d0718827253b0336be5cb8ac51ad946f924"
     },
     {
       "path": "Tests/Editor/UnityCliBridgeQueuePolicyTests.cs",
@@ -1956,8 +1956,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliDiagnosticBoundaryTests.cs",
-      "size": 7695,
-      "sha256": "78856fd270a561d6d785da81bb3993fc825e1689675e791a8ff84e798687468d"
+      "size": 7671,
+      "sha256": "17804561a3a467c360161dd758038381c27895649cab01326b462dbc41bc31eb"
     },
     {
       "path": "Tests/Editor/UnityCliExceptionProjectionTests.cs",
@@ -1981,8 +1981,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliRuntimeBridgeIntegrationTests.cs",
-      "size": 27807,
-      "sha256": "e692568940a26adc05b5844b665452577e0aee51bf00c75d893139fcdc67a141"
+      "size": 27783,
+      "sha256": "d07b825f1df7bf7751ce617bb2bc1a4c0dd8c91dcf3808eda834179a0a2e6895"
     },
     {
       "path": "Tests/Editor/UnityCliToolCatalogTests.cs",

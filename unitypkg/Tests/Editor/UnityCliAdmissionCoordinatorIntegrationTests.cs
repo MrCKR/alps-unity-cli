@@ -12,7 +12,6 @@ using UnityCli.Protocol;
 
 namespace UnityCli.Tests
 {
-    [NonParallelizable]
     public sealed class UnityCliAdmissionCoordinatorIntegrationTests
     {
         private const string InstanceId = "test-instance";

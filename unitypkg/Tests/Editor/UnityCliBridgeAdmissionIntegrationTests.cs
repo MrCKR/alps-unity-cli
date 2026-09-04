@@ -11,7 +11,6 @@ using UnityCli.Protocol;
 
 namespace UnityCli.Tests
 {
-    [NonParallelizable]
     public sealed class UnityCliBridgeAdmissionIntegrationTests
     {
         private UnityCliAdmissionPool pool;

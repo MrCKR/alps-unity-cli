@@ -11,7 +11,6 @@ using UnityEngine;
 
 namespace UnityCli.Tests
 {
-    [NonParallelizable]
     public sealed class UnityCliRuntimeBridgeIntegrationTests
     {
         private const string ListenerId = "runtime-test-listener";

@@ -10,7 +10,6 @@ using NUnit.Framework;
 
 namespace UnityCli.Tests
 {
-    [NonParallelizable]
     public sealed class UnityCliDiagnosticBoundaryTests
     {
         private static readonly Type BridgeType = Type.GetType("UnityCli.UnityCliBridge, UnityCli.Editor", true);
