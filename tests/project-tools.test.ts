@@ -240,7 +240,10 @@ test("official attribute snake_case identity does not make the live catalog unhe
     bridgeExecute: async (payload) => ({
       ok: true,
       requestId: payload.requestId,
-      data: { tools: [officialDescriptor({ name: "UnityPipeline_project_reload_data" })] },
+      data: { tools: [officialDescriptor({
+        name: "UnityPipeline_project_reload_data",
+        examples: [{ description: "Reload project data.", argv: ["tools", "run", "UnityPipeline_project_reload_data", "--input", "{\"value\":\"hello\"}"] }],
+      })] },
     }),
   }, "req_official_snake_case");
   assert.ok(result.ok, JSON.stringify(result));

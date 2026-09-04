@@ -76,7 +76,7 @@ test("reflection.method.call example is executable and overload selection is exp
   assert.match(source, /Execution = new ToolExampleExecution \{ DryRun = true \}/);
   assert.match(source, /public List<string> ParameterTypes/);
   assert.match(source, /request\.Args, request\.ParameterTypes, request\.InstanceRef/);
-  assert.match(reflection, /private static MethodInfo ResolveCallMethod/);
+  assert.match(reflection, /private static CallCandidate ResolveCallMethod/);
   assert.match(reflection, /E_METHOD_AMBIGUOUS/);
   assert.match(reflection, /RequireSynchronousResult/);
   assert.match(reflection, /E_METHOD_COMPLETION_UNPROVABLE/);

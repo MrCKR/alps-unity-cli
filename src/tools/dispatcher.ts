@@ -143,7 +143,7 @@ export async function dispatchTool(
     const input = requestFromInput(localMetadata, { ...parsed.input, ...seed }, dispatchFlags, positionalTarget);
     return dispatchResolved(localMetadata, input);
   }
-  if (coreSpec && runtime.bridgeExecute && runtime.projectTools === undefined) {
+  if (coreSpec && runtime.bridgeExecute && runtime.projectTools === undefined && !runtime.createSessionSupervisor) {
     return executeCoreBridgeSpec(name, coreSpec, parsed.input, dispatchFlags, runtime, requestId, admissionAbsoluteDeadlineMs, positionalTarget);
   }
 
@@ -248,7 +248,7 @@ async function acquireCatalogAdmissions(
   expectedDiscoveryProvenances?: Partial<Record<InstanceTarget, DiscoveryProvenance>>,
 ): Promise<TargetAdmissionContext | { result: CliResult }> {
   const context: TargetAdmissionContext = { admissions: {}, supervisors: {}, executionAbsoluteDeadlineMs: 0 };
-  let lastOffline: CliResult | undefined;
+  let firstOffline: CliResult | undefined;
   for (const target of ["editor", "runtime"] as InstanceTarget[]) {
     const supervisor = createSessionSupervisor(flags, runtime);
     try {
@@ -261,13 +261,13 @@ async function acquireCatalogAdmissions(
       context.supervisors[target] = supervisor;
     } catch (error) {
       const projected = catalogAdmissionFailure(requestId, error);
-      if (projected.error.code === "E_INSTANCE_NOT_RUNNING" || projected.error.code === "E_RUNTIME_NOT_RUNNING") { lastOffline = projected; continue; }
+      if (projected.error.code === "E_INSTANCE_NOT_RUNNING" || projected.error.code === "E_RUNTIME_NOT_RUNNING") { firstOffline ??= projected; continue; }
       await releaseUnconsumedCatalogAdmissions(context);
       return { result: projected };
     }
   }
   const leases = Object.values(context.admissions).filter((value): value is RootAdmissionLease => !!value);
-  if (leases.length === 0) return { result: lastOffline ?? failure(requestId, "E_INSTANCE_NOT_RUNNING", "No live Unity target is available for catalog projection.", ["Open the target Unity project or development Player."]) };
+  if (leases.length === 0) return { result: firstOffline ?? failure(requestId, "E_INSTANCE_NOT_RUNNING", "No live Unity target is available for catalog projection.", ["Open the target Unity project or development Player."]) };
   const now = Date.now();
   if (leases.some((lease) => lease.grantExpiresAtMs <= now)) {
     await releaseUnconsumedCatalogAdmissions(context);
@@ -379,8 +379,9 @@ async function executeDefinition(
   let projectPath = typeof input.project === "string" ? input.project : process.cwd();
   const execution = executionFromFlags(flags);
 
-  // exact观察定义及其describe投影不进入业务准入；隔离fixture中的普通offline Tool仍验证准入边界。
-  if (isAdmissionIndependentLocalDefinition(tool, input) || (tool.handler === "offline" && !runtime.createSessionSupervisor)) {
+  // 仅精确观察定义及 catalog fixture 不进入业务准入；生产中的普通本地 Tool 仍是 live target root。
+  if (isAdmissionIndependentLocalDefinition(tool, input)
+      || tool.handler === "offline" && runtime.projectTools !== undefined && !runtime.createSessionSupervisor) {
     return executeLocalDefinition(tool, completion, definition, input, flags, runtime, requestId, projectPath, execution, admissionAbsoluteDeadlineMs);
   }
 

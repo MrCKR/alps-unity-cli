@@ -46,7 +46,7 @@ test("official attribute names preserve legal snake_case suffixes within the tot
 
 test("native and official C# registration both use the profile-aware name validator", async () => {
   const [registry, official, validator] = await Promise.all([
-    readFile("unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", "utf8"),
+    readFile("unitypkg/Editor/ProjectTools/RegisteredTool.cs", "utf8"),
     readFile("unitypkg/Editor/ProjectTools/OfficialAttributeToolRegistry.cs", "utf8"),
     readFile("unitypkg/Editor/ProjectTools/UnityCliToolName.cs", "utf8"),
   ]);

@@ -201,7 +201,7 @@ test("ui C# keeps one capability per physical file with CRUD, stylesheet, list, 
   assert.match(sources.preview, /new RenderTexture\(width, height, 24, RenderTextureFormat\.ARGB32\)/);
   assert.match(sources.preview, /await ctx\.Wait\.NextFrame\(2, ct\)/);
   assert.match(sources.preview, /ReadPixels\(new Rect\(0, 0, width, height\)/);
-  assert.match(sources.preview, /ScreenshotToolSupport\.WriteScreenshotBytes\(outputPath, bytes\)/);
+  assert.match(sources.preview, /ScreenshotToolSupport\.WriteScreenshotBytes\(outputPath, bytes, captureBudget\)/);
   assert.match(sources.preview, /finally[\s\S]*DestroyImmediate\(panelSettings\)/);
   assert.match(sources.preview, /ctx\.DryRun/);
   assert.doesNotMatch(sources.preview, /new Texture2D\(1, 1/);

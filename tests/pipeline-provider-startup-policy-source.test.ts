@@ -16,7 +16,7 @@ test("Pipeline provider suppression uses declaring assembly package identity onl
   assert.match(source, /SuppressedOfficialAttributePackage = "com\.unity\.pipeline"/);
   assert.match(source, /string\.Equals\(package\.name, SuppressedOfficialAttributePackage, StringComparison\.Ordinal\)/);
   assert.doesNotMatch(source, /method\.Name.*Suppressed|type\.Namespace.*Suppressed|assembly\.GetName\(\)\.Name.*Suppressed/);
-  assert.ok(source.indexOf("IsSuppressedOfficialAttributeProvider(assembly)") < source.indexOf("CreateOfficialAttributeTool(assembly, type, method)"));
+  assert.ok(source.indexOf("IsSuppressedOfficialAttributeProvider(assembly)") < source.indexOf("CreateOfficialAttributeTool(ownershipResolver, type, method)"));
 });
 
 test("project settings default Bridge AutoStart on and keep handoff marker one-way", async () => {
@@ -116,7 +116,7 @@ test("Bridge bootstrap advances on the existing update loop and AutoStart off pu
   assert.match(source, /transition == BridgeStartupTransition\.CompleteFailed/);
   assert.doesNotMatch(source, /EditorApplication\.delayCall[\s\S]*?BridgeStartup/);
   assert.doesNotMatch(source, /PrimeBridgeStartup|QueueCompleteBridgeStartup|startupScheduled|startupPhase/);
-  assert.match(workQueue, /cachedIsPlayModeChanging = IsPlayModeChanging\(\);[\s\S]*?AdvanceBridgeStartup\(\);[\s\S]*?UnityCliSessionMutationLease\.TryFinalizeOwnedPlayModeRoot\(\)/);
+  assert.match(workQueue, /cachedIsPlayModeChanging = isPlayModeChanging;[\s\S]*?AdvanceBridgeStartup\(\);[\s\S]*?UnityCliSessionMutationLease\.TryFinalizeOwnedPlayModeRoot\(\)/);
   assert.match(source, /UnityCliPipelineHandoff\.EnsureAppliedOnce/);
   assert.match(source, /if \(!UnityCliProjectSettings\.Current\.BridgeAutoStart\)[\s\S]*?DeleteInstanceRegistration\(\);[\s\S]*?StopListener\(\);[\s\S]*?return/);
   const reloadStart = source.indexOf("private static void OnBeforeAssemblyReload()");

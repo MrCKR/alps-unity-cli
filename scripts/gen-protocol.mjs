@@ -18,7 +18,7 @@
 // 命名:TS camelCase -> C# PascalCase 属性;C# 序列化器反射时映射回 camelCase 输出。
 //
 // 注:协议框架文档原提"ts-morph",本生成器直接用已安装的 typescript Compiler API,
-// 避免新增依赖(更精简,符合项目风格)。此偏离记录于阶段1执行日志。
+// 使用内置解析以避免新增依赖。
 
 import { createRequire } from "node:module";
 import { writeFileSync, mkdirSync } from "node:fs";

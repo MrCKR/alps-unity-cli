@@ -405,6 +405,7 @@ namespace UnityCli
 
         private static void Validate(RegisteredTool definition, UnityCliToolProviderKind providerKind)
         {
+            if (definition != null) UnityCliToolName.Validate(definition.Name, definition.ContractProfile);
             if (definition == null || string.IsNullOrWhiteSpace(definition.Name) || string.IsNullOrWhiteSpace(definition.Summary)
                 || string.IsNullOrWhiteSpace(definition.Description) || string.IsNullOrWhiteSpace(definition.Group)
                 || definition.CloneExamples() == null || definition.InvokeAsync == null)

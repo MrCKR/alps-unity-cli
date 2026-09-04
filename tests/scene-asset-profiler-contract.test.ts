@@ -82,11 +82,11 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
 
   assert.match(sceneSource, /class SceneHierarchyTool : IUnityCliTool</);
   assert.match(sceneSource, /public string Parent[\s\S]*public string Query[\s\S]*public string ComponentType[\s\S]*IncludeComponents/);
-  assert.match(sceneSource, /CollectHierarchy\(Transform transform, List<HierarchyItem> items, int depth, int maxDepth, string query, bool includeInactive, bool includeComponents, string componentType\)/);
-  assert.match(sceneSource, /BuildPageInfo\(pageSize, cursor, total, page\.Count\)/);
+  assert.match(sceneSource, /UnityCliHierarchyPager\.ResolveCursor\(request\.Cursor, "scene\.hierarchy"/);
+  assert.match(sceneSource, /UnityCliHierarchyPager\.Cursor\("scene\.hierarchy"[\s\S]*NextCursor = nextCursor/);
   assert.doesNotMatch(sceneSource, /unitycli scene/);
 
-  assert.match(goSource, /SearchGameObjects\(searchMethod, searchTerm, includeInactive\)[\s\S]*PageInfo = new GoPageInfo/);
+  assert.match(goSource, /UnityCliHierarchyPager\.ResolveCursor\(request\.Cursor, "go\.find"[\s\S]*PageInfo = new PageInfo/);
   assert.match(goSource, /ResolveUniqueTarget[\s\S]*FindObjectsOfType<GameObject>\(true\)/);
   assert.match(goSource, /ResolveComponentType\(string componentName\)/);
   assert.match(goSource, /ValidateMutationInputs[\s\S]*ResolveModifyTargets\(request\)[\s\S]*UnityCliSceneMutation\.RecordObject/);
@@ -94,7 +94,7 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   assert.doesNotMatch(goSource, /unitycli scene hierarchy/);
 
   assert.match(consoleSource, /class ConsoleGetTool : IUnityCliTool/);
-  assert.match(consoleSource, /Skip\(cursor\)\.Take\(count\)/);
+  assert.match(consoleSource, /EditorToolSupport\.ReadConsolePage\(request\.Type, request\.Filter, pageSize, ctx\.UseReadBudget\(request\.Budget\)\)/);
   assert.match(menuSource, /class EditorMenuTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(request\.Path\)/);
   assert.match(menuSource, /E_MENU_COMPLETION_UNSUPPORTED[\s\S]*Use a dedicated Tool, or use File\/Save/);
   assert.match(menuSource, /string\.Equals\(request\.Path, "File\/Save"/);
@@ -178,14 +178,13 @@ test("one-capability source, contract, and bridge spec sets are bidirectionally 
     assert.deepEqual(specNames, sourceNames, `${domain} bridge spec must enumerate current one-capability files`);
   }
   assert.equal(contractToolNames("build").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 13);
-  assert.equal(contractToolNames("graphics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 26);
-  assert.equal(contractToolNames("physics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 15);
+  assert.equal(contractToolNames("graphics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 21);
+  assert.equal(contractToolNames("physics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 14);
 });
 
 test("bridge specs resolve for all new domain 4-8 tools", () => {
   const checks = [
     ["scene", "unload", "project-tool.run"],
-    ["scene", "data", "project-tool.run"],
     ["go", "set-parent", "project-tool.run"],
     ["prefab", "instantiate", "project-tool.run"],
     ["prefab", "unpack", "project-tool.run"],

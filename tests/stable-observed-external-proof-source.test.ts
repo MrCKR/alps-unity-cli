@@ -42,7 +42,7 @@ test("observed-state tools wait stably and construct from final readback", async
   assert.match(profilerStart, /var observed = ProfilerToolSupport\.BuildProfilerState\(\)/);
   assert.match(profilerStop, /var observed = ProfilerToolSupport\.BuildProfilerState\(\)/);
   assert.match(profilerPause, /var observed = ProfilerToolSupport\.BuildProfilerState\(\)/);
-  assert.match(frameEnable, /var eventCount = FrameDebuggerReflection\.GetEventCount\(\)/);
+  assert.match(frameEnable, /var eventCount = FrameDebuggerReflection\.GetEventCount\(ctx\.UseReadBudget\(\)\)/);
 });
 
 test("VFX actions use stable observable state and profiler artifacts retain external proof", async () => {

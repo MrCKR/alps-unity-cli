@@ -82,7 +82,7 @@ test("console, profiler, build settings, and Prefab Stage mutations use readback
   assert.match(profilerClear, /E_PROFILER_CLEAR_STATE_MISMATCH/);
   assert.doesNotMatch(profilerClear, /try \{ clearMethod\.Invoke\(null, null\); \} catch/);
   assert.match(buildState, /EditorBuildSettings\.scenes = scenes[\s\S]*scenes = ReadScenes\(\)/);
-  assert.match(buildState, /scene\.path == path && scene\.enabled == enabled/);
+  assert.match(buildState, /FindIndex\(scene => scene\.path == path\)[\s\S]*scenes\[index\]\.enabled != enabled/);
   assert.match(buildAdd, /EditorBuildSettings\.scenes =[\s\S]*scenes = BuildSceneStateTool\.ReadScenes\(\)[\s\S]*scene\.path == path && scene\.enabled/);
   assert.match(buildRemove, /EditorBuildSettings\.scenes =[\s\S]*scenes = BuildSceneStateTool\.ReadScenes\(\)[\s\S]*if \(scenes\.Any\(scene => scene\.path == path\)\)/);
   for (const text of [stageOpen, stageSave, stageClose]) assert.match(text, /PrefabToolSupport\.CurrentPrefabStage\(\)/);

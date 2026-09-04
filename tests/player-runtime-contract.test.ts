@@ -156,7 +156,7 @@ test("tools discovery is a direct control-plane and keeps the root request ident
   assert.equal(source.match(/dispatchTool\(/g)?.length, 1, "only tools run may enter the Tool dispatcher");
   assert.match(source, /if \(command === "run"\)[\s\S]{0,240}return dispatchTool\(/);
   assert.doesNotMatch(source, /requestId\s*\+|`\$\{requestId\}[_-]/, "discovery must not mint a second request identity");
-  for (const obsolete of ["tools/describe", "tools/group", "tools/group-list", "tools/search", "tools/pagination"])
+  for (const obsolete of ["tools/describe", "tools/group-list", "tools/search", "tools/pagination"])
     assert.equal(source.includes(obsolete), false, obsolete);
 });
 

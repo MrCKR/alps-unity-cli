@@ -148,9 +148,9 @@ test("EditMode regressions call production paging serialization ownership and ha
 });
 
 test("command projections preserve opaque cursors and nested budgets", async () => {
-  const roots = new URL("../src/bridge/domains/", import.meta.url);
+  const roots = "src/bridge/domains";
   const files = ["console.ts", "game-object.ts", "scene.ts", "profiler.ts", "reflection.ts", "screenshot.ts"];
-  const text = (await Promise.all(files.map((file) => readFile(new URL(file, roots), "utf8")))).join("\n");
+  const text = (await Promise.all(files.map((file) => readFile(`${roots}/${file}`, "utf8")))).join("\n");
   assert.ok((text.match(/cursor: stringFlag\(flags, "cursor"\)/g) ?? []).length >= 5);
   assert.match(text, /budget: structured\.budget/);
   assert.match(text, /limits: structured\.limits/);
@@ -160,8 +160,8 @@ test("obsolete aggregate readers are absent from canonical source and non-genera
   await assert.rejects(access(new URL("Tools/go/inspect.cs", editor)));
   await assert.rejects(access(new URL("Tools/scene/data.cs", editor)));
   const [goRoute, sceneRoute] = await Promise.all([
-    readFile(new URL("../src/bridge/domains/game-object.ts", import.meta.url), "utf8"),
-    readFile(new URL("../src/bridge/domains/scene.ts", import.meta.url), "utf8"),
+    readFile("src/bridge/domains/game-object.ts", "utf8"),
+    readFile("src/bridge/domains/scene.ts", "utf8"),
   ]);
   assert.doesNotMatch(goRoute, /go\.inspect/);
   assert.doesNotMatch(sceneRoute, /scene\.data/);

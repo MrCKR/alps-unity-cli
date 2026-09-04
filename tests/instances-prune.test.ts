@@ -148,7 +148,7 @@ test("Editor registry publication uses one bounded same-domain retry chain", asy
   const startListener = bridge.slice(startListenerIndex, initialHandlerIndex);
   assertAnchorsInOrder(startListener, "InitialPublicationGate.Start()", 'HandleInitialPublicationOutcome(RegisterInstance("transitioning"))');
   assert.match(bridge, /started = false;[\s\S]*?readyPublicationPending = false;[\s\S]*?InitialPublicationGate\.Reset\(\);[\s\S]*?CancelInstancePublicationRetry\(\)/);
-  assert.match(workQueue, /RetryPendingWorkItemSettlements\(\);[\s\S]*?HandleInitialPublicationOutcome\(TickInstancePublicationRetry\(\)\);[\s\S]*?CurrentDurableMutationBarrier\(state\)[\s\S]*?UnityCliBridgeQueuePolicy\.SelectStarts/);
+  assert.match(workQueue, /RetryPendingWorkItemSettlements\(\);[\s\S]*?HandleInitialPublicationOutcome\(TickInstancePublicationRetry\(\)\);[\s\S]*?SelectQueuedStarts\(state, CurrentDurableMutationBarrier\(state\)/);
   assert.match(unityTests, /UnityCliInstancePublicationRetry[\s\S]*?BridgeInitialPublicationGate[\s\S]*?now = 0\.25[\s\S]*?retry\.Tick\(\)/);
   assert.match(unityTests, /RetryableFailureStopsListenerOnlyAfterFourthAttempt[\s\S]*?AttemptCount[\s\S]*?Is\.EqualTo\(4\)[\s\S]*?Exhausted[\s\S]*?Is\.True/);
   assert.match(unityTests, /NonRetryableFailureStopsImmediatelyAndResetCreatesANewDomainChain[\s\S]*?retry\.Reset\(\)[\s\S]*?gate\.Reset\(\)/);

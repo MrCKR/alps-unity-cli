@@ -37,6 +37,10 @@ function attributeEvalTool(overrides: Partial<ToolMetadata> = {}): ToolMetadata 
     target: "editor",
     playModeSupport: "unknown",
     availabilityScope: "editorSession",
+    examples: [{
+      description: "Evaluate one expression.",
+      argv: ["tools", "run", "UnityPipeline_eval", "--input", "{\"code\":\"return 1;\"}"],
+    }],
     inputSchema: {
       type: "object",
       properties: {
@@ -242,8 +246,14 @@ test("online command resolution uses exact Runtime describe without injected pro
     inputSchema: tool.inputSchema,
     outputSchema: tool.outputSchema,
     destructiveHint: tool.destructiveHint,
+    sideEffects: tool.sideEffects,
     supportsDryRun: tool.supportsDryRun ?? false,
-    examples: tool.examples,
+    permissions: tool.permissions,
+    requiresPackages: tool.requiresPackages,
+    examples: tool.examples?.map((example) => ({
+      description: example.description,
+      input: example.argv[4] ? JSON.parse(example.argv[4]) : {},
+    })),
     target: tool.target ?? "editor",
     availabilityScope: tool.availabilityScope ?? "editorSession",
     playModeSupport: tool.playModeSupport ?? "supported",

@@ -4,6 +4,7 @@ import test from "node:test";
 
 const registryPath = "unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs";
 const officialPath = "unitypkg/Editor/ProjectTools/OfficialAttributeToolRegistry.cs";
+const registeredToolPath = "unitypkg/Editor/ProjectTools/RegisteredTool.cs";
 const ownershipPath = "unitypkg/Editor/Infrastructure/RegistryOwnershipResolver.cs";
 const coordinatorPath = "unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs";
 const commandDocsPath = "docs/command-execution.md";
@@ -14,7 +15,7 @@ test("official attribute discovery binds exact owners and uses a cycle-safe prov
     readFile(officialPath, "utf8"),
     readFile(ownershipPath, "utf8"),
   ]);
-  assert.match(registry, /TryRegisterOfficialAttributeTools\(assembly, type\)/);
+  assert.match(registry, /TryRegisterOfficialAttributeTools\(builder, ownership, assembly, type\)/);
   assert.match(registry, /ConfigureOfficialAuthoringApi\(assemblies\)/);
   assert.match(registry, /ToolProviderAssemblies\(assemblies, officialRoots\)/);
   assert.match(registry, /RegistryOwnershipResolver\.Load\(candidates\)/);
@@ -42,9 +43,10 @@ test("official attribute discovery binds exact owners and uses a cycle-safe prov
 });
 
 test("Pipeline package provider在注册前抑制且其他attribute继续共享pending发布", async () => {
-  const [registry, official, ownership] = await Promise.all([
+  const [registry, official, registeredTool, ownership] = await Promise.all([
     readFile(registryPath, "utf8"),
     readFile(officialPath, "utf8"),
+    readFile(registeredToolPath, "utf8"),
     readFile(ownershipPath, "utf8"),
   ]);
   assert.match(registry, /var builder = new UnityCliToolCatalogBuilder\(\)/);
@@ -62,11 +64,11 @@ test("Pipeline package provider在注册前抑制且其他attribute继续共享p
   assert.doesNotMatch(ownership, /PackageInfo\.FindForAssembly|IsOwnedByPackage|AppDomain\.CurrentDomain\.GetAssemblies/);
   assert.match(ownership, /expected\.DescriptorOwner\.StartsWith\("extension:"/);
   assert.match(ownership, /loadedExtensionAssemblies\.TryGetValue\(assembly, out loadedExtensionId\)/);
-  assert.match(official, /var toolName = OfficialAttributeToolPrefix \+ name/);
+  assert.match(official, /var toolName = OfficialAttributeToolPrefix \+ \(name \?\? string\.Empty\)/);
   assert.match(official, /Name = toolName/);
   assert.match(official, /Group = OfficialAttributeToolGroup/);
   assert.match(official, /RegisterProjectTool\(builder, definition, UnityCliToolProviderKind\.OfficialAttribute\)/);
-  assert.match(registry, /Duplicate tool registration/);
+  assert.match(registeredTool, /Duplicate tool registration/);
   assert.match(registry, /ValidateOfficialAttributeNamespace\(definition\)/);
   assert.match(registry, /Native Tool cannot use the reserved UnityPipeline_/);
 });
@@ -78,7 +80,7 @@ test("official descriptors expose the conservative machine contract", async () =
     /SideEffects = new\[\] \{ "arbitrary-method-invocation" \}/,
     /Permissions = new\[\] \{ "execute-user-code" \}/,
     /SupportsDryRun = false/,
-    /ContractProfile = "official-attribute"/,
+    /"official-attribute",[\s\S]*typeof\(Dictionary<string, object>\)/,
     /PlayModeSupport = playModeSupport/,
     /"official-method-return-v1"/,
     /"method-may-still-be-running"/,
@@ -130,7 +132,7 @@ test("official invocation crosses one barrier and does not claim Task cancellati
   assert.match(official, /binding\.DeclaredResultType == typeof\(void\)/);
   assert.match(official, /attributed method did not return a trustworthy terminal result/);
   assert.match(registry, /innerBce[\s\S]*?OfficialAttributeBinding != null[\s\S]*?PostEffectExecutionTimeout/);
-  assert.match(registry, /try[\s\S]*?UnityCliSerializer\.Serialize\(result\)[\s\S]*?catch \(BridgeCommandException exception\)/);
+  assert.match(registry, /try[\s\S]*?UnityCliSerializer\.Serialize\(result, terminalBudget, toolTimeout\.Token\)[\s\S]*?catch \(BridgeCommandException exception\)/);
   assert.match(registry, /catch \(Exception exception\)[\s\S]*?"postcondition"/);
   assert.match(coordinator, /official-method-return-v1/);
 });

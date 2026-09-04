@@ -112,7 +112,7 @@ unitycli tools describe editor.state --instance C:\path\UnityProject
 unitycli tools run editor.state --input '{}' --instance C:\path\UnityProject
 ```
 
-Do not guess Tool names or inputs. Discover the current catalog, read one descriptor, then call that exact Tool. `command <name>` is a schema-argument projection of the same live catalog, not a second capability system.
+Do not guess Tool names or inputs. Discover the current catalog, read one descriptor, then call that exact Tool. `command <name>` is a schema-argument projection of the same live catalog, not a second capability system. 调用方明确要求的业务值优先于schema default和example值；不要把default或example当作连通性、probe或smoke调用。
 
 Optional extensions use their dedicated control plane:
 

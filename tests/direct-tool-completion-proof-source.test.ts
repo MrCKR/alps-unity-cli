@@ -25,13 +25,14 @@ test("direct tool completion proof waits for terminal preview and deletion state
 
 test("camera captures and texture generation prove their observed artifacts", async () => {
   const camera = await readTool("Tools/camera/CameraToolSupport.cs");
+  const screenshotSupport = await readTool("Tools/screenshot/ScreenshotToolSupport.cs");
   const multiview = await readTool("Tools/camera/multiview.cs");
   const generate = await readTool("Tools/texture/generate.cs");
 
   assert.match(camera, /ScreenshotToolSupport\.WriteScreenshotBytes\(outputPath, bytes, budget\)/);
-  assert.match(camera, /E_SCREENSHOT_ARTIFACT_EMPTY/);
-  assert.match(camera, /E_SCREENSHOT_ARTIFACT_MISSING/);
-  assert.match(camera, /E_SCREENSHOT_ARTIFACT_INVALID/);
+  assert.match(screenshotSupport, /E_SCREENSHOT_ARTIFACT_EMPTY/);
+  assert.match(screenshotSupport, /E_SCREENSHOT_ARTIFACT_MISSING/);
+  assert.match(screenshotSupport, /E_SCREENSHOT_ARTIFACT_INVALID/);
   assert.match(multiview, /CameraToolSupport\.NormalizeFormat\(request\.Format, Path\.Combine\(outputDir, "capture\.png"\)\)/);
   assert.match(multiview, /plans\.Add\(new KeyValuePair<int, string>\(camera\.GetInstanceID\(\), outputPath\)\)/);
   assert.match(multiview, /EditorUtility\.InstanceIDToObject\(plan\.Key\) as Camera/);

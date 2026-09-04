@@ -320,7 +320,7 @@ function writeModule(directory, injections) {
 }
 
 function generate() {
-  if (existsSync(join(ROOT, "src", "contexts"))) throw new Error("src/contexts: legacy Context schema input is forbidden; define Tools under src/tools instead");
+  if (existsSync(join(ROOT, "src", "contexts"))) throw new Error("src/contexts: Context schema input is forbidden; define Tools under src/tools instead");
   const program = loadProgram();
   for (const sourceFile of program.getSourceFiles()) {
     if (!sourceFile.isDeclarationFile && /\bdefineContext\s*(?:<|\()/.test(sourceFile.text)) {

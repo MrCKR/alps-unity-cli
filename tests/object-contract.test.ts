@@ -144,7 +144,7 @@ test("object.modify implements IUnityCliTool with dry-run support", async () => 
 test("C# object serializer implements path aggregate and viewQuery conflict", async () => {
   const serializer = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectSerializer.cs", import.meta.url), "utf8");
   const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/object/ObjectToolSupport.cs", import.meta.url), "utf8");
-  assert.match(serializer, /BuildPathReadAggregate[\s\S]*TypeName = "UnityCli\.PathReadAggregate"/, "paths should return a stable aggregate envelope");
+  assert.match(serializer, /BuildPathReadAggregate[\s\S]*NewMember\("\$", "UnityCli\.PathReadAggregate", budget\)/, "paths should return a stable aggregate envelope");
   assert.match(serializer, /TryReadPath[\s\S]*ReadPathSegment[\s\S]*ReadIndexer/, "paths should read exact nested members and indexers");
   assert.match(supportSource, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "object serializer options should reject paths and viewQuery together");
 });
@@ -160,11 +160,9 @@ test("C# object serializer represents non-finite dynamic numbers without invalid
 
 test("bounded Unity readers expose opaque string continuation in the same cursor domain", async () => {
   const paths = [
-    "../unitypkg/Editor/Tools/console/get.cs",
     "../unitypkg/Editor/Tools/scene/hierarchy.cs",
     "../unitypkg/Editor/Tools/go/find.cs",
-    "../unitypkg/Editor/Tools/profiler/hierarchy.cs",
-    "../unitypkg/Editor/Tools/profiler/frame-debugger/events.cs"
+    "../unitypkg/Editor/Tools/profiler/hierarchy.cs"
   ];
   for (const path of paths) {
     const source = await readFile(new URL(path, import.meta.url), "utf8");

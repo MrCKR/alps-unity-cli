@@ -107,10 +107,10 @@ test("screenshot tools restore render state and require a non-empty written arti
   assert.match(supportSource, /camera\.targetTexture = previousTarget/);
   assert.match(gameViewSource, /RenderTexture\.active = previousActive/);
   assert.match(gameViewSource, /finally \{ cam\.targetTexture = prevTarget; \}/);
-  assert.match(isolatedSource, /RenderScreenshotTexture\(cam, width, height\)/);
+  assert.match(isolatedSource, /RenderScreenshotTexture\(camera, width, height, captureBudget\)/);
   assert.match(isolatedSource, /finally \{ UnityEngine\.Object\.DestroyImmediate\(texture\); \}/);
-  assert.match(orbitSource, /previousPosition = cam\.transform\.position/);
-  assert.match(orbitSource, /cam\.transform\.position = previousPosition/);
+  assert.match(orbitSource, /previousPosition = camera\.transform\.position/);
+  assert.match(orbitSource, /camera\.transform\.position = previousPosition/);
   assert.match(orbitSource, /finally \{ UnityEngine\.Object\.DestroyImmediate\(texture\); \}/);
 });
 

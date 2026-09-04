@@ -105,10 +105,10 @@ test("profiler live descriptors expose representative play mode, package, and sc
 
 test("profiler.hierarchy C# supports current hierarchy API and latest-frame default", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/hierarchy.cs", import.meta.url), "utf8");
-  assert.match(source, /UnityEditor\.Profiling\.HierarchyFrameDataView[\s\S]*UnityEditorInternal\.HierarchyFrameDataView[\s\S]*UnityEngine\.Profiling\.HierarchyFrameDataView/);
-  assert.match(source, /typeof\(bool\)/);
-  assert.match(source, /ProfilerDriverIntProperty\("lastFrameIndex", -1\)/);
-  assert.match(source, /Description = "Latest frame on the main thread"[\s\S]*Frame = -1, Thread = 0/);
+  assert.match(source, /GetMethod\("GetRawFrameDataView"[\s\S]*RawHierarchyAccessor/);
+  assert.match(source, /UnityCliContinuationToken/);
+  assert.match(source, /request\.Frame \?\? ProfilerToolSupport\.ProfilerDriverIntProperty\("lastFrameIndex", -1\)/);
+  assert.match(source, /Description = "Read latest-frame nodes"[\s\S]*PageSize = 50, Depth = 5/);
 });
 
 test("profiler.start records Editor frames and profiler.stop restores profileEditor", async () => {
@@ -274,9 +274,10 @@ test("profiler.capture and memory-snapshot.take use async IUnityCliTool", async 
   assert.match(captureSource, /Frames = 1/);
   assert.doesNotMatch(captureSource, /Frames = 30/);
   const snapshotSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot/take.cs", import.meta.url), "utf8");
+  const snapshotSupport = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerMemorySnapshotSupport.cs", import.meta.url), "utf8");
   assert.match(snapshotSource, /class ProfilerMemorySnapshotTakeTool : IUnityCliTool</);
   assert.match(snapshotSource, /public async ValueTask<Result> ExecuteAsync\(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default\)/);
   assert.match(snapshotSource, /await ctx\.Wait\.ForCallback<Result>\(/);
-  assert.match(snapshotSource, /E_PROFILER_SNAPSHOT_ARTIFACT_MISSING/);
-  assert.match(snapshotSource, /!info\.Exists \|\| info\.Length <= 0/);
+  assert.match(snapshotSupport, /E_PROFILER_SNAPSHOT_ARTIFACT_MISSING/);
+  assert.match(snapshotSupport, /if \(!exists\)[\s\S]*if \(length <= 0L\)/);
 });

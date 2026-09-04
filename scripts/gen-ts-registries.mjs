@@ -19,7 +19,7 @@ function sourceFiles(root) {
 
 function assertNoLegacyContextAuthoring() {
   const sourceRoot = join(ROOT, "src");
-  if (existsSync(join(sourceRoot, "contexts"))) throw new Error("src/contexts: legacy Context authoring directory is forbidden; define Tools under src/tools instead");
+  if (existsSync(join(sourceRoot, "contexts"))) throw new Error("src/contexts: Context authoring directory is forbidden; define Tools under src/tools instead");
   for (const file of sourceFiles(sourceRoot)) {
     const text = readFileSync(file, "utf8");
     if (/\bdefineContext\s*(?:<|\()/.test(text)) throw new Error(`${relative(ROOT, file)}: legacy defineContext authoring is forbidden; define a Tool instead`);

@@ -52,7 +52,8 @@ test("Execute is the single success and error envelope boundary", () => {
   assert.match(execute, /await ExecuteData\(request, cancellationToken\)/);
   assert.match(execute, /ProtocolEnvelopeFactory\.Success\(request\.RequestId, data\)/);
   assert.match(execute, /SerializeBridgeExceptionEnvelope\(request\.RequestId, exception\)/);
-  assert.doesNotMatch(registry + runtimeExecutor, /ProtocolEnvelopeFactory\.(?:Success|Error)/);
+  assert.doesNotMatch(runtimeExecutor, /ProtocolEnvelopeFactory\.(?:Success|Error)/);
+  assert.match(registry, /SerializeTerminalSuccess[\s\S]*ProtocolEnvelopeFactory\.Success/);
 });
 
 test("ProBuilder error factories create BridgeCommandException with machine-readable details and actions", () => {

@@ -47,9 +47,9 @@ test("repeatable multi-process assets cover readers, waiters, mutations, prune, 
 });
 
 test("Unity EditMode assets execute real retry and cleanup boundaries", () => {
-  assert.match(sources.retryTests, /FileShare\.None/);
-  assert.match(sources.retryTests, /TransientWriteFailureUsesLatestStateAndSucceedsOnOneRetry/);
-  assert.match(sources.retryTests, /PersistentWriteFailureStopsAtFourAndDoesNotStartAnotherChain/);
+  assert.match(sources.retryTests, /InitialRetryKeepsListenerClosedUntilTransitioningPublishesThenOpensOnce/);
+  assert.match(sources.retryTests, /PendingPeriodicPublicationKeepsOneChainAndUsesLatestRequestedState/);
+  assert.match(sources.retryTests, /RetryableFailureStopsListenerOnlyAfterFourthAttempt/);
   assert.match(sources.cleanupTests, /index < 115/);
   assert.match(sources.cleanupTests, /index < 30/);
   assert.match(sources.cleanupTests, /index < 2001/);

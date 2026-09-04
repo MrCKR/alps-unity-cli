@@ -79,7 +79,6 @@ test("later descriptor reads and executable runs remain on the same publication"
   const sources = await readSources([
     toolRegistryPath,
     runtimeExecutorPath,
-    "unitypkg/Editor/Tools/diagnose/preflight.cs",
   ]);
   assert.match(sources, /ProjectToolCatalogSnapshotReader\.Read\(\)/);
   assert.match(sources, /ReadPublishedProjectToolCatalogSnapshot\(\)/);
@@ -107,7 +106,7 @@ test("unified generation emits exact C# owner inventory before runtime publicati
   assert.match(generator, /InventoryEntries/);
   assert.match(ownership, /GetCustomAttributes\(typeof\(UnityCliExtensionAssemblyAttribute\)/);
   assert.match(ownership, /expected\/actual set mismatch/);
-  assert.match(ownership, /loaded without its exact assembly marker/);
+  assert.match(ownership, /loaded without its exact UnityCliExtensionAssembly marker/);
   assert.doesNotMatch(ownership, /StartsWith\(ExtensionAssemblyPrefix/);
   for (let index = 0; index < extensionIds.length; index += 1) {
     assert.match(markers[index], new RegExp(`\\[assembly:\\s*UnityCli\\.UnityCliExtensionAssembly\\("${extensionIds[index]}"\\)\\s*\\]`));

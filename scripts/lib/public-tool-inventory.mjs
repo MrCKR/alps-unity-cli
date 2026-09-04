@@ -180,7 +180,7 @@ function assertNoLegacyContextAuthoring(root) {
   const forbidden = /\bdefineContext\s*(?:<|\()|\bIUnityCliContext\s*</;
   for (const file of files) {
     const sourceText = fs.readFileSync(file, "utf8");
-    if (forbidden.test(sourceText)) throw new Error(`${relativeSource(root, file)}: legacy Context authoring is forbidden; define a Tool instead`);
+    if (forbidden.test(sourceText)) throw new Error(`${relativeSource(root, file)}: Context authoring is forbidden; define a Tool instead`);
   }
 }
 

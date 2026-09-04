@@ -572,7 +572,7 @@ checks.push({
 });
 
 const internalMetaRoutes = new Set([
-  "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run",
+  "project-tool.health", "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run",
   "runtime-tool.groups", "runtime-tool.summary", "runtime-tool.describe", "runtime-tool.list", "runtime-tool.run",
   "code.exec"
 ]);

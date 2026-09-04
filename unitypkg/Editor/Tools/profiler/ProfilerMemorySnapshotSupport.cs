@@ -356,7 +356,7 @@ namespace UnityCli
                 "profiler.memory-snapshot",
                 CleanupOrphanPass,
                 TimeSpan.FromDays(3650),
-                CancellationToken.None);
+                default(CancellationToken));
         }
 
         internal static bool CleanupOrphanPass()
