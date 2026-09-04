@@ -216,7 +216,8 @@ namespace UnityCli
                 }
                 catch (Exception ex)
                 {
-                    var error = new BridgeCommandException("E_BRIDGE_COMMAND_FAILED", ex.Message, "Check Unity Console and UnityCliBridge.log.");
+                    WriteLog("build_unhandled_exception requestId=" + request.RequestId + " activeRootCreated=" + activeRootCreated + " exception=" + ex);
+                    var error = new BridgeCommandException("E_EXECUTION_FAILED", "Build preparation failed before BuildPlayer could start.", "Inspect UnityCliBridge.log and Build Settings before retrying build.run.");
                     if (!activeRootCreated && ActiveRootDefinitelyAbsent(queueState, request.RequestId, digest))
                         return FinishBuildPreRootFault(queueState, request.RequestId, digest, error);
                     return FinishBuildTerminalAfterRootFault(queueState, request.RequestId, digest, SerializeException(request.RequestId, ex), queueAdmissionOwner, dependencies);
