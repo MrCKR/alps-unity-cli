@@ -369,8 +369,8 @@ export class SessionSupervisor {
       if (mode === "execute" && template.mutation !== false && dispatchAttempted && binding.sessionId !== dispatchSessionId) {
         throw await this.executionTimeoutWithObservation(target.instanceId, binding, absoluteDeadlineMs, "The selected Unity process session changed after the first mutation POST; automatic redelivery is forbidden.");
       }
-      assertAdmissionBinding(template.rootAdmission, binding);
       try {
+        assertAdmissionBinding(template.rootAdmission, binding);
         dispatchAttempted = true;
         postAttempts += 1;
         const requestAdmission = template.rootAdmission?.requestId === template.requestId ? template.rootAdmission : undefined;

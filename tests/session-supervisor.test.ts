@@ -816,6 +816,58 @@ test("changed discovery listener fails before admission or business POST", async
   assert.equal(businessPosts, 0);
 });
 
+test("changed listener after a mutation POST is outcome unknown, never a pre-dispatch catalog error", async () => {
+  let now = 2_000;
+  let selections = 0;
+  let businessPosts = 0;
+  const admission: RootAdmissionLease = {
+    requestId: "req_posted_listener_change",
+    command: "editor.play",
+    rootFingerprint: "f".repeat(64),
+    completionContractIdentity: "observed-state-v1",
+    target: "editor",
+    instanceId: INSTANCE_ID,
+    canonicalProjectPath: "c:\\repo\\project",
+    sessionId: SESSION_ID,
+    listenerId: `listener-${"0".repeat(31)}1`,
+    listenerGeneration: 1,
+    token: "a".repeat(64),
+    consumed: false,
+    grantExpiresAtMs: 3_000,
+    executionAbsoluteDeadlineMs: 7_000,
+    injected: false,
+  };
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => now,
+    sleep: async (ms) => { now += ms; },
+    select: async () => selection("ready", selections++ === 0 ? 1 : 2),
+    observer: observer("unproven"),
+    post: async (_binding, request) => {
+      businessPosts += 1;
+      return {
+        response: { ok: false, requestId: request.payload.requestId, error: { code: "E_UNITY_DOMAIN_RELOAD", message: "changed", nextActions: [], transient: true, retryAfterMs: 100 } },
+        attestation: attestation(2),
+      };
+    },
+  });
+
+  await assert.rejects(() => supervisor.execute({
+    requestId: admission.requestId,
+    command: "project-tool.run",
+    input: { name: "editor.play", input: {} },
+    mutation: true,
+    absoluteDeadlineMs: 7_000,
+    rootAdmission: admission,
+  }), (error: unknown) => {
+    assert.ok(error instanceof SessionSupervisorError);
+    assert.equal(error.code, "E_EXECUTION_TIMEOUT");
+    assert.equal(error.details?.dispatch, "may-have-started");
+    assert.notEqual(error.details?.businessRequestSent, false);
+    return true;
+  });
+  assert.equal(businessPosts, 1);
+});
+
 test("explicit pre-effect admission rejection polls reacquire until capacity is available", async () => {
   let now = 3_000;
   let acquireCalls = 0;
