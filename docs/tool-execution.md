@@ -54,7 +54,7 @@ unitycli tools run camera.screenshot --input '{}'
 
 准入等待超过`T`时返回`E_UNITY_BUSY`、`transient:true`和`retryAfterMs:100`。该错误明确证明本次业务Bridge请求未发送、effect未开始，可以稍后提交一个新root。放行后的timeout、断连或终态不明仍返回`E_EXECUTION_TIMEOUT`，表示outcome unknown，必须先观察业务状态。
 
-统一catalog在Editor和Runtime同时在线时，会在每个参与公开结果的target session分别准入；任一在线target未获准时不返回跨池的部分catalog。exact `editor.state`、`editor.dialogs`、`editor.dialog.click`和六个域专用durable status Tool是固定例外：它们使用冻结的本地descriptor完成相同contract、availability、schema、结果与envelope校验，但不取得或撤销业务admission。status仍向选定实例发送一次域绑定SafeStatus读取；其他offline Tool、相邻名称、group或handler不会获得该例外。
+统一catalog在Editor和Runtime同时在线时，会在每个参与公开结果的target session分别准入；任一在线target未获准时不返回跨池的部分catalog。exact `editor.state`、`editor.dialogs`、`editor.dialog.click`和六个域专用durable status Tool是固定例外：它们使用冻结的本地descriptor完成相同contract、availability、schema、结果与envelope校验。三个Editor观察Tool不取得业务admission；域status取得独立只读root admission后向选定实例发送一次域绑定SafeStatus读取，但不取得mutation lease；其他offline Tool、相邻名称、group或handler不会获得该例外。
 
 ## Bridge 执行约束
 

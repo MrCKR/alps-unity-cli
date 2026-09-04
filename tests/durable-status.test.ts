@@ -63,11 +63,12 @@ test("durable status fails closed on malformed state and preserves bridge errors
 });
 
 test("durable status Bridge path is read-only, bounded, and digest-internal", async () => {
-  const [active, coordinator, operation, queuePolicy] = await Promise.all([
+  const [active, coordinator, operation, queuePolicy, dispatcher] = await Promise.all([
     readFile("unitypkg/Editor/Infrastructure/UnityCliActiveOperation.cs", "utf8"),
     readFile("unitypkg/Editor/Infrastructure/UnityCliDurableStatusCoordinator.cs", "utf8"),
     readFile("unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs", "utf8"),
     readFile("unitypkg/Shared/UnityCliBridgeQueuePolicy.cs", "utf8"),
+    readFile("src/tools/dispatcher.ts", "utf8"),
   ]);
   assert.match(active, /MaxTerminalCacheBytes = 8 \* 1024 \* 1024/);
   assert.match(active, /TryGetTerminalByRequestId\(string scope, string requestId, out string requestDigest, out string statusDomain, out object envelope\)/);
@@ -75,6 +76,7 @@ test("durable status Bridge path is read-only, bounded, and digest-internal", as
   assert.doesNotMatch(coordinator, /public sealed class Args[\s\S]*Digest/);
   assert.match(operation, /UnityCliDurableStatusCoordinator\.IsCommand\(request\.Command\)/);
   assert.match(operation, /SaveDirectMutationAcceptedRoot\(request\.RequestId, requestDigest, contract\.ToolName\)/);
+  assert.match(dispatcher, /resolveCatalogIndependentOperabilityTool\(tool\.name\)\?\.handler === "offline"/);
   assert.doesNotMatch(operation, /SaveDirectMutationAcceptedRoot\(request\.RequestId, requestDigest, request\.Command\)/);
   for (const [, command] of cases) assert.match(queuePolicy, new RegExp(command.replaceAll(".", "\\.")));
 });

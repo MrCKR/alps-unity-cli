@@ -78,7 +78,7 @@ alias 绑定完整 `instanceId`、canonical project path 和 canonicalization ve
 - 准入deadline到达返回effect-before `E_UNITY_BUSY`并证明业务请求未发送；
 - 放行后的超时或终态前断连返回`E_EXECUTION_TIMEOUT`，调用方必须先观察业务状态，再作新的提交决策。
 
-普通读取型Tool的成功结果来自同一validated generation的完整读取。exact `editor.state`、`editor.dialogs`、`editor.dialog.click`和六个域专用durable status Tool使用frozen本地descriptor进入同一dispatcher，不依赖可能被transition、modal或业务mutation阻断的Live catalog，也不执行普通业务admission acquire/revoke；status仍严格选择目标实例并只发送域绑定SafeStatus读取。`editor.state`在同一dispatch absolute deadline内合并Registry v3、Health v3内存主线程pulse、一次private snapshot Bridge观察、PID/start、project claim和Windows modal证据，返回七态与freshness；4秒/10秒子上限只能缩短该deadline。dialogs保持Windows-only，click仍重新证明exact PID/start/dialog/button并只执行一次effect。其他Tool与catalog listing仍严格依赖Live实例和普通准入。Domain Reload只由Registry lifecycle、新listener generation和该generation首个主线程pulse证明，不读取固定时长marker文件。
+普通读取型Tool的成功结果来自同一validated generation的完整读取。exact `editor.state`、`editor.dialogs`、`editor.dialog.click`和六个域专用durable status Tool使用frozen本地descriptor进入同一dispatcher，不依赖可能被transition、modal或业务mutation阻断的Live catalog，三个Editor观察Tool不执行普通业务admission acquire/revoke；域status仍严格选择目标实例、取得独立只读root admission并只发送域绑定SafeStatus读取，但不取得mutation lease。`editor.state`在同一dispatch absolute deadline内合并Registry v3、Health v3内存主线程pulse、一次private snapshot Bridge观察、PID/start、project claim和Windows modal证据，返回七态与freshness；4秒/10秒子上限只能缩短该deadline。dialogs保持Windows-only，click仍重新证明exact PID/start/dialog/button并只执行一次effect。其他Tool与catalog listing仍严格依赖Live实例和普通准入。Domain Reload只由Registry lifecycle、新listener generation和该generation首个主线程pulse证明，不读取固定时长marker文件。
 
 ## Development Player Sidecar
 

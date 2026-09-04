@@ -419,7 +419,7 @@ async function executeDefinition(
 
 /** exact owner判定只接受固定公开观察与durable status Tool。 */
 function isAdmissionIndependentLocalDefinition(tool: ToolMetadata, _input: Record<string, unknown>): boolean {
-  return !!resolveCatalogIndependentOperabilityTool(tool.name);
+  return resolveCatalogIndependentOperabilityTool(tool.name)?.handler === "offline";
 }
 
 /** 本地定义统一执行输出校验、effect barrier和deadline terminal。 */
