@@ -417,7 +417,7 @@ async function executeDefinition(
   return executeLocalDefinition(tool, completion, definition, input, flags, rootRuntime, requestId, projectPath, execution, executionAbsoluteDeadlineMs, cleanup);
 }
 
-/** exact owner判定只接受三个公开观察/恢复 Tool。 */
+/** exact owner判定只接受固定公开观察与durable status Tool。 */
 function isAdmissionIndependentLocalDefinition(tool: ToolMetadata, _input: Record<string, unknown>): boolean {
   return !!resolveCatalogIndependentOperabilityTool(tool.name);
 }

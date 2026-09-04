@@ -22,16 +22,21 @@ export type ToolCatalogResult = { ok: true; tools: ToolMetadata[] } | (CliResult
 
 const OFFICIAL_ATTRIBUTE_PREFIX = "UnityPipeline_";
 const OFFICIAL_ATTRIBUTE_GROUP = "UnityPipeline";
-const CATALOG_INDEPENDENT_OPERABILITY_TOOLS = new Set(["editor.state", "editor.dialogs", "editor.dialog.click"]);
+const CATALOG_INDEPENDENT_OFFLINE_TOOLS = new Set(["editor.state", "editor.dialogs", "editor.dialog.click"]);
+const CATALOG_INDEPENDENT_DURABLE_STATUS_TOOLS = new Set([
+  "asset.refresh.status", "build.player.status", "editor.play-mode.status",
+  "package.install.status", "package.remove.status", "test.run.status",
+]);
 
-/** 统一状态观察与弹窗恢复必须在Live catalog被transition或modal阻断时仍进入原dispatcher。 */
+/** 固定观察与durable status在Live catalog被transition、modal或业务mutation阻断时仍进入原dispatcher。 */
 export function resolveCatalogIndependentOperabilityTool(name: string): ToolMetadata | undefined {
-  if (!CATALOG_INDEPENDENT_OPERABILITY_TOOLS.has(name)) return undefined;
   const tool = findToolByName(name);
-  return tool?.handler === "offline" ? tool : undefined;
+  if (CATALOG_INDEPENDENT_OFFLINE_TOOLS.has(name)) return tool?.handler === "offline" ? tool : undefined;
+  if (!CATALOG_INDEPENDENT_DURABLE_STATUS_TOOLS.has(name)) return undefined;
+  return tool?.handler === "hybrid" && tool.destructiveHint === false && (tool.sideEffects?.length ?? 0) === 0 ? tool : undefined;
 }
 
-/** 只有三个 exact operability Tool 可绕过 live catalog。 */
+/** 只有固定的 exact operability/status Tool 可绕过 live catalog。 */
 export function resolveCatalogIndependentInvocationTool(name: string): ToolMetadata | undefined {
   return resolveCatalogIndependentOperabilityTool(name);
 }

@@ -14,12 +14,19 @@ import { dispatchTool, enrichTargetFailureWithDialogBlocker } from "../src/tools
 import { findToolByName } from "../src/tools/metadata/index.js";
 
 const OPERABILITY_TOOLS = ["editor.state", "editor.dialogs", "editor.dialog.click"] as const;
+const DURABLE_STATUS_TOOLS = ["asset.refresh.status", "build.player.status", "editor.play-mode.status", "package.install.status", "package.remove.status", "test.run.status"] as const;
 
-test("only exact Editor operability tools own catalog-independent descriptors", () => {
+test("only exact operability and durable status tools own catalog-independent descriptors", () => {
   for (const name of OPERABILITY_TOOLS) {
     const resolved = resolveCatalogIndependentOperabilityTool(name);
     assert.deepEqual(resolved, findToolByName(name));
     assert.equal(resolved?.handler, "offline");
+  }
+  for (const name of DURABLE_STATUS_TOOLS) {
+    const resolved = resolveCatalogIndependentOperabilityTool(name);
+    assert.deepEqual(resolved, findToolByName(name));
+    assert.equal(resolved?.handler, "hybrid");
+    assert.equal(resolved?.destructiveHint, false);
   }
   for (const name of ["dialogs", "editor.compile", "docs.get", "package.registry.set"])
     assert.equal(resolveCatalogIndependentOperabilityTool(name), undefined, name);
@@ -80,7 +87,7 @@ test("exact Editor operability definitions bypass business admission while anoth
 test("tools describe learns exact Editor operability contracts without a live catalog", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "unity-cli-dialog-recovery-describe-"));
   try {
-    for (const name of OPERABILITY_TOOLS) {
+    for (const name of [...OPERABILITY_TOOLS, ...DURABLE_STATUS_TOOLS]) {
       assert.deepEqual(resolveCatalogIndependentInvocationTool(name), findToolByName(name));
       const result = await handleToolsCommand("describe", [name], {}, { dataDir, projectTools: [] }, `req_describe_${name.replaceAll(".", "_")}`);
       assert.equal(result.ok, true, JSON.stringify(result));

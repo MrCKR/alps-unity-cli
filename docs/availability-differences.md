@@ -22,7 +22,7 @@ catalog只包含必须由已打开Unity Editor或development Player提供的项�
 | `offline` | 不返回capability catalog；返回`E_INSTANCE_NOT_RUNNING` |
 | `conflict` | 至少两个verified live claim；返回`E_INSTANCE_CONFLICT` |
 
-没有 selector 且 CWD 不在 Unity 项目中时返回 `E_INSTANCE_REQUIRED`。静态 snapshot 不作为公开 fallback。只有三个exact观察名称及`tools describe`对它们的精确学习入口可使用冻结本地descriptor；相邻名称、alias、group、handler和其他offline Tool仍按Live catalog与普通准入失败。dialogs只在Windows可用。
+没有 selector 且 CWD 不在 Unity 项目中时返回 `E_INSTANCE_REQUIRED`。静态 snapshot 不作为公开 fallback。只有三个exact Editor观察名称、六个域专用durable status名称及`tools describe`对它们的精确学习入口可使用冻结本地descriptor；status仍执行一次选定实例上的SafeStatus读取，相邻名称、alias、group、handler和其他offline Tool仍按Live catalog与普通准入失败。dialogs只在Windows可用。
 
 ## Package 与 Extension
 
