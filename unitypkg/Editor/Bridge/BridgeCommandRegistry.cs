@@ -131,6 +131,7 @@ namespace UnityCli
             RegisterEditorStateSnapshotCommand(registry);
             RegisterDoctorDiagnosticCommands(registry);
             RegisterInstanceCleanupCommand(registry);
+            UnityCliDurableStatusCoordinator.Register(registry);
             UnityCliCompileCoordinator.Register(registry);
             UnityCliLiveBuildCoordinator.Register(registry);
             UnityCliLiveRefreshCoordinator.Register(registry);

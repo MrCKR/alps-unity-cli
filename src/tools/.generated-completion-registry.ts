@@ -418,6 +418,20 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
+    "toolName": "asset.refresh.status",
+    "descriptorOwner": "ts-local",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "atomic",
+    "completionPredicate": "typed-business-terminal",
+    "proofSource": "typed-result-and-effect-readback",
+    "reloadPolicy": "caller-responsibility",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "atomic-typed-result-v1",
+    "journalPolicy": "none",
+    "mutation": false
+  },
+  {
     "toolName": "asset.rename",
     "descriptorOwner": "built-in",
     "deliveryMode": "direct-terminal",
@@ -496,6 +510,20 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "implementationType": "UnityCli.BuildPlatformSetTool",
     "journalPolicy": "required",
     "mutation": true
+  },
+  {
+    "toolName": "build.player.status",
+    "descriptorOwner": "ts-local",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "atomic",
+    "completionPredicate": "typed-business-terminal",
+    "proofSource": "typed-result-and-effect-readback",
+    "reloadPolicy": "caller-responsibility",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "atomic-typed-result-v1",
+    "journalPolicy": "none",
+    "mutation": false
   },
   {
     "toolName": "build.profile.create",
@@ -1554,6 +1582,20 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "implementationType": "UnityCli.EditorPlayTool",
     "journalPolicy": "required",
     "mutation": true
+  },
+  {
+    "toolName": "editor.play-mode.status",
+    "descriptorOwner": "ts-local",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "atomic",
+    "completionPredicate": "typed-business-terminal",
+    "proofSource": "typed-result-and-effect-readback",
+    "reloadPolicy": "caller-responsibility",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "atomic-typed-result-v1",
+    "journalPolicy": "none",
+    "mutation": false
   },
   {
     "toolName": "editor.redo",
@@ -2634,6 +2676,20 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "mutation": true
   },
   {
+    "toolName": "package.install.status",
+    "descriptorOwner": "ts-local",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "atomic",
+    "completionPredicate": "typed-business-terminal",
+    "proofSource": "typed-result-and-effect-readback",
+    "reloadPolicy": "caller-responsibility",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "atomic-typed-result-v1",
+    "journalPolicy": "none",
+    "mutation": false
+  },
+  {
     "toolName": "package.registry.clear",
     "descriptorOwner": "ts-local",
     "deliveryMode": "direct-terminal",
@@ -2674,6 +2730,20 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "completionDriverId": "external-terminal-readback-v1",
     "journalPolicy": "required",
     "mutation": true
+  },
+  {
+    "toolName": "package.remove.status",
+    "descriptorOwner": "ts-local",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "atomic",
+    "completionPredicate": "typed-business-terminal",
+    "proofSource": "typed-result-and-effect-readback",
+    "reloadPolicy": "caller-responsibility",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "atomic-typed-result-v1",
+    "journalPolicy": "none",
+    "mutation": false
   },
   {
     "toolName": "package.resolve",
@@ -2730,6 +2800,20 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "completionDriverId": "atomic-typed-result-v1",
     "journalPolicy": "required",
     "mutation": true
+  },
+  {
+    "toolName": "package.update.status",
+    "descriptorOwner": "ts-local",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "atomic",
+    "completionPredicate": "typed-business-terminal",
+    "proofSource": "typed-result-and-effect-readback",
+    "reloadPolicy": "caller-responsibility",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "atomic-typed-result-v1",
+    "journalPolicy": "none",
+    "mutation": false
   },
   {
     "toolName": "physics.assign-material",
@@ -5120,6 +5204,20 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "completionDriverId": "active-operation-terminal-readback-v1",
     "journalPolicy": "required",
     "mutation": true
+  },
+  {
+    "toolName": "test.run.status",
+    "descriptorOwner": "ts-local",
+    "deliveryMode": "direct-terminal",
+    "executionClass": "atomic",
+    "completionPredicate": "typed-business-terminal",
+    "proofSource": "typed-result-and-effect-readback",
+    "reloadPolicy": "caller-responsibility",
+    "timeoutError": "E_EXECUTION_TIMEOUT",
+    "outcomeUnknownPolicy": "caller-responsibility",
+    "completionDriverId": "atomic-typed-result-v1",
+    "journalPolicy": "none",
+    "mutation": false
   },
   {
     "toolName": "texture.create",

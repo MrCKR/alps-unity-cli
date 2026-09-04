@@ -281,12 +281,17 @@ namespace UnityCli
 
         internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, object envelope)
         {
+            return StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, null, envelope);
+        }
+
+        internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, string statusDomain, object envelope)
+        {
             AssertIoOutsideQueueLock();
             TestHooks.Hit("before-terminal-store:" + scope);
             Interlocked.Increment(ref ioCallbackCount);
             return IsolatedExecution == null
-                ? UnityCliActiveOperation.StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, envelope)
-                : IsolatedExecution.StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, envelope);
+                ? UnityCliActiveOperation.StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, statusDomain, envelope)
+                : IsolatedExecution.StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, statusDomain, envelope);
         }
 
         internal bool TryGetTerminalBySelector(string scope, string requestId, string selectorDigest, out object envelope)
@@ -554,6 +559,11 @@ namespace UnityCli
 
         internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, object envelope)
         {
+            return StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, null, envelope);
+        }
+
+        internal object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, string statusDomain, object envelope)
+        {
             lock (sync)
             {
                 var key = TerminalKey(scope, requestId, requestDigest);
@@ -565,11 +575,13 @@ namespace UnityCli
                         Scope = scope,
                         RequestId = requestId,
                         SelectorDigest = selectorDigest,
+                        StatusDomain = statusDomain,
                         Envelope = CloneObject(envelope)
                     };
                     terminals.Add(key, current);
                 }
-                else if (!string.Equals(current.SelectorDigest, selectorDigest, StringComparison.Ordinal))
+                else if (!string.Equals(current.SelectorDigest, selectorDigest, StringComparison.Ordinal)
+                    || !string.Equals(current.StatusDomain, statusDomain, StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException("Isolated terminal selector identity changed.");
                 }
@@ -637,6 +649,7 @@ namespace UnityCli
             internal string Scope;
             internal string RequestId;
             internal string SelectorDigest;
+            internal string StatusDomain;
             internal object Envelope;
         }
 

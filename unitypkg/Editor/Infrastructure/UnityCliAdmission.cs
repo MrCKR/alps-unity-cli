@@ -1836,7 +1836,7 @@ namespace UnityCli
         private static bool AdmissionRecoveryCommand(string command)
         {
             return IsProjectToolCatalogReadCommand(command) || command == "internal.editor.state.snapshot"
-                || IsDoctorAdmissionBypassCommand(command)
+                || IsDoctorAdmissionBypassCommand(command) || UnityCliDurableStatusCoordinator.IsCommand(command)
                 || UnityCliCompileCoordinator.IsCommand(command) || UnityCliLiveBuildCoordinator.IsCommand(command)
                 || UnityCliLiveRefreshCoordinator.IsCommand(command) || UnityCliAssetRefreshCoordinator.IsCommand(command)
                 || UnityCliPackageEmbedCoordinator.IsCommand(command) || UnityCliPackageResolveCoordinator.IsCommand(command)

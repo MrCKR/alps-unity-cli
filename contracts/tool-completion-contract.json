@@ -679,6 +679,33 @@
       ]
     },
     {
+      "toolName": "asset.refresh.status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/asset/refresh-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "asset.refresh.status returns one bounded same-session active phase or exact durable terminal envelope."
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "The domain-bound SafeStatus command reads the active journal or first-terminal-wins cache without acquiring the mutation lease."
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "The read never replays an effect; an Editor process restart invalidates the previous session mechanism state."
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "A status read failure does not alter business state; inspect the selected Editor session before another read."
+      },
+      "asyncSignals": [
+        "promise"
+      ]
+    },
+    {
       "toolName": "asset.rename",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/asset/rename.cs",
@@ -813,6 +840,33 @@
       },
       "asyncSignals": [
         "value-task"
+      ]
+    },
+    {
+      "toolName": "build.player.status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/build/player-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "build.player.status returns one bounded same-session active phase or exact durable terminal envelope."
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "The domain-bound SafeStatus command reads the active journal or first-terminal-wins cache without acquiring the mutation lease."
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "The read never replays an effect; an Editor process restart invalidates the previous session mechanism state."
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "A status read failure does not alter business state; inspect the selected Editor session before another read."
+      },
+      "asyncSignals": [
+        "promise"
       ]
     },
     {
@@ -2626,6 +2680,33 @@
       },
       "asyncSignals": [
         "value-task"
+      ]
+    },
+    {
+      "toolName": "editor.play-mode.status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/editor/play-mode-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "editor.play-mode.status returns one bounded same-session active phase or exact durable terminal envelope."
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "The domain-bound SafeStatus command reads the active journal or first-terminal-wins cache without acquiring the mutation lease."
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "The read never replays an effect; an Editor process restart invalidates the previous session mechanism state."
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "A status read failure does not alter business state; inspect the selected Editor session before another read."
+      },
+      "asyncSignals": [
+        "promise"
       ]
     },
     {
@@ -4506,6 +4587,33 @@
       ]
     },
     {
+      "toolName": "package.install.status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/install-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.install.status returns one bounded same-session active phase or exact durable terminal envelope."
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "The domain-bound SafeStatus command reads the active journal or first-terminal-wins cache without acquiring the mutation lease."
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "The read never replays an effect; an Editor process restart invalidates the previous session mechanism state."
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "A status read failure does not alter business state; inspect the selected Editor session before another read."
+      },
+      "asyncSignals": [
+        "promise"
+      ]
+    },
+    {
       "toolName": "package.registry.clear",
       "descriptorOwner": "ts-local",
       "source": "src/tools/package/registry-clear.ts",
@@ -4588,6 +4696,33 @@
         "promise",
         "async",
         "await"
+      ]
+    },
+    {
+      "toolName": "package.remove.status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/remove-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.remove.status returns one bounded same-session active phase or exact durable terminal envelope."
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "The domain-bound SafeStatus command reads the active journal or first-terminal-wins cache without acquiring the mutation lease."
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "The read never replays an effect; an Editor process restart invalidates the previous session mechanism state."
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "A status read failure does not alter business state; inspect the selected Editor session before another read."
+      },
+      "asyncSignals": [
+        "promise"
       ]
     },
     {
@@ -4701,6 +4836,33 @@
       "asyncSignals": [
         "async",
         "await"
+      ]
+    },
+    {
+      "toolName": "package.update.status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/package/update-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "package.update.status returns one bounded same-session active phase or exact durable terminal envelope."
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "The domain-bound SafeStatus command reads the active journal or first-terminal-wins cache without acquiring the mutation lease."
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "The read never replays an effect; an Editor process restart invalidates the previous session mechanism state."
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "A status read failure does not alter business state; inspect the selected Editor session before another read."
+      },
+      "asyncSignals": [
+        "promise"
       ]
     },
     {
@@ -8765,6 +8927,33 @@
         "promise",
         "async",
         "await"
+      ]
+    },
+    {
+      "toolName": "test.run.status",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/test/run-status.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "test.run.status returns one bounded same-session active phase or exact durable terminal envelope."
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "The domain-bound SafeStatus command reads the active journal or first-terminal-wins cache without acquiring the mutation lease."
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "The read never replays an effect; an Editor process restart invalidates the previous session mechanism state."
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "A status read failure does not alter business state; inspect the selected Editor session before another read."
+      },
+      "asyncSignals": [
+        "promise"
       ]
     },
     {

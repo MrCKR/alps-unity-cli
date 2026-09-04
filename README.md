@@ -149,7 +149,7 @@ Failure:
 {"ok":false,"requestId":"req-...","error":{"code":"...","message":"...","nextActions":[],"transient":false,"retryAfterMs":0}}
 ```
 
-Follow structured `nextActions`. With `--timeout-ms T`, use a host budget of at least `2 * T + 5000` milliseconds and wait for the unitycli process to exit. `E_EXECUTION_TIMEOUT` means no trusted terminal result; timeout does not stop Unity effects or synchronous C# already running. Inspect business state before deciding whether to submit a new mutation.
+Follow structured `nextActions`. With `--timeout-ms T`, use a host budget of at least `2 * T + 5000` milliseconds and wait for the unitycli process to exit. `E_EXECUTION_TIMEOUT` means no trusted terminal result; timeout does not stop Unity effects or synchronous C# already running. For `asset.refresh`, player build, Play Mode, Package install/remove/update, and `test.run`, discover the matching domain `.status` Tool and pass the original root `requestId`; status reads the same-session active phase or exact terminal without replaying the effect. Otherwise inspect business state before deciding whether to submit a new mutation.
 
 ## Update And Remove
 

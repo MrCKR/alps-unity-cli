@@ -315,7 +315,7 @@ namespace UnityCli
                         && root.TerminalEnvelope != null)
                     {
                         var selector = UnityCliSerializer.Sha256Canonical(root.PackageOperation["input"]);
-                        terminal = UnityCliActiveOperation.StoreTerminalFirst(ActiveScope, root.RequestId, root.RequestDigest, selector, root.TerminalEnvelope);
+                        terminal = UnityCliActiveOperation.StoreTerminalFirst(ActiveScope, root.RequestId, root.RequestDigest, selector, Text(root.PackageOperation, "operation"), root.TerminalEnvelope);
                     }
                     if (terminal != null) UnityCliActiveOperation.BeginExactTerminalCleanup(ActiveScope, root.RequestId, root.RequestDigest);
                 }

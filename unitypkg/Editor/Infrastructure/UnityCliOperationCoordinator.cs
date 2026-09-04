@@ -50,6 +50,9 @@ namespace UnityCli
         /// </summary>
         private static async Task<string> ExecuteCoordinatedRequest(BridgeRequest request, byte[] rawRequestBytes, Func<bool> tryAcceptJournal, CancellationToken cancellationToken)
         {
+            // durable status只读active journal或terminal cache，必须绕开通用direct completion路径。
+            if (UnityCliDurableStatusCoordinator.IsCommand(request.Command))
+                return await UnityCliDurableStatusCoordinator.Execute(request, cancellationToken);
             // 私有 compile start/status 必须绕开通用 completion 路径；start 的 accepted 不是公开 terminal。
             if (UnityCliCompileCoordinator.IsCommand(request.Command))
                 return await UnityCliCompileCoordinator.Execute(request, rawRequestBytes, tryAcceptJournal, cancellationToken);
@@ -128,7 +131,7 @@ namespace UnityCli
                 return ExecutionTimeoutEnvelope(request.RequestId, "The request was not accepted before the execution deadline elapsed.");
             }
 
-            try { SaveDirectMutationAcceptedRoot(request.RequestId, requestDigest); }
+            try { SaveDirectMutationAcceptedRoot(request.RequestId, requestDigest, request.Command); }
             catch (Exception exception)
             {
                 ScheduleDirectMutationPreEffectCleanup(request.RequestId, requestDigest);
@@ -221,7 +224,7 @@ namespace UnityCli
                 root["phase"] = "terminal_pending";
                 root["terminalEnvelope"] = envelope;
                 state.SaveOperation(DirectMutationTerminalScope, root);
-                var first = state.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, envelope);
+                var first = state.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, null, root["toolName"] as string, envelope);
                 CleanupPublishedDirectMutation(state, requestId, requestDigest);
                 return UnityCliSerializer.Serialize(first);
             }
@@ -229,12 +232,33 @@ namespace UnityCli
             catch (Exception exception) { return SerializeBridgeExceptionEnvelope(requestId, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Direct mutation terminal publication is incomplete; the exact owner is retained: " + exception.GetType().Name + ".")); }
         }
 
-        private static void SaveDirectMutationAcceptedRoot(string requestId, string requestDigest)
+        private static void SaveDirectMutationAcceptedRoot(string requestId, string requestDigest, string toolName)
         {
             UnityCliActiveOperation.Save(DirectMutationTerminalScope, new Dictionary<string, object>
             {
-                { "requestId", requestId }, { "requestDigest", requestDigest }, { "editorSessionId", EditorSessionId() }, { "phase", "accepted_before_effect" }
+                { "requestId", requestId }, { "requestDigest", requestDigest }, { "toolName", toolName },
+                { "editorSessionId", EditorSessionId() }, { "phase", "accepted_before_effect" }
             });
+        }
+
+        /// <summary>editor.play-mode.status只读取editor.play/editor.stop的direct owner或其已发布终态。</summary>
+        private static object ReadEditorPlayModeStatus(string requestId)
+        {
+            string requestDigest;
+            string statusDomain;
+            object terminal;
+            if (UnityCliActiveOperation.TryGetTerminalByRequestId(DirectMutationTerminalScope, requestId, out requestDigest, out statusDomain, out terminal))
+            {
+                if (statusDomain != "editor.play" && statusDomain != "editor.stop")
+                    throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "The requested Play Mode operation was not found in this status domain.");
+                return UnityCliDurableStatusCoordinator.Terminal(requestId, terminal);
+            }
+            var root = LoadDirectMutationRoot();
+            var toolName = root == null ? null : root.ContainsKey("toolName") ? root["toolName"] as string : null;
+            if (root == null || !string.Equals(root["requestId"] as string, requestId, StringComparison.Ordinal)
+                || (toolName != "editor.play" && toolName != "editor.stop"))
+                throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "The requested Play Mode operation was not found in this Editor session.");
+            return UnityCliDurableStatusCoordinator.Running(requestId, root["phase"] as string);
         }
 
         private static void MarkDirectMutationEffectStarted(string requestId, string requestDigest)
@@ -259,10 +283,10 @@ namespace UnityCli
             {
                 var root = state.LoadOperation(DirectMutationTerminalScope);
                 if (root == null) return null;
-                object requestId; object requestDigest; object editorSessionId; object phase;
+                object requestId; object requestDigest; object toolName; object editorSessionId; object phase;
                 if (!root.TryGetValue("requestId", out requestId) || !root.TryGetValue("requestDigest", out requestDigest)
-                    || !root.TryGetValue("editorSessionId", out editorSessionId) || !root.TryGetValue("phase", out phase)
-                    || !(requestId is string) || !(requestDigest is string) || !(editorSessionId is string) || !(phase is string))
+                    || !root.TryGetValue("toolName", out toolName) || !root.TryGetValue("editorSessionId", out editorSessionId) || !root.TryGetValue("phase", out phase)
+                    || !(requestId is string) || !(requestDigest is string) || !(toolName is string) || !(editorSessionId is string) || !(phase is string))
                     throw new InvalidDataException("Direct mutation active state is incomplete.");
                 return root;
             }
@@ -318,7 +342,7 @@ namespace UnityCli
             root["phase"] = "terminal_pending";
             root["terminalEnvelope"] = terminal;
             state.SaveOperation(DirectMutationTerminalScope, root);
-            state.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, terminal);
+            state.StoreTerminalFirst(DirectMutationTerminalScope, requestId, requestDigest, null, root["toolName"] as string, terminal);
             UnityCliActiveOperation.BeginExactTerminalCleanup(DirectMutationTerminalScope, requestId, requestDigest, state);
             return DirectMutationReloadOutcome.SettledEffectBefore;
         }

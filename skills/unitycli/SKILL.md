@@ -50,7 +50,7 @@ PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。�
 - 调用公开 Tool 或 CLI 控制面即为授权。风险 metadata 只描述效果与可选 dry-run；Skill 不增加确认或预定义操作范围。
 - 等待 CLI 进程退出。`ok:true` 后检查任务相关的关键业务字段；返回结果不足或任务明确要求验证时，再使用只读 Tool 或业务 readback。
 - 失败时根据结构化 error 和 `nextActions` 形成恢复决策。`transient:true` 与 `nextActions` 仍是建议，不构成额外授权门。
-- `E_EXECUTION_TIMEOUT`、放行后连接丢失或缺少可信 terminal envelope只表示没有可信终态。先用只读Tool或业务readback观察并形成新的业务决策；CLI不自动重放，首次mutation POST后Editor session改变时也不会向新session重投。
+- `E_EXECUTION_TIMEOUT`、放行后连接丢失或缺少可信 terminal envelope只表示没有可信终态。对于`asset.refresh`、player build、Play Mode、Package install/remove/update和`test.run`，先按需发现对应域的`.status` Tool并只传原root `requestId`读取同一Editor session的active phase或exact terminal；status不重放effect。其他能力使用只读Tool或业务readback形成新的业务决策；CLI不自动重放，首次mutation POST后Editor session改变时也不会向新session重投。
 - 状态观察使用 `instances`、`doctor` 或 `editor.state`，不操作内部 registry 或 transport。
 
 ## 能力扩展

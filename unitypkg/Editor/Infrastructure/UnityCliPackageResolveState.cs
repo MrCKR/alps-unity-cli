@@ -374,6 +374,25 @@ namespace UnityCli
                 if (root == null || !string.Equals(root.RequestId, requestId, StringComparison.Ordinal)) throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "Package active operation was not found.");
                 return root;
             }
+
+            /// <summary>域status按公开root requestId读取active或terminal，并拒绝活跃请求的跨operation查询。</summary>
+            internal static object ReadPublicStatus(string requestId, string expectedOperation)
+            {
+                string requestDigest;
+                object terminal;
+                string statusDomain;
+                if (UnityCliActiveOperation.TryGetTerminalByRequestId(ActiveScope, requestId, out requestDigest, out statusDomain, out terminal))
+                {
+                    if (!string.IsNullOrEmpty(statusDomain) && !string.Equals(statusDomain, expectedOperation, StringComparison.Ordinal))
+                        throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "The requested Package operation was not found in this status domain.");
+                    return UnityCliDurableStatusCoordinator.Terminal(requestId, terminal);
+                }
+                var root = RequiredRoot(requestId);
+                var operation = Text(root.PackageOperation, "operation");
+                if (!string.Equals(operation, expectedOperation, StringComparison.Ordinal))
+                    throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "The requested Package operation was not found in this status domain.");
+                return UnityCliDurableStatusCoordinator.Running(requestId, Text(root.PackageOperation, "phase"));
+            }
             private static List<ActivePackageOperationRecord> OpenRoots()
             {
                 var root = LoadPackageActiveOperation();
@@ -455,7 +474,7 @@ namespace UnityCli
                 root.State = state; root.Phase = "result_persisted"; root.TerminalEnvelope = envelope;
                 SavePackageActiveOperation(root);
                 var selectorDigest = UnityCliSerializer.Sha256Canonical(root.PackageOperation["input"]);
-                var first = UnityCliActiveOperation.StoreTerminalFirst(ActiveScope, root.RequestId, root.RequestDigest, selectorDigest, envelope);
+                var first = UnityCliActiveOperation.StoreTerminalFirst(ActiveScope, root.RequestId, root.RequestDigest, selectorDigest, Text(root.PackageOperation, "operation"), envelope);
                 root.TerminalEnvelope = first;
                 TerminalRoots[requestId] = root;
                 UnityCliActiveOperation.BeginExactTerminalCleanup(ActiveScope, root.RequestId, root.RequestDigest);

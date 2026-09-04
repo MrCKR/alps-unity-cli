@@ -235,6 +235,32 @@ namespace UnityCli
             return false;
         }
 
+        /// <summary>公开status仅凭root requestId定位exact terminal，digest只在Bridge内部读取和校验。</summary>
+        internal static bool TryGetTerminalByRequestId(string scope, string requestId, out string requestDigest, out string statusDomain, out object envelope)
+        {
+            requestDigest = null;
+            statusDomain = null;
+            envelope = null;
+            ValidateRequestId(scope, requestId);
+            var cache = LoadTerminalCache();
+            foreach (var entry in cache.Entries)
+            {
+                if (!string.Equals(Text(entry, "scope"), scope, StringComparison.Ordinal)
+                    || !string.Equals(Text(entry, "requestId"), requestId, StringComparison.Ordinal)) continue;
+                var storedDigest = Text(entry, "requestDigest");
+                ValidateTerminalIdentity(scope, requestId, storedDigest);
+                object stored;
+                if (!entry.TryGetValue("envelope", out stored) || stored == null)
+                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal cache entry is incomplete; outcome is unknown.");
+                requestDigest = storedDigest;
+                statusDomain = Text(entry, "statusDomain");
+                envelope = stored;
+                return true;
+            }
+            RejectRetiredTerminal(cache.RetiredIdentities, scope, requestId);
+            return false;
+        }
+
         /// <summary>按业务selector读取terminal，仅用于start响应丢失且调用方尚未取得root digest的恢复。</summary>
         internal static bool TryGetTerminalBySelector(string scope, string requestId, string selectorDigest, out object envelope)
         {
@@ -265,7 +291,15 @@ namespace UnityCli
         /// <summary>first-terminal-wins；固定cache按100条与8MiB双重上限保留当前session最新identity。</summary>
         internal static object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, object envelope)
         {
+            return StoreTerminalFirst(scope, requestId, requestDigest, selectorDigest, null, envelope);
+        }
+
+        /// <summary>statusDomain只供固定域status校验，绝不参与公开输入或exact replay identity。</summary>
+        internal static object StoreTerminalFirst(string scope, string requestId, string requestDigest, string selectorDigest, string statusDomain, object envelope)
+        {
             ValidateTerminalIdentity(scope, requestId, requestDigest);
+            if (statusDomain != null && (string.IsNullOrWhiteSpace(statusDomain) || statusDomain.Length > 80))
+                throw new BridgeCommandException("E_EXECUTION_FAILED", "Durable terminal status domain is invalid.");
             if (!string.IsNullOrEmpty(selectorDigest)) ValidateTerminalIdentity(scope, requestId, selectorDigest);
             if (envelope == null) throw new ArgumentNullException("envelope");
             var cache = LoadTerminalCache();
@@ -274,7 +308,8 @@ namespace UnityCli
                 if (!string.Equals(Text(entry, "scope"), scope, StringComparison.Ordinal)
                     || !string.Equals(Text(entry, "requestId"), requestId, StringComparison.Ordinal)) continue;
                 if (!string.Equals(Text(entry, "requestDigest"), requestDigest, StringComparison.Ordinal)
-                    || (!string.IsNullOrEmpty(selectorDigest) && !string.Equals(Text(entry, "selectorDigest"), selectorDigest, StringComparison.Ordinal)))
+                    || (!string.IsNullOrEmpty(selectorDigest) && !string.Equals(Text(entry, "selectorDigest"), selectorDigest, StringComparison.Ordinal))
+                    || (!string.IsNullOrEmpty(statusDomain) && !string.Equals(Text(entry, "statusDomain"), statusDomain, StringComparison.Ordinal)))
                     throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Terminal requestId was reused with different input.");
                 object stored;
                 if (!entry.TryGetValue("envelope", out stored) || stored == null)
@@ -290,6 +325,7 @@ namespace UnityCli
                 { "storedAt", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture) }, { "envelope", envelope }
             };
             if (!string.IsNullOrEmpty(selectorDigest)) added["selectorDigest"] = selectorDigest;
+            if (!string.IsNullOrEmpty(statusDomain)) added["statusDomain"] = statusDomain;
             if (Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(added)) > MaxTerminalEntryBytes)
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Durable terminal envelope exceeds its fixed size limit; outcome is unknown.");
             cache.Entries.Add(added);
@@ -361,6 +397,10 @@ namespace UnityCli
                         throw new InvalidDataException("Durable terminal cache contains a duplicate or retired request identity.");
                     object selectorValue;
                     if (entry.TryGetValue("selectorDigest", out selectorValue)) ValidateTerminalIdentity(scope, requestId, selectorValue as string);
+                    object statusDomainValue;
+                    if (entry.TryGetValue("statusDomain", out statusDomainValue)
+                        && (!(statusDomainValue is string) || string.IsNullOrWhiteSpace((string)statusDomainValue) || ((string)statusDomainValue).Length > 80))
+                        throw new InvalidDataException("Durable terminal status domain is invalid.");
                     object envelopeValue;
                     var envelope = entry.TryGetValue("envelope", out envelopeValue) ? envelopeValue as Dictionary<string, object> : null;
                     object envelopeRequestId;
@@ -413,10 +453,17 @@ namespace UnityCli
                 return string.Concat(Array.ConvertAll(sha.ComputeHash(Encoding.UTF8.GetBytes(scope + "\0" + requestId)), value => value.ToString("x2")));
         }
 
-        private static void ValidateTerminalIdentity(string scope, string requestId, string requestDigest)
+        private static void ValidateRequestId(string scope, string requestId)
         {
             ActiveOperationPath(scope);
-            if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 200 || string.IsNullOrWhiteSpace(requestDigest) || requestDigest.Length != 64)
+            if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 200)
+                throw new BridgeCommandException("E_EXECUTION_FAILED", "Durable terminal identity is invalid.");
+        }
+
+        private static void ValidateTerminalIdentity(string scope, string requestId, string requestDigest)
+        {
+            ValidateRequestId(scope, requestId);
+            if (string.IsNullOrWhiteSpace(requestDigest) || requestDigest.Length != 64)
                 throw new BridgeCommandException("E_EXECUTION_FAILED", "Durable terminal identity is invalid.");
             foreach (var character in requestDigest)
                 if (!Uri.IsHexDigit(character)) throw new BridgeCommandException("E_EXECUTION_FAILED", "Durable terminal identity is invalid.");

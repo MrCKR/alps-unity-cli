@@ -45,7 +45,7 @@ namespace UnityCli.Tests
             Assert.That(acquired, Is.True);
             queueState.SaveOperation("direct-mutation", new Dictionary<string, object>
             {
-                { "requestId", requestId }, { "requestDigest", digest },
+                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play" },
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", "effect_started" }
             });
             stateHookClearDirectRootOnce();
@@ -83,7 +83,7 @@ namespace UnityCli.Tests
             Consume(pool, requestId, digest, TestDeadline());
             queueState.SaveOperation("direct-mutation", new Dictionary<string, object>
             {
-                { "requestId", requestId }, { "requestDigest", digest },
+                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play" },
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", "accepted_before_effect" }
             });
 
@@ -1200,7 +1200,7 @@ namespace UnityCli.Tests
         {
             return new Dictionary<string, object>
             {
-                { "requestId", requestId }, { "requestDigest", digest },
+                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play" },
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", phase }
             };
         }
