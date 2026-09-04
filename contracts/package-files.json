@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "195051674365c6ab4532950c6741fef8a4eeac2487a67fdbc5db3c97f9431e51",
+  "sourceHash": "1c291578cba6cfce79316b7d3cad9e5462bcfd19819b6fd15c1bbfaffd62137c",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -121,8 +121,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliDoctorDiagnostics.cs",
-      "size": 12373,
-      "sha256": "d58c65bb88bee18fd4f24945bc2e692f50296fe8fbd54e5be275ae333a509575"
+      "size": 12175,
+      "sha256": "5c717649feb129f199f003f0aa90b1336a49f42c225b00117847a2ce77e22734"
     },
     {
       "path": "Editor/Infrastructure/UnityCliEditorStateSnapshot.cs",
@@ -131,8 +131,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliHierarchyPager.cs",
-      "size": 10574,
-      "sha256": "207acee93cbf7cd3f929c3e531ca72271caa875fbb2e4659d3fa5e15fd4a7e4a"
+      "size": 10604,
+      "sha256": "baab3d648a8af65d0994ae890712fc85557c599244ceb37e5f097a4348826482"
     },
     {
       "path": "Editor/Infrastructure/UnityCliInstanceCleanup.cs",
@@ -311,13 +311,13 @@
     },
     {
       "path": "Editor/ProjectTools/OfficialAttributeToolRegistry.cs",
-      "size": 55903,
-      "sha256": "1b878043bf0f1adeac645209cd157d70b6be13a3da4fd45847133515f2c16b51"
+      "size": 55915,
+      "sha256": "a0c9eebce5b796126d766519ecde8b6aebff2e591e1f5d5e7bf9a2e6e0ecc125"
     },
     {
       "path": "Editor/ProjectTools/ProjectToolRegistry.cs",
-      "size": 68304,
-      "sha256": "0df9212c5882108d16e4fe44447c5e78a0b4d8b6bda61206716b3f0b87dfe6d6"
+      "size": 68352,
+      "sha256": "983ed5fb2b8239068c26d6c14093fe05a1eaf4c617426044082232af9592aba7"
     },
     {
       "path": "Editor/ProjectTools/ProjectToolSchemaValidator.cs",
@@ -1491,23 +1491,23 @@
     },
     {
       "path": "Editor/Tools/scene/gameobject-support.cs",
-      "size": 11919,
-      "sha256": "ffe43a7544d003169f6f3e2715036584a1bd20378c4332165ae8d71a88cfd9cb"
+      "size": 11963,
+      "sha256": "7806d6753c6b38c3f8daabd8170a06ddbf854ff4e533d3e4291df4f37d0cadb4"
     },
     {
       "path": "Editor/Tools/scene/gameobject.cs",
-      "size": 7692,
-      "sha256": "310472d241f26d56c18d0d92d94f541d0c44698689af0512b9b73581cfca022e"
+      "size": 7758,
+      "sha256": "47ebe0a7961f563d79038b7f8e6d37aa4fe89c1a5c5425a9bc9503556c329b91"
     },
     {
       "path": "Editor/Tools/scene/gameobject/component.cs",
-      "size": 5077,
-      "sha256": "76775670b462dd2c81bb9a33a8cd1ac19210f0bdb725dd73e2215e1d7d9012ec"
+      "size": 5121,
+      "sha256": "e8a35f42861703eccb53a36d209f31af9ebaa5e66b7466bb22d1d2fc163d5589"
     },
     {
       "path": "Editor/Tools/scene/gameobject/components.cs",
-      "size": 3950,
-      "sha256": "e45dc1f2a43b5bcbe425fbb47312bd2f381a0d08d38dadd0aff98b2fae2fe053"
+      "size": 3972,
+      "sha256": "2ae50f1f002776e88b24727e7d9faa0683584a9a1d9b0c82829f82ac4471e40e"
     },
     {
       "path": "Editor/Tools/scene/hierarchy.cs",
@@ -1841,8 +1841,8 @@
     },
     {
       "path": "Editor/UnityCliBridge.cs",
-      "size": 29140,
-      "sha256": "680894554c18e6653a4552b4aa6d11452c7346cc3bf1edc601b3cada770d0ad7"
+      "size": 29159,
+      "sha256": "a443db06a665defc92c8c4c0533afdab7a56e8f1b1351c2d88b3227b14552ccf"
     },
     {
       "path": "Editor/UnityCliBridgeBuildInfo.cs",

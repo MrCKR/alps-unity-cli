@@ -141,7 +141,7 @@ test("doctor private diagnostics read the immutable catalog owner and keep compi
   assert.match(diagnostics, /maxScannedEntries = 5000[\s\S]*maxScanMilliseconds = 50[\s\S]*maxCompileErrorBytes = 64 \* 1024/);
   const doctorHandler = diagnostics.slice(diagnostics.indexOf("private static object DoctorCatalogDiagnostic"), diagnostics.indexOf("private static object DoctorCompileDiagnostic"));
   assert.match(doctorHandler, /ProjectToolCatalogSnapshotReader\.Read\(\)/);
-  assert.match(doctorHandler, /providerCounts[\s\S]*publicationDiagnostics[\s\S]*DiscoveryPassCount[\s\S]*PerToolSuccessLogCount/);
+  assert.match(doctorHandler, /providerCounts[\s\S]*publicationDiagnostics[\s\S]*DiscoveryPassCount[\s\S]*ProviderMetadataReadCount[\s\S]*AggregateSuccessLogCount/);
   assert.doesNotMatch(doctorHandler, /DiscoverProjectTools|RefreshProjectToolFingerprint|ProjectToolDescriptorData|rePinValue|blockedTools/);
   assert.doesNotMatch(registry, /ProjectToolCatalogDiagnosticState|ProjectToolCatalogBlockedDiagnostic|projectToolCatalogDiagnostics/);
   assert.doesNotMatch(bridge, /projectToolCatalogDiagnostics/);

@@ -67,10 +67,8 @@ namespace UnityCli
                         { "providerAssemblyCount", (long)catalog.ProviderAssemblyCount },
                         { "elapsedMilliseconds", catalog.ElapsedMilliseconds },
                         { "discoveryPassCount", (long)catalog.DiscoveryPassCount },
-                        { "assetDatabaseOperationCount", (long)catalog.AssetDatabaseOperationCount },
-                        { "sourceFileReadCount", (long)catalog.SourceFileReadCount },
-                        { "persistedToolValueOperationCount", (long)catalog.PersistedToolValueOperationCount },
-                        { "perToolSuccessLogCount", (long)catalog.PerToolSuccessLogCount }
+                        { "providerMetadataReadCount", (long)catalog.ProviderMetadataReadCount },
+                        { "aggregateSuccessLogCount", (long)catalog.AggregateSuccessLogCount }
                     }
                 }
             };

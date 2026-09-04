@@ -385,7 +385,7 @@ namespace UnityCli
         /// <summary>continuation只绑定transport session与listener generation；Tool级identifier不参与stale判定。</summary>
         private static string ProjectToolCatalogGeneration()
         {
-            return Sha256Hex(EditorSessionId() + "\n" + ListenerId + "\n" + CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture));
+            return Sha256Hex(Encoding.UTF8.GetBytes(EditorSessionId() + "\n" + ListenerId + "\n" + CurrentListenerGeneration().ToString(CultureInfo.InvariantCulture)));
         }
 
         /// <summary>generation变化时 continuation 必须稳定失败，不能混合两代目录。</summary>
@@ -537,9 +537,9 @@ namespace UnityCli
         /// <summary>把目标generation、query和local投影视图绑定到签名scope。</summary>
         private static string ProjectToolCatalogCursorScope(string generation, ProjectToolCatalogArgs args, bool runtimeOnly, List<string> localNames)
         {
-            return Sha256Hex(generation + "\n" + (runtimeOnly ? "runtime" : "editor") + "\n" + args.CursorContext + "\n"
+            return Sha256Hex(Encoding.UTF8.GetBytes(generation + "\n" + (runtimeOnly ? "runtime" : "editor") + "\n" + args.CursorContext + "\n"
                 + (args.Group ?? string.Empty) + "\n" + (args.Keyword ?? string.Empty) + "\n"
-                + string.Join("\n", localNames) + "\n--reserved--\n" + string.Join("\n", args.ReservedNames ?? new string[0]));
+                + string.Join("\n", localNames) + "\n--reserved--\n" + string.Join("\n", args.ReservedNames ?? new string[0])));
         }
 
         /// <summary>验证opaque token并恢复目标签发的序号与前页边界。</summary>

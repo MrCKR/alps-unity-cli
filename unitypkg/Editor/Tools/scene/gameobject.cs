@@ -57,7 +57,7 @@ namespace UnityCli
             var transform = gameObject.transform;
             var info = new SceneGameObjectTool.GameObjectInfo
             {
-                Id = gameObject.GetInstanceID(), Name = gameObject.name, Path = HierarchyPath(gameObject, budget), Active = gameObject.activeSelf, Tag = gameObject.tag, Layer = gameObject.layer,
+                Id = gameObject.GetInstanceID(), Name = gameObject.name, Path = GameObjectToolSupport.HierarchyPath(gameObject, budget), Active = gameObject.activeSelf, Tag = gameObject.tag, Layer = gameObject.layer,
                 Transform = new SceneGameObjectTool.TransformInfo(),
                 Components = new List<SceneGameObjectTool.ComponentInfo>(), Children = new List<SceneGameObjectTool.GameObjectRef>()
             };
@@ -76,7 +76,7 @@ namespace UnityCli
                     }
                     if (!budget.TryConsumeReflectionCall()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var componentType = component.GetType();
-                    info.Components.Add(new SceneGameObjectTool.ComponentInfo { Type = componentType.Name, FullName = componentType.FullName, Enabled = ComponentEnabled(component, budget) });
+                    info.Components.Add(new SceneGameObjectTool.ComponentInfo { Type = componentType.Name, FullName = componentType.FullName, Enabled = GameObjectToolSupport.ComponentEnabled(component, budget) });
                 }
             }
             if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
@@ -89,7 +89,7 @@ namespace UnityCli
                 if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                 var childObject = child.gameObject;
                 if (!budget.TryConsumeGetters(2)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                info.Children.Add(new SceneGameObjectTool.GameObjectRef { Id = childObject.GetInstanceID(), Name = childObject.name, Path = HierarchyPath(childObject, budget) });
+                info.Children.Add(new SceneGameObjectTool.GameObjectRef { Id = childObject.GetInstanceID(), Name = childObject.name, Path = GameObjectToolSupport.HierarchyPath(childObject, budget) });
             }
             return info;
         }

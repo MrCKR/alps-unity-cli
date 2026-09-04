@@ -632,8 +632,8 @@ namespace UnityCli
                     : Failure(path, "single-character string", ActualType(value));
             }
             if (type == typeof(bool)) return value is bool ? null : Failure(path, "boolean", ActualType(value));
-            if (UnityCliSchemaDeriver.IsInteger(type)) return ValidateInteger(value, type, path);
-            if (UnityCliSchemaDeriver.IsNumber(type)) return ValidateNumber(value, type, path);
+            if (UnityCliSchemaDeriver.IsInteger(type)) return ValidateInteger(value, type, path, null);
+            if (UnityCliSchemaDeriver.IsNumber(type)) return ValidateNumber(value, type, path, null);
             if (type.IsEnum)
             {
                 var enumName = value as string;

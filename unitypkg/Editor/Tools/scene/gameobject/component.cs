@@ -55,8 +55,8 @@ namespace UnityCli
                 var componentType = component.GetType();
                 var result = new Result
                 {
-                    GameObject = new GameObjectRef { Id = ConsumeSceneGetter(budget, gameObject.GetInstanceID), Name = ConsumeSceneGetter(budget, () => gameObject.name), Path = HierarchyPath(gameObject, budget) },
-                    Component = new ComponentInfo { Type = componentType.Name, FullName = componentType.FullName, Enabled = ComponentEnabled(component, budget), Properties = SceneContextComponentReadableProperties(component, budget) }
+                    GameObject = new GameObjectRef { Id = ConsumeSceneGetter(budget, gameObject.GetInstanceID), Name = ConsumeSceneGetter(budget, () => gameObject.name), Path = GameObjectToolSupport.HierarchyPath(gameObject, budget) },
+                    Component = new ComponentInfo { Type = componentType.Name, FullName = componentType.FullName, Enabled = GameObjectToolSupport.ComponentEnabled(component, budget), Properties = SceneContextComponentReadableProperties(component, budget) }
                 };
                 return new System.Threading.Tasks.ValueTask<Result>(result);
             }

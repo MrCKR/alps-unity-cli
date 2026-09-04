@@ -68,7 +68,7 @@ namespace UnityCli
                     {
                         Id = ConsumeSceneGetter(budget, gameObject.GetInstanceID),
                         Name = ConsumeSceneGetter(budget, () => gameObject.name),
-                        Path = HierarchyPath(gameObject, budget)
+                        Path = GameObjectToolSupport.HierarchyPath(gameObject, budget)
                     },
                     Components = components,
                     Count = components.Count

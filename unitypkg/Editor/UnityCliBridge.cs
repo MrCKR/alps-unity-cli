@@ -191,7 +191,7 @@ namespace UnityCli
             if (!UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError)) return false;
             try
             {
-                DiscoverProjectTools();
+                ReadPublishedProjectToolCatalogSnapshot();
                 return true;
             }
             catch (Exception exception)

@@ -52,10 +52,8 @@ interface DoctorCatalogPublicationDiagnostics {
   providerAssemblyCount: number;
   elapsedMilliseconds: number;
   discoveryPassCount: number;
-  assetDatabaseOperationCount: number;
-  sourceFileReadCount: number;
-  persistedToolValueOperationCount: number;
-  perToolSuccessLogCount: number;
+  providerMetadataReadCount: number;
+  aggregateSuccessLogCount: number;
 }
 
 interface DoctorCatalogData {
@@ -561,7 +559,7 @@ function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
   const providerCounts = exactRecord(data.providerCounts, ["builtIn", "extension", "projectInterface", "officialAttribute"]);
   const publication = exactRecord(data.publicationDiagnostics, [
     "assemblyCount", "providerAssemblyCount", "elapsedMilliseconds", "discoveryPassCount",
-    "assetDatabaseOperationCount", "sourceFileReadCount", "persistedToolValueOperationCount", "perToolSuccessLogCount",
+    "providerMetadataReadCount", "aggregateSuccessLogCount",
   ]);
   const serialized = JSON.stringify(data);
   const toolCount = data.toolCount;
@@ -584,19 +582,15 @@ function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
     || !isNonNegativeInteger(publication.providerAssemblyCount) || publication.providerAssemblyCount > publication.assemblyCount
     || !isNonNegativeInteger(publication.elapsedMilliseconds)
     || publication.discoveryPassCount !== 1
-    || publication.assetDatabaseOperationCount !== 0
-    || publication.sourceFileReadCount !== 0
-    || publication.persistedToolValueOperationCount !== 0
-    || publication.perToolSuccessLogCount !== 0) return undefined;
+    || publication.providerMetadataReadCount !== publication.providerAssemblyCount
+    || publication.aggregateSuccessLogCount !== 1) return undefined;
   const typedPublication: DoctorCatalogPublicationDiagnostics = {
     assemblyCount: publication.assemblyCount,
     providerAssemblyCount: publication.providerAssemblyCount,
     elapsedMilliseconds: publication.elapsedMilliseconds,
     discoveryPassCount: publication.discoveryPassCount,
-    assetDatabaseOperationCount: publication.assetDatabaseOperationCount,
-    sourceFileReadCount: publication.sourceFileReadCount,
-    persistedToolValueOperationCount: publication.persistedToolValueOperationCount,
-    perToolSuccessLogCount: publication.perToolSuccessLogCount,
+    providerMetadataReadCount: publication.providerMetadataReadCount,
+    aggregateSuccessLogCount: publication.aggregateSuccessLogCount,
   };
 
   return {

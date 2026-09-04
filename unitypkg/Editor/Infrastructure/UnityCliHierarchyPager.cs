@@ -41,7 +41,7 @@ namespace UnityCli
                     if (!budget.TryConsumeGetters(2)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     return boundary.GetChild(0).gameObject;
                 }
-                roots = roots ?? ObjectRefResolver.BoundedSceneRoots(scene, budget);
+                roots = roots ?? UnityCliBridge.ObjectRefResolver.BoundedSceneRoots(scene, budget);
                 return roots.Length == 0 ? null : roots[0];
             }
 
@@ -76,7 +76,7 @@ namespace UnityCli
                     }
                     if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
                     var rootSibling = cursor.GetSiblingIndex() + 1;
-                    roots = roots ?? ObjectRefResolver.BoundedSceneRoots(scene, budget);
+                    roots = roots ?? UnityCliBridge.ObjectRefResolver.BoundedSceneRoots(scene, budget);
                     return rootSibling < roots.Length ? roots[rootSibling] : null;
                 }
                 return null;

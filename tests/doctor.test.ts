@@ -35,10 +35,8 @@ function healthyCatalog(overrides: Record<string, unknown> = {}): Record<string,
       providerAssemblyCount: 20,
       elapsedMilliseconds: 12,
       discoveryPassCount: 1,
-      assetDatabaseOperationCount: 0,
-      sourceFileReadCount: 0,
-      persistedToolValueOperationCount: 0,
-      perToolSuccessLogCount: 0,
+      providerMetadataReadCount: 20,
+      aggregateSuccessLogCount: 1,
     },
     ...overrides,
   };
@@ -236,10 +234,8 @@ test("doctor accepts the immutable catalog aggregate without per-Tool pin state"
     providerAssemblyCount: 20,
     elapsedMilliseconds: 12,
     discoveryPassCount: 1,
-    assetDatabaseOperationCount: 0,
-    sourceFileReadCount: 0,
-    persistedToolValueOperationCount: 0,
-    perToolSuccessLogCount: 0,
+    providerMetadataReadCount: 20,
+    aggregateSuccessLogCount: 1,
   });
   assert.doesNotMatch(JSON.stringify(catalog), /fingerprint|rePin|blockedTools|blockedCount/i);
 });
@@ -254,10 +250,8 @@ test("doctor rejects malformed catalog aggregate and publication boundaries", as
     providerAssemblyCount: 20,
     elapsedMilliseconds: 12,
     discoveryPassCount: 1,
-    assetDatabaseOperationCount: 0,
-    sourceFileReadCount: 0,
-    persistedToolValueOperationCount: 0,
-    perToolSuccessLogCount: 0,
+    providerMetadataReadCount: 20,
+    aggregateSuccessLogCount: 1,
   };
   const invalidCatalogs = [
     {
@@ -276,7 +270,8 @@ test("doctor rejects malformed catalog aggregate and publication boundaries", as
     healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, assemblyCount: 100_001 } }),
     healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, providerAssemblyCount: 451 } }),
     healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, discoveryPassCount: 2 } }),
-    healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, sourceFileReadCount: 1 } }),
+    healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, providerMetadataReadCount: 19 } }),
+    healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, aggregateSuccessLogCount: 2 } }),
     healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, internalPath: "forbidden" } }),
   ];
 

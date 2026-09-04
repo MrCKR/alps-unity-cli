@@ -117,7 +117,7 @@ namespace UnityCli
         /// <summary>按组件类型解析单个组件；类型查找与 Unity getter 均使用同一请求预算。</summary>
         private static Component ResolveSceneContextComponent(GameObject gameObject, string componentName, UnityCliRequestBudget budget)
         {
-            var type = ResolveComponentType(componentName, budget);
+            var type = GameObjectToolSupport.ResolveComponentType(componentName, budget);
             if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             return gameObject.GetComponent(type);
         }
@@ -186,7 +186,7 @@ namespace UnityCli
                 {
                     Type = componentType.Name,
                     FullName = componentType.FullName,
-                    Enabled = ComponentEnabled(component, budget),
+                    Enabled = GameObjectToolSupport.ComponentEnabled(component, budget),
                     Properties = includeProperties ? SceneContextComponentReadableProperties(component, budget) : null
                 });
             }
