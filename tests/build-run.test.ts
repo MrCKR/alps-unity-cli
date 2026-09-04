@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -17,6 +17,12 @@ const blocker = { type: "dialog" as const, dialogId: "dialog_build", title: "Thi
 
 test("build.run reserves the coordinator build deadline", () => {
   assert.equal(tool.timeoutMs, 600_000);
+});
+
+test("build.run maps a null EditorBuildSettings scene array to the stable empty-scenes error", async () => {
+  const source = await readFile("unitypkg/Editor/Infrastructure/UnityCliLiveBuildCoordinator.cs", "utf8");
+  assert.match(source, /EditorBuildSettings\.scenes \?\? Array\.Empty<EditorBuildSettingsScene>\(\)/);
+  assert.match(source, /scenes\.Length == 0[\s\S]*E_BUILD_SCENES_EMPTY/);
 });
 
 async function fixture(playMode: "edit" | "play" = "edit") {

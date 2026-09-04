@@ -407,7 +407,9 @@ namespace UnityCli
             {
                 if (input == null || string.IsNullOrWhiteSpace(input.Target) || string.IsNullOrWhiteSpace(input.OutputPath)) throw new BridgeCommandException("E_SCHEMA_INVALID", "Each build target requires target and outputPath.");
                 BuildTarget target; if (!Enum.TryParse(input.Target, false, out target)) throw new BridgeCommandException("E_SCHEMA_INVALID", "Unsupported Unity BuildTarget: " + input.Target);
-                var scenes = EditorBuildSettings.scenes.Where(x => x.enabled && File.Exists(x.path)).Select(x => x.path).ToArray(); if (scenes.Length == 0) throw new BridgeCommandException("E_BUILD_SCENES_EMPTY", "No enabled existing build scenes are available.");
+                var configuredScenes = EditorBuildSettings.scenes ?? Array.Empty<EditorBuildSettingsScene>();
+                var scenes = configuredScenes.Where(x => x != null && x.enabled && File.Exists(x.path)).Select(x => x.path).ToArray();
+                if (scenes.Length == 0) throw new BridgeCommandException("E_BUILD_SCENES_EMPTY", "No enabled existing build scenes are available.");
                 var publicPath = input.OutputPath.Replace('\\', '/'); if (Path.IsPathRooted(input.OutputPath) || publicPath.Split('/').Any(x => x == "..")) throw new BridgeCommandException("E_SCHEMA_INVALID", "Build outputPath must be project-relative.");
                 var projectRoot = Path.GetFullPath(ProjectRoot()); var outputPath = Path.GetFullPath(Path.Combine(projectRoot, input.OutputPath)); if (!outputPath.StartsWith(projectRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) && !string.Equals(outputPath, projectRoot, StringComparison.Ordinal)) throw new BridgeCommandException("E_SCHEMA_INVALID", "Build outputPath escapes the project.");
                 return new Prepared { Target = target, TargetName = input.Target, OutputPath = outputPath, PublicOutputPath = publicPath, Scenes = scenes, Options = ParseOptions(input.Options) };
