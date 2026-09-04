@@ -65,15 +65,15 @@ function assertNoInternalSourceText(subject: string, text: string): void {
 test("TS-local descriptor registry owns exactly the current package-local tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    "asset.refresh", "build.run", "code.exec", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
-    "editor.dialogs", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
+    "asset.refresh", "asset.refresh.status", "build.player.status", "build.run", "code.exec", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
+    "editor.dialogs", "editor.play-mode.status", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
     "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
     "occlusion.bake-status", "package.bridge-remove", "package.deploy",
-    "package.embed", "package.install", "package.registry.clear", "package.registry.set", "package.remove",
-    "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove",
+    "package.embed", "package.install", "package.install.status", "package.registry.clear", "package.registry.set", "package.remove", "package.remove.status",
+    "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove", "package.update.status",
     "reflect.member", "reflect.search", "reflect.type", "runtime.console", "runtime.input.key", "runtime.input.pointer",
     "runtime.log", "runtime.state", "runtime.target-framerate.set", "runtime.time-scale.set", "runtime.ui.capture-element",
-    "test.cancel", "test.run"
+    "test.cancel", "test.run", "test.run.status"
   ]);
   assert.equal(findToolByName("asset.refresh")?.handler, "hybrid");
 });

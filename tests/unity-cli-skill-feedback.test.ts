@@ -254,7 +254,8 @@ test("Skill feedback contract is opt-in, local, and preserves the cross-session 
   assert.equal((skill.match(/^FeedbackMode:\s*(?:off|on)$/gm) ?? []).length, 1);
   assert.match(skill, /^FeedbackMode: off$/m);
   assert.match(skill, /tools search '<k1\|k2\|\.\.\.>'/);
-  assert.match(skill, /先用只读Tool或业务readback观察并形成新的业务决策/);
+  assert.match(skill, /按需发现对应域的`\.status` Tool并只传原root `requestId`/);
+  assert.match(skill, /其他能力使用只读Tool或业务readback形成新的业务决策/);
   assert.match(skill, /首次mutation POST后Editor session改变时也不会向新session重投/);
   assert.match(skill, /transient:true.*nextActions.*仍是建议，不构成额外授权门/);
   assert.match(operationProtocol, /只有形成新的业务决策后才提交新请求/);

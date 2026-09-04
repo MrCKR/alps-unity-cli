@@ -243,7 +243,7 @@ test("Package coordinator uses active-operation state and terminal cleanup", asy
   assert.match(state, /MarkPackageFileEffectStartedActive[\s\S]*AdvancePackageOperation\(requestId, root =>[\s\S]*RequireLease\(root\)/);
   assert.match(state, /MarkPackageResolveEffectStarted[\s\S]*RequireLease\(root\)/);
   assert.match(state, /var dispatchRoot = RequiredRoot\(root\.RequestId\);[\s\S]*RequireLease\(dispatchRoot\);[\s\S]*Client\.Resolve\(\)/);
-  assert.match(state, /PersistPackageTerminal[\s\S]*StoreTerminalFirst\(ActiveScope, root\.RequestId, root\.RequestDigest, selectorDigest, envelope\)[\s\S]*BeginExactTerminalCleanup\(ActiveScope, root\.RequestId, root\.RequestDigest\)/);
+  assert.match(state, /PersistPackageTerminal[\s\S]*StoreTerminalFirst\(ActiveScope, root\.RequestId, root\.RequestDigest, selectorDigest, Text\(root\.PackageOperation, "operation"\), envelope\)[\s\S]*BeginExactTerminalCleanup\(ActiveScope, root\.RequestId, root\.RequestDigest\)/);
   assert.match(coordinator, /E_EXECUTION_TIMEOUT/);
   assert.doesNotMatch(coordinator + state, /RequestJournal|E_REQUEST_OUTCOME_UNKNOWN/);
 });

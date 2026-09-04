@@ -12,7 +12,7 @@ import { dispatchTool } from "../src/tools/dispatcher.js";
 import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
 import { createUnityProject } from "./helpers/instance-registry-v3.js";
 
-const LOCAL_PACKAGE_COMMANDS = ["package.bridge-remove", "package.deploy", "package.embed", "package.install", "package.registry.clear", "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove"];
+const LOCAL_PACKAGE_COMMANDS = ["package.bridge-remove", "package.deploy", "package.embed", "package.install", "package.install.status", "package.registry.clear", "package.registry.set", "package.remove", "package.remove.status", "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove", "package.update.status"];
 
 /** Package 域只保留文件 mutation、真实 Unity resolve 与明确 registry mutation。 */
 
