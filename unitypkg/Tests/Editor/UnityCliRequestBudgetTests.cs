@@ -7,7 +7,6 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using NUnit.Framework;
-using UnityCliBridge.Transport;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -201,11 +200,11 @@ namespace UnityCli.Tests
                 first.AddComponent<SphereCollider>();
 
                 var rootBudget = Budget(new ManualClock(), scans: 2);
-                Assert.Throws<UnityCliRequestBudgetExceededException>(() => ObjectRefResolver.BoundedSceneRoots(scene, rootBudget));
+                Assert.Throws<UnityCliRequestBudgetExceededException>(() => UnityCliBridge.ObjectRefResolver.BoundedSceneRoots(scene, rootBudget));
                 Assert.That(rootBudget.Usage().ScannedRecords, Is.Zero);
 
                 var componentBudget = Budget(new ManualClock(), scans: 2);
-                Assert.Throws<UnityCliRequestBudgetExceededException>(() => ObjectRefResolver.BoundedComponents(first, componentBudget));
+                Assert.Throws<UnityCliRequestBudgetExceededException>(() => UnityCliBridge.ObjectRefResolver.BoundedComponents(first, componentBudget));
                 Assert.That(componentBudget.Usage().ScannedRecords, Is.Zero);
 
                 var pagerBudget = Budget(new ManualClock(), scans: 32, nodes: 32, getters: 128);
