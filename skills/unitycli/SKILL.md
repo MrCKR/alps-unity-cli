@@ -37,7 +37,7 @@ unitycli command <name> --field <value> --instance <id|projectPath|alias>
 
 用户已给出目标或当前 Unity 项目 CWD 能唯一解析时可以直接使用；需要 selector 时优先只传一种，冲突的 `--instance` 与 `command --project-path` 会失败。不了解能力领域时可先看 group，已有业务关键词时可直接 search，第一次执行不了解的 Tool 前先 describe。
 
-PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。任务明确要求的业务值优先于 schema default 和 example；default/example只说明合法形状，不作为 connectivity、smoke 或 probe 调用。分页、artifact、大输出、弹窗和 host 等待按需读取 `references/operation-protocol.md`。
+PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。任务明确要求的业务值优先于 schema default 和 example；default/example只说明合法形状，不能把default/example当作连通性或probe调用，也不作为 smoke 调用。分页、artifact、大输出、弹窗和 host 等待按需读取 `references/operation-protocol.md`。
 
 - 等待 CLI 进程退出；`--timeout-ms` 应为 host 保留至少 5000 ms 的进程退出时间。不得手工每100毫秒循环轮询；超时不会停止 Unity、已开始的 effect 或 C# 工作。
 - `instances list` 默认过滤 offline 实例并只列出可用实例；需要完整盘点时使用 `instances list --all`，并读取 `invalidRecordCount`。旧、损坏或不可读记录由 CLI 隔离，不要读取、删除或改写内部记录文件；需要清理时使用 `instances prune --instance <id>`，依据返回的 `removed`、`deferred`、`remaining` 计数。启动、编译或 reload 后只等待有界 readiness。
