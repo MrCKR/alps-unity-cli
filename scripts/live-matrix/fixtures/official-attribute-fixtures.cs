@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using Unity.Pipeline.Commands;
 
 // 以下本地 authoring 类型保持官方 0.4 完整名称和公开 shape，用于验证不建立 package assembly 编译依赖的反射路径。
@@ -118,9 +117,9 @@ public static class UnityCliOfficialAttributeFixtures
         return new FixtureResult { Kind = "dictionary", Message = first.DisplayName, Count = first.Count, IsMainThread = true };
     }
 
-    [CliCommand("validation.official.jobject", "Round-trip an arbitrary JObject payload without Unity side effects.")]
-    public static JObject JObjectRoundTrip(
-        [CliArg("payload", "Arbitrary JSON object payload.", Required = true)] JObject payload)
+    [CliCommand("validation.official.jobject", "Round-trip an arbitrary JSON object without Unity side effects.")]
+    public static Dictionary<string, object> JObjectRoundTrip(
+        [CliArg("payload", "Arbitrary JSON object payload.", Required = true)] Dictionary<string, object> payload)
     {
         payload["observed"] = true;
         return payload;

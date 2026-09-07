@@ -995,6 +995,11 @@ test("final recovery proves ready EditMode before EditMode-only recovery fixture
   assert.ok(recovery >= 0 && enterEdit > recovery && pipeline > enterEdit, "recovery must re-enter EditMode before any recovery fixture");
 });
 
+test("official attribute fixture has no undeclared third-party compile dependency", async () => {
+  const source = await readFile(new URL("./live-matrix/fixtures/official-attribute-fixtures.cs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /Newtonsoft|JObject payload/);
+});
+
 test("official attribute fixture is projected deterministically into an authorized Dev project", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "unitycli-official-fixture-"));
   t.after(async () => rm(root, { recursive: true, force: true }));
