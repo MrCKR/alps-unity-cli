@@ -249,6 +249,12 @@ test("profiler memory-snapshot and frame-debugger tools implement IUnityCliTool"
   assert.match(frameEnableSource, /class ProfilerFrameDebuggerEnableTool : IUnityCliTool/);
   assert.match(frameDisableSource, /class ProfilerFrameDebuggerDisableTool : IUnityCliTool/);
   assert.match(frameEventsSource, /class ProfilerFrameDebuggerEventsTool : IUnityCliTool/);
+  assert.match(frameEventsSource, /public string Cursor \{ get; set; \}/);
+  assert.match(frameEventsSource, /public string NextCursor \{ get; set; \}/);
+  assert.match(frameEventsSource, /FrameDebuggerReflection\.CaptureGeneration/);
+  assert.match(frameEventsSource, /UnityCliContinuationToken\.TryParse/);
+  assert.match(frameEventsSource, /E_CONTINUATION_STALE/);
+  assert.doesNotMatch(frameEventsSource, /non-resumable|intentionally provides no continuation/i);
   assert.match(`${frameEnableSource}\n${frameDisableSource}\n${frameEventsSource}`, /FrameDebuggerUtility/);
   const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerToolSupport.cs", import.meta.url), "utf8");
   const frameSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerFrameDebuggerSupport.cs", import.meta.url), "utf8");
@@ -259,6 +265,8 @@ test("profiler memory-snapshot and frame-debugger tools implement IUnityCliTool"
   assert.match(frameSupportSource, /GetProperty\("enabled", BindingFlags\.Public \| BindingFlags\.Static\)/);
   assert.doesNotMatch(frameSupportSource, /GetMethod\("IsLocalEnabled"/);
   assert.match(frameSupportSource, /new object\[\] \{ value, 0 \}/);
+  assert.match(frameSupportSource, /UnityCliReadGeneration\.Session\("profiler\.frame-debugger\.events"\)/);
+  assert.match(frameSupportSource, /Interlocked\.Read\(ref captureGeneration\)/);
   assert.doesNotMatch(frameSupportSource, /eventsCount|isEnabled|GetMethod\("GetEnabled"/);
 });
 

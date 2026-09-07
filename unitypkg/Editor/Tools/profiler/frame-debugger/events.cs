@@ -1,5 +1,7 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace UnityCli
 {
@@ -9,6 +11,7 @@ namespace UnityCli
         public sealed class Request
         {
             [UnityCliRange(1L, 500L)] public int? PageSize { get; set; }
+            public string Cursor { get; set; }
             public UnityCliReadBudgetInput Budget { get; set; }
         }
 
@@ -16,9 +19,19 @@ namespace UnityCli
         {
             public long TotalEvents { get; set; }
             [UnityCliItemsRange(0, 500)] public List<FrameDebuggerEvent> Events { get; set; }
-            public string Note { get; set; }
-            public bool Truncated { get; set; }
+            public PageInfo PageInfo { get; set; }
             public UnityCliRequestBudgetUsage Budget { get; set; }
+        }
+
+        public sealed class PageInfo
+        {
+            public long ReturnedCount { get; set; }
+            public long PageSize { get; set; }
+            public string Cursor { get; set; }
+            public string NextCursor { get; set; }
+            public bool Complete { get; set; }
+            public bool Truncated { get; set; }
+            public string Generation { get; set; }
         }
 
         public sealed class FrameDebuggerEvent
@@ -36,8 +49,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "profiler.frame-debugger.events",
-            Summary = "Read one bounded, non-resumable Frame Debugger event snapshot under a request budget.",
-            Description = "Read raw Frame Debugger event indices directly without copying the full event array. Unity does not expose a reliable frame/capture identity, so this tool intentionally provides no continuation cursor: truncated=true means the caller must start a fresh snapshot and may choose a larger pageSize/budget. pageSize is 1..500 (default 50). Event reflection, getters, scans, elapsed main-thread time and UTF-8 output share the documented request budget. Read-only in Edit and Play Mode.",
+            Summary = "Page one bounded Frame Debugger capture from stable raw event indices.",
+            Description = "Read raw Frame Debugger event indices directly without copying the full event array. pageSize is 1..500 (default 50); pass pageInfo.nextCursor unchanged to continue the same capture. The opaque cursor binds the Editor listener, CLI enable/disable generation, event count and capture boundary signature; a changed or deleted capture returns E_CONTINUATION_STALE. Event reflection, getters, scans, elapsed main-thread time and UTF-8 output share the documented request budget. Read-only in Edit and Play Mode.",
             Group = "profiler", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read first raw event page", Input = new Request { PageSize = 50 } } }
@@ -48,10 +61,25 @@ namespace UnityCli
             request = request ?? new Request();
             if (!FrameDebuggerReflection.Available)
                 throw new UnityCliBridge.BridgeCommandException("E_FRAME_DEBUGGER_UNAVAILABLE", "FrameDebuggerUtility is unavailable.", "Use a Unity Editor with Frame Debugger support.");
-            var budget = ctx.UseReadBudget(request.Budget);
+            return new System.Threading.Tasks.ValueTask<Result>(ReadPage(request, ctx.UseReadBudget(request.Budget)));
+        }
+
+        /// <summary>按 raw event index 推进；只有成功 materialize 的事件才会移动 continuation。</summary>
+        internal static Result ReadPage(Request request, UnityCliRequestBudget budget)
+        {
             var pageSize = request.PageSize ?? 50;
             var total = FrameDebuggerReflection.GetEventCount(budget);
+            var generation = FrameDebuggerReflection.CaptureGeneration(total, budget);
             var index = 0;
+            if (!string.IsNullOrEmpty(request.Cursor))
+            {
+                string position;
+                if (!UnityCliContinuationToken.TryParse(request.Cursor, "profiler.frame-debugger.events", generation, out position)
+                    || !int.TryParse(position, NumberStyles.None, CultureInfo.InvariantCulture, out index)
+                    || index < 0 || index >= total)
+                    throw Stale();
+            }
+
             var events = new List<FrameDebuggerEvent>();
             while (index < total && events.Count < pageSize)
             {
@@ -79,16 +107,34 @@ namespace UnityCli
                 }
                 catch (UnityCliRequestBudgetExceededException) { break; }
             }
-            if (events.Count == 0 && total > 0) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
-            var truncated = index < total;
-            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            if (events.Count == 0 && index < total) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
+            var nextCursor = index < total
+                ? UnityCliContinuationToken.Create("profiler.frame-debugger.events", generation, index.ToString(CultureInfo.InvariantCulture))
+                : null;
+            return new Result
             {
                 TotalEvents = total,
                 Events = events,
-                Note = total == 0 ? "Frame Debugger has no events." : truncated ? "Snapshot truncated; Frame Debugger events are intentionally non-resumable because Unity exposes no stable frame identity." : null,
-                Truncated = truncated,
+                PageInfo = new PageInfo
+                {
+                    ReturnedCount = events.Count,
+                    PageSize = pageSize,
+                    Cursor = request.Cursor,
+                    NextCursor = nextCursor,
+                    Complete = nextCursor == null,
+                    Truncated = nextCursor != null,
+                    Generation = generation
+                },
                 Budget = budget.Usage()
-            });
+            };
+        }
+
+        private static UnityCliBridge.BridgeCommandException Stale()
+        {
+            return new UnityCliBridge.BridgeCommandException(
+                "E_CONTINUATION_STALE",
+                "The Frame Debugger continuation no longer identifies the same capture.",
+                "Start a new profiler.frame-debugger.events read without cursor.");
         }
     }
 }

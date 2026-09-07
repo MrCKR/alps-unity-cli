@@ -107,7 +107,7 @@ unitycli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
 通用规则：
 
 - discovery 的 `tools group list`、`tools search` 和省略name的`command`列表默认每页20项、最大100项；继续读取时将`pageInfo.nextCursor`原值传回CLI `--cursor`。
-- `console.get`、`scene.hierarchy`、`go.find`、`profiler.hierarchy`、`profiler.frame-debugger.events`、`profiler.memory-snapshot.list`、`type.schema` 和 `reflection.method.find` 使用 opaque string `nextCursor`。游标绑定原始位置、selector 与 Unity/assembly generation；必须原样传回，改变 selector 或 generation 后返回 `E_CONTINUATION_STALE`。`truncated=true` 表示还有原始位置；不能把当前页数量当作总数。
+- `console.get`、`scene.hierarchy`、`go.find`、`profiler.hierarchy`、`profiler.frame-debugger.events`、`profiler.memory-snapshot.list`、`type.schema` 和 `reflection.method.find` 使用 opaque string `nextCursor`。游标绑定原始位置、selector 与 Unity/assembly generation；Frame Debugger 游标还绑定 Editor listener、CLI enable/disable generation、事件数与捕获首尾签名。游标必须原样传回，改变 selector、generation 或捕获后返回 `E_CONTINUATION_STALE`。`truncated=true` 表示还有原始位置；不能把当前页数量当作总数。
 - 深度序列化工具（`object.get-data`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`。`maxDepth` 为 `0..16`，`maxArrayItems` 为 `1..1000`，`paths` 最多128条并保持输入顺序；cycle/depth 在展开前裁决，所有路径共享同一预算，非 `IList` enumerable 不会预 materialize。`truncated` 与 `nextPath` 表示被截断子树。
 - 上述 Unity 主线程读取默认共用 `10000` scanned records、`4096` nodes、`2048` getters、`4096` reflection calls、`250ms` monotonic main-thread work 和 `1 MiB` serialized UTF-8。`budget` 可收紧或提高到公开上限 `100000`、`20000`、`10000`、`20000`、`2000ms`、`8 MiB`；零、负数或超限值在读取/effect前返回 `E_SCHEMA_INVALID` 或 `E_REQUEST_BUDGET_INVALID`。
 - 文本源码工具（如 `shader.read`）使用 `offset` 和 `maxBytes` 分段读取。输出 `truncated=true` 时，下一次把 `nextOffset` 作为新的 `offset`。

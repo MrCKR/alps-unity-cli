@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "46c824d9aa17acfd0e1b76a23ca9d5188393b970ee7f863de834fda5d7a63bde",
+  "sourceHash": "1090e1a45c39f348d3f454c35f45d46ee906c62f33b62cfdf80f643d9018ceef",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -871,8 +871,8 @@
     },
     {
       "path": "Editor/Tools/go/find.cs",
-      "size": 13930,
-      "sha256": "30b07075073ff4c868461ab4fece366b6fe1eff9526b53420960ee3a3b5846a3"
+      "size": 14518,
+      "sha256": "68fc679b211703518c06d035c158bc882774dce46890e8591285fee77c56609e"
     },
     {
       "path": "Editor/Tools/go/look-at.cs",
@@ -1236,8 +1236,8 @@
     },
     {
       "path": "Editor/Tools/profiler/ProfilerFrameDebuggerSupport.cs",
-      "size": 5427,
-      "sha256": "d9417f22177d470d49eaf59ff425fa6cfc5567b045fb27e1ea94236999c65a1d"
+      "size": 8606,
+      "sha256": "b0f5bec8be995540c4adc6f1328aa1a9c2edcd005b4248fc12fff22cdd9e2e7a"
     },
     {
       "path": "Editor/Tools/profiler/ProfilerMemorySnapshotSupport.cs",
@@ -1291,8 +1291,8 @@
     },
     {
       "path": "Editor/Tools/profiler/frame-debugger/events.cs",
-      "size": 5645,
-      "sha256": "5b78eb7bd64478cde4af6ba97ea20b70ae6fa0a7c75eba5e0f2c0a056f856ba9"
+      "size": 7567,
+      "sha256": "9938e17f115a8ae29092b36d8d36e19de26a603e46df0d91e3460697ab8a8221"
     },
     {
       "path": "Editor/Tools/profiler/frame.cs",
@@ -1958,6 +1958,11 @@
       "path": "Tests/Editor/UnityCliBridgeQueuePolicyTests.cs",
       "size": 23107,
       "sha256": "21d51492a520752b7a2a27689a270d3614c21cd5415bec56bde26459ee75d4ce"
+    },
+    {
+      "path": "Tests/Editor/UnityCliContinuationIntegrationTests.cs",
+      "size": 14594,
+      "sha256": "36498d02757fc6307b4000d32fcb299ad93071d2dbf93bf0a84e910df0048877"
     },
     {
       "path": "Tests/Editor/UnityCliDiagnosticBoundaryTests.cs",

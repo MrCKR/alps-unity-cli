@@ -92,10 +92,21 @@ namespace UnityCli
             if ((method == "by_id" || method == "by_path") && !string.IsNullOrEmpty(request.Cursor))
                 throw new UnityCliBridge.BridgeCommandException("E_CONTINUATION_INVALID", "Exact by_id/by_path resolution does not accept cursor.", "Remove cursor for exact resolution.");
 
+            if (!budget.TryConsumeGetter()) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
             var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-            var prefabOpen = request.PreferPrefabStage && prefabStage != null && prefabStage.prefabContentsRoot != null;
+            GameObject prefabRoot = null;
+            var prefabStageIdentity = string.Empty;
+            if (request.PreferPrefabStage && prefabStage != null)
+            {
+                if (!budget.TryConsumeGetters(3)) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                prefabRoot = prefabStage.prefabContentsRoot;
+                if (prefabRoot != null)
+                    prefabStageIdentity = prefabStage.scene.handle.ToString(CultureInfo.InvariantCulture) + "\0" + prefabStage.assetPath;
+            }
+            var prefabOpen = prefabRoot != null;
             var generation = UnityCliContinuationToken.Fingerprint(
-                UnityCliReadGeneration.Hierarchy(SceneManager.GetActiveScene()) + "\0" + method + "\0" + searchTerm + "\0" + request.IncludeInactive + "\0" + prefabOpen);
+                UnityCliReadGeneration.Hierarchy(SceneManager.GetActiveScene()) + "\0" + method + "\0" + searchTerm + "\0" + request.IncludeInactive
+                + "\0" + prefabOpen + "\0" + prefabStageIdentity);
             if (method == "by_id" || method == "by_path")
             {
                 var exact = ResolveExact(method, searchTerm, budget);
@@ -112,16 +123,16 @@ namespace UnityCli
             int? layer = null;
             if (method == "by_component") componentType = GameObjectToolSupport.ResolveComponentType(searchTerm, budget);
             if (method == "by_layer") layer = GameObjectToolSupport.ParseLayer(searchTerm);
-            var prefabTraversal = prefabOpen ? new UnityCliHierarchyPager.Traversal(prefabStage.scene, prefabStage.prefabContentsRoot, int.MaxValue, budget) : null;
+            var prefabTraversal = prefabOpen ? new UnityCliHierarchyPager.Traversal(prefabStage.scene, prefabRoot, int.MaxValue, budget) : null;
             var sceneTraversal = new UnityCliHierarchyPager.LoadedSceneTraversal(budget, prefabOpen ? prefabStage.scene.handle : 0);
             GameObject current;
             var phase = prefabOpen ? "prefab" : "scene";
-            if (string.IsNullOrEmpty(request.Cursor)) current = prefabOpen ? prefabStage.prefabContentsRoot : sceneTraversal.First(budget);
+            if (string.IsNullOrEmpty(request.Cursor)) current = prefabOpen ? prefabRoot : sceneTraversal.First(budget);
             else
             {
                 current = UnityCliHierarchyPager.ResolveCursor(request.Cursor, "go.find", generation, budget, out phase);
                 if (phase != "scene" && phase != "prefab") throw UnityCliHierarchyPager.Stale();
-                if (phase == "prefab" && (!prefabOpen || !IsDescendantOrSelf(current.transform, prefabStage.prefabContentsRoot.transform, budget))) throw UnityCliHierarchyPager.Stale();
+                if (phase == "prefab" && (!prefabOpen || !IsDescendantOrSelf(current.transform, prefabRoot.transform, budget))) throw UnityCliHierarchyPager.Stale();
                 if (phase == "scene" && prefabOpen && current.scene.handle == prefabStage.scene.handle) throw UnityCliHierarchyPager.Stale();
             }
 

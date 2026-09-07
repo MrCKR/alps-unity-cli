@@ -70,6 +70,10 @@ test("profiler and snapshot paths remain raw-paged and governed", async () => {
   ]);
   assert.match(hierarchy, /GetSampleChildAt/);
   assert.doesNotMatch(events, /GetFrameEvents|CopyTo\(/);
+  assert.match(events, /pageInfo\.nextCursor|PageInfo|NextCursor/);
+  assert.match(events, /UnityCliContinuationToken\.Create\("profiler\.frame-debugger\.events"/);
+  assert.match(events, /UnityCliContinuationToken\.TryParse/);
+  assert.match(events, /index\.ToString\(CultureInfo\.InvariantCulture\)/);
   assert.match(snapshots, /Library.*UnityCli.*memory-snapshots/);
   assert.match(snapshots, /RetainedSnapshotCount = 100/);
   assert.match(snapshots, /RetainedSnapshotBytes = 8L \* 1024L \* 1024L \* 1024L/);
