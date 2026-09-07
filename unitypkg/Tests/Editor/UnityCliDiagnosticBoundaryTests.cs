@@ -49,7 +49,7 @@ namespace UnityCli.Tests
         {
             var validator = Type.GetType("UnityCli.UnityCliToolName, UnityCli.Editor", true);
             var validate = validator.GetMethod("Validate", BindingFlags.NonPublic | BindingFlags.Static);
-            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "scene.data", "native" }));
+            Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "scene.hierarchy", "native" }));
             Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { new string('a', 128), "native" }));
             Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "UnityPipeline_hotfix_container_inspect", "official-attribute" }));
             Assert.DoesNotThrow(() => validate.Invoke(null, new object[] { "UnityPipeline_project_reload_data", "official-attribute" }));
@@ -60,9 +60,9 @@ namespace UnityCli.Tests
             AssertInvalidName(validate, "scene..data", "native");
             AssertInvalidName(validate, "scene.数据", "native");
             AssertInvalidName(validate, new string('a', 129), "native");
-            AssertInvalidName(validate, "scene.data\n", "native");
-            AssertInvalidName(validate, "scene.data\r\n", "native");
-            AssertInvalidName(validate, "scene.data ", "native");
+            AssertInvalidName(validate, "scene.hierarchy\n", "native");
+            AssertInvalidName(validate, "scene.hierarchy\r\n", "native");
+            AssertInvalidName(validate, "scene.hierarchy ", "native");
             AssertInvalidName(validate, "UnityPipeline_project_reload_data\n", "official-attribute");
             AssertInvalidName(validate, "UnityPipeline_project_reload_data\r\n", "official-attribute");
             AssertInvalidName(validate, "UnityPipeline_project_reload_data\t", "official-attribute");

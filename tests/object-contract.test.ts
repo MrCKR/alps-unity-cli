@@ -171,7 +171,7 @@ test("bounded Unity readers expose opaque string continuation in the same cursor
   }
 });
 
-test("scene.gameobject stays lightweight while object.get-data owns deep reads and go.inspect stays absent", async () => {
+test("scene.gameobject stays lightweight while object.get-data owns deep reads", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "scene.gameobject", summary: "Read one GameObject summary.", description: "Read one lightweight GameObject summary.", group: "scene" }),
     makeLiveTool({ name: "object.get-data", summary: "Read serialized object data.", description: "Read deep serialized object data.", group: "object" })
