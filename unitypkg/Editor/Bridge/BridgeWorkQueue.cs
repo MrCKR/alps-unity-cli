@@ -795,7 +795,8 @@ namespace UnityCli
                         HoldPendingSettlement(state, item, "completion-owner-changed");
                         return false;
                     }
-                    if (!PersistAdmissionCompletionIntent(state, frozen))
+                    if (!HasAdmissionCompletionIntent(state, frozen)
+                        && !PersistAdmissionCompletionIntent(state, frozen))
                     {
                         HoldPendingSettlement(state, item, "completion-intent-pending");
                         return false;
