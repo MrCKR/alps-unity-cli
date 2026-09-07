@@ -17,13 +17,7 @@ export const PLAYMODE_RESOLVE_BLOCKED_TOOLS = new Set([
 ]);
 // Dev Matrix 的 project/attribute Tool 是固定 fixture inventory；公开 descriptor 不暴露内部 source。
 const REQUIRED_PROJECT_TOOL_NAMES = Object.freeze([
-  "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status",
-  "UnityPipeline_test", "UnityPipeline_validation.official.any-output", "UnityPipeline_validation.official.dictionary",
-  "UnityPipeline_validation.official.jobject", "UnityPipeline_validation.official.result-getter-throw",
-  "UnityPipeline_validation.official.runtime", "UnityPipeline_validation.official.structured",
-  "UnityPipeline_validation.official.sync", "UnityPipeline_validation.official.task",
-  "UnityPipeline_validation.official.throw", "UnityPipeline_validation.official.timeout",
-  "UnityPipeline_validation.official.timeout-status"
+  "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"
 ]);
 const REQUIRED_PROJECT_TOOL_NAME_SET = new Set(REQUIRED_PROJECT_TOOL_NAMES);
 const REMOVED_PUBLIC_TOOL_NAMES = Object.freeze(["build.status", "build.cancel"]);
@@ -501,18 +495,6 @@ async function discover(m) {
   }));
 }
 
-/** 把固定 attribute fixture 投影到授权 Dev project，避免依赖被忽略的手工现场。 */
-export async function ensureOfficialAttributeFixture(projectPath, sourcePath = resolve("scripts/live-matrix/fixtures/official-attribute-fixtures.cs")) {
-  const project = resolve(projectPath);
-  const relativeTarget = join("Assets", "Editor", "UnityCLI", "official-attribute-fixtures.cs");
-  const target = resolve(project, relativeTarget);
-  if (!target.startsWith(project + sep)) throw new Error("Official attribute fixture target escapes the authorized project.");
-  const source = await readFile(sourcePath, "utf8");
-  await mkdir(dirname(target), { recursive: true });
-  const existing = await readFile(target, "utf8").catch((error) => error?.code === "ENOENT" ? undefined : Promise.reject(error));
-  if (existing !== source) await writeFile(target, source, "utf8");
-  return { path: target, changed: existing !== source };
-}
 async function getDescriptor(m, kind, name) {
   const cached = m.descriptors.get(`${kind}:${name}`);
   if (cached) return cached;
@@ -2926,7 +2908,6 @@ async function recordRunnerFailure(m, id, error, meta = {}) {
 
 export async function runMatrix(options) {
   const m = new Matrix({ ...options, capabilities: options.capabilities ?? [] });
-  await ensureOfficialAttributeFixture(m.o.project);
   await m.init();
   m.invalidateSessionControls();
   let primaryError;

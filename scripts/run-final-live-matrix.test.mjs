@@ -26,7 +26,6 @@ import {
   EXTERNAL_STATE_DEPENDENT_TOOL_NAMES,
   MATRIX_OWNED_DIALOG,
   directPhaseIds,
-  ensureOfficialAttributeFixture,
   extensionAvailabilityIssues,
   fixtureError,
   fixtureExpectationIssue,
@@ -584,19 +583,13 @@ test("extension doctor validation consumes the current checks envelope", () => {
   assert.deepEqual(extensionAvailabilityIssues({ extensions: [{ id: "empty", toolCount: 0 }] }, { checks: [] }), []);
 });
 
-test("runtime inventory is exact for product capabilities and requires Dev fixtures", async () => {
+test("runtime inventory is exact for product capabilities and current Dev fixtures", async () => {
   const baseline = await loadRuntimeInventoryBaseline();
   const completion = JSON.parse(await readFile(new URL("../contracts/tool-completion-contract.json", import.meta.url), "utf8"));
   assert.deepEqual(baseline.tools, completion.tools.map((entry) => entry.toolName).sort());
   assert.equal(baseline.tools.includes("docs.list") || baseline.tools.includes("docs.topic"), false);
   const projectTools = [
-    "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status",
-    "UnityPipeline_test", "UnityPipeline_validation.official.any-output", "UnityPipeline_validation.official.dictionary",
-    "UnityPipeline_validation.official.jobject", "UnityPipeline_validation.official.result-getter-throw",
-    "UnityPipeline_validation.official.runtime", "UnityPipeline_validation.official.structured",
-    "UnityPipeline_validation.official.sync", "UnityPipeline_validation.official.task",
-    "UnityPipeline_validation.official.throw", "UnityPipeline_validation.official.timeout",
-    "UnityPipeline_validation.official.timeout-status"
+    "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"
   ];
   const discovered = { tools: [...baseline.tools, ...projectTools] };
   assert.deepEqual(runtimeInventoryIssues(discovered, baseline), []);
@@ -993,25 +986,6 @@ test("final recovery proves ready EditMode before EditMode-only recovery fixture
   const enterEdit = source.indexOf('setCasePlayMode(m, "recovery-enter-edit", false)', recovery);
   const pipeline = source.indexOf('runFixtureSequence(m, "pipeline-final-restore"', recovery);
   assert.ok(recovery >= 0 && enterEdit > recovery && pipeline > enterEdit, "recovery must re-enter EditMode before any recovery fixture");
-});
-
-test("official attribute fixture has no undeclared third-party compile dependency", async () => {
-  const source = await readFile(new URL("./live-matrix/fixtures/official-attribute-fixtures.cs", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /Newtonsoft|JObject payload/);
-});
-
-test("official attribute fixture is projected deterministically into an authorized Dev project", async (t) => {
-  const root = await mkdtemp(join(tmpdir(), "unitycli-official-fixture-"));
-  t.after(async () => rm(root, { recursive: true, force: true }));
-  const source = join(root, "fixture.cs");
-  const project = join(root, "DevProject");
-  await writeFile(source, "// canonical fixture\n", "utf8");
-  const first = await ensureOfficialAttributeFixture(project, source);
-  const second = await ensureOfficialAttributeFixture(project, source);
-  assert.equal(first.changed, true);
-  assert.equal(second.changed, false);
-  assert.equal(await readFile(first.path, "utf8"), "// canonical fixture\n");
-  assert.equal(first.path, join(project, "Assets", "Editor", "UnityCLI", "official-attribute-fixtures.cs"));
 });
 
 test("inventory discovery fails at the first terminal contract mismatch", async () => {
