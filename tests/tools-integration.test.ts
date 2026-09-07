@@ -18,8 +18,18 @@ const goFindTool = makeLiveTool({
   description: "Find matching scene objects by name and return a bounded result page.",
   group: "go",
   inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"], additionalProperties: false },
+  examples: [{
+    description: "Find an object named Player.",
+    argv: ["tools", "run", "go.find", "--input", "{\"name\":\"Player\"}"],
+  }],
 });
-const connectedTools = [sceneHierarchyTool(), goFindTool];
+const cameraScreenshotTool = makeLiveTool({
+  name: "camera.screenshot",
+  summary: "Capture a screenshot from a Unity camera.",
+  description: "Capture a screenshot from a Unity camera and return the saved artifact metadata.",
+  group: "camera",
+});
+const connectedTools = [sceneHierarchyTool(), goFindTool, cameraScreenshotTool];
 const connected = { ...disconnected, projectTools: connectedTools, runtimeTools: [], bridgeExecute: injectedBridge } as const;
 
 function fixtureCatalogSummaryQuery(overrides: Partial<CatalogSummaryQuery> & Pick<CatalogSummaryQuery, "limit" | "reservedNames">): CatalogSummaryQuery {
