@@ -29,6 +29,19 @@ const REQUIRED_PROJECT_TOOL_NAME_SET = new Set(REQUIRED_PROJECT_TOOL_NAMES);
 const REMOVED_PUBLIC_TOOL_NAMES = Object.freeze(["build.status", "build.cancel"]);
 /** These Tools require values returned by a fresh read Tool observation, not descriptor placeholders. */
 export const EXTERNAL_STATE_DEPENDENT_TOOL_NAMES = Object.freeze(["editor.dialog.click"]);
+export const DEPENDENT_STATUS_ROOT_TOOLS = Object.freeze({
+  "asset.refresh.status": "asset.refresh",
+  "build.player.status": "build.player",
+  "editor.play-mode.status": "editor.play",
+  "package.install.status": "package.install",
+  "package.remove.status": "package.remove",
+  "test.run.status": "test.run"
+});
+const EXTERNAL_SCENE_RELOAD_DIALOG = Object.freeze({
+  title: "The open scene(s) have been modified externally",
+  scenePath: "Assets/UnityCLIValidation/MatrixScene.unity",
+  button: "Reload"
+});
 const TEST_CANCEL_FIXTURE_NAME = "UnityCliValidation.MatrixEditModeSmokeTests.WaitForExplicitCancellation";
 const TEST_CANCEL_PENDING_CODES = new Set(["E_TEST_RUN_NOT_ACTIVE", "E_TEST_CANCEL_IDENTITY_UNPROVEN"]);
 export const MATRIX_OWNED_DIALOG = Object.freeze({
@@ -513,6 +526,30 @@ export function capabilityProject(m, _kind, descriptor) {
   return m.o.project;
 }
 function matrixCaseId(kind, name, id, phase) { return phase === "play" ? `${kind}.${name}.play.${id}` : `${kind}.${name}.${id}`; }
+
+export function successfulRootRequestId(records, rootToolName, phase) {
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index];
+    const capabilityName = typeof record.capability === "string" ? record.capability : record.capability?.name;
+    if (capabilityName !== rootToolName || record.phase !== phase || record.assertion?.status !== "PASS" || record.envelope?.ok !== true) continue;
+    if (Array.isArray(record.argv) && record.argv.includes("--dry-run")) continue;
+    if (typeof record.envelope.requestId === "string" && record.envelope.requestId.length > 0) return record.envelope.requestId;
+  }
+  return null;
+}
+
+export function selectExactExternalSceneReloadDialog(dialogs) {
+  const candidates = Array.isArray(dialogs) ? dialogs : [];
+  if (candidates.length === 0) return { outcome: "none" };
+  const exact = candidates.filter((dialog) =>
+    dialog?.title === EXTERNAL_SCENE_RELOAD_DIALOG.title
+    && typeof dialog?.message === "string"
+    && dialog.message.includes(EXTERNAL_SCENE_RELOAD_DIALOG.scenePath)
+    && Array.isArray(dialog?.buttons)
+    && dialog.buttons.includes(EXTERNAL_SCENE_RELOAD_DIALOG.button));
+  if (candidates.length === 1 && exact.length === 1) return { outcome: "reload", dialog: exact[0] };
+  return { outcome: "blocked", dialogs: candidates };
+}
 
 export const FROZEN_DIRECT_TOOL_NAMES = Object.freeze([
   "animator.crossfade", "code.exec", "editor.undo", "editor.redo", "physics.simulation", "navmesh.surface.bake",
@@ -2205,6 +2242,16 @@ export function selectMatrixOwnedDialog(dialogs) {
   return { outcome: "blocked", reason: "Multiple matrix-owned dialog fixtures matched the fresh observation." };
 }
 
+async function coverDependentStatusTool(m, name, descriptor, phase, project, rootToolName) {
+  const requestId = successfulRootRequestId(m.records, rootToolName, phase);
+  if (!requestId) {
+    await m.blocked(matrixCaseId("tool", name, "linked-request", phase), `No successful ${rootToolName} requestId is available in the ${phase} phase.`, { tool: name, rootTool: rootToolName });
+  } else {
+    await invoke(m, "tool", name, "linked-request", descriptor, { requestId }, [], true, phase, project);
+  }
+  await m.notApplicable(matrixCaseId("tool", name, "optional", phase), "The durable status Tool has no independent optional call; its positive path is bound to the completed root operation.", { tool: name, rootTool: rootToolName });
+}
+
 /**
  * Dialog clicks may only target the uniquely observed matrix-owned fixture. Descriptor examples
  * are explanatory only and cannot form a valid positive matrix invocation.
@@ -2345,16 +2392,19 @@ async function cover(m, kind, name, phase = "editor") {
   const unavailableCode = phase === "play" ? (PLAYMODE_UNAVAILABLE_CODE_OVERRIDES.get(name) ?? "E_TOOL_PLAYMODE_UNAVAILABLE") : "E_RUNTIME_NOT_RUNNING";
   const invocationIsPositive = () => !unavailable;
   const externalStateDependent = kind === "tool" && EXTERNAL_STATE_DEPENDENT_TOOL_NAMES.includes(name);
+  const dependentStatusRoot = kind === "tool" ? DEPENDENT_STATUS_ROOT_TOOLS[name] : null;
   const testCancelDependent = kind === "tool" && name === "test.cancel" && phase === "editor";
   if (externalStateDependent && !unavailable) {
     await coverExternalStateDependentTool(m, name, d, phase, project);
+  } else if (dependentStatusRoot && !unavailable) {
+    await coverDependentStatusTool(m, name, d, phase, project, dependentStatusRoot);
   } else if (testCancelDependent && !unavailable) {
     await coverTestCancelDependentTool(m, d, phase, project);
   }
   const frozenRecipe = kind === "tool" ? DIRECT_LIVE_CASES[name] : null;
   const directRecipe = phase === "editor" && !unavailable ? frozenRecipe : null;
   const suppressFrozenPlayPositive = phase === "play" && frozenRecipe && !unavailable;
-  if ((externalStateDependent || testCancelDependent) && !unavailable) {
+  if ((externalStateDependent || dependentStatusRoot || testCancelDependent) && !unavailable) {
     // The dedicated path above owns all positive coverage; continue with negative schema probes below.
   } else if (directRecipe) {
     await runDirectLiveCase(m, name, d, phase, project);
@@ -2772,8 +2822,23 @@ async function recoverFinalMatrixState(m) {
     return false;
   }
 
-  const reconciliation = { packageResolve: "pending", editorRefresh: "pending", sceneReload: "pending", editorState: "pending" };
+  const reconciliation = { externalSceneReload: "pending", packageResolve: "pending", editorRefresh: "pending", sceneReload: "pending", editorState: "pending" };
   let reconciliationPassed = true;
+
+  const dialogsRecord = await m.call("control.source-restore.external-scene-dialogs", ["tools", "run", "editor.dialogs", "--input", "{}"], (e, r) => r.exitCode === 0 ? assertPositiveSuccess(e) : `editor.dialogs reconciliation exited ${r.exitCode}.`, { cleanup: { projectSnapshot: true, reconcile: "external-scene-dialogs" } });
+  const dialogSelection = dialogsRecord.assertion?.status === "PASS" ? selectExactExternalSceneReloadDialog(dialogsRecord.envelope?.data?.dialogs) : { outcome: "blocked", dialogs: [] };
+  if (dialogSelection.outcome === "none") {
+    reconciliation.externalSceneReload = "N/A";
+  } else if (dialogSelection.outcome === "reload") {
+    const reloadRecord = await m.call("control.source-restore.external-scene-reload", ["tools", "run", "editor.dialog.click", "--input", JSON.stringify({ dialogId: dialogSelection.dialog.dialogId, button: EXTERNAL_SCENE_RELOAD_DIALOG.button })], (e, r) => r.exitCode === 0 ? assertPositiveSuccess(e) : `editor.dialog.click reconciliation exited ${r.exitCode}.`, { cleanup: { projectSnapshot: true, reconcile: "external-scene-reload" } });
+    reconciliation.externalSceneReload = reloadRecord.assertion?.status === "PASS" ? "PASS" : "FAIL";
+    reconciliationPassed = reconciliationPassed && reloadRecord.assertion?.status === "PASS";
+  } else {
+    await m.blocked("control.source-restore.external-scene-reload", "Source restore observed an unknown or ambiguous Unity dialog; recovery remains fail closed.", { cleanup: { projectSnapshot: true, reconcile: "external-scene-reload" }, dialogs: dialogSelection.dialogs });
+    reconciliation.externalSceneReload = "BLOCKED";
+    reconciliationPassed = false;
+  }
+
   // 即使 restore 得到相同 bytes，PackageManager/AssetDatabase 内存也可能仍持有 effect 期间状态；公开reconcile必须绑定刚恢复的文件摘要。
   const expectedPackageHashes = {
     manifestHash: restoredPackageFileHash(m.projectSnapshot, "Packages/manifest.json"),

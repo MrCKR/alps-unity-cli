@@ -16,6 +16,7 @@ import {
   callRecoveryEffect,
   concurrencyOverlapMs,
   concurrencySerialProof,
+  DEPENDENT_STATUS_ROOT_TOOLS,
   journalLifecycleIssue,
   PLAYMODE_RESOLVE_BLOCKED_TOOLS,
   PLAYMODE_UNAVAILABLE_CODE_OVERRIDES,
@@ -51,6 +52,8 @@ import {
   routeCapabilityInput,
   runtimeInventoryIssues,
   sceneBakeArtifactDirectory,
+  selectExactExternalSceneReloadDialog,
+  successfulRootRequestId,
   runCli,
   runDirectCasePhase,
   runFixtureSequence,
@@ -303,6 +306,27 @@ test("external-state-dependent Tools do not use descriptor placeholders as posit
   assert.match(source, /MATRIX_OWNED_DIALOG/);
   const removedToolName = `editor.launch${"-dialog.dismiss"}`;
   assert.doesNotMatch(source, new RegExp(removedToolName.replaceAll(".", "\\.")));
+});
+
+test("durable status Tools bind to a prior successful root requestId", () => {
+  assert.equal(DEPENDENT_STATUS_ROOT_TOOLS["asset.refresh.status"], "asset.refresh");
+  assert.equal(DEPENDENT_STATUS_ROOT_TOOLS["editor.play-mode.status"], "editor.play");
+  const records = [
+    { capability: { kind: "tool", name: "asset.refresh" }, phase: "editor", argv: ["tools", "run", "asset.refresh", "--dry-run"], assertion: { status: "PASS" }, envelope: { ok: true, requestId: "dry-run" } },
+    { capability: { kind: "tool", name: "asset.refresh" }, phase: "play", argv: [], assertion: { status: "PASS" }, envelope: { ok: true, requestId: "wrong-phase" } },
+    { capability: { kind: "tool", name: "asset.refresh" }, phase: "editor", argv: [], assertion: { status: "FAIL" }, envelope: { ok: false, requestId: "failed" } },
+    { capability: { kind: "tool", name: "asset.refresh" }, phase: "editor", argv: [], assertion: { status: "PASS" }, envelope: { ok: true, requestId: "root-request" } }
+  ];
+  assert.equal(successfulRootRequestId(records, "asset.refresh", "editor"), "root-request");
+  assert.equal(successfulRootRequestId(records, "build.player", "editor"), null);
+});
+
+test("source recovery reloads only the single exact MatrixScene external-change dialog", () => {
+  const exact = { dialogId: "scene-reload", title: "The open scene(s) have been modified externally", message: "Assets/UnityCLIValidation/MatrixScene.unity was modified.", buttons: ["Ignore", "Reload"] };
+  assert.deepEqual(selectExactExternalSceneReloadDialog([]), { outcome: "none" });
+  assert.deepEqual(selectExactExternalSceneReloadDialog([exact]), { outcome: "reload", dialog: exact });
+  assert.equal(selectExactExternalSceneReloadDialog([{ ...exact, message: "Assets/Other.unity" }]).outcome, "blocked");
+  assert.equal(selectExactExternalSceneReloadDialog([exact, { dialogId: "foreign", title: "Unknown", message: "Stop", buttons: ["OK"] }]).outcome, "blocked");
 });
 
 test("test.cancel coverage freezes and cancels one coordinator-owned run identity", async () => {
