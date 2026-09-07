@@ -26,6 +26,7 @@ import {
   EXTERNAL_STATE_DEPENDENT_TOOL_NAMES,
   MATRIX_OWNED_DIALOG,
   directPhaseIds,
+  ensureOfficialAttributeFixture,
   extensionAvailabilityIssues,
   fixtureError,
   fixtureExpectationIssue,
@@ -992,6 +993,27 @@ test("final recovery proves ready EditMode before EditMode-only recovery fixture
   const enterEdit = source.indexOf('setCasePlayMode(m, "recovery-enter-edit", false)', recovery);
   const pipeline = source.indexOf('runFixtureSequence(m, "pipeline-final-restore"', recovery);
   assert.ok(recovery >= 0 && enterEdit > recovery && pipeline > enterEdit, "recovery must re-enter EditMode before any recovery fixture");
+});
+
+test("official attribute fixture is projected deterministically into an authorized Dev project", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "unitycli-official-fixture-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const source = join(root, "fixture.cs");
+  const project = join(root, "DevProject");
+  await writeFile(source, "// canonical fixture\n", "utf8");
+  const first = await ensureOfficialAttributeFixture(project, source);
+  const second = await ensureOfficialAttributeFixture(project, source);
+  assert.equal(first.changed, true);
+  assert.equal(second.changed, false);
+  assert.equal(await readFile(first.path, "utf8"), "// canonical fixture\n");
+  assert.equal(first.path, join(project, "Assets", "Editor", "UnityCLI", "official-attribute-fixtures.cs"));
+});
+
+test("inventory discovery fails at the first terminal contract mismatch", async () => {
+  const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
+  assert.match(source, /stopAfterTerminalFailure\(await m\.call\("catalog\.groups"/);
+  assert.match(source, /stopAfterTerminalFailure\(await m\.call\(`tools\.group/);
+  assert.match(source, /stopAfterTerminalFailure\(await m\.call\("inventory\.current-tree"/);
 });
 
 test("playmode unavailable code overrides cover exactly editor.compile's contracted code", async () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Final live matrix; invokes only the public built CLI with shell:false. */
 import { appendFile, lstat, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -463,14 +463,14 @@ export function runtimeInventoryIssues(discovered, baseline) {
 function inventoryHash(names) { return createHash("sha256").update([...names].sort().join("\n")).digest("hex"); }
 
 async function discover(m) {
-  const groups = await m.call("catalog.groups", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } }));
+  const groups = stopAfterTerminalFailure(await m.call("catalog.groups", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } })));
   for (const item of groups.envelope?.data?.groups ?? []) {
     const group = nameOf(item); if (!group) continue;
     let cursor;
     do {
       const argv = ["tools", "group", "list", group, "--page-size", "100", ...(cursor === undefined ? [] : ["--cursor", String(cursor)])];
       const suffix = cursor === undefined ? "first" : String(cursor);
-      const listed = await m.call(`tools.group.${group}.${suffix}`, argv, (e) => assertSuccess(e, { required: ["tools", "pageInfo"] }));
+      const listed = stopAfterTerminalFailure(await m.call(`tools.group.${group}.${suffix}`, argv, (e) => assertSuccess(e, { required: ["tools", "pageInfo"] })));
       for (const tool of listed.envelope?.data?.tools ?? []) {
         const name = nameOf(tool); if (!name) continue;
         if (!m.discovered.tools.includes(name)) m.discovered.tools.push(name);
@@ -486,7 +486,7 @@ async function discover(m) {
   const inventoryIssues = runtimeInventoryIssues(m.discovered, baseline);
   const productTools = m.discovered.tools.filter((name) => !REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
   const projectTools = m.discovered.tools.filter((name) => REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
-  await m.call("inventory.current-tree", ["tools", "run", "editor.state", "--input", "{}"], (e) => {
+  stopAfterTerminalFailure(await m.call("inventory.current-tree", ["tools", "run", "editor.state", "--input", "{}"], (e) => {
     const envelopeIssue = assertSuccess(e, {});
     return envelopeIssue ?? (inventoryIssues.length > 0 ? inventoryIssues.join(" ") : null);
   }, {
@@ -498,7 +498,20 @@ async function discover(m) {
       projectTools,
       issues: inventoryIssues
     }
-  });
+  }));
+}
+
+/** 把固定 attribute fixture 投影到授权 Dev project，避免依赖被忽略的手工现场。 */
+export async function ensureOfficialAttributeFixture(projectPath, sourcePath = resolve("scripts/live-matrix/fixtures/official-attribute-fixtures.cs")) {
+  const project = resolve(projectPath);
+  const relativeTarget = join("Assets", "Editor", "UnityCLI", "official-attribute-fixtures.cs");
+  const target = resolve(project, relativeTarget);
+  if (!target.startsWith(project + sep)) throw new Error("Official attribute fixture target escapes the authorized project.");
+  const source = await readFile(sourcePath, "utf8");
+  await mkdir(dirname(target), { recursive: true });
+  const existing = await readFile(target, "utf8").catch((error) => error?.code === "ENOENT" ? undefined : Promise.reject(error));
+  if (existing !== source) await writeFile(target, source, "utf8");
+  return { path: target, changed: existing !== source };
 }
 async function getDescriptor(m, kind, name) {
   const cached = m.descriptors.get(`${kind}:${name}`);
@@ -2913,6 +2926,7 @@ async function recordRunnerFailure(m, id, error, meta = {}) {
 
 export async function runMatrix(options) {
   const m = new Matrix({ ...options, capabilities: options.capabilities ?? [] });
+  await ensureOfficialAttributeFixture(m.o.project);
   await m.init();
   m.invalidateSessionControls();
   let primaryError;
