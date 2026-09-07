@@ -4,15 +4,23 @@ import test from "node:test";
 import type { BridgeRequest, RootAdmissionLease, RootAdmissionRequest } from "../src/bridge/index.js";
 import { readEditorCatalogDescriptor, readEditorCatalogSummary, readRuntimeCatalogDescriptor, type CatalogSummaryQuery } from "../src/catalog-protocol.js";
 import { execute } from "../src/cli.js";
-import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
-import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import type { ToolMetadata } from "../src/tools/metadata/index.js";
+import { makeLiveTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
 import { LocalEffectBarrier, completeUnconsumedRootAdmission, settleToolExecutionAtDeadline } from "../src/tools/dispatcher.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 const disconnected = { dataDir: "Z:/definitely-missing-unity-cli-data" } as const;
 const injectedBridge = async (payload: BridgeRequest) => ({ ok: true as const, requestId: payload.requestId, data: {} });
-const connected = { ...disconnected, projectTools: staticBridgeToolMetadata(), runtimeTools: [], bridgeExecute: injectedBridge } as const;
+const goFindTool = makeLiveTool({
+  name: "go.find",
+  summary: "Find scene objects by name.",
+  description: "Find matching scene objects by name and return a bounded result page.",
+  group: "go",
+  inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"], additionalProperties: false },
+});
+const connectedTools = [sceneHierarchyTool(), goFindTool];
+const connected = { ...disconnected, projectTools: connectedTools, runtimeTools: [], bridgeExecute: injectedBridge } as const;
 
 function fixtureCatalogSummaryQuery(overrides: Partial<CatalogSummaryQuery> & Pick<CatalogSummaryQuery, "limit" | "reservedNames">): CatalogSummaryQuery {
   const localNames = overrides.localNames ?? [];
@@ -29,7 +37,7 @@ function fixtureCatalogSummaryQuery(overrides: Partial<CatalogSummaryQuery> & Pi
   };
 }
 
-function bridgeDescriptor(tool: ReturnType<typeof staticBridgeToolMetadata>[number]): Record<string, unknown> {
+function bridgeDescriptor(tool: ToolMetadata): Record<string, unknown> {
   return {
     name: tool.name,
     summary: tool.summary,
@@ -70,7 +78,7 @@ test("tools group, search, and describe use one connected instance catalog", asy
 });
 
 test("each discovery root performs one bounded catalog transport per target", async () => {
-  const live = staticBridgeToolMetadata().find((tool) => tool.name === "scene.hierarchy")!;
+  const live = sceneHierarchyTool();
   const descriptorPayload = { ...bridgeDescriptor(live), outputSchema: { ...live.outputSchema, description: "x".repeat(4_096) } };
   const summary = {
     name: live.name,
@@ -158,7 +166,7 @@ test("each discovery root performs one bounded catalog transport per target", as
 });
 
 test("tools run carries exact discovery provenance into the business root admission", async () => {
-  const live = staticBridgeToolMetadata().find((tool) => tool.name === "go.find")!;
+  const live = goFindTool;
   const admissions: RootAdmissionRequest[] = [];
   const runtime = {
     ...disconnected,
@@ -257,7 +265,7 @@ test("summary protocol bounds a large catalog before transport projection", asyn
 });
 
 test("private summary and exact protocols fail closed on extra payload and wrong identity", async () => {
-  const live = staticBridgeToolMetadata().find((tool) => tool.name === "scene.hierarchy")!;
+  const live = sceneHierarchyTool();
   const malformedSummary = await readEditorCatalogSummary({}, {
     bridgeExecute: async (payload: BridgeRequest) => ({
       ok: true,

@@ -28,14 +28,12 @@ const names = [
   "project.time-settings.set",
 ];
 const completion = JSON.parse(read("contracts/tool-completion-contract.json")) as { tools: Array<{ toolName: string }> };
-const catalog = JSON.parse(read("contracts/static-capability-catalog.json")) as { tools: Array<Record<string, unknown>> };
 
 test("Project Settings只公开批准的四读四写canonical Tool", () => {
   const source = readSources.join("\n") + setSources.join("\n");
   for (const name of names) {
     assert.match(source, new RegExp(`Name = "${name.replaceAll(".", "\\.")}"`));
     assert.equal(completion.tools.filter((entry) => entry.toolName === name).length, 1, `completion contract mismatch for ${name}`);
-    assert.equal(catalog.tools.filter((entry) => entry.name === name).length, 1, `static catalog mismatch for ${name}`);
   }
   assert.doesNotMatch(source, /get_audio_settings|set_audio_settings|get_input_settings|set_input_settings|get_player_settings|set_player_settings|get_time_settings|set_time_settings/);
 });
@@ -85,8 +83,6 @@ test("批准字段是typed闭集且不存在任意SerializedObject路由", () =>
   assert.match(support, /ProjectInputSettingsSetRequest[\s\S]*\[UnityCliRequired\][\s\S]*string Axis/);
   assert.match(setSources[1], /first configured entry is selected/);
   assert.match(support, /matches\[0\]/);
-  const inputDescriptor = catalog.tools.find((entry) => entry.name === "project.input-settings.set");
-  assert.match(String(inputDescriptor?.description), /first configured entry is selected/);
 });
 
 test("版本、enum与数值边界在effect前fail closed", () => {

@@ -5,16 +5,13 @@ import { validateProBuilderCompletionScope } from "./lib/probuilder-completion-s
 
 const root = process.cwd();
 const contractPath = path.join(root, "contracts", "tool-completion-contract.json");
-const catalogPath = path.join(root, "contracts", "static-capability-catalog.json");
 const contract = JSON.parse(fs.readFileSync(contractPath, "utf8"));
-const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
 const inventory = collectPublicToolInventory(root);
 const entries = Array.isArray(contract.tools) ? contract.tools : [];
 const failures = [];
 
 const inventoryByName = uniqueMap(inventory, (entry) => entry.name, "public Tool inventory");
 const contractByName = uniqueMap(entries, (entry) => entry.toolName, "completion contract");
-const staticByName = uniqueMap(catalog.tools ?? [], (entry) => entry.name, "static capability catalog");
 for (const name of inventoryByName.keys()) if (!contractByName.has(name)) failures.push(`completion contract missing ${name}`);
 for (const name of contractByName.keys()) if (!inventoryByName.has(name)) failures.push(`orphan completion contract ${name}`);
 failures.push(...validateProBuilderCompletionScope(entries));
@@ -23,7 +20,7 @@ const normalized = [];
 for (const tool of inventory) {
   const completion = contractByName.get(tool.name);
   if (!completion) continue;
-  normalized.push(normalize(tool, completion, staticByName.get(tool.name)));
+  normalized.push(normalize(tool, completion));
 }
 const csharpEntries = normalized.filter((entry) => entry.descriptorOwner === "built-in" || entry.descriptorOwner.startsWith("extension:"));
 const editorCompile = normalized.find((entry) => entry.toolName === "editor.compile" && entry.descriptorOwner === "ts-local");
@@ -52,7 +49,7 @@ process.stdout.write(`generated ${path.relative(root, tsOutput)} (${normalized.l
 process.stdout.write(`generated ${path.relative(root, csharpOutput)} (${csharpEntries.length} C# completion contracts)\n`);
 
 /** 将人读契约收敛成运行时只能枚举分支的机器字段。 */
-function normalize(tool, completion, descriptor) {
+function normalize(tool, completion) {
   const executionClass = requiredEnum(completion.executionClass, ["atomic", "observed-state", "resumable", "external"], `${tool.name}.executionClass`);
   const deliveryMode = "direct-terminal";
   const completionPredicate = requiredKind(completion.completionPredicate, `${tool.name}.completionPredicate`);
@@ -60,8 +57,6 @@ function normalize(tool, completion, descriptor) {
   const reloadPolicy = requiredKind(completion.reloadPolicy, `${tool.name}.reloadPolicy`);
   const outcomeUnknownPolicy = requiredKind(completion.outcomeUnknownPolicy, `${tool.name}.outcomeUnknownPolicy`);
   const timeoutError = requiredString(completion.timeoutError, `${tool.name}.timeoutError`);
-  if ((tool.descriptorOwner === "built-in" || tool.descriptorOwner.startsWith("extension:")) && !descriptor)
-    throw new Error(`static descriptor missing for C# Tool ${tool.name}`);
   const mutation = isMutation(sourceMutationDescriptor(tool));
   return {
     toolName: tool.name,

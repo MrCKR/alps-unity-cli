@@ -5,7 +5,7 @@ import { toolPublicRoute } from "../tools/metadata/derived.js";
 import { toolHandler } from "../tools/metadata/status.js";
 import type { ToolMetadata } from "../tools/metadata/types.js";
 import type { ExtensionManifest } from "../extensions/types.js";
-import { staticCapabilityCatalog } from "../static-capability-catalog.js";
+import { generatedToolCompletionContract } from "../tools/.generated-completion-registry.js";
 
 export type CommandHandlerType = "bridge" | "bridge-runtime" | "hybrid" | "offline" | "cli_only";
 
@@ -91,7 +91,6 @@ export function findCommandContract(bridgeCommand: string): CommandContractEntry
 }
 
 export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry, skipGroups?: Set<string>): void {
-  const staticProjectTools = new Set(staticCapabilityCatalog().tools.map((tool) => String(tool.name)));
   const registryCommands = new Set<string>();
   const registryToolNames = new Set<string>();
   for (const spec of registry.specs()) {
@@ -106,7 +105,9 @@ export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry,
 
   for (const contract of commandContracts()) {
     if (skipGroups?.has(contract.group)) continue;
-    if (contract.csharp_handler === "present" && (contract.handler_type === "bridge" || contract.handler_type === "hybrid") && !registryCommands.has(contract.bridgeCommand) && !registryToolNames.has(contract.bridgeCommand) && !staticProjectTools.has(contract.bridgeCommand)) {
+    const owner = generatedToolCompletionContract(contract.bridgeCommand)?.descriptorOwner;
+    const unityOwned = owner === "built-in" || owner?.startsWith("extension:") === true;
+    if (contract.csharp_handler === "present" && (contract.handler_type === "bridge" || contract.handler_type === "hybrid") && !registryCommands.has(contract.bridgeCommand) && !registryToolNames.has(contract.bridgeCommand) && !unityOwned) {
       throw new Error(`Contract command missing from BridgeCommandRegistry: ${contract.bridgeCommand}`);
     }
   }

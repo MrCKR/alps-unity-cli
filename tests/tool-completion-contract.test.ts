@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
-import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
-import { builtinToolMetadata } from "../src/tools/metadata/index.js";
 import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "../src/tools/.generated-completion-registry.js";
 
 interface CompletionFacet { kind: string; description: string; }
@@ -24,8 +24,10 @@ async function contractEntries(): Promise<CompletionEntry[]> {
   return contract.tools;
 }
 
-test("completion contract exactly covers every current public Tool", async () => {
-  const expected = [...new Set([...builtinToolMetadata(), ...staticBridgeToolMetadata()].map((tool) => tool.name))].sort();
+test("completion contract exactly covers every canonical public Tool", async () => {
+  const moduleUrl = pathToFileURL(join(process.cwd(), "scripts", "lib", "public-tool-inventory.mjs")).href;
+  const inventoryModule = await import(moduleUrl) as { collectPublicToolInventory(root: string): Array<{ name: string }> };
+  const expected = inventoryModule.collectPublicToolInventory(process.cwd()).map((tool) => tool.name).sort();
   const entries = await contractEntries();
   const actual = entries.map((entry) => entry.toolName).sort();
   assert.deepEqual(actual, expected);

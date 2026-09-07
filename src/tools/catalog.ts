@@ -5,10 +5,8 @@ import {
   type ProjectToolRuntime
 } from "../project-tool-discovery.js";
 import { readEditorCatalogDescriptor, readRuntimeCatalogDescriptor } from "../catalog-protocol.js";
-import { staticCapabilityCatalog } from "../static-capability-catalog.js";
 import { failure } from "../output.js";
 import type { CliResult } from "../types.js";
-import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "./.generated-completion-registry.js";
 import {
   builtinToolMetadata,
   findToolByName,
@@ -39,19 +37,6 @@ export function resolveCatalogIndependentOperabilityTool(name: string): ToolMeta
 /** 只有固定的 exact operability/status Tool 可绕过 live catalog。 */
 export function resolveCatalogIndependentInvocationTool(name: string): ToolMetadata | undefined {
   return resolveCatalogIndependentOperabilityTool(name);
-}
-
-/** package snapshot 中的 C# built-in/Extension descriptor，仅供生成、契约和离线审计使用。 */
-export function staticBridgeToolMetadata(): ToolMetadata[] {
-  const bridgeContracts = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS
-    .filter((contract) => contract.descriptorOwner === "built-in" || contract.descriptorOwner.startsWith("extension:"))
-    .map((contract) => [contract.toolName, contract]));
-  return staticCapabilityCatalog().tools.filter((descriptor) => bridgeContracts.has(String(descriptor.name ?? ""))).map((descriptor) => {
-    const name = String(descriptor.name ?? "");
-    const tool = projectDescriptorToToolMetadata({ ...descriptor, contractProfile: "native", completionContract: bridgeContracts.get(name) });
-    if (!tool) throw new Error(`Malformed static Tool descriptor: ${String(descriptor.name ?? "unknown")}`);
-    return tool;
-  });
 }
 
 /**

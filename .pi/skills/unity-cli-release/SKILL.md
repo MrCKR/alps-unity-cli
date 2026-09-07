@@ -39,7 +39,7 @@ compatibility: 适用于 alps-unity-cli；需要 pwsh、npm、git 与已登录 n
 
 1. 发布所含增删改及其直接影响面的自动化测试全部通过，并记录测试命令与变更覆盖关系；不得默认运行无关的全仓测试。允许的唯一失败必须是在 `.issues/completed/` 已登记的 pre-existing 项。
 2. `node .pi/skills/unity-cli-issue-lifecycle/scripts/validate-issues.mjs` 输出 `failures: []`。
-3. 涉及工具/契约变更时，`contracts/static-capability-catalog.json` 已 re-capture，outputSchema 与源码一致。
+3. 涉及工具/契约变更时，所有生成产物已从 canonical Tool 源码重新生成，并且二次生成无差异。
 4. 涉及 skill 版本时，`skills/unitycli/manifest.json` 与 `package.json` 一致。
 5. 发布前 `npm whoami` 确认已登录 npm。
 

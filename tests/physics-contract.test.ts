@@ -193,13 +193,13 @@ test("physics mutation tools validate before commit and prove fresh observed sta
   assert.doesNotMatch(settings + simulation + support, /Physics\.autoSimulation = value|Physics\.autoSimulation == value|AutoSimulation = Physics\.autoSimulation|if \(Physics\.autoSimulation/);
 });
 
-test("physics.settings static catalog exposes the manual simulation contract", async () => {
-  const catalog = JSON.parse(await readFile(new URL("../contracts/static-capability-catalog.json", import.meta.url), "utf8"));
-  const descriptor = catalog.tools.find((tool: { name?: string }) => tool.name === "physics.settings");
-  assert.ok(descriptor, "physics.settings must exist in the static catalog");
-  assert.equal(descriptor.inputSchema.properties.simulationMode2D.type, "string");
-  assert.equal(descriptor.outputSchema.$defs["UnityCli.PhysicsSettingsInfo"].properties.simulationMode2D.type, "string");
-  assert.match(descriptor.description, /simulationMode2D accepts FixedUpdate, Update, or Script/);
+test("physics.settings canonical descriptor and DTO expose the manual simulation contract", async () => {
+  const settings = await readFile(new URL("../unitypkg/Editor/Tools/physics/settings.cs", import.meta.url), "utf8");
+  const support = await readFile(new URL("../unitypkg/Editor/Tools/physics/PhysicsToolSupport.cs", import.meta.url), "utf8");
+  assert.match(settings, /Name = "physics\.settings"/);
+  assert.match(settings, /simulationMode2D accepts FixedUpdate, Update, or Script/);
+  assert.match(settings, /public string SimulationMode2D \{ get; set; \}/);
+  assert.match(support, /public string SimulationMode2D \{ get; set; \}/);
 });
 
 test("physics bridge spec forwards structured --input fields", async () => {

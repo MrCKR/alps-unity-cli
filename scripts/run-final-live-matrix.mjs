@@ -87,16 +87,11 @@ const descriptorOf = (e) => e?.data?.descriptor ?? e?.data;
 export async function loadInternalResultSchemas(cliEntry = resolve("dist", "cli.js")) {
   const root = dirname(resolve(cliEntry));
   const metadataPath = resolve(root, "tools", "metadata", "index.js");
-  const catalogPath = resolve(root, "tools", "catalog.js");
-  if (!await lstat(metadataPath).then(() => true).catch(() => false)
-      || !await lstat(catalogPath).then(() => true).catch(() => false)) {
+  if (!await lstat(metadataPath).then(() => true).catch(() => false)) {
     throw new Error(`Compiled Tool metadata is missing beside CLI entry ${resolve(cliEntry)}.`);
   }
-  const [metadata, catalog] = await Promise.all([
-    import(pathToFileURL(metadataPath).href),
-    import(pathToFileURL(catalogPath).href),
-  ]);
-  const tools = [...new Map([...metadata.builtinToolMetadata(), ...catalog.staticBridgeToolMetadata()].map((tool) => [tool.name, tool])).values()];
+  const metadata = await import(pathToFileURL(metadataPath).href);
+  const tools = metadata.builtinToolMetadata();
   const schemas = new Map();
   for (const tool of tools) {
     if (!plain(tool.outputSchema)) throw new Error(`Internal Tool ${tool.name} is missing outputSchema.`);
@@ -430,9 +425,7 @@ export function extensionAvailabilityIssues(listData, doctorData) {
 /** 验证基线来自内部 completion contract；公开 inventory 必须由 live instance 完整返回。 */
 export async function loadRuntimeInventoryBaseline() {
   const completion = JSON.parse(await readFile(new URL("../contracts/tool-completion-contract.json", import.meta.url), "utf8"));
-  const catalog = JSON.parse(await readFile(new URL("../contracts/static-capability-catalog.json", import.meta.url), "utf8"));
   if (!Array.isArray(completion?.tools) || !completion.tools.every((value) => typeof value?.toolName === "string")) throw new Error("Tool completion inventory is malformed.");
-  if (Object.hasOwn(catalog ?? {}, "contexts")) throw new Error("Static inventory contains a forbidden legacy contexts field.");
   return { tools: [...new Set(completion.tools.map((value) => value.toolName))].sort() };
 }
 

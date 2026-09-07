@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
-import { staticCapabilityCatalog } from "../src/static-capability-catalog.js";
 
 const removedReadOwners = [
   "unitypkg/Editor/Contexts/scene/renderer-features.cs",
@@ -26,17 +25,4 @@ test("approved read fields are merged into canonical Tools", async () => {
   assert.match(volume, /Result \{ public List<VolumeInfo> Volumes[\s\S]*public long Count[\s\S]*public PageInfo PageInfo/);
   assert.match(volume, /HasMore = false, PageSize = pageSize/);
 
-  const catalog = staticCapabilityCatalog();
-  assert.equal(Object.hasOwn(catalog, "contexts"), false);
-  const tools = new Map(catalog.tools.map((tool) => [String(tool.name), tool]));
-  const feature = tools.get("urp.feature.list") as { outputSchema: { properties: Record<string, unknown> } } | undefined;
-  assert.ok(feature);
-  const featureSchema = feature.outputSchema.properties;
-  for (const field of ["available", "renderer", "diagnostics", "nextActions"]) assert.ok(field in featureSchema);
-  const graphics = tools.get("graphics.volume") as { inputSchema: { properties: Record<string, unknown> }; outputSchema: { properties: Record<string, unknown> } } | undefined;
-  assert.ok(graphics);
-  const graphicsInput = graphics.inputSchema.properties;
-  const graphicsOutput = graphics.outputSchema.properties;
-  for (const field of ["target", "cursor", "pageSize"]) assert.ok(field in graphicsInput);
-  for (const field of ["volumes", "count", "pageInfo"]) assert.ok(field in graphicsOutput);
 });

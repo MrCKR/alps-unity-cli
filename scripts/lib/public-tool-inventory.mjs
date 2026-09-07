@@ -35,6 +35,8 @@ function collectCSharpTools(root) {
     if (!/\bIUnityCliTool\s*</.test(sourceText)) continue;
     const name = sourceText.match(/\bName\s*=\s*"([^"]+)"/)?.[1];
     if (!name) throw new Error(`${relativeSource(root, file)}: IUnityCliTool 缺少公开 Name`);
+    const group = sourceText.match(/\bGroup\s*=\s*"([^"]+)"/)?.[1];
+    if (!group) throw new Error(`${relativeSource(root, file)}: IUnityCliTool 缺少公开 Group`);
     const source = relativeSource(root, file);
     const extensionMatch = source.match(/^extensions\/([^/]+)\//);
     let owner;
@@ -60,7 +62,10 @@ function collectCSharpTools(root) {
       source,
       assemblyName: owner?.assemblyName ?? "UnityCli.Editor",
       implementationType,
+      group,
       handler: "bridge",
+      destructiveHint: /\bDestructiveHint\s*=\s*true\b/.test(sourceText),
+      requiresPackages: collectRequiredPackages(sourceText),
       asyncSignals: collectAsyncSignals(sourceText, "csharp"),
     });
   }
@@ -147,6 +152,20 @@ function collectTypeScriptTools(root) {
     });
   }
   return tools;
+}
+
+/** descriptor 的 Package 依赖只允许字符串常量闭集；生成器无需物化完整 descriptor。 */
+function collectRequiredPackages(sourceText) {
+  const expression = sourceText.match(/\bRequiresPackages\s*=\s*new\[\]\s*\{([^}]*)\}/)?.[1];
+  if (expression === undefined) return [];
+  const packages = [...expression.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  if (/\bTimelineToolSupport\.PackageId\b/.test(expression)) packages.push("com.unity.timeline");
+  const residue = expression
+    .replace(/"[^"]+"/g, "")
+    .replace(/\bTimelineToolSupport\.PackageId\b/g, "")
+    .replace(/[\s,]/g, "");
+  if (residue.length > 0) throw new Error(`Unsupported RequiresPackages expression: ${expression.trim()}`);
+  return packages;
 }
 
 /** 记录跨帧、callback 和外部 operation 信号，供 completion contract 审计。 */

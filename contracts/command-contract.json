@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedFrom": "unified C#/TS/metadata command contract",
+  "generatedFrom": "canonical C#/TS source inventory and metadata",
   "commands": [
     {
       "bridgeCommand": "animation.clip",
@@ -2390,7 +2390,7 @@
       "command": "memory-snapshot.take",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000,
       "requires_packages": [
         "com.unity.memoryprofiler"

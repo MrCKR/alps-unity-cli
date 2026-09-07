@@ -39,12 +39,15 @@ test("all 18 removed identities are absent from canonical source and runtime rou
   }
 
   const generator = await readFile("scripts/gen-command-contract.mjs", "utf8");
-  assert.match(generator, /assertExactNameSet\(sourceDescriptorNames, staticDescriptorNames\)/);
-  assert.doesNotMatch(generator, /sourceDescriptorNames\.filter|staticDescriptorNames\.filter|legacy|compatibility|fallback/);
-  assert.match(generator, /publicToolNames/);
+  assert.match(generator, /publicToolInventory = collectPublicToolInventory\(process\.cwd\(\)\)/);
+  assert.match(generator, /for \(const tool of publicToolInventory\)/);
+  assert.doesNotMatch(generator, /static-capability-catalog|staticDescriptorNames|legacy|compatibility|fallback/);
 
   const source = (await Promise.all((await nonGeneratedSourceFiles()).map((path) => readFile(path, "utf8")))).join("\n");
   for (const name of REMOVED_TOOLS) assert.equal(source.includes(name), false, `non-generated source residual: ${name}`);
+
+  const publicSurface = (await Promise.all((await publicSurfaceFiles()).map((path) => readFile(path, "utf8")))).join("\n");
+  for (const name of REMOVED_TOOLS) assert.equal(publicSurface.includes(name), false, `public/generated residual: ${name}`);
 });
 
 test("replacement mutations expose fresh readback for the removed duplicate surfaces", async () => {
@@ -113,12 +116,26 @@ async function nonGeneratedSourceFiles(): Promise<string[]> {
   return files.filter((path) => !path.includes(".generated-") && !path.includes(join("Editor", "Generated")));
 }
 
+async function publicSurfaceFiles(): Promise<string[]> {
+  return [
+    "README.md",
+    "skills/unitycli/SKILL.md",
+    "contracts/command-contract.json",
+    "contracts/tool-completion-contract.json",
+    ...await filesWithExtension("docs", ".md"),
+  ];
+}
+
 async function sourceFiles(root: string): Promise<string[]> {
+  return filesWithExtension(root, ".ts", ".cs");
+}
+
+async function filesWithExtension(root: string, ...extensions: string[]): Promise<string[]> {
   const result: string[] = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
-    if (entry.isDirectory()) result.push(...await sourceFiles(path));
-    else if (entry.isFile() && (entry.name.endsWith(".ts") || entry.name.endsWith(".cs"))) result.push(path);
+    if (entry.isDirectory()) result.push(...await filesWithExtension(path, ...extensions));
+    else if (entry.isFile() && extensions.some((extension) => entry.name.endsWith(extension))) result.push(path);
   }
   return result;
 }

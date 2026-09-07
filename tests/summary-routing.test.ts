@@ -4,11 +4,10 @@ import { handleToolsCommand, type ToolsRuntime } from "../src/tools/commands.js"
 import { allRegisteredToolMetadata } from "../src/tools/metadata/index.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
 import { probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
-import { staticBridgeToolMetadata } from "../src/tools/catalog.js";
 import "../src/extensions/index.js";
 
 const requestId = "test_summary_routing_001";
-const connectedRuntime: ToolsRuntime = { projectTools: staticBridgeToolMetadata() };
+const connectedRuntime: ToolsRuntime = { projectTools: [sceneHierarchyTool(), probuilderPingTool()] };
 const GENERIC_PATTERNS = [/\bvarious\b/i, /\butilities\b/i, /\bhelpers\b/i, /\bmanage things\b/i, /^run\s+[\w.-]+\.?$/i, /^manage\s+\w+\.?$/i, /\.\.\./];
 
 function wordCount(text: string): number {

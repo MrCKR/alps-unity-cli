@@ -4,8 +4,10 @@ import type { BridgeRequest } from "../src/bridge/index.js";
 import { readFileSync } from "node:fs";
 import { execute } from "../src/cli.js";
 import { discoverProjectTools, projectDescriptorToToolMetadata } from "../src/project-tool-discovery.js";
-import { publicToolDescriptor, staticBridgeToolMetadata } from "../src/tools/catalog.js";
+import { publicToolDescriptor } from "../src/tools/catalog.js";
 import { builtinToolMetadata } from "../src/tools/metadata/index.js";
+import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "../src/tools/.generated-completion-registry.js";
+import { probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -81,11 +83,11 @@ function officialDescriptor(overrides: Record<string, unknown> = {}): Record<str
   });
 }
 
-test("static internal descriptors receive completion only from the generated registry", () => {
-  const tools = staticBridgeToolMetadata();
+test("canonical C# inventory receives completion only from the generated registry", () => {
+  const tools = GENERATED_TOOL_COMPLETION_CONTRACTS.filter((tool) => tool.descriptorOwner === "built-in" || tool.descriptorOwner.startsWith("extension:"));
   assert.ok(tools.length > 300);
-  assert.ok(tools.every((tool) => tool.completionContract));
-  assert.ok(tools.every((tool) => tool.examples?.every((example) => example.argv[0] === "tools" && example.argv[1] === "run" && example.argv[2] === tool.name)));
+  assert.equal(new Set(tools.map((tool) => tool.toolName)).size, tools.length);
+  assert.ok(tools.every((tool) => tool.assemblyName && tool.implementationType));
 });
 
 test("project Tool parser requires a complete self-contained descriptor", () => {
@@ -162,8 +164,8 @@ test("public descriptor derives execution controls and emits availability only w
   }]);
 });
 
-test("all current public descriptors use the compact field closure while internal output schemas remain complete", () => {
-  const tools = [...new Map([...builtinToolMetadata(), ...staticBridgeToolMetadata()].map((tool) => [tool.name, tool])).values()];
+test("representative local and live descriptors use the compact field closure while internal schemas remain complete", () => {
+  const tools = [...builtinToolMetadata(), sceneHierarchyTool(), probuilderPingTool()];
   const allowed = new Set([
     "name", "description", "inputSchema", "destructiveHint", "sideEffects", "playModeSupport", "supportsDryRun",
     "examples", "target", "available", "unavailableReason", "requiresPackages",
