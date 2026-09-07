@@ -292,12 +292,31 @@ namespace UnityCli
                 }
                 else
                 {
-                    var exact = pool.InspectExactIdentityFields(ToPoolIdentity(owner));
-                    var outcome = exact == UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent
-                        ? pool.CompleteTrusted(ToPoolIdentity(owner))
-                        : exact == UnityCliAdmissionPool.ExactIdentityOutcome.DefinitelyAbsent
-                            ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
-                            : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                    UnityCliAdmissionPool.CompletionOutcome outcome;
+                    var activeWorkOwnsAdmission = false;
+                    lock (state.QueueLock)
+                    {
+                        // 同一root可先describe再attach业务WorkItem；旧intent必须等活动WorkItem完成后再收敛。
+                        activeWorkOwnsAdmission = ActiveWorkOwnsAdmissionUnderQueueLock(state, owner);
+                        if (activeWorkOwnsAdmission)
+                        {
+                            outcome = UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                        }
+                        else
+                        {
+                            var exact = pool.InspectExactIdentityFields(ToPoolIdentity(owner));
+                            outcome = exact == UnityCliAdmissionPool.ExactIdentityOutcome.ExactCurrent
+                                ? pool.CompleteTrusted(ToPoolIdentity(owner))
+                                : exact == UnityCliAdmissionPool.ExactIdentityOutcome.DefinitelyAbsent
+                                    ? UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent
+                                    : UnityCliAdmissionPool.CompletionOutcome.IdentityMismatchOrBlocked;
+                        }
+                    }
+                    if (activeWorkOwnsAdmission)
+                    {
+                        state.DeferCompletionIntent(pending, now);
+                        continue;
+                    }
                     if (outcome == UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
                         || outcome == UnityCliAdmissionPool.CompletionOutcome.DefinitelyAbsent)
                     {
@@ -638,10 +657,7 @@ namespace UnityCli
             UnityCliAdmissionPool.CompletionOutcome outcome;
             lock (state.QueueLock)
             {
-                BridgeWorkItem existing;
-                if (state.ActiveRequestWork.TryGetValue(identity.RequestId, out existing)
-                    && existing.AdmissionOwner != null
-                    && SameAdmissionOwner(existing.AdmissionOwner, identity)) return false;
+                if (ActiveWorkOwnsAdmissionUnderQueueLock(state, identity)) return false;
                 outcome = pool.CompleteTrusted(ToPoolIdentity(identity));
             }
             if (outcome != UnityCliAdmissionPool.CompletionOutcome.ExactCurrentCompleted
@@ -656,6 +672,15 @@ namespace UnityCli
             state.Sinks.WriteLog("admission_terminal requestId=" + identity.RequestId + " outcome=" + outcome.ToString() + " active=" + pool.Capture().Active.ToString(CultureInfo.InvariantCulture));
             TryFinalizeAdmissionPoolShutdown(state);
             return true;
+        }
+
+        // 调用方必须持有QueueLock，使活动WorkItem检查与owner完成形成同一原子裁决。
+        private static bool ActiveWorkOwnsAdmissionUnderQueueLock(BridgeQueueState state, AdmissionOwnerIdentity identity)
+        {
+            BridgeWorkItem existing;
+            return state.ActiveRequestWork.TryGetValue(identity.RequestId, out existing)
+                && existing.AdmissionOwner != null
+                && SameAdmissionOwner(existing.AdmissionOwner, identity);
         }
 
         /// <summary>仅为将随父root落盘的continuation写入完整intent；pool transfer由队列terminal owner提交。</summary>

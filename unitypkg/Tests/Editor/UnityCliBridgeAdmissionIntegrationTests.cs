@@ -447,6 +447,39 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void CompletionIntentWaitsForAttachedWorkItemBeforeSettlingOwner()
+        {
+            var request = Request("queue-completion-intent-attached-work");
+            var raw = RequestBytes(request);
+            var deadline = Deadline(request);
+            var grant = pool.Acquire(request.RequestId, fingerprint, state.ListenerId, state.ListenerGeneration);
+            Assert.That(grant.Outcome, Is.EqualTo(UnityCliAdmissionPool.AcquireOutcome.Granted));
+            var item = Enqueue(request, raw, grant.Token, deadline, out var created);
+            Assert.That(created, Is.True);
+            Assert.That(item.AdmissionOwner, Is.Not.Null);
+            Assert.That(state.PersistIntent(item.AdmissionOwner), Is.True);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(1));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(1));
+            Assert.That(item.Completed.IsSet, Is.False);
+
+            Assert.That(UnityCliBridge.CompleteWorkItemForTests(item, Success(request.RequestId)), Is.True);
+            Assert.That(item.Completed.IsSet, Is.True);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+            Assert.That(UnityCliBridge.ActiveRequestWorkCountForTests(state), Is.EqualTo(0));
+
+            monotonicNowMs += 100L;
+            UnityCliBridge.RetryPendingWorkItemSettlementsForTests(state);
+            Assert.That(state.PendingCompletionIntentCount, Is.EqualTo(0));
+        }
+
+        [Test]
         public void CompletionBoundaryFaultLogsAndPersistsOutsideQueueLock()
         {
             var request = Request("queue-completion-fault");

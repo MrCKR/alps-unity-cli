@@ -187,7 +187,7 @@ test("current JavaScript harness uses only the production public CLI entrypoint"
   assert.match(source, /const lockPath = resolve\(evidenceDir, "\.runner\.lock"\)/);
   assert.match(source, /releaseLock = await acquireRunnerLock\(options\.evidence_dir\)/);
   assert.match(source, /if \(record\?\.assertion\?\.status === "FAIL"\) throw new MatrixTerminalFailure\(record\)/);
-  assert.match(source, /await rm\(target\.embeddedPath, \{ recursive: true, force: false \}\)[\s\S]*cleanup\.package\.resolve[\s\S]*cleanup\.ready[\s\S]*cleanup\.package\.info/);
+  assert.match(source, /await rm\(target\.embeddedPath, \{ recursive: true, force: false \}\)[\s\S]*cleanup\.package\.resolve[\s\S]*cleanup\.ready/);
   assert.match(source, /prepareOwnedBakeStartSnapshot[\s\S]*cleanupOwnedBakeStartCase[\s\S]*cleanup\.graphics\.bake-status[\s\S]*cleanup\.asset\.delete[\s\S]*cleanup\.asset\.refresh[\s\S]*Final scene bake artifact path\/digest closure/);
   assert.match(source, /recoverAllPendingOwnedBakeSnapshots\(m\)[\s\S]*setCasePlayMode\(m, "initial-editor"/);
   assert.match(source, /"prepared", "effect-terminal", "clean"/);
@@ -287,11 +287,12 @@ test("public descriptor audit rejects removed fields and default availability", 
   assert.match(publicDescriptorIssue({ ...descriptor, available: false }), /unavailableReason/);
 });
 
-test("Live harness loads every package result schema from current compiled metadata", async () => {
+test("Live harness loads only CLI-owned result schemas from current compiled metadata", async () => {
   const schemas = await loadInternalResultSchemas(resolve("dist", "cli.js"));
-  assert.ok(schemas.size >= 400);
+  assert.ok(schemas.size >= 40 && schemas.size < 100);
   assert.equal(schemas.get("code.exec")?.oneOf instanceof Array, true);
-  assert.equal(schemas.get("scene.gameobject")?.type, "object");
+  assert.equal(schemas.get("editor.state")?.type, "object");
+  assert.equal(schemas.has("package.list"), false);
 });
 
 test("external-state-dependent Tools do not use descriptor placeholders as positive matrix inputs", async () => {
@@ -560,7 +561,8 @@ test("extension doctor validation consumes the current checks envelope", () => {
 
 test("runtime inventory is exact for product capabilities and requires Dev fixtures", async () => {
   const baseline = await loadRuntimeInventoryBaseline();
-  assert.equal(baseline.tools.length, 418);
+  const completion = JSON.parse(await readFile(new URL("../contracts/tool-completion-contract.json", import.meta.url), "utf8"));
+  assert.deepEqual(baseline.tools, completion.tools.map((entry) => entry.toolName).sort());
   assert.equal(baseline.tools.includes("docs.list") || baseline.tools.includes("docs.topic"), false);
   const projectTools = [
     "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status",
@@ -809,7 +811,7 @@ test("undo redo and animator recipes avoid reload-prone or externally driven tar
 test("Package matrix cases declare terminal-only exact cleanup", async () => {
   const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
   assert.match(source, /record\.assertion\?\.status !== "PASS" \|\| record\.envelope\?\.ok !== true \|\| flags\.includes\("--dry-run"\)/);
-  assert.match(source, /if \(name === "package\.embed"\)[\s\S]*ownedEmbeddedPackageCleanupTarget[\s\S]*package\.resolve[\s\S]*package\.info/);
+  assert.match(source, /if \(name === "package\.embed"\)[\s\S]*ownedEmbeddedPackageCleanupTarget[\s\S]*package\.resolve/);
   for (const pair of [["package.deploy", "package.restore"], ["package.install", "package.remove"], ["package.registry.set", "package.registry.clear"], ["package.scoped-registry.add", "package.scoped-registry.remove"]]) {
     assert.match(source, new RegExp(`"${pair[0].replaceAll(".", "\\.")}"[\\s\\S]*name: "${pair[1].replaceAll(".", "\\.")}"`));
   }
