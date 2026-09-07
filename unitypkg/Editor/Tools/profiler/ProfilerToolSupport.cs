@@ -301,9 +301,12 @@ namespace UnityCli
             return format;
         }
 
+        internal static Func<UnityCliRequestBudget, Type> MemoryProfilerTypeOverrideForTests;
+
         /// <summary>查找 MemoryProfiler 类型(包 com.unity.memoryprofiler)。找不到返回 null。</summary>
         public static Type MemoryProfilerType(UnityCliRequestBudget budget = null)
         {
+            if (MemoryProfilerTypeOverrideForTests != null) return MemoryProfilerTypeOverrideForTests(budget);
             return FindType("Unity.Profiling.Memory.MemoryProfiler", budget)
                 ?? FindType("UnityEngine.Profiling.Memory.Experimental.MemoryProfiler", budget);
         }

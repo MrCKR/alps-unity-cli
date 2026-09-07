@@ -61,6 +61,8 @@ namespace UnityCli
                 snapshots.Add(item);
                 index++;
             }
+            if (index == offset && index < files.Count)
+                throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
             var next = index < files.Count ? UnityCliContinuationToken.Create("profiler.memory-snapshot.list", generation, index.ToString(CultureInfo.InvariantCulture)) : null;
             return new System.Threading.Tasks.ValueTask<Result>(new Result
             {

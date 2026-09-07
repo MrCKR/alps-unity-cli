@@ -542,6 +542,7 @@ namespace UnityCli
                         || !int.TryParse(position, NumberStyles.Integer, CultureInfo.InvariantCulture, out index) || index < 0 || index > methods.Length)
                         throw new BridgeCommandException("E_CONTINUATION_STALE", "The reflection method continuation does not match the current assembly generation and selector.", "Start a new reflection.method.find read without cursor.");
                 }
+                var pageStartIndex = index;
                 var result = new List<ReflectionMethodDescriptor>();
                 while (index < methods.Length && result.Count < pageSize)
                 {
@@ -573,6 +574,8 @@ namespace UnityCli
                     index++;
                     if (!parametersComplete) break;
                 }
+                if (index == pageStartIndex && index < methods.Length)
+                    throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
                 var next = index < methods.Length ? UnityCliContinuationToken.Create("reflection.method.find", generation, index.ToString(CultureInfo.InvariantCulture)) : null;
                 return new MethodPage { Methods = result, Total = methods.Length, NextCursor = next, Generation = generation, Truncated = next != null || budget.IsExhausted };
             }

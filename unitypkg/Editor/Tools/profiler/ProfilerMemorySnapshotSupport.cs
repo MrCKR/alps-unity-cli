@@ -62,6 +62,7 @@ namespace UnityCli
         {
             RootOverrideForTests = null;
             DeleteFileOverrideForTests = null;
+            ProfilerToolSupport.MemoryProfilerTypeOverrideForTests = null;
             lock (PendingLock)
             {
                 ActivePendingSlots.Clear();

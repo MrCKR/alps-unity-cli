@@ -83,6 +83,8 @@ test("profiler and snapshot paths remain raw-paged and governed", async () => {
   assert.match(take, /ctx\.Wait\.ForCallback/);
   assert.match(take, /complete\(\(\) =>/);
   assert.match(list, /NextCursor/);
+  assert.match(list, /index == offset && index < files\.Count/);
+  assert.match(list, /UnityCliRequestBudgetExceededException/);
   assert.doesNotMatch(take + list, /temporaryCachePath|MemoryCaptures|Directory\.GetFiles/);
 });
 
@@ -98,6 +100,8 @@ test("reflection pages bind assembly generation and budgeted member definitions"
   assert.match(typeTool, /MaxMembers/);
   assert.match(typeTool, /MaxDefinitions/);
   assert.match(methodTool, /NextCursor/);
+  assert.match(reflection, /index == pageStartIndex && index < methods\.Length/);
+  assert.match(reflection, /UnityCliRequestBudgetExceededException\(budget\.ExhaustedDimension \?\? "scannedRecords"\)/);
   assert.match(typeTool + methodTool, /UnityCliReadBudgetInput/);
 });
 
@@ -149,6 +153,25 @@ test("EditMode regressions call production paging serialization ownership and ha
     "InitializeOwnedView",
   ]) assert.ok(tests.includes(productionCall), `missing production regression call: ${productionCall}`);
   assert.doesNotMatch(tests, /MemorySnapshotTerminal|Thread\.Sleep/);
+});
+
+test("memory and reflection integration fixtures exercise exact terminal and resource matrices", async () => {
+  const tests = await readFile(new URL("../unitypkg/Tests/Editor/UnityCliMemoryReflectionIntegrationTests.cs", import.meta.url), "utf8");
+  for (const productionCall of [
+    "ProfilerMemorySnapshotTakeTool",
+    "ProfilerMemorySnapshotListTool",
+    "TypeSchemaGenerator.Generate",
+    "ReflectionInvoker.FindMethods",
+    "UnityCliReadGeneration.InvalidateReflection",
+    "AssertInventory",
+  ]) assert.ok(tests.includes(productionCall), `missing integration regression call: ${productionCall}`);
+  for (const outcome of ["available", "missing", "unsupported", "write-failure", "timeout", "cancel", "reload"]) {
+    assert.ok(tests.includes(`\"${outcome}\"`), `missing memory terminal fixture: ${outcome}`);
+  }
+  assert.match(tests, /for \(var index = 0; index < 105; index\+\+\)/);
+  assert.match(tests, /Assert\.That\(names\.Count, Is\.EqualTo\(100\)\)/);
+  assert.match(tests, /File\.WriteAllBytes\(FakeMemoryProfiler\.PendingPath/);
+  assert.doesNotMatch(tests, /Thread\.Sleep/);
 });
 
 test("command projections preserve opaque cursors and nested budgets", async () => {

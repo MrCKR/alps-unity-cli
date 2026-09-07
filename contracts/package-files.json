@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "1090e1a45c39f348d3f454c35f45d46ee906c62f33b62cfdf80f643d9018ceef",
+  "sourceHash": "b73cfbb361abe67ba62505892bd760caee0d1ed55f0619d598e2c20639cbecbe",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -241,8 +241,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliReflection.cs",
-      "size": 61449,
-      "sha256": "e58dffe64eab715a47a1d90386eeee77bc1b8439d45dbd22011eb1a1ca31dd72"
+      "size": 61681,
+      "sha256": "d18bc7b6eb4cfa203028f53fca9e337d773e61f34d1aa7a1d516aa05de47f8ed"
     },
     {
       "path": "Editor/Infrastructure/UnityCliReloadOperation.cs",
@@ -1241,13 +1241,13 @@
     },
     {
       "path": "Editor/Tools/profiler/ProfilerMemorySnapshotSupport.cs",
-      "size": 21641,
-      "sha256": "a5999ee4e551a9b07a262a87a928f66e6119575fa07bc4fd7241b0a03c807ab4"
+      "size": 21716,
+      "sha256": "b6969fe3ba70c0f7fc0a99b6ced9cc326c51efc5c390a64360651c580cd1ef84"
     },
     {
       "path": "Editor/Tools/profiler/ProfilerToolSupport.cs",
-      "size": 24830,
-      "sha256": "b25c4d5b77e91272405dfb3dc396a8003028053c741256483b56fb151049365b"
+      "size": 25036,
+      "sha256": "57e2ae450edf9b6ead113b9446c8ca1686da71d567fbb98ebb50b8d6a1623db0"
     },
     {
       "path": "Editor/Tools/profiler/areas.cs",
@@ -1316,8 +1316,8 @@
     },
     {
       "path": "Editor/Tools/profiler/memory-snapshot/list.cs",
-      "size": 4299,
-      "sha256": "73af4696751701aa0fd0a3b65a3cd966c1e4307ce08e2ee6d9f628cec49a6d80"
+      "size": 4468,
+      "sha256": "34d91f8122f46799f380e8e0ff4d429af9cfa15fdca4c51b640f724b75b8c2c4"
     },
     {
       "path": "Editor/Tools/profiler/memory-snapshot/take.cs",
@@ -1988,6 +1988,11 @@
       "path": "Tests/Editor/UnityCliInstancePublicationRetryTests.cs",
       "size": 10209,
       "sha256": "6a6e76c11f833d08b74c300a2a5193a72efe5a863530e47426d20bb92e5a01ba"
+    },
+    {
+      "path": "Tests/Editor/UnityCliMemoryReflectionIntegrationTests.cs",
+      "size": 21399,
+      "sha256": "c7b0e378f50d486425f866c55bdf87a6400cb95f0e50e0442f78d36b76c713af"
     },
     {
       "path": "Tests/Editor/UnityCliRequestBudgetTests.cs",
