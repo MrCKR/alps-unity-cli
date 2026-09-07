@@ -576,12 +576,12 @@ namespace UnityCli
             throw new BridgeCommandException("E_ADMISSION_IDENTITY_MISMATCH", "Consumed admission root cannot attach to this listener generation.");
         }
 
-        /// <summary>pool memory已完成但durable settlement尚未清理时，同字节duplicate只附着原WorkItem。</summary>
+        /// <summary>durable settlement已失败并等待恢复时，同字节duplicate只附着原WorkItem。</summary>
         private static bool TryAuthorizeCompletionPendingAttach(BridgeQueueState state, AdmissionQueueReservation reservation, BridgeWorkItem existing)
         {
             var owner = existing == null ? null : existing.AdmissionOwner;
             if (state == null || reservation == null || owner == null || !existing.CompletionIntentReady
-                || !reservation.HasAdmissionHeaders
+                || !existing.SettlementFailureLogged || !reservation.HasAdmissionHeaders
                 || !string.Equals(reservation.RequestId, owner.RequestId, StringComparison.Ordinal)
                 || !string.Equals(reservation.RequestDigest, owner.RequestDigest, StringComparison.Ordinal)
                 || !string.Equals(reservation.RootFingerprint, owner.RootFingerprint, StringComparison.Ordinal)
