@@ -15,9 +15,9 @@ export const PLAYMODE_RESOLVE_BLOCKED_TOOLS = new Set([
   "package.deploy", "package.embed", "package.install", "package.remove", "package.resolve", "package.restore",
   "package.scoped-registry.add", "package.scoped-registry.remove"
 ]);
-// Dev Matrix 的 project/attribute Tool 是固定 fixture inventory；公开 descriptor 不暴露内部 source。
+// Dev Matrix 的 project Tool 是固定 fixture inventory；公开 descriptor 不暴露内部 source。
 const REQUIRED_PROJECT_TOOL_NAMES = Object.freeze([
-  "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"
+  "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"
 ]);
 const REQUIRED_PROJECT_TOOL_NAME_SET = new Set(REQUIRED_PROJECT_TOOL_NAMES);
 const REMOVED_PUBLIC_TOOL_NAMES = Object.freeze(["build.status", "build.cancel"]);

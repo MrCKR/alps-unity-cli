@@ -589,13 +589,13 @@ test("runtime inventory is exact for product capabilities and current Dev fixtur
   assert.deepEqual(baseline.tools, completion.tools.map((entry) => entry.toolName).sort());
   assert.equal(baseline.tools.includes("docs.list") || baseline.tools.includes("docs.topic"), false);
   const projectTools = [
-    "test", "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"
+    "validation.echo", "validation.ui-cache", "validation.wait", "validation.wait-status"
   ];
   const discovered = { tools: [...baseline.tools, ...projectTools] };
   assert.deepEqual(runtimeInventoryIssues(discovered, baseline), []);
-  discovered.tools.push("project.unexpected");
-  assert.match(runtimeInventoryIssues(discovered, baseline).join(" "), /Unexpected non-project Tools: project\.unexpected/);
-  discovered.tools = discovered.tools.filter((name) => name !== "project.unexpected" && name !== "validation.echo" && name !== "probuilder.create-shape");
+  discovered.tools.push("project.unexpected", "test");
+  assert.match(runtimeInventoryIssues(discovered, baseline).join(" "), /Unexpected non-project Tools: project\.unexpected, test/);
+  discovered.tools = discovered.tools.filter((name) => name !== "project.unexpected" && name !== "test" && name !== "validation.echo" && name !== "probuilder.create-shape");
   const missingIssues = runtimeInventoryIssues(discovered, baseline).join(" ");
   assert.match(missingIssues, /Missing current public Tools: probuilder\.create-shape/);
   assert.match(missingIssues, /Missing required project fixture Tools: validation\.echo/);
