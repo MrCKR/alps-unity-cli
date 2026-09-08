@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "415e3b0b7287f895e9ac4cfad3e66668037159526b101a262b5f0a38431405ef",
+  "sourceHash": "760baa059eca78c34fb3d6c53268a4b556f5d355471ae0d78fabf2e8ae91e6ca",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -1966,8 +1966,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliDiagnosticBoundaryTests.cs",
-      "size": 7519,
-      "sha256": "7ad5ee1511fa03e7485a8214a199b7d0645fcd47a3df6dcee99c732334b9b91d"
+      "size": 7539,
+      "sha256": "c1972c53bd12de189d7ce0062edb1e5df64cf99600083ea11993f49d764494b1"
     },
     {
       "path": "Tests/Editor/UnityCliDurableStatusTests.cs",
