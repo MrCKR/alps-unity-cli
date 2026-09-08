@@ -25,12 +25,24 @@ const REMOVED_PUBLIC_TOOL_NAMES = Object.freeze(["build.status", "build.cancel"]
 export const EXTERNAL_STATE_DEPENDENT_TOOL_NAMES = Object.freeze(["editor.dialog.click"]);
 export const DEPENDENT_STATUS_ROOT_TOOLS = Object.freeze({
   "asset.refresh.status": "asset.refresh",
-  "build.player.status": "build.player",
+  "build.player.status": "build.run",
   "editor.play-mode.status": "editor.play",
   "package.install.status": "package.install",
   "package.remove.status": "package.remove",
   "test.run.status": "test.run"
 });
+export const DEPENDENT_STATUS_ROOT_INPUTS = Object.freeze({
+  "asset.refresh.status": Object.freeze({ path: "Assets/UnityCLIValidation/Matrix.prefab", forceUpdate: true })
+});
+const DIRECT_READ_RETRY_CODES = Object.freeze(["E_READ_GENERATION_CHANGED"]);
+const DIRECT_READ_MAX_ATTEMPTS = 3;
+
+export function shouldRetryMatrixCall(meta, envelope, issue, attempt, maxAttempts) {
+  if (!issue || attempt >= maxAttempts) return false;
+  const retryReadiness = meta.retryAssertion === true;
+  const retryError = Array.isArray(meta.retryErrorCodes) && meta.retryErrorCodes.includes(envelope?.error?.code);
+  return retryReadiness || retryError;
+}
 const EXTERNAL_SCENE_RELOAD_DIALOG = Object.freeze({
   title: "The open scene(s) have been modified externally",
   scenePath: "Assets/UnityCLIValidation/MatrixScene.unity",
@@ -342,7 +354,9 @@ class Matrix {
 
     const attempts = [];
     let final;
-    for (let attempt = 1; attempt <= TRANSIENT_MAX_ATTEMPTS; attempt += 1) {
+    const configuredAttempts = Number(meta.retryMaxAttempts);
+    const maxAttempts = Number.isInteger(configuredAttempts) && configuredAttempts > 0 ? configuredAttempts : TRANSIENT_MAX_ATTEMPTS;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const preState = base[0] === "tools" && base[1] === "run" && base[2] === "editor.state" ? null : await this.state(project);
       const result = await runCli(this.o.cli, [...this.o.cli_args, ...argv], this.o.timeoutMs);
       let envelope; let parse;
@@ -354,14 +368,17 @@ class Matrix {
         const checkpoint = { id, at: new Date().toISOString(), argv, input: inputFrom(argv), exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, envelope, preState, target: this.o.target ?? null, project, buildStamp: this.o.build_stamp ?? null, assertion: { status: "FAIL", issue }, retryCheckpoint: { attempt }, ...meta };
         await appendEvidenceLine(this.jsonl, `${JSON.stringify(checkpoint)}\n`);
       }
-      const retryReadiness = meta.retryAssertion === true
-        && base[0] === "tools"
-        && base[1] === "run"
-        && base[2] === "editor.state";
-      if (!issue || !retryReadiness || attempt === TRANSIENT_MAX_ATTEMPTS) break;
+      const retryMeta = meta.retryAssertion === true
+        && !(base[0] === "tools" && base[1] === "run" && base[2] === "editor.state")
+        ? { ...meta, retryAssertion: false }
+        : meta;
+      if (!shouldRetryMatrixCall(retryMeta, envelope, issue, attempt, maxAttempts)) break;
+      const configuredDelay = Number(meta.retryDelayMs);
       const requestedDelay = Number(envelope?.error?.retryAfterMs);
-      const retryAfterMs = Number.isFinite(requestedDelay) && requestedDelay > 0 ? requestedDelay : 1000;
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, Math.min(2000, Math.max(500, retryAfterMs))));
+      const retryAfterMs = Number.isFinite(configuredDelay) && configuredDelay > 0
+        ? configuredDelay
+        : Number.isFinite(requestedDelay) && requestedDelay > 0 ? requestedDelay : 1000;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, Math.min(2000, Math.max(Number.isFinite(configuredDelay) ? 1 : 500, retryAfterMs))));
     }
 
     const { result, envelope, preState, issue } = final;
@@ -556,7 +573,7 @@ export const FROZEN_DIRECT_TOOL_NAMES = Object.freeze([
 ]);
 
 const step = (id, name, input = {}, options = {}) => ({ id, kind: "tool", name, input, ...options });
-const readStep = (id, name, input = {}, options = {}) => ({ id, kind: "tool", name, input, ...options });
+const readStep = (id, name, input = {}, options = {}) => ({ id, kind: "tool", name, input, readOnly: true, ...options });
 const trianglePoints = [
   { x: 2, y: 0, z: 0 },
   { x: 0, y: 0, z: 0 },
@@ -2096,9 +2113,11 @@ async function runDirectCaseStep(m, sourceCase, phase, definition, index, variab
   }
   const id = `${sourceCase}.${phase}.${definition.id ?? index + 1}`;
   const argv = argvFor(definition.kind, definition.name, input, flags);
+  const readOnly = definition.readOnly === true;
   const record = await m.call(id, argv, (e, r) => directExpectationIssue(e, r, expect, outputSchema), {
     baseline: { sourceCase },
-    directCase: { sourceCase, phase, step: definition.id ?? index + 1, capability: definition.name }
+    directCase: { sourceCase, phase, step: definition.id ?? index + 1, capability: definition.name, readOnly },
+    ...(readOnly ? { retryErrorCodes: DIRECT_READ_RETRY_CODES, retryMaxAttempts: DIRECT_READ_MAX_ATTEMPTS, retryDelayMs: 250 } : {})
   }, project);
   if (record.assertion?.status !== "PASS") return false;
   for (const [name, pointer] of Object.entries(definition.capture ?? {})) {
@@ -2237,14 +2256,23 @@ export function selectMatrixOwnedDialog(dialogs) {
   return { outcome: "blocked", reason: "Multiple matrix-owned dialog fixtures matched the fresh observation." };
 }
 
-async function coverDependentStatusTool(m, name, descriptor, phase, project, rootToolName) {
-  const requestId = successfulRootRequestId(m.records, rootToolName, phase);
-  if (!requestId) {
-    await m.blocked(matrixCaseId("tool", name, "linked-request", phase), `No successful ${rootToolName} requestId is available in the ${phase} phase.`, { tool: name, rootTool: rootToolName });
-  } else {
-    await invoke(m, "tool", name, "linked-request", descriptor, { requestId }, [], true, phase, project);
+export async function coverDependentStatusTool(m, name, descriptor, phase, project, rootToolName, invokeTool = invoke) {
+  const rootPhase = phase === "play" ? "editor" : phase;
+  let requestId = successfulRootRequestId(m.records, rootToolName, rootPhase);
+  const rootInput = DEPENDENT_STATUS_ROOT_INPUTS[name];
+  if (!requestId && rootInput && phase === "editor") {
+    const rootDescriptor = await getDescriptor(m, "tool", rootToolName);
+    if (rootDescriptor) {
+      const root = await invokeTool(m, "tool", rootToolName, "status-root", rootDescriptor, rootInput, [], true, phase, project);
+      if (root?.assertion?.status === "PASS" && root.envelope?.ok === true) requestId = root.envelope.requestId;
+    }
   }
-  await m.notApplicable(matrixCaseId("tool", name, "optional", phase), "The durable status Tool has no independent optional call; its positive path is bound to the completed root operation.", { tool: name, rootTool: rootToolName });
+  if (!requestId) {
+    await m.blocked(matrixCaseId("tool", name, "linked-request", phase), `No successful ${rootToolName} requestId is available from the ${rootPhase} phase.`, { tool: name, rootTool: rootToolName, rootPhase });
+  } else {
+    await invokeTool(m, "tool", name, "linked-request", descriptor, { requestId }, [], true, phase, project);
+  }
+  await m.notApplicable(matrixCaseId("tool", name, "optional", phase), "The durable status Tool has no independent optional call; its positive path is bound to the completed root operation.", { tool: name, rootTool: rootToolName, rootPhase });
 }
 
 /**
@@ -2444,9 +2472,13 @@ function capabilitySelected(m, name) {
   return m.o.capabilities.length === 0 || m.o.capabilities.includes(name);
 }
 
+export function orderedToolNames(names) {
+  return [...names].sort((left, right) => Number(Object.hasOwn(DEPENDENT_STATUS_ROOT_TOOLS, left)) - Number(Object.hasOwn(DEPENDENT_STATUS_ROOT_TOOLS, right)));
+}
+
 async function coverToolsWithPipelineFixtures(m, phase, excluded = new Set()) {
   const prepared = new Set();
-  for (const name of m.discovered.tools) {
+  for (const name of orderedToolNames(m.discovered.tools)) {
     if (excluded.has(name) || !capabilitySelected(m, name)) continue;
     const pipeline = name.startsWith("urp.") ? "pipeline_urp" : name.startsWith("hdrp.") ? "pipeline_hdrp" : null;
     if (pipeline && phase === "editor" && !prepared.has(pipeline)) {

@@ -16,12 +16,14 @@ import {
   callRecoveryEffect,
   concurrencyOverlapMs,
   concurrencySerialProof,
+  DEPENDENT_STATUS_ROOT_INPUTS,
   DEPENDENT_STATUS_ROOT_TOOLS,
   journalLifecycleIssue,
   PLAYMODE_RESOLVE_BLOCKED_TOOLS,
   PLAYMODE_UNAVAILABLE_CODE_OVERRIDES,
   DIRECT_LIVE_CASES,
   directInvariantIssue,
+  coverDependentStatusTool,
   coverExternalStateDependentTool,
   EXTERNAL_STATE_DEPENDENT_TOOL_NAMES,
   MATRIX_OWNED_DIALOG,
@@ -39,6 +41,7 @@ import {
   markOwnedProjectSnapshotReconciled,
   ownedEmbeddedPackageCleanupTarget,
   ownedSceneBakeCleanupPlan,
+  orderedToolNames,
   packageResolveReconciliationIssue,
   parseOptions,
   parsePublicExample,
@@ -53,6 +56,7 @@ import {
   runtimeInventoryIssues,
   sceneBakeArtifactDirectory,
   selectExactExternalSceneReloadDialog,
+  shouldRetryMatrixCall,
   successfulRootRequestId,
   runCli,
   runDirectCasePhase,
@@ -309,8 +313,17 @@ test("external-state-dependent Tools do not use descriptor placeholders as posit
 });
 
 test("durable status Tools bind to a prior successful root requestId", () => {
-  assert.equal(DEPENDENT_STATUS_ROOT_TOOLS["asset.refresh.status"], "asset.refresh");
-  assert.equal(DEPENDENT_STATUS_ROOT_TOOLS["editor.play-mode.status"], "editor.play");
+  assert.deepEqual(DEPENDENT_STATUS_ROOT_TOOLS, {
+    "asset.refresh.status": "asset.refresh",
+    "build.player.status": "build.run",
+    "editor.play-mode.status": "editor.play",
+    "package.install.status": "package.install",
+    "package.remove.status": "package.remove",
+    "test.run.status": "test.run"
+  });
+  assert.deepEqual(DEPENDENT_STATUS_ROOT_INPUTS, {
+    "asset.refresh.status": { path: "Assets/UnityCLIValidation/Matrix.prefab", forceUpdate: true }
+  });
   const records = [
     { capability: { kind: "tool", name: "asset.refresh" }, phase: "editor", argv: ["tools", "run", "asset.refresh", "--dry-run"], assertion: { status: "PASS" }, envelope: { ok: true, requestId: "dry-run" } },
     { capability: { kind: "tool", name: "asset.refresh" }, phase: "play", argv: [], assertion: { status: "PASS" }, envelope: { ok: true, requestId: "wrong-phase" } },
@@ -318,7 +331,38 @@ test("durable status Tools bind to a prior successful root requestId", () => {
     { capability: { kind: "tool", name: "asset.refresh" }, phase: "editor", argv: [], assertion: { status: "PASS" }, envelope: { ok: true, requestId: "root-request" } }
   ];
   assert.equal(successfulRootRequestId(records, "asset.refresh", "editor"), "root-request");
-  assert.equal(successfulRootRequestId(records, "build.player", "editor"), null);
+  assert.equal(successfulRootRequestId(records, "build.run", "editor"), null);
+});
+
+test("dependent status Tools execute after roots without disturbing relative order", () => {
+  assert.deepEqual(
+    orderedToolNames(["build.player.status", "asset.refresh", "build.run", "asset.refresh.status", "scene.open"]),
+    ["asset.refresh", "build.run", "scene.open", "build.player.status", "asset.refresh.status"]
+  );
+});
+
+test("asset refresh status creates one real matrix-owned root request when absent", async () => {
+  const calls = [];
+  let notApplicableCount = 0;
+  const matrix = {
+    records: [],
+    descriptors: new Map([["tool:asset.refresh", { name: "asset.refresh", resultSchema: {} }]]),
+    resultSchemas: new Map(),
+    blocked: async () => assert.fail("owned root request must prevent a blocked status case"),
+    notApplicable: async () => { notApplicableCount += 1; }
+  };
+  const invokeTool = async (_m, _kind, name, id, _descriptor, input, _flags, _positive, phase) => {
+    calls.push({ name, id, input, phase });
+    return { assertion: { status: "PASS" }, envelope: { ok: true, requestId: name === "asset.refresh" ? "req_refresh" : "req_status", data: {} } };
+  };
+
+  await coverDependentStatusTool(matrix, "asset.refresh.status", { name: "asset.refresh.status" }, "editor", "C:\\DevProject", "asset.refresh", invokeTool);
+
+  assert.deepEqual(calls, [
+    { name: "asset.refresh", id: "status-root", input: { path: "Assets/UnityCLIValidation/Matrix.prefab", forceUpdate: true }, phase: "editor" },
+    { name: "asset.refresh.status", id: "linked-request", input: { requestId: "req_refresh" }, phase: "editor" }
+  ]);
+  assert.equal(notApplicableCount, 1);
 });
 
 test("source recovery reloads only the single exact MatrixScene external-change dialog", () => {
@@ -642,10 +686,11 @@ test("frozen direct cases are a complete request-specific closed set", async () 
   assert.match(source, /directPhaseIds\(sourceCase, recipe\)\.every/);
   assert.match(source, /recoverInterruptedDirectCase/);
   assert.match(source, /direct-recovery\.json/);
-  // direct Tool 不可重放；仅最终只读 ready 汇总允许收敛重试。
+  // direct mutation 不可重放；仅 editor.state ready 收敛与显式 direct read generation 变化允许有界重试。
   assert.match(source, /cleanupAttempted: true \}, retryAssertion: businessSucceeded && cleanupSucceeded \}, project\)/);
-  assert.match(source, /const retryReadiness = meta\.retryAssertion === true[\s\S]*base\[0\] === "tools"[\s\S]*base\[1\] === "run"[\s\S]*base\[2\] === "editor\.state"/);
-  assert.match(source, /if \(!issue \|\| !retryReadiness \|\| attempt === TRANSIENT_MAX_ATTEMPTS\) break/);
+  assert.match(source, /meta\.retryAssertion === true[\s\S]*base\[0\] === "tools"[\s\S]*base\[1\] === "run"[\s\S]*base\[2\] === "editor\.state"/);
+  assert.match(source, /readOnly \? \{ retryErrorCodes: DIRECT_READ_RETRY_CODES, retryMaxAttempts: DIRECT_READ_MAX_ATTEMPTS/);
+  assert.match(source, /if \(!shouldRetryMatrixCall\(retryMeta, envelope, issue, attempt, maxAttempts\)\) break/);
   assert.doesNotMatch(source, /envelope\?\.error\?\.transient !== true/);
 });
 
@@ -889,6 +934,52 @@ test("terminal capability failure stops later coverage after owned cleanup", asy
   assert.match(source, /finally \{[\s\S]*runDirectCasePhase\(m, sourceCase, "cleanup"[\s\S]*stopAfterTerminalFailure\(record\)/);
   assert.match(source, /catch \(error\) \{[\s\S]*error instanceof MatrixTerminalFailure[\s\S]*control\.runner\.exception/);
   assert.match(source, /error instanceof MatrixTerminalFailure[\s\S]*await recoverFinalMatrixState\(m\)[\s\S]*await report\(m\)/);
+});
+
+test("direct case retries generation changes only for read-only steps", async () => {
+  const calls = [];
+  const matrix = {
+    directRecovery: new Map(),
+    call: async (id, _argv, assertion, meta) => {
+      calls.push({ id, meta });
+      const retryEnvelope = { ok: false, requestId: "req_read_1", error: { code: "E_READ_GENERATION_CHANGED", message: "retry", details: {} } };
+      const retryIssue = assertion(retryEnvelope, { exitCode: 1 });
+      assert.equal(shouldRetryMatrixCall(meta, retryEnvelope, retryIssue, 1, meta.retryMaxAttempts), true);
+      const envelope = { ok: true, requestId: "req_read_2", data: {} };
+      const issue = assertion(envelope, { exitCode: 0 });
+      return { id, envelope, exitCode: 0, assertion: { status: issue ? "FAIL" : "PASS", ...(issue ? { issue } : {}) } };
+    },
+    failed: async (_id, issue) => ({ assertion: { status: "FAIL", issue } })
+  };
+  const definitions = [{ id: "read", kind: "tool", name: "scene.gameobject", input: {}, readOnly: true }];
+
+  assert.equal(await runDirectCasePhase(matrix, "tool.code.exec", "setup", definitions, {}, "C:\\DevProject"), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].id, "tool.code.exec.setup.read");
+  assert.deepEqual(calls[0].meta.retryErrorCodes, ["E_READ_GENERATION_CHANGED"]);
+  assert.equal(calls[0].meta.retryMaxAttempts, 3);
+  assert.equal(shouldRetryMatrixCall(calls[0].meta, { error: { code: "E_OTHER" } }, "failure", 1, 3), false);
+});
+
+test("direct case never retries mutation steps on generation change", async () => {
+  const calls = [];
+  const matrix = {
+    directRecovery: new Map(),
+    call: async (id, _argv, assertion, meta) => {
+      calls.push({ id, meta });
+      const envelope = { ok: false, requestId: "req_mutation", error: { code: "E_READ_GENERATION_CHANGED", message: "do not retry", details: {} } };
+      const result = { exitCode: 1 };
+      const issue = assertion(envelope, result);
+      return { id, envelope, exitCode: result.exitCode, assertion: { status: issue ? "FAIL" : "PASS", ...(issue ? { issue } : {}) } };
+    },
+    failed: async (_id, issue) => ({ assertion: { status: "FAIL", issue } })
+  };
+  const definitions = [{ id: "mutate", kind: "tool", name: "code.exec", input: {} }];
+
+  assert.equal(await runDirectCasePhase(matrix, "tool.code.exec", "mutation", definitions, {}, "C:\\DevProject"), false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].id, "tool.code.exec.mutation.mutate");
+  assert.equal(calls[0].meta.retryErrorCodes, undefined);
 });
 
 test("cleanup phase continues after an earlier cleanup step fails", async () => {
