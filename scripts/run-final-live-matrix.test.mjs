@@ -255,14 +255,14 @@ test("current JavaScript harness uses only the production public CLI entrypoint"
   assert.ok(invokeSource.indexOf('writeSceneBakeSnapshotStatus(bakeSnapshot, "effect-terminal"') < invokeSource.indexOf("cleanupOwnedBakeStartCase(m, caseId"));
   assert.match(source, /Persisted baseline digest changed[\s\S]*asset\.refresh/);
   assert.match(source, /prepareOwnedProjectSnapshot\(this\.o\.project[\s\S]*setCasePlayMode\(m, "initial-editor"/);
-  assert.match(source, /semantic-reset-complete[\s\S]*restoreOwnedProjectSnapshot[\s\S]*package\.resolve[\s\S]*editor\.refresh[\s\S]*scene\.load[\s\S]*markOwnedProjectSnapshotClean/);
+  assert.match(source, /semantic-reset-complete[\s\S]*restoreOwnedProjectSnapshot[\s\S]*editor\.refresh[\s\S]*package\.resolve[\s\S]*scene\.load[\s\S]*markOwnedProjectSnapshotClean/);
   assert.match(source, /blockMissingRequiredFixture\(m, "control\.setup"[\s\S]*runRequiredFixtureSequence\(m, "setup"[\s\S]*recoverFinalMatrixState\(m\)[\s\S]*recordRunnerFailure\(m, "control\.source-restore\.exception"[\s\S]*await report\(m\)/);
   assert.match(source, /ACTIVE_OPERATION_SCOPES[\s\S]*active-\$\{scope\}\.json[\s\S]*Request-level journal must not be produced/);
   assert.doesNotMatch(source, /E_REQUEST_OUTCOME_UNKNOWN|matchingUncertainCall|exact outcome-unknown/i);
   assert.match(source, /const playReady = await m\.call\("playmode\.ready"[\s\S]*stopAfterTerminalFailure\(playReady\)/);
   assert.match(source, /return blockTerminal\(m, "playmode\.transition"[\s\S]*stopAfterTerminalFailure\(await m\.failed\("control\.post-playmode-edit"/);
   assert.match(source, /blockMissingRequiredFixture\(m, "control\.concurrency"[\s\S]*concurrencyRecord\.assertion\?\.status !== "PASS"/);
-  assert.match(source, /callRecoveryEffect[\s\S]*source-restore\.package-resolve[\s\S]*packageResolveReconciliationIssue[\s\S]*source-restore\.editor-refresh[\s\S]*source-restore\.scene-load/);
+  assert.match(source, /callRecoveryEffect[\s\S]*source-restore\.editor-refresh[\s\S]*source-restore\.package-resolve[\s\S]*packageResolveReconciliationIssue[\s\S]*source-restore\.scene-load/);
   assert.match(source, /package\.resolve[\s\S]*--timeout-ms[\s\S]*120000[\s\S]*packageResolveReconciliationIssue/);
   assert.match(source, /const expectedPublicPath = `Packages\/\$\{packageId\}`/);
   assert.doesNotMatch(source, /\.plan[\\/]evidence|public-output-modal|run-live-matrix\.ps1|\.ps1["'`]|powershell|pwsh/i);

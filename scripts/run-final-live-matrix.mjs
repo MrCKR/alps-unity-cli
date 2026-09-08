@@ -2952,7 +2952,15 @@ async function recoverFinalMatrixState(m) {
     reconciliationPassed = false;
   }
 
-  // 即使 restore 得到相同 bytes，PackageManager/AssetDatabase 内存也可能仍持有 effect 期间状态；公开reconcile必须绑定刚恢复的文件摘要。
+  // 先由durable refresh吸收外部文件通知与可能的reload，再要求PackageManager返回绑定恢复摘要的完整终态。
+  const refreshRecord = await callRecoveryEffect(m, "control.source-restore.editor-refresh", ["tools", "run", "editor.refresh", "--input", "{}"], (e, r) => {
+    if (r.exitCode !== 0) return `editor.refresh reconciliation exited ${r.exitCode}.`;
+    const issue = assertPositiveSuccess(e);
+    return issue ?? (e?.data?.editorState?.status === "ready" && e?.data?.editorState?.compile === false && e?.data?.editorState?.import === false ? null : "editor.refresh did not prove stable ready state.");
+  }, { cleanup: { projectSnapshot: true, reconcile: "editor.refresh" } });
+  reconciliation.editorRefresh = refreshRecord.assertion?.status === "PASS" ? "PASS" : "FAIL";
+  reconciliationPassed = reconciliationPassed && refreshRecord.assertion?.status === "PASS";
+
   const expectedPackageHashes = {
     manifestHash: restoredPackageFileHash(m.projectSnapshot, "Packages/manifest.json"),
     lockHash: restoredPackageFileHash(m.projectSnapshot, "Packages/packages-lock.json")
@@ -2962,14 +2970,6 @@ async function recoverFinalMatrixState(m) {
     : await callRecoveryEffect(m, "control.source-restore.package-resolve", ["tools", "run", "package.resolve", "--input", "{}", "--timeout-ms", "120000"], (e, r) => packageResolveReconciliationIssue(e, r, expectedPackageHashes), { cleanup: { projectSnapshot: true, reconcile: "package.resolve" }, expectedPackageHashes });
   reconciliation.packageResolve = packageRecord.assertion?.status === "PASS" ? "PASS" : "FAIL";
   reconciliationPassed = reconciliationPassed && packageRecord.assertion?.status === "PASS";
-
-  const refreshRecord = await callRecoveryEffect(m, "control.source-restore.editor-refresh", ["tools", "run", "editor.refresh", "--input", "{}"], (e, r) => {
-    if (r.exitCode !== 0) return `editor.refresh reconciliation exited ${r.exitCode}.`;
-    const issue = assertPositiveSuccess(e);
-    return issue ?? (e?.data?.editorState?.status === "ready" && e?.data?.editorState?.compile === false && e?.data?.editorState?.import === false ? null : "editor.refresh did not prove stable ready state.");
-  }, { cleanup: { projectSnapshot: true, reconcile: "editor.refresh" } });
-  reconciliation.editorRefresh = refreshRecord.assertion?.status === "PASS" ? "PASS" : "FAIL";
-  reconciliationPassed = reconciliationPassed && refreshRecord.assertion?.status === "PASS";
   const sceneRecord = await callRecoveryEffect(m, "control.source-restore.scene-load", ["tools", "run", "scene.load", "--input", JSON.stringify({ path: "Assets/UnityCLIValidation/MatrixScene.unity" })], (e, r) => {
     if (r.exitCode !== 0) return `scene.load reconciliation exited ${r.exitCode}.`;
     const issue = assertPositiveSuccess(e);
