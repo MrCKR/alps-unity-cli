@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 
@@ -6,34 +7,39 @@ namespace UnityCli.Tests
 {
     public sealed class UnityCliDurableStatusTests
     {
-        private const string Scope = "durable-status-test-v2";
-        private const string RunningRequestId = "durable-status-running-root-01";
-        private const string TerminalRequestId = "durable-status-terminal-root-01";
+        private string _scope;
+        private string _runningRequestId;
+        private string _terminalRequestId;
         private static readonly string Digest = new string('a', 64);
 
         [SetUp]
         public void SetUp()
         {
-            UnityCliActiveOperation.Clear(Scope);
+            // terminal identity在Editor session内有意持久化，增量重复执行必须使用新identity。
+            var runId = Guid.NewGuid().ToString("N");
+            _scope = "durable-status-test-" + runId;
+            _runningRequestId = "durable-status-running-root-" + runId;
+            _terminalRequestId = "durable-status-terminal-root-" + runId;
+            UnityCliActiveOperation.Clear(_scope);
         }
 
         [TearDown]
         public void TearDown()
         {
-            UnityCliActiveOperation.Clear(Scope);
+            UnityCliActiveOperation.Clear(_scope);
         }
 
         [Test]
         public void ReadScope_ReturnsRunningPhaseWithoutDigest()
         {
-            UnityCliActiveOperation.Save(Scope, new Dictionary<string, object>
+            UnityCliActiveOperation.Save(_scope, new Dictionary<string, object>
             {
-                { "requestId", RunningRequestId }, { "requestDigest", Digest }, { "phase", "effect_started" }
+                { "requestId", _runningRequestId }, { "requestDigest", Digest }, { "phase", "effect_started" }
             });
 
-            var result = (Dictionary<string, object>)UnityCliBridge.UnityCliDurableStatusCoordinator.ReadScope(Scope, RunningRequestId);
+            var result = (Dictionary<string, object>)UnityCliBridge.UnityCliDurableStatusCoordinator.ReadScope(_scope, _runningRequestId);
 
-            Assert.That(result["requestId"], Is.EqualTo(RunningRequestId));
+            Assert.That(result["requestId"], Is.EqualTo(_runningRequestId));
             Assert.That(result["state"], Is.EqualTo("running"));
             Assert.That(result["phase"], Is.EqualTo("effect_started"));
             Assert.That(result.ContainsKey("requestDigest"), Is.False);
@@ -45,12 +51,12 @@ namespace UnityCli.Tests
         {
             var terminal = new Dictionary<string, object>
             {
-                { "ok", true }, { "requestId", TerminalRequestId }, { "data", new Dictionary<string, object> { { "value", 1L } } }
+                { "ok", true }, { "requestId", _terminalRequestId }, { "data", new Dictionary<string, object> { { "value", 1L } } }
             };
-            var first = UnityCliActiveOperation.StoreTerminalFirst(Scope, TerminalRequestId, Digest, null, "test.run", terminal);
+            var first = UnityCliActiveOperation.StoreTerminalFirst(_scope, _terminalRequestId, Digest, null, "test.run", terminal);
 
-            var result = (Dictionary<string, object>)UnityCliBridge.UnityCliDurableStatusCoordinator.ReadScope(Scope, TerminalRequestId);
-            Assert.That(UnityCliActiveOperation.TryGetTerminalByRequestId(Scope, TerminalRequestId, out var internalDigest, out var statusDomain, out var selected), Is.True);
+            var result = (Dictionary<string, object>)UnityCliBridge.UnityCliDurableStatusCoordinator.ReadScope(_scope, _terminalRequestId);
+            Assert.That(UnityCliActiveOperation.TryGetTerminalByRequestId(_scope, _terminalRequestId, out var internalDigest, out var statusDomain, out var selected), Is.True);
 
             Assert.That(result["state"], Is.EqualTo("completed"));
             Assert.That(result["terminalEnvelope"], Is.EqualTo(first));
