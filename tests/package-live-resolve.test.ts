@@ -305,12 +305,16 @@ test("Package file claim transition timeout returns execution timeout before pre
 test("Package resolve survives a transient reload observation and returns the durable terminal", async () => {
   const f = await fixture("E_EXECUTION_TIMEOUT");
   const terminal = { ok: true, requestId: f.context.requestId, data: { resolved: true } };
+  const startedAt = Date.now();
+  const rootDeadline = startedAt + 60_000;
+  const statusDeadlines: number[] = [];
   let statusCalls = 0;
-  f.context.absoluteDeadlineMs = Date.now() + 500;
+  f.context.absoluteDeadlineMs = rootDeadline;
   f.context.bridgeExecute = async (payload: BridgeRequest): Promise<BridgeResponse> => {
     if (payload.command === "internal.package.resolve.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, phase: "files_proven", rootRequestDigest: mockRootRequestDigest } };
     if (payload.command === "internal.package.resolve.status") {
       statusCalls += 1;
+      statusDeadlines.push(Date.parse(payload.execution.absoluteDeadlineUtc));
       if (statusCalls === 1) return { ok: false, requestId: payload.requestId, error: { code: "E_EXECUTION_TIMEOUT", message: "reload in progress", nextActions: [], transient: true, retryAfterMs: 0 } };
       return { ok: true, requestId: payload.requestId, data: { terminal: true, accepted: true, phase: "list_succeeded", operation: "resolve", rootInputSha256: sha256CanonicalJson({}), fileExecutorAlive: false, fileExecutorOwnedByCaller: false, terminalEnvelope: terminal } };
     }
@@ -319,6 +323,8 @@ test("Package resolve survives a transient reload observation and returns the du
   try {
     assert.deepEqual(await runLivePackageResolve<{ resolved: boolean }>(f.context, "resolve", {}, undefined, f.binding), { resolved: true });
     assert.equal(statusCalls, 2);
+    assert.ok(statusDeadlines.every((deadline) => deadline < rootDeadline));
+    assert.ok(statusDeadlines.every((deadline) => deadline >= startedAt + 9_000 && deadline <= startedAt + 11_000));
   } finally {
     await rm(f.root, { recursive: true, force: true });
   }

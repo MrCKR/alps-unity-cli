@@ -63,6 +63,7 @@ interface RootState {
 }
 
 const FILE_CONTROL_RESERVE_MS = 1_000;
+const PACKAGE_STATUS_OBSERVATION_BUDGET_MS = 10_000;
 
 export interface LivePackageBinding {
   instanceId: string;
@@ -225,7 +226,10 @@ async function status(context: ToolContext, binding: LivePackageBinding, executo
     requestId: childRequestId(context.requestId, "status"), command: "internal.package.resolve.status",
     args: { rootRequestId: context.requestId, rootInputSha256, ...(rootRequestDigest ? { rootRequestDigest } : {}), executorPid: process.pid, executorCapability },
   };
-  return rootState(await execute(context, binding, request, false), request.requestId);
+  const rootDeadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
+  // 单次只读观察必须让出预算，才能在 domain reload 后由外层循环重绑新 listener。
+  const observationDeadline = Math.min(rootDeadline, Date.now() + PACKAGE_STATUS_OBSERVATION_BUDGET_MS);
+  return rootState(await execute(context, binding, request, false, undefined, observationDeadline), request.requestId);
 }
 
 const reloadObservationErrors = new Set([
@@ -289,8 +293,8 @@ function packageObservationTimeout(cause: StructuredToolError): StructuredToolEr
 }
 
 /** 生产路径由 SessionSupervisor 选择真实 Editor；bridgeExecute 仅用于隔离测试注入。 */
-async function execute(context: ToolContext, binding: LivePackageBinding, request: PrivateRequest, mutation: boolean, operation?: string): Promise<BridgeResponse> {
-  const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
+async function execute(context: ToolContext, binding: LivePackageBinding, request: PrivateRequest, mutation: boolean, operation?: string, invocationDeadlineMs?: number): Promise<BridgeResponse> {
+  const deadline = invocationDeadlineMs ?? context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
   const result = await executeBridgePayload(
     request.requestId,
     request.command,
