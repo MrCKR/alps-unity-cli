@@ -551,12 +551,32 @@ export function capabilityProject(m, _kind, descriptor) {
 }
 function matrixCaseId(kind, name, id, phase) { return phase === "play" ? `${kind}.${name}.play.${id}` : `${kind}.${name}.${id}`; }
 
+function selectedStatusToolForRoot(m, rootToolName) {
+  return Object.entries(DEPENDENT_STATUS_ROOT_TOOLS)
+    .find(([statusToolName, candidateRoot]) => candidateRoot === rootToolName && capabilitySelected(m, statusToolName))?.[0] ?? null;
+}
+
+/** 只有显式选中的status Tool可以接管携带requestId的root超时；其冻结终态仍必须单独验证。 */
+export function isDeferredStatusRootTimeout(rootToolName, phase, envelope, exitCode, statusToolName) {
+  return typeof statusToolName === "string"
+    && DEPENDENT_STATUS_ROOT_TOOLS[statusToolName] === rootToolName
+    && phase === "editor"
+    && exitCode !== 0
+    && envelope?.ok === false
+    && envelope?.error?.code === "E_EXECUTION_TIMEOUT"
+    && typeof envelope.requestId === "string"
+    && envelope.requestId.length > 0;
+}
+
 export function successfulRootRequestId(records, rootToolName, phase) {
   for (let index = records.length - 1; index >= 0; index -= 1) {
     const record = records[index];
     const capabilityName = typeof record.capability === "string" ? record.capability : record.capability?.name;
-    if (capabilityName !== rootToolName || record.phase !== phase || record.assertion?.status !== "PASS" || record.envelope?.ok !== true) continue;
+    if (capabilityName !== rootToolName || record.phase !== phase || record.assertion?.status !== "PASS") continue;
     if (Array.isArray(record.argv) && record.argv.includes("--dry-run")) continue;
+    const completed = record.envelope?.ok === true
+      || isDeferredStatusRootTimeout(rootToolName, phase, record.envelope, record.exitCode, record.recoveryStatusTool);
+    if (!completed) continue;
     if (typeof record.envelope.requestId === "string" && record.envelope.requestId.length > 0) return record.envelope.requestId;
   }
   return null;
@@ -1122,9 +1142,10 @@ export function routeCapabilityFixtureInput(input, name, options) {
   return input;
 }
 
-/** editor.play cleanup失败必须终止coverage；超时后是否重试由调用方决定。 */
+/** editor.play cleanup失败必须终止coverage；status接管的超时root也必须恢复到EditMode。 */
 async function cleanupEditorPlay(m, caseId, name, phase, record) {
-  if (name !== "editor.play" || phase !== "editor" || record.envelope?.ok !== true) return null;
+  const deferred = isDeferredStatusRootTimeout(name, phase, record.envelope, record.exitCode, record.recoveryStatusTool);
+  if (name !== "editor.play" || phase !== "editor" || (record.envelope?.ok !== true && !deferred)) return null;
   const descriptor = await getDescriptor(m, "tool", "editor.stop");
   let input = {};
   try { input = parsePublicExample(descriptor?.examples?.[0], "tool", "editor.stop").input; } catch { }
@@ -2231,13 +2252,25 @@ async function invoke(m, kind, name, id, d, input, flags, positive, phase, proje
   const dynamicInput = input;
   const projectInput = routeCapabilityInput(dynamicInput, project, m.o.project);
   const routedInput = routeCapabilityFixtureInput(projectInput, name, m.o);
+  const recoveryStatusTool = kind === "tool" && positive && !flags.includes("--dry-run")
+    ? selectedStatusToolForRoot(m, name)
+    : null;
   const record = await m.call(caseId, argvFor(kind, name, routedInput, flags), (e, r) => {
-    if (positive) return r.exitCode === 0 ? assertPositiveSuccess(e, d.resultSchema ?? {}) : `Positive invocation exited ${r.exitCode}.`;
+    if (positive) {
+      if (r.exitCode === 0) return assertPositiveSuccess(e, d.resultSchema ?? {});
+      if (isDeferredStatusRootTimeout(name, phase, e, r.exitCode, recoveryStatusTool)) return null;
+      return `Positive invocation exited ${r.exitCode}.`;
+    }
     if (r.exitCode === 0) return "Negative invocation must exit nonzero.";
     const issue = assertError(e, expectedErrorCode === "E_SCHEMA_INVALID");
     if (issue) return issue;
     return expectedErrorCode && e?.error?.code !== expectedErrorCode ? `Expected error ${expectedErrorCode}, received ${e?.error?.code ?? "unknown"}.` : null;
-  }, { capability: { kind, name }, phase, ...(expectedErrorCode ? { expectedErrorCode } : {}) }, project);
+  }, {
+    capability: { kind, name },
+    phase,
+    ...(recoveryStatusTool ? { recoveryStatusTool } : {}),
+    ...(expectedErrorCode ? { expectedErrorCode } : {})
+  }, project);
   if (bakeSnapshot && record.envelope?.ok === true && record.exitCode === 0) {
     try { await writeSceneBakeSnapshotStatus(bakeSnapshot, "effect-terminal", record.envelope.requestId ?? null); }
     catch (error) {

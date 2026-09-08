@@ -34,6 +34,7 @@ import {
   fixtureStepRetriesReadyAssertion,
   FROZEN_DIRECT_TOOL_NAMES,
   hasReusableDirectCase,
+  isDeferredStatusRootTimeout,
   isReadyEditorState,
   loadInternalResultSchemas,
   loadRuntimeInventoryBaseline,
@@ -332,6 +333,20 @@ test("durable status Tools bind to a prior successful root requestId", () => {
   ];
   assert.equal(successfulRootRequestId(records, "asset.refresh", "editor"), "root-request");
   assert.equal(successfulRootRequestId(records, "build.run", "editor"), null);
+
+  const deferred = {
+    capability: { kind: "tool", name: "editor.play" },
+    phase: "editor",
+    argv: [],
+    exitCode: 1,
+    assertion: { status: "PASS" },
+    recoveryStatusTool: "editor.play-mode.status",
+    envelope: { ok: false, requestId: "play-root", error: { code: "E_EXECUTION_TIMEOUT" } }
+  };
+  assert.equal(isDeferredStatusRootTimeout("editor.play", "editor", deferred.envelope, deferred.exitCode, deferred.recoveryStatusTool), true);
+  assert.equal(successfulRootRequestId([deferred], "editor.play", "editor"), "play-root");
+  assert.equal(successfulRootRequestId([{ ...deferred, recoveryStatusTool: undefined }], "editor.play", "editor"), null);
+  assert.equal(isDeferredStatusRootTimeout("editor.play", "editor", { ...deferred.envelope, error: { code: "E_SCHEMA_INVALID" } }, 1, deferred.recoveryStatusTool), false);
 });
 
 test("dependent status Tools execute after roots without disturbing relative order", () => {
