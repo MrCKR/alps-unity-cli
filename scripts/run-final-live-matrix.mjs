@@ -1864,9 +1864,23 @@ async function cleanupOwnedPackageCase(m, caseId, name, record, flags, project) 
   const cleanup = cleanups[name];
   if (!cleanup) return null;
   const descriptor = await getDescriptor(m, "tool", cleanup.name);
-  return m.call(`${caseId}.cleanup.${cleanup.name}`, argvFor("tool", cleanup.name, cleanup.input, []), (e, r) => {
-    return r.exitCode === 0 ? assertPositiveSuccess(e, descriptor?.resultSchema ?? {}) : `${cleanup.name} cleanup exited ${r.exitCode}.`;
-  }, { cleanup: { sourceCase: caseId, capability: cleanup.name, packageState: true } }, project);
+  const recoveryStatusTool = selectedStatusToolForRoot(m, cleanup.name);
+  const cleanupRecord = await m.call(`${caseId}.cleanup.${cleanup.name}`, argvFor("tool", cleanup.name, cleanup.input, []), (e, r) => {
+    if (r.exitCode === 0) return assertPositiveSuccess(e, descriptor?.resultSchema ?? {});
+    return isDeferredStatusRootTimeout(cleanup.name, "editor", e, r.exitCode, recoveryStatusTool)
+      ? null
+      : `${cleanup.name} cleanup exited ${r.exitCode}.`;
+  }, {
+    cleanup: { sourceCase: caseId, capability: cleanup.name, packageState: true },
+    ...(recoveryStatusTool ? { recoveryStatusTool } : {})
+  }, project);
+  if (!isDeferredStatusRootTimeout(cleanup.name, "editor", cleanupRecord.envelope, cleanupRecord.exitCode, recoveryStatusTool)) return cleanupRecord;
+
+  const statusDescriptor = await getDescriptor(m, "tool", recoveryStatusTool);
+  if (!statusDescriptor) return m.failed(`${caseId}.cleanup.${cleanup.name}.status-descriptor`, `${recoveryStatusTool} descriptor is unavailable for deferred cleanup recovery.`, { cleanup: { sourceCase: caseId, capability: recoveryStatusTool, packageState: true } });
+  return m.call(`${caseId}.cleanup.${cleanup.name}.status`, argvFor("tool", recoveryStatusTool, { requestId: cleanupRecord.envelope.requestId }, []), (e, r) => {
+    return r.exitCode === 0 ? assertPositiveSuccess(e, statusDescriptor.resultSchema ?? {}) : `${recoveryStatusTool} cleanup recovery exited ${r.exitCode}.`;
+  }, { cleanup: { sourceCase: caseId, capability: recoveryStatusTool, rootCapability: cleanup.name, packageState: true, requestId: cleanupRecord.envelope.requestId } }, project);
 }
 
 /** 通过公开 Context 先确认当前状态，仅在确需变化时调用 PlayMode Tool。 */

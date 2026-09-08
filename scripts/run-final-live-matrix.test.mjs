@@ -909,6 +909,8 @@ test("Package matrix cases declare terminal-only exact cleanup", async () => {
   for (const pair of [["package.deploy", "package.restore"], ["package.install", "package.remove"], ["package.registry.set", "package.registry.clear"], ["package.scoped-registry.add", "package.scoped-registry.remove"]]) {
     assert.match(source, new RegExp(`"${pair[0].replaceAll(".", "\\.")}"[\\s\\S]*name: "${pair[1].replaceAll(".", "\\.")}"`));
   }
+  assert.match(source, /selectedStatusToolForRoot\(m, cleanup\.name\)[\s\S]*isDeferredStatusRootTimeout\(cleanup\.name, "editor"[\s\S]*requestId: cleanupRecord\.envelope\.requestId/);
+  assert.match(source, /cleanup\.\$\{cleanup\.name\}\.status[\s\S]*assertPositiveSuccess\(e, statusDescriptor\.resultSchema/);
 });
 
 test("pipeline fixture materializes scene-session Volume profiles", async () => {
