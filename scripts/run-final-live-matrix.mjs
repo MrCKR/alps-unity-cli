@@ -2959,7 +2959,7 @@ async function recoverFinalMatrixState(m) {
   };
   const packageRecord = !expectedPackageHashes.manifestHash || !expectedPackageHashes.lockHash
     ? await m.failed("control.source-restore.package-resolve", "Restored Package manifest/lock hashes are unavailable; package.resolve reconciliation is forbidden.", { cleanup: { projectSnapshot: true, reconcile: "package.resolve" } })
-    : await callRecoveryEffect(m, "control.source-restore.package-resolve", ["tools", "run", "package.resolve", "--input", "{}"], (e, r) => packageResolveReconciliationIssue(e, r, expectedPackageHashes), { cleanup: { projectSnapshot: true, reconcile: "package.resolve" }, expectedPackageHashes });
+    : await callRecoveryEffect(m, "control.source-restore.package-resolve", ["tools", "run", "package.resolve", "--input", "{}", "--timeout-ms", "120000"], (e, r) => packageResolveReconciliationIssue(e, r, expectedPackageHashes), { cleanup: { projectSnapshot: true, reconcile: "package.resolve" }, expectedPackageHashes });
   reconciliation.packageResolve = packageRecord.assertion?.status === "PASS" ? "PASS" : "FAIL";
   reconciliationPassed = reconciliationPassed && packageRecord.assertion?.status === "PASS";
 

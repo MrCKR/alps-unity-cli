@@ -263,6 +263,7 @@ test("current JavaScript harness uses only the production public CLI entrypoint"
   assert.match(source, /return blockTerminal\(m, "playmode\.transition"[\s\S]*stopAfterTerminalFailure\(await m\.failed\("control\.post-playmode-edit"/);
   assert.match(source, /blockMissingRequiredFixture\(m, "control\.concurrency"[\s\S]*concurrencyRecord\.assertion\?\.status !== "PASS"/);
   assert.match(source, /callRecoveryEffect[\s\S]*source-restore\.package-resolve[\s\S]*packageResolveReconciliationIssue[\s\S]*source-restore\.editor-refresh[\s\S]*source-restore\.scene-load/);
+  assert.match(source, /package\.resolve[\s\S]*--timeout-ms[\s\S]*120000[\s\S]*packageResolveReconciliationIssue/);
   assert.match(source, /const expectedPublicPath = `Packages\/\$\{packageId\}`/);
   assert.doesNotMatch(source, /\.plan[\\/]evidence|public-output-modal|run-live-matrix\.ps1|\.ps1["'`]|powershell|pwsh/i);
   assert.doesNotMatch(source, /spawn\(["'`]Unity(?:\.exe)?["'`]/i);
