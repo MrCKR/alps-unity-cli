@@ -233,6 +233,7 @@ async function status(context: ToolContext, binding: LivePackageBinding, executo
 }
 
 const reloadObservationErrors = new Set([
+  "E_UNITY_DOMAIN_RELOAD",
   "E_UNITY_TRANSITIONING",
   "E_UNITY_TRANSITION_TIMEOUT",
   "E_UNITY_UNRESPONSIVE",

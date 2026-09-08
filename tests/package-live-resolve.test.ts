@@ -315,7 +315,7 @@ test("Package resolve survives a transient reload observation and returns the du
     if (payload.command === "internal.package.resolve.status") {
       statusCalls += 1;
       statusDeadlines.push(Date.parse(payload.execution.absoluteDeadlineUtc));
-      if (statusCalls === 1) return { ok: false, requestId: payload.requestId, error: { code: "E_EXECUTION_TIMEOUT", message: "reload in progress", nextActions: [], transient: true, retryAfterMs: 0 } };
+      if (statusCalls === 1) return { ok: false, requestId: payload.requestId, error: { code: "E_UNITY_DOMAIN_RELOAD", message: "reload in progress", nextActions: [], transient: true, retryAfterMs: 0 } };
       return { ok: true, requestId: payload.requestId, data: { terminal: true, accepted: true, phase: "list_succeeded", operation: "resolve", rootInputSha256: sha256CanonicalJson({}), fileExecutorAlive: false, fileExecutorOwnedByCaller: false, terminalEnvelope: terminal } };
     }
     throw new Error(`unexpected ${payload.command}`);
