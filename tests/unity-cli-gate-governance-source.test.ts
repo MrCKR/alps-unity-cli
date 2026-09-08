@@ -27,7 +27,8 @@ test("fresh gate keeps task values above defaults and forbids probe calls", asyn
 });
 
 test("repository governance separates implementation from affected-scope validation", async () => {
-  const [agents, validation, issueLifecycle, release] = await Promise.all([
+  const [agent, agents, validation, issueLifecycle, release] = await Promise.all([
+    readFile(agentPath, "utf8"),
     readFile(agentsPath, "utf8"),
     readFile(validationPath, "utf8"),
     readFile(issueLifecyclePath, "utf8"),
@@ -39,6 +40,11 @@ test("repository governance separates implementation from affected-scope validat
   assert.match(agents, /实现未收敛前不得运行正式自动化测试[^\n]*unity-cli-gate/);
   assert.match(validation, /未完成前不得运行正式自动化测试[^\n]*陌生 AI 门禁/);
   for (const source of [agents, validation]) assert.match(source, /只覆盖本次增删改/);
+  assert.match(validation, /AffectedValidationScope/);
+  assert.match(validation, /禁止运行无筛选的 `npm test`[^\n]*`npm run build:test`[^\n]*全 Tool Live 矩阵/);
+  assert.match(validation, /缺少所需选择器[^\n]*先为 harness 增加并验证选择器/);
+  assert.match(agent, /全量 smoke\/回归\/矩阵[^\n]*立即报告 `INVALID`/);
+  assert.match(agent, /最小 discovery、业务调用、业务验证和 cleanup 链/);
   assert.doesNotMatch(release, /npm test[^\n]*全量/);
   assert.match(release, /增删改及其直接影响面/);
 });

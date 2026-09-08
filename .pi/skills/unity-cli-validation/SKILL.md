@@ -25,7 +25,10 @@ compatibility: 适用于 alps-unity-cli；Unity 真实验证使用 ./Dev，子�
 - 实现阶段先完成所有受影响的产品代码、测试代码、契约、文档和公开 Skill，未完成前不得运行正式自动化测试、Dev Unity 矩阵或陌生 AI 门禁。
 - 实现收敛后冻结增删改清单和影响面，进入独立验证阶段；禁止一边继续实现一边用测试或门禁探索下一处修改。
 - 验证顺序固定为受影响自动化与契约检查、受影响 Dev Unity 真实矩阵、适用的 fresh `unity-cli-gate`。前序未通过不得启动后序门禁。
-- 测试和门禁只覆盖本次增删改及其直接受影响行为，不默认执行无关的 `npm test` 全仓套件、全 Tool Live 矩阵或全部门禁类型。基础设施改动影响较宽时，必须按真实依赖链扩大范围并记录依据。
+- 每次进入验证阶段前，必须在当前 issue 或验证记录中冻结 `AffectedValidationScope`：逐项列出改动 owner、直接调用链、公开 Tool/字段/错误语义、受影响契约、选中的测试文件或 test-name filter、Unity/PlayMode/Player 状态切片、适用 gate 类型，以及明确排除的未受影响范围。没有这份清单不得运行正式验证。
+- 所有正式验证必须使用精确文件、test-name、capability、group、fixture 或状态选择器，只覆盖本次增删改及其直接受影响的 `AffectedValidationScope`。禁止运行无筛选的 `npm test`、`npm run build:test`、全 Tool Live 矩阵、全 Dev EditMode/Player 套件或全部 gate 类型；不得把全量运行当作影响分析、选择器缺失或执行方便的替代品。
+- 共享 dispatcher、catalog、Bridge、scheduler 或 schema 基础设施改动也必须从真实 callers、contract owners 和行为等价类推导有限切片，不能自动宣布“全仓受影响”。若现有 harness 缺少所需选择器，先为 harness 增加并验证选择器，再执行增量矩阵。只有项目所有者针对准确命令和本轮执行明确批准，才可扩大到全量。
+- 编译器或生成器为证明受影响代码可构建而读取完整项目依赖图，不等于授权运行完整行为测试；构建后仍只执行增量 contract、test、Unity 和 gate 切片。
 - 任一验证失败都结束当前验证阶段；完成失败分类并返回实现阶段，待修复整体收敛后重新执行被修改失效的受影响验证。修复前的局部 PASS 不能与修复后的结果拼接成最终完成证据。
 
 ## 契约与自动化测试
@@ -83,7 +86,7 @@ Dev 调用矩阵：
 - 主 Agent 必须指定 `subagent_type: "unity-cli-gate"`；不得以其他代理替代。
 - `.pi/agents/unity-cli-gate.md` 是本节规范的可执行投影，必须保持 `prompt_mode: replace`、`inherit_context: false`、`skills: false`，并且只暴露 `windows-pwsh/pwsh`。
 - `windows-pwsh` 不可用时判定为环境阻塞，不得回退到其他 shell 或代理。
-- 子代理必须实际运行在 `LMD/deepseek-v4-pro`；模型不可用、解析失败或 fallback 时门禁无效。
+- 子代理必须实际运行在 `LMD/deepseek-v4-flash`；模型不可用、解析失败或 fallback 时门禁无效。
 - 正式门禁必须使用全新会话，禁止继承父上下文。产品修正后的重跑也必须创建新会话。
 - 修改本规范或 agent 定义时必须同步更新，并执行隔离自检。
 
@@ -108,7 +111,7 @@ Dev 调用矩阵：
 
 ### 任务设计
 
-- 默认只给一个可独立完成的自然语言业务任务，不提供期望工具名。
+- 每个 fresh gate 只给一个可独立完成、且能映射到 `AffectedValidationScope` 中一个受影响公开行为的自然语言业务任务；不得让 gate 扫描全部能力、运行通用 smoke、覆盖矩阵或顺带验证未变更工作流。
 - 只有当验证目标就是某个已公开名称本身时，才可给出能力名称；仍不得给命令、参数或输入。
 - capability gate 使用单领域真实任务，观察能否发现正确能力。
 - task gate 使用跨能力真实目标，观察能否自主组合。
@@ -163,7 +166,7 @@ FAIL 后由主 Agent 结合原始 transcript 和诊断回答分类：
 - 被测子代理不得承担证据格式化职责。主 Agent 从原始 prompt、tool calls、stdout/stderr、最终回答和 Unity 前后状态独立生成 evidence。
 - 证据必须记录实际模型、agent ID、原始提示词、发现链、读取的 descriptor、首次选择依据、第一次实际调用、关键业务验证、清理结果和禁止信息检查。
 - 失败时额外记录诊断问题与原样回答；诊断回答只能用于归因。
-- 只执行与本次增删改风险匹配的 capability、task、perturbation、blocker 门禁类型；每个适用类型分别保存 fresh 会话证据，未受影响的类型不运行。旧会话、自评摘要或恢复后成功不得替代。
+- 只执行 `AffectedValidationScope` 明确选中的 capability、task、perturbation、blocker 门禁类型；每个适用类型分别保存 fresh 会话证据，未受影响的类型不运行。不得因一个 Tool 或共享 owner 改动而运行全 catalog gate。旧会话、自评摘要或恢复后成功不得替代。
 
 ## 完成条件
 
