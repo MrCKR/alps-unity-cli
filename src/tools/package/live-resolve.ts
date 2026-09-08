@@ -228,40 +228,61 @@ async function status(context: ToolContext, binding: LivePackageBinding, executo
   return rootState(await execute(context, binding, request, false), request.requestId);
 }
 
+const reloadObservationErrors = new Set([
+  "E_UNITY_TRANSITIONING",
+  "E_UNITY_TRANSITION_TIMEOUT",
+  "E_UNITY_UNRESPONSIVE",
+  "E_INSTANCE_NOT_RUNNING",
+  "E_INSTANCE_UNVERIFIABLE",
+  "E_EDITOR_SESSION_REPLACED",
+  "E_EXECUTION_TIMEOUT",
+]);
+
 async function waitForTerminal<T>(context: ToolContext, binding: LivePackageBinding, executorCapability: string, rootInputSha256: string, rootRequestDigest: string): Promise<T> {
   const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
+  let lastObservationError: StructuredToolError | undefined;
   while (Date.now() < deadline) {
     try {
       const root = await status(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
       if (root.terminal) return terminalResult<T>(context.requestId, root);
     } catch (error) {
       const structured = error instanceof StructuredToolError ? error : undefined;
-      if (structured && new Set(["E_EDITOR_BLOCKED", "E_UNITY_BLOCKED", "E_UNITY_TRANSITIONING", "E_UNITY_TRANSITION_TIMEOUT", "E_UNITY_UNRESPONSIVE", "E_INSTANCE_NOT_RUNNING", "E_INSTANCE_UNVERIFIABLE", "E_INSTANCE_CONFLICT", "E_EDITOR_SESSION_REPLACED", "E_EXECUTION_TIMEOUT"]).has(structured.code)) {
-        const blockers = blockersFromDetails(structured.details);
-        throw new StructuredToolError(
-          "E_EXECUTION_TIMEOUT",
-          blockerTimeoutMessage("Package call", blockers),
-          blockers ? blockerNextActions() : ["Inspect Package Manager and package files before submitting a new request."],
-          { causeCode: structured.code, ...(blockers ? { blockers } : {}) },
-          false,
-          0,
-        );
+      // Package reload 会短暂替换 Editor session；单次观察失败不能提前终结 durable root。
+      if (structured && reloadObservationErrors.has(structured.code) && Date.now() < deadline) {
+        lastObservationError = structured;
+        await delay(Math.min(50, Math.max(1, deadline - Date.now())));
+        continue;
       }
+      if (structured && new Set(["E_EDITOR_BLOCKED", "E_UNITY_BLOCKED", "E_INSTANCE_CONFLICT"]).has(structured.code)) throw packageObservationTimeout(structured);
       throw error;
     }
-    await delay(50);
+    await delay(Math.min(50, Math.max(1, deadline - Date.now())));
   }
   try {
     const root = await status(context, binding, executorCapability, rootInputSha256, rootRequestDigest);
     if (root.terminal) return terminalResult<T>(context.requestId, root);
-  } catch {
-    // Deadline 后只保留统一 timeout，不泄露 control request 的 transport 细节。
+  } catch (error) {
+    const structured = error instanceof StructuredToolError ? error : undefined;
+    if (structured && reloadObservationErrors.has(structured.code)) lastObservationError = structured;
   }
+  if (lastObservationError) throw packageObservationTimeout(lastObservationError);
   throw new StructuredToolError(
     "E_EXECUTION_TIMEOUT",
     "Package call did not return a terminal result before the immutable deadline.",
     ["Inspect Package Manager and package files before submitting a new request."],
     undefined,
+    false,
+    0,
+  );
+}
+
+function packageObservationTimeout(cause: StructuredToolError): StructuredToolError {
+  const blockers = blockersFromDetails(cause.details);
+  return new StructuredToolError(
+    "E_EXECUTION_TIMEOUT",
+    blockerTimeoutMessage("Package call", blockers),
+    blockers ? blockerNextActions() : ["Inspect Package Manager and package files before submitting a new request."],
+    { causeCode: cause.code, ...(blockers ? { blockers } : {}) },
     false,
     0,
   );

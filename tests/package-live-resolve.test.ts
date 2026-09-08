@@ -302,13 +302,36 @@ test("Package file claim transition timeout returns execution timeout before pre
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
 
-test("Package resolve converts status blocker and timeout to execution timeout", async () => {
+test("Package resolve survives a transient reload observation and returns the durable terminal", async () => {
+  const f = await fixture("E_EXECUTION_TIMEOUT");
+  const terminal = { ok: true, requestId: f.context.requestId, data: { resolved: true } };
+  let statusCalls = 0;
+  f.context.absoluteDeadlineMs = Date.now() + 500;
+  f.context.bridgeExecute = async (payload: BridgeRequest): Promise<BridgeResponse> => {
+    if (payload.command === "internal.package.resolve.start") return { ok: true, requestId: payload.requestId, data: { terminal: false, accepted: true, phase: "files_proven", rootRequestDigest: mockRootRequestDigest } };
+    if (payload.command === "internal.package.resolve.status") {
+      statusCalls += 1;
+      if (statusCalls === 1) return { ok: false, requestId: payload.requestId, error: { code: "E_EXECUTION_TIMEOUT", message: "reload in progress", nextActions: [], transient: true, retryAfterMs: 0 } };
+      return { ok: true, requestId: payload.requestId, data: { terminal: true, accepted: true, phase: "list_succeeded", operation: "resolve", rootInputSha256: sha256CanonicalJson({}), fileExecutorAlive: false, fileExecutorOwnedByCaller: false, terminalEnvelope: terminal } };
+    }
+    throw new Error(`unexpected ${payload.command}`);
+  };
+  try {
+    assert.deepEqual(await runLivePackageResolve<{ resolved: boolean }>(f.context, "resolve", {}, undefined, f.binding), { resolved: true });
+    assert.equal(statusCalls, 2);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("Package resolve converts blockers and exhausted reload observation to execution timeout", async () => {
   for (const entry of [
-    { code: "E_UNITY_BLOCKED", details: { blockers: [blocker] }, blockers: [blocker] },
-    { code: "E_EXECUTION_TIMEOUT", details: undefined, blockers: undefined },
-    { code: "E_UNITY_TRANSITION_TIMEOUT", details: undefined, blockers: undefined },
+    { code: "E_UNITY_BLOCKED", details: { blockers: [blocker] }, blockers: [blocker], retryable: false },
+    { code: "E_EXECUTION_TIMEOUT", details: undefined, blockers: undefined, retryable: true },
+    { code: "E_UNITY_TRANSITION_TIMEOUT", details: undefined, blockers: undefined, retryable: true },
   ]) {
     const f = await fixture(entry.code, entry.details);
+    if (entry.retryable) f.context.absoluteDeadlineMs = Date.now() + 80;
     try {
       await assert.rejects(
         async () => await runLivePackageResolve(f.context, "resolve", {}, undefined, f.binding),
