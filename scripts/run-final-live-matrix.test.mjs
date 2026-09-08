@@ -647,6 +647,22 @@ test("runtime inventory is exact for product capabilities and current Dev fixtur
   assert.match(runtimeInventoryIssues(discovered, baseline).join(" "), /Removed public Tools are discoverable: build\.status/);
 });
 
+test("capability-sliced inventory validates only the explicit selection", async () => {
+  const baseline = await loadRuntimeInventoryBaseline();
+  const selected = ["asset.refresh", "editor.state", "validation.echo"];
+  assert.deepEqual(runtimeInventoryIssues({ tools: [...selected] }, baseline, selected), []);
+  assert.match(runtimeInventoryIssues({ tools: ["asset.refresh"] }, baseline, selected).join(" "), /editor\.state, validation\.echo/);
+  assert.match(runtimeInventoryIssues({ tools: [...selected, "scene.hierarchy"] }, baseline, selected).join(" "), /Unexpected non-project Tools: scene\.hierarchy/);
+});
+
+test("capability-sliced discovery does not enumerate groups or Extensions", async () => {
+  const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
+  const selectedBranch = source.match(/if \(selectedTools\) \{([\s\S]*?)\n  \} else \{/u)?.[1];
+  assert.ok(selectedBranch);
+  assert.match(selectedBranch, /getDescriptor\(m, "tool", name\)/);
+  assert.doesNotMatch(selectedBranch, /catalog\.groups|tools\.group|extensions\.list|extensions\.doctor/);
+});
+
 test("frozen direct cases are a complete request-specific closed set", async () => {
   assert.deepEqual(Object.keys(DIRECT_LIVE_CASES).sort(), [...FROZEN_DIRECT_TOOL_NAMES].sort());
   assert.equal(FROZEN_DIRECT_TOOL_NAMES.length, 30);

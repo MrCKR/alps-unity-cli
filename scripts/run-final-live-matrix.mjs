@@ -453,16 +453,17 @@ export async function loadRuntimeInventoryBaseline() {
   return { tools: [...new Set(completion.tools.map((value) => value.toolName))].sort() };
 }
 
-/** Dev project fixtures 是当前 matrix 的固定额外 inventory；产品 Tool 必须与 contracts 精确一致。 */
-export function runtimeInventoryIssues(discovered, baseline) {
+/** Dev project fixtures 是当前 matrix 的固定额外 inventory；显式切片只比较本轮选择。 */
+export function runtimeInventoryIssues(discovered, baseline, expectedSelection = null) {
   const issues = [];
+  const scoped = Array.isArray(expectedSelection);
   const actualTools = new Set(discovered.tools ?? []);
-  const expectedTools = new Set(baseline.tools ?? []);
+  const expectedTools = new Set(scoped ? expectedSelection : (baseline.tools ?? []));
   const missingTools = [...expectedTools].filter((name) => !actualTools.has(name));
-  const unexpectedTools = [...actualTools].filter((name) => !expectedTools.has(name) && !REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
-  const missingFrozen = FROZEN_DIRECT_TOOL_NAMES.filter((name) => !actualTools.has(name));
+  const unexpectedTools = [...actualTools].filter((name) => !expectedTools.has(name) && (scoped || !REQUIRED_PROJECT_TOOL_NAME_SET.has(name)));
+  const missingFrozen = FROZEN_DIRECT_TOOL_NAMES.filter((name) => (!scoped || expectedTools.has(name)) && !actualTools.has(name));
   const removedPresent = REMOVED_PUBLIC_TOOL_NAMES.filter((name) => actualTools.has(name));
-  const missingProjectTools = REQUIRED_PROJECT_TOOL_NAMES.filter((name) => !actualTools.has(name));
+  const missingProjectTools = REQUIRED_PROJECT_TOOL_NAMES.filter((name) => (!scoped || expectedTools.has(name)) && !actualTools.has(name));
   if (missingTools.length) issues.push(`Missing current public Tools: ${missingTools.join(", ")}.`);
   if (unexpectedTools.length) issues.push(`Unexpected non-project Tools: ${unexpectedTools.sort().join(", ")}.`);
   if (missingFrozen.length) issues.push(`Missing frozen direct Tools: ${missingFrozen.join(", ")}.`);
@@ -474,37 +475,48 @@ export function runtimeInventoryIssues(discovered, baseline) {
 function inventoryHash(names) { return createHash("sha256").update([...names].sort().join("\n")).digest("hex"); }
 
 async function discover(m) {
-  const groups = stopAfterTerminalFailure(await m.call("catalog.groups", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } })));
-  for (const item of groups.envelope?.data?.groups ?? []) {
-    const group = nameOf(item); if (!group) continue;
-    let cursor;
-    do {
-      const argv = ["tools", "group", "list", group, "--page-size", "100", ...(cursor === undefined ? [] : ["--cursor", String(cursor)])];
-      const suffix = cursor === undefined ? "first" : String(cursor);
-      const listed = stopAfterTerminalFailure(await m.call(`tools.group.${group}.${suffix}`, argv, (e) => assertSuccess(e, { required: ["tools", "pageInfo"] })));
-      for (const tool of listed.envelope?.data?.tools ?? []) {
-        const name = nameOf(tool); if (!name) continue;
-        if (!m.discovered.tools.includes(name)) m.discovered.tools.push(name);
-      }
-      cursor = listed.envelope?.data?.pageInfo?.nextCursor;
-    } while (Number.isSafeInteger(cursor) && cursor >= 0);
-  }
-  const ext = await m.call("extensions.list", ["extensions", "list"], (e) => assertSuccess(e, {}));
-  const doc = await m.call("extensions.doctor", ["extensions", "doctor"], (e) => assertSuccess(e, {}));
-  for (const issue of extensionAvailabilityIssues(ext.envelope?.data, doc.envelope?.data)) await m.blocked(`extension.${issue.id}.availability`, issue.reason);
-
   const baseline = await loadRuntimeInventoryBaseline();
-  const inventoryIssues = runtimeInventoryIssues(m.discovered, baseline);
+  const selectedTools = m.o.capabilities.length > 0 ? [...new Set(m.o.capabilities)].sort() : null;
+  if (selectedTools) {
+    // 增量切片逐项自发现，禁止先遍历无关group或Extension目录。
+    for (const name of selectedTools) {
+      const descriptor = await getDescriptor(m, "tool", name);
+      if (descriptor && !m.discovered.tools.includes(name)) m.discovered.tools.push(name);
+    }
+  } else {
+    const groups = stopAfterTerminalFailure(await m.call("catalog.groups", ["tools", "group"], (e) => assertSuccess(e, { required: ["groups"], properties: { groups: { type: "array" } } })));
+    for (const item of groups.envelope?.data?.groups ?? []) {
+      const group = nameOf(item); if (!group) continue;
+      let cursor;
+      do {
+        const argv = ["tools", "group", "list", group, "--page-size", "100", ...(cursor === undefined ? [] : ["--cursor", String(cursor)])];
+        const suffix = cursor === undefined ? "first" : String(cursor);
+        const listed = stopAfterTerminalFailure(await m.call(`tools.group.${group}.${suffix}`, argv, (e) => assertSuccess(e, { required: ["tools", "pageInfo"] })));
+        for (const tool of listed.envelope?.data?.tools ?? []) {
+          const name = nameOf(tool); if (!name) continue;
+          if (!m.discovered.tools.includes(name)) m.discovered.tools.push(name);
+        }
+        cursor = listed.envelope?.data?.pageInfo?.nextCursor;
+      } while (Number.isSafeInteger(cursor) && cursor >= 0);
+    }
+    const ext = await m.call("extensions.list", ["extensions", "list"], (e) => assertSuccess(e, {}));
+    const doc = await m.call("extensions.doctor", ["extensions", "doctor"], (e) => assertSuccess(e, {}));
+    for (const issue of extensionAvailabilityIssues(ext.envelope?.data, doc.envelope?.data)) await m.blocked(`extension.${issue.id}.availability`, issue.reason);
+  }
+
+  const expectedTools = selectedTools ?? baseline.tools;
+  const inventoryIssues = runtimeInventoryIssues(m.discovered, baseline, selectedTools);
   const productTools = m.discovered.tools.filter((name) => !REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
   const projectTools = m.discovered.tools.filter((name) => REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
+  const expectedProductTools = expectedTools.filter((name) => !REQUIRED_PROJECT_TOOL_NAME_SET.has(name));
   stopAfterTerminalFailure(await m.call("inventory.current-tree", ["tools", "run", "editor.state", "--input", "{}"], (e) => {
     const envelopeIssue = assertSuccess(e, {});
     return envelopeIssue ?? (inventoryIssues.length > 0 ? inventoryIssues.join(" ") : null);
   }, {
     inventory: {
-      expectedToolCount: baseline.tools.length,
+      expectedToolCount: expectedProductTools.length,
       actualToolCount: productTools.length,
-      expectedToolsSha256: inventoryHash(baseline.tools),
+      expectedToolsSha256: inventoryHash(expectedProductTools),
       actualToolsSha256: inventoryHash(productTools),
       projectTools,
       issues: inventoryIssues
