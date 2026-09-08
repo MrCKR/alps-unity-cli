@@ -247,6 +247,7 @@ test("current JavaScript harness uses only the production public CLI entrypoint"
   assert.match(source, /releaseLock = await acquireRunnerLock\(options\.evidence_dir\)/);
   assert.match(source, /if \(record\?\.assertion\?\.status === "FAIL"\) throw new MatrixTerminalFailure\(record\)/);
   assert.match(source, /await rm\(target\.embeddedPath, \{ recursive: true, force: false \}\)[\s\S]*cleanup\.package\.resolve[\s\S]*cleanup\.ready/);
+  assert.match(source, /const preMutationReady = await m\.call\(`\$\{caseId\}\.cleanup\.pre-mutation-ready`[\s\S]*retryAssertion: true[\s\S]*stopAfterTerminalFailure\(preMutationReady\)[\s\S]*const cleanupRecord = await m\.call/);
   assert.match(source, /prepareOwnedBakeStartSnapshot[\s\S]*cleanupOwnedBakeStartCase[\s\S]*cleanup\.graphics\.bake-status[\s\S]*cleanup\.asset\.delete[\s\S]*cleanup\.asset\.refresh[\s\S]*Final scene bake artifact path\/digest closure/);
   assert.match(source, /recoverAllPendingOwnedBakeSnapshots\(m\)[\s\S]*setCasePlayMode\(m, "initial-editor"/);
   assert.match(source, /"prepared", "effect-terminal", "clean"/);

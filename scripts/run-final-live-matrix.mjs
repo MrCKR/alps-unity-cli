@@ -1863,6 +1863,11 @@ async function cleanupOwnedPackageCase(m, caseId, name, record, flags, project) 
   };
   const cleanup = cleanups[name];
   if (!cleanup) return null;
+  const preMutationReady = await m.call(`${caseId}.cleanup.pre-mutation-ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
+    return r.exitCode === 0 && isReadyEditorState(e, false) ? null : `Editor is not ready before ${cleanup.name} cleanup.`;
+  }, { cleanup: { sourceCase: caseId, capability: cleanup.name, packageState: true }, retryAssertion: true }, project);
+  stopAfterTerminalFailure(preMutationReady);
+
   const descriptor = await getDescriptor(m, "tool", cleanup.name);
   const recoveryStatusTool = selectedStatusToolForRoot(m, cleanup.name);
   const cleanupRecord = await m.call(`${caseId}.cleanup.${cleanup.name}`, argvFor("tool", cleanup.name, cleanup.input, []), (e, r) => {
