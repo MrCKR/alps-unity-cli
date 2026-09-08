@@ -163,6 +163,57 @@ test("fixture retries execution timeout when the caller explicitly requests it",
   assert.equal(calls.length, 2);
 });
 
+test("fixture validates an explicit durable status mapping", () => {
+  const base = { assert: { packageInstalled: true }, steps: [{ argv: ["tools", "run", "package.install", "--input", "{}"], expect: {} }] };
+  assert.equal(fixtureError({ ...base, steps: [{ ...base.steps[0], statusTool: "package.install.status" }] }, "package_remove"), null);
+  assert.match(fixtureError({ ...base, steps: [{ ...base.steps[0], statusTool: "package.remove.status" }] }, "package_remove"), /exact durable status Tool/);
+});
+
+test("fixture verifies a deferred root through its declared status Tool", async () => {
+  const calls = [];
+  const matrix = {
+    o: { project: "D:/Project" },
+    descriptors: new Map([["tool:package.install.status", { name: "package.install.status", resultSchema: {} }]]),
+    failed: async () => ({ assertion: { status: "FAIL" } }),
+    call: async (id, argv, assertion) => {
+      calls.push({ id, argv });
+      const deferred = calls.length === 1;
+      const envelope = deferred
+        ? { ok: false, requestId: "req_fixture", error: { code: "E_EXECUTION_TIMEOUT", message: "timeout" } }
+        : { ok: true, requestId: "req_status", data: { status: "completed" } };
+      const result = { exitCode: deferred ? 1 : 0 };
+      const issue = assertion(envelope, result);
+      return { argv, envelope, exitCode: result.exitCode, result, assertion: { status: issue ? "FAIL" : "PASS", ...(issue ? { issue } : {}) } };
+    }
+  };
+  const fixture = { assert: { packageInstalled: true }, steps: [{ id: "install", argv: ["tools", "run", "package.install", "--input", "{}"], statusTool: "package.install.status", expect: {} }] };
+  assert.equal(await runFixtureSequence(matrix, "package_remove", fixture), true);
+  assert.deepEqual(calls.map((call) => call.id), ["control.package_remove.install", "control.package_remove.install.status"]);
+  assert.deepEqual(JSON.parse(calls[1].argv[4]), { requestId: "req_fixture" });
+});
+
+test("fixture rejects deferred recovery when the declared status Tool fails", async () => {
+  let callCount = 0;
+  const matrix = {
+    o: { project: "D:/Project" },
+    descriptors: new Map([["tool:package.install.status", { name: "package.install.status", resultSchema: {} }]]),
+    failed: async () => ({ assertion: { status: "FAIL" } }),
+    call: async (_id, argv, assertion) => {
+      callCount += 1;
+      const deferred = callCount === 1;
+      const envelope = deferred
+        ? { ok: false, requestId: "req_fixture", error: { code: "E_EXECUTION_TIMEOUT", message: "timeout" } }
+        : { ok: false, requestId: "req_status", error: { code: "E_REQUEST_NOT_FOUND", message: "missing" } };
+      const result = { exitCode: 1 };
+      const issue = assertion(envelope, result);
+      return { argv, envelope, exitCode: result.exitCode, result, assertion: { status: issue ? "FAIL" : "PASS", ...(issue ? { issue } : {}) } };
+    }
+  };
+  const fixture = { assert: { packageInstalled: true }, steps: [{ id: "install", argv: ["tools", "run", "package.install", "--input", "{}"], statusTool: "package.install.status", expect: {} }] };
+  assert.equal(await runFixtureSequence(matrix, "package_remove", fixture), false);
+  assert.equal(callCount, 2);
+});
+
 test("reconciliation invokes the caller-selected retry after timeout", async () => {
   let spawned = false;
   const record = await callRecoveryEffect({

@@ -1130,6 +1130,7 @@
      "--input",
      "{\"name\":\"com.unity.textmeshpro\",\"version\":\"3.0.7\"}"
     ],
+    "statusTool": "package.install.status",
     "expect": {
      "equals": {
       "data.action": "install",

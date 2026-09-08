@@ -2652,7 +2652,15 @@ export function fixtureError(f, id) {
   }
   const semantic = FIXTURE_ASSERTIONS[id]; if (!semantic || f.assert[semantic] !== true) return `Fixture assert.${semantic ?? "semantic"} must be true.`;
   if (!Array.isArray(f.steps) || f.steps.length === 0) return "Fixture must declare one or more steps.";
-  return f.steps.some((step) => !plain(step) || !Array.isArray(step.argv) || !plain(step.expect)) ? "Every fixture step must declare argv and expect." : null;
+  if (f.steps.some((step) => !plain(step) || !Array.isArray(step.argv) || !plain(step.expect))) return "Every fixture step must declare argv and expect.";
+  for (const step of f.steps) {
+    if (step.statusTool === undefined) continue;
+    const rootToolName = step.argv[0] === "tools" && step.argv[1] === "run" ? step.argv[2] : null;
+    if (typeof step.statusTool !== "string" || step.statusTool.length === 0 || DEPENDENT_STATUS_ROOT_TOOLS[step.statusTool] !== rootToolName) {
+      return "Fixture statusTool must be the exact durable status Tool mapped to its root Tool.";
+    }
+  }
+  return null;
 }
 
 // 执行可重试的真实 fixture 步骤，并把每次尝试及动态捕获写入同一证据流。
@@ -2661,6 +2669,7 @@ async function runFixtureStep(m, fixtureId, step, index, variables, project) {
   let argv;
   try { argv = step.argv.map((value) => fixtureArg(value, variables)); }
   catch (error) { await m.failed(`control.${fixtureId}.${step.id ?? index + 1}`, `Fixture arguments are invalid: ${error instanceof Error ? error.message : String(error)}`, { fixture: fixtureId, step: step.id ?? index + 1 }); return false; }
+  const rootToolName = step.statusTool ? argv[2] : null;
   const maxAttempts = Math.max(1, Number(step.retry?.attempts ?? 1));
   const retryCodes = new Set(step.retry?.errorCodes ?? []);
   let finalRecord;
@@ -2669,15 +2678,33 @@ async function runFixtureStep(m, fixtureId, step, index, variables, project) {
     const id = `control.${fixtureId}.${step.id ?? index + 1}${suffix}`;
     finalRecord = await m.call(id, argv, (e, r) => {
       const issue = fixtureExpectationIssue(e, r, step.expect);
+      if (issue && isDeferredStatusRootTimeout(rootToolName, "editor", e, r.exitCode, step.statusTool)) return null;
       if (issue && attempt < maxAttempts && retryCodes.has(e?.error?.code)) return null;
       return issue;
-    }, { fixture: fixtureId, step: step.id ?? index + 1, attempt, retryAssertion: fixtureStepRetriesReadyAssertion(step) }, project);
+    }, {
+      fixture: fixtureId,
+      step: step.id ?? index + 1,
+      attempt,
+      retryAssertion: fixtureStepRetriesReadyAssertion(step),
+      ...(step.statusTool ? { recoveryStatusTool: step.statusTool } : {})
+    }, project);
     const issue = fixtureExpectationIssue(finalRecord.envelope, finalRecord.result ?? { exitCode: finalRecord.exitCode }, step.expect);
-    if (!issue) break;
+    if (!issue || isDeferredStatusRootTimeout(rootToolName, "editor", finalRecord.envelope, finalRecord.exitCode, step.statusTool)) break;
     if (attempt >= maxAttempts || !retryCodes.has(finalRecord.envelope?.error?.code)) break;
     await new Promise((resolveDelay) => setTimeout(resolveDelay, Number(step.retry?.delayMs ?? 1000)));
   }
   if (finalRecord?.assertion?.status !== "PASS") return false;
+  if (isDeferredStatusRootTimeout(rootToolName, "editor", finalRecord.envelope, finalRecord.exitCode, step.statusTool)) {
+    const statusDescriptor = await getDescriptor(m, "tool", step.statusTool);
+    if (!statusDescriptor) {
+      await m.failed(`control.${fixtureId}.${step.id ?? index + 1}.status-descriptor`, `${step.statusTool} descriptor is unavailable for deferred fixture recovery.`, { fixture: fixtureId, step: step.id ?? index + 1 });
+      return false;
+    }
+    const statusRecord = await m.call(`control.${fixtureId}.${step.id ?? index + 1}.status`, argvFor("tool", step.statusTool, { requestId: finalRecord.envelope.requestId }, []), (e, r) => {
+      return r.exitCode === 0 ? assertPositiveSuccess(e, statusDescriptor.resultSchema ?? {}) : `${step.statusTool} fixture recovery exited ${r.exitCode}.`;
+    }, { fixture: fixtureId, step: step.id ?? index + 1, rootCapability: rootToolName, recoveryStatusTool: step.statusTool, requestId: finalRecord.envelope.requestId }, project);
+    if (statusRecord.assertion?.status !== "PASS") return false;
+  }
   for (const [name, path] of Object.entries(step.capture ?? {})) {
     const captured = valueAt(finalRecord.envelope, path);
     if (captured === undefined) { await m.failed(`control.${fixtureId}.${step.id ?? index + 1}.capture.${name}`, `Capture path is absent: ${path}`); return false; }
