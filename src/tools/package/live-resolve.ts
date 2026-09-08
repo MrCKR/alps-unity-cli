@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
 import { executeBridgePayload } from "../../bridge/index.js";
-import { withTransitionBinding, type BridgeResponse } from "../../bridge/types.js";
+import { withTransitionBinding, withTransitionStatusObservation, type BridgeResponse } from "../../bridge/types.js";
 import { defaultDataDir } from "../../platform.js";
 import type { ToolContext } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
@@ -229,7 +229,7 @@ async function status(context: ToolContext, binding: LivePackageBinding, executo
   const rootDeadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
   // 单次只读观察必须让出预算，才能在 domain reload 后由外层循环重绑新 listener。
   const observationDeadline = Math.min(rootDeadline, Date.now() + PACKAGE_STATUS_OBSERVATION_BUDGET_MS);
-  return rootState(await execute(context, binding, request, false, undefined, observationDeadline), request.requestId);
+  return rootState(await execute(context, binding, request, false, undefined, observationDeadline, true), request.requestId);
 }
 
 const reloadObservationErrors = new Set([
@@ -293,7 +293,7 @@ function packageObservationTimeout(cause: StructuredToolError): StructuredToolEr
 }
 
 /** 生产路径由 SessionSupervisor 选择真实 Editor；bridgeExecute 仅用于隔离测试注入。 */
-async function execute(context: ToolContext, binding: LivePackageBinding, request: PrivateRequest, mutation: boolean, operation?: string, invocationDeadlineMs?: number): Promise<BridgeResponse> {
+async function execute(context: ToolContext, binding: LivePackageBinding, request: PrivateRequest, mutation: boolean, operation?: string, invocationDeadlineMs?: number, returnTransitionResponse = false): Promise<BridgeResponse> {
   const deadline = invocationDeadlineMs ?? context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
   const result = await executeBridgePayload(
     request.requestId,
@@ -301,7 +301,9 @@ async function execute(context: ToolContext, binding: LivePackageBinding, reques
     request.args,
     { ...(context.flags ?? {}), instance: binding.instanceId },
     { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute },
-    withTransitionBinding({ mode: "execute", mutation, absoluteDeadlineMs: deadline }),
+    returnTransitionResponse
+      ? withTransitionStatusObservation({ absoluteDeadlineMs: deadline })
+      : withTransitionBinding({ mode: "execute", mutation, absoluteDeadlineMs: deadline }),
   );
   return result as BridgeResponse;
 }

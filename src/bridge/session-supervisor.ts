@@ -64,6 +64,9 @@ const ROOT_TRANSITION_COMMANDS = new Set([
   "internal.occlusion.bake.snapshot",
   "internal.occlusion.bake.cancel",
 ]);
+const RETURNABLE_TRANSITION_COMMANDS = new Set([
+  "internal.package.resolve.status",
+]);
 const TRANSITION_CODES = new Set([
   "E_UNITY_DOMAIN_RELOAD",
   "E_UNITY_COMPILING",
@@ -95,8 +98,10 @@ export interface BridgeRequestTemplate {
   rootAdmission?: RootAdmissionLease;
   /** 已由 editor.state 完成的私有选择；不得重跑 selector。 */
   observationSelection?: InstanceSelection;
-  /** 私有 continuation capability；只允许 compile start/status 绑定 transition session。 */
+  /** 私有 continuation capability；只允许白名单内部命令绑定 transition session。 */
   allowTransitionBinding?: boolean;
+  /** 私有 durable status capability；把 canonical transition 响应交回外层重新观察。 */
+  returnTransitionResponse?: boolean;
 }
 
 export interface FrozenBridgeRequest {
@@ -325,6 +330,14 @@ export class SessionSupervisor {
     if (template.allowTransitionBinding === true && !ROOT_TRANSITION_COMMANDS.has(template.command)) {
       throw new SessionSupervisorError("E_INTERNAL_INVOCATION_INVALID", "Transition binding is restricted to private durable root coordinator commands.", [], { command: template.command });
     }
+    if (template.returnTransitionResponse === true && (
+      mode !== "read"
+      || template.mutation !== false
+      || template.allowTransitionBinding !== true
+      || !RETURNABLE_TRANSITION_COMMANDS.has(template.command)
+    )) {
+      throw new SessionSupervisorError("E_INTERNAL_INVOCATION_INVALID", "Transition response handoff is restricted to private read-only durable status commands.", [], { command: template.command });
+    }
     const timeoutMs = normalizeTimeoutMs(template.timeoutMs, mode);
     // caller 已冻结业务 deadline 时，未显式提供更短 timeout 不得被 Supervisor 默认预算再次截断。
     const absoluteDeadlineMs = mode === "observeNow"
@@ -387,6 +400,7 @@ export class SessionSupervisor {
         if (requestAdmission) requestAdmission.consumed = true;
         // Bridge 已给出 canonical terminal response 时优先返回。
         if (!shouldRecoverTransition(reply.response)) return reply.response;
+        if (template.returnTransitionResponse === true) return reply.response;
         await this.waitBeforeRecovery(reply.response, absoluteDeadlineMs);
         clearInstanceHealthCache();
         binding = await this.bind(target, absoluteDeadlineMs, false, undefined, template.allowTransitionBinding === true);

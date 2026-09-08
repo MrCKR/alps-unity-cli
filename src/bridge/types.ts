@@ -35,11 +35,13 @@ export interface BridgeInvocationOptions {
   /** 仅 editor.state 内部传递已完成的真实选择结果；Symbol 字段不会进入公开请求。 */
   [observationSelectionKey]?: import("../instances.js").InstanceSelection;
   [transitionBindingKey]?: true;
+  [transitionResponseKey]?: true;
 }
 
-// 不导出 key，外部 flags、CLI 输入和 JSON 均不能伪造这个内部调用字段。
+// 不导出 key，外部 flags、CLI 输入和 JSON 均不能伪造这些内部调用字段。
 const observationSelectionKey: unique symbol = Symbol("unity-cli.observation-selection");
 const transitionBindingKey: unique symbol = Symbol("unity-cli.transition-binding");
+const transitionResponseKey: unique symbol = Symbol("unity-cli.transition-response");
 
 export function withObservationSelection(
   options: Omit<BridgeInvocationOptions, typeof observationSelectionKey>,
@@ -52,13 +54,30 @@ export function observationSelectionFrom(options: BridgeInvocationOptions): impo
   return options[observationSelectionKey];
 }
 
-/** 仅 compile continuation 可在 registry transitioning 时绑定同一会话。 */
+/** 仅白名单内的跨 reload 内部调用可在 registry transitioning 时绑定同一会话。 */
 export function withTransitionBinding(options: Omit<BridgeInvocationOptions, typeof transitionBindingKey>): BridgeInvocationOptions {
   return { ...options, [transitionBindingKey]: true };
 }
 
 export function transitionBindingAllowed(options: BridgeInvocationOptions): boolean {
   return options[transitionBindingKey] === true;
+}
+
+/** 仅 durable status coordinator 可接管 canonical transition 响应并重新观察。 */
+export function withTransitionStatusObservation(
+  options: Omit<BridgeInvocationOptions, typeof transitionBindingKey | typeof transitionResponseKey | "mode" | "mutation">,
+): BridgeInvocationOptions {
+  return {
+    ...options,
+    mode: "read",
+    mutation: false,
+    [transitionBindingKey]: true,
+    [transitionResponseKey]: true,
+  };
+}
+
+export function transitionResponseAllowed(options: BridgeInvocationOptions): boolean {
+  return options[transitionResponseKey] === true;
 }
 
 export interface BridgeArgContext {

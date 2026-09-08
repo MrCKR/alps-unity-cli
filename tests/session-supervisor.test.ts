@@ -139,6 +139,72 @@ test("supervisor consumes one absolute deadline and redelivers identical read by
   assert.ok(now < 6_000);
 });
 
+test("private Package status returns canonical transition response to its durable coordinator", async () => {
+  let selectCount = 0;
+  let postCount = 0;
+  let sleepCount = 0;
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => 1_000,
+    sleep: async () => { sleepCount += 1; },
+    select: async () => {
+      selectCount += 1;
+      return selection("ready", 1);
+    },
+    post: async (_binding, request) => {
+      postCount += 1;
+      return {
+        response: {
+          ok: false,
+          requestId: request.payload.requestId,
+          error: {
+            code: "E_UNITY_DOMAIN_RELOAD",
+            message: "reloading",
+            nextActions: [],
+            transient: true,
+            retryAfterMs: 250,
+          },
+        },
+        attestation: attestation(1),
+      };
+    },
+  });
+
+  const response = await supervisor.read({
+    requestId: "req_package_status",
+    command: "internal.package.resolve.status",
+    input: { rootRequestId: "req_package_root" },
+    mutation: false,
+    allowTransitionBinding: true,
+    returnTransitionResponse: true,
+  });
+  assert.equal(response.ok, false);
+  if (response.ok === false) assert.equal(response.error.code, "E_UNITY_DOMAIN_RELOAD");
+  assert.equal(selectCount, 1);
+  assert.equal(postCount, 1);
+  assert.equal(sleepCount, 0);
+});
+
+test("transition response handoff rejects non-status commands", async () => {
+  const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+    now: () => 1_000,
+    sleep: async () => undefined,
+    select: async () => selection("ready", 1),
+    post: async () => { throw new Error("must not dispatch"); },
+  });
+
+  await assert.rejects(
+    () => supervisor.read({
+      requestId: "req_package_start",
+      command: "internal.package.resolve.start",
+      input: {},
+      mutation: false,
+      allowTransitionBinding: true,
+      returnTransitionResponse: true,
+    }),
+    (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_INTERNAL_INVOCATION_INVALID",
+  );
+});
+
 test("runtime-tool commands select only the development Player target", async () => {
   const selectedTargets: string[] = [];
   const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {

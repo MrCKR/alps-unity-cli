@@ -4,7 +4,7 @@ import { instanceSelectionFailure } from "../instances.js";
 import { BridgeArgumentError } from "./args.js";
 import { bridgeCommandRegistry } from "./registry.js";
 import { getBoolean } from "../args.js";
-import { observationSelectionFrom, transitionBindingAllowed, type BridgeCommandSpec, type BridgeError, type BridgeFlags, type BridgeInvocationOptions, type BridgeRequest, type BridgeResponse, type BridgeRuntime } from "./types.js";
+import { observationSelectionFrom, transitionBindingAllowed, transitionResponseAllowed, type BridgeCommandSpec, type BridgeError, type BridgeFlags, type BridgeInvocationOptions, type BridgeRequest, type BridgeResponse, type BridgeRuntime } from "./types.js";
 import { bridgeHttpTimeoutMs, SessionSupervisor, SessionSupervisorError } from "./session-supervisor.js";
 
 export { BridgeCommandRegistry, bridgeCommandRegistry } from "./registry.js";
@@ -68,6 +68,7 @@ export async function executeBridgePayload(
       rootAdmission: runtime.rootAdmission,
       observationSelection: observationSelectionFrom(invocation),
       allowTransitionBinding: transitionBindingAllowed(invocation),
+      returnTransitionResponse: transitionResponseAllowed(invocation),
     };
     const bridgeResult = invocation.mode === "read"
       ? await supervisor.read(template)
