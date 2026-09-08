@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -328,6 +328,11 @@ test("Package resolve survives a transient reload observation and returns the du
   } finally {
     await rm(f.root, { recursive: true, force: true });
   }
+});
+
+test("Package private reload status does not reuse the root listener admission", async () => {
+  const source = await readFile(join(process.cwd(), "src", "tools", "package", "live-resolve.ts"), "utf8");
+  assert.match(source, /returnTransitionResponse \? \{\} : \{ rootAdmission: context\.rootAdmission \}/);
 });
 
 test("Package resolve converts blockers and exhausted reload observation to execution timeout", async () => {

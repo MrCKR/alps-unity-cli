@@ -301,7 +301,8 @@ async function execute(context: ToolContext, binding: LivePackageBinding, reques
     request.command,
     request.args,
     { ...(context.flags ?? {}), instance: binding.instanceId },
-    { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute },
+    // 私有只读status由executor capability绑定原root；reload后不得携带旧listener的admission。
+    { dataDir: context.dataDir, ...(returnTransitionResponse ? {} : { rootAdmission: context.rootAdmission }), bridgeExecute: context.bridgeExecute },
     returnTransitionResponse
       ? withTransitionStatusObservation({ absoluteDeadlineMs: deadline })
       : withTransitionBinding({ mode: "execute", mutation, absoluteDeadlineMs: deadline }),
