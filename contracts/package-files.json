@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "f5ba0a625aa35f9e0e2f651c84329107c6cbf95ad66fe5010af7dca33cdec987",
+  "sourceHash": "bce69ed5486aceed3e6c22a61db8dd180031897b2db4cf2c1907fd9dc37aceeb",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -201,8 +201,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliOperationCoordinator.cs",
-      "size": 66827,
-      "sha256": "0acbea10afda00777aa97e5ed55670d634b6f16907ba1aa081107da946c21b49"
+      "size": 73906,
+      "sha256": "f489dd4f86ef86eeb3e91a4ffb4465580849ec69d003d0e1a9952c8c4e073505"
     },
     {
       "path": "Editor/Infrastructure/UnityCliPackageEmbedCoordinator.cs",
@@ -801,8 +801,8 @@
     },
     {
       "path": "Editor/Tools/editor/play.cs",
-      "size": 3136,
-      "sha256": "b44ba725787b09c7105bf5a70469597cfae1c94fac3f7b056b1d1c57e5acb80f"
+      "size": 2666,
+      "sha256": "544e1637b7a528fc17bae629cf2eae272ef7f9ad5b507f4a011da9b1338820dc"
     },
     {
       "path": "Editor/Tools/editor/redo.cs",
@@ -831,8 +831,8 @@
     },
     {
       "path": "Editor/Tools/editor/stop.cs",
-      "size": 3105,
-      "sha256": "2f7fbe9243d696ae7dd3d62e49b067670441f1842003a9be16b26664dfdd7042"
+      "size": 2635,
+      "sha256": "76ab922121d2f4a20fb2cfc306f50607f618287a1407b6a37d533f25e3a324e7"
     },
     {
       "path": "Editor/Tools/editor/tool-states.cs",
@@ -1936,8 +1936,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliAdmissionCoordinatorIntegrationTests.cs",
-      "size": 78182,
-      "sha256": "2d4b11fd395257e7a1d5676884a09df92d6ddc3a17be4ab45dbe065c534d95ea"
+      "size": 84710,
+      "sha256": "7681f502586afe4c056b7c9e58ccbd5766e297b61f4b215c30c3e2ff81b1e320"
     },
     {
       "path": "Tests/Editor/UnityCliAdmissionPoolTests.cs",
