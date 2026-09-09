@@ -361,7 +361,7 @@ class Matrix {
       const result = await runCli(this.o.cli, [...this.o.cli_args, ...argv], this.o.timeoutMs);
       let envelope; let parse;
       try { envelope = JSON.parse(result.stdout); } catch (error) { parse = String(error); }
-      const issue = parse ? `stdout is not a complete JSON envelope: ${parse}` : assertion(envelope, result);
+      const issue = parse ? `stdout is not a complete JSON envelope: ${parse}` : assertion(envelope, result, preState);
       attempts.push({ attempt, at: new Date().toISOString(), exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, envelope, preState, ...(parse ? { parse } : {}), ...(issue ? { issue } : {}) });
       final = { result, envelope, preState, issue };
       if (issue) {
@@ -2974,11 +2974,16 @@ async function recoverFinalMatrixState(m) {
   const reconciliation = { externalSceneReload: "pending", packageResolve: "pending", editorRefresh: "pending", sceneReload: "pending", editorState: "pending" };
   let reconciliationPassed = true;
 
-  const dialogsRecord = await m.call("control.source-restore.external-scene-dialogs", ["tools", "run", "editor.dialogs", "--input", "{}"], (e, r) => r.exitCode === 0 ? assertPositiveSuccess(e) : `editor.dialogs reconciliation exited ${r.exitCode}.`, {
-    cleanup: { projectSnapshot: true, reconcile: "external-scene-dialogs" },
-    retryErrorCodes: ["E_INSTANCE_NOT_RUNNING"]
-  });
-  const dialogSelection = dialogsRecord.assertion?.status === "PASS" ? selectExactExternalSceneReloadDialog(dialogsRecord.envelope?.data?.dialogs) : { outcome: "blocked", dialogs: [] };
+  let headlessDialogsUnavailable = false;
+  const dialogsRecord = await m.call("control.source-restore.external-scene-dialogs", ["tools", "run", "editor.dialogs", "--input", "{}"], (e, r, preState) => {
+    headlessDialogsUnavailable = r.exitCode === 1
+      && e?.error?.code === "E_INSTANCE_NOT_RUNNING"
+      && isReadyEditorState(preState?.envelope, false);
+    return r.exitCode === 0 ? assertPositiveSuccess(e) : headlessDialogsUnavailable ? null : `editor.dialogs reconciliation exited ${r.exitCode}.`;
+  }, { cleanup: { projectSnapshot: true, reconcile: "external-scene-dialogs" } });
+  const dialogSelection = dialogsRecord.assertion?.status === "PASS"
+    ? headlessDialogsUnavailable ? { outcome: "none", dialogs: [] } : selectExactExternalSceneReloadDialog(dialogsRecord.envelope?.data?.dialogs)
+    : { outcome: "blocked", dialogs: [] };
   if (dialogSelection.outcome === "none") {
     reconciliation.externalSceneReload = "N/A";
   } else if (dialogSelection.outcome === "reload") {

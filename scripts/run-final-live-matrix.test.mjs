@@ -243,6 +243,7 @@ test("current JavaScript harness uses only the production public CLI entrypoint"
   assert.equal(packageJson.scripts["matrix:live"], "node scripts/run-final-live-matrix.mjs");
   assert.equal(packageJson.scripts["matrix:live:dist"], "node scripts/run-final-live-matrix.mjs --cli node --cli-arg dist/cli.js");
   assert.match(source, /spawn\(cli, argv, \{ shell: false, windowsHide: true/);
+  assert.match(source, /assertion\(envelope, result, preState\)/);
   assert.match(source, /Required --fixture-file is missing/);
   assert.match(source, /const lockPath = resolve\(evidenceDir, "\.runner\.lock"\)/);
   assert.match(source, /releaseLock = await acquireRunnerLock\(options\.evidence_dir\)/);
@@ -266,7 +267,7 @@ test("current JavaScript harness uses only the production public CLI entrypoint"
   assert.match(source, /blockMissingRequiredFixture\(m, "control\.concurrency"[\s\S]*concurrencyRecord\.assertion\?\.status !== "PASS"/);
   assert.match(source, /callRecoveryEffect[\s\S]*source-restore\.editor-refresh[\s\S]*source-restore\.package-resolve[\s\S]*packageResolveReconciliationIssue[\s\S]*source-restore\.scene-load/);
   assert.match(source, /package\.resolve[\s\S]*--timeout-ms[\s\S]*120000[\s\S]*packageResolveReconciliationIssue/);
-  assert.match(source, /source-restore\.external-scene-dialogs[\s\S]*retryErrorCodes: \["E_INSTANCE_NOT_RUNNING"\]/);
+  assert.match(source, /headlessDialogsUnavailable = r\.exitCode === 1[\s\S]*E_INSTANCE_NOT_RUNNING[\s\S]*isReadyEditorState\(preState\?\.envelope, false\)[\s\S]*headlessDialogsUnavailable \? \{ outcome: "none", dialogs: \[\] \}/);
   assert.match(source, /const expectedPublicPath = `Packages\/\$\{packageId\}`/);
   assert.doesNotMatch(source, /\.plan[\\/]evidence|public-output-modal|run-live-matrix\.ps1|\.ps1["'`]|powershell|pwsh/i);
   assert.doesNotMatch(source, /spawn\(["'`]Unity(?:\.exe)?["'`]/i);
