@@ -2943,7 +2943,11 @@ async function recoverFinalMatrixState(m) {
   const reconciliation = { externalSceneReload: "pending", packageResolve: "pending", editorRefresh: "pending", sceneReload: "pending", editorState: "pending" };
   let reconciliationPassed = true;
 
-  const dialogsRecord = await m.call("control.source-restore.external-scene-dialogs", ["tools", "run", "editor.dialogs", "--input", "{}"], (e, r) => r.exitCode === 0 ? assertPositiveSuccess(e) : `editor.dialogs reconciliation exited ${r.exitCode}.`, { cleanup: { projectSnapshot: true, reconcile: "external-scene-dialogs" } });
+  const dialogsRecord = await m.call("control.source-restore.external-scene-dialogs", ["tools", "run", "editor.dialogs", "--input", "{}"], (e, r) => r.exitCode === 0 ? assertPositiveSuccess(e) : `editor.dialogs reconciliation exited ${r.exitCode}.`, {
+    cleanup: { projectSnapshot: true, reconcile: "external-scene-dialogs" },
+    retryErrorCodes: ["E_INSTANCE_NOT_RUNNING"],
+    retryMaxAttempts: 3
+  });
   const dialogSelection = dialogsRecord.assertion?.status === "PASS" ? selectExactExternalSceneReloadDialog(dialogsRecord.envelope?.data?.dialogs) : { outcome: "blocked", dialogs: [] };
   if (dialogSelection.outcome === "none") {
     reconciliation.externalSceneReload = "N/A";

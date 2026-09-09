@@ -257,6 +257,7 @@ test("current JavaScript harness uses only the production public CLI entrypoint"
   assert.match(source, /Persisted baseline digest changed[\s\S]*asset\.refresh/);
   assert.match(source, /prepareOwnedProjectSnapshot\(this\.o\.project[\s\S]*setCasePlayMode\(m, "initial-editor"/);
   assert.match(source, /semantic-reset-complete[\s\S]*restoreOwnedProjectSnapshot[\s\S]*editor\.refresh[\s\S]*package\.resolve[\s\S]*scene\.load[\s\S]*markOwnedProjectSnapshotClean/);
+  assert.match(source, /control\.source-restore\.external-scene-dialogs[\s\S]*retryErrorCodes: \["E_INSTANCE_NOT_RUNNING"\][\s\S]*retryMaxAttempts: 3/);
   assert.match(source, /blockMissingRequiredFixture\(m, "control\.setup"[\s\S]*runRequiredFixtureSequence\(m, "setup"[\s\S]*recoverFinalMatrixState\(m\)[\s\S]*recordRunnerFailure\(m, "control\.source-restore\.exception"[\s\S]*await report\(m\)/);
   assert.match(source, /ACTIVE_OPERATION_SCOPES[\s\S]*active-\$\{scope\}\.json[\s\S]*Request-level journal must not be produced/);
   assert.doesNotMatch(source, /E_REQUEST_OUTCOME_UNKNOWN|matchingUncertainCall|exact outcome-unknown/i);
