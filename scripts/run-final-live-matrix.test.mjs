@@ -41,6 +41,7 @@ import {
   markOwnedProjectSnapshotClean,
   markOwnedProjectSnapshotReconciled,
   ownedEmbeddedPackageCleanupTarget,
+  ownedMemorySnapshotCleanupTarget,
   ownedSceneBakeCleanupPlan,
   orderedToolNames,
   packageResolveReconciliationIssue,
@@ -560,6 +561,27 @@ test("package.embed cleanup accepts only its exact owned package directory", asy
   }
 });
 
+test("memory snapshot cleanup is confined to the exact project Library root", () => {
+  const project = resolve("D:/Dev/UnityProject");
+  const target = resolve(project, "Library/UnityCli/memory-snapshots/capture.snap");
+  const result = {
+    path: target,
+    plannedEffects: [{ type: "profiler.memory-snapshot.take", path: target }]
+  };
+  assert.deepEqual(ownedMemorySnapshotCleanupTarget(project, result), {
+    root: resolve(project, "Library/UnityCli/memory-snapshots"),
+    target
+  });
+  assert.throws(
+    () => ownedMemorySnapshotCleanupTarget(project, { ...result, path: resolve(project, "capture.snap") }),
+    /outside the exact project snapshot root/
+  );
+  assert.throws(
+    () => ownedMemorySnapshotCleanupTarget(project, { ...result, plannedEffects: [] }),
+    /no matching terminal planned effect/
+  );
+});
+
 test("graphics.bake-start cleanup is confined to the active scene lighting directory", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-bake-cleanup-中文项目-"));
   try {
@@ -966,6 +988,7 @@ test("Package matrix cases declare terminal-only exact cleanup", async () => {
   const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
   assert.match(source, /record\.assertion\?\.status !== "PASS" \|\| record\.envelope\?\.ok !== true \|\| flags\.includes\("--dry-run"\)/);
   assert.match(source, /if \(name === "package\.embed"\)[\s\S]*ownedEmbeddedPackageCleanupTarget[\s\S]*package\.resolve/);
+  assert.match(source, /cleanupOwnedMemorySnapshotCase\(m, caseId, name, record, flags, project\)/);
   for (const pair of [["package.deploy", "package.restore"], ["package.install", "package.remove"], ["package.registry.set", "package.registry.clear"], ["package.scoped-registry.add", "package.scoped-registry.remove"]]) {
     assert.match(source, new RegExp(`"${pair[0].replaceAll(".", "\\.")}"[\\s\\S]*name: "${pair[1].replaceAll(".", "\\.")}"`));
   }

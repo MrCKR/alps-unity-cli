@@ -1173,6 +1173,35 @@ export function ownedEmbeddedPackageCleanupTarget(project, packageResult) {
   return { packageId, embeddedPath: resolve(project, "Packages", packageId), publicPath: expectedPublicPath };
 }
 
+/** memory snapshot 只清理由本次成功响应精确证明、且位于项目临时根下的产物。 */
+export function ownedMemorySnapshotCleanupTarget(project, snapshotResult) {
+  if (typeof project !== "string" || project.length === 0 || !plain(snapshotResult)) throw new Error("Memory snapshot cleanup requires a project and terminal result.");
+  if (typeof snapshotResult.path !== "string" || snapshotResult.path.length === 0) throw new Error("Memory snapshot cleanup returned no output path.");
+  const root = resolve(project, "Library", "UnityCli", "memory-snapshots");
+  const target = resolve(snapshotResult.path);
+  const relativeTarget = relative(root, target);
+  if (!relativeTarget || relativeTarget.startsWith(`..${sep}`) || relativeTarget === ".." || isAbsolute(relativeTarget) || extname(target).toLowerCase() !== ".snap")
+    throw new Error(`Memory snapshot cleanup path is outside the exact project snapshot root: ${snapshotResult.path}`);
+  const ownsTarget = Array.isArray(snapshotResult.plannedEffects)
+    && snapshotResult.plannedEffects.some((effect) => effect?.type === "profiler.memory-snapshot.take" && resolve(effect.path ?? "") === target);
+  if (!ownsTarget) throw new Error("Memory snapshot cleanup has no matching terminal planned effect.");
+  return { root, target };
+}
+
+async function cleanupOwnedMemorySnapshotCase(m, caseId, name, record, flags, project) {
+  if (name !== "profiler.memory-snapshot.take" || record.assertion?.status !== "PASS" || record.envelope?.ok !== true || flags.includes("--dry-run")) return null;
+  try {
+    const owned = ownedMemorySnapshotCleanupTarget(project, record.envelope.data);
+    await assertNoSymbolicAncestor(owned.target, owned.root, "Memory snapshot cleanup target");
+    const stat = await lstat(owned.target);
+    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("Memory snapshot cleanup target is not a regular file.");
+    await unlink(owned.target);
+    return null;
+  } catch (error) {
+    return m.failed(`${caseId}.cleanup.profiler.memory-snapshot.take`, `Exact memory snapshot cleanup failed: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
+  }
+}
+
 function slashPath(value) { return value.replaceAll("\\", "/"); }
 
 /** 将active scene限定到项目Assets下对应的Unity lighting目录。 */
@@ -2301,6 +2330,8 @@ async function invoke(m, kind, name, id, d, input, flags, positive, phase, proje
   if (editorPlayCleanup) throw new MatrixTerminalFailure(editorPlayCleanup);
   const packageCleanup = kind === "tool" && positive ? await cleanupOwnedPackageCase(m, caseId, name, record, flags, project) : null;
   if (packageCleanup) stopAfterTerminalFailure(packageCleanup);
+  const memorySnapshotCleanup = kind === "tool" && positive ? await cleanupOwnedMemorySnapshotCase(m, caseId, name, record, flags, project) : null;
+  if (memorySnapshotCleanup) stopAfterTerminalFailure(memorySnapshotCleanup);
   const bakeCleanup = kind === "tool" && positive ? await cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project, bakeSnapshot) : null;
   if (bakeCleanup) stopAfterTerminalFailure(bakeCleanup);
   return stopAfterTerminalFailure(record);
