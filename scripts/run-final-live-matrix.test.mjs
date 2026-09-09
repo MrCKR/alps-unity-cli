@@ -872,6 +872,7 @@ test("active fixtures use only current public execution semantics", async () => 
   assert.equal(resetSceneLoad.argv[2], "scene.load");
   assert.match(setupSceneLoad.argv[4], /MatrixScene\.unity/);
   assert.deepEqual(fixtures.profiler_hierarchy_capture.steps.map((step) => step.id), ["start", "verify"]);
+  assert.deepEqual(fixtures.profiler_hierarchy_capture.steps[1].expect.exists, ["data.items"]);
   assert.equal(fixtures.profiler_hierarchy_capture.steps.some((step) => step.argv[2] === "profiler.capture"), false);
   assert.deepEqual(fixtures.profiler_snapshots.steps.map((step) => step.id), ["write-inputs", "restore-proof"]);
   assert.equal(fixtures.profiler_snapshots.steps.some((step) => step.argv[2] === "profiler.memory-snapshot.take"), false);

@@ -916,7 +916,7 @@
     ],
     "expect": {
      "exists": [
-      "data.rootItems"
+      "data.items"
      ]
     }
    }
