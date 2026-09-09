@@ -860,6 +860,12 @@ test("active fixtures use only current public execution semantics", async () => 
   assert.equal(fixtures.reset.steps[0].argv[2], "profiler.stop");
   assert.deepEqual(fixtures.concurrency.assert, { minOverlapMs: 1 });
   assert.equal(fixtures.concurrency.calls.every((item) => item.argv[2] === "validation.wait"), true);
+  const domainReloadDelete = fixtures.domain_reload.steps.find((step) => step.id === "delete-probe");
+  const domainReloadDeleteProof = fixtures.domain_reload.steps.find((step) => step.id === "delete-proof");
+  assert.deepEqual(domainReloadDelete.expect.acceptErrorCodes, ["E_ASSET_NOT_FOUND", "E_EXECUTION_TIMEOUT"]);
+  assert.equal(domainReloadDeleteProof.argv[2], "asset.info");
+  assert.equal(domainReloadDeleteProof.expect.errorCode, "E_ASSET_NOT_FOUND");
+  assert.ok(fixtures.domain_reload.steps.indexOf(domainReloadDelete) < fixtures.domain_reload.steps.indexOf(domainReloadDeleteProof));
   const setupSceneLoad = fixtures.setup.steps.find((step) => step.id === "load-baseline-scene");
   const resetSceneLoad = fixtures.reset.steps.find((step) => step.id === "load-baseline-scene");
   assert.equal(setupSceneLoad.argv[2], "scene.load");

@@ -1443,8 +1443,22 @@
     ],
     "expect": {
      "acceptErrorCodes": [
-      "E_ASSET_NOT_FOUND"
+      "E_ASSET_NOT_FOUND",
+      "E_EXECUTION_TIMEOUT"
      ]
+    }
+   },
+   {
+    "id": "delete-proof",
+    "argv": [
+     "tools",
+     "run",
+     "asset.info",
+     "--input",
+     "{\"path\":\"Assets/UnityCLIValidation/MatrixReloadProbe.cs\"}"
+    ],
+    "expect": {
+     "errorCode": "E_ASSET_NOT_FOUND"
     }
    },
    {
