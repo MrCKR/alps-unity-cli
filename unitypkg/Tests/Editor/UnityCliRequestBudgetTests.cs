@@ -122,6 +122,29 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void ProfilerHierarchyTraversesUnity2022FlatPreorderWithoutChildAt()
+        {
+            var budget = Budget(new ManualClock(), scans: 64, nodes: 64, getters: 64, reflections: 128);
+            using (var accessor = ProfilerHierarchyTool.RawHierarchyAccessor.InitializeForTests(new Unity2022RawFrameDataViewProbe(), budget))
+            {
+                var stack = new List<ProfilerHierarchyTool.TraversalFrame>
+                {
+                    new ProfilerHierarchyTool.TraversalFrame { ParentId = 0, NextSample = 1, Depth = 0 }
+                };
+                var items = new List<ProfilerHierarchyTool.HierarchyItem>();
+                ProfilerHierarchyTool.HierarchyItem item;
+                while (ProfilerHierarchyTool.TryNext(accessor, stack, 8, budget, out item)) items.Add(item);
+
+                CollectionAssert.AreEqual(new long[] { 1, 2, 3, 4 }, items.Select(value => value.Id).ToArray());
+                CollectionAssert.AreEqual(new long[] { 0, 1, 0, 3 }, items.Select(value => value.ParentId).ToArray());
+                CollectionAssert.AreEqual(new long[] { 0, 1, 0, 1 }, items.Select(value => value.Depth).ToArray());
+                CollectionAssert.AreEqual(new long[] { 1, 0, 1, 0 }, items.Select(value => value.ChildCount).ToArray());
+                Assert.That(accessor.SubtreeEndExclusive(0, budget), Is.EqualTo(5));
+                Assert.That(stack, Is.Empty);
+            }
+        }
+
+        [Test]
         public void ContinuationBindsScopeGenerationAndRawPosition()
         {
             var token = UnityCliContinuationToken.Create("console.get", "generation-a", "99999:99000:sentinel");
@@ -513,6 +536,23 @@ namespace UnityCli.Tests
         {
             internal bool Disposed { get; private set; }
             public void Dispose() { Disposed = true; }
+        }
+
+        private sealed class Unity2022RawFrameDataViewProbe
+        {
+            private static readonly int[] DirectChildren = { 2, 1, 0, 1, 0 };
+            private static readonly int[] RecursiveChildren = { 4, 1, 0, 1, 0 };
+
+            public bool valid { get { return true; } }
+            public int sampleCount { get { return DirectChildren.Length; } }
+            public int frameIndex { get { return 17; } }
+            public int threadIndex { get { return 0; } }
+            public double frameStartTimeMs { get { return 100.0; } }
+            public float frameTimeMs { get { return 16.0f; } }
+            public int GetSampleChildrenCount(int sampleIndex) { return DirectChildren[sampleIndex]; }
+            public int GetSampleChildrenCountRecursive(int sampleIndex) { return RecursiveChildren[sampleIndex]; }
+            public string GetSampleName(int sampleIndex) { return "sample-" + sampleIndex.ToString(); }
+            public float GetSampleTimeMs(int sampleIndex) { return sampleIndex; }
         }
 
         private sealed class EmptyConsoleSnapshot : EditorToolSupport.IConsoleSnapshotAdapter

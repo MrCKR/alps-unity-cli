@@ -106,6 +106,8 @@ test("profiler live descriptors expose representative play mode, package, and sc
 test("profiler.hierarchy C# supports current hierarchy API and latest-frame default", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/hierarchy.cs", import.meta.url), "utf8");
   assert.match(source, /GetMethod\("GetRawFrameDataView"[\s\S]*RawHierarchyAccessor/);
+  assert.match(source, /GetSampleChildrenCountRecursive/);
+  assert.doesNotMatch(source, /GetSampleChildAt/);
   assert.match(source, /UnityCliContinuationToken/);
   assert.match(source, /request\.Frame \?\? ProfilerToolSupport\.ProfilerDriverIntProperty\("lastFrameIndex", -1\)/);
   assert.match(source, /Description = "Read latest-frame nodes"[\s\S]*PageSize = 50, Depth = 5/);

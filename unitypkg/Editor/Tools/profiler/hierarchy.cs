@@ -6,7 +6,7 @@ using System.Reflection;
 
 namespace UnityCli
 {
-    /// <summary>profiler.hierarchy — 使用 RawFrameDataView child-at API 做全局节点续页。</summary>
+    /// <summary>profiler.hierarchy — 使用 RawFrameDataView 扁平先序索引做全局节点续页。</summary>
     public class ProfilerHierarchyTool : IUnityCliTool<ProfilerHierarchyTool.Request, ProfilerHierarchyTool.Result>
     {
         public sealed class Request
@@ -74,7 +74,7 @@ namespace UnityCli
             {
                 var generation = UnityCliContinuationToken.Fingerprint(UnityCliReadGeneration.Session("profiler.hierarchy") + "\0" + accessor.CaptureIdentity);
                 var stack = string.IsNullOrEmpty(request.Cursor)
-                    ? new List<TraversalFrame> { new TraversalFrame { ParentId = 0, NextChild = 0, Depth = 0 } }
+                    ? new List<TraversalFrame> { new TraversalFrame { ParentId = 0, NextSample = 1, Depth = 0 } }
                     : ParseCursor(request.Cursor, generation, accessor, maxDepth, budget);
                 var items = new List<HierarchyItem>();
                 while (stack.Count > 0 && items.Count < pageSize)
@@ -105,24 +105,27 @@ namespace UnityCli
             finally { accessor.Dispose(); }
         }
 
-        private static bool TryNext(RawHierarchyAccessor accessor, List<TraversalFrame> stack, int maxDepth, UnityCliRequestBudget budget, out HierarchyItem item)
+        /// <summary>扁平先序数组中，当前子树后的首个样本就是下一兄弟；栈只保留每层的下一个样本。</summary>
+        internal static bool TryNext(RawHierarchyAccessor accessor, List<TraversalFrame> stack, int maxDepth, UnityCliRequestBudget budget, out HierarchyItem item)
         {
             item = null;
             while (stack.Count > 0)
             {
                 var frame = stack[stack.Count - 1];
-                var childCount = accessor.ChildCount(frame.ParentId, budget);
+                var parentEnd = accessor.SubtreeEndExclusive(frame.ParentId, budget);
                 if (budget.IsExhausted) return false;
-                if (frame.NextChild >= childCount) { stack.RemoveAt(stack.Count - 1); continue; }
+                if (frame.NextSample >= parentEnd) { stack.RemoveAt(stack.Count - 1); continue; }
                 if (!budget.TryConsumeScannedRecord() || !budget.TryConsumeNode()) return false;
-                var child = accessor.ChildAt(frame.ParentId, frame.NextChild, budget);
+                var child = frame.NextSample;
+                var childEnd = accessor.SubtreeEndExclusive(child, budget);
                 if (budget.IsExhausted) return false;
-                frame.NextChild++;
                 var grandChildren = accessor.ChildCount(child, budget);
                 if (budget.IsExhausted) return false;
+                if ((grandChildren > 0) != (childEnd > child + 1)) throw RawHierarchyAccessor.InvalidPreorder();
                 var name = accessor.Name(child, budget) ?? "(unknown)";
                 var milliseconds = accessor.Milliseconds(child, budget);
                 if (budget.IsExhausted || !budget.TryReserveSerializedUtf8(name)) return false;
+                frame.NextSample = childEnd;
                 item = new HierarchyItem
                 {
                     Id = child, ParentId = frame.ParentId, Name = name, Depth = frame.Depth,
@@ -130,7 +133,7 @@ namespace UnityCli
                     ChildrenTruncated = grandChildren > 0 && frame.Depth >= maxDepth
                 };
                 if (grandChildren > 0 && frame.Depth < maxDepth)
-                    stack.Add(new TraversalFrame { ParentId = child, NextChild = 0, Depth = frame.Depth + 1 });
+                    stack.Add(new TraversalFrame { ParentId = child, NextSample = child + 1, Depth = frame.Depth + 1 });
                 return true;
             }
             return false;
@@ -147,9 +150,18 @@ namespace UnityCli
                 for (var index = 0; index < stack.Count; index++)
                 {
                     var frame = stack[index];
-                    if (frame.Depth != index || frame.ParentId < 0 || frame.ParentId >= accessor.SampleCount || frame.NextChild < 0) throw Stale();
-                    var childCount = accessor.ChildCount(frame.ParentId, budget);
-                    if (frame.NextChild > childCount) throw Stale();
+                    if (frame.Depth != index || frame.ParentId < 0 || frame.ParentId >= accessor.SampleCount) throw Stale();
+                    var parentEnd = accessor.SubtreeEndExclusive(frame.ParentId, budget);
+                    if (budget.IsExhausted) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                    if (frame.NextSample < frame.ParentId + 1 || frame.NextSample > parentEnd) throw Stale();
+                    if (index + 1 < stack.Count)
+                    {
+                        var activeChild = stack[index + 1].ParentId;
+                        if (activeChild <= frame.ParentId || activeChild >= parentEnd) throw Stale();
+                        var activeChildEnd = accessor.SubtreeEndExclusive(activeChild, budget);
+                        if (budget.IsExhausted) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
+                        if (activeChildEnd != frame.NextSample) throw Stale();
+                    }
                 }
                 return stack;
             }
@@ -161,7 +173,7 @@ namespace UnityCli
         private static string EncodeStack(List<TraversalFrame> stack)
         {
             var values = new List<string>();
-            foreach (var frame in stack) values.Add(frame.ParentId.ToString(CultureInfo.InvariantCulture) + "," + frame.NextChild.ToString(CultureInfo.InvariantCulture) + "," + frame.Depth.ToString(CultureInfo.InvariantCulture));
+            foreach (var frame in stack) values.Add(frame.ParentId.ToString(CultureInfo.InvariantCulture) + "," + frame.NextSample.ToString(CultureInfo.InvariantCulture) + "," + frame.Depth.ToString(CultureInfo.InvariantCulture));
             return string.Join(";", values.ToArray());
         }
 
@@ -176,7 +188,7 @@ namespace UnityCli
                 result.Add(new TraversalFrame
                 {
                     ParentId = int.Parse(parts[0], CultureInfo.InvariantCulture),
-                    NextChild = int.Parse(parts[1], CultureInfo.InvariantCulture),
+                    NextSample = int.Parse(parts[1], CultureInfo.InvariantCulture),
                     Depth = int.Parse(parts[2], CultureInfo.InvariantCulture)
                 });
             }
@@ -189,7 +201,7 @@ namespace UnityCli
             return new UnityCliBridge.BridgeCommandException("E_CONTINUATION_STALE", "The profiler hierarchy continuation does not match the same frame/thread generation.", "Start a new profiler.hierarchy read without cursor.");
         }
 
-        private sealed class TraversalFrame { internal int ParentId; internal int NextChild; internal int Depth; }
+        internal sealed class TraversalFrame { internal int ParentId; internal int NextSample; internal int Depth; }
 
         internal sealed class RawHierarchyAccessor : IDisposable
         {
@@ -197,7 +209,7 @@ namespace UnityCli
             private readonly PropertyInfo validProperty;
             private readonly int sampleCount;
             private readonly MethodInfo childCountMethod;
-            private readonly MethodInfo childAtMethod;
+            private readonly MethodInfo recursiveChildCountMethod;
             private readonly MethodInfo nameMethod;
             private readonly MethodInfo millisecondsMethod;
             private readonly string captureIdentity;
@@ -212,12 +224,12 @@ namespace UnityCli
                 var frameStartTimeProperty = ReflectProperty(type, "frameStartTimeMs", budget);
                 var frameTimeProperty = ReflectProperty(type, "frameTimeMs", budget);
                 childCountMethod = ReflectMethod(type, "GetSampleChildrenCount", new[] { typeof(int) }, budget);
-                childAtMethod = ReflectMethod(type, "GetSampleChildAt", new[] { typeof(int), typeof(int) }, budget);
+                recursiveChildCountMethod = ReflectMethod(type, "GetSampleChildrenCountRecursive", new[] { typeof(int) }, budget);
                 nameMethod = ReflectMethod(type, "GetSampleName", new[] { typeof(int) }, budget);
                 millisecondsMethod = ReflectMethod(type, "GetSampleTimeMs", new[] { typeof(int) }, budget);
                 if (sampleCountProperty == null || frameIndexProperty == null || threadIndexProperty == null || frameStartTimeProperty == null || frameTimeProperty == null
-                    || childCountMethod == null || childAtMethod == null || nameMethod == null || millisecondsMethod == null)
-                    throw Unavailable("RawFrameDataView capture identity or child-at members are unavailable.");
+                    || childCountMethod == null || recursiveChildCountMethod == null || nameMethod == null || millisecondsMethod == null)
+                    throw Unavailable("RawFrameDataView capture identity or preorder hierarchy members are unavailable.");
                 if (validProperty != null && !ReadBool(validProperty, view, budget)) throw NoData();
                 var identityValues = new object[5];
                 var identityProperties = new[] { frameIndexProperty, threadIndexProperty, frameStartTimeProperty, frameTimeProperty, sampleCountProperty };
@@ -262,8 +274,23 @@ namespace UnityCli
                 }
             }
 
+            internal static RawHierarchyAccessor InitializeForTests(object view, UnityCliRequestBudget budget)
+            {
+                return InitializeOwnedView(view, value => new RawHierarchyAccessor(value, value.GetType(), budget));
+            }
+
             internal int ChildCount(int sample, UnityCliRequestBudget budget) { return Convert.ToInt32(Invoke(childCountMethod, new object[] { sample }, budget), CultureInfo.InvariantCulture); }
-            internal int ChildAt(int sample, int index, UnityCliRequestBudget budget) { return Convert.ToInt32(Invoke(childAtMethod, new object[] { sample, index }, budget), CultureInfo.InvariantCulture); }
+
+            /// <summary>Unity 的 raw samples 是先序扁平数组，递归后代数可直接确定子树右边界。</summary>
+            internal int SubtreeEndExclusive(int sample, UnityCliRequestBudget budget)
+            {
+                var recursiveChildren = Convert.ToInt32(Invoke(recursiveChildCountMethod, new object[] { sample }, budget), CultureInfo.InvariantCulture);
+                if (budget.IsExhausted) return sample + 1;
+                var end = (long)sample + recursiveChildren + 1L;
+                if (sample < 0 || sample >= sampleCount || recursiveChildren < 0 || end > sampleCount) throw InvalidPreorder();
+                return (int)end;
+            }
+
             internal string Name(int sample, UnityCliRequestBudget budget) { return Invoke(nameMethod, new object[] { sample }, budget) as string; }
             internal double Milliseconds(int sample, UnityCliRequestBudget budget) { return Convert.ToDouble(Invoke(millisecondsMethod, new object[] { sample }, budget), CultureInfo.InvariantCulture); }
 
@@ -305,6 +332,11 @@ namespace UnityCli
             private static UnityCliBridge.BridgeCommandException Unavailable(string message)
             {
                 return new UnityCliBridge.BridgeCommandException("E_PROFILER_HIERARCHY_UNAVAILABLE", message, "Use an Editor exposing RawFrameDataView and record profiler frames before retrying.");
+            }
+
+            internal static UnityCliBridge.BridgeCommandException InvalidPreorder()
+            {
+                return new UnityCliBridge.BridgeCommandException("E_PROFILER_HIERARCHY_READ_FAILED", "Raw profiler hierarchy preorder ranges are inconsistent.", "Record a fresh frame and restart pagination.");
             }
 
             private static UnityCliBridge.BridgeCommandException NoData()

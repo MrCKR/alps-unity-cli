@@ -68,7 +68,8 @@ test("profiler and snapshot paths remain raw-paged and governed", async () => {
     source("Tools/profiler/ProfilerMemorySnapshotSupport.cs"),
     source("Tools/profiler/memory-snapshot/take.cs"), source("Tools/profiler/memory-snapshot/list.cs"),
   ]);
-  assert.match(hierarchy, /GetSampleChildAt/);
+  assert.match(hierarchy, /GetSampleChildrenCountRecursive/);
+  assert.doesNotMatch(hierarchy, /GetSampleChildAt/);
   assert.doesNotMatch(events, /GetFrameEvents|CopyTo\(/);
   assert.match(events, /pageInfo\.nextCursor|PageInfo|NextCursor/);
   assert.match(events, /UnityCliContinuationToken\.Create\("profiler\.frame-debugger\.events"/);
