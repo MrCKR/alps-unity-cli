@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "7f624ddfede237bf1122e71629f6d53039386b3ed42139277244462245bc67a8",
+  "sourceHash": "f590d1e74ca8161564baa457d197e36b626ddc538e7d533746d927de4a5352fa",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -451,8 +451,8 @@
     },
     {
       "path": "Editor/Tools/asset/delete.cs",
-      "size": 4395,
-      "sha256": "b5d7caa547f9224d503f378ec2d56d570df8ff45264a9b9284c19dfd4ddf4765"
+      "size": 4038,
+      "sha256": "7d27c5d5154a54619a22b8fd90b20ad65eb4eb62f4a5987062c381095898d6d1"
     },
     {
       "path": "Editor/Tools/asset/duplicate.cs",
