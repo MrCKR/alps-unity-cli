@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "f590d1e74ca8161564baa457d197e36b626ddc538e7d533746d927de4a5352fa",
+  "sourceHash": "492c4a8fd0667d5716dc2931c3af6131b0e3e0561387c605cce6fdd33e35f621",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -146,8 +146,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliInstanceRegistry.cs",
-      "size": 40388,
-      "sha256": "40d13444466b6136c15661c92fced6a0360548a91462a141a0da6dae52e05180"
+      "size": 40498,
+      "sha256": "be02b6f11781e90865a1050f535788376e114469cee96804eef90a5789cf981a"
     },
     {
       "path": "Editor/Infrastructure/UnityCliJson.cs",
@@ -331,8 +331,8 @@
     },
     {
       "path": "Editor/ProjectTools/RegisteredTool.cs",
-      "size": 27650,
-      "sha256": "3976f13cdb895aefae760eaf9e5e5e76d038c43f081eeebabff7defffecf6c0f"
+      "size": 28944,
+      "sha256": "1271714693974811350ce878b7cda02d99f603a4b0f6b0359d87cf55dc47949d"
     },
     {
       "path": "Editor/ProjectTools/UnityCliProjectToolContext.cs",
@@ -2006,8 +2006,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliToolCatalogTests.cs",
-      "size": 30449,
-      "sha256": "2ca07be35b64d4eaaa9155ed6a2ad5d20017db7f1afbfccc6438459c92485a34"
+      "size": 32647,
+      "sha256": "fd5e41e7b29c14f00c8308718d3ef14676f08862b4213e4dbdf081f0b6a3f463"
     },
     {
       "path": "Tests/Runtime/UnityCli.Runtime.Tests.asmdef",

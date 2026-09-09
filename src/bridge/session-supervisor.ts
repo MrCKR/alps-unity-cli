@@ -67,6 +67,11 @@ const ROOT_TRANSITION_COMMANDS = new Set([
 const RETURNABLE_TRANSITION_COMMANDS = new Set([
   "internal.package.resolve.status",
 ]);
+// 只有自身切换 Editor session 状态的 Tool 才能恢复已发出但丢失响应的同根请求。
+const POST_DISPATCH_LISTENER_RECOVERY_TOOLS = new Set([
+  "editor.play",
+  "editor.stop",
+]);
 const TRANSITION_CODES = new Set([
   "E_UNITY_DOMAIN_RELOAD",
   "E_UNITY_COMPILING",
@@ -121,6 +126,7 @@ interface ValidatedBinding {
   readonly endpoint: string;
   readonly processId: number;
   readonly processStartedAt: string;
+  readonly toolCatalogFingerprint?: string;
 }
 
 interface TransportAttestation {
@@ -243,6 +249,9 @@ export class SessionSupervisor {
         instanceId: INJECTED_INSTANCE_ID,
         canonicalProjectPath: process.cwd(),
         sessionId: "injected-session",
+        processId: process.pid,
+        processStartedAt: "injected-process",
+        toolCatalogFingerprint: "injected-catalog",
         listenerId: "injected-listener",
         listenerGeneration: 1,
         discoveryProvenance: request.expectedDiscoveryProvenance ?? (request.captureDiscoveryProvenance ? {
@@ -282,6 +291,9 @@ export class SessionSupervisor {
             instanceId: binding.instanceId,
             canonicalProjectPath: binding.canonicalProjectPath,
             sessionId: binding.sessionId,
+            processId: binding.processId,
+            processStartedAt: binding.processStartedAt,
+            toolCatalogFingerprint: binding.toolCatalogFingerprint,
             listenerId: binding.listenerId,
             listenerGeneration: binding.listenerGeneration,
             discoveryProvenance: request.expectedDiscoveryProvenance
@@ -383,11 +395,16 @@ export class SessionSupervisor {
         throw await this.executionTimeoutWithObservation(target.instanceId, binding, absoluteDeadlineMs, "The selected Unity process session changed after the first mutation POST; automatic redelivery is forbidden.");
       }
       try {
-        assertAdmissionBinding(template.rootAdmission, binding);
+        const requestAdmission = template.rootAdmission?.requestId === template.requestId ? template.rootAdmission : undefined;
+        const recoverConsumedAdmission = canRecoverConsumedAdmission(requestAdmission, binding, dispatchAttempted);
+        assertAdmissionBinding(template.rootAdmission, binding, recoverConsumedAdmission);
         dispatchAttempted = true;
         postAttempts += 1;
-        const requestAdmission = template.rootAdmission?.requestId === template.requestId ? template.rootAdmission : undefined;
-        const reply = await this.dependencies.post(binding, request, remainingMs, requestAdmission);
+        // replacement listener 只能通过 Bridge 持久化的 exact consumed owner 附着，不能重用旧 token。
+        const transportAdmission = recoverConsumedAdmission && requestAdmission
+          ? { ...requestAdmission, consumed: true }
+          : requestAdmission;
+        const reply = await this.dependencies.post(binding, request, remainingMs, transportAdmission);
         if (!attestationMatches(binding, reply.attestation)) {
           binding = await this.bindReplacement(target, absoluteDeadlineMs, binding, template.allowTransitionBinding === true);
           continue;
@@ -821,6 +838,7 @@ function bindingFrom(instance: UnityInstance): ValidatedBinding {
     endpoint: session.listener.endpoint.url,
     processId: session.processId,
     processStartedAt: session.processStartedAt,
+    toolCatalogFingerprint: session.toolCatalogFingerprint,
   };
 }
 
@@ -836,18 +854,36 @@ function attestationMatches(binding: ValidatedBinding, attestation: TransportAtt
     && attestation.listenerGeneration === binding.listenerGeneration;
 }
 
-function assertAdmissionBinding(admission: RootAdmissionLease | undefined, binding: ValidatedBinding): void {
+function assertAdmissionBinding(admission: RootAdmissionLease | undefined, binding: ValidatedBinding, recoveredConsumedRoot = false): void {
   if (!admission) return;
   const matches = admission.instanceId === binding.instanceId
     && admission.target === binding.target
     && admission.sessionId === binding.sessionId
     && admission.listenerId === binding.listenerId
     && admission.listenerGeneration === binding.listenerGeneration;
-  if (matches) return;
+  if (matches || recoveredConsumedRoot) return;
   if (admission.discoveryProvenance && !admission.consumed) throw staleDiscoveryProvenance(admission.discoveryProvenance);
   throw new SessionSupervisorError("E_EXECUTION_TIMEOUT", "The admitted Unity root no longer matches the selected target session.", [
     "Inspect the selected Unity session and affected business state before submitting a new request.",
   ], { instanceId: admission.instanceId, outcome: "unknown" });
+}
+
+/** 只允许同一Editor进程、同一catalog的显式session-affecting根附着Bridge持久化owner。 */
+function canRecoverConsumedAdmission(admission: RootAdmissionLease | undefined, binding: ValidatedBinding, dispatchAttempted: boolean): boolean {
+  return dispatchAttempted
+    && admission !== undefined
+    && POST_DISPATCH_LISTENER_RECOVERY_TOOLS.has(admission.command)
+    && admission.target === "editor"
+    && binding.target === "editor"
+    && admission.instanceId === binding.instanceId
+    && admission.canonicalProjectPath === binding.canonicalProjectPath
+    && admission.sessionId === binding.sessionId
+    && admission.processId === binding.processId
+    && admission.processStartedAt === binding.processStartedAt
+    && typeof admission.toolCatalogFingerprint === "string"
+    && admission.toolCatalogFingerprint.length > 0
+    && admission.toolCatalogFingerprint === binding.toolCatalogFingerprint
+    && (admission.listenerId !== binding.listenerId || admission.listenerGeneration !== binding.listenerGeneration);
 }
 
 /** discovery 和首次业务 POST 必须归属于同一 exact listener generation。 */

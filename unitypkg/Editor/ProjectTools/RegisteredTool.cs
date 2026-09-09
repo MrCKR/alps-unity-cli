@@ -236,6 +236,7 @@ namespace UnityCli
     {
         internal UnityCliToolCatalogSnapshot(
             IEnumerable<RegisteredToolDescriptor> descriptors,
+            string toolCatalogFingerprint,
             int assemblyCount,
             int providerAssemblyCount,
             int builtInToolCount,
@@ -247,6 +248,8 @@ namespace UnityCli
         {
             Descriptors = new ReadOnlyCollection<RegisteredToolDescriptor>(
                 descriptors.OrderBy(item => item.Name, StringComparer.Ordinal).ToArray());
+            if (string.IsNullOrWhiteSpace(toolCatalogFingerprint)) throw new ArgumentException("Tool catalog fingerprint is required.", "toolCatalogFingerprint");
+            ToolCatalogFingerprint = toolCatalogFingerprint;
             AssemblyCount = assemblyCount;
             ProviderAssemblyCount = providerAssemblyCount;
             BuiltInToolCount = builtInToolCount;
@@ -261,6 +264,7 @@ namespace UnityCli
         }
 
         public IReadOnlyList<RegisteredToolDescriptor> Descriptors { get; }
+        public string ToolCatalogFingerprint { get; }
         public int ToolCount { get { return Descriptors.Count; } }
         public int AssemblyCount { get; }
         public int ProviderAssemblyCount { get; }
@@ -379,9 +383,23 @@ namespace UnityCli
                 throw new InvalidOperationException("Tool catalog provider counts do not match the pending table.");
 
             operations.Record(UnityCliToolCatalogOperationKind.AggregateSuccessLog);
-            var descriptors = pending.Values.Select(tool => new RegisteredToolDescriptor(tool));
+            var orderedTools = pending.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal).ToArray();
+            var descriptors = orderedTools.Select(tool => new RegisteredToolDescriptor(tool)).ToArray();
+            // publication 时一次性绑定 descriptor 与实现程序集；registry 刷新只能读取缓存值。
+            var toolCatalogFingerprint = UnityCliSerializer.Sha256Canonical(new Dictionary<string, object>
+            {
+                { "descriptors", descriptors },
+                { "implementations", orderedTools.Select(tool => new Dictionary<string, object>
+                    {
+                        { "name", tool.Name },
+                        { "assemblyIdentity", tool.OwnerIdentity.AssemblyIdentity },
+                        { "assemblyMvid", tool.OwnerIdentity.Assembly.ManifestModule.ModuleVersionId.ToString("D") },
+                        { "implementationType", tool.OwnerIdentity.ImplementationType.FullName }
+                    }).Cast<object>().ToList() }
+            });
             var snapshot = new UnityCliToolCatalogSnapshot(
                 descriptors,
+                toolCatalogFingerprint,
                 assemblyCount,
                 providerMetadata.Count,
                 builtInToolCount,

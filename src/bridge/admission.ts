@@ -19,6 +19,9 @@ export interface RootAdmissionLease {
   readonly instanceId: string;
   readonly canonicalProjectPath: string;
   readonly sessionId: string;
+  readonly processId: number;
+  readonly processStartedAt: string;
+  readonly toolCatalogFingerprint?: string;
   readonly listenerId: string;
   readonly listenerGeneration: number;
   readonly discoveryProvenance?: DiscoveryProvenance;

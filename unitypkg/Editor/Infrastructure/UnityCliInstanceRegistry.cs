@@ -568,7 +568,8 @@ namespace UnityCli
                 { "progress", SnapshotProgress() },
                 { "blockers", new List<object>() },
                 { "unityVersion", Application.unityVersion },
-                { "buildStamp", BridgeBuildStamp() }
+                { "buildStamp", BridgeBuildStamp() },
+                { "toolCatalogFingerprint", ProjectToolCatalogSnapshotReader.Read().ToolCatalogFingerprint }
             };
             return session;
         }

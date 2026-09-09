@@ -94,6 +94,41 @@ namespace UnityCli.Tests
         }
 
         [Test]
+        public void CatalogFingerprintIsCachedStableAndBindsPublishedDescriptorContent()
+        {
+            var previousCatalog = publishedField.GetValue(null);
+            var previousHealth = healthField.GetValue(null);
+            try
+            {
+                var firstBuilder = NewBuilder(1, 1);
+                Add(firstBuilder, Definition("fixture.fingerprint", "project", "native", "fixture"), "ProjectInterface");
+                var first = PublishThroughProductionSlot(firstBuilder, 1L);
+                var firstSnapshot = Property(first, "Snapshot").GetValue(first);
+                var firstFingerprint = (string)Property(firstSnapshot, "ToolCatalogFingerprint").GetValue(firstSnapshot);
+
+                var sameBuilder = NewBuilder(1, 1);
+                Add(sameBuilder, Definition("fixture.fingerprint", "project", "native", "fixture"), "ProjectInterface");
+                var same = PublishThroughProductionSlot(sameBuilder, 999L);
+                var sameFingerprint = (string)Property(Property(same, "Snapshot").GetValue(same), "ToolCatalogFingerprint").GetValue(Property(same, "Snapshot").GetValue(same));
+
+                var changedBuilder = NewBuilder(1, 1);
+                Add(changedBuilder, Definition("fixture.fingerprint", "project", "native", "fixture", "Changed fixture summary."), "ProjectInterface");
+                var changed = PublishThroughProductionSlot(changedBuilder, 1L);
+                var changedFingerprint = (string)Property(Property(changed, "Snapshot").GetValue(changed), "ToolCatalogFingerprint").GetValue(Property(changed, "Snapshot").GetValue(changed));
+
+                Assert.That(firstFingerprint, Does.Match("^[0-9a-f]{64}$"));
+                Assert.That(Property(firstSnapshot, "ToolCatalogFingerprint").GetValue(firstSnapshot), Is.SameAs(firstFingerprint));
+                Assert.That(sameFingerprint, Is.EqualTo(firstFingerprint));
+                Assert.That(changedFingerprint, Is.Not.EqualTo(firstFingerprint));
+            }
+            finally
+            {
+                publishedField.SetValue(null, previousCatalog);
+                healthField.SetValue(null, previousHealth);
+            }
+        }
+
+        [Test]
         public void ProviderMetadataCountersAndThreeHundredOneEntriesFlowThroughProductionPublication()
         {
             var previousCatalog = publishedField.GetValue(null);

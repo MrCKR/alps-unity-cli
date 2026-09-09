@@ -274,6 +274,8 @@ test("online command resolution uses exact Runtime describe without injected pro
         instanceId: `unity-${(request.target === "editor" ? "c" : "d").repeat(64)}`,
         canonicalProjectPath: "c:\\fixture",
         sessionId: `session-${request.target}`,
+        processId: process.pid,
+        processStartedAt: "injected-process",
         listenerId: `listener-${request.target}`,
         listenerGeneration: 1,
         token: (request.target === "editor" ? "e" : "f").repeat(64),

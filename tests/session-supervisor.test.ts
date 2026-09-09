@@ -25,13 +25,19 @@ function observer(outcome: "observed-empty" | "observed-blocked" | "unproven" | 
   } } as unknown as EditorBlockerObserver;
 }
 
-function selection(status: UnityInstanceStatus, generation = 1, target: "editor" | "runtime" = "editor", sessionId = SESSION_ID): InstanceSelection {
+function selection(
+  status: UnityInstanceStatus,
+  generation = 1,
+  target: "editor" | "runtime" = "editor",
+  sessionId = SESSION_ID,
+  identity: { processId?: number; processStartedAt?: string; toolCatalogFingerprint?: string } = {},
+): InstanceSelection {
   const session = {
     target,
     sessionId,
     ...(target === "editor" ? { editorSessionId: sessionId } : { runtimeSessionId: sessionId, executablePath: process.execPath, buildId: "a".repeat(32) }),
-    processId: 101,
-    processStartedAt: "2026-07-16T00:00:00.000Z",
+    processId: identity.processId ?? 101,
+    processStartedAt: identity.processStartedAt ?? "2026-07-16T00:00:00.000Z",
     publishedAt: "2026-07-16T00:00:01.000Z",
     publicationSequence: generation,
     lifecycle: status === "blocked" ? "blocked" as const : status === "ready" ? "ready" as const : "transitioning" as const,
@@ -51,6 +57,7 @@ function selection(status: UnityInstanceStatus, generation = 1, target: "editor"
     progress: status === "transitioning" ? [{ type: "compile" }] : [],
     blockers: status === "blocked" ? [{ kind: "modal", title: "Known blocker" }] : [],
     buildStamp: "test-build",
+    toolCatalogFingerprint: identity.toolCatalogFingerprint ?? "c".repeat(64),
   };
   const instance: UnityInstance = {
     instanceId: INSTANCE_ID,
@@ -68,12 +75,13 @@ function selection(status: UnityInstanceStatus, generation = 1, target: "editor"
     allSessions: [session],
     sessionId,
     ...(target === "editor" ? { editorSessionId: sessionId } : { runtimeSessionId: sessionId }),
-    processId: 101,
+    processId: session.processId,
     publishedAt: session.publishedAt,
     lastUnitySnapshot: {},
     progress: session.progress,
     blockers: session.blockers,
     buildStamp: "test-build",
+    toolCatalogFingerprint: session.toolCatalogFingerprint,
     claimVerification: "verified",
   };
   return { instance, matchedBy: "instanceId" };
@@ -882,10 +890,10 @@ test("changed discovery listener fails before admission or business POST", async
   assert.equal(businessPosts, 0);
 });
 
-test("changed listener after a mutation POST is outcome unknown, never a pre-dispatch catalog error", async () => {
+test("session-affecting root recovers a lost response through exact consumed admission identity", async () => {
   let now = 2_000;
   let selections = 0;
-  let businessPosts = 0;
+  const sentConsumed: boolean[] = [];
   const admission: RootAdmissionLease = {
     requestId: "req_posted_listener_change",
     command: "editor.play",
@@ -895,6 +903,9 @@ test("changed listener after a mutation POST is outcome unknown, never a pre-dis
     instanceId: INSTANCE_ID,
     canonicalProjectPath: "c:\\repo\\project",
     sessionId: SESSION_ID,
+    processId: 101,
+    processStartedAt: "2026-07-16T00:00:00.000Z",
+    toolCatalogFingerprint: "c".repeat(64),
     listenerId: `listener-${"0".repeat(31)}1`,
     listenerGeneration: 1,
     token: "a".repeat(64),
@@ -908,30 +919,84 @@ test("changed listener after a mutation POST is outcome unknown, never a pre-dis
     sleep: async (ms) => { now += ms; },
     select: async () => selection("ready", selections++ === 0 ? 1 : 2),
     observer: observer("unproven"),
-    post: async (_binding, request) => {
-      businessPosts += 1;
+    post: async (_binding, request, _remainingMs, requestAdmission) => {
+      sentConsumed.push(requestAdmission?.consumed === true);
+      if (sentConsumed.length === 1) throw new Error("response lost after PlayMode transition");
       return {
-        response: { ok: false, requestId: request.payload.requestId, error: { code: "E_UNITY_DOMAIN_RELOAD", message: "changed", nextActions: [], transient: true, retryAfterMs: 100 } },
+        response: { ok: true, requestId: request.payload.requestId, data: { state: "play" } },
         attestation: attestation(2),
       };
     },
   });
 
-  await assert.rejects(() => supervisor.execute({
+  const response = await supervisor.execute({
     requestId: admission.requestId,
     command: "project-tool.run",
     input: { name: "editor.play", input: {} },
     mutation: true,
     absoluteDeadlineMs: 7_000,
     rootAdmission: admission,
-  }), (error: unknown) => {
-    assert.ok(error instanceof SessionSupervisorError);
-    assert.equal(error.code, "E_EXECUTION_TIMEOUT");
-    assert.equal(error.details?.dispatch, "may-have-started");
-    assert.notEqual(error.details?.businessRequestSent, false);
-    return true;
   });
-  assert.equal(businessPosts, 1);
+  assert.equal(response.ok, true);
+  assert.deepEqual(sentConsumed, [false, true]);
+  assert.equal(admission.consumed, true);
+});
+
+test("post-dispatch listener recovery rejects generic tools, process changes, and catalog drift", async () => {
+  const cases = [
+    { name: "generic-tool", command: "project.info", replacement: selection("ready", 2) },
+    { name: "process-change", command: "editor.play", replacement: selection("ready", 2, "editor", SESSION_ID, { processId: 202 }) },
+    { name: "catalog-drift", command: "editor.play", replacement: selection("ready", 2, "editor", SESSION_ID, { toolCatalogFingerprint: "d".repeat(64) }) },
+  ];
+  for (const item of cases) {
+    let now = 2_000;
+    let selections = 0;
+    let businessPosts = 0;
+    const admission: RootAdmissionLease = {
+      requestId: `req_reject_${item.name}`,
+      command: item.command,
+      rootFingerprint: "f".repeat(64),
+      completionContractIdentity: "observed-state-v1",
+      target: "editor",
+      instanceId: INSTANCE_ID,
+      canonicalProjectPath: "c:\\repo\\project",
+      sessionId: SESSION_ID,
+      processId: 101,
+      processStartedAt: "2026-07-16T00:00:00.000Z",
+      toolCatalogFingerprint: "c".repeat(64),
+      listenerId: `listener-${"0".repeat(31)}1`,
+      listenerGeneration: 1,
+      token: "a".repeat(64),
+      consumed: false,
+      grantExpiresAtMs: 3_000,
+      executionAbsoluteDeadlineMs: 7_000,
+      injected: false,
+    };
+    const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
+      now: () => now,
+      sleep: async (ms) => { now += ms; },
+      select: async () => selections++ === 0 ? selection("ready", 1) : item.replacement,
+      observer: observer("unproven"),
+      post: async () => {
+        businessPosts += 1;
+        throw new Error("response lost after mutation upload");
+      },
+    });
+    await assert.rejects(() => supervisor.execute({
+      requestId: admission.requestId,
+      command: "project-tool.run",
+      input: { name: item.command, input: {} },
+      mutation: true,
+      absoluteDeadlineMs: 7_000,
+      rootAdmission: admission,
+    }), (error: unknown) => {
+      assert.ok(error instanceof SessionSupervisorError);
+      assert.equal(error.code, "E_EXECUTION_TIMEOUT");
+      assert.equal(error.details?.dispatch, "may-have-started");
+      return true;
+    }, item.name);
+    assert.equal(businessPosts, 1, item.name);
+  }
 });
 
 test("explicit pre-effect admission rejection polls reacquire until capacity is available", async () => {
@@ -948,6 +1013,9 @@ test("explicit pre-effect admission rejection polls reacquire until capacity is 
     instanceId: INSTANCE_ID,
     canonicalProjectPath: "c:\\repo\\project",
     sessionId: SESSION_ID,
+    processId: 101,
+    processStartedAt: "2026-07-16T00:00:00.000Z",
+    toolCatalogFingerprint: "c".repeat(64),
     listenerId: `listener-${"0".repeat(31)}1`,
     listenerGeneration: 1,
     token: "a".repeat(64),

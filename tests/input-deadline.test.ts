@@ -22,6 +22,8 @@ function lease(request: RootAdmissionRequest): RootAdmissionLease {
     instanceId: `unity-${"b".repeat(64)}`,
     canonicalProjectPath: process.cwd(),
     sessionId: `session-${"c".repeat(64)}`,
+    processId: process.pid,
+    processStartedAt: "injected-process",
     listenerId: `listener-${"e".repeat(32)}`,
     listenerGeneration: 1,
     token: "d".repeat(64),
