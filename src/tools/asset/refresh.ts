@@ -53,15 +53,19 @@ export default defineTool<AssetRefreshRequest, AssetRefreshResult | AssetRefresh
     while (root.terminal !== true) {
       if (Date.now() >= deadline) throw timeout();
       await delay(100);
-      try { root = record((await bridge(childId(context.requestId, "_asset_refresh_status"), "internal.asset.refresh.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe)).data); }
+      try { root = record((await bridge(childId(context.requestId, "_asset_refresh_status"), "internal.asset.refresh.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe, false)).data); }
       catch { throw timeout(); }
     }
     return terminal(root, context.requestId);
   },
 });
 
-async function bridge(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: any, invocation: any): Promise<{ data?: unknown }> {
-  const result = await executeBridgePayload(requestId, command, input, flags, { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }, invocation);
+async function bridge(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: any, invocation: any, includeRootAdmission = true): Promise<{ data?: unknown }> {
+  // reload 后的只读 status 必须在 replacement listener 上重新绑定，不能复用 start admission。
+  const runtime = includeRootAdmission
+    ? { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }
+    : { dataDir: context.dataDir, bridgeExecute: context.bridgeExecute };
+  const result = await executeBridgePayload(requestId, command, input, flags, runtime, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live asset refresh bridge failed." });
   return { data: result.data };
 }

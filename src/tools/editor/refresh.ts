@@ -97,7 +97,7 @@ export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefr
         if (Date.now() >= deadline) throw executionTimeout("E_EXECUTION_TIMEOUT");
         await delay(100);
         try {
-          root = record((await bridge(statusId, "internal.editor.refresh.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe)).data);
+          root = record((await bridge(statusId, "internal.editor.refresh.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe, false)).data);
         } catch (error) {
           throw executionTimeoutFrom(error);
         }
@@ -113,12 +113,12 @@ export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefr
   },
 });
 
-async function bridge(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: any, invocation: any): Promise<BridgeData> {
-  const result = await executeBridgePayload(requestId, command, input, flags, {
-    dataDir: context.dataDir,
-    rootAdmission: context.rootAdmission,
-    bridgeExecute: context.bridgeExecute,
-  }, invocation);
+async function bridge(requestId: string, command: string, input: RecordValue, flags: BridgeFlags, context: any, invocation: any, includeRootAdmission = true): Promise<BridgeData> {
+  // reload 后的只读 status 必须在 replacement listener 上重新绑定，不能复用 start admission。
+  const runtime = includeRootAdmission
+    ? { dataDir: context.dataDir, rootAdmission: context.rootAdmission, bridgeExecute: context.bridgeExecute }
+    : { dataDir: context.dataDir, bridgeExecute: context.bridgeExecute };
+  const result = await executeBridgePayload(requestId, command, input, flags, runtime, invocation);
   if (!result.ok) throw StructuredToolError.from(result.error ?? { code: "BRIDGE_CONNECTION_FAILED", message: "Live refresh bridge failed." });
   return { data: result.data };
 }

@@ -5,6 +5,8 @@ import test from "node:test";
 
 const coordinatorPath = join(process.cwd(), "unitypkg", "Editor", "Infrastructure", "UnityCliLiveRefreshCoordinator.cs");
 const skeletonPath = join(process.cwd(), "unitypkg", "Editor", "Infrastructure", "UnityCliReloadOperation.cs");
+const editorRefreshToolPath = join(process.cwd(), "src", "tools", "editor", "refresh.ts");
+const assetRefreshToolPath = join(process.cwd(), "src", "tools", "asset", "refresh.ts");
 
 test("refresh persists and resumes only its active operation", async () => {
   const source = await readFile(coordinatorPath, "utf8");
@@ -35,4 +37,15 @@ test("refresh uses bounded Unity-owned artifact generations instead of recursive
   assert.match(source, /AssetDatabase\.GlobalArtifactProcessedVersion/);
   assert.match(source, /"importObserved"/);
   assert.doesNotMatch(source, /Directory\.GetFiles|SearchOption\.AllDirectories|GetAssetDependencyHash|HashFile|sourceFingerprint|sourceFileCount/);
+});
+
+test("reload refresh status observers rebind without the root listener admission", async () => {
+  for (const [path, command] of [
+    [editorRefreshToolPath, "internal.editor.refresh.status"],
+    [assetRefreshToolPath, "internal.asset.refresh.status"],
+  ] as const) {
+    const source = await readFile(path, "utf8");
+    assert.match(source, new RegExp(`${command.replaceAll(".", "\\.")}[^\\n]+observe, false\\)`));
+    assert.match(source, /includeRootAdmission\s*\?\s*\{ dataDir: context\.dataDir, rootAdmission: context\.rootAdmission, bridgeExecute: context\.bridgeExecute \}/);
+  }
 });
