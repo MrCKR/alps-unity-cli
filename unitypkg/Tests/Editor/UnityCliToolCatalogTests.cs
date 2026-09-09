@@ -102,19 +102,18 @@ namespace UnityCli.Tests
             {
                 var firstBuilder = NewBuilder(1, 1);
                 Add(firstBuilder, Definition("fixture.fingerprint", "project", "native", "fixture"), "ProjectInterface");
-                var first = PublishThroughProductionSlot(firstBuilder, 1L);
-                var firstSnapshot = Property(first, "Snapshot").GetValue(first);
+                var firstSnapshot = PublishThroughProductionSlot(firstBuilder, 1L);
                 var firstFingerprint = (string)Property(firstSnapshot, "ToolCatalogFingerprint").GetValue(firstSnapshot);
 
                 var sameBuilder = NewBuilder(1, 1);
                 Add(sameBuilder, Definition("fixture.fingerprint", "project", "native", "fixture"), "ProjectInterface");
-                var same = PublishThroughProductionSlot(sameBuilder, 999L);
-                var sameFingerprint = (string)Property(Property(same, "Snapshot").GetValue(same), "ToolCatalogFingerprint").GetValue(Property(same, "Snapshot").GetValue(same));
+                var sameSnapshot = PublishThroughProductionSlot(sameBuilder, 999L);
+                var sameFingerprint = (string)Property(sameSnapshot, "ToolCatalogFingerprint").GetValue(sameSnapshot);
 
                 var changedBuilder = NewBuilder(1, 1);
                 Add(changedBuilder, Definition("fixture.fingerprint", "project", "native", "fixture", "Changed fixture summary."), "ProjectInterface");
-                var changed = PublishThroughProductionSlot(changedBuilder, 1L);
-                var changedFingerprint = (string)Property(Property(changed, "Snapshot").GetValue(changed), "ToolCatalogFingerprint").GetValue(Property(changed, "Snapshot").GetValue(changed));
+                var changedSnapshot = PublishThroughProductionSlot(changedBuilder, 1L);
+                var changedFingerprint = (string)Property(changedSnapshot, "ToolCatalogFingerprint").GetValue(changedSnapshot);
 
                 Assert.That(firstFingerprint, Does.Match("^[0-9a-f]{64}$"));
                 Assert.That(Property(firstSnapshot, "ToolCatalogFingerprint").GetValue(firstSnapshot), Is.SameAs(firstFingerprint));
