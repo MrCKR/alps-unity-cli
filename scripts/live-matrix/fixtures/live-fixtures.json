@@ -912,7 +912,7 @@
      "run",
      "profiler.hierarchy",
      "--input",
-     "{\"frame\":-1,\"thread\":0,\"top\":20,\"depth\":5}"
+     "{\"frame\":-1,\"thread\":0,\"pageSize\":20,\"depth\":5}"
     ],
     "expect": {
      "exists": [
