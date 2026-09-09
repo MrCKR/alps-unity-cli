@@ -62,17 +62,16 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_DELETE_FAILED", "Failed to delete asset: " + path, "Check Unity Console and file permissions.");
             }
             var fullPath = AssetToolSupport.AssetFullPath(path);
-            var deleted = await ctx.Wait.Until(
-                () => !File.Exists(fullPath)
-                    && !Directory.Exists(fullPath)
-                    && !AssetDatabase.IsValidFolder(path)
-                    && AssetDatabase.LoadMainAssetAtPath(path) == null,
-                TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)),
-                ct);
-            var observedExists = File.Exists(fullPath)
-                || Directory.Exists(fullPath)
-                || AssetDatabase.IsValidFolder(path)
-                || AssetDatabase.LoadMainAssetAtPath(path) != null;
+            // 脚本删除会立即触发 domain reload；同步证明已满足时必须在 reload 前返回终态。
+            var deleted = IsDeletionObserved(path, fullPath);
+            if (!deleted)
+            {
+                deleted = await ctx.Wait.Until(
+                    () => IsDeletionObserved(path, fullPath),
+                    TimeSpan.FromMilliseconds(Math.Max(1, ctx.TimeoutMs)),
+                    ct);
+            }
+            var observedExists = !IsDeletionObserved(path, fullPath);
             if (!deleted || observedExists)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_DELETE_PROOF_MISSING", "Asset deletion was not observed in the file system and AssetDatabase: " + path, "Inspect Unity Console and file permissions before retrying.");
@@ -82,6 +81,15 @@ namespace UnityCli
                 Asset = new AssetDetail { Path = path, Exists = observedExists },
                 PlannedEffects = new List<AssetPlannedEffect> { new AssetPlannedEffect { Type = "asset.delete", Path = path } }
             };
+        }
+
+        /// <summary>同时核对文件系统与 AssetDatabase，避免把单侧可见性误作删除终态。</summary>
+        private static bool IsDeletionObserved(string path, string fullPath)
+        {
+            return !File.Exists(fullPath)
+                && !Directory.Exists(fullPath)
+                && !AssetDatabase.IsValidFolder(path)
+                && AssetDatabase.LoadMainAssetAtPath(path) == null;
         }
     }
 }

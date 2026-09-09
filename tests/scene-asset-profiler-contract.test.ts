@@ -124,7 +124,9 @@ test("asset preview and delete expose only terminal observed state", async () =>
   assert.match(previewSource, /AssetPreview\.GetAssetPreview\(asset\)[\s\S]*ctx\.Wait\.Until\([\s\S]*!AssetPreview\.IsLoadingAssetPreview\(instanceId\)[\s\S]*AssetPreview\.GetAssetPreview\(asset\)/);
   assert.match(previewSource, /IsTransient = false/);
   assert.match(previewSource, /E_ASSET_PREVIEW_TIMEOUT/);
-  assert.match(deleteSource, /ctx\.Wait\.Until\([\s\S]*!File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*!AssetDatabase\.IsValidFolder\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.match(deleteSource, /var deleted = IsDeletionObserved\(path, fullPath\);\s*if \(!deleted\)[\s\S]*ctx\.Wait\.Until\([\s\S]*IsDeletionObserved\(path, fullPath\)/);
+  assert.match(deleteSource, /return !File\.Exists\(fullPath\)[\s\S]*!Directory\.Exists\(fullPath\)[\s\S]*!AssetDatabase\.IsValidFolder\(path\)[\s\S]*LoadMainAssetAtPath\(path\) == null/);
+  assert.ok(deleteSource.indexOf("var deleted = IsDeletionObserved(path, fullPath)") < deleteSource.indexOf("await ctx.Wait.Until"));
   assert.doesNotMatch(deleteSource, /AssetPathToGUID\(path\)/);
   assert.match(deleteSource, /E_ASSET_DELETE_PROOF_MISSING/);
 });
