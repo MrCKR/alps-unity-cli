@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.4.3",
-  "sourceHash": "bce69ed5486aceed3e6c22a61db8dd180031897b2db4cf2c1907fd9dc37aceeb",
+  "sourceHash": "bb823f653c77277a425e49d907d7b67f0fb20f4df1ef431e9d350310a77e2365",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -786,8 +786,8 @@
     },
     {
       "path": "Editor/Tools/editor/menu-items.cs",
-      "size": 2284,
-      "sha256": "668478cd7c5c87e6a41bd560099c53f99954125e5a941f047f271f3f7e568b13"
+      "size": 2283,
+      "sha256": "7d2aa70d83c0963bb6217594c055b28f0388e8afe87aa4573e7209949c804a77"
     },
     {
       "path": "Editor/Tools/editor/menu.cs",
@@ -821,8 +821,8 @@
     },
     {
       "path": "Editor/Tools/editor/selection.cs",
-      "size": 9008,
-      "sha256": "549a7d3fe1f6560f805885825a2d17d50b056d6e274417483b47df3ebfcdd133"
+      "size": 9007,
+      "sha256": "0160dd48101b11c71781ffdeb46dbd704871e2e86f26a7d1366418310953e8c8"
     },
     {
       "path": "Editor/Tools/editor/selection/set.cs",
@@ -846,8 +846,8 @@
     },
     {
       "path": "Editor/Tools/editor/windows.cs",
-      "size": 3393,
-      "sha256": "9f92485c284932e3889badea590eedc8a535ed0bfb0f39fae6e92c63e073dab7"
+      "size": 3392,
+      "sha256": "51651bc743a4c8ffb27e47a7723f536688313e4642eaa6434cf33791eb11df67"
     },
     {
       "path": "Editor/Tools/go/GameObjectToolSupport.cs",
@@ -1221,8 +1221,8 @@
     },
     {
       "path": "Editor/Tools/prefab/stage.cs",
-      "size": 2986,
-      "sha256": "0487e61991634cabe40c36b251d1520e73f721379347b033fc1ac60c081509de"
+      "size": 2985,
+      "sha256": "11855c98b732866cd93adff2cd7c163e88fddb7eb19f29d74f3a8d05389e0e9b"
     },
     {
       "path": "Editor/Tools/prefab/unpack.cs",
@@ -1301,8 +1301,8 @@
     },
     {
       "path": "Editor/Tools/profiler/hierarchy.cs",
-      "size": 19095,
-      "sha256": "271219a731322f7a31e66077546c53303ad6a533445cefe69cbdf56831dffb83"
+      "size": 21246,
+      "sha256": "492442c5c5c9b0fb5fed876bfd3f7c48a830e6179b0f8bff8f3f363c6d2f7f9d"
     },
     {
       "path": "Editor/Tools/profiler/load.cs",
@@ -1401,8 +1401,8 @@
     },
     {
       "path": "Editor/Tools/project/info.cs",
-      "size": 2136,
-      "sha256": "a0128cc2ec2f0bd33d1ee9cdd4e5c05fd7abe0bb4814e61e925c3ebfe4350861"
+      "size": 2135,
+      "sha256": "948671b66b69a3fbc749cec09479ef73cb183424ac806492618b242e3490c26a"
     },
     {
       "path": "Editor/Tools/project/input-settings.cs",
@@ -1426,8 +1426,8 @@
     },
     {
       "path": "Editor/Tools/project/layers.cs",
-      "size": 2159,
-      "sha256": "2cd50b25b7cff62542226ab348bee61ef9b48c8d43eeedfb6d5aa180a84f6c6e"
+      "size": 2158,
+      "sha256": "724b03e528c2685137986424aab53362ac2fd676d6afe0ebf92c38c9890a08b2"
     },
     {
       "path": "Editor/Tools/project/player-settings.cs",
@@ -1451,8 +1451,8 @@
     },
     {
       "path": "Editor/Tools/project/tags.cs",
-      "size": 1656,
-      "sha256": "af9951086ed467ad67efb0ffbec8c8af83f242eb477bddb897baf1cf6a1d396d"
+      "size": 1655,
+      "sha256": "39cac574fa659de3cf65025997dee4f7c32820b48f29932b2787020305e97dac"
     },
     {
       "path": "Editor/Tools/project/time-settings.cs",
@@ -1996,8 +1996,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliRequestBudgetTests.cs",
-      "size": 30604,
-      "sha256": "f43e0574bf2e6e6283b945ee3ab63a57ed5c02b21d096124524600a706788bb2"
+      "size": 33085,
+      "sha256": "5850a4acc2c9828ac205c01a43d6c0cd56b932868cfaecc624c2365c72961d8d"
     },
     {
       "path": "Tests/Editor/UnityCliRuntimeBridgeIntegrationTests.cs",
