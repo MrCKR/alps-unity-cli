@@ -169,6 +169,104 @@ namespace UnityCli.Tests
             pool.Reset();
         }
 
+        [TestCase("editor.play", false, true)]
+        [TestCase("editor.stop", true, false)]
+        public void ReloadedPlayModeRootFreezesTypedSuccessAfterStableTargetIsObserved(string toolName, bool before, bool targetPlaying)
+        {
+            var requestId = Unique("playmode-success");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("playmode-success-session");
+            Consume(pool, requestId, digest, TestDeadline());
+            queueState.SaveOperation("direct-mutation", PlayModeRoot(requestId, digest, toolName, before, DateTimeOffset.UtcNow.AddMinutes(1)));
+            Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+
+            var finalized = UnityCliBridge.TryFinalizeRecoveredPlayModeRootForTests(
+                queueState, requestId, digest, targetPlaying, false, false, DateTimeOffset.UtcNow);
+
+            Assert.That(finalized, Is.True);
+            Assert.That(queueState.TryGetTerminal("direct-mutation", requestId, digest, out var terminal), Is.True);
+            var serialized = UnityCliSerializer.Serialize(terminal);
+            Assert.That(serialized, Does.Contain("\"ok\":true"));
+            Assert.That(serialized, Does.Contain("\"changed\":true"));
+            Assert.That(serialized, Does.Contain("\"isPlaying\":" + targetPlaying.ToString().ToLowerInvariant()));
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+            Assert.That(queueState.TryIsLeaseOwned(requestId, digest, out var owned), Is.True);
+            Assert.That(owned, Is.False);
+        }
+
+        [Test]
+        public void ReloadedPlayModeRootRetainsExactOwnerWhileTransitionIsActive()
+        {
+            var requestId = Unique("playmode-changing");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("playmode-changing-session");
+            Consume(pool, requestId, digest, TestDeadline());
+            queueState.SaveOperation("direct-mutation", PlayModeRoot(requestId, digest, "editor.play", false, DateTimeOffset.UtcNow.AddMinutes(1)));
+            Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+
+            var finalized = UnityCliBridge.TryFinalizeRecoveredPlayModeRootForTests(
+                queueState, requestId, digest, false, false, true, DateTimeOffset.UtcNow);
+
+            Assert.That(finalized, Is.False);
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.True);
+            Assert.That(queueState.TryGetTerminal("direct-mutation", requestId, digest, out var terminal), Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(1));
+            Assert.That(queueState.TryIsLeaseOwned(requestId, digest, out var owned), Is.True);
+            Assert.That(owned, Is.True);
+            queueState.ClearOperation("direct-mutation");
+            queueState.ReleaseLease(requestId, digest);
+            pool.Reset();
+        }
+
+        [Test]
+        public void ReloadedPlayModeRootFreezesDomainErrorAtImmutableDeadline()
+        {
+            var requestId = Unique("playmode-deadline");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("playmode-deadline-session");
+            Consume(pool, requestId, digest, TestDeadline());
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(-1);
+            queueState.SaveOperation("direct-mutation", PlayModeRoot(requestId, digest, "editor.play", false, deadline));
+            Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+
+            var finalized = UnityCliBridge.TryFinalizeRecoveredPlayModeRootForTests(
+                queueState, requestId, digest, false, false, false, deadline.AddSeconds(1));
+
+            Assert.That(finalized, Is.True);
+            Assert.That(queueState.TryGetTerminal("direct-mutation", requestId, digest, out var terminal), Is.True);
+            var serialized = UnityCliSerializer.Serialize(terminal);
+            Assert.That(serialized, Does.Contain("E_PLAY_MODE_TERMINAL_NOT_OBSERVED"));
+            Assert.That(serialized, Does.Not.Contain("outcome is unknown"));
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.False);
+            Assert.That(pool.Capture().Active, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ReloadedGenericDirectMutationIsNotFinalizedFromPlayModeState()
+        {
+            var requestId = Unique("generic-effect");
+            var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
+            var pool = CreatePool("generic-effect-session");
+            Consume(pool, requestId, digest, TestDeadline());
+            queueState.SaveOperation("direct-mutation", PlayModeRoot(requestId, digest, "asset.delete", false, DateTimeOffset.UtcNow.AddMinutes(1)));
+            Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
+            Assert.That(acquired, Is.True);
+
+            var finalized = UnityCliBridge.TryFinalizeRecoveredPlayModeRootForTests(
+                queueState, requestId, digest, true, false, false, DateTimeOffset.UtcNow);
+
+            Assert.That(finalized, Is.False);
+            Assert.That(queueState.OperationExists("direct-mutation"), Is.True);
+            Assert.That(queueState.TryGetTerminal("direct-mutation", requestId, digest, out var terminal), Is.False);
+            queueState.ClearOperation("direct-mutation");
+            queueState.ReleaseLease(requestId, digest);
+            pool.Reset();
+        }
+
         [Test]
         public void ReloadTickScheduleUsesMonotonicTimeAcrossUtcRollback()
         {
@@ -1202,6 +1300,18 @@ namespace UnityCli.Tests
             {
                 { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play" },
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", phase }
+            };
+        }
+
+        private static Dictionary<string, object> PlayModeRoot(
+            string requestId, string digest, string toolName, bool before, DateTimeOffset deadline)
+        {
+            return new Dictionary<string, object>
+            {
+                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", toolName },
+                { "editorSessionId", UnityCliBridge.EditorSessionId() },
+                { "absoluteDeadlineUtc", deadline.ToString("O") }, { "playModeWasPlaying", before },
+                { "phase", "effect_started" }
             };
         }
 

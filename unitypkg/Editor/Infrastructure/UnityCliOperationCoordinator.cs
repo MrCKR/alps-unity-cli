@@ -131,7 +131,7 @@ namespace UnityCli
                 return ExecutionTimeoutEnvelope(request.RequestId, "The request was not accepted before the execution deadline elapsed.");
             }
 
-            try { SaveDirectMutationAcceptedRoot(request.RequestId, requestDigest, contract.ToolName); }
+            try { SaveDirectMutationAcceptedRoot(request, requestDigest, contract.ToolName); }
             catch (Exception exception)
             {
                 ScheduleDirectMutationPreEffectCleanup(request.RequestId, requestDigest);
@@ -232,12 +232,13 @@ namespace UnityCli
             catch (Exception exception) { return SerializeBridgeExceptionEnvelope(requestId, new BridgeCommandException("E_EXECUTION_TIMEOUT", "Direct mutation terminal publication is incomplete; the exact owner is retained: " + exception.GetType().Name + ".")); }
         }
 
-        private static void SaveDirectMutationAcceptedRoot(string requestId, string requestDigest, string toolName)
+        private static void SaveDirectMutationAcceptedRoot(BridgeRequest request, string requestDigest, string toolName)
         {
             UnityCliActiveOperation.Save(DirectMutationTerminalScope, new Dictionary<string, object>
             {
-                { "requestId", requestId }, { "requestDigest", requestDigest }, { "toolName", toolName },
-                { "editorSessionId", EditorSessionId() }, { "phase", "accepted_before_effect" }
+                { "requestId", request.RequestId }, { "requestDigest", requestDigest }, { "toolName", toolName },
+                { "editorSessionId", EditorSessionId() }, { "absoluteDeadlineUtc", request.Execution.AbsoluteDeadlineUtc },
+                { "phase", "accepted_before_effect" }
             });
         }
 
@@ -268,6 +269,10 @@ namespace UnityCli
             if (!string.Equals(root["phase"] as string, "accepted_before_effect", StringComparison.Ordinal)
                 && !string.Equals(root["phase"] as string, "effect_started", StringComparison.Ordinal))
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Direct mutation active state cannot cross its effect barrier.");
+            var toolName = root["toolName"] as string;
+            if ((string.Equals(toolName, "editor.play", StringComparison.Ordinal) || string.Equals(toolName, "editor.stop", StringComparison.Ordinal))
+                && !root.ContainsKey("playModeWasPlaying"))
+                root["playModeWasPlaying"] = EditorApplication.isPlaying;
             root["phase"] = "effect_started";
             UnityCliActiveOperation.Save(DirectMutationTerminalScope, root);
         }
@@ -369,6 +374,22 @@ namespace UnityCli
             bool recovered;
             try { if (!UnityCliSessionMutationLease.TryRecoverExact(requestId, requestDigest, out recovered)) return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(requestId, "E_UNITY_BUSY", "Another mutation owns the selected Unity instance.", null, null, true, 250)); }
             catch (BridgeCommandException exception) { return SerializeBridgeExceptionEnvelope(requestId, exception); }
+            var toolName = root["toolName"] as string;
+            if (string.Equals(phase, "effect_started", StringComparison.Ordinal)
+                && (string.Equals(toolName, "editor.play", StringComparison.Ordinal) || string.Equals(toolName, "editor.stop", StringComparison.Ordinal)))
+            {
+                if (!TryFinalizeRecoveredPlayModeRoot(
+                    ProductionQueueState, requestId, requestDigest,
+                    EditorApplication.isPlaying, EditorApplication.isPaused, IsPlayModeChanging(),
+                    EditorToolSupport.BuildEditorState, DateTimeOffset.UtcNow))
+                    return UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Error(
+                        requestId, "E_UNITY_BUSY", "The Play Mode transition is still active for this exact request.",
+                        null, new[] { "Run tools run editor.play-mode.status with the same requestId." }, true, 100));
+                object recoveredTerminal;
+                if (UnityCliActiveOperation.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out recoveredTerminal))
+                    return UnityCliSerializer.Serialize(recoveredTerminal);
+                return ExecutionTimeoutEnvelope(requestId, "The recovered Play Mode terminal could not be read after publication.");
+            }
             object pending;
             var envelope = string.Equals(phase, "terminal_pending", StringComparison.Ordinal) && root.TryGetValue("terminalEnvelope", out pending) && pending != null
                 ? pending
@@ -449,12 +470,13 @@ namespace UnityCli
             ReleaseDirectMutationLease(requestId, requestDigest);
         }
 
-        /// <summary>主循环恢复direct terminal发布或精确lease清理，I/O不确定时保持root与owner。</summary>
+        /// <summary>主循环只对可直接观察的PlayMode root冻结原类型终态；其余direct effect仍保持unknown。</summary>
         private static bool TryFinalizeRecoveredPlayModeRoot(string requestId, string requestDigest)
         {
+            Dictionary<string, object> root;
             try
             {
-                var root = LoadDirectMutationRoot();
+                root = LoadDirectMutationRoot();
                 if (root != null && SessionState.GetBool(DirectMutationCleanupPendingSessionKey, false)
                     && DirectMutationBindingMatches(requestId, requestDigest)
                     && string.Equals(root["requestId"] as string, requestId, StringComparison.Ordinal)
@@ -463,17 +485,108 @@ namespace UnityCli
                     UnityCliActiveOperation.Clear(DirectMutationTerminalScope);
             }
             catch { return false; }
-            var resumed = TryResumeDirectMutation(requestId, requestDigest);
-            if (resumed != null)
+
+            var finalized = TryFinalizeRecoveredPlayModeRoot(
+                ProductionQueueState, requestId, requestDigest,
+                EditorApplication.isPlaying, EditorApplication.isPaused, IsPlayModeChanging(),
+                EditorToolSupport.BuildEditorState, DateTimeOffset.UtcNow);
+            if (!finalized)
+            {
+                try { root = LoadDirectMutationRoot(); }
+                catch { root = null; }
+                var toolName = root == null ? null : root["toolName"] as string;
+                if (toolName != "editor.play" && toolName != "editor.stop")
+                    finalized = TryResumeDirectMutation(requestId, requestDigest) != null;
+            }
+            if (finalized)
             {
                 try { if (!UnityCliActiveOperation.Exists(DirectMutationTerminalScope)) ReleaseDirectMutationLease(requestId, requestDigest); }
                 catch { }
             }
             if (!SessionState.GetBool(DirectMutationCleanupPendingSessionKey, false)
-                || !DirectMutationBindingMatches(requestId, requestDigest)) return resumed != null;
+                || !DirectMutationBindingMatches(requestId, requestDigest)) return finalized;
             ReleaseDirectMutationLease(requestId, requestDigest);
             bool isOwned;
             return UnityCliSessionMutationLease.TryIsOwnedBy(requestId, requestDigest, out isOwned) && !isOwned;
+        }
+
+        internal static bool TryFinalizeRecoveredPlayModeRootForTests(
+            BridgeQueueState state, string requestId, string requestDigest,
+            bool isPlaying, bool isPaused, bool isChanging, DateTimeOffset utcNow)
+        {
+            return TryFinalizeRecoveredPlayModeRoot(state, requestId, requestDigest, isPlaying, isPaused, isChanging,
+                () => new EditorStateInfo
+                {
+                    PlayMode = new PlayModeInfo
+                    {
+                        IsPlaying = isPlaying,
+                        IsPaused = isPaused,
+                        IsPlayingOrWillChangePlaymode = isPlaying || isChanging
+                    },
+                    Busy = new BusyInfo { PlayModeChanging = isChanging }
+                }, utcNow);
+        }
+
+        /// <summary>固定root中的before/deadline与当前主线程状态共同构成跨reload完成证明。</summary>
+        private static bool TryFinalizeRecoveredPlayModeRoot(
+            BridgeQueueState state, string requestId, string requestDigest,
+            bool isPlaying, bool isPaused, bool isChanging,
+            Func<EditorStateInfo> readState, DateTimeOffset utcNow)
+        {
+            Dictionary<string, object> root;
+            try
+            {
+                root = LoadDirectMutationRoot(state);
+                RequireDirectMutationRoot(root, requestId, requestDigest);
+            }
+            catch { return false; }
+            if (!string.Equals(root["phase"] as string, "effect_started", StringComparison.Ordinal)) return false;
+            var toolName = root["toolName"] as string;
+            var enterPlayMode = string.Equals(toolName, "editor.play", StringComparison.Ordinal);
+            if (!enterPlayMode && !string.Equals(toolName, "editor.stop", StringComparison.Ordinal)) return false;
+
+            object beforeValue;
+            object deadlineValue;
+            DateTimeOffset deadline;
+            if (!root.TryGetValue("playModeWasPlaying", out beforeValue) || !(beforeValue is bool)
+                || !root.TryGetValue("absoluteDeadlineUtc", out deadlineValue) || !(deadlineValue is string)
+                || !DateTimeOffset.TryParse((string)deadlineValue, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out deadline))
+            {
+                PublishDirectMutationTerminal(state, requestId, requestDigest,
+                    ExecutionTimeoutEnvelope(requestId, "Play Mode recovery state is incomplete; outcome is unknown."));
+                object invalidTerminal;
+                return state.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out invalidTerminal);
+            }
+
+            object terminal;
+            if (!isChanging && isPlaying == enterPlayMode)
+            {
+                var before = (bool)beforeValue;
+                var result = new PlayModeResult
+                {
+                    Changed = enterPlayMode ? !before : before,
+                    IsPlaying = isPlaying,
+                    IsPaused = isPaused
+                };
+                terminal = enterPlayMode
+                    ? (object)new EditorPlayTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play" } } }
+                    : new EditorStopTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.stop" } } };
+                PublishDirectMutationTerminal(state, requestId, requestDigest,
+                    UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Success(requestId, terminal)));
+            }
+            else
+            {
+                if (utcNow < deadline) return false;
+                var code = enterPlayMode ? "E_PLAY_MODE_TERMINAL_NOT_OBSERVED" : "E_EDIT_MODE_TERMINAL_NOT_OBSERVED";
+                var message = enterPlayMode
+                    ? "Play Mode did not reach a stable playing state before the immutable deadline."
+                    : "The Editor did not reach stable Edit Mode before the immutable deadline.";
+                terminal = ProtocolEnvelopeFactory.Error(requestId, code, message, null,
+                    new[] { "Run tools run editor.play-mode.status with the same requestId before deciding whether to submit a new request." });
+                PublishDirectMutationTerminal(state, requestId, requestDigest, UnityCliSerializer.Serialize(terminal));
+            }
+            object published;
+            return state.TryGetTerminal(DirectMutationTerminalScope, requestId, requestDigest, out published);
         }
 
         /// <summary>绑定本domain正在执行的direct mutation；SessionState只跨本次Editor启动的domain reload存活。</summary>
