@@ -609,7 +609,7 @@ export function reduceObservationRegistryRecord(record: InstanceRegistryV3, obse
  * fallback 前重新证明 registry claim 对应原 PID/start 的 Unity.exe。
  * 命令行存在 -projectPath 时必须匹配 canonical identity；正式 Hub/普通启动可以不携带该参数。
  */
-export async function verifyRegistrySessionProcess(identity: RegistryIdentity, session: RegistrySession, timeoutMs = 900): Promise<SessionProcessVerification> {
+export async function verifyRegistrySessionProcess(identity: RegistryIdentity, session: Pick<RegistrySession, "processId" | "processStartedAt" | "target" | "executablePath">, timeoutMs = 900): Promise<SessionProcessVerification> {
   if (process.platform !== "win32" || timeoutMs < 1) return "unverifiable";
   const startedAt = Date.now();
   const command = [

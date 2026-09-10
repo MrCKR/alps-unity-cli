@@ -151,6 +151,56 @@ test("editor.state fallback performs zero UI probes for unverified, duplicate, o
     }));
     assert.equal(verified.outcome, "observed-empty");
     assert.equal(verifiedProbes, 1);
+
+    const noProjectPathClaims: ProjectProcessClaimInspection = { verification: "verified", processIds: [], processClaims: [] };
+    let registryProbes = 0;
+    const registryObserver = new EditorBlockerObserver({
+      inspect: async () => noProjectPathClaims,
+      verifySession: async () => "verified",
+      probe: async (processId) => {
+        registryProbes += 1;
+        assert.equal(processId, fixture.session.processId);
+        return { supported: true, outcome: "observed-empty", windows: [] };
+      },
+    });
+    const noProjectPath = await observeVerifiedRegistrySession(fixture.identity, fixture.session, Date.now() + 1_000, "verified", noProjectPathClaims, registryObserver);
+    assert.equal(noProjectPath.outcome, "observed-empty");
+    assert.equal(registryProbes, 1);
+
+    const instance = reduceObservationRegistryRecord(makeRegistry(fixture.identity, [{ ...fixture.session, lifecycle: "ready" }]), new Map([[fixture.session.processId, {
+      processId: fixture.session.processId, state: "alive" as const,
+      processStartedAt: fixture.session.processStartedAt, executablePath: process.execPath,
+    }]]));
+    const result = await readEditorState({
+      requestId: "registry-without-projectpath-catalog-failed",
+      flags: { instance: fixture.project }, dataDir: fixture.dataDir,
+      bridgeExecute: async (payload) => ({ ok: false, requestId: payload.requestId,
+        error: { code: "E_TOOL_REGISTRY_UNHEALTHY", message: "Duplicate tool registration", nextActions: [], transient: false, retryAfterMs: 0 } }),
+    }, {
+      selectObservation: async () => ({ instance, matchedBy: "projectPath" }),
+      verifySession: async () => "verified",
+      inspectClaims: async () => noProjectPathClaims,
+      observer: registryObserver,
+    });
+    assert.equal(result.status, "unresponsive");
+    assert.equal(result.session.known, true);
+    assert.equal(result.session.editorSessionId, fixture.session.editorSessionId);
+    assert.equal(registryProbes, 2);
+
+    const recovered = await readEditorState({
+      requestId: "registry-without-projectpath-recovered",
+      flags: { instance: fixture.project }, dataDir: fixture.dataDir,
+      bridgeExecute: async (payload) => ({ ok: true, requestId: payload.requestId,
+        data: { snapshot: snapshot(fixture.session), progress: [], blockers: [] } }),
+    }, {
+      selectObservation: async () => ({ instance, matchedBy: "projectPath" }),
+      verifySession: async () => "verified",
+      inspectClaims: async () => noProjectPathClaims,
+      observer: registryObserver,
+    });
+    assert.equal(recovered.status, "ready");
+    assert.equal(recovered.observation.freshness, "live");
+    assert.equal(registryProbes, 2);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }

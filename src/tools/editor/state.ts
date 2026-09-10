@@ -170,7 +170,7 @@ export function rejectUnavailableEditorState(state: EditorStateResult, operation
 }
 
 /**
- * registry fallback 只有在 session PID、project claim 与 start identity 全部一致后才允许 UIAutomation。
+ * registry fallback 先证明 session PID/start；显式项目 claim 存在时必须一致，但普通启动可以不携带它。
  * 任何多 PID、不可验证或 PID 复用迹象都在 observer 调用前 fail closed。
  */
 export async function observeVerifiedRegistrySession(
@@ -183,11 +183,12 @@ export async function observeVerifiedRegistrySession(
 ): Promise<EditorBlockerObservation> {
   if (verification === "dead") return { outcome: "offline", blockers: [] };
   if (verification !== "verified" || processClaims.verification !== "verified") return { outcome: "unproven", blockers: [], reason: "process-claims-unverifiable" };
-  if (processClaims.processIds.length === 0) return { outcome: "offline", blockers: [] };
-  if (processClaims.processIds.length !== 1) return { outcome: "conflict", blockers: [], reason: "multiple-process-claims" };
-  if (processClaims.processIds[0] !== session.processId) return { outcome: "unproven", blockers: [], reason: "session-process-mismatch" };
-  const claim = processClaims.processClaims?.find((item) => item.processId === session.processId);
-  if (!claim || Date.parse(claim.processStartedAt) !== Date.parse(session.processStartedAt)) return { outcome: "unproven", blockers: [], reason: "session-process-mismatch" };
+  if (processClaims.processIds.length > 0) {
+    if (processClaims.processIds.length !== 1) return { outcome: "conflict", blockers: [], reason: "multiple-process-claims" };
+    if (processClaims.processIds[0] !== session.processId) return { outcome: "unproven", blockers: [], reason: "session-process-mismatch" };
+    const claim = processClaims.processClaims?.find((item) => item.processId === session.processId);
+    if (!claim || Date.parse(claim.processStartedAt) !== Date.parse(session.processStartedAt)) return { outcome: "unproven", blockers: [], reason: "session-process-mismatch" };
+  }
   return observer.observe(identity, deadlineMs, session);
 }
 

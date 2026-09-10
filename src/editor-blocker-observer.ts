@@ -1,5 +1,5 @@
 /** 编辑器 blocker 的公开投影；任何 transport 或窗口内部标识都不得越过这里。 */
-import { inspectProjectProcessClaims, type ProjectProcessClaimInspection, type RegistryIdentity, type RegistrySession } from "./instances.js";
+import { inspectProjectProcessClaims, verifyRegistrySessionProcess, type ProjectProcessClaimInspection, type RegistryIdentity, type RegistrySession, type SessionProcessVerification } from "./instances.js";
 import { probeWindowsEditorState, type WindowsEditorStateProbe } from "./windows-editor-state.js";
 import { dialogId, normalizeDialogButton } from "./editor-dialogs.js";
 
@@ -29,17 +29,51 @@ export function windowBlockers(value: Array<{ modal: boolean; hwnd: string; titl
 }
 export type EditorBlockerObservationOutcome = "observed-empty" | "observed-blocked" | "unproven" | "conflict" | "unsupported" | "offline";
 export interface EditorBlockerObservation { outcome: EditorBlockerObservationOutcome; blockers: EditorBlocker[]; processId?: number; processStartedAt?: string; reason?: string; }
-export interface EditorBlockerObserverDependencies { inspect(identity: RegistryIdentity, timeoutMs: number): Promise<ProjectProcessClaimInspection>; probe(processId: number, timeoutMs: number): Promise<WindowsEditorStateProbe>; now(): number; }
+export interface EditorBlockerObserverDependencies {
+  inspect(identity: RegistryIdentity, timeoutMs: number): Promise<ProjectProcessClaimInspection>;
+  verifySession(identity: RegistryIdentity, session: Pick<RegistrySession, "processId" | "processStartedAt">, timeoutMs: number): Promise<SessionProcessVerification>;
+  probe(processId: number, timeoutMs: number): Promise<WindowsEditorStateProbe>;
+  now(): number;
+}
 /** canonical project identity 的唯一有界 blocker observer。 */
 export class EditorBlockerObserver {
   private readonly dependencies: EditorBlockerObserverDependencies;
-  public constructor(dependencies: Partial<EditorBlockerObserverDependencies> = {}) { this.dependencies = { inspect: dependencies.inspect ?? inspectProjectProcessClaims, probe: dependencies.probe ?? ((processId, timeoutMs) => probeWindowsEditorState(processId, { timeoutMs })), now: dependencies.now ?? Date.now }; }
+  public constructor(dependencies: Partial<EditorBlockerObserverDependencies> = {}) {
+    this.dependencies = {
+      inspect: dependencies.inspect ?? inspectProjectProcessClaims,
+      verifySession: dependencies.verifySession ?? ((identity, session, timeoutMs) => verifyRegistrySessionProcess(identity, { ...session, target: "editor" }, timeoutMs)),
+      probe: dependencies.probe ?? ((processId, timeoutMs) => probeWindowsEditorState(processId, { timeoutMs })),
+      now: dependencies.now ?? Date.now,
+    };
+  }
   /** deadline 由调用者冻结；只在唯一可归因 PID 上读取 Windows UI。 */
   public async observe(identity: RegistryIdentity, deadlineMs: number, session?: Pick<RegistrySession, "processId" | "processStartedAt">): Promise<EditorBlockerObservation> {
     const remaining = Math.max(0, deadlineMs - this.dependencies.now()); if (remaining < 1) return { outcome: "unproven", blockers: [], reason: "deadline" };
-    const claims = await this.dependencies.inspect(identity, remaining); if (claims.verification === "unsupported") return { outcome: "unsupported", blockers: [] }; if (claims.verification !== "verified") return { outcome: "unproven", blockers: [], reason: "process-claims-unverifiable" }; if (claims.processIds.length === 0) return { outcome: "offline", blockers: [] }; if (claims.processIds.length !== 1) return { outcome: "conflict", blockers: [], reason: "multiple-process-claims" };
-    const processId = claims.processIds[0]; const claim = claims.processClaims?.find((item) => item.processId === processId); if (!claim) return { outcome: "unproven", blockers: [], processId, reason: "process-start-unproven" }; if (session && (session.processId !== processId || Date.parse(session.processStartedAt) !== Date.parse(claim.processStartedAt))) return { outcome: "unproven", blockers: [], reason: "session-process-mismatch" };
-    const probe = await this.dependencies.probe(processId, Math.max(1, deadlineMs - this.dependencies.now())); if (probe.outcome === "unsupported") return { outcome: "unsupported", blockers: [], processId, processStartedAt: claim.processStartedAt }; if (probe.outcome === "unproven") return { outcome: "unproven", blockers: [], processId, processStartedAt: claim.processStartedAt, ...(probe.reason ? { reason: probe.reason } : {}) };
+    const claims = await this.dependencies.inspect(identity, remaining);
+    if (claims.verification === "unsupported") return { outcome: "unsupported", blockers: [] };
+    if (claims.verification !== "verified") return { outcome: "unproven", blockers: [], reason: "process-claims-unverifiable" };
+    let claim: { processId: number; processStartedAt: string };
+    if (claims.processIds.length === 0) {
+      if (!session) return { outcome: "offline", blockers: [] };
+      // 命令行缺少项目参数不是退出证据；独立证明原 PID/start 后才能观察它的窗口。
+      const verificationBudget = deadlineMs - this.dependencies.now();
+      if (verificationBudget < 1) return { outcome: "unproven", blockers: [], reason: "deadline" };
+      const verification = await this.dependencies.verifySession(identity, session, verificationBudget);
+      if (verification === "dead") return { outcome: "offline", blockers: [] };
+      if (verification !== "verified") return { outcome: "unproven", blockers: [], reason: "session-process-unverifiable" };
+      claim = session;
+    } else {
+      if (claims.processIds.length !== 1) return { outcome: "conflict", blockers: [], reason: "multiple-process-claims" };
+      const processId = claims.processIds[0];
+      const matchingClaim = claims.processClaims?.find((item) => item.processId === processId);
+      if (!matchingClaim) return { outcome: "unproven", blockers: [], processId, reason: "process-start-unproven" };
+      if (session && (session.processId !== processId || Date.parse(session.processStartedAt) !== Date.parse(matchingClaim.processStartedAt))) return { outcome: "unproven", blockers: [], reason: "session-process-mismatch" };
+      claim = matchingClaim;
+    }
+    const processId = claim.processId;
+    const probeBudget = deadlineMs - this.dependencies.now();
+    if (probeBudget < 1) return { outcome: "unproven", blockers: [], reason: "deadline" };
+    const probe = await this.dependencies.probe(processId, probeBudget); if (probe.outcome === "unsupported") return { outcome: "unsupported", blockers: [], processId, processStartedAt: claim.processStartedAt }; if (probe.outcome === "unproven") return { outcome: "unproven", blockers: [], processId, processStartedAt: claim.processStartedAt, ...(probe.reason ? { reason: probe.reason } : {}) };
     const blockers = probe.outcome === "observed-blocked" ? windowBlockers(probe.windows, processId, claim.processStartedAt) : [];
     return { outcome: blockers.length > 0 ? "observed-blocked" : "observed-empty", blockers, processId, processStartedAt: claim.processStartedAt };
   }
