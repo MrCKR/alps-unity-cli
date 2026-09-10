@@ -13,6 +13,7 @@ import {
   type UnityInstance,
 } from "../instances.js";
 import { rootAdmissionFingerprint, type DiscoveryProvenance, type RootAdmissionLease, type RootAdmissionRequest } from "./admission.js";
+import { readBridgeStartBlockerDiagnostics } from "./start-diagnostics.js";
 import type { BridgeFlags, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 
 export const EDITOR_STATE_OBSERVATION_BUDGET_MS = 10_000;
@@ -536,7 +537,7 @@ export class SessionSupervisor {
       return reply.response;
     } catch (error) {
       if (error instanceof SessionSupervisorError) throw error;
-      throw connectionFailure(instance.instanceId, error);
+      throw await connectionFailure(instance.instanceId, error, this.runtime.dataDir);
     }
   }
 
@@ -548,7 +549,7 @@ export class SessionSupervisor {
 
   /** 测试 transport 仍通过 supervisor，但不伪造 registry/listener generation。 */
   private async dispatchInjected(request: FrozenBridgeRequest, timeoutMs?: number): Promise<BridgeResponse> {
-    if (!this.runtime.bridgeExecute) throw connectionFailure(request.payload.instanceId, new Error("Injected Bridge transport is unavailable."));
+    if (!this.runtime.bridgeExecute) throw await connectionFailure(request.payload.instanceId, new Error("Injected Bridge transport is unavailable."), this.runtime.dataDir);
     try {
       const operation = this.runtime.bridgeExecute(request.payload);
       const response = timeoutMs === undefined ? await operation : await Promise.race([
@@ -559,7 +560,7 @@ export class SessionSupervisor {
       return response;
     } catch (error) {
       if (error instanceof SessionSupervisorError) throw error;
-      throw connectionFailure(request.payload.instanceId, error);
+      throw await connectionFailure(request.payload.instanceId, error, this.runtime.dataDir);
     }
   }
 
@@ -1048,11 +1049,26 @@ function identityMismatch(instanceId: string): SessionSupervisorError {
   ], { instanceId });
 }
 
-function connectionFailure(instanceId: string, error: unknown): SessionSupervisorError {
-  return new SessionSupervisorError("BRIDGE_CONNECTION_FAILED", errorMessage(error), [
+/**
+ * 连接失败的统一错误构造；dataDir 可用时读取项目 bridge 日志尾部，
+ * 把 Unity 侧阻止 bridge 启动的根因直接透出到错误信息与 nextActions，而不是笼统的连接失败。
+ */
+async function connectionFailure(instanceId: string, error: unknown, dataDir?: string): Promise<SessionSupervisorError> {
+  const failure = new SessionSupervisorError("BRIDGE_CONNECTION_FAILED", errorMessage(error), [
     "Run unitycli instances list and inspect the selected Unity session.",
     "Run unitycli tools run editor.state for transition or blocker details.",
   ], { instanceId }, true, REGISTRY_POLL_INTERVAL_MS);
+  try {
+    const diagnostics = await readBridgeStartBlockerDiagnostics(dataDir ?? defaultDataDir(), instanceId);
+    if (!diagnostics) return failure;
+    return new SessionSupervisorError("BRIDGE_CONNECTION_FAILED", `${errorMessage(error)} ${diagnostics.message}`, [
+      ...diagnostics.nextActions,
+      ...failure.nextActions,
+    ], { instanceId, bridgeStartBlocked: diagnostics.details }, true, REGISTRY_POLL_INTERVAL_MS);
+  } catch {
+    // 根因诊断永远不影响原始连接失败错误。
+    return failure;
+  }
 }
 
 function admissionWasRejected(response: BridgeResponse): boolean {

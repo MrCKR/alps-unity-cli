@@ -410,6 +410,151 @@ export async function checkExtensionBundles(projectPath: string, options: Extens
   return checks;
 }
 
+export interface ExtensionProjectionRepairEntry {
+  extensionId: ExtensionId;
+  fileCount: number;
+  sourceHash?: string;
+}
+
+export interface ExtensionProjectionRepairFailure {
+  extensionId: ExtensionId;
+  code: string;
+  message: string;
+  nextActions: string[];
+}
+
+export interface ExtensionProjectionRepairResult {
+  repaired: ExtensionProjectionRepairEntry[];
+  upToDate: ExtensionId[];
+  failures: ExtensionProjectionRepairFailure[];
+}
+
+/**
+ * init 包发布后的扩展升级自愈：把已装扩展投影对齐到当前 CLI 内置 bundle。
+ * Unity 增量编译只看源文件变化，包升级后若不重铺投影，扩展程序集不会重编译，
+ * 新协议要求的精确 UnityCliExtensionAssembly 标记就不会出现，bridge 启动校验会失败。
+ * 逐项收集失败结果并原样透出，任何单项失败都不中断 init 包发布。
+ */
+export async function refreshInstalledExtensionProjections(projectPath: string, absoluteDeadlineMs?: number): Promise<ExtensionProjectionRepairResult> {
+  const result: ExtensionProjectionRepairResult = { repaired: [], upToDate: [], failures: [] };
+  const registry = new ExtensionRegistry();
+  let installed: InstalledExtensionManifestEntry[];
+  try {
+    installed = (await readExtensionInstallManifest(projectPath)).extensions;
+  } catch (error) {
+    result.failures.push({
+      extensionId: "unknown",
+      code: "E_EXTENSION_REPAIR_FAILED",
+      message: `Installed extension manifest could not be read, so installed extension projections were not refreshed: ${error instanceof Error ? error.message : String(error)}`,
+      nextActions: [`Run \`unitycli extensions status --project "${projectPath}"\` to inspect the broken extension install manifest.`],
+    });
+    return result;
+  }
+  for (const entry of installed) {
+    if (absoluteDeadlineMs !== undefined && Date.now() >= absoluteDeadlineMs) {
+      result.failures.push({
+        extensionId: entry.extensionId,
+        code: "E_EXTENSION_REPAIR_DEADLINE",
+        message: `The immutable init deadline elapsed before the ${entry.extensionId} extension projection could be refreshed.`,
+        nextActions: ["Rerun `unitycli init package --project <UnityProject>` to finish refreshing extension projections."],
+      });
+      continue;
+    }
+    const extension = registry.getExtension(entry.extensionId);
+    if (!extension) {
+      result.failures.push({
+        extensionId: entry.extensionId,
+        code: "E_EXTENSION_UNKNOWN_INSTALLED",
+        message: `Installed extension ${entry.extensionId} is not provided by this CLI build, so its projection cannot be refreshed automatically.`,
+        nextActions: [`Run \`unitycli extensions remove ${entry.extensionId} --project "${projectPath}"\` if the extension is no longer needed.`],
+      });
+      continue;
+    }
+    const sourceRoot = extensionSourceRoot(entry.extensionId);
+    const includes = extensionUnityInstallIncludes(extension.manifest);
+    if (!existsSync(sourceRoot) || !includes.every((include) => existsSync(safeSourcePath(sourceRoot, include)))) {
+      result.failures.push({
+        extensionId: entry.extensionId,
+        code: "E_EXTENSION_BUNDLE_MISSING",
+        message: `The ${entry.extensionId} extension bundle shipped with this CLI build is incomplete, so its installed projection was left unchanged.`,
+        nextActions: ["Reinstall the @alpsckr/unitycli package, then run `unitycli init package` again."],
+      });
+      continue;
+    }
+    const currentHash = await hashBundleProjection(sourceRoot, includes);
+    if (entry.sourceHash === currentHash && entry.version === extension.manifest.version) {
+      result.upToDate.push(entry.extensionId);
+      continue;
+    }
+    try {
+      const repair = await installExtensionBundleUnchecked(projectPath, extension.manifest, "installed");
+      result.repaired.push({ extensionId: entry.extensionId, fileCount: repair.fileCount, sourceHash: repair.sourceHash });
+    } catch (error) {
+      result.failures.push({
+        extensionId: entry.extensionId,
+        code: error instanceof ExtensionInstallerError ? error.code : "E_EXTENSION_REPAIR_FAILED",
+        message: `Extension projection refresh failed for ${entry.extensionId}: ${error instanceof Error ? error.message : String(error)}`,
+        nextActions: error instanceof ExtensionInstallerError && error.nextActions.length > 0
+          ? error.nextActions
+          : [`Reinstall manually: \`unitycli extensions remove ${entry.extensionId}\` followed by \`unitycli extensions install ${entry.extensionId} --project "${projectPath}"\`.`],
+      });
+    }
+  }
+  return result;
+}
+
+export interface CompiledExtensionMarkerCheck {
+  extensionId: ExtensionId;
+  assemblyName: string;
+  compiledAssemblyFound: boolean;
+  markerPresent?: boolean;
+}
+
+const compiledMarkerNeedle = Buffer.from("UnityCliExtensionAssembly", "utf8");
+const maxCompiledAssemblyReadBytes = 32 * 1024 * 1024;
+
+/**
+ * 只读检查扩展编译产物是否包含当前协议要求的精确扩展标记。
+ * 投影重铺后 Unity 可能尚未重编译；此时 Library/ScriptAssemblies 的旧 dll 不含标记，
+ * bridge 启动校验仍会失败，doctor 必须把这种状态显式暴露为 warn 而不是 pass。
+ */
+export async function inspectCompiledExtensionMarkers(projectPath: string, extensionIds: readonly ExtensionId[], absoluteDeadlineMs?: number): Promise<CompiledExtensionMarkerCheck[]> {
+  const checks: CompiledExtensionMarkerCheck[] = [];
+  for (const extensionId of extensionIds) {
+    if (absoluteDeadlineMs !== undefined && Date.now() >= absoluteDeadlineMs) break;
+    // 投影根目录即 Unity 包根，asmdef 与 Editor/ 都在 Extensions/<id>/ 顶层。
+    const unityPackageRoot = extensionInstallRoot(projectPath, extensionId);
+    let assemblyName: string | undefined;
+    try {
+      const entries = await readdir(unityPackageRoot);
+      const asmdefFile = entries.find((name) => name.endsWith(".asmdef"));
+      if (!asmdefFile) continue;
+      const parsed = JSON.parse(stripBom(await readFile(join(unityPackageRoot, asmdefFile), "utf8"))) as { name?: unknown };
+      if (typeof parsed.name !== "string" || parsed.name.length === 0) continue;
+      assemblyName = parsed.name;
+    } catch {
+      continue; // 投影缺失或不可读时无从检查编译产物
+    }
+    const assemblyPath = join(projectPath, "Library", "ScriptAssemblies", `${assemblyName}.dll`);
+    try {
+      const info = await stat(assemblyPath);
+      if (!info.isFile() || info.size > maxCompiledAssemblyReadBytes) {
+        checks.push({ extensionId, assemblyName, compiledAssemblyFound: false });
+        continue;
+      }
+      const bytes = await readFile(assemblyPath);
+      checks.push({ extensionId, assemblyName, compiledAssemblyFound: true, markerPresent: bytes.includes(compiledMarkerNeedle) });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        checks.push({ extensionId, assemblyName, compiledAssemblyFound: false });
+        continue;
+      }
+      throw error;
+    }
+  }
+  return checks;
+}
+
 function extensionStatus(
   manifest: ExtensionManifest,
   availability: ExtensionAvailabilityResult,

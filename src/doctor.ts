@@ -28,7 +28,7 @@ import { EDITOR_STATE_OBSERVATION_BUDGET_MS } from "./bridge/session-supervisor.
 import { withObservationSelection } from "./bridge/types.js";
 import { extensionAvailabilityFlags } from "./extension-availability.js";
 import { readInstalledExtensions } from "./cli-commands/extensions.js";
-import { checkExtensionBundles, readExtensionInstallManifest, type ExtensionStatusCheck } from "./extensions/installer.js";
+import { checkExtensionBundles, inspectCompiledExtensionMarkers, readExtensionInstallManifest, type ExtensionStatusCheck } from "./extensions/installer.js";
 import { EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT } from "./extensions/state-contract.js";
 import { failure, success } from "./output.js";
 import type { CliError, CliResult } from "./types.js";
@@ -422,6 +422,29 @@ async function checkExtensions(flags: Record<string, string | boolean>, runtime:
           broken: broken.slice(0, EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT).map(extensionDiagnostic),
           brokenTruncated: broken.length > EXTENSION_DIAGNOSTIC_SAMPLE_LIMIT,
           nextActions,
+        },
+      };
+    }
+
+    // 投影已最新但编译产物尚未重编译时，bridge 启动校验仍会失败；doctor 必须把这种状态显式暴露为 warn。
+    // 该检查优先于 optional 分支：未安装其他扩展是常态，不能掩盖已安装扩展的过期编译产物。
+    const compiledMarkers = await inspectCompiledExtensionMarkers(projectPath, physical.filter((entry) => entry.installed).map((entry) => entry.extensionId));
+    const staleCompiled = compiledMarkers.filter((entry) => !entry.compiledAssemblyFound || entry.markerPresent === false);
+    if (staleCompiled.length > 0) {
+      return {
+        name: "extensions",
+        status: "warn",
+        message: `${staleCompiled.length} installed extension projection(s) are current, but Library/ScriptAssemblies does not yet contain a compiled assembly carrying the exact UnityCliExtensionAssembly marker; Bridge startup will stay blocked until Unity recompiles them.`,
+        details: {
+          code: "E_EXTENSION_COMPILED_MARKER_MISSING",
+          projectPath,
+          healthyInstalled,
+          optionalUninstalled: optional.length,
+          staleCompiled: staleCompiled.map((entry) => ({ extensionId: entry.extensionId, assemblyName: entry.assemblyName, compiledAssemblyFound: entry.compiledAssemblyFound })),
+          nextActions: [
+            "Switch focus to Unity Editor or run `unitycli tools run editor.refresh` so Unity recompiles the extension projections, then rerun doctor.",
+            "If the marker is still missing after recompile, reinstall the extension: `unitycli extensions remove <id>` followed by `unitycli extensions install <id> --project <UnityProject>`.",
+          ],
         },
       };
     }

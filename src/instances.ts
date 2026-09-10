@@ -914,6 +914,23 @@ async function readCanonicalRegistryNames(dataDir: string): Promise<string[]> {
   }
 }
 
+export interface RegistryInstanceDiagnostics {
+  canonicalProjectPath: string;
+  processStartedAtMs?: number;
+}
+
+/** 连接失败诊断专用：只读 registry 记录中的项目路径与本次进程启动时刻；失败一律返回 undefined，不改变原始错误。 */
+export async function readRegistryInstanceDiagnostics(dataDir: string, instanceId: string, deadlineMs?: number): Promise<RegistryInstanceDiagnostics | undefined> {
+  try {
+    const record = await readRegistryRecord(dataDir, instanceId, deadlineMs);
+    if (!record) return undefined;
+    const starts = record.sessions.map((session) => Date.parse(session.processStartedAt)).filter((value) => Number.isFinite(value));
+    return { canonicalProjectPath: record.identity.canonicalProjectPath, processStartedAtMs: starts.length > 0 ? Math.min(...starts) : undefined };
+  } catch {
+    return undefined;
+  }
+}
+
 /** Observation paths already know the deterministic v3 filename and must not enumerate unrelated records. */
 async function readRegistryRecord(dataDir: string, instanceId: string, deadlineMs?: number): Promise<InstanceRegistryV3 | undefined> {
   const filePath = join(instancesDir(dataDir), `${instanceId}.json`);

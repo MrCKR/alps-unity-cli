@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { getBoolean, getString } from "../args.js";
 import { failure, success } from "../output.js";
 import { ProjectIdentityError, resolveProjectIdentity } from "../project-identity.js";
+import { refreshInstalledExtensionProjections } from "../extensions/installer.js";
 import type { CliResult } from "../types.js";
 import { closeUnityProjectProcesses, findUnityProjectProcesses } from "../unity-project-processes.js";
 import { handleInitDiscover } from "./init-discovery.js";
@@ -79,14 +80,21 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
     const install = await ensurePackageBridge(identity.canonicalProjectPath, plan, { absoluteDeadlineMs });
     const readback = await inspectPackageBridge(identity.canonicalProjectPath);
     if (readback.status !== "installed") throw new PackageManagerError("INIT_CHECK_FAILED", "Bridge package installation did not reach an installed readback state.", ["Inspect the returned package state before submitting init again."], { package: readback });
+    // 升级自愈：包发布后把已装扩展投影对齐到本版本内置 bundle，避免 Unity 增量编译漏编扩展程序集导致 bridge 启动校验失败；失败逐项透出且不回滚已发布的包。
+    const extensionRepair = await refreshInstalledExtensionProjections(identity.canonicalProjectPath, absoluteDeadlineMs);
+    const warnings = extensionRepair.failures.map((repairFailure) => `${repairFailure.extensionId}: ${repairFailure.code} — ${repairFailure.message} ${repairFailure.nextActions[0] ?? ""}`.trim());
     return success(requestId, {
       action: "init_package",
       projectPath: identity.canonicalProjectPath,
       projectIdentity: identity,
       ...(editorClose ? { editorClose } : {}),
       package: { status: "installed", install, readback },
-      nextActions: ["Open or refresh this Unity project to import the copied Bridge package."],
-    });
+      ...(extensionRepair.repaired.length > 0 || extensionRepair.failures.length > 0 ? { extensionRepair } : {}),
+      nextActions: [
+        "Open or refresh this Unity project to import the copied Bridge package.",
+        ...(extensionRepair.repaired.length > 0 ? ["Switch focus to Unity Editor so it recompiles the refreshed extension projections before the next bridge call."] : []),
+      ],
+    }, warnings.length > 0 ? { warnings } : undefined);
   } catch (error) {
     if (error instanceof ProjectIdentityError) return failure(requestId, error.code, error.message, ["Pass the root of an existing Unity project."], error.details);
     const { PackageManagerError } = await import("../package-manager.js");
