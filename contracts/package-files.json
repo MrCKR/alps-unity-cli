@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.5.0",
-  "sourceHash": "1993a0390c643b34bdd57c739e29195228f450808361b2d6b417f1847a705737",
+  "sourceHash": "f7d0a238c4db8a1ce41e3456f13d5a5dca25d93c06c8e9119456460484208183",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -1426,13 +1426,13 @@
     },
     {
       "path": "Editor/Tools/rendering/pipeline/settings.cs",
-      "size": 4162,
-      "sha256": "2572b91e1eeed4d27d8b3c4501e00c060cfd9653cfd8844ca517478677f1aed7"
+      "size": 4163,
+      "sha256": "7eaaee70ad50077994eb02840488963c4503b4aa25b3f73c639796c6d28f4a7f"
     },
     {
       "path": "Editor/Tools/rendering/quality.cs",
-      "size": 10152,
-      "sha256": "4f62e1573da960e804263be75f71cab42462428149d59d7ef44dfbf6fc06f26b"
+      "size": 10153,
+      "sha256": "e861364293f79941e16d31bac7ef0d5a6c32815b144e4b46f1fdad324ee8facf"
     },
     {
       "path": "Editor/Tools/rendering/scene-debug.cs",
