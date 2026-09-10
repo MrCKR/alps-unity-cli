@@ -112,5 +112,5 @@ test("Player reload风险和调用方fresh-read责任被明确投影", () => {
   const entry = completion.tools.find((item) => item.toolName === "project-settings.player-settings.set") as Record<string, unknown> | undefined;
   assert.ok(entry);
   assert.equal(entry?.executionClass, "atomic");
-  assert.match(JSON.stringify(entry), /project\.player-settings/);
+  assert.match(JSON.stringify(entry), /project-settings\.player-settings/);
 });

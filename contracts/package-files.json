@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.5.0",
-  "sourceHash": "7ab828f86c1dd319c9d01badc32521bdbe324a06502197119e90be5b6b22f236",
+  "sourceHash": "1993a0390c643b34bdd57c739e29195228f450808361b2d6b417f1847a705737",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -370,51 +370,6 @@
       "sha256": "d151b6b1537bf0f73542696de1feaa423ba3c31d44fcc91d4999b66517d06954"
     },
     {
-      "path": "Editor/Tools/animation-clip/animator/crossfade.cs",
-      "size": 8914,
-      "sha256": "5c91a3ebae434771f60dc92f953f70ac282d267f723a4ca57c60b703a85ea160"
-    },
-    {
-      "path": "Editor/Tools/animation-clip/animator/get-info.cs",
-      "size": 1832,
-      "sha256": "03c1083f07e95614bd5c3e7157ec7d72f51da1f72bf92a7408334092af16ddf2"
-    },
-    {
-      "path": "Editor/Tools/animation-clip/animator/get-parameter.cs",
-      "size": 3282,
-      "sha256": "98f9997a25e1c505b82f2d4f3cd0eb696a315b7212d0148a22b8949b5b8ae9dc"
-    },
-    {
-      "path": "Editor/Tools/animation-clip/animator/get-state.cs",
-      "size": 1980,
-      "sha256": "622b3e5104142a100db612a9ab6059a93cba04c603771a3af7b8c3ce8b54a5f1"
-    },
-    {
-      "path": "Editor/Tools/animation-clip/animator/play.cs",
-      "size": 4430,
-      "sha256": "0e94e1a0efc6a2f00de61d27b74769f17989c00deb886cb8a752d77424edb0da"
-    },
-    {
-      "path": "Editor/Tools/animation-clip/animator/set-enabled.cs",
-      "size": 2863,
-      "sha256": "d5bb2196a754dbd7df514da12b9d3f2537f190f4dea8dffb281ae827dc90fd91"
-    },
-    {
-      "path": "Editor/Tools/animation-clip/animator/set-parameter.cs",
-      "size": 6022,
-      "sha256": "03c97a8cbbb22880d9080ca4031306df7003d219860eae4a980a936b5c0b0910"
-    },
-    {
-      "path": "Editor/Tools/animation-clip/animator/set-speed.cs",
-      "size": 2840,
-      "sha256": "1898a441c23a10772a65ffe16cdf605c238d95c456a812e9acb9dfb9f0194178"
-    },
-    {
-      "path": "Editor/Tools/animation-clip/animator/stop.cs",
-      "size": 4135,
-      "sha256": "b4449a30849f98be8668276d4e9328bd3a4d4a93397e69b2f79734494ec94f63"
-    },
-    {
       "path": "Editor/Tools/animation-clip/create.cs",
       "size": 5200,
       "sha256": "252497a9a4457aba22e3add9ee526296248b9d586b34f1c7a4e94115d5014d6b"
@@ -493,6 +448,51 @@
       "path": "Editor/Tools/animator/AnimatorRuntimeToolSupport.cs",
       "size": 570,
       "sha256": "5ca4178f7528c1ca58ee64fd6822e60c4f4cb18d73f0a0e497c97307ab218270"
+    },
+    {
+      "path": "Editor/Tools/animator/crossfade.cs",
+      "size": 8908,
+      "sha256": "32a1f7289837c8c19feac279d111ba89f991aa98d69f2094e0b53f5cab9d599c"
+    },
+    {
+      "path": "Editor/Tools/animator/get-info.cs",
+      "size": 1826,
+      "sha256": "f18d2740596f80cd78c72b355baad7048515208391a44103a6b04d8378ad1407"
+    },
+    {
+      "path": "Editor/Tools/animator/get-parameter.cs",
+      "size": 3276,
+      "sha256": "541685921b859667892ace69c5d49c9470314c99e286eea6ad1080d2fd764ce0"
+    },
+    {
+      "path": "Editor/Tools/animator/get-state.cs",
+      "size": 1974,
+      "sha256": "6c20a3a859668dac75d4a1cdc9e918e5471b4e48f3ac52ed9a19efa8e6f90b2b"
+    },
+    {
+      "path": "Editor/Tools/animator/play.cs",
+      "size": 4424,
+      "sha256": "0e325f4b925c937657ef02bbad35eab210daa2a3a9fc8b99ee9bfa85fb85be07"
+    },
+    {
+      "path": "Editor/Tools/animator/set-enabled.cs",
+      "size": 2857,
+      "sha256": "d8cf5afb71d02528eb6f4159291668cb51777f3c4b41ca56d1ef627a61567eda"
+    },
+    {
+      "path": "Editor/Tools/animator/set-parameter.cs",
+      "size": 6016,
+      "sha256": "9f4c82827905dfe63fa64e1e5fea95bd2365938ba88cb0c056deadcad05701a4"
+    },
+    {
+      "path": "Editor/Tools/animator/set-speed.cs",
+      "size": 2834,
+      "sha256": "08a59786412d64daf0a24d1de93195691b957d129c83185dcab77725949c910e"
+    },
+    {
+      "path": "Editor/Tools/animator/stop.cs",
+      "size": 4129,
+      "sha256": "85e12209725f07ee80b3e536634c0783f919858fdd1f042877acccdafcd7950d"
     },
     {
       "path": "Editor/Tools/asset/AssetImportSettingsToolSupport.cs",
@@ -695,11 +695,6 @@
       "sha256": "2097842aa9c76b1b26689ca67bb77128a7920429005553722bbd11abfcd5c3a2"
     },
     {
-      "path": "Editor/Tools/camera/screenshot/from-camera.cs",
-      "size": 4557,
-      "sha256": "62cb3c89e59b25a569c8c567866c490fbd31c297a983eeab103d2f34f429a0d4"
-    },
-    {
       "path": "Editor/Tools/camera/target.cs",
       "size": 6026,
       "sha256": "80d875b469fd943f4c8a34693f04a99cbcf74bf71a05e6123ba0e19b7773cf44"
@@ -890,9 +885,89 @@
       "sha256": "f1be4d503c01050a1f0f2eadbcee861e8e44825fe30430e08dc3b5a22286ab18"
     },
     {
+      "path": "Editor/Tools/game-object/move-to-scene.cs",
+      "size": 5856,
+      "sha256": "1c433d0d53b67417b74439a23bdd5d2c3be581429bde237c85c270fdbb97eaa9"
+    },
+    {
       "path": "Editor/Tools/game-object/set-parent.cs",
       "size": 4941,
       "sha256": "742a13dfe64739511b63dc0967a32da0bbec29f53f97c46c2feab38eacc55ad2"
+    },
+    {
+      "path": "Editor/Tools/lighting/bake/cancel.cs",
+      "size": 2127,
+      "sha256": "c89df96ac478686a0f6bb4f1d690ecf514610d7cf4713e75602d3ce86a2466ad"
+    },
+    {
+      "path": "Editor/Tools/lighting/bake/clear.cs",
+      "size": 2823,
+      "sha256": "70e5b40c23a04644697df4264b2109441e49f7fc9dd2c221da3d754d3ae61581"
+    },
+    {
+      "path": "Editor/Tools/lighting/bake/reflection-probe.cs",
+      "size": 5114,
+      "sha256": "b96e592d3fe84bd9a58352785def00f11960c9a12cf7a405961bb67c11d37a43"
+    },
+    {
+      "path": "Editor/Tools/lighting/bake/settings.cs",
+      "size": 10722,
+      "sha256": "e1d694247c87642f77e7f9df5721ffe7ab11cf88e17537b1e9e0ec5dff34b4a7"
+    },
+    {
+      "path": "Editor/Tools/lighting/bake/start.cs",
+      "size": 2153,
+      "sha256": "ff9bb93297c1473ee5b410babd4403f9a77c380fccf82901ed965375ad7aa797"
+    },
+    {
+      "path": "Editor/Tools/lighting/bake/status.cs",
+      "size": 2002,
+      "sha256": "4ecb55c2f36df7e6de94ceec422cf75d543ab8e7bbba3fcf2e74adf0199df266"
+    },
+    {
+      "path": "Editor/Tools/lighting/light-probe-group.cs",
+      "size": 5521,
+      "sha256": "f824d49e9198e98a4e65f602d0079ba9ffa8755351cc14dcf3126323edf49d56"
+    },
+    {
+      "path": "Editor/Tools/lighting/reflection-probe.cs",
+      "size": 8004,
+      "sha256": "a84d3e3dc4ed1fe5f469f289f58fd5b7b7c4d8237bb79e271563a46c110d84c6"
+    },
+    {
+      "path": "Editor/Tools/lighting/skybox/get.cs",
+      "size": 2726,
+      "sha256": "383c3d10521ffb349020c2fffcddde7281094048319760982f1695731717c884"
+    },
+    {
+      "path": "Editor/Tools/lighting/skybox/set-ambient.cs",
+      "size": 4156,
+      "sha256": "bb2a5bcd7fefa51e87e61e76da1968570d43967f9aa6dd2031ac035d9fb71f1b"
+    },
+    {
+      "path": "Editor/Tools/lighting/skybox/set-fog.cs",
+      "size": 4483,
+      "sha256": "24b4ede3024b0975223b3c6603a0dce067e4b1a3325914328da86299a3930d61"
+    },
+    {
+      "path": "Editor/Tools/lighting/skybox/set-material.cs",
+      "size": 3190,
+      "sha256": "47a729eeaf20a64170f7c35c42d81f1a9d36b0f70981774e07984dde0585dd31"
+    },
+    {
+      "path": "Editor/Tools/lighting/skybox/set-properties.cs",
+      "size": 5358,
+      "sha256": "842829e6f107ae076f5d7c8e93b98b11a0e551ba7cc6ba5ea304ccba0666d48d"
+    },
+    {
+      "path": "Editor/Tools/lighting/skybox/set-reflection.cs",
+      "size": 4182,
+      "sha256": "c1675e2292b1fbfdb3b9ee20e1f719cf07ebdc972f214382d234fb0375f157c6"
+    },
+    {
+      "path": "Editor/Tools/lighting/skybox/set-sun.cs",
+      "size": 2823,
+      "sha256": "a5084e43dea33f55325ddb34f8083c2a1818ec3cd1c801d33f4e01c33581a6ed"
     },
     {
       "path": "Editor/Tools/material/MaterialToolSupport.cs",
@@ -1345,81 +1420,6 @@
       "sha256": "22828ae7a19e197a286ef5695de9ee81b356e703ccb1498fe547b68a6f5d2e23"
     },
     {
-      "path": "Editor/Tools/rendering/lighting/bake/cancel.cs",
-      "size": 2128,
-      "sha256": "06106f64af50a6f81c7e4ec89d256197cf74acdc88545a3c3c6ef4e0e6659d4c"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/bake/clear.cs",
-      "size": 2824,
-      "sha256": "9597dda8d75a478914b1a855814c59bedd7a33bff6c0ab91d450adf0de68680f"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/bake/reflection-probe.cs",
-      "size": 5115,
-      "sha256": "4de25973635d8bd085fc2d495c05807d03b59f875dd99b7cb231be99c8d8532b"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/bake/settings.cs",
-      "size": 10723,
-      "sha256": "908e469b14db8b7bb62abd1cd4e90a9515f49b6fe9c9eaf9b165e1aed85a275f"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/bake/start.cs",
-      "size": 2154,
-      "sha256": "cebec8df5f2e344e364b4bed60c493a30ecbdbbc8eb2b88e5237afe6059a195d"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/bake/status.cs",
-      "size": 2003,
-      "sha256": "cddf6aef4f5646984167f79403adffecb78abf2fa2bdb82d9b29ee2cff14dd00"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/light-probe-group.cs",
-      "size": 5522,
-      "sha256": "f08e7e3359240eef756db2bd9978712e58af438e82163a7db3329fa05b0d071a"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/reflection-probe.cs",
-      "size": 8005,
-      "sha256": "0b6b9ba9d62a9698f1d79d2dc686f7418c1731f3bb7a4a6839e56cce51610243"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/skybox/get.cs",
-      "size": 2727,
-      "sha256": "4e5ffa45899f56185cbaa0eb15211c54f64aee0eb07b629cc65311459572d80d"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/skybox/set-ambient.cs",
-      "size": 4157,
-      "sha256": "79ac2b41c5db7c28efa7a2fe0b6ce5522d8254f16968c14a26f32d0d2726547e"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/skybox/set-fog.cs",
-      "size": 4484,
-      "sha256": "2e8150f3dcf9c7f745b86d5b5230185f1b45c0f51a6ee788c6bb95dce902c4b8"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/skybox/set-material.cs",
-      "size": 3191,
-      "sha256": "8c024084b2caf5f23fb9c232b10fb0185345697f372b4bc19d5905d1ba842967"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/skybox/set-properties.cs",
-      "size": 5359,
-      "sha256": "4830408b77606e4f2b4d4c13ffbce26ef29d1431e97d7db9bf8c2bb090bf0913"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/skybox/set-reflection.cs",
-      "size": 4183,
-      "sha256": "ce1da15aea6e0aa98acf8a0feb3ab9e608a211bcb5b566b3205a8e0583aa8528"
-    },
-    {
-      "path": "Editor/Tools/rendering/lighting/skybox/set-sun.cs",
-      "size": 2824,
-      "sha256": "1281a6758dbd714a9f938901c98bc6bc324cfaeb20331cca2b00a4d74e6c361e"
-    },
-    {
       "path": "Editor/Tools/rendering/pipeline/info.cs",
       "size": 1601,
       "sha256": "2ecd43bb7aed48eeeaa8a8fcc78ab2f61bb59c02cce2779efd648bc95d8c84c1"
@@ -1443,11 +1443,6 @@
       "path": "Editor/Tools/rendering/stats.cs",
       "size": 1407,
       "sha256": "cbea3fe5c4934ea984ae9efd7a8fe242fd33121060a53a1dc4a68e18a4d2527e"
-    },
-    {
-      "path": "Editor/Tools/rendering/volume/list.cs",
-      "size": 4663,
-      "sha256": "0a1f20393ca0eff58e92c90be1a798990680e37e74480d5d998ce59d2940d03c"
     },
     {
       "path": "Editor/Tools/runtime-reflection/method/find.cs",
@@ -1478,11 +1473,6 @@
       "path": "Editor/Tools/scene/create.cs",
       "size": 3667,
       "sha256": "1b30dc7ec0a00dafae396878ef5e1735fabd3fdcaa164159f5c91f11be692e0e"
-    },
-    {
-      "path": "Editor/Tools/scene/game-object/move-to-scene.cs",
-      "size": 5850,
-      "sha256": "6865ff4eb6ee6c30775c3b3dcb7f35fa175e5868d6bee12484e9df1b8e9bd680"
     },
     {
       "path": "Editor/Tools/scene/gameobject-support.cs",
@@ -1558,6 +1548,11 @@
       "path": "Editor/Tools/screenshot/editor-element.cs",
       "size": 4561,
       "sha256": "4662d027027c290be624675a96ccd2644721791496610c8708ee6ae71057384c"
+    },
+    {
+      "path": "Editor/Tools/screenshot/from-camera.cs",
+      "size": 4561,
+      "sha256": "a3709f410661867bd0ee41d4260f354b62cf61c9aa06c59b8a4683632796bd2a"
     },
     {
       "path": "Editor/Tools/screenshot/game-view.cs",
@@ -1845,6 +1840,11 @@
       "sha256": "bb0d92ece310087e9afbdf4033792222430ad07a88efe08f93cfcbba9f760e17"
     },
     {
+      "path": "Editor/Tools/volume/list.cs",
+      "size": 4660,
+      "sha256": "5005a096fd61442f9bdc1ccdc60267dd107eda2ed356f1b1d691d936a9c4f96f"
+    },
+    {
       "path": "Editor/UnityCliBridge.cs",
       "size": 24777,
       "sha256": "c5916dc392ee6adba68aca27f7c59a25d9963fc234ef4baaccad911f2efa23a5"
@@ -2016,8 +2016,8 @@
     },
     {
       "path": "Tests/Runtime/UnityCliRuntimeCatalogValidationTests.cs",
-      "size": 1284,
-      "sha256": "e09a01985cd4698ab071d5f1494cbd55439e8ae50e3915fbd2d47ee1b6baadc4"
+      "size": 1291,
+      "sha256": "d02355d051fda58ab55964fe7db62cc9f8da5ef53a28ef2e52cf037f9356cd6e"
     },
     {
       "path": "UnityCli.Editor.asmdef",

@@ -42,7 +42,7 @@ const mutationTools = [
   ["runtime-reflection.method.invoke", "Tools/runtime-reflection/method/invoke.cs"],
   ["scene.create", "Tools/scene/create.cs"],
   ["scene.load", "Tools/scene/load.cs"],
-  ["game-object.move-to-scene", "Tools/scene/game-object/move-to-scene.cs"],
+  ["game-object.move-to-scene", "Tools/game-object/move-to-scene.cs"],
   ["scene.save", "Tools/scene/save.cs"],
   ["scene.set-active", "Tools/scene/set-active.cs"],
   ["scene.unload", "Tools/scene/unload.cs"],

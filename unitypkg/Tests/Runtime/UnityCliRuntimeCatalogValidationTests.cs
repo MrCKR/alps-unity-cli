@@ -18,7 +18,7 @@ namespace UnityCli.Tests
             var fallback = new Dictionary<string, object>
             {
                 { "name", "player-runtime.state" },
-                { "fallbackName", "UnityPipeline_runtime.state" }
+                { "fallbackName", "UnityPipeline_player-runtime.state" }
             };
             var exception = Assert.Throws<TargetInvocationException>(() =>
                 validate.Invoke(null, new object[] { "catalog.player.describe", fallback }));

@@ -93,7 +93,7 @@ test("runtime-reflection.method.invoke example is executable and overload select
 });
 
 test("reflection probe bake requires Unity output and a readable cubemap artifact", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/rendering/lighting/bake/reflection-probe.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs", import.meta.url), "utf8");
   assert.match(source, /E_GRAPHICS_ASSET_DIRECTORY_NOT_FOUND/);
   assert.ok(source.indexOf("E_GRAPHICS_ASSET_DIRECTORY_NOT_FOUND") < source.indexOf("ctx.CommitEffect()"));
   assert.match(source, /E_REFLECTION_PROBE_BAKE_FAILED/);

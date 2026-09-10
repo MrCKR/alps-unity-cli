@@ -10,8 +10,8 @@ async function readTool(path: string): Promise<string> {
 
 test("atomic mutations return only independently observed completion state", async () => {
   const [bakeClear, moveObject, activeTool, selection, moduleEnable, setActive] = await Promise.all([
-    readTool("Tools/rendering/lighting/bake/clear.cs"),
-    readTool("Tools/scene/game-object/move-to-scene.cs"),
+    readTool("Tools/lighting/bake/clear.cs"),
+    readTool("Tools/game-object/move-to-scene.cs"),
     readTool("Tools/editor/active-tool/set.cs"),
     readTool("Tools/editor/selection/set.cs"),
     readTool("Tools/profiler/module-enable.cs"),

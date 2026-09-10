@@ -31,7 +31,9 @@ const GRAPHICS_COMMANDS = [
 ];
 
 test("rendering family exposes dedicated quality, pipeline, probe, and unified stats tools", () => {
-  assert.deepEqual(contractToolNames("rendering"), [...GRAPHICS_COMMANDS].sort());
+  assert.deepEqual(contractToolNames("rendering"), [...GRAPHICS_COMMANDS].filter((name) => name.startsWith("rendering.")).sort());
+  assert.deepEqual(contractToolNames("lighting"), [...GRAPHICS_COMMANDS].filter((name) => name.startsWith("lighting.")).sort());
+  assert.deepEqual(contractToolNames("volume"), [...GRAPHICS_COMMANDS].filter((name) => name.startsWith("volume.")).sort());
 });
 
 test("graphics live descriptors expose representative play mode semantics", async () => {
@@ -102,7 +104,7 @@ test("graphics bridge spec forwards structured --input fields", async () => {
 });
 
 test("skybox property writes reject non-Assets materials and persist before readback", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/rendering/lighting/skybox/set-properties.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/lighting/skybox/set-properties.cs", import.meta.url), "utf8");
   assert.match(source, /!skyboxPath\.StartsWith\("Assets\/", System\.StringComparison\.OrdinalIgnoreCase\)/, "builtin and package materials must fail before the effect barrier");
   assert.match(source, /E_SKYBOX_ASSET_PATH_INVALID[\s\S]*ctx\.CommitEffect\(\)[\s\S]*EditorUtility\.SetDirty\(skybox\)[\s\S]*AssetDatabase\.SaveAssetIfDirty\(skybox\)[\s\S]*ReloadAsset<Material>/, "skybox writes must persist the exact asset before fresh readback");
 });
@@ -111,8 +113,8 @@ test("graphics dedicated replacements expose fresh mutation readback and bounded
   const [quality, pipeline, lightProbe, reflectionProbe, stats] = await Promise.all([
     readFile(new URL("../unitypkg/Editor/Tools/rendering/quality.cs", import.meta.url), "utf8"),
     readFile(new URL("../unitypkg/Editor/Tools/rendering/pipeline/settings.cs", import.meta.url), "utf8"),
-    readFile(new URL("../unitypkg/Editor/Tools/rendering/lighting/light-probe-group.cs", import.meta.url), "utf8"),
-    readFile(new URL("../unitypkg/Editor/Tools/rendering/lighting/reflection-probe.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/Tools/lighting/light-probe-group.cs", import.meta.url), "utf8"),
+    readFile(new URL("../unitypkg/Editor/Tools/lighting/reflection-probe.cs", import.meta.url), "utf8"),
     readFile(new URL("../unitypkg/Editor/Tools/rendering/stats.cs", import.meta.url), "utf8"),
   ]);
   assert.match(quality, /PlayModeSupport = "session-affecting"/);
@@ -128,7 +130,8 @@ test("graphics dedicated replacements expose fresh mutation readback and bounded
 });
 
 test("graphics C# keeps current pipeline/quality/bake implementation details", async () => {
-  const source = await readCsSources(new URL("../unitypkg/Editor/Tools/rendering/", import.meta.url));
+  const source = await readCsSources(new URL("../unitypkg/Editor/Tools/rendering/", import.meta.url))
+    + await readCsSources(new URL("../unitypkg/Editor/Tools/lighting/", import.meta.url));
   assert.match(source, /ResolveQualityLevel[\s\S]*QualitySettings\.names[\s\S]*E_QUALITY_LEVEL_INVALID/, "graphics quality should resolve index or quality level name");
   assert.match(source, /var pipeline = resetToBuiltIn \? null : AssetDatabase\.LoadAssetAtPath<RenderPipelineAsset>/, "pipeline settings should plan built-in/null assignment before commit");
   assert.match(source, /GraphicsSettings\.defaultRenderPipeline = pipeline/, "pipeline settings should apply the prevalidated asset or null");

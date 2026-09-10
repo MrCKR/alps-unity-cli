@@ -40,8 +40,8 @@ test("critical asset and create handlers commit immediately before their first e
 
 test("graphics and prefab validate before committing and profile proof does not replay", async () => {
   const [lightProbe, reflectionProbe, prefab, profile] = await Promise.all([
-    readTool("Tools/rendering/lighting/light-probe-group.cs"),
-    readTool("Tools/rendering/lighting/reflection-probe.cs"),
+    readTool("Tools/lighting/light-probe-group.cs"),
+    readTool("Tools/lighting/reflection-probe.cs"),
     readTool("Tools/prefab/modify.cs"),
     readTool("Tools/build/profile/switch.cs")
   ]);

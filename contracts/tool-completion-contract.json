@@ -11,11 +11,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "animation.clip 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animation-clip.read 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "animation.clip 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animation-clip.read 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -38,11 +38,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "animation.clip.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animation-clip.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "animation.clip.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animation-clip.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -65,11 +65,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "animation.clip.modify 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animation-clip.update 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "animation.clip.modify 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animation-clip.update 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -87,16 +87,16 @@
     {
       "toolName": "animator.play",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/play.cs",
+      "source": "unitypkg/Editor/Tools/animator/play.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "animation.play 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "animator.play 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "animation.play 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "animator.play 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -114,16 +114,16 @@
     {
       "toolName": "animator.get-state",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/get-state.cs",
+      "source": "unitypkg/Editor/Tools/animator/get-state.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "animation.state 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator.get-state 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "animation.state 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator.get-state 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -141,16 +141,16 @@
     {
       "toolName": "animator.stop",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/stop.cs",
+      "source": "unitypkg/Editor/Tools/animator/stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "animation.stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "animator.stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "animation.stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "animator.stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -168,7 +168,7 @@
     {
       "toolName": "animator.crossfade",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/crossfade.cs",
+      "source": "unitypkg/Editor/Tools/animator/crossfade.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -195,7 +195,7 @@
     {
       "toolName": "animator.get-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/get-info.cs",
+      "source": "unitypkg/Editor/Tools/animator/get-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -222,7 +222,7 @@
     {
       "toolName": "animator.get-parameter",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/get-parameter.cs",
+      "source": "unitypkg/Editor/Tools/animator/get-parameter.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -249,7 +249,7 @@
     {
       "toolName": "animator.set-enabled",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/set-enabled.cs",
+      "source": "unitypkg/Editor/Tools/animator/set-enabled.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -276,7 +276,7 @@
     {
       "toolName": "animator.set-parameter",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/set-parameter.cs",
+      "source": "unitypkg/Editor/Tools/animator/set-parameter.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -303,7 +303,7 @@
     {
       "toolName": "animator.set-speed",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/animator/set-speed.cs",
+      "source": "unitypkg/Editor/Tools/animator/set-speed.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -578,11 +578,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "asset.modify 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "asset.write-text 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "asset.modify 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "asset.write-text 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -1333,16 +1333,16 @@
     {
       "toolName": "screenshot.from-camera",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/camera/screenshot/from-camera.cs",
+      "source": "unitypkg/Editor/Tools/screenshot/from-camera.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
         "kind": "external-operation-terminal",
-        "description": "camera.screenshot 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
+        "description": "screenshot.from-camera 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
       },
       "proofSource": {
         "kind": "operation-terminal-and-readback",
-        "description": "camera.screenshot 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
+        "description": "screenshot.from-camera 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
       },
       "reloadPolicy": {
         "kind": "reattach-or-reobserve",
@@ -1770,7 +1770,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "code.exec 同步执行结束后返回编译、运行返回值与输出；提供 completionProbe 时附加 fresh assertion readback。"
+        "description": "code.execute 同步执行结束后返回编译、运行返回值与输出；提供 completionProbe 时附加 fresh assertion readback。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -1987,11 +1987,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "console.get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "console.read 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "console.get 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "console.read 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2014,11 +2014,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.add-blend-tree-child 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.add-blend-tree-child 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.add-blend-tree-child 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.add-blend-tree-child 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2041,11 +2041,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.add-layer 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.add-layer 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.add-layer 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.add-layer 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2068,11 +2068,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.add-parameter 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.add-parameter 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.add-parameter 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.add-parameter 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2095,11 +2095,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.add-state 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.add-state 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.add-state 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.add-state 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2122,11 +2122,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.add-transition 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.add-transition 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.add-transition 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.add-transition 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2149,11 +2149,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.assign 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.assign 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.assign 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.assign 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2176,11 +2176,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.create 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.create 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2203,11 +2203,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.create-blend-tree-1d 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.create-blend-tree-1d 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.create-blend-tree-1d 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.create-blend-tree-1d 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2230,11 +2230,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.create-blend-tree-2d 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.create-blend-tree-2d 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.create-blend-tree-2d 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.create-blend-tree-2d 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2257,11 +2257,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.get-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.get-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.get-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.get-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2284,11 +2284,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.remove-layer 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.remove-layer 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.remove-layer 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.remove-layer 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2311,11 +2311,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "controller.set-layer-weight 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "animator-controller.set-layer-weight 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "controller.set-layer-weight 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "animator-controller.set-layer-weight 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -2663,11 +2663,11 @@
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "editor.play 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "editor.play-mode.start 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "editor.play 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "editor.play-mode.start 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -2908,11 +2908,11 @@
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "editor.stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "editor.play-mode.stop 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "editor.stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "editor.play-mode.stop 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -3024,7 +3024,7 @@
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
-        "description": "go.create 不跨 reload 重放；terminal 丢失时调用方通过 scene.hierarchy 或 go.find 检查请求名称集合。"
+        "description": "game-object.create 不跨 reload 重放；terminal 丢失时调用方通过 scene.hierarchy 或 game-object.find 检查请求名称集合。"
       },
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
@@ -3043,11 +3043,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "go.delete 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "game-object.delete 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "go.delete 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "game-object.delete 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3070,11 +3070,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "go.duplicate 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "game-object.duplicate 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "go.duplicate 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "game-object.duplicate 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3097,11 +3097,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "go.find 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "game-object.find 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "go.find 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "game-object.find 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3124,11 +3124,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "go.look-at 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "game-object.look-at 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "go.look-at 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "game-object.look-at 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3151,11 +3151,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "go.modify 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "game-object.modify 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "go.modify 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "game-object.modify 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3178,11 +3178,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "go.move-relative 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "game-object.move-relative 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "go.move-relative 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "game-object.move-relative 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3205,11 +3205,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "go.set-parent 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "game-object.set-parent 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "go.set-parent 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "game-object.set-parent 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3227,16 +3227,16 @@
     {
       "toolName": "lighting.bake.cancel",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/cancel.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/cancel.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "graphics.bake-cancel 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "lighting.bake.cancel 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "graphics.bake-cancel 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "lighting.bake.cancel 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -3254,16 +3254,16 @@
     {
       "toolName": "lighting.bake.clear",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/clear.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/clear.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.bake-clear 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.bake.clear 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.bake-clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.bake.clear 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3281,16 +3281,16 @@
     {
       "toolName": "lighting.bake.reflection-probe",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/reflection-probe.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
         "kind": "external-operation-terminal",
-        "description": "graphics.bake-reflection-probe 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
+        "description": "lighting.bake.reflection-probe 的外部或跨帧 operation 已达到自己的业务 terminal，且必要 artifact/状态 readback 已验证。"
       },
       "proofSource": {
         "kind": "operation-terminal-and-readback",
-        "description": "graphics.bake-reflection-probe 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
+        "description": "lighting.bake.reflection-probe 的稳定 operation state、callback terminal、artifact digest 或目标状态 readback。"
       },
       "reloadPolicy": {
         "kind": "reattach-or-reobserve",
@@ -3308,16 +3308,16 @@
     {
       "toolName": "lighting.bake.settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/settings.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.bake-settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.bake.settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.bake-settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.bake.settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3335,16 +3335,16 @@
     {
       "toolName": "lighting.bake.start",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/start.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/start.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
         "kind": "stable-state-readback",
-        "description": "graphics.bake-start 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
+        "description": "lighting.bake.start 请求的目标状态已被重新观察，并在工具规定的稳定窗口内持续成立。"
       },
       "proofSource": {
         "kind": "validated-state-snapshot",
-        "description": "graphics.bake-start 的目标子系统状态 readback 与同一 validated editor session snapshot。"
+        "description": "lighting.bake.start 的目标子系统状态 readback 与同一 validated editor session snapshot。"
       },
       "reloadPolicy": {
         "kind": "same-session-reobserve",
@@ -3363,16 +3363,16 @@
     {
       "toolName": "lighting.bake.status",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/status.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/status.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.bake-status 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.bake.status 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.bake-status 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.bake.status 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3390,16 +3390,16 @@
     {
       "toolName": "lighting.light-probe-group",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/light-probe-group.cs",
+      "source": "unitypkg/Editor/Tools/lighting/light-probe-group.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.light-probe-group 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.light-probe-group 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.light-probe-group 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.light-probe-group 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3422,11 +3422,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.pipeline-info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "rendering.pipeline.info 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.pipeline-info 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "rendering.pipeline.info 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3449,11 +3449,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.pipeline-settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "rendering.pipeline.settings 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.pipeline-settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "rendering.pipeline.settings 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3476,11 +3476,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.quality 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "rendering.quality 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.quality 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "rendering.quality 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3498,16 +3498,16 @@
     {
       "toolName": "lighting.reflection-probe",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/reflection-probe.cs",
+      "source": "unitypkg/Editor/Tools/lighting/reflection-probe.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.reflection-probe 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.reflection-probe 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.reflection-probe 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.reflection-probe 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3530,11 +3530,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.scene-debug 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "rendering.scene-debug 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.scene-debug 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "rendering.scene-debug 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3552,16 +3552,16 @@
     {
       "toolName": "lighting.skybox.get",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/get.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/get.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.skybox-get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox.get 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.skybox-get 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox.get 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3579,16 +3579,16 @@
     {
       "toolName": "lighting.skybox.set-ambient",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-ambient.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-ambient.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.skybox-set-ambient 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox.set-ambient 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.skybox-set-ambient 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox.set-ambient 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3606,16 +3606,16 @@
     {
       "toolName": "lighting.skybox.set-fog",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-fog.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-fog.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.skybox-set-fog 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox.set-fog 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.skybox-set-fog 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox.set-fog 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3633,16 +3633,16 @@
     {
       "toolName": "lighting.skybox.set-material",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-material.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-material.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.skybox-set-material 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox.set-material 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.skybox-set-material 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox.set-material 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3660,16 +3660,16 @@
     {
       "toolName": "lighting.skybox.set-properties",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-properties.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.skybox-set-properties 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox.set-properties 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.skybox-set-properties 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox.set-properties 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3687,16 +3687,16 @@
     {
       "toolName": "lighting.skybox.set-reflection",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-reflection.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-reflection.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.skybox-set-reflection 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox.set-reflection 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.skybox-set-reflection 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox.set-reflection 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3714,16 +3714,16 @@
     {
       "toolName": "lighting.skybox.set-sun",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-sun.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-sun.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.skybox-set-sun 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "lighting.skybox.set-sun 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.skybox-set-sun 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "lighting.skybox.set-sun 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3746,11 +3746,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.stats 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "rendering.stats 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.stats 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "rendering.stats 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -3768,16 +3768,16 @@
     {
       "toolName": "volume.list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/rendering/volume/list.cs",
+      "source": "unitypkg/Editor/Tools/volume/list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "graphics.volume 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "volume.list 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "graphics.volume 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "volume.list 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4315,11 +4315,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "object.get-data 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "serialized-object.read 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "object.get-data 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "serialized-object.read 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -4342,11 +4342,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "object.modify 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "serialized-object.patch 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "object.modify 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "serialized-object.patch 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7254,7 +7254,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.audio-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
+        "description": "project-settings.audio-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -7281,7 +7281,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.audio-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+        "description": "project-settings.audio-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -7308,11 +7308,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.info 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+        "description": "project-settings.info 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project.info 的 typed result 与 output schema validation 共同证明读取终态。"
+        "description": "project-settings.info 的 typed result 与 output schema validation 共同证明读取终态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7335,7 +7335,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.input-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
+        "description": "project-settings.input-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -7362,7 +7362,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.input-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+        "description": "project-settings.input-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -7389,11 +7389,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.layer.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "project-settings.layer.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project.layer.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "project-settings.layer.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7416,11 +7416,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.layer.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "project-settings.layer.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project.layer.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "project-settings.layer.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7443,11 +7443,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.layers 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+        "description": "project-settings.layers 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project.layers 的 typed result 与 output schema validation 共同证明读取终态。"
+        "description": "project-settings.layers 的 typed result 与 output schema validation 共同证明读取终态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7470,7 +7470,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.player-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
+        "description": "project-settings.player-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -7497,7 +7497,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.player-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+        "description": "project-settings.player-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -7505,7 +7505,7 @@
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
-        "description": "scriptingBackend或apiCompatibilityLevel可能触发reload；若未收到terminal response，调用方先读project.player-settings且不得盲目重放。"
+        "description": "scriptingBackend或apiCompatibilityLevel可能触发reload；若未收到terminal response，调用方先读project-settings.player-settings且不得盲目重放。"
       },
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
@@ -7524,11 +7524,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.tag.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "project-settings.tag.add 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project.tag.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "project-settings.tag.add 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7551,11 +7551,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.tag.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "project-settings.tag.remove 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project.tag.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "project-settings.tag.remove 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7578,11 +7578,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.tags 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
+        "description": "project-settings.tags 的完整 typed read result 通过 output schema，且不产生 Unity 或文件副作用。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "project.tags 的 typed result 与 output schema validation 共同证明读取终态。"
+        "description": "project-settings.tags 的 typed result 与 output schema validation 共同证明读取终态。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7605,7 +7605,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.time-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
+        "description": "project-settings.time-settings 返回当前Unity版本已验证的有界typed ProjectSettings snapshot。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -7632,7 +7632,7 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "project.time-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
+        "description": "project-settings.time-settings.set 返回前必须证明全部requested fields与对应ProjectSettings文件持久化。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
@@ -7659,11 +7659,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "reflect.member 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "type-inspection.get-member 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "reflect.member 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "type-inspection.get-member 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7684,11 +7684,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "reflect.search 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "type-inspection.search 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "reflect.search 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "type-inspection.search 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7709,11 +7709,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "reflect.type 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "type-inspection.get-type 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "reflect.type 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "type-inspection.get-type 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7761,11 +7761,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "reflection.method.find 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "runtime-reflection.method.find 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "reflection.method.find 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "runtime-reflection.method.find 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -7876,7 +7876,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
-        "description": "effect 后 terminal 丢失时只读取 runtime.console；不得用新 requestId 重放未知 log effect。"
+        "description": "effect 后 terminal 丢失时只读取 player-runtime.console；不得用新 requestId 重放未知 log effect。"
       },
       "asyncSignals": []
     },
@@ -7926,7 +7926,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
-        "description": "terminal 缺失时先读取 runtime.state；不得用新 requestId 重放未知设置 effect。"
+        "description": "terminal 缺失时先读取 player-runtime.state；不得用新 requestId 重放未知设置 effect。"
       },
       "asyncSignals": []
     },
@@ -7951,7 +7951,7 @@
       "timeoutError": "E_EXECUTION_TIMEOUT",
       "outcomeUnknownPolicy": {
         "kind": "caller-responsibility",
-        "description": "terminal 缺失时先读取 runtime.state；不得用新 requestId 重放未知设置 effect。"
+        "description": "terminal 缺失时先读取 player-runtime.state；不得用新 requestId 重放未知设置 effect。"
       },
       "asyncSignals": []
     },
@@ -8199,16 +8199,16 @@
     {
       "toolName": "game-object.move-to-scene",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/scene/game-object/move-to-scene.cs",
+      "source": "unitypkg/Editor/Tools/game-object/move-to-scene.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "scene.move-object 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "game-object.move-to-scene 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "scene.move-object 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "game-object.move-to-scene 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",
@@ -9234,11 +9234,11 @@
       "executionClass": "atomic",
       "completionPredicate": {
         "kind": "typed-business-terminal",
-        "description": "type.schema 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
+        "description": "runtime-reflection.type.schema 的完整 typed business result 通过 output schema；任何 effect 已在同一执行边界完成并验证。"
       },
       "proofSource": {
         "kind": "typed-result-and-effect-readback",
-        "description": "type.schema 的 typed result、output schema validation 与工具拥有的 effect readback。"
+        "description": "runtime-reflection.type.schema 的 typed result、output schema validation 与工具拥有的 effect readback。"
       },
       "reloadPolicy": {
         "kind": "caller-responsibility",

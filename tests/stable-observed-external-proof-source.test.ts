@@ -18,10 +18,10 @@ test("stable target predicate is owned by UnityCliWaiter", async () => {
 
 test("observed-state tools wait stably and construct from final readback", async () => {
   const [animationPlay, animationStop, bakeStart, bakeCancel, editorPause, editorPlay, editorStop, profilerStart, profilerStop, profilerPause, frameEnable, frameDisable] = await Promise.all([
-    source("../unitypkg/Editor/Tools/animation-clip/animator/play.cs"),
-    source("../unitypkg/Editor/Tools/animation-clip/animator/stop.cs"),
-    source("../unitypkg/Editor/Tools/rendering/lighting/bake/start.cs"),
-    source("../unitypkg/Editor/Tools/rendering/lighting/bake/cancel.cs"),
+    source("../unitypkg/Editor/Tools/animator/play.cs"),
+    source("../unitypkg/Editor/Tools/animator/stop.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake/start.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake/cancel.cs"),
     source("../unitypkg/Editor/Tools/editor/pause.cs"),
     source("../unitypkg/Editor/Tools/editor/play-mode/start.cs"),
     source("../unitypkg/Editor/Tools/editor/play-mode/stop.cs"),

@@ -20,7 +20,7 @@ test("approved read fields are merged into canonical Tools", async () => {
     assert.match(featureSupport, new RegExp(`public .* ${field} \\{ get; set; \\}`));
   }
 
-  const volume = await readFile("unitypkg/Editor/Tools/rendering/volume/list.cs", "utf8");
+  const volume = await readFile("unitypkg/Editor/Tools/volume/list.cs", "utf8");
   assert.match(volume, /Request \{ public string Target[\s\S]*public int PageSize[\s\S]*public string Cursor/);
   assert.match(volume, /Result \{ public List<VolumeInfo> Volumes[\s\S]*public long Count[\s\S]*public PageInfo PageInfo/);
   assert.match(volume, /HasMore = false, PageSize = pageSize/);

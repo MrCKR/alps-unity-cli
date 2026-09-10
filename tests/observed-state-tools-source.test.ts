@@ -8,10 +8,10 @@ async function source(path: string): Promise<string> {
 
 test("observed animation and bake tools wait for stable readback", async () => {
   const [play, stop, bakeStart, bakeCancel] = await Promise.all([
-    source("../unitypkg/Editor/Tools/animation-clip/animator/play.cs"),
-    source("../unitypkg/Editor/Tools/animation-clip/animator/stop.cs"),
-    source("../unitypkg/Editor/Tools/rendering/lighting/bake/start.cs"),
-    source("../unitypkg/Editor/Tools/rendering/lighting/bake/cancel.cs")
+    source("../unitypkg/Editor/Tools/animator/play.cs"),
+    source("../unitypkg/Editor/Tools/animator/stop.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake/start.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake/cancel.cs")
   ]);
 
   assert.match(play, /await ctx\.Wait\.UntilStable\([\s\S]*GetCurrentAnimatorStateInfo\(layer\)\.fullPathHash == expectedHash[\s\S]*TimeSpan\.FromMilliseconds\(ctx\.TimeoutMs\)[\s\S]*ct: ct\)/);
@@ -103,7 +103,7 @@ test("oracle core mutations prevalidate inputs and return fresh proof", async ()
     source("../unitypkg/Editor/Tools/game-object/set-parent.cs"),
     source("../unitypkg/Editor/Tools/material/set-renderer-color.cs"),
     source("../unitypkg/Editor/Tools/prefab/instantiate.cs"),
-    source("../unitypkg/Editor/Tools/scene/game-object/move-to-scene.cs"),
+    source("../unitypkg/Editor/Tools/game-object/move-to-scene.cs"),
     source("../unitypkg/Editor/Tools/animation-clip/create.cs"),
     source("../unitypkg/Editor/Tools/animation-clip/update.cs"),
     source("../unitypkg/Editor/Tools/animation-clip/AnimationToolSupport.cs"),

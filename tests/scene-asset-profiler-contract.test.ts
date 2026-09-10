@@ -177,7 +177,9 @@ test("one-capability source, contract, and bridge spec sets are bidirectionally 
     }
   }
   assert.equal(contractToolNames("build").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 13);
-  assert.equal(contractToolNames("rendering").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 21);
+  assert.equal(contractToolNames("rendering").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 5);
+  assert.equal(contractToolNames("lighting").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 15);
+  assert.equal(contractToolNames("volume").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 1);
   assert.equal(contractToolNames("physics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 14);
 });
 

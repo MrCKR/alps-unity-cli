@@ -15,7 +15,6 @@ const SCENE_COMMANDS = [
   "scene.hierarchy",
   "scene.list-opened",
   "scene.load",
-  "game-object.move-to-scene",
   "scene.save",
   "scene.set-active",
   "scene.unload",

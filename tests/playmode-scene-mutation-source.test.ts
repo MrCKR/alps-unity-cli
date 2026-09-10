@@ -66,9 +66,9 @@ test("PlayMode scene tools use the mutation helper instead of unsafe Editor APIs
     "unitypkg/Editor/Tools/material/set-renderer-color.cs",
     "unitypkg/Editor/Tools/material/assign.cs",
     "unitypkg/Editor/Tools/animator-controller/assign.cs",
-    "unitypkg/Editor/Tools/rendering/lighting/light-probe-group.cs",
-    "unitypkg/Editor/Tools/rendering/lighting/reflection-probe.cs",
-    "unitypkg/Editor/Tools/rendering/lighting/skybox/set-material.cs",
+    "unitypkg/Editor/Tools/lighting/light-probe-group.cs",
+    "unitypkg/Editor/Tools/lighting/reflection-probe.cs",
+    "unitypkg/Editor/Tools/lighting/skybox/set-material.cs",
     "unitypkg/Editor/Tools/physics/assign-material.cs",
     "unitypkg/Editor/Tools/physics/force.cs",
     "unitypkg/Editor/Tools/physics/joint/add.cs",
@@ -117,8 +117,8 @@ test("retained graphics replacements declare their final PlayMode behavior", asy
   const [quality, pipeline, group, reflection] = await Promise.all([
     source("unitypkg/Editor/Tools/rendering/quality.cs"),
     source("unitypkg/Editor/Tools/rendering/pipeline/settings.cs"),
-    source("unitypkg/Editor/Tools/rendering/lighting/light-probe-group.cs"),
-    source("unitypkg/Editor/Tools/rendering/lighting/reflection-probe.cs"),
+    source("unitypkg/Editor/Tools/lighting/light-probe-group.cs"),
+    source("unitypkg/Editor/Tools/lighting/reflection-probe.cs"),
   ]);
 
   for (const value of [quality, pipeline]) {
@@ -151,8 +151,8 @@ test("persistent writes are explicitly editor-only", async () => {
     "unitypkg/Editor/Tools/editor/undo.cs", "unitypkg/Editor/Tools/editor/redo.cs",
     "unitypkg/Editor/Tools/asset/create.cs", "unitypkg/Editor/Tools/texture/create.cs", "unitypkg/Editor/Tools/shader/create.cs",
     "unitypkg/Editor/Tools/scriptable-object/create.cs", "unitypkg/Editor/Tools/material/create.cs", "unitypkg/Editor/Tools/physics/material.cs",
-    "unitypkg/Editor/Tools/animation-clip/create.cs", "unitypkg/Editor/Tools/animation-clip/animator/set-parameter.cs", "unitypkg/Editor/Tools/animator-controller/create.cs",
-    "unitypkg/Editor/Tools/rendering/lighting/skybox/set-properties.cs",
+    "unitypkg/Editor/Tools/animation-clip/create.cs", "unitypkg/Editor/Tools/animator/set-parameter.cs", "unitypkg/Editor/Tools/animator-controller/create.cs",
+    "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs",
     "unitypkg/Editor/Tools/prefab/create.cs", "unitypkg/Editor/Tools/scene/save.cs",
     "unitypkg/Editor/Tools/build/settings/set.cs", "unitypkg/Editor/Tools/project-settings/layer/add.cs",
     "extensions/urp/unitypkg/Editor/Urp/settings-set.cs", "extensions/hdrp/unitypkg/Editor/Hdrp/settings-set.cs"
