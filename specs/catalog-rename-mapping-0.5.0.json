@@ -600,32 +600,32 @@
     },
     {
       "old": "graphics.bake-cancel",
-      "new": "lighting.bake-cancel",
+      "new": "lighting.bake.cancel",
       "group": "graphics"
     },
     {
       "old": "graphics.bake-clear",
-      "new": "lighting.bake-clear",
+      "new": "lighting.bake.clear",
       "group": "graphics"
     },
     {
       "old": "graphics.bake-reflection-probe",
-      "new": "lighting.bake-reflection-probe",
+      "new": "lighting.bake.reflection-probe",
       "group": "graphics"
     },
     {
       "old": "graphics.bake-settings",
-      "new": "lighting.bake-settings",
+      "new": "lighting.bake.settings",
       "group": "graphics"
     },
     {
       "old": "graphics.bake-start",
-      "new": "lighting.bake-start",
+      "new": "lighting.bake.start",
       "group": "graphics"
     },
     {
       "old": "graphics.bake-status",
-      "new": "lighting.bake-status",
+      "new": "lighting.bake.status",
       "group": "graphics"
     },
     {
