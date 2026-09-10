@@ -10,9 +10,9 @@ async function source(path: string): Promise<string> {
 
 test("core atomic business mutations return readback state rather than requested values", async () => {
   const [enabled, speed, parameter, assign, weight, material, rigidbody, settings, sprite] = await Promise.all([
-    source("Tools/animator/set-enabled.cs"),
-    source("Tools/animator/set-speed.cs"),
-    source("Tools/animator/set-parameter.cs"),
+    source("Tools/animation-clip/animator/set-enabled.cs"),
+    source("Tools/animation-clip/animator/set-speed.cs"),
+    source("Tools/animation-clip/animator/set-parameter.cs"),
     source("Tools/animator-controller/assign.cs"),
     source("Tools/animator-controller/set-layer-weight.cs"),
     source("Tools/material/assign.cs"),

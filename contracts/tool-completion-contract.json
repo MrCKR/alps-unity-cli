@@ -6,7 +6,7 @@
     {
       "toolName": "animation-clip.read",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/clip.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/read.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -33,7 +33,7 @@
     {
       "toolName": "animation-clip.create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/clip/create.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -60,7 +60,7 @@
     {
       "toolName": "animation-clip.update",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation-clip/clip/modify.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/update.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -87,7 +87,7 @@
     {
       "toolName": "animator.play",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/play.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/play.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -114,7 +114,7 @@
     {
       "toolName": "animator.get-state",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/get-state.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/get-state.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -141,7 +141,7 @@
     {
       "toolName": "animator.stop",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/stop.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -168,7 +168,7 @@
     {
       "toolName": "animator.crossfade",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/crossfade.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/crossfade.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -195,7 +195,7 @@
     {
       "toolName": "animator.get-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/get-info.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/get-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -222,7 +222,7 @@
     {
       "toolName": "animator.get-parameter",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/get-parameter.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/get-parameter.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -249,7 +249,7 @@
     {
       "toolName": "animator.set-enabled",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/set-enabled.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/set-enabled.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -276,7 +276,7 @@
     {
       "toolName": "animator.set-parameter",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/set-parameter.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/set-parameter.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -303,7 +303,7 @@
     {
       "toolName": "animator.set-speed",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animator/set-speed.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/animator/set-speed.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -1333,7 +1333,7 @@
     {
       "toolName": "screenshot.from-camera",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/screenshot/from-camera.cs",
+      "source": "unitypkg/Editor/Tools/camera/screenshot/from-camera.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
@@ -3227,7 +3227,7 @@
     {
       "toolName": "lighting.bake.cancel",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/cancel.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/cancel.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -3254,7 +3254,7 @@
     {
       "toolName": "lighting.bake.clear",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/clear.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/clear.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3281,7 +3281,7 @@
     {
       "toolName": "lighting.bake.reflection-probe",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/reflection-probe.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
@@ -3308,7 +3308,7 @@
     {
       "toolName": "lighting.bake.settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/settings.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3335,7 +3335,7 @@
     {
       "toolName": "lighting.bake.start",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/start.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/start.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -3363,7 +3363,7 @@
     {
       "toolName": "lighting.bake.status",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/bake/status.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/bake/status.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3390,7 +3390,7 @@
     {
       "toolName": "lighting.light-probe-group",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/light-probe-group.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/light-probe-group.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3498,7 +3498,7 @@
     {
       "toolName": "lighting.reflection-probe",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/reflection-probe.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/reflection-probe.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3552,7 +3552,7 @@
     {
       "toolName": "lighting.skybox.get",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/get.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/get.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3579,7 +3579,7 @@
     {
       "toolName": "lighting.skybox.set-ambient",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-ambient.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-ambient.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3606,7 +3606,7 @@
     {
       "toolName": "lighting.skybox.set-fog",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-fog.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-fog.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3633,7 +3633,7 @@
     {
       "toolName": "lighting.skybox.set-material",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-material.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-material.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3660,7 +3660,7 @@
     {
       "toolName": "lighting.skybox.set-properties",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-properties.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3687,7 +3687,7 @@
     {
       "toolName": "lighting.skybox.set-reflection",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-reflection.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-reflection.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3714,7 +3714,7 @@
     {
       "toolName": "lighting.skybox.set-sun",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/lighting/skybox/set-sun.cs",
+      "source": "unitypkg/Editor/Tools/rendering/lighting/skybox/set-sun.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3768,7 +3768,7 @@
     {
       "toolName": "volume.list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/volume/list.cs",
+      "source": "unitypkg/Editor/Tools/rendering/volume/list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -8199,7 +8199,7 @@
     {
       "toolName": "game-object.move-to-scene",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/game-object/move-to-scene.cs",
+      "source": "unitypkg/Editor/Tools/scene/game-object/move-to-scene.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {

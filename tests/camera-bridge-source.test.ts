@@ -52,7 +52,7 @@ test("AssetImportWorker never starts or registers a Bridge listener", async () =
 test("one-capability-per-file camera tools route through catalog.editor.run with matching descriptors and contracts", async () => {
   const bridgeRegistry = await readFile(new URL("Bridge/BridgeCommandRegistry.cs", editorUrl), "utf8");
   const support = await readFile(new URL("Tools/camera/CameraToolSupport.cs", editorUrl), "utf8");
-  const fromCamera = await readFile(new URL("Tools/screenshot/from-camera.cs", editorUrl), "utf8");
+  const fromCamera = await readFile(new URL("Tools/camera/screenshot/from-camera.cs", editorUrl), "utf8");
   const fromCameraSpec = bridgeCommandRegistry.lookup("screenshot", "from-camera");
   assert.match(fromCamera, /Name = "screenshot\.from-camera"/);
   assert.equal(fromCameraSpec?.bridgeCommand, "catalog.editor.run");

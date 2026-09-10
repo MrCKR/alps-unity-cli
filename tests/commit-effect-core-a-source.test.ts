@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
-const domains = ["animation-clip", "animator", "animator-controller", "asset", "build", "camera", "component", "editor", "game-object", "lighting", "material", "rendering", "volume"];
+const domains = ["animation-clip", "animator-controller", "asset", "build", "camera", "component", "editor", "game-object", "material", "rendering"];
 const toolsRoot = new URL("../unitypkg/Editor/Tools/", import.meta.url);
 
 async function sourceFiles(directory: URL): Promise<URL[]> {

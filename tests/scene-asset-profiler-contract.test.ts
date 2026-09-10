@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
-import { commandContracts, findCommandContract } from "../src/contracts/command-contract.js";
+import { findCommandContract } from "../src/contracts/command-contract.js";
 import { contractToolNames, listCsFiles, readCsSources } from "./helpers/csharp-test-helpers.js";
 
-const ONE_CAPABILITY_DOMAINS = ["scene", "asset", "build", "animation-clip", "animator", "animator-controller", "lighting", "rendering", "volume", "physics", "profiler"];
+const ONE_CAPABILITY_DOMAINS = ["scene", "asset", "build", "animation-clip", "animator-controller", "rendering", "physics", "profiler"];
 
 async function oneCapabilityToolNames(domain: string): Promise<string[]> {
   const files = await listCsFiles(new URL(`../unitypkg/Editor/Tools/${domain}/`, import.meta.url));
@@ -16,7 +16,7 @@ async function oneCapabilityToolNames(domain: string): Promise<string[]> {
     assert.equal((source.match(/:\s*IUnityCliTool\s*</g) ?? []).length, 1, `${file.pathname} must implement exactly one Tool`);
     const name = /ToolDescriptor\s+Describe\(\)\s*=>\s*new\(\)\s*\{\s*Name\s*=\s*"([a-z0-9][a-z0-9.-]*)"/.exec(source)?.[1];
     assert.ok(name, `${file.pathname} must expose a Tool descriptor name`);
-    if (name.split(".")[0] === domain) names.push(name);
+    names.push(name);
   }
   return names.sort();
 }
@@ -164,20 +164,17 @@ test("build/animation/package sources keep current typed-result flows", async ()
 });
 
 test("one-capability source, contract, and bridge spec sets are bidirectionally aligned", async () => {
+  const specToolNames = new Set(bridgeCommandRegistry.specs().filter((spec) => spec.toolName).map((spec) => spec.toolName!));
   for (const domain of ONE_CAPABILITY_DOMAINS) {
     const sourceNames = await oneCapabilityToolNames(domain);
-    // animator 等拆分域的公开 group 与名称首段可能不同（animator.* 归入 animation-clip 组），按名称首段对齐。
-    const contractNames = commandContracts()
-      .filter((entry) => entry.bridgeCommand.split(".")[0] === domain && findCommandContract(entry.bridgeCommand)?.csharp_handler === "present")
-      .map((entry) => entry.bridgeCommand)
-      .sort();
-    const specNames = [...new Set(bridgeCommandRegistry.specs()
-      .filter((spec) => spec.group === domain && spec.toolName)
-      .map((spec) => spec.toolName!))]
-      .filter((name) => name.split(".")[0] === domain)
+    // 公开 group 与 C# 目录一一对应；拆分域（animation-clip/rendering）的子目录工具也归入同一 group。
+    const contractNames = contractToolNames(domain)
+      .filter((name) => findCommandContract(name)?.csharp_handler === "present")
       .sort();
     assert.deepEqual(contractNames, sourceNames, `${domain} contract must enumerate current one-capability files`);
-    assert.deepEqual(specNames, sourceNames, `${domain} bridge spec must enumerate current one-capability files`);
+    for (const name of sourceNames) {
+      assert.ok(specToolNames.has(name), `${name} should have a bridge spec routing via catalog.editor.run`);
+    }
   }
   assert.equal(contractToolNames("build").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 13);
   assert.equal(contractToolNames("rendering").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 21);

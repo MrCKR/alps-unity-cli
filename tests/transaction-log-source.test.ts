@@ -68,7 +68,7 @@ test("unconfirmed-outcome errors use the consolidated codes", async () => {
   const root = new URL("../unitypkg/Editor/Tools/", import.meta.url);
   const [frame, crossfade] = await Promise.all([
     readFile(new URL("scene/view-frame.cs", root), "utf8"),
-    readFile(new URL("animator/crossfade.cs", root), "utf8")
+    readFile(new URL("animation-clip/animator/crossfade.cs", root), "utf8")
   ]);
 
   for (const source of [frame, crossfade]) {

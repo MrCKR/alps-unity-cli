@@ -10,7 +10,7 @@ async function source(path: string): Promise<string> {
 
 test("animation, component, and controller mutations prove completion through concrete readback", async () => {
   const [clipCreate, clipModify, enabled, parameter, speed, componentAdd, componentModify, componentRemove, componentSet, controllerCreate, addLayer, addParameter, addState, addTransition, assign, blend1d, blend2d, blendChild, removeLayer, layerWeight] = await Promise.all([
-    source("Tools/animation-clip/clip/create.cs"), source("Tools/animation-clip/clip/modify.cs"), source("Tools/animator/set-enabled.cs"), source("Tools/animator/set-parameter.cs"), source("Tools/animator/set-speed.cs"), source("Tools/component/add.cs"), source("Tools/component/modify.cs"), source("Tools/component/remove.cs"), source("Tools/component/set.cs"), source("Tools/animator-controller/create.cs"), source("Tools/animator-controller/add-layer.cs"), source("Tools/animator-controller/add-parameter.cs"), source("Tools/animator-controller/add-state.cs"), source("Tools/animator-controller/add-transition.cs"), source("Tools/animator-controller/assign.cs"), source("Tools/animator-controller/create-blend-tree-1d.cs"), source("Tools/animator-controller/create-blend-tree-2d.cs"), source("Tools/animator-controller/add-blend-tree-child.cs"), source("Tools/animator-controller/remove-layer.cs"), source("Tools/animator-controller/set-layer-weight.cs")
+    source("Tools/animation-clip/create.cs"), source("Tools/animation-clip/update.cs"), source("Tools/animation-clip/animator/set-enabled.cs"), source("Tools/animation-clip/animator/set-parameter.cs"), source("Tools/animation-clip/animator/set-speed.cs"), source("Tools/component/add.cs"), source("Tools/component/modify.cs"), source("Tools/component/remove.cs"), source("Tools/component/set.cs"), source("Tools/animator-controller/create.cs"), source("Tools/animator-controller/add-layer.cs"), source("Tools/animator-controller/add-parameter.cs"), source("Tools/animator-controller/add-state.cs"), source("Tools/animator-controller/add-transition.cs"), source("Tools/animator-controller/assign.cs"), source("Tools/animator-controller/create-blend-tree-1d.cs"), source("Tools/animator-controller/create-blend-tree-2d.cs"), source("Tools/animator-controller/add-blend-tree-child.cs"), source("Tools/animator-controller/remove-layer.cs"), source("Tools/animator-controller/set-layer-weight.cs")
   ]);
 
   for (const text of [clipCreate, clipModify]) {
@@ -58,7 +58,7 @@ test("animation, component, and controller mutations prove completion through co
   assert.match(blendChild, /blendTree\.useAutomaticThresholds = false/);
   assert.ok(blendChild.indexOf("E_BLEND_TREE_CHILD_INPUT_CONFLICT") < blendChild.indexOf("ctx.CommitEffect()"));
   assert.match(assign, /observedTarget = EditorUtility\.InstanceIDToObject/);
-  const crossfade = await source("Tools/animator/crossfade.cs");
+  const crossfade = await source("Tools/animation-clip/animator/crossfade.cs");
   assert.match(crossfade, /AnimatorCrossfadeTool/);
   assert.match(crossfade, /FindStateInLayer/);
   assert.match(crossfade, /Animator\.StringToHash\(controllerLayers\[targetLayer\]\.name/);

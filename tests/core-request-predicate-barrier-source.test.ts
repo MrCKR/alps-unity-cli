@@ -25,7 +25,7 @@ test("supported dry-runs bypass direct proof refusal while graphics reads remain
 test("core request predicates cross one barrier before their first mutation", async () => {
   const paths = [
     "Tools/game-object/duplicate.cs", "Tools/game-object/modify.cs", "Tools/material/assign.cs", "Tools/material/set.cs",
-    "Tools/camera/target.cs", "Tools/camera/lens.cs", "Tools/animator/stop.cs", "Tools/asset/duplicate.cs",
+    "Tools/camera/target.cs", "Tools/camera/lens.cs", "Tools/animation-clip/animator/stop.cs", "Tools/asset/duplicate.cs",
     "Tools/asset/move.cs", "Tools/prefab/create.cs"
   ];
   const texts = await Promise.all(paths.map(source));
