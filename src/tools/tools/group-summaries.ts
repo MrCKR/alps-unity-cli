@@ -10,6 +10,7 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   camera: "Camera creation, discovery, lens settings, targeting, and multiview capture.",
   cinemachine: "Cinemachine virtual camera, brain, aim, body, blend, noise, and extension configuration.",
   code: "C# code execution with explicit safety controls.",
+  catalog: "Built-in Editor and development Player tool catalog transports: health, groups, summary, describe, list, and run per target.",
   component: "Add, get, list, modify, remove, and set components on scene objects.",
   console: "Unity Console reading and exact clear operations with count readback.",
   docs: "Offline documentation lookup and search.",
