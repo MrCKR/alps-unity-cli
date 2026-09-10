@@ -15,10 +15,10 @@ const LONG_RUNNING_TOOL_NAMES = new Set<string>([
   "asset.refresh",
   "build.run",
   "cinemachine.create",
-  "code.exec",
+  "code.execute",
   "editor.compile",
   "editor.refresh",
-  "graphics.bake-start",
+  "lighting.bake.start",
   "navmesh.bake",
   "navmesh.surface.bake",
   "occlusion.bake",
@@ -57,14 +57,14 @@ const MEDIUM_RISK_EFFECTS = new Set([
   "unknown-editor-side-effect"
 ]);
 
-const HIGH_RISK_TOOL_PREFIXES = ["object.", "scriptable-object."];
+const HIGH_RISK_TOOL_PREFIXES = ["serialized-object.", "scriptable-object."];
 const HIGH_RISK_TOOL_NAMES = new Set(["component.modify"]);
 const MEDIUM_RISK_TOOL_NAMES = new Set([
-  "animation.clip.create",
-  "animation.clip.modify",
+  "animation-clip.create",
+  "animation-clip.update",
   "console.clear",
-  "graphics.bake-reflection-probe",
-  "graphics.bake-start",
+  "lighting.bake.reflection-probe",
+  "lighting.bake.start",
   "navmesh.bake",
   "navmesh.bake-clear",
   "navmesh.surface.bake",
@@ -88,7 +88,7 @@ const MEDIUM_RISK_TOOL_NAMES = new Set([
 
 /** 生成文档归类；少数跨 group 文档归属由集中 override 维护。 */
 export function toolDocsTopic(tool: { name: string; group: string; source?: ToolSource; target?: string }): string {
-  if (tool.name.startsWith("animator.") || tool.name.startsWith("controller.")) return "animation";
+  if (tool.name.startsWith("animator.") || tool.name.startsWith("animator-controller.")) return "animation";
   return DOCS_TOPIC_OVERRIDES.get(tool.name) ?? tool.group;
 }
 

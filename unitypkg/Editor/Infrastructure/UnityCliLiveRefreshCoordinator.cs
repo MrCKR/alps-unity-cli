@@ -47,14 +47,18 @@ namespace UnityCli
                 {
                     ValidateRootContract(root, new[]
                     {
-                        "compile", "compilationRequested", "compilationObserved", "compilePhase", "compileDispatchSequence", "compileStartedSequence", "compileFinishedSequence", "compileStartedCycle",
+                        "compile", "compilationObservationStarted", "compilationObserved", "compilePhase", "compileObservationSequence", "compileStartedSequence", "compileFinishedSequence", "compileStartedCycle",
                         "compileDiagnostics", "compileErrorCount", "compileWarningCount", "compileInfoCount", "compileDiagnosticsTruncated", "stableFrames",
                         "beforeDependencyGeneration", "beforeProcessedGeneration", "importObserved", "reloadObserved", "rootContractDigest"
                     }, "queued", "prepared", "dispatching", "refresh_returned", "waiting_stable");
-                    object compile; object requested; object observed; object diagnostics; object errorCount; object warningCount; object infoCount; object truncated; object stableFrames;
+                    object compile; object observationStarted; object observed; object sequence; object diagnostics; object errorCount; object warningCount; object infoCount; object truncated; object stableFrames;
                     if (!root.TryGetValue("compile", out compile) || !(compile is bool)
-                        || !root.TryGetValue("compilationRequested", out requested) || !(requested is bool)
+                        || !root.TryGetValue("compilationObservationStarted", out observationStarted) || !(observationStarted is bool)
                         || !root.TryGetValue("compilationObserved", out observed) || !(observed is bool)
+                        || !root.TryGetValue("compileObservationSequence", out sequence) || !(sequence is long) || (long)sequence < 0L
+                        || !root.TryGetValue("compileStartedSequence", out sequence) || !(sequence is long) || (long)sequence < 0L
+                        || !root.TryGetValue("compileFinishedSequence", out sequence) || !(sequence is long) || (long)sequence < 0L
+                        || !root.TryGetValue("compileStartedCycle", out sequence) || !(sequence is long) || (long)sequence < 0L
                         || !root.TryGetValue("compileDiagnostics", out diagnostics) || !(diagnostics is List<object>)
                         || !root.TryGetValue("compileErrorCount", out errorCount) || !(errorCount is long) || (long)errorCount < 0L || (long)errorCount > 1000000L
                         || !root.TryGetValue("compileWarningCount", out warningCount) || !(warningCount is long) || (long)warningCount < 0L || (long)warningCount > 1000000L
@@ -68,14 +72,16 @@ namespace UnityCli
                     if (!string.Equals(Text(root, "rootContractDigest"), RefreshRootContractDigest(root), StringComparison.Ordinal)) throw new InvalidDataException("Refresh immutable root contract changed.");
                     UnityCliCompileCoordinator.ValidateBoundedDiagnostics(root, "compileDiagnostics", "compileErrorCount", "compileWarningCount", "compileInfoCount", "compileDiagnosticsTruncated", true);
                     var compilePhase = Text(root, "compilePhase");
-                    if (Array.IndexOf(new[] { "idle", "dispatching", "awaiting_started", "compiling", "cycle_finished" }, compilePhase) < 0) throw new InvalidDataException("Refresh compile phase is invalid.");
+                    if (Array.IndexOf(new[] { "idle", "awaiting_started", "compiling", "cycle_finished" }, compilePhase) < 0) throw new InvalidDataException("Refresh compile phase is invalid.");
                     var refreshFenced = HasExactEffectFence("refresh", root, "refresh-dispatch");
                     var phase = Text(root, "phase");
                     if ((phase == "queued" || phase == "prepared") == refreshFenced) throw new InvalidDataException("Refresh effect fence is inconsistent with phase.");
-                    var compileFenced = HasExactEffectFence("refresh", root, "compile-dispatch");
-                    if ((compilePhase == "idle") == compileFenced) throw new InvalidDataException("Refresh compile fence is inconsistent with phase.");
-                    if (Bool(root, "compilationObserved") && (Long(root, "compileStartedCycle") <= 0L || Long(root, "compileStartedSequence") <= Long(root, "compileDispatchSequence")))
+                    if ((bool)observationStarted != ((bool)compile && compilePhase != "idle")) throw new InvalidDataException("Refresh compile observation state is inconsistent.");
+                    if ((bool)observed != (compilePhase == "compiling" || compilePhase == "cycle_finished")) throw new InvalidDataException("Refresh compile observed state is inconsistent with phase.");
+                    if ((bool)observed && (Long(root, "compileStartedCycle") <= 0L || Long(root, "compileStartedSequence") <= Long(root, "compileObservationSequence")))
                         throw new InvalidDataException("Refresh compile attribution is invalid.");
+                    if (compilePhase == "cycle_finished" && Long(root, "compileFinishedSequence") <= Long(root, "compileStartedSequence"))
+                        throw new InvalidDataException("Refresh compile finish attribution is invalid.");
                 }
 
                 private static string RefreshRootContractDigest(Dictionary<string, object> root)
@@ -101,8 +107,8 @@ namespace UnityCli
                     var root = new Dictionary<string, object>
                     {
                         { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc },
-                        { "phase", "queued" }, { "compile", args.Compile }, { "compilationRequested", false }, { "compilationObserved", false }, { "compilePhase", "idle" },
-                        { "compileDispatchSequence", 0L }, { "compileStartedSequence", 0L }, { "compileFinishedSequence", 0L }, { "compileStartedCycle", 0L },
+                        { "phase", "queued" }, { "compile", args.Compile }, { "compilationObservationStarted", false }, { "compilationObserved", false }, { "compilePhase", "idle" },
+                        { "compileObservationSequence", 0L }, { "compileStartedSequence", 0L }, { "compileFinishedSequence", 0L }, { "compileStartedCycle", 0L },
                         { "compileDiagnostics", new List<object>() }, { "compileErrorCount", 0L }, { "compileWarningCount", 0L }, { "compileInfoCount", 0L }, { "compileDiagnosticsTruncated", 0L },
                         { "stableFrames", 0L }, { "beforeDependencyGeneration", before.DependencyGeneration }, { "beforeProcessedGeneration", before.ProcessedGeneration },
                         { "importObserved", false }, { "reloadObserved", false }
@@ -119,24 +125,22 @@ namespace UnityCli
                     if (phase == "queued") { if (BusyEditor()) return; Update(value => value["phase"] = "prepared"); return; }
                     if (phase == "prepared")
                     {
+                        if (Bool(root, "compile"))
+                        {
+                            var observationSequence = UnityCliCompilationEventBroker.CurrentCompilationEventSequence();
+                            if (UnityCliCompilationEventBroker.SequenceCorrupt) { Fail(root, "E_EXECUTION_TIMEOUT", "Refresh compilation event sequence is corrupt; attributed outcome is unknown."); return; }
+                            Update(value => { value["compilationObservationStarted"] = true; value["compileObservationSequence"] = observationSequence; value["compilePhase"] = "awaiting_started"; value["stableFrames"] = 0L; });
+                            root["compilationObservationStarted"] = true; root["compileObservationSequence"] = observationSequence; root["compilePhase"] = "awaiting_started";
+                        }
                         root = CrossEffectFence(root, "refresh-dispatch", "dispatching");
                         try { AssetDatabase.Refresh(); Update(value => value["phase"] = "refresh_returned"); }
                         catch (Exception exception) { Fail(root, "E_EXECUTION_TIMEOUT", "Refresh result cannot be confirmed: " + exception.Message + "; inspect asset state."); }
                         return;
                     }
-                    if (phase == "refresh_returned")
-                    {
-                        if (Bool(root, "compile") && !Bool(root, "compilationObserved") && !Bool(root, "compilationRequested"))
-                        {
-                            if (BusyEditor()) return;
-                            UnityCliCompileCoordinator.RequestRefreshCompilation(Text(root, "requestId"), Text(root, "requestDigest"));
-                            return;
-                        }
-                        Update(value => value["phase"] = "waiting_stable");
-                        return;
-                    }
+                    if (phase == "refresh_returned") { Update(value => value["phase"] = "waiting_stable"); return; }
                     if (phase != "waiting_stable" || BusyEditor()) return;
-                    if (Bool(root, "compile") && (!Bool(root, "compilationObserved") || Text(root, "compilePhase") != "cycle_finished"))
+                    var compilePhase = Text(root, "compilePhase");
+                    if (Bool(root, "compile") && compilePhase != "awaiting_started" && compilePhase != "cycle_finished")
                     {
                         Fail(root, "E_EXECUTION_TIMEOUT", "Refresh compilation result cannot be confirmed; inspect editor.state and compile diagnostics.");
                         return;
@@ -152,6 +156,7 @@ namespace UnityCli
                         return;
                     }
                     var frames = Long(root, "stableFrames") + 1L;
+                    root["stableFrames"] = frames;
                     Update(value => value["stableFrames"] = frames);
                     if (frames >= 3L) Succeed(root);
                 }

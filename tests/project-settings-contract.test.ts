@@ -3,29 +3,29 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const read = (path: string): string => readFileSync(path, "utf8");
-const support = read("unitypkg/Editor/Tools/project/ProjectSettingsToolSupport.cs");
-const reader = read("unitypkg/Editor/Tools/project/ProjectSettingsReader.cs");
+const support = read("unitypkg/Editor/Tools/project-settings/ProjectSettingsToolSupport.cs");
+const reader = read("unitypkg/Editor/Tools/project-settings/ProjectSettingsReader.cs");
 const readSources = [
-  read("unitypkg/Editor/Tools/project/audio-settings.cs"),
-  read("unitypkg/Editor/Tools/project/input-settings.cs"),
-  read("unitypkg/Editor/Tools/project/player-settings.cs"),
-  read("unitypkg/Editor/Tools/project/time-settings.cs"),
+  read("unitypkg/Editor/Tools/project-settings/audio-settings.cs"),
+  read("unitypkg/Editor/Tools/project-settings/input-settings.cs"),
+  read("unitypkg/Editor/Tools/project-settings/player-settings.cs"),
+  read("unitypkg/Editor/Tools/project-settings/time-settings.cs"),
 ];
 const setSources = [
-  read("unitypkg/Editor/Tools/project/audio-settings/set.cs"),
-  read("unitypkg/Editor/Tools/project/input-settings/set.cs"),
-  read("unitypkg/Editor/Tools/project/player-settings/set.cs"),
-  read("unitypkg/Editor/Tools/project/time-settings/set.cs"),
+  read("unitypkg/Editor/Tools/project-settings/audio-settings/set.cs"),
+  read("unitypkg/Editor/Tools/project-settings/input-settings/set.cs"),
+  read("unitypkg/Editor/Tools/project-settings/player-settings/set.cs"),
+  read("unitypkg/Editor/Tools/project-settings/time-settings/set.cs"),
 ];
 const names = [
-  "project.audio-settings",
-  "project.audio-settings.set",
-  "project.input-settings",
-  "project.input-settings.set",
-  "project.player-settings",
-  "project.player-settings.set",
-  "project.time-settings",
-  "project.time-settings.set",
+  "project-settings.audio-settings",
+  "project-settings.audio-settings.set",
+  "project-settings.input-settings",
+  "project-settings.input-settings.set",
+  "project-settings.player-settings",
+  "project-settings.player-settings.set",
+  "project-settings.time-settings",
+  "project-settings.time-settings.set",
 ];
 const completion = JSON.parse(read("contracts/tool-completion-contract.json")) as { tools: Array<{ toolName: string }> };
 
@@ -108,8 +108,8 @@ test("Player reload风险和调用方fresh-read责任被明确投影", () => {
   const source = setSources[2];
   assert.match(source, /"domain-reload"/);
   assert.match(source, /may trigger a domain reload/);
-  assert.match(source, /read project\.player-settings before deciding whether to retry/);
-  const entry = completion.tools.find((item) => item.toolName === "project.player-settings.set") as Record<string, unknown> | undefined;
+  assert.match(source, /read project-settings\.player-settings before deciding whether to retry/);
+  const entry = completion.tools.find((item) => item.toolName === "project-settings.player-settings.set") as Record<string, unknown> | undefined;
   assert.ok(entry);
   assert.equal(entry?.executionClass, "atomic");
   assert.match(JSON.stringify(entry), /project\.player-settings/);

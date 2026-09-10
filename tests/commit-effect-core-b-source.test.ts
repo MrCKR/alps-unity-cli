@@ -5,7 +5,7 @@ import test from "node:test";
 const editorUrl = new URL("../unitypkg/Editor/", import.meta.url);
 
 const mutationTools = [
-  ["object.modify", "Tools/object/modify.cs"],
+  ["serialized-object.patch", "Tools/serialized-object/patch.cs"],
   ["physics.assign-material", "Tools/physics/assign-material.cs"],
   ["physics.collision-matrix", "Tools/physics/collision-matrix.cs"],
   ["physics.force", "Tools/physics/force.cs"],
@@ -35,14 +35,14 @@ const mutationTools = [
   ["profiler.pause", "Tools/profiler/pause.cs"],
   ["profiler.start", "Tools/profiler/start.cs"],
   ["profiler.stop", "Tools/profiler/stop.cs"],
-  ["project.layer.add", "Tools/project/ProjectTagLayerToolSupport.cs"],
-  ["project.layer.remove", "Tools/project/ProjectTagLayerToolSupport.cs"],
-  ["project.tag.add", "Tools/project/ProjectTagLayerToolSupport.cs"],
-  ["project.tag.remove", "Tools/project/ProjectTagLayerToolSupport.cs"],
-  ["reflection.method.call", "Tools/reflection/method/call.cs"],
+  ["project-settings.layer.add", "Tools/project-settings/ProjectSettingsToolSupport.cs"],
+  ["project-settings.layer.remove", "Tools/project-settings/ProjectSettingsToolSupport.cs"],
+  ["project-settings.tag.add", "Tools/project-settings/ProjectSettingsToolSupport.cs"],
+  ["project-settings.tag.remove", "Tools/project-settings/ProjectSettingsToolSupport.cs"],
+  ["runtime-reflection.method.invoke", "Tools/runtime-reflection/method/invoke.cs"],
   ["scene.create", "Tools/scene/create.cs"],
   ["scene.load", "Tools/scene/load.cs"],
-  ["scene.move-object", "Tools/scene/move-object.cs"],
+  ["game-object.move-to-scene", "Tools/game-object/move-to-scene.cs"],
   ["scene.save", "Tools/scene/save.cs"],
   ["scene.set-active", "Tools/scene/set-active.cs"],
   ["scene.unload", "Tools/scene/unload.cs"],
@@ -90,7 +90,7 @@ test("core B mutation tools commit exactly once before their effect", async () =
 
 test("reflection and profiler load commit at their first irreversible effect", async () => {
   const [reflection, profilerLoad] = await Promise.all([
-    readFile(new URL("Tools/reflection/method/call.cs", editorUrl), "utf8"),
+    readFile(new URL("Tools/runtime-reflection/method/invoke.cs", editorUrl), "utf8"),
     readFile(new URL("Tools/profiler/load.cs", editorUrl), "utf8")
   ]);
   assert.match(reflection, /PrepareCall\([\s\S]*ctx\.RunCompletionProbe\(request\.CompletionProbe, \(\) => data = UnityCliBridge\.ReflectionInvoker\.InvokePrepared\(prepared(?:, readBudget)?\)\)/);

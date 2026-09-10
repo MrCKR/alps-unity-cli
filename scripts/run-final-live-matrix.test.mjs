@@ -134,7 +134,7 @@ test("parseOptions controls-only slice is explicit and mutually exclusive with c
     "--project", "P",
     "--evidence-dir", "E",
     "--controls-only",
-    "--capability", "go.create"
+    "--capability", "game-object.create"
   ]), /--controls-only forbids --capability/);
   assert.throws(() => parseOptions([
     "--cli", process.execPath,
@@ -354,7 +354,7 @@ test("public descriptor audit rejects removed fields and default availability", 
 test("Live harness loads only CLI-owned result schemas from current compiled metadata", async () => {
   const schemas = await loadInternalResultSchemas(resolve("dist", "cli.js"));
   assert.ok(schemas.size >= 40 && schemas.size < 100);
-  assert.equal(schemas.get("code.exec")?.oneOf instanceof Array, true);
+  assert.equal(schemas.get("code.execute")?.oneOf instanceof Array, true);
   assert.equal(schemas.get("editor.state")?.type, "object");
   assert.equal(schemas.has("package.list"), false);
 });
@@ -373,7 +373,7 @@ test("durable status Tools bind to a prior successful root requestId", () => {
   assert.deepEqual(DEPENDENT_STATUS_ROOT_TOOLS, {
     "asset.refresh.status": "asset.refresh",
     "build.player.status": "build.run",
-    "editor.play-mode.status": "editor.play",
+    "editor.play-mode.status": "editor.play-mode.start",
     "package.install.status": "package.install",
     "package.remove.status": "package.remove",
     "test.run.status": "test.run"
@@ -391,7 +391,7 @@ test("durable status Tools bind to a prior successful root requestId", () => {
   assert.equal(successfulRootRequestId(records, "build.run", "editor"), null);
 
   const deferred = {
-    capability: { kind: "tool", name: "editor.play" },
+    capability: { kind: "tool", name: "editor.play-mode.start" },
     phase: "editor",
     argv: [],
     exitCode: 1,
@@ -399,10 +399,10 @@ test("durable status Tools bind to a prior successful root requestId", () => {
     recoveryStatusTool: "editor.play-mode.status",
     envelope: { ok: false, requestId: "play-root", error: { code: "E_EXECUTION_TIMEOUT" } }
   };
-  assert.equal(isDeferredStatusRootTimeout("editor.play", "editor", deferred.envelope, deferred.exitCode, deferred.recoveryStatusTool), true);
-  assert.equal(successfulRootRequestId([deferred], "editor.play", "editor"), "play-root");
-  assert.equal(successfulRootRequestId([{ ...deferred, recoveryStatusTool: undefined }], "editor.play", "editor"), null);
-  assert.equal(isDeferredStatusRootTimeout("editor.play", "editor", { ...deferred.envelope, error: { code: "E_SCHEMA_INVALID" } }, 1, deferred.recoveryStatusTool), false);
+  assert.equal(isDeferredStatusRootTimeout("editor.play-mode.start", "editor", deferred.envelope, deferred.exitCode, deferred.recoveryStatusTool), true);
+  assert.equal(successfulRootRequestId([deferred], "editor.play-mode.start", "editor"), "play-root");
+  assert.equal(successfulRootRequestId([{ ...deferred, recoveryStatusTool: undefined }], "editor.play-mode.start", "editor"), null);
+  assert.equal(isDeferredStatusRootTimeout("editor.play-mode.start", "editor", { ...deferred.envelope, error: { code: "E_SCHEMA_INVALID" } }, 1, deferred.recoveryStatusTool), false);
 });
 
 test("dependent status Tools execute after roots without disturbing relative order", () => {
@@ -584,7 +584,7 @@ test("memory snapshot cleanup is confined to the exact project Library root", ()
   );
 });
 
-test("graphics.bake-start cleanup is confined to the active scene lighting directory", async () => {
+test("lighting.bake.start cleanup is confined to the active scene lighting directory", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-cli-bake-cleanup-中文项目-"));
   try {
     const location = sceneBakeArtifactDirectory(project, "Assets/UnityCLIValidation/MatrixScene.unity");
@@ -598,7 +598,7 @@ test("graphics.bake-start cleanup is confined to the active scene lighting direc
   }
 });
 
-test("graphics.bake-start cleanup rejects junction ownership escapes", async () => {
+test("lighting.bake.start cleanup rejects junction ownership escapes", async () => {
   const owner = await mkdtemp(join(tmpdir(), "unity-cli-bake-owner-"));
   const outside = await mkdtemp(join(tmpdir(), "unity-cli-bake-outside-"));
   const junction = join(owner, "linked");
@@ -613,7 +613,7 @@ test("graphics.bake-start cleanup rejects junction ownership escapes", async () 
   }
 });
 
-test("graphics.bake-start cleanup restores baseline bytes and deletes only paired additions", () => {
+test("lighting.bake.start cleanup restores baseline bytes and deletes only paired additions", () => {
   const lighting = "Assets/UnityCLIValidation/MatrixScene/LightingData.asset";
   const reflection = "Assets/UnityCLIValidation/MatrixScene/ReflectionProbe-0.exr";
   const before = [
@@ -648,9 +648,9 @@ test("graphics.bake-start cleanup restores baseline bytes and deletes only paire
 test("local matrix cases bind deterministic caches and package projects", () => {
   assert.deepEqual(routeCapabilityFixtureInput({ api: "UnityEngine.Camera", docsDir: ".cache/unity-docs" }, "docs.get", { docs_cache_dir: "D:/evidence/docs-cache" }), { api: "UnityEngine.Camera", docsDir: "D:/evidence/docs-cache" });
   assert.deepEqual(routeCapabilityFixtureInput({ query: "Camera" }, "docs.search", { docs_cache_dir: "D:/evidence/docs-cache" }), { query: "Camera", docsDir: "D:/evidence/docs-cache" });
-  assert.deepEqual(routeCapabilityFixtureInput({ member: "UnityEngine.Camera.Render", reflectDir: ".cache/unity-reflect" }, "reflect.member", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { member: "UnityEngine.Camera.Render", reflectDir: "D:/evidence/reflect-cache" });
-  assert.deepEqual(routeCapabilityFixtureInput({ query: "Camera" }, "reflect.search", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { query: "Camera", reflectDir: "D:/evidence/reflect-cache" });
-  assert.deepEqual(routeCapabilityFixtureInput({ type: "UnityEngine.Camera" }, "reflect.type", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { type: "UnityEngine.Camera", reflectDir: "D:/evidence/reflect-cache" });
+  assert.deepEqual(routeCapabilityFixtureInput({ member: "UnityEngine.Camera.Render", reflectDir: ".cache/unity-reflect" }, "type-inspection.get-member", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { member: "UnityEngine.Camera.Render", reflectDir: "D:/evidence/reflect-cache" });
+  assert.deepEqual(routeCapabilityFixtureInput({ query: "Camera" }, "type-inspection.search", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { query: "Camera", reflectDir: "D:/evidence/reflect-cache" });
+  assert.deepEqual(routeCapabilityFixtureInput({ type: "UnityEngine.Camera" }, "type-inspection.get-type", { reflect_cache_dir: "D:/evidence/reflect-cache" }), { type: "UnityEngine.Camera", reflectDir: "D:/evidence/reflect-cache" });
   assert.deepEqual(routeCapabilityFixtureInput({}, "package.registry.clear", { project: "D:/Dev/UnityProject" }), { project: "D:/Dev/UnityProject" });
   assert.deepEqual(routeCapabilityFixtureInput({ project: { invalid: true } }, "package.registry.clear", { project: "D:/Dev/UnityProject" }), { project: { invalid: true } });
   assert.deepEqual(routeCapabilityFixtureInput({ name: "Acme" }, "package.scoped-registry.remove", { project: "D:/Dev/UnityProject" }), { name: "Acme", project: "D:/Dev/UnityProject" });
@@ -785,7 +785,7 @@ test("frozen direct cases are a complete request-specific closed set", async () 
       assert.equal(Object.hasOwn(probe, "context"), false, `${name} completionProbe must not use removed context`);
     }
     for (const setup of [...(recipe.setup ?? []), ...(recipe.before ?? []), ...(recipe.after ?? []), ...(recipe.cleanup ?? [])]) {
-      assert.notEqual(setup.name, "code.exec", `${name} must not use code.exec outside its own invocation`);
+      assert.notEqual(setup.name, "code.execute", `${name} must not use code.execute outside its own invocation`);
     }
   }
   const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
@@ -804,13 +804,13 @@ test("frozen direct cases are a complete request-specific closed set", async () 
 
 test("NavMeshSurface direct case owns one saved fixture, fresh asset proof, and exact cleanup", () => {
   const recipe = DIRECT_LIVE_CASES["navmesh.surface.bake"];
-  assert.deepEqual(recipe.setup.map((item) => item.name), ["go.create", "component.add", "go.create", "scene.save"]);
+  assert.deepEqual(recipe.setup.map((item) => item.name), ["game-object.create", "component.add", "game-object.create", "scene.save"]);
   assert.equal(recipe.setup[1].input.component, "Unity.AI.Navigation.NavMeshSurface");
   assert.deepEqual(recipe.before[0].flags, ["--dry-run"]);
   assert.equal(recipe.before[0].expect.equals["/data/targetCount"], 1);
   assert.equal(recipe.invocation.capture.dataPath, "/data/surfaces/0/dataPath");
   assert.deepEqual(recipe.after.map((item) => item.name), ["navmesh.bake-status", "asset.info"]);
-  assert.deepEqual(recipe.cleanup.map((item) => item.name), ["go.delete", "go.delete", "asset.delete", "scene.save"]);
+  assert.deepEqual(recipe.cleanup.map((item) => item.name), ["game-object.delete", "game-object.delete", "asset.delete", "scene.save"]);
   assert.deepEqual(recipe.cleanup[2].when, ["dataPath"]);
   assert.ok(recipe.invariants.some((item) => item.left === "dataGuid" && item.right === "assetGuid"));
 });
@@ -826,7 +826,7 @@ test("Prefab and Timeline direct cases own unique assets, fresh readback, and cl
     assert.ok(assetCleanup.acceptErrorCodes.includes("E_ASSET_NOT_FOUND"));
   }
   const apply = DIRECT_LIVE_CASES["prefab.overrides.apply"];
-  assert.deepEqual(apply.setup.map((item) => item.name), ["asset.duplicate", "prefab.instantiate", "go.create"]);
+  assert.deepEqual(apply.setup.map((item) => item.name), ["asset.duplicate", "prefab.instantiate", "game-object.create"]);
   assert.deepEqual(apply.after.map((item) => item.name), ["prefab.instantiate", "scene.gameobject"]);
   assert.ok(apply.cleanup[1].acceptErrorCodes.includes("E_TARGET_NOT_FOUND"));
   assert.equal(apply.before[0].expect.equals["/data/changed"], true);
@@ -901,7 +901,7 @@ test("active fixtures use only current public execution semantics", async () => 
   assert.deepEqual(fixtures.profiler_snapshots.steps.map((step) => step.id), ["write-inputs", "restore-proof"]);
   assert.equal(fixtures.profiler_snapshots.steps.some((step) => step.argv[2] === "profiler.memory-snapshot.take"), false);
   for (const name of [
-    "cinemachine.aim", "cinemachine.extension.add", "scene.create", "scene.move-object", "scene.set-active", "scene.unload",
+    "cinemachine.aim", "cinemachine.extension.add", "scene.create", "game-object.move-to-scene", "scene.set-active", "scene.unload",
     "prefab.create", "prefab.unpack", "prefab.stage-close", "profiler.load", "profiler.hierarchy", "profiler.frame-debugger.disable", "profiler.memory-snapshot.compare",
     "package.remove", "package.restore", "package.scoped-registry.remove", "ui.document.create", "ui.detach-document", "ui.modify-visual-element",
     "scriptable-object.create", "scriptable-object.modify", "vfx.line-create", "vfx.template.create"
@@ -915,8 +915,8 @@ test("active fixtures use only current public execution semantics", async () => 
       const argv = call.argv;
       const inputIndex = argv.indexOf("--input");
       const input = inputIndex < 0 ? {} : JSON.parse(argv[inputIndex + 1].replace(/\$\{[A-Za-z][A-Za-z0-9_]*\}/g, "0"));
-      if (argv[0] === "tools" && argv[2] === "code.exec") {
-        assert.ok(input.completionProbe, `${call.id ?? argv[2]} code.exec must declare completionProbe`);
+      if (argv[0] === "tools" && argv[2] === "code.execute") {
+        assert.ok(input.completionProbe, `${call.id ?? argv[2]} code.execute must declare completionProbe`);
         assert.equal(input.completionProbe.readTool, "scene.gameobject");
       }
       if (argv[0] === "tools" && argv[1] === "run" && argv[2] === "editor.state") assert.deepEqual(input, {});
@@ -967,22 +967,22 @@ test("undo redo and animator recipes avoid reload-prone or externally driven tar
   const undo = DIRECT_LIVE_CASES["editor.undo"];
   const redo = DIRECT_LIVE_CASES["editor.redo"];
   const animator = DIRECT_LIVE_CASES["animator.crossfade"];
-  assert.deepEqual(undo.setup.map((item) => item.name), ["go.create", "go.modify"]);
+  assert.deepEqual(undo.setup.map((item) => item.name), ["game-object.create", "game-object.modify"]);
   assert.equal(undo.setup[0].input.name, "${target}");
   assert.equal(undo.setup[1].input.target, "${target}");
-  assert.deepEqual(redo.setup.map((item) => item.name), ["go.create", "go.modify", "editor.undo"]);
+  assert.deepEqual(redo.setup.map((item) => item.name), ["game-object.create", "game-object.modify", "editor.undo"]);
   assert.equal(redo.setup[0].input.name, "${target}");
   assert.equal(redo.setup[1].input.target, "${target}");
   assert.equal(redo.setup[2].input.completionProbe.input.target, "${target}");
-  assert.deepEqual(undo.cleanup.map((item) => item.name), ["go.delete"]);
-  assert.deepEqual(redo.cleanup.map((item) => item.name), ["go.delete"]);
-  assert.deepEqual(animator.before.map((item) => item.name), ["scene.gameobject", "animation.state"]);
+  assert.deepEqual(undo.cleanup.map((item) => item.name), ["game-object.delete"]);
+  assert.deepEqual(redo.cleanup.map((item) => item.name), ["game-object.delete"]);
+  assert.deepEqual(animator.before.map((item) => item.name), ["scene.gameobject", "animator.get-state"]);
   assert.equal(animator.before[0].capture.beforeTargetId, "/data/gameObject/id");
   assert.equal(animator.before[1].capture.beforeCurrentStateHash, "/data/animator/currentState/fullPathHash");
   assert.equal(animator.invocation.capture.invocationCurrentStateHash, "/data/state/currentStateHash");
-  assert.deepEqual(animator.after.map((item) => item.name), ["scene.gameobject", "animation.state"]);
+  assert.deepEqual(animator.after.map((item) => item.name), ["scene.gameobject", "animator.get-state"]);
   assert.equal(animator.after[1].capture.afterCurrentStateHash, "/data/animator/currentState/fullPathHash");
-  assert.deepEqual(animator.cleanup.map((item) => item.name), ["go.delete"]);
+  assert.deepEqual(animator.cleanup.map((item) => item.name), ["game-object.delete"]);
   assert.ok(!animator.cleanup.some((item) => item.name === "asset.delete"));
 });
 
@@ -1092,7 +1092,7 @@ test("direct case never retries mutation steps on generation change", async () =
     },
     failed: async (_id, issue) => ({ assertion: { status: "FAIL", issue } })
   };
-  const definitions = [{ id: "mutate", kind: "tool", name: "code.exec", input: {} }];
+  const definitions = [{ id: "mutate", kind: "tool", name: "code.execute", input: {} }];
 
   assert.equal(await runDirectCasePhase(matrix, "tool.code.exec", "mutation", definitions, {}, "C:\\DevProject"), false);
   assert.equal(calls.length, 1);
@@ -1111,7 +1111,7 @@ test("cleanup phase continues after an earlier cleanup step fails", async () => 
     failed: async () => ({ assertion: { status: "FAIL" } })
   };
   const definitions = [
-    { id: "delete-target", kind: "tool", name: "go.delete", input: { target: "Target" } },
+    { id: "delete-target", kind: "tool", name: "game-object.delete", input: { target: "Target" } },
     { id: "restore-settings", kind: "tool", name: "physics.settings", input: { autoSimulation: true } }
   ];
 
@@ -1226,10 +1226,10 @@ test("playmode resolve blocked tools exactly cover package file mutations", () =
 test("journal lifecycle forbids request archives and clears terminal active state", async () => {
   const project = await mkdtemp(join(tmpdir(), "ucli-active-lifecycle-"));
   try {
-    assert.equal(await journalLifecycleIssue(project, ["tools", "run", "go.create"], { requestId: "req_clean" }), null);
+    assert.equal(await journalLifecycleIssue(project, ["tools", "run", "game-object.create"], { requestId: "req_clean" }), null);
     await mkdir(join(project, "Library", "UnityCli", "requests"), { recursive: true });
     await writeFile(join(project, "Library", "UnityCli", "requests", "req_archived.json"), "{}");
-    assert.match(await journalLifecycleIssue(project, ["tools", "run", "go.create"], { requestId: "req_archived" }), /Request-level journal/);
+    assert.match(await journalLifecycleIssue(project, ["tools", "run", "game-object.create"], { requestId: "req_archived" }), /Request-level journal/);
     await mkdir(join(project, "Library", "UnityCli"), { recursive: true });
     await writeFile(join(project, "Library", "UnityCli", "active-compile.json"), "{}");
     assert.match(await journalLifecycleIssue(project, ["tools", "run", "editor.compile"], { requestId: "req_compile" }), /active operation was not cleared/);

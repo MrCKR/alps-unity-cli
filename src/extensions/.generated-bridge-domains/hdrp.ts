@@ -5,13 +5,13 @@ import { boolFlag, compactArgs, floatFlag, stringFlag } from "../../bridge/args.
 import type { BridgeCommandSpec } from "../../bridge/types.js";
 
 export const hdrpBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
-  { group: "hdrp", command: "volume-list", bridgeCommand: "project-tool.run", toolName: "hdrp.volume.list", buildArgs: emptyArgs },
-  { group: "hdrp", command: "volume-create", bridgeCommand: "project-tool.run", toolName: "hdrp.volume.create", buildArgs: volumeCreateArgs },
-  { group: "hdrp", command: "volume-info", bridgeCommand: "project-tool.run", toolName: "hdrp.volume.info", buildArgs: volumeTargetArgs },
-  { group: "hdrp", command: "volume-add-effect", bridgeCommand: "project-tool.run", toolName: "hdrp.volume.add-effect", buildArgs: volumeEffectArgs },
-  { group: "hdrp", command: "volume-set", bridgeCommand: "project-tool.run", toolName: "hdrp.volume.set", buildArgs: volumeSetArgs },
-  { group: "hdrp", command: "settings-get", bridgeCommand: "project-tool.run", toolName: "hdrp.settings.get", buildArgs: emptyArgs },
-  { group: "hdrp", command: "settings-set", bridgeCommand: "project-tool.run", toolName: "hdrp.settings.set", buildArgs: hdrpSettingsArgs, destructiveHint: true, supportsDryRun: true }
+  { group: "hdrp", command: "volume.list", bridgeCommand: "catalog.editor.run", toolName: "hdrp.volume.list", buildArgs: emptyArgs },
+  { group: "hdrp", command: "volume.create", bridgeCommand: "catalog.editor.run", toolName: "hdrp.volume.create", buildArgs: volumeCreateArgs },
+  { group: "hdrp", command: "volume.info", bridgeCommand: "catalog.editor.run", toolName: "hdrp.volume.info", buildArgs: volumeTargetArgs },
+  { group: "hdrp", command: "volume.add-effect", bridgeCommand: "catalog.editor.run", toolName: "hdrp.volume.add-effect", buildArgs: volumeEffectArgs },
+  { group: "hdrp", command: "volume.set", bridgeCommand: "catalog.editor.run", toolName: "hdrp.volume.set", buildArgs: volumeSetArgs },
+  { group: "hdrp", command: "settings.get", bridgeCommand: "catalog.editor.run", toolName: "hdrp.settings.get", buildArgs: emptyArgs },
+  { group: "hdrp", command: "settings.set", bridgeCommand: "catalog.editor.run", toolName: "hdrp.settings.set", buildArgs: hdrpSettingsArgs, destructiveHint: true, supportsDryRun: true }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {

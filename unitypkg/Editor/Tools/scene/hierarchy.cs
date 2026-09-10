@@ -68,7 +68,7 @@ namespace UnityCli
         {
             Name = "scene.hierarchy",
             Summary = "Read a lightweight, paged active scene hierarchy from stable raw GameObject positions.",
-            Description = "Read a lightweight active-scene hierarchy in Edit or Play mode. Use parent for one subtree, maxDepth to limit recursion, query/name/component filters to narrow results, and includeComponents only when component previews are needed. Read one selected object with scene.gameobject; use object.get-data or component.get for deep fields. pageSize is 1..500 (default 50), maxDepth is 0..16 (default 1), each page scans only forward from nextCursor, pageInfo never fabricates a filtered total, and old generations return E_CONTINUATION_STALE. All pages share scan/node/getter/reflection/time/UTF-8 budgets.",
+            Description = "Read a lightweight active-scene hierarchy in Edit or Play mode. Use parent for one subtree, maxDepth to limit recursion, query/name/component filters to narrow results, and includeComponents only when component previews are needed. Read one selected object with scene.gameobject; use serialized-object.read or component.get for deep fields. pageSize is 1..500 (default 50), maxDepth is 0..16 (default 1), each page scans only forward from nextCursor, pageInfo never fabricates a filtered total, and old generations return E_CONTINUATION_STALE. All pages share scan/node/getter/reflection/time/UTF-8 budgets.",
             Group = "scene",
             DestructiveHint = false,
             Target = "editor",

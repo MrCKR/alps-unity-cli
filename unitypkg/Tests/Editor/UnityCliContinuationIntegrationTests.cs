@@ -182,7 +182,7 @@ namespace UnityCli.Tests
             }, Context("issue-042-prefab-deleted-first")).GetAwaiter().GetResult();
             string position;
             Assert.That(UnityCliContinuationToken.TryParse(
-                fresh.PageInfo.NextCursor, "go.find", fresh.PageInfo.Generation, out position), Is.True);
+                fresh.PageInfo.NextCursor, "game-object.find", fresh.PageInfo.Generation, out position), Is.True);
             var separator = position.IndexOf(':');
             int instanceId;
             Assert.That(separator, Is.GreaterThan(0));

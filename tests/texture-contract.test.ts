@@ -72,7 +72,7 @@ test("texture group tools are contract-discovered with correct live descriptor h
 test("bridge specs resolve for texture tools", () => {
   for (const command of ["info", "create", "sprite", "modify", "delete", "import-settings", "generate"]) {
     const spec = bridgeCommandRegistry.lookup("texture", command);
-    assert.equal(spec?.bridgeCommand, "project-tool.run");
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run");
     assert.equal(spec?.toolName, `texture.${command}`);
   }
 });

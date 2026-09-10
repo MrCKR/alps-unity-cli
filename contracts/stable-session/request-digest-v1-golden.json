@@ -2,6 +2,6 @@
   "version": 1,
   "algorithm": "SHA256(UTF8('unity-cli-request-v1') + NUL + UTF8(instanceId) + NUL + exactRequestBodyBytes)",
   "instanceId": "unity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "requestBodyUtf8": "{\"protocolVersion\":2,\"requestId\":\"req_digest\",\"instanceId\":\"unity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"command\":\"project-tool.run\",\"input\":{},\"execution\":{\"absoluteDeadlineUtc\":\"2026-07-16T00:00:00.000Z\",\"completionContractVersion\":1,\"requestDigestVersion\":1}}",
-  "sha256": "0c8c90d9afafe0a4d3357249f7e4e739c9952e37f417550d44655b50652866eb"
+  "requestBodyUtf8": "{\"protocolVersion\":2,\"requestId\":\"req_digest\",\"instanceId\":\"unity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"command\":\"catalog.editor.run\",\"input\":{},\"execution\":{\"absoluteDeadlineUtc\":\"2026-07-16T00:00:00.000Z\",\"completionContractVersion\":1,\"requestDigestVersion\":1}}",
+  "sha256": "70ae32ab942a1f0dc72c642835ddc67b34f22e4f5d34949e1745b4163602518a"
 }

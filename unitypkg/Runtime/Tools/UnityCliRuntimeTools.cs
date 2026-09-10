@@ -64,14 +64,14 @@ namespace UnityCli
             if (input == null) throw Error("E_SCHEMA_INVALID", "Runtime Tool input must be an object.");
             switch (name)
             {
-                case "runtime.state": return RuntimeState(input);
-                case "runtime.console": return RuntimeConsole(input);
-                case "runtime.log": return RuntimeLog(input, dryRun);
-                case "runtime.target-framerate.set": return SetTargetFramerate(input, dryRun);
-                case "runtime.time-scale.set": return SetTimeScale(input, dryRun);
-                case "runtime.input.key": return SimulateKey(input, dryRun);
-                case "runtime.input.pointer": return SimulatePointer(input, dryRun);
-                case "runtime.ui.capture-element": return CaptureElement(input, dryRun);
+                case "player-runtime.state": return RuntimeState(input);
+                case "player-runtime.console": return RuntimeConsole(input);
+                case "player-runtime.log": return RuntimeLog(input, dryRun);
+                case "player-runtime.target-framerate.set": return SetTargetFramerate(input, dryRun);
+                case "player-runtime.time-scale.set": return SetTimeScale(input, dryRun);
+                case "player-runtime.input.key": return SimulateKey(input, dryRun);
+                case "player-runtime.input.pointer": return SimulatePointer(input, dryRun);
+                case "player-runtime.ui.capture-element": return CaptureElement(input, dryRun);
                 default: throw Error("E_TOOL_NOT_FOUND", "Runtime Tool is not approved: " + name + ".");
             }
         }
@@ -108,8 +108,8 @@ namespace UnityCli
             var limit = (int)OptionalInteger(input, "limit", 50L);
             var level = OptionalString(input, "level", "log");
             var includeStackTrace = OptionalBool(input, "includeStackTrace", false);
-            if (since < -1L) throw Error("E_SCHEMA_INVALID", "runtime.console since must be -1 or a non-negative cursor.");
-            if (limit < 1 || limit > MaxConsoleLimit) throw Error("E_SCHEMA_INVALID", "runtime.console limit must be between 1 and 200.");
+            if (since < -1L) throw Error("E_SCHEMA_INVALID", "player-runtime.console since must be -1 or a non-negative cursor.");
+            if (limit < 1 || limit > MaxConsoleLimit) throw Error("E_SCHEMA_INVALID", "player-runtime.console limit must be between 1 and 200.");
             var minimum = Severity(level);
             List<RuntimeLogEntry> selected;
             long cursor;
@@ -133,9 +133,9 @@ namespace UnityCli
         {
             RequireOnly(input, "message", "level");
             var message = RequiredString(input, "message", MaxMessageLength);
-            if (string.IsNullOrWhiteSpace(message)) throw Error("E_SCHEMA_INVALID", "runtime.log message must not be empty.");
+            if (string.IsNullOrWhiteSpace(message)) throw Error("E_SCHEMA_INVALID", "player-runtime.log message must not be empty.");
             var level = OptionalString(input, "level", "info");
-            if (level != "info" && level != "warning" && level != "error") throw Error("E_SCHEMA_INVALID", "runtime.log level must be info, warning, or error.");
+            if (level != "info" && level != "warning" && level != "error") throw Error("E_SCHEMA_INVALID", "player-runtime.log level must be info, warning, or error.");
             long? sequence = null;
             if (!dryRun)
             {
@@ -159,7 +159,7 @@ namespace UnityCli
         {
             RequireOnly(input, "frameRate");
             var target = RequiredInteger(input, "frameRate");
-            if (target < -1L || target > 1000L) throw Error("E_SCHEMA_INVALID", "runtime.target-framerate.set frameRate must be between -1 and 1000.");
+            if (target < -1L || target > 1000L) throw Error("E_SCHEMA_INVALID", "player-runtime.target-framerate.set frameRate must be between -1 and 1000.");
             var before = Application.targetFrameRate;
             if (!dryRun && before != (int)target) Application.targetFrameRate = (int)target;
             var after = Application.targetFrameRate;
@@ -177,7 +177,7 @@ namespace UnityCli
         {
             RequireOnly(input, "scale");
             var target = RequiredFiniteNumber(input, "scale");
-            if (target < 0d || target > 1000d) throw Error("E_SCHEMA_INVALID", "runtime.time-scale.set scale must be between 0 and 1000.");
+            if (target < 0d || target > 1000d) throw Error("E_SCHEMA_INVALID", "player-runtime.time-scale.set scale must be between 0 and 1000.");
             var expected = (float)target;
             var before = Time.timeScale;
             if (!dryRun && before != expected) Time.timeScale = expected;
@@ -197,7 +197,7 @@ namespace UnityCli
             RequireOnly(input, "key", "event");
             var key = RequiredString(input, "key", 128);
             var eventName = OptionalString(input, "event", "press");
-            if (eventName != "down" && eventName != "up" && eventName != "press") throw Error("E_SCHEMA_INVALID", "runtime.input.key event must be down, up, or press.");
+            if (eventName != "down" && eventName != "up" && eventName != "press") throw Error("E_SCHEMA_INVALID", "player-runtime.input.key event must be down, up, or press.");
             var facade = InputSystemFacade.Create();
             var control = facade.ResolveKey(key);
             var canonicalKey = facade.CanonicalKey(control);
@@ -234,11 +234,11 @@ namespace UnityCli
             RequireOnly(input, "x", "y", "event", "button");
             var x = RequiredFiniteNumber(input, "x");
             var y = RequiredFiniteNumber(input, "y");
-            if (x < 0d || y < 0d || x >= Screen.width || y >= Screen.height) throw Error("E_SCHEMA_INVALID", "runtime.input.pointer coordinates must be inside the current Player screen.");
+            if (x < 0d || y < 0d || x >= Screen.width || y >= Screen.height) throw Error("E_SCHEMA_INVALID", "player-runtime.input.pointer coordinates must be inside the current Player screen.");
             var eventName = OptionalString(input, "event", "click");
             var button = OptionalString(input, "button", "left");
-            if (eventName != "move" && eventName != "down" && eventName != "up" && eventName != "click") throw Error("E_SCHEMA_INVALID", "runtime.input.pointer event must be move, down, up, or click.");
-            if (button != "left" && button != "right" && button != "middle") throw Error("E_SCHEMA_INVALID", "runtime.input.pointer button must be left, right, or middle.");
+            if (eventName != "move" && eventName != "down" && eventName != "up" && eventName != "click") throw Error("E_SCHEMA_INVALID", "player-runtime.input.pointer event must be move, down, up, or click.");
+            if (button != "left" && button != "right" && button != "middle") throw Error("E_SCHEMA_INVALID", "player-runtime.input.pointer button must be left, right, or middle.");
             var facade = InputSystemFacade.Create();
             var pointer = facade.ResolvePointer(button);
             // pointer与keyboard共享相同的native-event flush边界，避免读到将被同次Update覆盖的前态。
@@ -280,10 +280,10 @@ namespace UnityCli
         {
             RequireOnly(input, "selector", "panel");
             var selector = RequiredString(input, "selector", 256);
-            if (string.IsNullOrWhiteSpace(selector)) throw Error("E_SCHEMA_INVALID", "runtime.ui.capture-element selector must not be empty.");
+            if (string.IsNullOrWhiteSpace(selector)) throw Error("E_SCHEMA_INVALID", "player-runtime.ui.capture-element selector must not be empty.");
             var panelName = OptionalString(input, "panel", string.Empty);
 #if !UNITY_6000_7_OR_NEWER
-            throw Error("E_RUNTIME_ELEMENT_CAPTURE_UNAVAILABLE", "runtime.ui.capture-element requires Unity 6000.7 or newer.");
+            throw Error("E_RUNTIME_ELEMENT_CAPTURE_UNAVAILABLE", "player-runtime.ui.capture-element requires Unity 6000.7 or newer.");
 #else
             var panel = ResolvePanel(panelName);
             var element = ResolveElement(panel.Root, selector);
@@ -424,7 +424,7 @@ namespace UnityCli
             if (level == "log") return 0;
             if (level == "warning") return 1;
             if (level == "error") return 2;
-            throw Error("E_SCHEMA_INVALID", "runtime.console level must be log, warning, or error.");
+            throw Error("E_SCHEMA_INVALID", "player-runtime.console level must be log, warning, or error.");
         }
 
         private static void RequireOnly(Dictionary<string, object> input, params string[] names)
@@ -575,7 +575,7 @@ namespace UnityCli
                 try { key = Enum.Parse(keyType, requested, true); }
                 catch { throw Error("E_SCHEMA_INVALID", "Unknown Input System key: " + requested + "."); }
                 var canonical = Enum.GetName(keyType, key);
-                if (string.IsNullOrEmpty(canonical) || canonical == "None") throw Error("E_SCHEMA_INVALID", "runtime.input.key requires a concrete Input System key.");
+                if (string.IsNullOrEmpty(canonical) || canonical == "None") throw Error("E_SCHEMA_INVALID", "player-runtime.input.key requires a concrete Input System key.");
                 var indexer = keyboard.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(property => property.Name == "Item" && property.GetIndexParameters().Length == 1 && property.GetIndexParameters()[0].ParameterType == keyType);
                 var control = indexer == null ? null : indexer.GetValue(keyboard, new[] { key });
                 if (control == null) throw Error("E_RUNTIME_INPUT_DEVICE_UNAVAILABLE", "The current keyboard does not expose the requested key control.");

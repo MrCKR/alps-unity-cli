@@ -72,7 +72,7 @@ test("shader group tools are contract-discovered with correct live descriptor hi
 test("bridge specs resolve for shader tools", () => {
   for (const command of ["info", "read", "create", "update", "delete", "list", "get-data"]) {
     const spec = bridgeCommandRegistry.lookup("shader", command);
-    assert.equal(spec?.bridgeCommand, "project-tool.run");
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run");
     assert.equal(spec?.toolName, `shader.${command}`);
   }
 });

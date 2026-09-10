@@ -29,7 +29,7 @@ test("asset delete avoids a global refresh and proves the terminal file and Asse
 });
 
 test("pipeline settings never clears an omitted request and proves the observed pipeline", async () => {
-  const pipeline = await source("Tools/graphics/pipeline-settings.cs");
+  const pipeline = await source("Tools/rendering/pipeline/settings.cs");
 
   assert.match(pipeline, /if \(string\.IsNullOrEmpty\(r\.RenderPipeline\)\)[\s\S]*return new/s);
   assert.match(pipeline, /var pipeline = resetToBuiltIn \? null : AssetDatabase\.LoadAssetAtPath<RenderPipelineAsset>/);

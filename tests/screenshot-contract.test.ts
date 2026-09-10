@@ -21,7 +21,7 @@ test("screenshot domain exposes game-view/scene-view/isolated-object/orbit/surro
 
 test("screenshot live descriptors expose expected safety hints and schemas", async () => {
   const tools = await discoverLiveTools(
-    makeLiveTool({ name: "camera.screenshot", summary: "Capture a camera screenshot.", description: "Capture a camera screenshot with optional inlineBase64 output.", group: "camera", inputSchema: { type: "object", properties: { path: { type: "string" }, output: { type: "string" }, inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } } }),
+    makeLiveTool({ name: "screenshot.from-camera", summary: "Capture a camera screenshot.", description: "Capture a camera screenshot with optional inlineBase64 output.", group: "camera", inputSchema: { type: "object", properties: { path: { type: "string" }, output: { type: "string" }, inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } } }),
     makeLiveTool({ name: "screenshot.game-view", summary: "Capture the Game view.", description: "Capture the Game view.", group: "screenshot", inputSchema: { type: "object", properties: { inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } }, outputSchema: { type: "object", properties: { artifact: { type: "object" } } } }),
     makeLiveTool({ name: "screenshot.scene-view", summary: "Capture the Scene view.", description: "Capture the Scene view.", group: "screenshot", inputSchema: { type: "object", properties: { inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } }, outputSchema: { type: "object", properties: { artifact: { type: "object" } } } }),
     makeLiveTool({ name: "screenshot.isolated-object", summary: "Capture an isolated object.", description: "Capture an isolated object.", group: "screenshot", playModeSupport: "editor-only", inputSchema: { type: "object", properties: { inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } }, outputSchema: { type: "object", properties: { artifact: { type: "object" } } } }),
@@ -39,7 +39,7 @@ test("screenshot live descriptors expose expected safety hints and schemas", asy
   assert.equal(surround.supportsDryRun, true);
   assert.equal(surround.handler, "bridge");
 
-  const camera = tools.get("camera.screenshot")!;
+  const camera = tools.get("screenshot.from-camera")!;
   const cameraProps = camera.inputSchema.properties as Record<string, unknown>;
   assert.ok(cameraProps.path);
   assert.ok(cameraProps.output);
@@ -83,11 +83,11 @@ test("screenshot live descriptors expose expected safety hints and schemas", asy
 
 test("bridge specs resolve for screenshot tools", () => {
   const checks = [
-    ["screenshot", "game-view", "project-tool.run"],
-    ["screenshot", "scene-view", "project-tool.run"],
-    ["screenshot", "isolated-object", "project-tool.run"],
-    ["screenshot", "orbit", "project-tool.run"],
-    ["screenshot", "surround", "project-tool.run"]
+    ["screenshot", "game-view", "catalog.editor.run"],
+    ["screenshot", "scene-view", "catalog.editor.run"],
+    ["screenshot", "isolated-object", "catalog.editor.run"],
+    ["screenshot", "orbit", "catalog.editor.run"],
+    ["screenshot", "surround", "catalog.editor.run"]
   ] as const;
   for (const [group, command, bridgeCommand] of checks) {
     const spec = bridgeCommandRegistry.lookup(group, command);

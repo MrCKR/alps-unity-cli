@@ -2,13 +2,13 @@ import { boolFlag, compactArgs, contentFlag, numberFlag, stringFlag } from "../a
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const shaderBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "shader", command: "info", bridgeCommand: "project-tool.run", toolName: "shader.info", buildArgs: shaderArgs },
-  { group: "shader", command: "read", bridgeCommand: "project-tool.run", toolName: "shader.read", buildArgs: shaderArgs },
-  { group: "shader", command: "create", bridgeCommand: "project-tool.run", toolName: "shader.create", buildArgs: shaderArgs, destructiveHint: true },
-  { group: "shader", command: "update", bridgeCommand: "project-tool.run", toolName: "shader.update", buildArgs: shaderArgs, destructiveHint: true },
-  { group: "shader", command: "delete", bridgeCommand: "project-tool.run", toolName: "shader.delete", buildArgs: shaderArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "shader", command: "list", bridgeCommand: "project-tool.run", toolName: "shader.list", buildArgs: shaderListArgs },
-  { group: "shader", command: "get-data", bridgeCommand: "project-tool.run", toolName: "shader.get-data", buildArgs: shaderArgs }
+  { group: "shader", command: "info", bridgeCommand: "catalog.editor.run", toolName: "shader.info", buildArgs: shaderArgs },
+  { group: "shader", command: "read", bridgeCommand: "catalog.editor.run", toolName: "shader.read", buildArgs: shaderArgs },
+  { group: "shader", command: "create", bridgeCommand: "catalog.editor.run", toolName: "shader.create", buildArgs: shaderArgs, destructiveHint: true },
+  { group: "shader", command: "update", bridgeCommand: "catalog.editor.run", toolName: "shader.update", buildArgs: shaderArgs, destructiveHint: true },
+  { group: "shader", command: "delete", bridgeCommand: "catalog.editor.run", toolName: "shader.delete", buildArgs: shaderArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "shader", command: "list", bridgeCommand: "catalog.editor.run", toolName: "shader.list", buildArgs: shaderListArgs },
+  { group: "shader", command: "get-data", bridgeCommand: "catalog.editor.run", toolName: "shader.get-data", buildArgs: shaderArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段。

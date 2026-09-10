@@ -12,24 +12,6 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static List<object> CapabilitiesData()
-        {
-            return new List<object> {
-                CapabilityData("camera", CameraCommands), CapabilityData("scene", SceneCommands), CapabilityData("go", GameObjectCommands), CapabilityData("asset", AssetCommands),
-                CapabilityData("screenshot", ScreenshotCommands), CapabilityData("prefab", PrefabCommands), CapabilityData("ui", UiCommands),
-                CapabilityData("material", MaterialCommands), CapabilityData("graphics", GraphicsCommands), CapabilityData("physics", PhysicsCommands), CapabilityData("scriptable-object", ScriptableObjectCommands),
-                CapabilityData("profiler", ProfilerCommands), CapabilityData("animation", AnimationCommands), CapabilityData("shader", ShaderCommands), CapabilityData("texture", TextureCommands),
-                CapabilityData("editor", EditorCommands), CapabilityData("code", CodeCommands), CapabilityData("project-tool", ProjectToolCommands), CapabilityData("runtime-tool", RuntimeToolCommands)
-            };
-        }
-
-        private static bool IsMutatingCommand(string command) => CommandRegistry.IsMutating(command);
-
-        private static Dictionary<string, object> CapabilityData(string domain, string[] commands)
-        {
-            return new Dictionary<string, object> { { "domain", domain }, { "route", "POST /bridge/execute" }, { "commands", (commands ?? Array.Empty<string>()).Cast<object>().ToList() } };
-        }
-
         private static string HierarchyPath(GameObject gameObject)
         {
             var names = new Stack<string>();

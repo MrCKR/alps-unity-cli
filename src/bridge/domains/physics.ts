@@ -2,20 +2,20 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag } from "../arg
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const physicsBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "physics", command: "settings", bridgeCommand: "project-tool.run", toolName: "physics.settings", buildArgs: physicsArgs, destructiveHint: true },
-  { group: "physics", command: "collision-matrix", bridgeCommand: "project-tool.run", toolName: "physics.collision-matrix", buildArgs: physicsArgs, destructiveHint: true },
-  { group: "physics", command: "material", bridgeCommand: "project-tool.run", toolName: "physics.material", buildArgs: physicsArgs, destructiveHint: true },
-  { group: "physics", command: "assign-material", bridgeCommand: "project-tool.run", toolName: "physics.assign-material", buildArgs: physicsArgs, supportsDryRun: true },
-  { group: "physics", command: "joint-add", bridgeCommand: "project-tool.run", toolName: "physics.joint.add", buildArgs: physicsArgs, supportsDryRun: true },
-  { group: "physics", command: "joint-remove", bridgeCommand: "project-tool.run", toolName: "physics.joint.remove", buildArgs: physicsArgs, supportsDryRun: true },
-  { group: "physics", command: "force", bridgeCommand: "project-tool.run", toolName: "physics.force", buildArgs: physicsArgs },
-  { group: "physics", command: "overlap", bridgeCommand: "project-tool.run", toolName: "physics.overlap", buildArgs: physicsArgs },
-  { group: "physics", command: "rigidbody", bridgeCommand: "project-tool.run", toolName: "physics.rigidbody", buildArgs: physicsArgs },
-  { group: "physics", command: "raycast", bridgeCommand: "project-tool.run", toolName: "physics.raycast", buildArgs: physicsArgs },
-  { group: "physics", command: "linecast", bridgeCommand: "project-tool.run", toolName: "physics.linecast", buildArgs: physicsArgs },
-  { group: "physics", command: "shapecast", bridgeCommand: "project-tool.run", toolName: "physics.shapecast", buildArgs: physicsArgs },
-  { group: "physics", command: "validate", bridgeCommand: "project-tool.run", toolName: "physics.validate", buildArgs: physicsValidateArgs },
-  { group: "physics", command: "simulation", bridgeCommand: "project-tool.run", toolName: "physics.simulation", buildArgs: physicsArgs }
+  { group: "physics", command: "settings", bridgeCommand: "catalog.editor.run", toolName: "physics.settings", buildArgs: physicsArgs, destructiveHint: true },
+  { group: "physics", command: "collision-matrix", bridgeCommand: "catalog.editor.run", toolName: "physics.collision-matrix", buildArgs: physicsArgs, destructiveHint: true },
+  { group: "physics", command: "material", bridgeCommand: "catalog.editor.run", toolName: "physics.material", buildArgs: physicsArgs, destructiveHint: true },
+  { group: "physics", command: "assign-material", bridgeCommand: "catalog.editor.run", toolName: "physics.assign-material", buildArgs: physicsArgs, supportsDryRun: true },
+  { group: "physics", command: "joint.add", bridgeCommand: "catalog.editor.run", toolName: "physics.joint.add", buildArgs: physicsArgs, supportsDryRun: true },
+  { group: "physics", command: "joint.remove", bridgeCommand: "catalog.editor.run", toolName: "physics.joint.remove", buildArgs: physicsArgs, supportsDryRun: true },
+  { group: "physics", command: "force", bridgeCommand: "catalog.editor.run", toolName: "physics.force", buildArgs: physicsArgs },
+  { group: "physics", command: "overlap", bridgeCommand: "catalog.editor.run", toolName: "physics.overlap", buildArgs: physicsArgs },
+  { group: "physics", command: "rigidbody", bridgeCommand: "catalog.editor.run", toolName: "physics.rigidbody", buildArgs: physicsArgs },
+  { group: "physics", command: "raycast", bridgeCommand: "catalog.editor.run", toolName: "physics.raycast", buildArgs: physicsArgs },
+  { group: "physics", command: "linecast", bridgeCommand: "catalog.editor.run", toolName: "physics.linecast", buildArgs: physicsArgs },
+  { group: "physics", command: "shapecast", bridgeCommand: "catalog.editor.run", toolName: "physics.shapecast", buildArgs: physicsArgs },
+  { group: "physics", command: "validate", bridgeCommand: "catalog.editor.run", toolName: "physics.validate", buildArgs: physicsValidateArgs },
+  { group: "physics", command: "simulation", bridgeCommand: "catalog.editor.run", toolName: "physics.simulation", buildArgs: physicsArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段

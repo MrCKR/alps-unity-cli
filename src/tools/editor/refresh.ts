@@ -30,7 +30,7 @@ type BridgeData = { data?: unknown };
 export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefreshDryRunResult>({
   name: "editor.refresh",
   summary: "Refresh the open Unity Editor and return stable import and compile readback.",
-  description: "Refreshes the selected Editor once and proves completion with Unity-owned global artifact dependency/processed generations; it never recursively reads Assets, hashes file bytes, or calls per-file dependency hashing. changed reports a generation change, importObserved reports Unity import activity or generation movement, and unchanged/no-import remains an explicit successful result. compile=true requests one attributed compilation cycle. The same execution deadline and cancellation govern dispatch, import/compile stability, reload recovery and terminal readback. Editor-only; may trigger asset refresh, compilation and domain reload.",
+  description: "Refreshes the selected Editor once and proves completion with Unity-owned global artifact dependency/processed generations; it never recursively reads Assets, hashes file bytes, or calls per-file dependency hashing. changed reports a generation change, importObserved reports Unity import activity or generation movement, and unchanged/no-import remains an explicit successful result. compile=true observes and reports a compilation cycle when Unity decides refreshed script changes require one; it never forces a second compile. The same execution deadline and cancellation govern dispatch, import/compile stability, reload recovery and terminal readback. Editor-only; may trigger asset refresh, compilation and domain reload.",
   group: "editor",
   target: "editor",
   destructiveHint: false,
@@ -42,7 +42,7 @@ export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefr
   supportStatus: "live-bridge",
   examples: [
     { description: "Refresh the current open Editor.", argv: ["tools", "run", "editor.refresh"] },
-    { description: "Refresh and request script compilation.", argv: ["tools", "run", "editor.refresh", "--input", "{\"compile\":true}"] },
+    { description: "Refresh and observe any Unity-triggered script compilation.", argv: ["tools", "run", "editor.refresh", "--input", "{\"compile\":true}"] },
   ],
   async execute(request, context) {
     if (context.execution.dryRun) {

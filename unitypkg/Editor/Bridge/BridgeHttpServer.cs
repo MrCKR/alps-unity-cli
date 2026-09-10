@@ -429,9 +429,9 @@ namespace UnityCli
                 var allowedDuringPlayModeTransition = UnityCliDurableStatusCoordinator.IsCommand(request.Command) || UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command)
                     || IsEditorStateSnapshotCommand(request.Command)
                     || request.Command == "editor.pause"
-                    || request.Command == "editor.stop"
+                    || request.Command == "editor.play-mode.stop"
                     || IsProjectToolCatalogReadCommand(request.Command)
-                    || request.Command == "runtime-tool.run"
+                    || request.Command == "catalog.player.run"
                     || IsDoctorAdmissionBypassCommand(request.Command);
 
                 WriteLog("http_play_mode_guard requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlayingOrWillChange=" + Bool(cachedIsPlayingOrWillChangePlaymode) + " cachedIsPlaying=" + Bool(cachedIsPlaying) + " transitionAllowed=" + Bool(allowedDuringPlayModeTransition));

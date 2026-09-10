@@ -45,7 +45,7 @@ test("root admission fingerprint is canonical and excludes both deadlines", () =
 });
 
 test("immutable Bridge request and digest contain no admission token", async () => {
-  const frozen = freezeRequest({ requestId: request().requestId, command: "project-tool.run", input: { name: "scene.hierarchy", input: {} }, timeoutMs: 30_000 }, instanceA, 50_000);
+  const frozen = freezeRequest({ requestId: request().requestId, command: "catalog.editor.run", input: { name: "scene.hierarchy", input: {} }, timeoutMs: 30_000 }, instanceA, 50_000);
   assert.doesNotMatch(frozen.body, /admission|token/i);
   assert.equal(Object.keys(frozen.payload.execution).sort().join(","), "absoluteDeadlineUtc,completionContractVersion,requestDigestVersion");
   const source = await readFile("src/bridge/session-supervisor.ts", "utf8");

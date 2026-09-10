@@ -8,7 +8,6 @@ import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, Structu
 import type { ToolError } from "../../protocol/envelope.js";
 
 export interface EditorCompileRequest {
-  refresh?: boolean;
   /**
    * Unity 资产路径不能为空。
    * @minLength 1
@@ -31,6 +30,8 @@ export interface EditorCompileDiagnostic {
 
 export interface EditorCompileSummary {
   completed: boolean;
+  compilationTriggered: boolean;
+  noOpReason: "no-script-changes" | null;
   refresh: boolean;
   path: string | null;
   startedAt: string;
@@ -39,7 +40,7 @@ export interface EditorCompileSummary {
   assemblyCount: number;
   errorCount: number;
   warningCount: number;
-  status: "clean" | "warnings";
+  status: "unchanged" | "clean" | "warnings";
 }
 
 export interface EditorCompileEditorState {
@@ -73,8 +74,8 @@ type RootEnvelope = { ok: boolean; requestId: string; data?: RecordValue; error?
 
 export default defineTool<EditorCompileRequest, EditorCompileResult>({
   name: "editor.compile",
-  summary: "Refresh and compile the live Unity Editor, returning terminal diagnostics.",
-  description: "Starts Unity's durable compile coordinator and polls its private terminal status under one immutable deadline. This editor-only operation may refresh assets, compile scripts, and reload the domain.",
+  summary: "Refresh the live Unity Editor and return any resulting script compilation diagnostics.",
+  description: "Refreshes Unity's Asset Database, lets Unity decide whether imported script changes require compilation, and polls the durable coordinator to a stable terminal under one immutable deadline. Returns status=unchanged when Unity starts no compilation cycle; otherwise it collects diagnostics and survives domain reload.",
   group: "editor",
   target: "editor",
   destructiveHint: false,
@@ -84,7 +85,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
   sideEffects: ["asset-refresh", "script-compile", "domain-reload"],
   handler: "hybrid",
   supportStatus: "live-bridge",
-  examples: [{ description: "Refresh and compile the current Editor.", argv: ["tools", "run", "editor.compile"] }],
+  examples: [{ description: "Refresh the current Editor and observe any required script compilation.", argv: ["tools", "run", "editor.compile"] }],
   async execute(request, context) {
     if (request.path !== undefined && request.path.length === 0) throw new StructuredToolError("E_SCHEMA_INVALID", "editor.compile path must be a non-empty Unity asset path.", ["Omit path to refresh the project, or pass an existing Assets-relative path."]);
     const plannedEffects = compilePlannedEffects(request);
@@ -102,13 +103,13 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
     if (Date.now() >= absoluteDeadlineMs) throw compileTimeout();
     if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot start compilation.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
     rejectUnavailableEditorState(state, "editor.compile");
-    if (isPlaying(state)) throw new StructuredToolError("E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "editor.compile requires Edit Mode.", ["Run unitycli tools run editor.stop, then retry editor.compile."], { playMode: state.state.playMode.value }, false, 0);
+    if (isPlaying(state)) throw new StructuredToolError("E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "editor.compile requires Edit Mode.", ["Run unitycli tools run editor.play-mode.stop, then retry editor.compile."], { playMode: state.state.playMode.value }, false, 0);
     if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "editor.compile could not bind a verified Editor session.", ["Inspect editor.state and retry after the session identity is known."]);
 
     const boundContext: ToolContext = { ...context, flags: { ...(context.flags ?? {}), instance: state.identity.instanceId } };
     const startInvocation = withTransitionBinding({ mode: "execute", mutation: true, absoluteDeadlineMs });
     const statusInvocation = withTransitionBinding({ mode: "read", mutation: false, absoluteDeadlineMs });
-    const input = { refresh: request.refresh ?? true, ...(request.path ? { path: request.path } : {}), ...(request.forceUpdate !== undefined ? { forceUpdate: request.forceUpdate } : {}), ...(request.importRecursive !== undefined ? { importRecursive: request.importRecursive } : {}), includeWarnings: request.includeWarnings ?? true, expectedEditorSessionId: state.session.editorSessionId };
+    const input = { ...(request.path ? { path: request.path } : {}), ...(request.forceUpdate !== undefined ? { forceUpdate: request.forceUpdate } : {}), ...(request.importRecursive !== undefined ? { importRecursive: request.importRecursive } : {}), includeWarnings: request.includeWarnings ?? true, expectedEditorSessionId: state.session.editorSessionId };
     let start: { data?: unknown };
     try {
       start = await bridge(context.requestId, "internal.editor.compile.start", input, boundContext, startInvocation);
@@ -165,20 +166,29 @@ function terminalResult(envelope: RootEnvelope): EditorCompileTerminalResult {
   const durationMs = nonnegativeInteger(compile.durationMs);
   const assemblyCount = nonnegativeInteger(compile.assemblyCount);
   const status = compile.status;
+  const compilationTriggered = compile.compilationTriggered;
+  const noOpReason = compile.noOpReason;
   if (compile.completed !== true || errorCount !== 0 || warningCount === undefined || durationMs === undefined || assemblyCount === undefined
-    || (status !== "clean" && status !== "warnings") || (status === "clean" && warningCount !== 0) || (status === "warnings" && warningCount === 0)) {
-    throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal did not prove a clean or warnings-only completion.", ["Inspect returned compiler diagnostics and fix errors before retrying."]);
+    || typeof compilationTriggered !== "boolean"
+    || (compilationTriggered && ((status !== "clean" && status !== "warnings") || noOpReason !== null || (status === "clean" && warningCount !== 0) || (status === "warnings" && warningCount === 0)))
+    || (!compilationTriggered && (status !== "unchanged" || noOpReason !== "no-script-changes" || warningCount !== 0 || assemblyCount !== 0))) {
+    throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal did not prove an unchanged, clean, or warnings-only completion.", ["Inspect returned compiler diagnostics and fix errors before retrying."]);
   }
   const diagnostics = normalizeDiagnostics(data.diagnostics);
   const editorState = normalizeEditorState(record(data.editorState));
   const startedAt = timestamp(compile.startedAt);
   const finishedAt = timestamp(compile.finishedAt);
-  if (!diagnostics || !editorState || typeof compile.refresh !== "boolean" || (compile.path !== null && typeof compile.path !== "string") || !startedAt || !finishedAt || Date.parse(finishedAt) < Date.parse(startedAt)) {
+  if (!editorState || typeof compile.refresh !== "boolean" || (compile.path !== null && typeof compile.path !== "string") || !startedAt || !finishedAt || Date.parse(finishedAt) < Date.parse(startedAt)) {
     throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal has an invalid business proof shape.", ["Inspect UnityCliBridge.log and retry after the selected session is stable."]);
   }
-  const plannedEffects = normalizePlannedEffects(data.plannedEffects, compile.path, compile.refresh);
+  if (!diagnostics || (!compilationTriggered && diagnostics.length !== 0)) {
+    throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal diagnostics do not match its compilation outcome.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
+  }
+  const normalizedStatus = status as EditorCompileSummary["status"];
+  const normalizedNoOpReason = noOpReason as EditorCompileSummary["noOpReason"];
+  const plannedEffects = normalizePlannedEffects(data.plannedEffects, compile.path, compile.refresh, compilationTriggered);
   if (!plannedEffects) throw new StructuredToolError("E_TOOL_COMPLETION_PROOF_INVALID", "Compile terminal planned effects do not match its completed operation.", ["Inspect UnityCliBridge.log before submitting a new compile request."]);
-  return { compile: { completed: true, refresh: compile.refresh, path: compile.path, startedAt, finishedAt, durationMs, assemblyCount, errorCount, warningCount, status }, diagnostics, editorState, plannedEffects };
+  return { compile: { completed: true, compilationTriggered, noOpReason: normalizedNoOpReason, refresh: compile.refresh, path: compile.path, startedAt, finishedAt, durationMs, assemblyCount, errorCount, warningCount, status: normalizedStatus }, diagnostics, editorState, plannedEffects };
 }
 
 function rootEnvelope(value: unknown, requestId: string): RootEnvelope | undefined {
@@ -214,12 +224,12 @@ function normalizeEditorState(value: RecordValue): EditorCompileEditorState | un
     || playMode.known !== true || (playMode.value !== "play" && playMode.value !== "edit")) return undefined;
   return { status: "ready", compile: { known: true, value: false }, import: { known: true, value: false }, playMode: { known: true, value: playMode.value } };
 }
-function normalizePlannedEffects(value: unknown, path: unknown, refresh: boolean): EditorCompilePlannedEffect[] | undefined {
+function normalizePlannedEffects(value: unknown, path: unknown, refresh: boolean, compilationTriggered: boolean): EditorCompilePlannedEffect[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const expected: EditorCompilePlannedEffect[] = [];
   if (typeof path === "string" && path.length > 0) expected.push({ type: "asset-import", path });
   else if (refresh) expected.push({ type: "asset-refresh" });
-  expected.push({ type: "script-compile" }, { type: "domain-reload" });
+  if (compilationTriggered) expected.push({ type: "script-compile" }, { type: "domain-reload" });
   if (value.length !== expected.length) return undefined;
   for (let index = 0; index < expected.length; index += 1) {
     const actual = record(value[index]);
@@ -234,7 +244,7 @@ function isPlaying(state: EditorStateResult): boolean { const value = state.stat
 function compilePlannedEffects(request: EditorCompileRequest): EditorCompilePlannedEffect[] {
   const effects: EditorCompilePlannedEffect[] = [];
   if (request.path) effects.push({ type: "asset-import", path: request.path });
-  else if (request.refresh !== false) effects.push({ type: "asset-refresh" });
+  else effects.push({ type: "asset-refresh" });
   effects.push({ type: "script-compile" }, { type: "domain-reload" });
   return effects;
 }

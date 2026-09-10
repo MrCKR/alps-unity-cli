@@ -9,7 +9,7 @@ const registeredToolPath = "unitypkg/Editor/ProjectTools/RegisteredTool.cs";
 const runtimeExecutorPath = "unitypkg/Editor/Infrastructure/UnityCliRuntimeExecutor.cs";
 const bridgePath = "unitypkg/Editor/UnityCliBridge.cs";
 const ownershipPath = "unitypkg/Editor/Infrastructure/RegistryOwnershipResolver.cs";
-const runtimeBridgeDomainPath = "src/bridge/domains/runtime-tool.ts";
+const runtimeBridgeDomainPath = "src/bridge/domains/catalog-player.ts";
 const toolDispatcherPath = "src/tools/dispatcher.ts";
 
 async function readSources(paths: string[]): Promise<string> {
@@ -137,8 +137,8 @@ test("legacy project Context registries are absent while retained Tool owners st
     "src/contexts",
     "skills/unitycli/references/custom-contexts.md",
   ]) await assert.rejects(access(path), { code: "ENOENT" });
-  assert.match(runtimeDomain, /bridgeCommand: "runtime-tool\.describe"/);
-  assert.match(runtimeDomain, /bridgeCommand: "runtime-tool\.run"/);
+  assert.match(runtimeDomain, /bridgeCommand: "catalog.player.describe"/);
+  assert.match(runtimeDomain, /bridgeCommand: "catalog.player.run"/);
   assert.match(dispatcher, /if \(localMetadata\?\.handler === "bridge-runtime"\) \{[\s\S]*return dispatchResolved\(localMetadata, input\);[\s\S]*\}/);
 });
 

@@ -572,9 +572,9 @@ checks.push({
 });
 
 const internalMetaRoutes = new Set([
-  "project-tool.health", "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run",
-  "runtime-tool.groups", "runtime-tool.summary", "runtime-tool.describe", "runtime-tool.list", "runtime-tool.run",
-  "code.exec"
+  "catalog.editor.health", "catalog.editor.groups", "catalog.editor.summary", "catalog.editor.describe", "catalog.editor.list", "catalog.editor.run",
+  "catalog.player.groups", "catalog.player.summary", "catalog.player.describe", "catalog.player.list", "catalog.player.run",
+  "code.execute"
 ]);
 const contractCsharpTools = new Set(contract.commands
   .filter((entry) => entry.csharp_handler === "present" && !internalMetaRoutes.has(entry.bridgeCommand))

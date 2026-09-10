@@ -39,6 +39,16 @@ test("refresh uses bounded Unity-owned artifact generations instead of recursive
   assert.doesNotMatch(source, /Directory\.GetFiles|SearchOption\.AllDirectories|GetAssetDependencyHash|HashFile|sourceFingerprint|sourceFileCount/);
 });
 
+test("refresh observes Unity compilation without dispatching a second compile request", async () => {
+  const source = await readFile(coordinatorPath, "utf8");
+  const observation = source.indexOf("CurrentCompilationEventSequence()");
+  const refresh = source.indexOf("AssetDatabase.Refresh()");
+  assert.ok(observation >= 0 && refresh > observation);
+  assert.match(source, /"compilationObservationStarted"/);
+  assert.match(source, /"compileObservationSequence"/);
+  assert.doesNotMatch(source, /RequestRefreshCompilation|RequestScriptCompilation|compile-dispatch/);
+});
+
 test("reload refresh status observers rebind without the root listener admission", async () => {
   for (const [path, command] of [
     [editorRefreshToolPath, "internal.editor.refresh.status"],

@@ -87,9 +87,9 @@ test("published request schema accepts only the immutable BridgeRequest v2 shape
   const request = {
     protocolVersion: 2,
     instanceId: `unity-${"a".repeat(64)}`,
-    command: "project-tool.run",
+    command: "catalog.editor.run",
     requestId: "req_protocol_schema",
-    input: { name: "go.find", input: { name: "Player" } },
+    input: { name: "game-object.find", input: { name: "Player" } },
     execution: {
       absoluteDeadlineUtc: "2026-07-21T00:00:00.000Z",
       completionContractVersion: 1,

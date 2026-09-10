@@ -2,18 +2,18 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag } f
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const prefabBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "prefab", command: "info", bridgeCommand: "project-tool.run", toolName: "prefab.info", buildArgs: prefabArgs },
-  { group: "prefab", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "prefab.hierarchy", buildArgs: prefabArgs },
-  { group: "prefab", command: "create", bridgeCommand: "project-tool.run", toolName: "prefab.create", buildArgs: prefabArgs, destructiveHint: true },
-  { group: "prefab", command: "modify", bridgeCommand: "project-tool.run", toolName: "prefab.modify", buildArgs: prefabArgs, destructiveHint: true },
-  { group: "prefab", command: "overrides-apply", bridgeCommand: "project-tool.run", toolName: "prefab.overrides.apply", buildArgs: prefabOverridesArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "prefab", command: "overrides-revert", bridgeCommand: "project-tool.run", toolName: "prefab.overrides.revert", buildArgs: prefabOverridesArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "prefab", command: "variant-create", bridgeCommand: "project-tool.run", toolName: "prefab.variant.create", buildArgs: prefabVariantArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "prefab", command: "stage-open", bridgeCommand: "project-tool.run", toolName: "prefab.stage-open", buildArgs: prefabArgs },
-  { group: "prefab", command: "stage-save", bridgeCommand: "project-tool.run", toolName: "prefab.stage-save", buildArgs: prefabArgs, destructiveHint: true },
-  { group: "prefab", command: "stage-close", bridgeCommand: "project-tool.run", toolName: "prefab.stage-close", buildArgs: prefabArgs },
-  { group: "prefab", command: "instantiate", bridgeCommand: "project-tool.run", toolName: "prefab.instantiate", buildArgs: prefabInstantiateArgs, supportsDryRun: true },
-  { group: "prefab", command: "unpack", bridgeCommand: "project-tool.run", toolName: "prefab.unpack", buildArgs: prefabUnpackArgs, supportsDryRun: true }
+  { group: "prefab", command: "info", bridgeCommand: "catalog.editor.run", toolName: "prefab.info", buildArgs: prefabArgs },
+  { group: "prefab", command: "hierarchy", bridgeCommand: "catalog.editor.run", toolName: "prefab.hierarchy", buildArgs: prefabArgs },
+  { group: "prefab", command: "create", bridgeCommand: "catalog.editor.run", toolName: "prefab.create", buildArgs: prefabArgs, destructiveHint: true },
+  { group: "prefab", command: "modify", bridgeCommand: "catalog.editor.run", toolName: "prefab.modify", buildArgs: prefabArgs, destructiveHint: true },
+  { group: "prefab", command: "overrides.apply", bridgeCommand: "catalog.editor.run", toolName: "prefab.overrides.apply", buildArgs: prefabOverridesArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "prefab", command: "overrides.revert", bridgeCommand: "catalog.editor.run", toolName: "prefab.overrides.revert", buildArgs: prefabOverridesArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "prefab", command: "variant.create", bridgeCommand: "catalog.editor.run", toolName: "prefab.variant.create", buildArgs: prefabVariantArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "prefab", command: "stage-open", bridgeCommand: "catalog.editor.run", toolName: "prefab.stage-open", buildArgs: prefabArgs },
+  { group: "prefab", command: "stage-save", bridgeCommand: "catalog.editor.run", toolName: "prefab.stage-save", buildArgs: prefabArgs, destructiveHint: true },
+  { group: "prefab", command: "stage-close", bridgeCommand: "catalog.editor.run", toolName: "prefab.stage-close", buildArgs: prefabArgs },
+  { group: "prefab", command: "instantiate", bridgeCommand: "catalog.editor.run", toolName: "prefab.instantiate", buildArgs: prefabInstantiateArgs, supportsDryRun: true },
+  { group: "prefab", command: "unpack", bridgeCommand: "catalog.editor.run", toolName: "prefab.unpack", buildArgs: prefabUnpackArgs, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（path/name/addChild 等）

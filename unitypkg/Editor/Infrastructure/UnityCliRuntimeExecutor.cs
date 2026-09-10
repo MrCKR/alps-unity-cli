@@ -166,7 +166,7 @@ namespace UnityCli
                 WriteLog("runtime_tool_not_ready requestId=" + request.RequestId + " name=" + name + " sessionId=" + (currentPlayModeSessionId ?? "null"));
                 throw new BridgeCommandException("E_RUNTIME_NOT_READY",
                     "Runtime Tool cannot execute because the selected Editor is not in a ready Play Mode session.",
-                    "Run unitycli tools run editor.play, wait until editor.state reports ready Play Mode, then retry.");
+                    "Run unitycli tools run editor.play-mode.start, wait until editor.state reports ready Play Mode, then retry.");
             }
 
             // Validate the tool exists and is a runtime tool

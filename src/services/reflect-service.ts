@@ -1,6 +1,6 @@
-import type { ReflectMemberRequest, ReflectMemberResult } from "../tools/reflect/member.js";
-import type { ReflectSearchRequest, ReflectSearchResult } from "../tools/reflect/search.js";
-import type { ReflectTypeRequest, ReflectTypeResult } from "../tools/reflect/type.js";
+import type { ReflectMemberRequest, ReflectMemberResult } from "../tools/type-inspection/get-member.js";
+import type { ReflectSearchRequest, ReflectSearchResult } from "../tools/type-inspection/search.js";
+import type { ReflectTypeRequest, ReflectTypeResult } from "../tools/type-inspection/get-type.js";
 import { StructuredToolError } from "../tools/errors.js";
 import {
   assemblyDiagnostics,
@@ -33,7 +33,7 @@ export async function getReflectType(request: ReflectTypeRequest, runtime: Refle
   const matches = typeMatches(cache.entries, request.name);
   if (matches.length === 0) {
     throw new StructuredToolError("REFLECT_TYPE_NOT_FOUND", `Type was not found in the offline reflection cache: ${request.name}.`, [
-      "Run tools run reflect.search --input '{\"query\":\"<query>\"}' to inspect cached types and members.",
+      "Run tools run type-inspection.search --input '{\"query\":\"<query>\"}' to inspect cached types and members.",
       "Regenerate the reflection cache from Unity if the type comes from project assemblies."
     ]);
   }
@@ -62,7 +62,7 @@ export async function getReflectType(request: ReflectTypeRequest, runtime: Refle
 export async function getReflectMember(request: ReflectMemberRequest, runtime: ReflectServiceRuntime): Promise<ReflectMemberResult> {
   const cache = await readCache(request.reflectDir, request.unityVersion, runtime);
   if (!request.member.includes(".")) {
-    throw new StructuredToolError("REFLECT_MEMBER_REQUIRED", "Pass a member target like Type.Member: tools run reflect.member --input '{\"member\":\"<type.member>\"}'.");
+    throw new StructuredToolError("REFLECT_MEMBER_REQUIRED", "Pass a member target like Type.Member: tools run type-inspection.get-member --input '{\"member\":\"<type.member>\"}'.");
   }
   const lastDot = request.member.lastIndexOf(".");
   const typeName = request.member.slice(0, lastDot);
@@ -70,18 +70,18 @@ export async function getReflectMember(request: ReflectMemberRequest, runtime: R
   const types = typeMatches(cache.entries, typeName);
   if (types.length === 0) {
     throw new StructuredToolError("REFLECT_TYPE_NOT_FOUND", `Type was not found in the offline reflection cache: ${typeName}.`, [
-      "Run tools run reflect.search --input '{\"query\":\"<query>\"}' to inspect cached types and members."
+      "Run tools run type-inspection.search --input '{\"query\":\"<query>\"}' to inspect cached types and members."
     ]);
   }
   const matches = types.flatMap((type) => (type.members ?? []).filter((member) => normalize(member.name) === normalize(memberName)).map((member) => ({ type, member })));
   if (matches.length === 0) {
     throw new StructuredToolError("REFLECT_MEMBER_NOT_FOUND", `Member was not found in the offline reflection cache: ${request.member}.`, [
-      "Run tools run reflect.type --input '{\"name\":\"<type>\"}' to inspect cached members."
+      "Run tools run type-inspection.get-type --input '{\"name\":\"<type>\"}' to inspect cached members."
     ]);
   }
   if (matches.length > 1) {
     throw new StructuredToolError("REFLECT_MEMBER_AMBIGUOUS", `Multiple members matched: ${request.member}.`, [
-      "Use a fully-qualified type name or inspect overload signatures with tools run reflect.type --input '{\"name\":\"<type>\"}'."
+      "Use a fully-qualified type name or inspect overload signatures with tools run type-inspection.get-type --input '{\"name\":\"<type>\"}'."
     ]);
   }
   const type = publicType(matches[0].type, false);

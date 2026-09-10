@@ -17,21 +17,21 @@ function assertBefore(source: string, first: string, second: string, label: stri
 test("critical asset and create handlers commit immediately before their first effect", async () => {
   const [assetCreate, assetModify, assetImport, controller, goCreate, camera, material] = await Promise.all([
     readTool("Tools/asset/create.cs"),
-    readTool("Tools/asset/modify.cs"),
+    readTool("Tools/asset/write-text.cs"),
     readTool("Tools/asset/import.cs"),
-    readTool("Tools/controller/create.cs"),
-    readTool("Tools/go/create.cs"),
+    readTool("Tools/animator-controller/create.cs"),
+    readTool("Tools/game-object/create.cs"),
     readTool("Tools/camera/create.cs"),
     readTool("Tools/material/create.cs")
   ]);
 
   assertBefore(assetCreate, "ctx.CommitEffect();\n                AssetToolSupport.CreateAssetFolder", "AssetToolSupport.CreateAssetFolder", "asset.create folder");
   assertBefore(assetCreate, "ctx.CommitEffect();\n                AssetToolSupport.WriteTextAsset", "AssetToolSupport.WriteTextAsset", "asset.create file");
-  assertBefore(assetModify, "ctx.CommitEffect();", "AssetToolSupport.WriteTextAsset", "asset.modify");
+  assertBefore(assetModify, "ctx.CommitEffect();", "AssetToolSupport.WriteTextAsset", "asset.write-text");
   assertBefore(assetImport, "ctx.CommitEffect();\n                AssetToolSupport.CreateAssetDirectory", "File.Copy", "asset.import source");
   assertBefore(assetImport, "ctx.CommitEffect();\n                AssetToolSupport.WriteTextAsset", "AssetToolSupport.WriteTextAsset", "asset.import content");
-  assertBefore(controller, "ctx.CommitEffect();", "SceneToolSupport.CreateAssetDirectory", "controller.create");
-  assertBefore(goCreate, "ctx.CommitEffect();", "new GameObject", "go.create");
+  assertBefore(controller, "ctx.CommitEffect();", "SceneToolSupport.CreateAssetDirectory", "animator-controller.create");
+  assertBefore(goCreate, "ctx.CommitEffect();", "new GameObject", "game-object.create");
   assertBefore(camera, "var position =", "ctx.CommitEffect();", "camera.create vector validation");
   assertBefore(camera, "ctx.CommitEffect();", "new GameObject", "camera.create");
   assertBefore(material, "ctx.CommitEffect();", "AssetToolSupport.CreateAssetDirectory", "material.create directory");
@@ -40,8 +40,8 @@ test("critical asset and create handlers commit immediately before their first e
 
 test("graphics and prefab validate before committing and profile proof does not replay", async () => {
   const [lightProbe, reflectionProbe, prefab, profile] = await Promise.all([
-    readTool("Tools/graphics/light-probe-group.cs"),
-    readTool("Tools/graphics/reflection-probe.cs"),
+    readTool("Tools/lighting/light-probe-group.cs"),
+    readTool("Tools/lighting/reflection-probe.cs"),
     readTool("Tools/prefab/modify.cs"),
     readTool("Tools/build/profile/switch.cs")
   ]);

@@ -24,7 +24,7 @@ export async function executeBridgeCommand(
   try {
     const spec = bridgeCommandRegistry.lookupBridgeCommand(command);
     let args = spec ? await spec.buildArgs({ command, flags, positionalTarget }) : {};
-    // When the spec routes through project-tool.run, wrap the args into
+    // When the spec routes through catalog.editor.run, wrap the args into
     // { name: <toolName>, input: <original args> } and change the command.
     let bridgeCommand = command;
     if (spec?.toolName) {
@@ -78,7 +78,7 @@ export async function executeBridgePayload(
 
     if (bridgeResult.ok === false) {
       const bridgeError = bridgeResult.error;
-      const details = command === "code.exec" && bridgeError.code === "E_UNITY_BUSY"
+      const details = command === "code.execute" && bridgeError.code === "E_UNITY_BUSY"
         ? liveCodeBusyDetails(requestId, args, bridgeErrorDetails(bridgeError))
         : bridgeError.details;
       return failure(requestId, bridgeError.code, bridgeError.message, bridgeError.nextActions, details, {
@@ -133,7 +133,7 @@ class PublicTerminalProjectionError extends Error {}
 
 /** 将 durable Bridge terminal 投影成唯一公开业务 DTO，并拒绝任何不符合内部 terminal 契约的成功响应。 */
 function projectPublicData(command: string, data: unknown): unknown {
-  if (command !== "project-tool.run" && command !== "runtime-tool.run") return data;
+  if (command !== "catalog.editor.run" && command !== "catalog.player.run") return data;
   if (!data || typeof data !== "object" || Array.isArray(data) || !Object.prototype.hasOwnProperty.call(data, "result")) {
     throw new PublicTerminalProjectionError("Bridge returned a malformed successful terminal.");
   }

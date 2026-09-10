@@ -140,7 +140,7 @@ async function readCatalogSummary(
   const fixture = target === "runtime" ? runtime.runtimeTools ?? runtime.projectTools : runtime.projectTools;
   if (fixture) return summarizeFixture(target, fixture, requestId, query);
 
-  const command = `${target === "editor" ? "project" : "runtime"}-tool.summary`;
+  const command = target === "editor" ? "catalog.editor.summary" : "catalog.player.summary";
   const result = await executeBridgePayload(requestId, command, {
     ...(query.group ? { group: query.group } : {}),
     ...(query.keyword ? { keyword: query.keyword } : {}),
@@ -169,7 +169,7 @@ async function readCatalogGroups(
   const fixture = target === "runtime" ? runtime.runtimeTools ?? runtime.projectTools : runtime.projectTools;
   if (fixture) return groupsFixture(target, fixture, requestId, expectedGeneration, reservedNames);
 
-  const command = `${target === "editor" ? "project" : "runtime"}-tool.groups`;
+  const command = target === "editor" ? "catalog.editor.groups" : "catalog.player.groups";
   const result = await executeBridgePayload(requestId, command, {
     ...(expectedGeneration ? { expectedCatalogGeneration: expectedGeneration } : {}),
     reservedNames,
@@ -203,7 +203,7 @@ async function readCatalogDescriptor(
     };
   }
 
-  const command = `${target === "editor" ? "project" : "runtime"}-tool.describe`;
+  const command = target === "editor" ? "catalog.editor.describe" : "catalog.player.describe";
   const input = target === "editor" && fallbackName ? { name, fallbackName } : { name };
   const result = await executeBridgePayload(requestId, command, input, flags, runtime, { mode: "read", mutation: false, absoluteDeadlineMs });
   if (!result.ok) return result as CliResult & { ok: false };

@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
-import { findCommandContract } from "../src/contracts/command-contract.js";
+import { commandContracts, findCommandContract } from "../src/contracts/command-contract.js";
 import { contractToolNames, listCsFiles, readCsSources } from "./helpers/csharp-test-helpers.js";
 
-const ONE_CAPABILITY_DOMAINS = ["scene", "asset", "build", "animation", "graphics", "physics", "profiler"];
+const ONE_CAPABILITY_DOMAINS = ["scene", "asset", "build", "animation-clip", "animator", "animator-controller", "lighting", "rendering", "volume", "physics", "profiler"];
 
 async function oneCapabilityToolNames(domain: string): Promise<string[]> {
   const files = await listCsFiles(new URL(`../unitypkg/Editor/Tools/${domain}/`, import.meta.url));
@@ -30,10 +30,10 @@ async function oneCapabilityToolNames(domain: string): Promise<string[]> {
 test("cross-domain new tools keep contract entries with present C# handlers", () => {
   const newTools = [
     "scene.unload", "scene.set-active", "scene.list-opened", "scene.view-frame",
-    "go.set-parent", "prefab.instantiate", "prefab.unpack",
+    "game-object.set-parent", "prefab.instantiate", "prefab.unpack",
     "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.preview",
     "shader.list", "shader.get-data", "texture.generate",
-    "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set",
+    "console.read", "console.clear", "editor.selection.set", "editor.active-tool.set",
     "build.scene.list", "build.scene.add", "build.scene.remove", "build.scene.enable", "build.scene.disable",
     "build.platform.get", "build.platform.set", "build.profile.list", "build.profile.create", "build.profile.switch", "build.profile.modify", "build.settings.get", "build.settings.set",
     "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
@@ -63,8 +63,8 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   const assetSource = await readCsSources(new URL("../unitypkg/Editor/Tools/asset/", import.meta.url));
   const assetSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/AssetToolSupport.cs", import.meta.url), "utf8");
   const sceneSource = await readCsSources(new URL("../unitypkg/Editor/Tools/scene/", import.meta.url));
-  const goSource = await readCsSources(new URL("../unitypkg/Editor/Tools/go/", import.meta.url));
-  const consoleSource = await readFile(new URL("../unitypkg/Editor/Tools/console/get.cs", import.meta.url), "utf8");
+  const goSource = await readCsSources(new URL("../unitypkg/Editor/Tools/game-object/", import.meta.url));
+  const consoleSource = await readFile(new URL("../unitypkg/Editor/Tools/console/read.cs", import.meta.url), "utf8");
   const menuSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/menu.cs", import.meta.url), "utf8");
 
   assert.match(assetSource, /AssetToolSupport\.NormalizeAssetSearchFolders\(request\.Path, request\.SearchInFolders\)/);
@@ -86,11 +86,11 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   assert.match(sceneSource, /UnityCliHierarchyPager\.Cursor\("scene\.hierarchy"[\s\S]*NextCursor = nextCursor/);
   assert.doesNotMatch(sceneSource, /unitycli scene/);
 
-  assert.match(goSource, /UnityCliHierarchyPager\.ResolveCursor\(request\.Cursor, "go\.find"[\s\S]*PageInfo = new PageInfo/);
+  assert.match(goSource, /UnityCliHierarchyPager\.ResolveCursor\(request\.Cursor, "game-object\.find"[\s\S]*PageInfo = new PageInfo/);
   assert.match(goSource, /ResolveUniqueTarget[\s\S]*FindObjectsOfType<GameObject>\(true\)/);
   assert.match(goSource, /ResolveComponentType\(string componentName\)/);
   assert.match(goSource, /ValidateMutationInputs[\s\S]*ResolveModifyTargets\(request\)[\s\S]*UnityCliSceneMutation\.RecordObject/);
-  assert.match(goSource, /GameObject look-at requires a lookAt target[\s\S]*go\.look-at --input/);
+  assert.match(goSource, /GameObject look-at requires a lookAt target[\s\S]*game-object\.look-at --input/);
   assert.doesNotMatch(goSource, /unitycli scene hierarchy/);
 
   assert.match(consoleSource, /class ConsoleGetTool : IUnityCliTool/);
@@ -131,8 +131,8 @@ test("asset preview and delete expose only terminal observed state", async () =>
 
 test("build/animation/package sources keep current typed-result flows", async () => {
   const buildSource = await readCsSources(new URL("../unitypkg/Editor/Tools/build/", import.meta.url));
-  const animationSource = await readCsSources(new URL("../unitypkg/Editor/Tools/animation/", import.meta.url));
-  const controllerSource = await readCsSources(new URL("../unitypkg/Editor/Tools/controller/", import.meta.url));
+  const animationSource = await readCsSources(new URL("../unitypkg/Editor/Tools/animation-clip/", import.meta.url));
+  const controllerSource = await readCsSources(new URL("../unitypkg/Editor/Tools/animator-controller/", import.meta.url));
   const packageTool = await readFile(new URL("../src/tools/package/embed.js", import.meta.url), "utf8");
   const packageSource = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliPackageEmbedCoordinator.cs", import.meta.url), "utf8");
 
@@ -166,9 +166,11 @@ test("build/animation/package sources keep current typed-result flows", async ()
 test("one-capability source, contract, and bridge spec sets are bidirectionally aligned", async () => {
   for (const domain of ONE_CAPABILITY_DOMAINS) {
     const sourceNames = await oneCapabilityToolNames(domain);
-    const contractNames = contractToolNames(domain)
-      .filter((name) => name.split(".")[0] === domain)
-      .filter((name) => findCommandContract(name)?.csharp_handler === "present");
+    // animator 等拆分域的公开 group 与名称首段可能不同（animator.* 归入 animation-clip 组），按名称首段对齐。
+    const contractNames = commandContracts()
+      .filter((entry) => entry.bridgeCommand.split(".")[0] === domain && findCommandContract(entry.bridgeCommand)?.csharp_handler === "present")
+      .map((entry) => entry.bridgeCommand)
+      .sort();
     const specNames = [...new Set(bridgeCommandRegistry.specs()
       .filter((spec) => spec.group === domain && spec.toolName)
       .map((spec) => spec.toolName!))]
@@ -178,28 +180,28 @@ test("one-capability source, contract, and bridge spec sets are bidirectionally 
     assert.deepEqual(specNames, sourceNames, `${domain} bridge spec must enumerate current one-capability files`);
   }
   assert.equal(contractToolNames("build").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 13);
-  assert.equal(contractToolNames("graphics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 21);
+  assert.equal(contractToolNames("rendering").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 21);
   assert.equal(contractToolNames("physics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 14);
 });
 
 test("bridge specs resolve for all new domain 4-8 tools", () => {
   const checks = [
-    ["scene", "unload", "project-tool.run"],
-    ["go", "set-parent", "project-tool.run"],
-    ["prefab", "instantiate", "project-tool.run"],
-    ["prefab", "unpack", "project-tool.run"],
-    ["asset", "get-data", "project-tool.run"],
-    ["asset", "get-components", "project-tool.run"],
+    ["scene", "unload", "catalog.editor.run"],
+    ["game-object", "set-parent", "catalog.editor.run"],
+    ["prefab", "instantiate", "catalog.editor.run"],
+    ["prefab", "unpack", "catalog.editor.run"],
+    ["asset", "get-data", "catalog.editor.run", "asset.get-data"],
+    ["asset", "get-components", "catalog.editor.run"],
 
-    ["shader", "list", "project-tool.run"],
-    ["texture", "generate", "project-tool.run"],
-    ["console", "get", "project-tool.run", "console.get"],
+    ["shader", "list", "catalog.editor.run"],
+    ["texture", "generate", "catalog.editor.run"],
+    ["console", "read", "catalog.editor.run", "console.read"],
 
-    ["editor", "selection-set", "project-tool.run", "editor.selection.set"],
-    ["build", "scene-list", "project-tool.run", "build.scene.list"],
-    ["build", "profile-list", "project-tool.run", "build.profile.list"],
-    ["physics", "validate", "project-tool.run", "physics.validate"],
-    ["physics", "assign-material", "project-tool.run", "physics.assign-material"]
+    ["editor", "selection.set", "catalog.editor.run"],
+    ["build", "scene.list", "catalog.editor.run"],
+    ["build", "profile.list", "catalog.editor.run"],
+    ["physics", "validate", "catalog.editor.run", "physics.validate"],
+    ["physics", "assign-material", "catalog.editor.run", "physics.assign-material"]
   ] as const;
   for (const [group, command, bridgeCommand, toolName] of checks) {
     const spec = bridgeCommandRegistry.lookup(group, command);

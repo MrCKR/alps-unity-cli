@@ -4,9 +4,9 @@
   "semantics": "Every public Tool has one explicit completion contract. No handler-returned default is permitted.",
   "tools": [
     {
-      "toolName": "animation.clip",
+      "toolName": "animation-clip.read",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/clip.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/clip.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -31,9 +31,9 @@
       ]
     },
     {
-      "toolName": "animation.clip.create",
+      "toolName": "animation-clip.create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/clip/create.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/clip/create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -58,9 +58,9 @@
       ]
     },
     {
-      "toolName": "animation.clip.modify",
+      "toolName": "animation-clip.update",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/clip/modify.cs",
+      "source": "unitypkg/Editor/Tools/animation-clip/clip/modify.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -85,9 +85,9 @@
       ]
     },
     {
-      "toolName": "animation.play",
+      "toolName": "animator.play",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/play.cs",
+      "source": "unitypkg/Editor/Tools/animator/play.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -112,9 +112,9 @@
       ]
     },
     {
-      "toolName": "animation.state",
+      "toolName": "animator.get-state",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/state.cs",
+      "source": "unitypkg/Editor/Tools/animator/get-state.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -139,9 +139,9 @@
       ]
     },
     {
-      "toolName": "animation.stop",
+      "toolName": "animator.stop",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/stop.cs",
+      "source": "unitypkg/Editor/Tools/animator/stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -168,7 +168,7 @@
     {
       "toolName": "animator.crossfade",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/animator/crossfade.cs",
+      "source": "unitypkg/Editor/Tools/animator/crossfade.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -195,7 +195,7 @@
     {
       "toolName": "animator.get-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/animator/get-info.cs",
+      "source": "unitypkg/Editor/Tools/animator/get-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -222,7 +222,7 @@
     {
       "toolName": "animator.get-parameter",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/animator/get-parameter.cs",
+      "source": "unitypkg/Editor/Tools/animator/get-parameter.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -249,7 +249,7 @@
     {
       "toolName": "animator.set-enabled",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/animator/set-enabled.cs",
+      "source": "unitypkg/Editor/Tools/animator/set-enabled.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -276,7 +276,7 @@
     {
       "toolName": "animator.set-parameter",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/animator/set-parameter.cs",
+      "source": "unitypkg/Editor/Tools/animator/set-parameter.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -303,7 +303,7 @@
     {
       "toolName": "animator.set-speed",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/animation/animator/set-speed.cs",
+      "source": "unitypkg/Editor/Tools/animator/set-speed.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -571,9 +571,9 @@
       ]
     },
     {
-      "toolName": "asset.modify",
+      "toolName": "asset.write-text",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/asset/modify.cs",
+      "source": "unitypkg/Editor/Tools/asset/write-text.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -1331,9 +1331,9 @@
       ]
     },
     {
-      "toolName": "camera.screenshot",
+      "toolName": "screenshot.from-camera",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/camera/screenshot.cs",
+      "source": "unitypkg/Editor/Tools/screenshot/from-camera.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
@@ -1763,9 +1763,9 @@
       ]
     },
     {
-      "toolName": "code.exec",
+      "toolName": "code.execute",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/code/exec.ts",
+      "source": "src/tools/code/execute.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -1980,9 +1980,9 @@
       ]
     },
     {
-      "toolName": "console.get",
+      "toolName": "console.read",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/console/get.cs",
+      "source": "unitypkg/Editor/Tools/console/read.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2007,9 +2007,9 @@
       ]
     },
     {
-      "toolName": "controller.add-blend-tree-child",
+      "toolName": "animator-controller.add-blend-tree-child",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/add-blend-tree-child.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/add-blend-tree-child.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2034,9 +2034,9 @@
       ]
     },
     {
-      "toolName": "controller.add-layer",
+      "toolName": "animator-controller.add-layer",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/add-layer.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/add-layer.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2061,9 +2061,9 @@
       ]
     },
     {
-      "toolName": "controller.add-parameter",
+      "toolName": "animator-controller.add-parameter",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/add-parameter.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/add-parameter.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2088,9 +2088,9 @@
       ]
     },
     {
-      "toolName": "controller.add-state",
+      "toolName": "animator-controller.add-state",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/add-state.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/add-state.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2115,9 +2115,9 @@
       ]
     },
     {
-      "toolName": "controller.add-transition",
+      "toolName": "animator-controller.add-transition",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/add-transition.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/add-transition.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2142,9 +2142,9 @@
       ]
     },
     {
-      "toolName": "controller.assign",
+      "toolName": "animator-controller.assign",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/assign.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/assign.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2169,9 +2169,9 @@
       ]
     },
     {
-      "toolName": "controller.create",
+      "toolName": "animator-controller.create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/create.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2196,9 +2196,9 @@
       ]
     },
     {
-      "toolName": "controller.create-blend-tree-1d",
+      "toolName": "animator-controller.create-blend-tree-1d",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/create-blend-tree-1d.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/create-blend-tree-1d.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2223,9 +2223,9 @@
       ]
     },
     {
-      "toolName": "controller.create-blend-tree-2d",
+      "toolName": "animator-controller.create-blend-tree-2d",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/create-blend-tree-2d.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/create-blend-tree-2d.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2250,9 +2250,9 @@
       ]
     },
     {
-      "toolName": "controller.get-info",
+      "toolName": "animator-controller.get-info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/get-info.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/get-info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2277,9 +2277,9 @@
       ]
     },
     {
-      "toolName": "controller.remove-layer",
+      "toolName": "animator-controller.remove-layer",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/remove-layer.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/remove-layer.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2304,9 +2304,9 @@
       ]
     },
     {
-      "toolName": "controller.set-layer-weight",
+      "toolName": "animator-controller.set-layer-weight",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/controller/set-layer-weight.cs",
+      "source": "unitypkg/Editor/Tools/animator-controller/set-layer-weight.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -2656,9 +2656,9 @@
       ]
     },
     {
-      "toolName": "editor.play",
+      "toolName": "editor.play-mode.start",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/play.cs",
+      "source": "unitypkg/Editor/Tools/editor/play-mode/start.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -2901,9 +2901,9 @@
       ]
     },
     {
-      "toolName": "editor.stop",
+      "toolName": "editor.play-mode.stop",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/editor/stop.cs",
+      "source": "unitypkg/Editor/Tools/editor/play-mode/stop.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -3009,9 +3009,9 @@
       ]
     },
     {
-      "toolName": "go.create",
+      "toolName": "game-object.create",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/go/create.cs",
+      "source": "unitypkg/Editor/Tools/game-object/create.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3036,9 +3036,9 @@
       ]
     },
     {
-      "toolName": "go.delete",
+      "toolName": "game-object.delete",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/go/delete.cs",
+      "source": "unitypkg/Editor/Tools/game-object/delete.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3063,9 +3063,9 @@
       ]
     },
     {
-      "toolName": "go.duplicate",
+      "toolName": "game-object.duplicate",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/go/duplicate.cs",
+      "source": "unitypkg/Editor/Tools/game-object/duplicate.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3090,9 +3090,9 @@
       ]
     },
     {
-      "toolName": "go.find",
+      "toolName": "game-object.find",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/go/find.cs",
+      "source": "unitypkg/Editor/Tools/game-object/find.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3117,9 +3117,9 @@
       ]
     },
     {
-      "toolName": "go.look-at",
+      "toolName": "game-object.look-at",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/go/look-at.cs",
+      "source": "unitypkg/Editor/Tools/game-object/look-at.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3144,9 +3144,9 @@
       ]
     },
     {
-      "toolName": "go.modify",
+      "toolName": "game-object.modify",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/go/modify.cs",
+      "source": "unitypkg/Editor/Tools/game-object/modify.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3171,9 +3171,9 @@
       ]
     },
     {
-      "toolName": "go.move-relative",
+      "toolName": "game-object.move-relative",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/go/move-relative.cs",
+      "source": "unitypkg/Editor/Tools/game-object/move-relative.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3198,9 +3198,9 @@
       ]
     },
     {
-      "toolName": "go.set-parent",
+      "toolName": "game-object.set-parent",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/go/set-parent.cs",
+      "source": "unitypkg/Editor/Tools/game-object/set-parent.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3225,9 +3225,9 @@
       ]
     },
     {
-      "toolName": "graphics.bake-cancel",
+      "toolName": "lighting.bake.cancel",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/bake-cancel.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/cancel.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -3252,9 +3252,9 @@
       ]
     },
     {
-      "toolName": "graphics.bake-clear",
+      "toolName": "lighting.bake.clear",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/bake-clear.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/clear.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3279,9 +3279,9 @@
       ]
     },
     {
-      "toolName": "graphics.bake-reflection-probe",
+      "toolName": "lighting.bake.reflection-probe",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/bake-reflection-probe.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/reflection-probe.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "external",
       "completionPredicate": {
@@ -3306,9 +3306,9 @@
       ]
     },
     {
-      "toolName": "graphics.bake-settings",
+      "toolName": "lighting.bake.settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/bake-settings.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3333,9 +3333,9 @@
       ]
     },
     {
-      "toolName": "graphics.bake-start",
+      "toolName": "lighting.bake.start",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/bake-start.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/start.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -3361,9 +3361,9 @@
       ]
     },
     {
-      "toolName": "graphics.bake-status",
+      "toolName": "lighting.bake.status",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/bake-status.cs",
+      "source": "unitypkg/Editor/Tools/lighting/bake/status.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3388,9 +3388,9 @@
       ]
     },
     {
-      "toolName": "graphics.light-probe-group",
+      "toolName": "lighting.light-probe-group",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/light-probe-group.cs",
+      "source": "unitypkg/Editor/Tools/lighting/light-probe-group.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3415,9 +3415,9 @@
       ]
     },
     {
-      "toolName": "graphics.pipeline-info",
+      "toolName": "rendering.pipeline.info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/pipeline-info.cs",
+      "source": "unitypkg/Editor/Tools/rendering/pipeline/info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3442,9 +3442,9 @@
       ]
     },
     {
-      "toolName": "graphics.pipeline-settings",
+      "toolName": "rendering.pipeline.settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/pipeline-settings.cs",
+      "source": "unitypkg/Editor/Tools/rendering/pipeline/settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3469,9 +3469,9 @@
       ]
     },
     {
-      "toolName": "graphics.quality",
+      "toolName": "rendering.quality",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/quality.cs",
+      "source": "unitypkg/Editor/Tools/rendering/quality.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3496,9 +3496,9 @@
       ]
     },
     {
-      "toolName": "graphics.reflection-probe",
+      "toolName": "lighting.reflection-probe",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/reflection-probe.cs",
+      "source": "unitypkg/Editor/Tools/lighting/reflection-probe.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3523,9 +3523,9 @@
       ]
     },
     {
-      "toolName": "graphics.scene-debug",
+      "toolName": "rendering.scene-debug",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/scene-debug.cs",
+      "source": "unitypkg/Editor/Tools/rendering/scene-debug.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3550,9 +3550,9 @@
       ]
     },
     {
-      "toolName": "graphics.skybox-get",
+      "toolName": "lighting.skybox.get",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/skybox-get.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/get.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3577,9 +3577,9 @@
       ]
     },
     {
-      "toolName": "graphics.skybox-set-ambient",
+      "toolName": "lighting.skybox.set-ambient",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/skybox-set-ambient.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-ambient.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3604,9 +3604,9 @@
       ]
     },
     {
-      "toolName": "graphics.skybox-set-fog",
+      "toolName": "lighting.skybox.set-fog",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/skybox-set-fog.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-fog.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3631,9 +3631,9 @@
       ]
     },
     {
-      "toolName": "graphics.skybox-set-material",
+      "toolName": "lighting.skybox.set-material",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/skybox-set-material.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-material.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3658,9 +3658,9 @@
       ]
     },
     {
-      "toolName": "graphics.skybox-set-properties",
+      "toolName": "lighting.skybox.set-properties",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/skybox-set-properties.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3685,9 +3685,9 @@
       ]
     },
     {
-      "toolName": "graphics.skybox-set-reflection",
+      "toolName": "lighting.skybox.set-reflection",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/skybox-set-reflection.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-reflection.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3712,9 +3712,9 @@
       ]
     },
     {
-      "toolName": "graphics.skybox-set-sun",
+      "toolName": "lighting.skybox.set-sun",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/skybox-set-sun.cs",
+      "source": "unitypkg/Editor/Tools/lighting/skybox/set-sun.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3739,9 +3739,9 @@
       ]
     },
     {
-      "toolName": "graphics.stats",
+      "toolName": "rendering.stats",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/stats.cs",
+      "source": "unitypkg/Editor/Tools/rendering/stats.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -3766,9 +3766,9 @@
       ]
     },
     {
-      "toolName": "graphics.volume",
+      "toolName": "volume.list",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/graphics/volume.cs",
+      "source": "unitypkg/Editor/Tools/volume/list.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -4308,9 +4308,9 @@
       ]
     },
     {
-      "toolName": "object.get-data",
+      "toolName": "serialized-object.read",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/object/get-data.cs",
+      "source": "unitypkg/Editor/Tools/serialized-object/read.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -4335,9 +4335,9 @@
       ]
     },
     {
-      "toolName": "object.modify",
+      "toolName": "serialized-object.patch",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/object/modify.cs",
+      "source": "unitypkg/Editor/Tools/serialized-object/patch.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7247,9 +7247,9 @@
       ]
     },
     {
-      "toolName": "project.audio-settings",
+      "toolName": "project-settings.audio-settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/audio-settings.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/audio-settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7274,9 +7274,9 @@
       ]
     },
     {
-      "toolName": "project.audio-settings.set",
+      "toolName": "project-settings.audio-settings.set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/audio-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/audio-settings/set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7301,9 +7301,9 @@
       ]
     },
     {
-      "toolName": "project.info",
+      "toolName": "project-settings.info",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/info.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/info.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7328,9 +7328,9 @@
       ]
     },
     {
-      "toolName": "project.input-settings",
+      "toolName": "project-settings.input-settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/input-settings.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/input-settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7355,9 +7355,9 @@
       ]
     },
     {
-      "toolName": "project.input-settings.set",
+      "toolName": "project-settings.input-settings.set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/input-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/input-settings/set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7382,9 +7382,9 @@
       ]
     },
     {
-      "toolName": "project.layer.add",
+      "toolName": "project-settings.layer.add",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/layer/add.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/layer/add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7409,9 +7409,9 @@
       ]
     },
     {
-      "toolName": "project.layer.remove",
+      "toolName": "project-settings.layer.remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/layer/remove.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/layer/remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7436,9 +7436,9 @@
       ]
     },
     {
-      "toolName": "project.layers",
+      "toolName": "project-settings.layers",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/layers.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/layers.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7463,9 +7463,9 @@
       ]
     },
     {
-      "toolName": "project.player-settings",
+      "toolName": "project-settings.player-settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/player-settings.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/player-settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7490,9 +7490,9 @@
       ]
     },
     {
-      "toolName": "project.player-settings.set",
+      "toolName": "project-settings.player-settings.set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/player-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/player-settings/set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7517,9 +7517,9 @@
       ]
     },
     {
-      "toolName": "project.tag.add",
+      "toolName": "project-settings.tag.add",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/tag/add.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/tag/add.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7544,9 +7544,9 @@
       ]
     },
     {
-      "toolName": "project.tag.remove",
+      "toolName": "project-settings.tag.remove",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/tag/remove.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/tag/remove.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7571,9 +7571,9 @@
       ]
     },
     {
-      "toolName": "project.tags",
+      "toolName": "project-settings.tags",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/tags.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/tags.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7598,9 +7598,9 @@
       ]
     },
     {
-      "toolName": "project.time-settings",
+      "toolName": "project-settings.time-settings",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/time-settings.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/time-settings.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7625,9 +7625,9 @@
       ]
     },
     {
-      "toolName": "project.time-settings.set",
+      "toolName": "project-settings.time-settings.set",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/project/time-settings/set.cs",
+      "source": "unitypkg/Editor/Tools/project-settings/time-settings/set.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7652,9 +7652,9 @@
       ]
     },
     {
-      "toolName": "reflect.member",
+      "toolName": "type-inspection.get-member",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/reflect/member.ts",
+      "source": "src/tools/type-inspection/get-member.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7677,9 +7677,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "reflect.search",
+      "toolName": "type-inspection.search",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/reflect/search.ts",
+      "source": "src/tools/type-inspection/search.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7702,9 +7702,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "reflect.type",
+      "toolName": "type-inspection.get-type",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/reflect/type.ts",
+      "source": "src/tools/type-inspection/get-type.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7727,9 +7727,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "reflection.method.call",
+      "toolName": "runtime-reflection.method.invoke",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/reflection/method/call.cs",
+      "source": "unitypkg/Editor/Tools/runtime-reflection/method/invoke.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "observed-state",
       "completionPredicate": {
@@ -7754,9 +7754,9 @@
       ]
     },
     {
-      "toolName": "reflection.method.find",
+      "toolName": "runtime-reflection.method.find",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/reflection/method/find.cs",
+      "source": "unitypkg/Editor/Tools/runtime-reflection/method/find.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7781,9 +7781,9 @@
       ]
     },
     {
-      "toolName": "runtime.console",
+      "toolName": "player-runtime.console",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/runtime/console.ts",
+      "source": "src/tools/player-runtime/console.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7806,9 +7806,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "runtime.input.key",
+      "toolName": "player-runtime.input.key",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/runtime/input/key.ts",
+      "source": "src/tools/player-runtime/input/key.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7831,9 +7831,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "runtime.input.pointer",
+      "toolName": "player-runtime.input.pointer",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/runtime/input/pointer.ts",
+      "source": "src/tools/player-runtime/input/pointer.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7856,9 +7856,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "runtime.log",
+      "toolName": "player-runtime.log",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/runtime/log.ts",
+      "source": "src/tools/player-runtime/log.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7881,9 +7881,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "runtime.state",
+      "toolName": "player-runtime.state",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/runtime/state.ts",
+      "source": "src/tools/player-runtime/state.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7906,9 +7906,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "runtime.target-framerate.set",
+      "toolName": "player-runtime.target-framerate.set",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/runtime/target-framerate/set.ts",
+      "source": "src/tools/player-runtime/target-framerate/set.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7931,9 +7931,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "runtime.time-scale.set",
+      "toolName": "player-runtime.time-scale.set",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/runtime/time-scale/set.ts",
+      "source": "src/tools/player-runtime/time-scale/set.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -7956,9 +7956,9 @@
       "asyncSignals": []
     },
     {
-      "toolName": "runtime.ui.capture-element",
+      "toolName": "player-runtime.ui.capture-element",
       "descriptorOwner": "ts-local",
-      "source": "src/tools/runtime/ui/capture-element.ts",
+      "source": "src/tools/player-runtime/ui/capture-element.ts",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -8197,9 +8197,9 @@
       ]
     },
     {
-      "toolName": "scene.move-object",
+      "toolName": "game-object.move-to-scene",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/scene/move-object.cs",
+      "source": "unitypkg/Editor/Tools/game-object/move-to-scene.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {
@@ -9227,9 +9227,9 @@
       ]
     },
     {
-      "toolName": "type.schema",
+      "toolName": "runtime-reflection.type.schema",
       "descriptorOwner": "built-in",
-      "source": "unitypkg/Editor/Tools/reflection/type/schema.cs",
+      "source": "unitypkg/Editor/Tools/runtime-reflection/type/schema.cs",
       "deliveryMode": "direct-terminal",
       "executionClass": "atomic",
       "completionPredicate": {

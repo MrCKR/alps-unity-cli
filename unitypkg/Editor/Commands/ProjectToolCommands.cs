@@ -30,14 +30,14 @@ namespace UnityCli
     {
         private static void RegisterProjectToolCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "project-tool.health", "project-tool", false, ProjectToolCatalogHealth);
-            RegisterCommand(registry, "project-tool.groups", "project-tool", false, ProjectToolGroups);
-            RegisterCommand(registry, "project-tool.summary", "project-tool", false, ProjectToolSummary);
-            RegisterCommand(registry, "project-tool.describe", "project-tool", false, ProjectToolDescribe);
-            RegisterCommand(registry, "project-tool.list", "project-tool", false, ProjectToolList);
+            RegisterCommand(registry, "catalog.editor.health", "catalog", false, ProjectToolCatalogHealth);
+            RegisterCommand(registry, "catalog.editor.groups", "catalog", false, ProjectToolGroups);
+            RegisterCommand(registry, "catalog.editor.summary", "catalog", false, ProjectToolSummary);
+            RegisterCommand(registry, "catalog.editor.describe", "catalog", false, ProjectToolDescribe);
+            RegisterCommand(registry, "catalog.editor.list", "catalog", false, ProjectToolList);
             registry.Register<UnityCli.Protocol.BridgeRequest>(
-                "project-tool.run",
-                "project-tool",
+                "catalog.editor.run",
+                "catalog",
                 false,
                 60000,
                 ProjectToolRun);

@@ -70,8 +70,8 @@ const RETURNABLE_TRANSITION_COMMANDS = new Set([
 ]);
 // 只有自身切换 Editor session 状态的 Tool 才能恢复已发出但丢失响应的同根请求。
 const POST_DISPATCH_LISTENER_RECOVERY_TOOLS = new Set([
-  "editor.play",
-  "editor.stop",
+  "editor.play-mode.start",
+  "editor.play-mode.stop",
 ]);
 const TRANSITION_CODES = new Set([
   "E_UNITY_DOMAIN_RELOAD",
@@ -927,9 +927,9 @@ function admissionBusy(instanceId: string, timeoutMs: number): SessionSupervisor
   ], { instanceId, phase: "admission", businessRequestSent: false, waitedMs: timeoutMs }, true, REGISTRY_POLL_INTERVAL_MS);
 }
 
-/** runtime-tool namespace 始终绑定独立 development Player；其余命令绑定 Editor。 */
+/** catalog.player namespace 始终绑定独立 development Player；其余命令绑定 Editor。 */
 function bridgeTarget(command: string): InstanceTarget {
-  return command.startsWith("runtime-tool.") ? "runtime" : "editor";
+  return command.startsWith("catalog.player.") ? "runtime" : "editor";
 }
 
 function normalizeTimeoutMs(value: number | undefined, mode: SessionSupervisorMode): number {

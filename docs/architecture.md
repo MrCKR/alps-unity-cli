@@ -59,7 +59,7 @@ Bridge and Skill installation are independent effects. The CLI is non-interactiv
 
 The Bridge source is the npm-local canonical `unitypkg`. `contracts/package-files.json` fixes every managed path, size, SHA-256, and the complete tree hash. Installation validates the source before planning and again before effect, publishes through staging/rename, and proves the target from fresh filesystem readback.
 
-UnityCLI carries no private Roslyn assemblies. `code.exec` invokes the current Unity Editor's bounded Mono/csc compiler subprocess. `contracts/package-assembly-closure.json` fixes this boundary and defines protected precompiled assembly names and allowed providers.
+UnityCLI carries no private Roslyn assemblies. `code.execute` invokes the current Unity Editor's bounded Mono/csc compiler subprocess. `contracts/package-assembly-closure.json` fixes this boundary and defines protected precompiled assembly names and allowed providers.
 
 ## Editor Sessions
 

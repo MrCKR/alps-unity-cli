@@ -64,7 +64,7 @@ Editor 与 Runtime 能力在两种模式中都保持可发现。`available`、`u
 
 进入 PlayMode 的标准步骤：
 
-1. `unitycli tools run editor.play --input '{}'`
+1. `unitycli tools run editor.play-mode.start --input '{}'`
 2. `unitycli tools run editor.state --input '{}'`
 3. 重新 `tools describe <runtime-tool>` 或直接按 `nextActions` 调用
 

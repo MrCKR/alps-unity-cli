@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
-const domains = ["animation", "asset", "build", "camera", "component", "controller", "editor", "go", "graphics", "material"];
+const domains = ["animation-clip", "animator", "animator-controller", "asset", "build", "camera", "component", "editor", "game-object", "lighting", "material", "rendering", "volume"];
 const toolsRoot = new URL("../unitypkg/Editor/Tools/", import.meta.url);
 
 async function sourceFiles(directory: URL): Promise<URL[]> {
@@ -26,7 +26,7 @@ test("core A mutation Tools own a commit-effect boundary", async () => {
   const readOnly = sources.filter(({ source }) => /DestructiveHint\s*=\s*false/.test(source) && !/SideEffects\s*=\s*new\[\]\s*\{\s*"[^"]+"/.test(source));
   const sharedBuildScene = await readFile(new URL("build/BuildSceneStateTool.cs", toolsRoot), "utf8");
 
-  assert.ok(mutations.length >= 80, "the ten core domains must enumerate every mutation Tool");
+  assert.ok(mutations.length >= 80, "the core domains must enumerate every mutation Tool");
   for (const { file, source } of mutations) {
     const body = executeBody(source);
     const usesSharedBuildScene = /BuildSceneStateTool\.Execute/.test(body);

@@ -7,9 +7,9 @@ import type { BridgeCommandSpec, BridgeFlags } from "../../bridge/types.js";
 /**
  * ProBuilder extension bridge specs — 37 single-action tools.
  *
- * Each CLI command is routed through the project-tool.run bridge command
+ * Each CLI command is routed through the catalog.editor.run bridge command
  * to reach ProBuilder IUnityCliTool handlers in the Unity package. The
- * bridgeCommand field is always "project-tool.run";
+ * bridgeCommand field is always "catalog.editor.run";
  * the toolName field carries the underlying project-tool name (e.g.
  * "probuilder.ping"). The buildArgs output is wrapped into { name, input }
  * so the C# ProjectToolRun handler receives both the tool name and its
@@ -18,63 +18,63 @@ import type { BridgeCommandSpec, BridgeFlags } from "../../bridge/types.js";
 
 export const probuilderBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   // ─── Utility ───────────────────────────────────────────
-  { group: "probuilder", command: "ping", bridgeCommand: "project-tool.run", toolName: "probuilder.ping", buildArgs: probuilderPingArgs },
-  { group: "probuilder", command: "scene", bridgeCommand: "project-tool.run", toolName: "probuilder.scene", buildArgs: probuilderSceneArgs },
+  { group: "probuilder", command: "ping", bridgeCommand: "catalog.editor.run", toolName: "probuilder.ping", buildArgs: probuilderPingArgs },
+  { group: "probuilder", command: "scene", bridgeCommand: "catalog.editor.run", toolName: "probuilder.scene", buildArgs: probuilderSceneArgs },
 
   // ─── Shape Creation ────────────────────────────────────
-  { group: "probuilder", command: "create-shape", bridgeCommand: "project-tool.run", toolName: "probuilder.create-shape", buildArgs: probuilderCreateShapeArgs },
-  { group: "probuilder", command: "create-poly-shape", bridgeCommand: "project-tool.run", toolName: "probuilder.create-poly-shape", buildArgs: probuilderCreatePolyShapeArgs },
+  { group: "probuilder", command: "create-shape", bridgeCommand: "catalog.editor.run", toolName: "probuilder.create-shape", buildArgs: probuilderCreateShapeArgs },
+  { group: "probuilder", command: "create-poly-shape", bridgeCommand: "catalog.editor.run", toolName: "probuilder.create-poly-shape", buildArgs: probuilderCreatePolyShapeArgs },
 
   // ─── Face Operations ──────────────────────────────────
-  { group: "probuilder", command: "extrude-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.extrude-faces", buildArgs: probuilderTargetWithIndicesArgs },
-  { group: "probuilder", command: "delete-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.delete-faces", buildArgs: probuilderTargetWithIndicesArgs },
-  { group: "probuilder", command: "detach-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.detach-faces", buildArgs: probuilderDetachFacesArgs },
-  { group: "probuilder", command: "merge-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-faces", buildArgs: probuilderTargetWithIndicesArgs },
-  { group: "probuilder", command: "subdivide", bridgeCommand: "project-tool.run", toolName: "probuilder.subdivide", buildArgs: probuilderTargetWithOptionalIndicesArgs },
-  { group: "probuilder", command: "flip-normals", bridgeCommand: "project-tool.run", toolName: "probuilder.flip-normals", buildArgs: probuilderTargetWithOptionalIndicesArgs },
-  { group: "probuilder", command: "select-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.select-faces", buildArgs: probuilderSelectFacesArgs },
-  { group: "probuilder", command: "set-face-material", bridgeCommand: "project-tool.run", toolName: "probuilder.set-face-material", buildArgs: probuilderSetFaceMaterialArgs },
-  { group: "probuilder", command: "set-face-color", bridgeCommand: "project-tool.run", toolName: "probuilder.set-face-color", buildArgs: probuilderSetFaceColorArgs },
-  { group: "probuilder", command: "set-face-uvs", bridgeCommand: "project-tool.run", toolName: "probuilder.set-face-uvs", buildArgs: probuilderSetFaceUvsArgs },
+  { group: "probuilder", command: "extrude-faces", bridgeCommand: "catalog.editor.run", toolName: "probuilder.extrude-faces", buildArgs: probuilderTargetWithIndicesArgs },
+  { group: "probuilder", command: "delete-faces", bridgeCommand: "catalog.editor.run", toolName: "probuilder.delete-faces", buildArgs: probuilderTargetWithIndicesArgs },
+  { group: "probuilder", command: "detach-faces", bridgeCommand: "catalog.editor.run", toolName: "probuilder.detach-faces", buildArgs: probuilderDetachFacesArgs },
+  { group: "probuilder", command: "merge-faces", bridgeCommand: "catalog.editor.run", toolName: "probuilder.merge-faces", buildArgs: probuilderTargetWithIndicesArgs },
+  { group: "probuilder", command: "subdivide", bridgeCommand: "catalog.editor.run", toolName: "probuilder.subdivide", buildArgs: probuilderTargetWithOptionalIndicesArgs },
+  { group: "probuilder", command: "flip-normals", bridgeCommand: "catalog.editor.run", toolName: "probuilder.flip-normals", buildArgs: probuilderTargetWithOptionalIndicesArgs },
+  { group: "probuilder", command: "select-faces", bridgeCommand: "catalog.editor.run", toolName: "probuilder.select-faces", buildArgs: probuilderSelectFacesArgs },
+  { group: "probuilder", command: "set-face-material", bridgeCommand: "catalog.editor.run", toolName: "probuilder.set-face-material", buildArgs: probuilderSetFaceMaterialArgs },
+  { group: "probuilder", command: "set-face-color", bridgeCommand: "catalog.editor.run", toolName: "probuilder.set-face-color", buildArgs: probuilderSetFaceColorArgs },
+  { group: "probuilder", command: "set-face-uvs", bridgeCommand: "catalog.editor.run", toolName: "probuilder.set-face-uvs", buildArgs: probuilderSetFaceUvsArgs },
 
   // ─── Edge Operations ──────────────────────────────────
-  { group: "probuilder", command: "extrude-edges", bridgeCommand: "project-tool.run", toolName: "probuilder.extrude-edges", buildArgs: probuilderEdgeArgs },
-  { group: "probuilder", command: "bevel-edges", bridgeCommand: "project-tool.run", toolName: "probuilder.bevel-edges", buildArgs: probuilderBevelArgs },
-  { group: "probuilder", command: "bridge-edges", bridgeCommand: "project-tool.run", toolName: "probuilder.bridge-edges", buildArgs: probuilderBridgeEdgesArgs },
-  { group: "probuilder", command: "connect-elements", bridgeCommand: "project-tool.run", toolName: "probuilder.connect-elements", buildArgs: probuilderConnectArgs },
+  { group: "probuilder", command: "extrude-edges", bridgeCommand: "catalog.editor.run", toolName: "probuilder.extrude-edges", buildArgs: probuilderEdgeArgs },
+  { group: "probuilder", command: "bevel-edges", bridgeCommand: "catalog.editor.run", toolName: "probuilder.bevel-edges", buildArgs: probuilderBevelArgs },
+  { group: "probuilder", command: "bridge-edges", bridgeCommand: "catalog.editor.run", toolName: "probuilder.bridge-edges", buildArgs: probuilderBridgeEdgesArgs },
+  { group: "probuilder", command: "connect-elements", bridgeCommand: "catalog.editor.run", toolName: "probuilder.connect-elements", buildArgs: probuilderConnectArgs },
 
   // ─── Mesh Combine / Merge ─────────────────────────────
-  { group: "probuilder", command: "combine-meshes", bridgeCommand: "project-tool.run", toolName: "probuilder.combine-meshes", buildArgs: probuilderMultiTargetArgs },
-  { group: "probuilder", command: "merge-objects", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-objects", buildArgs: probuilderMergeObjectsArgs },
-  { group: "probuilder", command: "duplicate-and-flip", bridgeCommand: "project-tool.run", toolName: "probuilder.duplicate-and-flip", buildArgs: probuilderTargetWithOptionalIndicesArgs },
-  { group: "probuilder", command: "create-polygon", bridgeCommand: "project-tool.run", toolName: "probuilder.create-polygon", buildArgs: probuilderCreatePolygonArgs },
+  { group: "probuilder", command: "combine-meshes", bridgeCommand: "catalog.editor.run", toolName: "probuilder.combine-meshes", buildArgs: probuilderMultiTargetArgs },
+  { group: "probuilder", command: "merge-objects", bridgeCommand: "catalog.editor.run", toolName: "probuilder.merge-objects", buildArgs: probuilderMergeObjectsArgs },
+  { group: "probuilder", command: "duplicate-and-flip", bridgeCommand: "catalog.editor.run", toolName: "probuilder.duplicate-and-flip", buildArgs: probuilderTargetWithOptionalIndicesArgs },
+  { group: "probuilder", command: "create-polygon", bridgeCommand: "catalog.editor.run", toolName: "probuilder.create-polygon", buildArgs: probuilderCreatePolygonArgs },
 
   // ─── Vertex Operations ────────────────────────────────
-  { group: "probuilder", command: "merge-vertices", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-vertices", buildArgs: probuilderVertexIndicesArgs },
-  { group: "probuilder", command: "weld-vertices", bridgeCommand: "project-tool.run", toolName: "probuilder.weld-vertices", buildArgs: probuilderWeldArgs },
-  { group: "probuilder", command: "split-vertices", bridgeCommand: "project-tool.run", toolName: "probuilder.split-vertices", buildArgs: probuilderVertexIndicesArgs },
-  { group: "probuilder", command: "move-vertices", bridgeCommand: "project-tool.run", toolName: "probuilder.move-vertices", buildArgs: probuilderMoveVerticesArgs },
-  { group: "probuilder", command: "insert-vertex", bridgeCommand: "project-tool.run", toolName: "probuilder.insert-vertex", buildArgs: probuilderInsertVertexArgs },
-  { group: "probuilder", command: "append-vertices-to-edge", bridgeCommand: "project-tool.run", toolName: "probuilder.append-vertices-to-edge", buildArgs: probuilderAppendVerticesArgs },
+  { group: "probuilder", command: "merge-vertices", bridgeCommand: "catalog.editor.run", toolName: "probuilder.merge-vertices", buildArgs: probuilderVertexIndicesArgs },
+  { group: "probuilder", command: "weld-vertices", bridgeCommand: "catalog.editor.run", toolName: "probuilder.weld-vertices", buildArgs: probuilderWeldArgs },
+  { group: "probuilder", command: "split-vertices", bridgeCommand: "catalog.editor.run", toolName: "probuilder.split-vertices", buildArgs: probuilderVertexIndicesArgs },
+  { group: "probuilder", command: "move-vertices", bridgeCommand: "catalog.editor.run", toolName: "probuilder.move-vertices", buildArgs: probuilderMoveVerticesArgs },
+  { group: "probuilder", command: "insert-vertex", bridgeCommand: "catalog.editor.run", toolName: "probuilder.insert-vertex", buildArgs: probuilderInsertVertexArgs },
+  { group: "probuilder", command: "append-vertices-to-edge", bridgeCommand: "catalog.editor.run", toolName: "probuilder.append-vertices-to-edge", buildArgs: probuilderAppendVerticesArgs },
 
   // ─── Info / Inspection ────────────────────────────────
-  { group: "probuilder", command: "mesh-info", bridgeCommand: "project-tool.run", toolName: "probuilder.mesh-info", buildArgs: probuilderMeshInfoArgs },
-  { group: "probuilder", command: "validate-mesh", bridgeCommand: "project-tool.run", toolName: "probuilder.validate-mesh", buildArgs: probuilderTargetOnlyArgs },
+  { group: "probuilder", command: "mesh-info", bridgeCommand: "catalog.editor.run", toolName: "probuilder.mesh-info", buildArgs: probuilderMeshInfoArgs },
+  { group: "probuilder", command: "validate-mesh", bridgeCommand: "catalog.editor.run", toolName: "probuilder.validate-mesh", buildArgs: probuilderTargetOnlyArgs },
 
   // ─── Conversion ───────────────────────────────────────
-  { group: "probuilder", command: "convert-to-probuilder", bridgeCommand: "project-tool.run", toolName: "probuilder.convert-to-probuilder", buildArgs: probuilderTargetOnlyArgs },
+  { group: "probuilder", command: "convert-to-probuilder", bridgeCommand: "catalog.editor.run", toolName: "probuilder.convert-to-probuilder", buildArgs: probuilderTargetOnlyArgs },
 
   // ─── Smoothing ────────────────────────────────────────
-  { group: "probuilder", command: "set-smoothing", bridgeCommand: "project-tool.run", toolName: "probuilder.set-smoothing", buildArgs: probuilderSetSmoothingArgs },
-  { group: "probuilder", command: "auto-smooth", bridgeCommand: "project-tool.run", toolName: "probuilder.auto-smooth", buildArgs: probuilderAutoSmoothArgs },
+  { group: "probuilder", command: "set-smoothing", bridgeCommand: "catalog.editor.run", toolName: "probuilder.set-smoothing", buildArgs: probuilderSetSmoothingArgs },
+  { group: "probuilder", command: "auto-smooth", bridgeCommand: "catalog.editor.run", toolName: "probuilder.auto-smooth", buildArgs: probuilderAutoSmoothArgs },
 
   // ─── Pivot / Transform ────────────────────────────────
-  { group: "probuilder", command: "center-pivot", bridgeCommand: "project-tool.run", toolName: "probuilder.center-pivot", buildArgs: probuilderTargetOnlyArgs },
-  { group: "probuilder", command: "freeze-transform", bridgeCommand: "project-tool.run", toolName: "probuilder.freeze-transform", buildArgs: probuilderTargetOnlyArgs },
-  { group: "probuilder", command: "set-pivot", bridgeCommand: "project-tool.run", toolName: "probuilder.set-pivot", buildArgs: probuilderSetPivotArgs },
+  { group: "probuilder", command: "center-pivot", bridgeCommand: "catalog.editor.run", toolName: "probuilder.center-pivot", buildArgs: probuilderTargetOnlyArgs },
+  { group: "probuilder", command: "freeze-transform", bridgeCommand: "catalog.editor.run", toolName: "probuilder.freeze-transform", buildArgs: probuilderTargetOnlyArgs },
+  { group: "probuilder", command: "set-pivot", bridgeCommand: "catalog.editor.run", toolName: "probuilder.set-pivot", buildArgs: probuilderSetPivotArgs },
 
   // ─── Repair ───────────────────────────────────────────
-  { group: "probuilder", command: "repair-mesh", bridgeCommand: "project-tool.run", toolName: "probuilder.repair-mesh", buildArgs: probuilderTargetOnlyArgs }
+  { group: "probuilder", command: "repair-mesh", bridgeCommand: "catalog.editor.run", toolName: "probuilder.repair-mesh", buildArgs: probuilderTargetOnlyArgs }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {

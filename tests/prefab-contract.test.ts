@@ -67,9 +67,9 @@ test("bridge specs resolve for prefab tools", () => {
     info: "prefab.info",
     create: "prefab.create",
     modify: "prefab.modify",
-    "overrides-apply": "prefab.overrides.apply",
-    "overrides-revert": "prefab.overrides.revert",
-    "variant-create": "prefab.variant.create",
+    "overrides.apply": "prefab.overrides.apply",
+    "overrides.revert": "prefab.overrides.revert",
+    "variant.create": "prefab.variant.create",
     "stage-open": "prefab.stage-open",
     "stage-save": "prefab.stage-save",
     "stage-close": "prefab.stage-close",
@@ -79,7 +79,7 @@ test("bridge specs resolve for prefab tools", () => {
   };
   for (const [cmd, expected] of Object.entries(lookups)) {
     const spec = bridgeCommandRegistry.lookup("prefab", cmd);
-    assert.equal(spec?.bridgeCommand, "project-tool.run", `prefab ${cmd} should route via project-tool.run`);
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `prefab ${cmd} should route via catalog.editor.run`);
     assert.equal(spec?.toolName, expected, `prefab ${cmd} toolName should match`);
   }
 });

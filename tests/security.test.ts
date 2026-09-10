@@ -30,7 +30,7 @@ test("destructive Tool calls dispatch without confirmation", async () => {
 
   assert.ok(result.ok);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal(requests[0].command, "catalog.editor.run");
   assert.equal(requests[0].input?.name, "asset.delete");
   assert.equal(Object.hasOwn(requests[0].execution, "securityProof"), false);
 });
@@ -52,7 +52,7 @@ test("dry-run remains an optional execution mode without a confirmation proof", 
 
   assert.ok(result.ok);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal(requests[0].command, "catalog.editor.run");
   assert.equal(requests[0].input?.name, "asset.delete");
   assert.equal(requests[0].execution?.dryRun, true);
   assert.equal(Object.hasOwn(requests[0].execution, "securityProof"), false);

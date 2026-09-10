@@ -2,23 +2,23 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag, targetArgs } 
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const gameObjectBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "go", command: "find", bridgeCommand: "project-tool.run", toolName: "go.find", buildArgs: findArgs },
-  { group: "go", command: "create", bridgeCommand: "project-tool.run", toolName: "go.create", buildArgs: gameObjectArgs },
-  { group: "go", command: "modify", bridgeCommand: "project-tool.run", toolName: "go.modify", buildArgs: gameObjectArgs },
-  { group: "go", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "go.duplicate", buildArgs: gameObjectArgs },
-  { group: "go", command: "move-relative", bridgeCommand: "project-tool.run", toolName: "go.move-relative", buildArgs: gameObjectArgs },
-  { group: "go", command: "look-at", bridgeCommand: "project-tool.run", toolName: "go.look-at", buildArgs: gameObjectArgs },
-  { group: "go", command: "delete", bridgeCommand: "project-tool.run", toolName: "go.delete", buildArgs: gameObjectArgs, supportsDryRun: true },
-  { group: "go", command: "set-parent", bridgeCommand: "project-tool.run", toolName: "go.set-parent", buildArgs: gameObjectArgs, supportsDryRun: true },
-  { group: "component", command: "add", bridgeCommand: "project-tool.run", toolName: "component.add", buildArgs: componentArgs },
-  { group: "component", command: "remove", bridgeCommand: "project-tool.run", toolName: "component.remove", buildArgs: componentArgs },
-  { group: "component", command: "set", bridgeCommand: "project-tool.run", toolName: "component.set", buildArgs: componentArgs },
-  { group: "component", command: "get", bridgeCommand: "project-tool.run", toolName: "component.get", buildArgs: componentDeepArgs },
-  { group: "component", command: "modify", bridgeCommand: "project-tool.run", toolName: "component.modify", buildArgs: componentDeepArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "component", command: "list-types", bridgeCommand: "project-tool.run", toolName: "component.list-types", buildArgs: componentListTypesArgs }
+  { group: "game-object", command: "find", bridgeCommand: "catalog.editor.run", toolName: "game-object.find", buildArgs: findArgs },
+  { group: "game-object", command: "create", bridgeCommand: "catalog.editor.run", toolName: "game-object.create", buildArgs: gameObjectArgs },
+  { group: "game-object", command: "modify", bridgeCommand: "catalog.editor.run", toolName: "game-object.modify", buildArgs: gameObjectArgs },
+  { group: "game-object", command: "duplicate", bridgeCommand: "catalog.editor.run", toolName: "game-object.duplicate", buildArgs: gameObjectArgs },
+  { group: "game-object", command: "move-relative", bridgeCommand: "catalog.editor.run", toolName: "game-object.move-relative", buildArgs: gameObjectArgs },
+  { group: "game-object", command: "look-at", bridgeCommand: "catalog.editor.run", toolName: "game-object.look-at", buildArgs: gameObjectArgs },
+  { group: "game-object", command: "delete", bridgeCommand: "catalog.editor.run", toolName: "game-object.delete", buildArgs: gameObjectArgs, supportsDryRun: true },
+  { group: "game-object", command: "set-parent", bridgeCommand: "catalog.editor.run", toolName: "game-object.set-parent", buildArgs: gameObjectArgs, supportsDryRun: true },
+  { group: "component", command: "add", bridgeCommand: "catalog.editor.run", toolName: "component.add", buildArgs: componentArgs },
+  { group: "component", command: "remove", bridgeCommand: "catalog.editor.run", toolName: "component.remove", buildArgs: componentArgs },
+  { group: "component", command: "set", bridgeCommand: "catalog.editor.run", toolName: "component.set", buildArgs: componentArgs },
+  { group: "component", command: "get", bridgeCommand: "catalog.editor.run", toolName: "component.get", buildArgs: componentDeepArgs },
+  { group: "component", command: "modify", bridgeCommand: "catalog.editor.run", toolName: "component.modify", buildArgs: componentDeepArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "component", command: "list-types", bridgeCommand: "catalog.editor.run", toolName: "component.list-types", buildArgs: componentListTypesArgs }
 ];
 
-/** go.find 的搜索参数解析：支持 describe 中公开的 searchTerm/name/target 等字段，并避免实例 --target 泄漏。 */
+/** game-object.find 的搜索参数解析：支持 describe 中公开的 searchTerm/name/target 等字段，并避免实例 --target 泄漏。 */
 function findArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
   return compactArgs({
@@ -52,7 +52,7 @@ function gameObjectArgs({ command, flags, positionalTarget }: Parameters<BridgeC
   const rotation = vectorValue(structured.rotation);
   const scale = vectorValue(structured.scale);
   const offset = vectorValue(structured.offset);
-  const baseTargetArgs = command === "go.create"
+  const baseTargetArgs = command === "game-object.create"
     ? compactArgs({
       target: positionalTarget ?? stringFlag(flags, "target") ?? stringValue(structured.target),
       name: stringFlag(flags, "name") ?? stringValue(structured.name),

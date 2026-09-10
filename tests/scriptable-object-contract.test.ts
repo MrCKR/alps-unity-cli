@@ -79,7 +79,7 @@ test("scriptable-object tools are contract-discovered and expose expected live d
 test("bridge specs resolve for scriptable-object tools", () => {
   for (const command of ["create", "info", "list-types", "modify"]) {
     const spec = bridgeCommandRegistry.lookup("scriptable-object", command);
-    assert.equal(spec?.bridgeCommand, "project-tool.run");
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run");
   }
 });
 

@@ -16,16 +16,16 @@ test("supported dry-runs bypass direct proof refusal while graphics reads remain
   const coordinator = await source("Infrastructure/UnityCliOperationCoordinator.cs");
   assert.match(coordinator, /contract\.DeliveryMode, "direct-terminal"/);
   assert.match(coordinator, /RequestRequiresMutation[\s\S]*request\.Execution\.DryRun == true\)\) return false/);
-  assert.match(coordinator, /name == "graphics\.reflection-probe"/);
-  assert.match(coordinator, /name == "graphics\.light-probe-group"/);
+  assert.match(coordinator, /name == "lighting.reflection-probe"/);
+  assert.match(coordinator, /name == "lighting.light-probe-group"/);
   assert.match(coordinator, /name == "physics\.rigidbody"/);
   assert.doesNotMatch(coordinator, /RequestJournal|E_REQUEST_OUTCOME_UNKNOWN/);
 });
 
 test("core request predicates cross one barrier before their first mutation", async () => {
   const paths = [
-    "Tools/go/duplicate.cs", "Tools/go/modify.cs", "Tools/material/assign.cs", "Tools/material/set.cs",
-    "Tools/camera/target.cs", "Tools/camera/lens.cs", "Tools/animation/stop.cs", "Tools/asset/duplicate.cs",
+    "Tools/game-object/duplicate.cs", "Tools/game-object/modify.cs", "Tools/material/assign.cs", "Tools/material/set.cs",
+    "Tools/camera/target.cs", "Tools/camera/lens.cs", "Tools/animator/stop.cs", "Tools/asset/duplicate.cs",
     "Tools/asset/move.cs", "Tools/prefab/create.cs"
   ];
   const texts = await Promise.all(paths.map(source));

@@ -2,12 +2,12 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag } from "../arg
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const screenshotBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "screenshot", command: "game-view", bridgeCommand: "project-tool.run", toolName: "screenshot.game-view", buildArgs: screenshotArgs, destructiveHint: true },
-  { group: "screenshot", command: "scene-view", bridgeCommand: "project-tool.run", toolName: "screenshot.scene-view", buildArgs: screenshotArgs, destructiveHint: true },
-  { group: "screenshot", command: "isolated-object", bridgeCommand: "project-tool.run", toolName: "screenshot.isolated-object", buildArgs: isolatedArgs, destructiveHint: true },
-  { group: "screenshot", command: "orbit", bridgeCommand: "project-tool.run", toolName: "screenshot.orbit", buildArgs: orbitArgs, destructiveHint: true },
-  { group: "screenshot", command: "surround", bridgeCommand: "project-tool.run", toolName: "screenshot.surround", buildArgs: surroundArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "screenshot", command: "editor-element", bridgeCommand: "project-tool.run", toolName: "screenshot.editor-element", buildArgs: editorElementArgs, supportsDryRun: true }
+  { group: "screenshot", command: "game-view", bridgeCommand: "catalog.editor.run", toolName: "screenshot.game-view", buildArgs: screenshotArgs, destructiveHint: true },
+  { group: "screenshot", command: "scene-view", bridgeCommand: "catalog.editor.run", toolName: "screenshot.scene-view", buildArgs: screenshotArgs, destructiveHint: true },
+  { group: "screenshot", command: "isolated-object", bridgeCommand: "catalog.editor.run", toolName: "screenshot.isolated-object", buildArgs: isolatedArgs, destructiveHint: true },
+  { group: "screenshot", command: "orbit", bridgeCommand: "catalog.editor.run", toolName: "screenshot.orbit", buildArgs: orbitArgs, destructiveHint: true },
+  { group: "screenshot", command: "surround", bridgeCommand: "catalog.editor.run", toolName: "screenshot.surround", buildArgs: surroundArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "screenshot", command: "editor-element", bridgeCommand: "catalog.editor.run", toolName: "screenshot.editor-element", buildArgs: editorElementArgs, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（path/width/height/target 等）

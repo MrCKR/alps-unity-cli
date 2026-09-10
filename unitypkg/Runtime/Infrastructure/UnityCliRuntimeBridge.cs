@@ -246,7 +246,7 @@ namespace UnityCli
                 var remaining = work.AbsoluteDeadlineMs - dependencies.UtcNowMs();
                 if (remaining <= 0L || dependencies.IsStopping())
                 {
-                    var timeout = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request did not reach a proven terminal before its immutable deadline or session shutdown.", new[] { "Inspect runtime.state before submitting a new request." }, true, 100);
+                    var timeout = Error(requestId, "E_EXECUTION_TIMEOUT", "Runtime request did not reach a proven terminal before its immutable deadline or session shutdown.", new[] { "Inspect player-runtime.state before submitting a new request." }, true, 100);
                     if (work.Owner.FinalizeRuntimeRequest(work, timeout, 0)) return work.Completion.Task.Result;
                     return timeout;
                 }
@@ -435,22 +435,22 @@ namespace UnityCli
                         var expectedGeneration = ReadString(input, "expectedCatalogGeneration");
                         if (!string.IsNullOrEmpty(expectedGeneration) && !string.Equals(expectedGeneration, generation, StringComparison.Ordinal))
                             terminal = Error(requestId, "E_TOOL_CATALOG_CHANGED", "The Tool catalog generation changed before this continuation page was read.", new[] { "Restart this discovery query from its first page against the current Runtime generation." });
-                        else if (string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal))
+                        else if (string.Equals(command, "catalog.player.groups", StringComparison.Ordinal))
                             terminal = Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "groups", new List<object>() } });
-                        else if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
+                        else if (string.Equals(command, "catalog.player.summary", StringComparison.Ordinal))
                             terminal = Success(requestId, RuntimeCatalogSummaryData(input, generation));
-                        else if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
+                        else if (string.Equals(command, "catalog.player.describe", StringComparison.Ordinal))
                             terminal = Success(requestId, new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", false } });
                         else
                             terminal = Success(requestId, new Dictionary<string, object> { { "tools", new List<object>() }, { "target", "runtime" }, { "runtimeSessionId", sessionId } });
                     }
-                    else if (string.Equals(command, "runtime-tool.run", StringComparison.Ordinal))
+                    else if (string.Equals(command, "catalog.player.run", StringComparison.Ordinal))
                     {
                         var wrapper = ReadObject(request, "input");
-                        if (wrapper == null || !HasOnlyKeys(wrapper, "name", "input", "artifactDir", "playModeSessionId")) throw new FormatException("runtime-tool.run wrapper is invalid.");
+                        if (wrapper == null || !HasOnlyKeys(wrapper, "name", "input", "artifactDir", "playModeSessionId")) throw new FormatException("catalog.player.run wrapper is invalid.");
                         var name = RequiredString(wrapper, "name", 256);
                         var toolInput = ReadObject(wrapper, "input");
-                        if (toolInput == null) throw new FormatException("runtime-tool.run input must be an object.");
+                        if (toolInput == null) throw new FormatException("catalog.player.run input must be an object.");
                         var execution = ReadObject(request, "execution");
                         object dryRunValue;
                         var dryRun = execution != null && execution.TryGetValue("dryRun", out dryRunValue) && dryRunValue is bool && (bool)dryRunValue;
@@ -472,10 +472,10 @@ namespace UnityCli
 
         private static bool RuntimeCatalogReadCommand(string command)
         {
-            return string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal)
-                || string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal)
-                || string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal)
-                || string.Equals(command, "runtime-tool.list", StringComparison.Ordinal);
+            return string.Equals(command, "catalog.player.groups", StringComparison.Ordinal)
+                || string.Equals(command, "catalog.player.summary", StringComparison.Ordinal)
+                || string.Equals(command, "catalog.player.describe", StringComparison.Ordinal)
+                || string.Equals(command, "catalog.player.list", StringComparison.Ordinal);
         }
 
         /// <summary>Runtime catalog是私有闭集协议；空执行器也必须拒绝畸形或无界输入。</summary>
@@ -490,12 +490,12 @@ namespace UnityCli
                 if (reserved == null || reserved.Count > 4096 || reserved.Any(value => !(value is string) || string.IsNullOrWhiteSpace((string)value) || Encoding.UTF8.GetByteCount((string)value) > 256))
                     throw new FormatException("Catalog reserved names exceed their bounded item or string limits.");
             }
-            if (string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal))
+            if (string.Equals(command, "catalog.player.groups", StringComparison.Ordinal))
             {
                 if (!HasOnlyKeys(input, "expectedCatalogGeneration", "reservedNames")) throw new FormatException("Runtime catalog groups input contains an unknown field.");
                 return;
             }
-            if (string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal))
+            if (string.Equals(command, "catalog.player.summary", StringComparison.Ordinal))
             {
                 if (!HasOnlyKeys(input, "group", "keyword", "limit", "expectedCatalogGeneration", "reservedNames", "localNames", "cursorContext", "cursorToken"))
                     throw new FormatException("Runtime catalog summary input contains an unknown field.");
@@ -514,7 +514,7 @@ namespace UnityCli
                 RuntimeCatalogStringList(input, "localNames", true);
                 return;
             }
-            if (string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal))
+            if (string.Equals(command, "catalog.player.describe", StringComparison.Ordinal))
             {
                 if (!HasOnlyKeys(input, "name")) throw new FormatException("Runtime catalog describe input contains an unknown field.");
                 var name = RequiredString(input, "name", 256);
@@ -1077,7 +1077,7 @@ namespace UnityCli
                 {
                     if (newlyConsumed && admissionOwner != null && pool != null && !TryCompensateRuntimeAdmission(pool, admissionOwner))
                     {
-                        var terminal = Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime queue publication failed and exact admission cleanup is pending.", new[] { "Inspect runtime.state before submitting a new request." });
+                        var terminal = Error(requestId, "E_RUNTIME_BRIDGE_FAILED", "Runtime queue publication failed and exact admission cleanup is pending.", new[] { "Inspect player-runtime.state before submitting a new request." });
                         FinalizeRuntimeRequest(work, terminal, 0);
                         return Publication(RuntimePublicationOutcome.Rejected, work, null);
                     }

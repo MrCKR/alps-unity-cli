@@ -2,10 +2,10 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag } from "../arg
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const timelineBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "timeline", command: "create", bridgeCommand: "project-tool.run", toolName: "timeline.create", buildArgs: timelineCreateArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "timeline", command: "info", bridgeCommand: "project-tool.run", toolName: "timeline.info", buildArgs: timelineInfoArgs, destructiveHint: false, supportsDryRun: false },
-  { group: "timeline", command: "track.add", bridgeCommand: "project-tool.run", toolName: "timeline.track.add", buildArgs: timelineTrackAddArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "timeline", command: "clip.add", bridgeCommand: "project-tool.run", toolName: "timeline.clip.add", buildArgs: timelineClipAddArgs, destructiveHint: true, supportsDryRun: true }
+  { group: "timeline", command: "create", bridgeCommand: "catalog.editor.run", toolName: "timeline.create", buildArgs: timelineCreateArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "timeline", command: "info", bridgeCommand: "catalog.editor.run", toolName: "timeline.info", buildArgs: timelineInfoArgs, destructiveHint: false, supportsDryRun: false },
+  { group: "timeline", command: "track.add", bridgeCommand: "catalog.editor.run", toolName: "timeline.track.add", buildArgs: timelineTrackAddArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "timeline", command: "clip.add", bridgeCommand: "catalog.editor.run", toolName: "timeline.clip.add", buildArgs: timelineClipAddArgs, destructiveHint: true, supportsDryRun: true }
 ];
 
 // Timeline create 保留 typed business fields；package availability 由 live descriptor 统一裁决。

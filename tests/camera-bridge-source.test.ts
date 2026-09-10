@@ -49,13 +49,18 @@ test("AssetImportWorker never starts or registers a Bridge listener", async () =
   assert.doesNotMatch(constructor, /StartListener\(\)/);
 });
 
-test("one-capability-per-file camera tools route through project-tool.run with matching descriptors and contracts", async () => {
+test("one-capability-per-file camera tools route through catalog.editor.run with matching descriptors and contracts", async () => {
   const bridgeRegistry = await readFile(new URL("Bridge/BridgeCommandRegistry.cs", editorUrl), "utf8");
   const support = await readFile(new URL("Tools/camera/CameraToolSupport.cs", editorUrl), "utf8");
+  const fromCamera = await readFile(new URL("Tools/screenshot/from-camera.cs", editorUrl), "utf8");
+  const fromCameraSpec = bridgeCommandRegistry.lookup("screenshot", "from-camera");
+  assert.match(fromCamera, /Name = "screenshot\.from-camera"/);
+  assert.equal(fromCameraSpec?.bridgeCommand, "catalog.editor.run");
+  assert.equal(fromCameraSpec?.toolName, "screenshot.from-camera");
+  assert.equal(findCommandContract("screenshot.from-camera")?.csharp_handler, "present");
   const expectedTools = new Map([
     ["list.cs", "camera.list"],
     ["info.cs", "camera.info"],
-    ["screenshot.cs", "camera.screenshot"],
     ["create.cs", "camera.create"],
     ["target.cs", "camera.target"],
     ["lens.cs", "camera.lens"],
@@ -70,18 +75,18 @@ test("one-capability-per-file camera tools route through project-tool.run with m
 
   const cameraDirectory = await readdir(new URL("Tools/camera/", editorUrl));
   assert.deepEqual(cameraDirectory.filter((name) => name.endsWith(".cs")).sort(), [
-    "CameraToolSupport.cs", "create.cs", "info.cs", "lens.cs", "list.cs", "multiview.cs", "screenshot.cs", "target.cs"
+    "CameraToolSupport.cs", "create.cs", "info.cs", "lens.cs", "list.cs", "multiview.cs", "target.cs"
   ]);
 
   for (const [file, name] of expectedTools) {
     const source = await readFile(new URL(`Tools/camera/${file}`, editorUrl), "utf8");
-    const [, command] = name.split(".");
-    const spec = bridgeCommandRegistry.lookup("camera", command);
+    const dot = name.indexOf(".");
+    const spec = bridgeCommandRegistry.lookup(name.slice(0, dot), name.slice(dot + 1));
     const contract = findCommandContract(name);
     assert.match(source, /IUnityCliTool/);
     assert.match(source, new RegExp(`Name = "${name.replace(".", "\\.")}"`));
     assert.match(source, /ToolDescriptor Describe\(\)/);
-    assert.equal(spec?.bridgeCommand, "project-tool.run", `${name} must use the typed project-tool route`);
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `${name} must use the typed project-tool route`);
     assert.equal(spec?.toolName, name, `${name} route must preserve its public tool name`);
     assert.equal(contract?.csharp_handler, "present", `${name} must have a typed C# contract handler`);
   }
@@ -99,7 +104,7 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
 
   assert.match(source, /RequireAnimationClipPath/);
   assert.match(source, /AnimationUtility\.GetCurveBindings/);
-  assert.match(source, /Name = "animation\.state"/);
+  assert.match(source, /Name = "animator\.get-state"/);
   assert.match(source, /ResolveUniqueTarget/);
   assert.match(source, /E_ANIMATION_CLIP_PATH_REQUIRED/);
   assert.match(source, /E_ANIMATION_CLIP_PATH_INVALID/);
@@ -578,11 +583,11 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
 
   assert.doesNotMatch(source, /Name = "editor\.state"/);
   assert.match(source, /"internal\.editor\.state\.snapshot"/);
-  assert.match(source, /Name = "editor\.play"/);
+  assert.match(source, /Name = "editor\.play-mode\.start"/);
   assert.match(source, /Name = "editor\.pause"/);
-  assert.match(source, /Name = "editor\.stop"/);
+  assert.match(source, /Name = "editor\.play-mode\.stop"/);
   assert.match(source, /Name = "editor\.menu"/);
-  assert.match(source, /Name = "console\.get"/);
+  assert.match(source, /Name = "console\.read"/);
   assert.match(source, /private static string BridgeBuildStamp\(\)/);
   assert.match(source, /private static string BridgeHealthJson\(\)/);
   assert.match(source, /private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3"/);
@@ -640,7 +645,7 @@ test("Bridge execution uses the protocol request, linked cancellation, and one e
   assert.match(executeBlock, /ProtocolEnvelopeFactory\.Success\(request\.RequestId, data\)/);
   assert.match(executeBlock, /CommandRegistry\.ExecuteAsync\(request, cancellationToken\)/);
   assert.match(executeBlock, /if \(IsPlayModeChanging\(\)\)[\s\S]*if \(!allowedDuringPlayModeTransition\)/);
-  assert.match(executeBlock, /request\.Command == "runtime-tool\.run"/);
+  assert.match(executeBlock, /request.Command == "catalog.player.run"/);
   assert.doesNotMatch(executeBlock, /editor-domain write commands are not available/);
 
   const updateRegistrations = source.match(/EditorApplication\.update \+= ProcessQueuedWork/g) ?? [];
@@ -678,9 +683,9 @@ test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
   assert.doesNotMatch(httpBlock, /request\.Command == "editor\.state"/, "The removed public editor.state command must not stay in the transition allowlist");
   assert.doesNotMatch(httpBlock, /request\.Command == "editor\.console"/, "removed Console bridge route must not stay in the transition allowlist");
   assert.match(httpBlock, /request\.Command == "editor\.pause"/, "HandleHttpCore must allow editor.pause during Play Mode transitions");
-  assert.match(httpBlock, /request\.Command == "editor\.stop"/, "HandleHttpCore must allow editor.stop during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "editor\.play-mode\.stop"/, "HandleHttpCore must allow editor.play-mode.stop during Play Mode transitions");
   assert.match(httpBlock, /IsProjectToolCatalogReadCommand\(request\.Command\)/, "HandleHttpCore must allow bounded catalog readers during Play Mode transitions");
-  assert.match(httpBlock, /request\.Command == "runtime-tool\.run"/, "HandleHttpCore must allow runtime-tool.run during Play Mode transitions");
+  assert.match(httpBlock, /request.Command == "catalog.player.run"/, "HandleHttpCore must allow catalog.player.run during Play Mode transitions");
   assert.match(httpBlock, /IsDoctorAdmissionBypassCommand\(request\.Command\)/, "HandleHttpCore must allow bounded doctor catalog/compile reads during Play Mode transitions");
 });
 
@@ -731,9 +736,9 @@ test("HTTP and execution guards share the safe Play Mode transition allowlist", 
   assert.doesNotMatch(executeBlock, /request\.Command == "editor\.state"/);
   assert.match(httpBlock, /IsProjectToolCatalogReadCommand\(request\.Command\)/);
   assert.match(executeBlock, /IsProjectToolCatalogReadCommand\(request\.Command\)/);
-  const runtimeRun = /request\.Command == "runtime-tool\.run"/;
-  assert.match(httpBlock, runtimeRun, "runtime-tool.run must be allowed before queueing");
-  assert.match(executeBlock, runtimeRun, "runtime-tool.run must be allowed during execution");
+  const runtimeRun = /request.Command == "catalog.player.run"/;
+  assert.match(httpBlock, runtimeRun, "catalog.player.run must be allowed before queueing");
+  assert.match(executeBlock, runtimeRun, "catalog.player.run must be allowed during execution");
   assert.match(httpBlock, /if \(cachedIsPlayModeChanging\)[\s\S]*if \(!allowedDuringPlayModeTransition\)/);
   assert.match(executeBlock, /if \(IsPlayModeChanging\(\)\)[\s\S]*if \(!allowedDuringPlayModeTransition\)/);
 });

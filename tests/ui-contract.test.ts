@@ -123,14 +123,14 @@ test("ui.document.info cannot read a local file when the selected Unity Editor i
 
 test("bridge specs resolve for ui tools", () => {
   const lookups: Record<string, string> = {
-    "canvas/create": "ui.canvas.create",
-    "text/create": "ui.text.create",
-    "button/create": "ui.button.create",
-    "image/create": "ui.image.create",
-    "document/info": "ui.document.info",
-    "document/create": "ui.document.create",
-    "document/update": "ui.document.update",
-    "document/delete": "ui.document.delete",
+    "canvas.create": "ui.canvas.create",
+    "text.create": "ui.text.create",
+    "button.create": "ui.button.create",
+    "image.create": "ui.image.create",
+    "document.info": "ui.document.info",
+    "document.create": "ui.document.create",
+    "document.update": "ui.document.update",
+    "document.delete": "ui.document.delete",
     hierarchy: "ui.hierarchy",
     "attach-document": "ui.attach-document",
     "detach-document": "ui.detach-document",
@@ -144,7 +144,7 @@ test("bridge specs resolve for ui tools", () => {
   };
   for (const [cmd, expected] of Object.entries(lookups)) {
     const spec = bridgeCommandRegistry.lookup("ui", cmd);
-    assert.equal(spec?.bridgeCommand, "project-tool.run", `ui ${cmd} should route via project-tool.run`);
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `ui ${cmd} should route via catalog.editor.run`);
     assert.equal(spec?.toolName, expected, `ui ${cmd} toolName should match`);
   }
 });

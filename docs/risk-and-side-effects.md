@@ -21,18 +21,18 @@ Every tool carries risk hints in its descriptor. Public Tool and CLI control-pla
 |---------|-------|----------------------|
 | `tools run asset.delete` | Delete Asset | ✅ |
 | `tools run scene.save` | Save Scene | ✅ |
-| `tools run code.exec` | Execute Live Code | ✅ |
+| `tools run code.execute` | Execute Live Code | ✅ |
 | `tools run scriptable-object.create` | Create ScriptableObject Asset | ✅ |
 | `tools run scriptable-object.modify` | Modify ScriptableObject Asset | ✅ |
 | `tools run texture.modify` | Modify Texture Asset | ✅ |
 | `tools run texture.delete` | Delete Texture Asset | ✅ |
 | `tools run shader.delete` | Delete Shader Asset | ✅ |
-| `tools run object.modify` | Modify Object (deep patch) | ✅ |
-| `tools run reflection.method.call` | Call Method via Reflection | ✅ |
-| `tools run graphics.bake-clear` | Clear Baked Lighting | ❌ |
-| `tools run graphics.bake-start` | Start Light Bake | ❌ |
-| `tools run graphics.bake-reflection-probe` | Bake Reflection Probe | ❌ |
-| `tools run controller.remove-layer` | Remove Animator Controller Layer | ❌ |
+| `tools run serialized-object.patch` | Modify Object (deep patch) | ✅ |
+| `tools run runtime-reflection.method.invoke` | Call Method via Reflection | ✅ |
+| `tools run lighting.bake.clear` | Clear Baked Lighting | ❌ |
+| `tools run lighting.bake.start` | Start Light Bake | ❌ |
+| `tools run lighting.bake.reflection-probe` | Bake Reflection Probe | ❌ |
+| `tools run animator-controller.remove-layer` | Remove Animator Controller Layer | ❌ |
 | `tools run editor.menu` | Execute Editor Menu | ❌ |
 | `tools run package.embed` | Embed Package | ✅ |
 | `tools run package.install` | Package Install | ❌ |
@@ -41,9 +41,9 @@ Every tool carries risk hints in its descriptor. Public Tool and CLI control-pla
 | `tools run package.restore` | Package Restore | ✅ |
 | `tools run package.bridge-remove` | Package Bridge Remove | ✅ |
 
-`code.exec` keeps unrestricted synchronous C# execution. It does not reject infinite loops, long sleeps, blocking waits, lock contention, synchronous I/O, or long-running Unity API calls. Before submitting such code, the caller must decide whether it is necessary for the requested result and consider a bounded implementation or an existing Tool; necessary code may still be executed unchanged. After `Run` starts on the Unity Editor main thread, `--timeout-ms` can stop the CLI from waiting but cannot stop the C# code. The Editor can remain unresponsive, the mutation owner can remain active, Unity state can be partial or unknown, and recovery can require terminating the Editor process. A timeout is not proof that the code stopped, so inspect business state before retrying. Dry-run only previews the source hash and planned effect; it does not compile, execute, or prove termination.
+`code.execute` keeps unrestricted synchronous C# execution. It does not reject infinite loops, long sleeps, blocking waits, lock contention, synchronous I/O, or long-running Unity API calls. Before submitting such code, the caller must decide whether it is necessary for the requested result and consider a bounded implementation or an existing Tool; necessary code may still be executed unchanged. After `Run` starts on the Unity Editor main thread, `--timeout-ms` can stop the CLI from waiting but cannot stop the C# code. The Editor can remain unresponsive, the mutation owner can remain active, Unity state can be partial or unknown, and recovery can require terminating the Editor process. A timeout is not proof that the code stopped, so inspect business state before retrying. Dry-run only previews the source hash and planned effect; it does not compile, execute, or prove termination.
 
-The `reflection.method.call` tool performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). Its risk metadata describes that effect; invoking the public Tool authorizes execution. When a method name has overloads, pass the selected signature's `parameterType` values as `parameterTypes`.
+The `runtime-reflection.method.invoke` tool performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). Its risk metadata describes that effect; invoking the public Tool authorizes execution. When a method name has overloads, pass the selected signature's `parameterType` values as `parameterTypes`.
 
 ### Optional Preview
 

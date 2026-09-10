@@ -28,7 +28,7 @@ namespace UnityCli
         {
             Name = "asset.preview",
             Summary = "Return AssetPreview thumbnail metadata (width/height/transient) for an Assets/* asset.",
-            Description = "Return terminal AssetPreview thumbnail metadata for an Assets/* asset. A cache miss waits for Editor preview generation; assets without a preview return hasPreview=false as a terminal result. Does not return image bytes; use camera.screenshot or screenshot.scene-view for rendered captures.",
+            Description = "Return terminal AssetPreview thumbnail metadata for an Assets/* asset. A cache miss waits for Editor preview generation; assets without a preview return hasPreview=false as a terminal result. Does not return image bytes; use screenshot.from-camera or screenshot.scene-view for rendered captures.",
             Group = "asset",
             DestructiveHint = false,
             SideEffects = new[] { "asset-preview-generation", "editor-cache-write" },

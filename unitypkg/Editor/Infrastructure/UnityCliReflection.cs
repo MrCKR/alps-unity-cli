@@ -56,7 +56,7 @@ namespace UnityCli
                         Generation = generation,
                         Data = new Dictionary<string, object>
                         {
-                            { "command", "type.schema" }, { "typeName", FriendlyTypeName(type, context) }, { "schema", rootSchema },
+                            { "command", "runtime-reflection.type.schema" }, { "typeName", FriendlyTypeName(type, context) }, { "schema", rootSchema },
                             { "memberCount", 0L }, { "returnedMemberCount", 0L }, { "definitionCount", (long)context.Definitions.Count }
                         }
                     };
@@ -80,7 +80,7 @@ namespace UnityCli
                 var typeDisplayName = FriendlyTypeName(type, context);
                 var schema = new Dictionary<string, object> { { "type", "object" }, { "typeName", typeDisplayName }, { "properties", rootProperties } };
                 if (context.Definitions.Count > 0) schema["$defs"] = context.Definitions;
-                var next = index < members.Length ? UnityCliContinuationToken.Create("type.schema", generation, "member:" + index.ToString(CultureInfo.InvariantCulture)) : null;
+                var next = index < members.Length ? UnityCliContinuationToken.Create("runtime-reflection.type.schema", generation, "member:" + index.ToString(CultureInfo.InvariantCulture)) : null;
                 return new Page
                 {
                     Truncated = next != null || context.Truncated,
@@ -88,7 +88,7 @@ namespace UnityCli
                     Generation = generation,
                     Data = new Dictionary<string, object>
                     {
-                        { "command", "type.schema" }, { "typeName", typeDisplayName }, { "schema", schema },
+                        { "command", "runtime-reflection.type.schema" }, { "typeName", typeDisplayName }, { "schema", schema },
                         { "memberCount", (long)members.Length }, { "returnedMemberCount", (long)rootProperties.Count },
                         { "definitionCount", (long)context.Definitions.Count }
                     }
@@ -99,7 +99,7 @@ namespace UnityCli
             {
                 string position;
                 index = -1;
-                if (!UnityCliContinuationToken.TryParse(cursor, "type.schema", generation, out position)
+                if (!UnityCliContinuationToken.TryParse(cursor, "runtime-reflection.type.schema", generation, out position)
                     || !position.StartsWith("member:", StringComparison.Ordinal)
                     || !int.TryParse(position.Substring(7), NumberStyles.Integer, CultureInfo.InvariantCulture, out index)
                     || index < 0 || index > memberCount) throw StaleSchemaCursor();
@@ -107,7 +107,7 @@ namespace UnityCli
 
             private static BridgeCommandException StaleSchemaCursor()
             {
-                return new BridgeCommandException("E_CONTINUATION_STALE", "The type.schema continuation does not match the current assembly generation and limits.", "Start a new type.schema read without cursor.");
+                return new BridgeCommandException("E_CONTINUATION_STALE", "The runtime-reflection.type.schema continuation does not match the current assembly generation and limits.", "Start a new runtime-reflection.type.schema read without cursor.");
             }
 
             /// <summary>递归生成 schema；复杂嵌套类型通过 $defs/$ref 去重，避免循环类型无限展开。</summary>
@@ -538,9 +538,9 @@ namespace UnityCli
                 if (!string.IsNullOrEmpty(cursor))
                 {
                     string position;
-                    if (!UnityCliContinuationToken.TryParse(cursor, "reflection.method.find", generation, out position)
+                    if (!UnityCliContinuationToken.TryParse(cursor, "runtime-reflection.method.find", generation, out position)
                         || !int.TryParse(position, NumberStyles.Integer, CultureInfo.InvariantCulture, out index) || index < 0 || index > methods.Length)
-                        throw new BridgeCommandException("E_CONTINUATION_STALE", "The reflection method continuation does not match the current assembly generation and selector.", "Start a new reflection.method.find read without cursor.");
+                        throw new BridgeCommandException("E_CONTINUATION_STALE", "The reflection method continuation does not match the current assembly generation and selector.", "Start a new runtime-reflection.method.find read without cursor.");
                 }
                 var pageStartIndex = index;
                 var result = new List<ReflectionMethodDescriptor>();
@@ -576,7 +576,7 @@ namespace UnityCli
                 }
                 if (index == pageStartIndex && index < methods.Length)
                     throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension ?? "scannedRecords");
-                var next = index < methods.Length ? UnityCliContinuationToken.Create("reflection.method.find", generation, index.ToString(CultureInfo.InvariantCulture)) : null;
+                var next = index < methods.Length ? UnityCliContinuationToken.Create("runtime-reflection.method.find", generation, index.ToString(CultureInfo.InvariantCulture)) : null;
                 return new MethodPage { Methods = result, Total = methods.Length, NextCursor = next, Generation = generation, Truncated = next != null || budget.IsExhausted };
             }
 
@@ -684,7 +684,7 @@ namespace UnityCli
                     || typeof(CustomYieldInstruction).IsAssignableFrom(returnType))
                     throw new BridgeCommandException(
                         "E_METHOD_COMPLETION_UNPROVABLE",
-                        "reflection.method.call cannot prove immediate completion for awaitable, yield, or AsyncOperation returns: " + returnType.FullName + ".",
+                        "runtime-reflection.method.invoke cannot prove immediate completion for awaitable, yield, or AsyncOperation returns: " + returnType.FullName + ".",
                         "Use a dedicated Tool with an explicit business predicate and proof source.");
             }
 
@@ -739,7 +739,7 @@ namespace UnityCli
                 {
                     throw new BridgeCommandException("E_METHOD_NOT_FOUND", "No overload matches the supplied reflection method signature: " + type.FullName + "." + methodName,
                         new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", methodName }, { "parameterTypes", parameterTypeNames ?? new List<string>() } },
-                        new[] { "Run reflection.method.find and pass the returned parameterType values as parameterTypes." });
+                        new[] { "Run runtime-reflection.method.find and pass the returned parameterType values as parameterTypes." });
                 }
 
                 var signatures = new List<string>();
@@ -755,7 +755,7 @@ namespace UnityCli
                 }
                 throw new BridgeCommandException("E_METHOD_AMBIGUOUS", "Multiple overloads match: " + type.FullName + "." + methodName,
                     new Dictionary<string, object> { { "typeName", type.FullName }, { "methodName", methodName }, { "candidateSignatures", signatures } },
-                    new[] { "Run reflection.method.find and pass one returned signature's parameterType values as parameterTypes." });
+                    new[] { "Run runtime-reflection.method.find and pass one returned signature's parameterType values as parameterTypes." });
             }
 
             private static bool MethodMatchesBindings(MethodInfo method, BindingFlags bindings, bool declaredOnTarget)

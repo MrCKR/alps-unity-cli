@@ -111,7 +111,7 @@ test("material tools are contract-discovered and expose expected live descriptor
 test("bridge specs resolve for material tools", () => {
   for (const command of ["info", "create", "assign", "set", "set-renderer-color"]) {
     const spec = bridgeCommandRegistry.lookup("material", command);
-    assert.equal(spec?.bridgeCommand, "project-tool.run", `material ${command} should route via project-tool.run`);
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `material ${command} should route via catalog.editor.run`);
     assert.equal(spec?.toolName, `material.${command}`, `material ${command} toolName should match`);
   }
 });

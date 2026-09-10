@@ -6,10 +6,10 @@ import { findCommandContract } from "../src/contracts/command-contract.js";
 import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
 import { discoverLiveTools, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
-const PROJECT_TOOLS = ["project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove"];
+const PROJECT_TOOLS = ["project-settings.tag.add", "project-settings.tag.remove", "project-settings.layer.add", "project-settings.layer.remove"];
 
 test("project tag and layer tools expose independent persistent-write descriptors", async () => {
-  const tools = await discoverLiveTools(...PROJECT_TOOLS.map((name) => makeLiveTool({ name, summary: "Mutate TagManager.", description: "Writes ProjectSettings/TagManager.asset.", group: "project", destructiveHint: true, playModeSupport: "supported", sideEffects: ["project-settings-write"], inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" } } } })));
+  const tools = await discoverLiveTools(...PROJECT_TOOLS.map((name) => makeLiveTool({ name, summary: "Mutate TagManager.", description: "Writes ProjectSettings/TagManager.asset.", group: "project-settings", destructiveHint: true, playModeSupport: "supported", sideEffects: ["project-settings-write"], inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" } } } })));
   for (const name of PROJECT_TOOLS) {
     const tool = tools.get(name)!;
     assert.equal(tool.destructiveHint, true);
@@ -22,9 +22,9 @@ test("project tag and layer tools expose independent persistent-write descriptor
 
 test("bridge specs resolve for independent project tools", () => {
   for (const name of PROJECT_TOOLS) {
-    const [domain, object, action] = name.split(".");
-    const spec = bridgeCommandRegistry.lookup(domain, `${object}-${action}`);
-    assert.equal(spec?.bridgeCommand, "project-tool.run");
+    const [domain, ...rest] = name.split(".");
+    const spec = bridgeCommandRegistry.lookup(domain, rest.join("."));
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run");
     assert.equal(spec?.toolName, name);
   }
 });
@@ -40,7 +40,7 @@ test("C# handlers exist for independent project tools", async () => {
 });
 
 test("project tag and layer no-op returns before its sole effect barrier", async () => {
-  const support = await readFile(new URL("../unitypkg/Editor/Tools/project/ProjectTagLayerToolSupport.cs", import.meta.url), "utf8");
+  const support = await readFile(new URL("../unitypkg/Editor/Tools/project-settings/ProjectTagLayerToolSupport.cs", import.meta.url), "utf8");
   const noOp = support.indexOf("if (!plan.Changed)");
   const commit = support.indexOf("ctx.CommitEffect()");
   assert.ok(noOp >= 0 && commit > noOp);

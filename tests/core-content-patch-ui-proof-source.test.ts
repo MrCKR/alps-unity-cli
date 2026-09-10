@@ -8,7 +8,7 @@ const source = (path: string) => readFile(new URL(path, editor), "utf8");
 test("content mutations validate before commit and prove fresh bytes or pixels", async () => {
   const [textureCreate, textureModify, sprite, assetCreate, assetModify, shaderCreate, shaderUpdate] = await Promise.all([
     source("Tools/texture/create.cs"), source("Tools/texture/modify.cs"), source("Tools/texture/sprite.cs"),
-    source("Tools/asset/create.cs"), source("Tools/asset/modify.cs"), source("Tools/shader/create.cs"), source("Tools/shader/update.cs")
+    source("Tools/asset/create.cs"), source("Tools/asset/write-text.cs"), source("Tools/shader/create.cs"), source("Tools/shader/update.cs")
   ]);
   assert.ok(textureCreate.indexOf("ValidateTextureSettings") < textureCreate.indexOf("ctx.CommitEffect()"));
   assert.match(textureModify, /VerifyPixels\(path, x, y, width, height, color\)/);
@@ -22,7 +22,7 @@ test("content mutations validate before commit and prove fresh bytes or pixels",
 
 test("object patches are validate-only serialized patches with fresh readback", async () => {
   const [patch, objectModify, componentModify] = await Promise.all([
-    source("Infrastructure/UnityCliObjectPatch.cs"), source("Tools/object/modify.cs"), source("Tools/component/modify.cs")
+    source("Infrastructure/UnityCliObjectPatch.cs"), source("Tools/serialized-object/patch.cs"), source("Tools/component/modify.cs")
   ]);
   assert.match(patch, /ValidateOnly\(UnityEngine\.Object target, IList pathPatches, object mergePatch\)/);
   assert.match(patch, /E_OBJECT_PATCH_UNSUPPORTED/);

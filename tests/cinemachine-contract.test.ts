@@ -46,10 +46,10 @@ test("Cinemachine manifest contributions document package gate and extension own
   }
 });
 
-test("Cinemachine bridge specs route through project-tool.run with toolName", () => {
+test("Cinemachine bridge specs route through catalog.editor.run with toolName", () => {
   const specs = bridgeCommandRegistry.specs().filter((spec) => spec.group === "cinemachine");
   assert.deepEqual(specs.map((spec) => spec.toolName).sort(), [...EXPECTED_CINEMACHINE_TOOLS].sort());
-  assert.ok(specs.every((spec) => spec.bridgeCommand === "project-tool.run"));
+  assert.ok(specs.every((spec) => spec.bridgeCommand === "catalog.editor.run"));
   assert.ok(specs.every((spec) => spec.toolsOnly === true));
 });
 

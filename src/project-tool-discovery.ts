@@ -31,13 +31,13 @@ export async function discoverProjectTools(
     return { ok: true, tools: runtime.projectTools.map(ensureProjectToolDefaults), mode: "runtime" };
   }
 
-  const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
+  const result = await executeBridgeCommand(requestId, "catalog.editor.list", flags, undefined, runtime, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }
 
   const rawTools = (result.data as { tools?: unknown } | undefined)?.tools;
-  return parseBridgeToolCatalog(rawTools, requestId, "project-tool.list");
+  return parseBridgeToolCatalog(rawTools, requestId, "catalog.editor.list");
 }
 
 export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMetadata | undefined {
@@ -262,7 +262,7 @@ export function groupFromName(name: string): string {
   return group || "custom";
 }
 
-/** runtime-tool.list 只补充当前 PlayMode availability；不会形成第二份公开目录。 */
+/** catalog.player.list 只补充当前 PlayMode availability；不会形成第二份公开目录。 */
 export async function discoverRuntimeTools(
   flags: Record<string, string | boolean>,
   runtime: ProjectToolRuntime,
@@ -276,13 +276,13 @@ export async function discoverRuntimeTools(
     return { ok: true, tools: runtimeTools, mode: "runtime" };
   }
 
-  const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
+  const result = await executeBridgeCommand(requestId, "catalog.player.list", flags, undefined, runtime, { mode: "read", mutation: false, absoluteDeadlineMs: options.absoluteDeadlineMs });
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }
 
   const rawTools = (result.data as { tools?: unknown } | undefined)?.tools;
-  return parseBridgeToolCatalog(rawTools, requestId, "runtime-tool.list");
+  return parseBridgeToolCatalog(rawTools, requestId, "catalog.player.list");
 }
 
 /** Bridge catalog 必须整体可解析且名称唯一，禁止静默返回部分能力。 */

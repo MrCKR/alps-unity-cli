@@ -49,6 +49,8 @@ function terminalData() {
   return {
     compile: {
       completed: true,
+      compilationTriggered: true,
+      noOpReason: null,
       refresh: true,
       path: null,
       startedAt: "2026-07-16T00:00:00.000Z",
@@ -67,6 +69,16 @@ function terminalData() {
       playMode: { known: true, value: "edit" },
     },
     plannedEffects: [{ type: "asset-refresh" }, { type: "script-compile" }, { type: "domain-reload" }],
+  };
+}
+
+function unchangedTerminalData() {
+  const data = terminalData();
+  return {
+    ...data,
+    compile: { ...data.compile, compilationTriggered: false, noOpReason: "no-script-changes", finishedAt: data.compile.startedAt, durationMs: 0, assemblyCount: 0, warningCount: 0, status: "unchanged" },
+    diagnostics: [],
+    plannedEffects: [{ type: "asset-refresh" }],
   };
 }
 
@@ -90,6 +102,7 @@ test("editor.compile publishes a non-empty path schema", () => {
   assert.equal(metadata.timeoutMs, 120_000);
   const properties = (metadata.inputSchema.properties ?? {}) as Record<string, Record<string, unknown>>;
   assert.equal(properties.path?.minLength, 1);
+  assert.equal(properties.refresh, undefined);
 });
 
 test("editor.compile child IDs hash the complete long root", () => {
@@ -104,10 +117,10 @@ test("editor.compile child IDs hash the complete long root", () => {
 
 test("editor.compile dry-run is local and returns only planned effects", async () => {
   let calls = 0;
-  const result = await tool.execute({ refresh: false }, context(".", ".", async () => { calls += 1; throw new Error("must not dispatch"); }, { dryRun: true }));
+  const result = await tool.execute({}, context(".", ".", async () => { calls += 1; throw new Error("must not dispatch"); }, { dryRun: true }));
   assert.deepEqual(result, {
     dryRun: true,
-    plannedEffects: [{ type: "script-compile" }, { type: "domain-reload" }],
+    plannedEffects: [{ type: "asset-refresh" }, { type: "script-compile" }, { type: "domain-reload" }],
   });
   assert.equal(calls, 0);
 });
@@ -147,6 +160,7 @@ test("editor.compile consumes private acknowledgement and returns only the root 
     assert.equal(new Set(compilePayloads.map((payload) => payload.execution.absoluteDeadlineUtc)).size, 1);
     assert.equal(new Set(compilePayloads.map((payload) => payload.instanceId)).size, 1);
     assert.equal((compilePayloads[0].input as Record<string, unknown>).expectedEditorSessionId, f.session.editorSessionId);
+    assert.equal("refresh" in (compilePayloads[0].input as Record<string, unknown>), false);
     assert.equal(compilePayloads[0].requestId, "req_compile_behavior");
     assert.match(compilePayloads[1].requestId, /_compile_status$/);
   } finally {
@@ -170,10 +184,25 @@ test("editor.compile returns a recovered start terminal without polling status",
   }
 });
 
+test("editor.compile accepts an unchanged terminal when refresh starts no compilation cycle", async () => {
+  const f = await fixture();
+  const terminal = unchangedTerminalData();
+  try {
+    const result = await tool.execute({}, context(f.project, f.dataDir, async (payload) => {
+      if (payload.command === "internal.editor.state.snapshot") return { ok: true, requestId: payload.requestId, data: { snapshot: snapshot(f.session, "edit"), progress: [], blockers: [] } };
+      return { ok: true, requestId: payload.requestId, data: { terminal: true, rootEnvelope: { ok: true, requestId: "req_compile_behavior", data: terminal } } };
+    }));
+    assert.deepEqual(result, terminal);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
 test("editor.compile rejects malformed or transitioning success proof", async () => {
   const cases = [
     { name: "fractional diagnostic", mutate: (data: ReturnType<typeof terminalData>) => { data.diagnostics[0].line = 1.5; } },
     { name: "transitioning editor", mutate: (data: ReturnType<typeof terminalData>) => { data.editorState.status = "transitioning"; } },
+    { name: "triggered compile with no-op reason", mutate: (data: ReturnType<typeof terminalData>) => { (data.compile as { noOpReason: string | null }).noOpReason = "no-script-changes"; } },
   ];
   for (const entry of cases) {
     const f = await fixture();

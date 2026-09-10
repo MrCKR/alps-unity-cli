@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import codeExec from "../src/tools/code/exec.js";
+import codeExecute from "../src/tools/code/execute.js";
 
-test("code.exec publishes direct examples with and without a completion probe", () => {
-  const plainExample = codeExec.examples?.[0];
-  const probeExample = codeExec.examples?.[1];
+test("code.execute publishes direct examples with and without a completion probe", () => {
+  const plainExample = codeExecute.examples?.[0];
+  const probeExample = codeExecute.examples?.[1];
   assert.ok(plainExample);
   assert.ok(probeExample);
-  assert.deepEqual(plainExample.argv?.slice(0, 3), ["tools", "run", "code.exec"]);
+  assert.deepEqual(plainExample.argv?.slice(0, 3), ["tools", "run", "code.execute"]);
   const plainInputIndex = plainExample.argv!.indexOf("--input");
   const plainInput = JSON.parse(plainExample.argv![plainInputIndex + 1]!) as Record<string, unknown>;
   assert.equal(typeof plainInput.code, "string");
@@ -18,21 +18,21 @@ test("code.exec publishes direct examples with and without a completion probe", 
   assert.ok(probeInput.completionProbe && typeof probeInput.completionProbe === "object");
   assert.equal(plainExample.argv!.includes("--dry-run"), false);
   assert.equal(probeExample.argv!.includes("--dry-run"), false);
-  assert.equal(codeExec.timeoutMs, 60_000);
-  assert.doesNotMatch(JSON.stringify(codeExec.examples), /\{\.\.\.\}|--channel|batchmode|--job/);
+  assert.equal(codeExecute.timeoutMs, 60_000);
+  assert.doesNotMatch(JSON.stringify(codeExecute.examples), /\{\.\.\.\}|--channel|batchmode|--job/);
 });
 
-test("code.exec clearly preserves necessary hazardous code and discloses the non-preemptible main-thread boundary", () => {
-  assert.match(codeExec.summary, /cannot be force-stopped by timeout/i);
-  assert.match(codeExec.description, /does not reject infinite loops, long sleeps, blocking waits, lock contention/);
-  assert.match(codeExec.description, /Prefer a bounded alternative when possible/);
-  assert.match(codeExec.description, /necessary code executes unchanged/);
-  assert.match(codeExec.description, /cannot interrupt Run/);
-  assert.match(codeExec.description, /require terminating the Editor/);
-  assert.match(codeExec.description, /outcome-unknown, not proof execution stopped/);
-  assert.match(codeExec.description, /wait for this CLI process to exit and allow at least 5000ms beyond --timeout-ms/);
-  assert.match(codeExec.description, /Dry-run reports source hash/);
-  assert.doesNotMatch(codeExec.description, /reject(?:s|ed)? (?:dangerous|hazardous) code/i);
+test("code.execute clearly preserves necessary hazardous code and discloses the non-preemptible main-thread boundary", () => {
+  assert.match(codeExecute.summary, /cannot be force-stopped by timeout/i);
+  assert.match(codeExecute.description, /does not reject infinite loops, long sleeps, blocking waits, lock contention/);
+  assert.match(codeExecute.description, /Prefer a bounded alternative when possible/);
+  assert.match(codeExecute.description, /necessary code executes unchanged/);
+  assert.match(codeExecute.description, /cannot interrupt Run/);
+  assert.match(codeExecute.description, /require terminating the Editor/);
+  assert.match(codeExecute.description, /outcome-unknown, not proof execution stopped/);
+  assert.match(codeExecute.description, /wait for this CLI process to exit and allow at least 5000ms beyond --timeout-ms/);
+  assert.match(codeExecute.description, /Dry-run reports source hash/);
+  assert.doesNotMatch(codeExecute.description, /reject(?:s|ed)? (?:dangerous|hazardous) code/i);
 });
 
 test("Shared exception projection grants exact Editor internals access without an asmdef cycle", async () => {
@@ -47,12 +47,12 @@ test("Shared exception projection grants exact Editor internals access without a
   assert.ok((JSON.parse(editorAssembly) as { references: string[] }).references.includes("UnityCli.Shared"));
 });
 
-test("raw code.exec dry-run cannot compile source and normal execution rechecks the exact lease", async () => {
+test("raw code.execute dry-run cannot compile source and normal execution rechecks the exact lease", async () => {
   const [support, coordinator, runtimeCode, toolSource, dispatcher] = await Promise.all([
     readFile("unitypkg/Editor/Infrastructure/CodeExecSupport.cs", "utf8"),
     readFile("unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs", "utf8"),
     readFile("src/runtime-code.ts", "utf8"),
-    readFile("src/tools/code/exec.ts", "utf8"),
+    readFile("src/tools/code/execute.ts", "utf8"),
     readFile("src/tools/dispatcher.ts", "utf8"),
   ]);
   const entry = support.slice(support.indexOf("private static string CodeExec"), support.indexOf("private static string WrapCodeSource"));
@@ -89,7 +89,7 @@ test("raw code.exec dry-run cannot compile source and normal execution rechecks 
   assert.match(runtimeCode, /executeBridgePayload[\s\S]*absoluteDeadlineMs \}\);/);
   assert.match(runtimeCode, /function normalizeTimeout[\s\S]*return Math\.trunc\(value\)/);
   assert.doesNotMatch(runtimeCode, /Math\.min\(Math\.trunc\(value\), 600_000\)/);
-  assert.match(dispatcher, /parseTypedInput\(flags, requestId, name === "code\.exec" \? 1024 \* 1024 : undefined, [^)]+\)/);
+  assert.match(dispatcher, /parseTypedInput\(flags, requestId, name === "code\.execute" \? 1024 \* 1024 : undefined, [^)]+\)/);
   assert.match(dispatcher, /readBoundedInputFile[\s\S]*beforeInputDeadline[\s\S]*handle\.read/);
   assert.match(dispatcher, /readStdin\(maxBytes, absoluteDeadlineMs\)[\s\S]*InputDeadlineExceeded/);
   assert.match(dispatcher, /E_CODE_INPUT_TOO_LARGE/);

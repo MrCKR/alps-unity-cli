@@ -93,14 +93,14 @@ export async function dispatchTool(
 
   const localMetadata = findToolByName(name);
   const timeoutMetadata = resolvedTool ?? localMetadata;
-  const defaultTimeoutMs = name === "code.exec" ? 60_000 : 30_000;
+  const defaultTimeoutMs = name === "code.execute" ? 60_000 : 30_000;
   const started = invocationContext
     ? { ok: true as const, context: invocationContext }
     : beginToolInvocation(flags, requestId, { timeoutMs: timeoutMetadata?.timeoutMs ?? defaultTimeoutMs }, dispatchStartedAtMs);
   if (!started.ok) return started.result;
   const admissionTimeoutMs = started.context.timeoutMs;
   const admissionAbsoluteDeadlineMs = started.context.admissionAbsoluteDeadlineMs;
-  const parsed = await parseTypedInput(flags, requestId, name === "code.exec" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
+  const parsed = await parseTypedInput(flags, requestId, name === "code.execute" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
   if (!parsed.ok) return parsed.error;
   const dispatchFlags = withStructuredInput(flags, parsed.input);
   const dispatchResolved = (tool: ToolMetadata, input: Record<string, unknown>): Promise<CliResult> => dispatchResolvedTool(
@@ -687,7 +687,7 @@ function validateKnownLocalTerminal(
     if (record.action !== "bridge-remove" || !nonEmptyString(record.bridgePath) || !nonEmptyString(record.installMetadataPath)) throw invalidCompletionProof(toolName, completion, "did not prove the Bridge package removal target");
     return true;
   }
-  if (toolName === "code.exec") {
+  if (toolName === "code.execute") {
     const compile = objectRecord(record.compile);
     const runtime = objectRecord(record.runtime);
     const probeRequested = Object.prototype.hasOwnProperty.call(input ?? {}, "completionProbe");
@@ -731,7 +731,12 @@ function validateKnownLocalTerminal(
     if (record.dryRun === true) return true;
     const compile = objectRecord(record.compile);
     const status = compile?.status;
-    if (compile?.completed !== true || compile.errorCount !== 0 || (status !== undefined && status !== "clean" && status !== "warnings")) throw invalidCompletionProof(toolName, completion, "did not prove a clean or warnings-only compile terminal");
+    const triggered = compile?.compilationTriggered;
+    if (compile?.completed !== true || compile.errorCount !== 0 || typeof triggered !== "boolean"
+      || (triggered && (status !== "clean" && status !== "warnings" || compile.noOpReason !== null))
+      || (!triggered && (status !== "unchanged" || compile.noOpReason !== "no-script-changes"))) {
+      throw invalidCompletionProof(toolName, completion, "did not prove an unchanged, clean, or warnings-only compile terminal");
+    }
     return true;
   }
   if (toolName === "navmesh.bake" || toolName === "navmesh.surface.bake") {
@@ -1020,7 +1025,7 @@ async function executeLiveTool(
   if ("result" in admissionContext) return admissionContext.result;
   const { admission, supervisor } = admissionContext;
   const runtimeTarget = admission.target === "runtime";
-  const wrapper = runtimeTarget ? "runtime-tool.run" : "project-tool.run";
+  const wrapper = runtimeTarget ? "catalog.player.run" : "catalog.editor.run";
   const rootRuntime: ToolsRuntime = { ...runtime, rootAdmission: admission };
 
   // live descriptor已完成schema校验，wrapper直接承载typed input并复用同一root admission。
@@ -1192,9 +1197,9 @@ function requireInputDeadline(absoluteDeadlineMs?: number): void {
   if (absoluteDeadlineMs !== undefined && (!Number.isFinite(absoluteDeadlineMs) || Date.now() >= absoluteDeadlineMs)) throw new InputDeadlineExceeded();
 }
 
-/** 统一生成code.exec本地typed input超限错误。 */
+/** 统一生成code.execute本地typed input超限错误。 */
 function inputTooLarge(requestId: string, source: string, maxBytes: number): ParsedInput {
-  return { ok: false, error: failure(requestId, "E_CODE_INPUT_TOO_LARGE", `${source} exceeds the ${maxBytes}-byte code.exec typed-input limit.`, ["Use a smaller JSON input and keep Runtime Code source below its documented local budget."]) };
+  return { ok: false, error: failure(requestId, "E_CODE_INPUT_TOO_LARGE", `${source} exceeds the ${maxBytes}-byte code.execute typed-input limit.`, ["Use a smaller JSON input and keep Runtime Code source below its documented local budget."]) };
 }
 
 function inputDeadlineExceeded(requestId: string): ParsedInput {

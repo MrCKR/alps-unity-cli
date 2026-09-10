@@ -9,10 +9,10 @@
 unitycli tools run camera.list --input '{}'
 
 # 通过 --input-file 传参（JSON 文件）
-unitycli tools run camera.screenshot --input-file params.json
+unitycli tools run screenshot.from-camera --input-file params.json
 
 # 通过 --stdin 传参
-echo '{"target":"Main Camera"}' | unitycli tools run camera.screenshot --stdin
+echo '{"target":"Main Camera"}' | unitycli tools run screenshot.from-camera --stdin
 ```
 
 ## 执行路由
@@ -33,10 +33,10 @@ echo '{"target":"Main Camera"}' | unitycli tools run camera.screenshot --stdin
 
 ```powershell
 # 正确：提供 inputSchema 要求的字段
-unitycli tools run camera.screenshot --input '{"target":"Main Camera","output":"shot.png"}'
+unitycli tools run screenshot.from-camera --input '{"target":"Main Camera","output":"shot.png"}'
 
 # 错误：缺少必需字段
-unitycli tools run camera.screenshot --input '{}'
+unitycli tools run screenshot.from-camera --input '{}'
 # → E_SCHEMA_INVALID, nextActions 指向 tools describe
 ```
 
@@ -66,10 +66,10 @@ Bridge-backed Tool由Unity Editor主线程执行。业务请求发送前，sessi
 
 ### `editor.compile`
 
-`editor.compile` 是唯一公开编译 Tool。一次调用在同一 root request 下等待 pre-existing import/compile、触发 owned compilation cycle、跨 domain reload 恢复、收集本次 `CompilationPipeline` diagnostics，并等待 Editor 与 listener 重新稳定。公开成功要求 `compile.completed=true`、`errorCount=0`、`editorState.status=ready`；warning 可作为 diagnostics 返回。compiler error 返回 `E_UNITY_COMPILE_FAILED`，不会用旧 Console 历史判断本次结果。
+`editor.compile` 是唯一公开编译 Tool。一次调用在同一 root request 下等待 pre-existing import/compile、刷新 Asset Database，并由 Unity 判断导入的脚本变化是否需要编译。Tool 只观察刷新后出现的新 `CompilationPipeline` cycle，不额外调用 `RequestScriptCompilation()`；有编译时跨 domain reload 恢复并收集本次 diagnostics，没有编译时返回 `compile.status="unchanged"`、`compilationTriggered=false` 和 `noOpReason="no-script-changes"`。公开成功要求 `compile.completed=true`、`errorCount=0`、`editorState.status=ready`；warning 可作为 diagnostics 返回。compiler error 返回 `E_UNITY_COMPILE_FAILED`，不会用旧 Console 历史判断本次结果。
 
 ```powershell
-unitycli tools run editor.compile --input '{"refresh":true,"includeWarnings":true}' --timeout-ms 120000
+unitycli tools run editor.compile --input '{"includeWarnings":true}' --timeout-ms 120000
 ```
 
 accepted、queued、phase、run ID 和 listener 字段仅属于内部 coordinator，不会成为公开成功。稳定 Play Mode 调用返回 `E_UNITY_COMPILE_REQUIRES_EDIT_MODE`；dry-run 只返回 planned effects，不触发 refresh 或 compile。
@@ -107,8 +107,8 @@ unitycli tools run asset.delete --input '{"path":"Assets/Temp.mat"}'
 通用规则：
 
 - discovery 的 `tools group list`、`tools search` 和省略name的`command`列表默认每页20项、最大100项；继续读取时将`pageInfo.nextCursor`原值传回CLI `--cursor`。
-- `console.get`、`scene.hierarchy`、`go.find`、`profiler.hierarchy`、`profiler.frame-debugger.events`、`profiler.memory-snapshot.list`、`type.schema` 和 `reflection.method.find` 使用 opaque string `nextCursor`。游标绑定原始位置、selector 与 Unity/assembly generation；Frame Debugger 游标还绑定 Editor listener、CLI enable/disable generation、事件数与捕获首尾签名。游标必须原样传回，改变 selector、generation 或捕获后返回 `E_CONTINUATION_STALE`。`truncated=true` 表示还有原始位置；不能把当前页数量当作总数。
-- 深度序列化工具（`object.get-data`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`。`maxDepth` 为 `0..16`，`maxArrayItems` 为 `1..1000`，`paths` 最多128条并保持输入顺序；cycle/depth 在展开前裁决，所有路径共享同一预算，非 `IList` enumerable 不会预 materialize。`truncated` 与 `nextPath` 表示被截断子树。
+- `console.read`、`scene.hierarchy`、`game-object.find`、`profiler.hierarchy`、`profiler.frame-debugger.events`、`profiler.memory-snapshot.list`、`type.schema` 和 `runtime-reflection.method.find` 使用 opaque string `nextCursor`。游标绑定原始位置、selector 与 Unity/assembly generation；Frame Debugger 游标还绑定 Editor listener、CLI enable/disable generation、事件数与捕获首尾签名。游标必须原样传回，改变 selector、generation 或捕获后返回 `E_CONTINUATION_STALE`。`truncated=true` 表示还有原始位置；不能把当前页数量当作总数。
+- 深度序列化工具（`serialized-object.read`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`。`maxDepth` 为 `0..16`，`maxArrayItems` 为 `1..1000`，`paths` 最多128条并保持输入顺序；cycle/depth 在展开前裁决，所有路径共享同一预算，非 `IList` enumerable 不会预 materialize。`truncated` 与 `nextPath` 表示被截断子树。
 - 上述 Unity 主线程读取默认共用 `10000` scanned records、`4096` nodes、`2048` getters、`4096` reflection calls、`250ms` monotonic main-thread work 和 `1 MiB` serialized UTF-8。`budget` 可收紧或提高到公开上限 `100000`、`20000`、`10000`、`20000`、`2000ms`、`8 MiB`；零、负数或超限值在读取/effect前返回 `E_SCHEMA_INVALID` 或 `E_REQUEST_BUDGET_INVALID`。
 - 文本源码工具（如 `shader.read`）使用 `offset` 和 `maxBytes` 分段读取。输出 `truncated=true` 时，下一次把 `nextOffset` 作为新的 `offset`。
 - 截图/相机捕获的单图边长最多8192且最多16777216像素，capture count最多36。完整计划必须在首个effect前满足默认33554432 total pixels、128 MiB peak temporary memory、64 MiB artifact bytes；公开上限为67108864、256 MiB、256 MiB。`orbit`逐图释放，`surround`逐图写入contact sheet后释放，不同时保留所有tile。内联图片仍限512 KiB。
@@ -142,7 +142,7 @@ unitycli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","m
 | 错误码 | 原因 | 恢复方式 |
 |--------|------|---------|
 | `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 运行 `tools search <k1|k2|...>` 发现相关 Tool，再用 `tools describe` 检查 requiresPackages 和 available |
-| `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play`，transient 可重试 |
+| `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play-mode.start`，transient 可重试 |
 | `E_SCHEMA_INVALID` | 输入缺少 inputSchema.required 字段 | 查看 `tools describe` 的 inputSchema |
 | `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 去除可选 `--dry-run` 后直接调用 |
 | `E_INSTANCE_CONFLICT` | 至少两个verified live process claim属于同一canonical project | 关闭重复Editor，只保留目标session |
@@ -157,24 +157,24 @@ unitycli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","m
 
 ## Object 与 Component 修改
 
-`object.modify` 和 `component.modify` 只接受非空 `pathPatches`。每一项必须是可由 Unity `SerializedObject.FindProperty` 定位并 fresh readback 的 direct `replace`；不提供 merge、add、remove、reflection member path 或 diff 旁路。支持的值类型以当前 `inputSchema` 和错误 `nextActions` 为准。
+`serialized-object.patch` 和 `component.modify` 只接受非空 `pathPatches`。每一项必须是可由 Unity `SerializedObject.FindProperty` 定位并 fresh readback 的 direct `replace`；不提供 merge、add、remove、reflection member path 或 diff 旁路。支持的值类型以当前 `inputSchema` 和错误 `nextActions` 为准。
 
-`path` 使用 Unity serialized property path，例如 `m_Name`、`m_LocalPosition.x` 或数组的 `Array.data[0]`。它不是 `/` 分隔的 C# member path。`asset.modify` 是独立的文本资产覆写 Tool，不使用 ObjectPatch。
+`path` 使用 Unity serialized property path，例如 `m_Name`、`m_LocalPosition.x` 或数组的 `Array.data[0]`。它不是 `/` 分隔的 C# member path。`asset.write-text` 是独立的文本资产覆写 Tool，不使用 ObjectPatch。
 
 ```powershell
 # 先读后改
 unitycli tools run component.get --input '{"path":"Player","component":"Rigidbody"}'
 unitycli tools run component.modify --input '{"path":"Player","component":"Rigidbody","pathPatches":[{"path":"m_Mass","op":"replace","value":10}]}'
 
-unitycli tools run object.modify --input '{"path":"Player","pathPatches":[{"path":"m_Name","op":"replace","value":"PlayerModified"}]}'
+unitycli tools run serialized-object.patch --input '{"path":"Player","pathPatches":[{"path":"m_Name","op":"replace","value":"PlayerModified"}]}'
 ```
 
-## reflection.method.call
+## runtime-reflection.method.invoke
 
-`reflection.method.call` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），且 `destructiveHint: true`。先用 `reflection.method.find` 获取签名；存在同名 overload 时，将选中签名的 `parameterType` 数组作为 `parameterTypes`。公开调用即授权：
+`runtime-reflection.method.invoke` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），且 `destructiveHint: true`。先用 `runtime-reflection.method.find` 获取签名；存在同名 overload 时，将选中签名的 `parameterType` 数组作为 `parameterTypes`。公开调用即授权：
 
 ```powershell
-unitycli tools run reflection.method.call --input '{
+unitycli tools run runtime-reflection.method.invoke --input '{
   "typeName":"UnityEngine.Transform",
   "methodName":"Translate",
   "parameterTypes":["UnityEngine.Vector3","UnityEngine.Space"],
@@ -187,4 +187,4 @@ unitycli tools run reflection.method.call --input '{
 
 ## asset.get-data 复用 serializer
 
-`asset.get-data` 是 asset-friendly wrapper，底层复用 `object.get-data` 的 `ObjectSerializer`，不重复实现序列化。`object.get-data` 是任意 `UnityEngine.Object` 深序列化主入口，`asset.get-data` 提供按 assetPath 解析的便捷入口。
+`asset.get-data` 是 asset-friendly wrapper，底层复用 `serialized-object.read` 的 `ObjectSerializer`，不重复实现序列化。`serialized-object.read` 是任意 `UnityEngine.Object` 深序列化主入口，`asset.get-data` 提供按 assetPath 解析的便捷入口。

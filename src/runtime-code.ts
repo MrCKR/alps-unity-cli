@@ -74,12 +74,12 @@ export async function executeRuntimeCode(request: RuntimeCodeRequest, runtime: R
         timeoutMs,
         args: parsedArgs,
       },
-      plannedEffects: [{ type: "code.exec", sideEffects: "user-code-not-executed" }],
+      plannedEffects: [{ type: "code.execute", sideEffects: "user-code-not-executed" }],
     };
   }
 
   requireRuntimeCodeDeadline(absoluteDeadlineMs);
-  const result = await executeBridgePayload(requestId, "code.exec", payload, {
+  const result = await executeBridgePayload(requestId, "code.execute", payload, {
     instance: request.instance ?? "",
     "timeout-ms": String(timeoutMs),
     __destructiveConfirmed: true,

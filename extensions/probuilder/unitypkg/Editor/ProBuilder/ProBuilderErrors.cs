@@ -5,7 +5,7 @@ namespace UnityCli.ProBuilder
     /// <summary>
     /// ProBuilder 工具 handler 的结构化错误工厂。
     /// 统一返回 <see cref="UnityCliBridge.BridgeCommandException"/>，由调用处 throw 出去，
-    /// 经 project-tool.run / runtime-tool.run 的 catch 块转成标准错误 envelope。
+    /// 经 catalog.editor.run / catalog.player.run 的 catch 块转成标准错误 envelope。
     /// 错误码统一使用当前 extension dependency、target、schema、operation 与 outcome unknown 契约，
     /// details 与多个 nextActions 通过 exception 字段透传。
     /// </summary>

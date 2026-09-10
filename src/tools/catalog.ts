@@ -41,7 +41,7 @@ export function resolveCatalogIndependentInvocationTool(name: string): ToolMetad
 
 /**
  * 显式诊断聚合使用的完整 Tool catalog；公开discovery与执行解析禁止调用。
- * project-tool.list 返回全部注册能力；runtime-tool.list 只补充同一注册在当前 PlayMode 下的 availability。
+ * catalog.editor.list 返回全部注册能力；catalog.player.list 只补充同一注册在当前 PlayMode 下的 availability。
  */
 export async function loadFullToolCatalogForDiagnostics(
   flags: Record<string, string | boolean>,

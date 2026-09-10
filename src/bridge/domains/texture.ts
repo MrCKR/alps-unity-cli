@@ -2,13 +2,13 @@ import { boolFlag, compactArgs, numberFlag, stringFlag } from "../args.js";
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const textureBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "texture", command: "info", bridgeCommand: "project-tool.run", toolName: "texture.info", buildArgs: textureArgs },
-  { group: "texture", command: "create", bridgeCommand: "project-tool.run", toolName: "texture.create", buildArgs: textureArgs, destructiveHint: true },
-  { group: "texture", command: "sprite", bridgeCommand: "project-tool.run", toolName: "texture.sprite", buildArgs: textureArgs, destructiveHint: true },
-  { group: "texture", command: "modify", bridgeCommand: "project-tool.run", toolName: "texture.modify", buildArgs: textureArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "texture", command: "delete", bridgeCommand: "project-tool.run", toolName: "texture.delete", buildArgs: textureArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "texture", command: "import-settings", bridgeCommand: "project-tool.run", toolName: "texture.import-settings", buildArgs: textureArgs, destructiveHint: true },
-  { group: "texture", command: "generate", bridgeCommand: "project-tool.run", toolName: "texture.generate", buildArgs: textureGenerateArgs, destructiveHint: true, supportsDryRun: true }
+  { group: "texture", command: "info", bridgeCommand: "catalog.editor.run", toolName: "texture.info", buildArgs: textureArgs },
+  { group: "texture", command: "create", bridgeCommand: "catalog.editor.run", toolName: "texture.create", buildArgs: textureArgs, destructiveHint: true },
+  { group: "texture", command: "sprite", bridgeCommand: "catalog.editor.run", toolName: "texture.sprite", buildArgs: textureArgs, destructiveHint: true },
+  { group: "texture", command: "modify", bridgeCommand: "catalog.editor.run", toolName: "texture.modify", buildArgs: textureArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "texture", command: "delete", bridgeCommand: "catalog.editor.run", toolName: "texture.delete", buildArgs: textureArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "texture", command: "import-settings", bridgeCommand: "catalog.editor.run", toolName: "texture.import-settings", buildArgs: textureArgs, destructiveHint: true },
+  { group: "texture", command: "generate", bridgeCommand: "catalog.editor.run", toolName: "texture.generate", buildArgs: textureGenerateArgs, destructiveHint: true, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（width/height/enum/bool 等）

@@ -24,8 +24,8 @@ test("request budget owns all six counters and injectable monotonic time", async
 
 test("console is bounded non-resumable while scene and GameObject discovery page raw positions", async () => {
   const [consoleGet, editorSupport, hierarchy, goFind] = await Promise.all([
-    source("Tools/console/get.cs"), source("Tools/editor/EditorToolSupport.cs"),
-    source("Tools/scene/hierarchy.cs"), source("Tools/go/find.cs"),
+    source("Tools/console/read.cs"), source("Tools/editor/EditorToolSupport.cs"),
+    source("Tools/scene/hierarchy.cs"), source("Tools/game-object/find.cs"),
   ]);
   assert.match(editorSupport, /rawIndex/);
   assert.match(editorSupport, /intentionally non-resumable/);
@@ -92,7 +92,7 @@ test("profiler and snapshot paths remain raw-paged and governed", async () => {
 test("reflection pages bind assembly generation and budgeted member definitions", async () => {
   const [reflection, typeTool, methodTool] = await Promise.all([
     source("Infrastructure/UnityCliReflection.cs"),
-    source("Tools/reflection/type/schema.cs"), source("Tools/reflection/method/find.cs"),
+    source("Tools/runtime-reflection/type/schema.cs"), source("Tools/runtime-reflection/method/find.cs"),
   ]);
   assert.match(reflection, /ResolvedTypeCache/);
   assert.match(reflection, /UnityCliReadGeneration\.Reflection/);
@@ -177,7 +177,7 @@ test("memory and reflection integration fixtures exercise exact terminal and res
 
 test("command projections preserve opaque cursors and nested budgets", async () => {
   const roots = "src/bridge/domains";
-  const files = ["console.ts", "game-object.ts", "scene.ts", "profiler.ts", "reflection.ts", "screenshot.ts"];
+  const files = ["console.ts", "game-object.ts", "scene.ts", "profiler.ts", "runtime-reflection.ts", "screenshot.ts"];
   const text = (await Promise.all(files.map((file) => readFile(`${roots}/${file}`, "utf8")))).join("\n");
   assert.ok((text.match(/cursor: stringFlag\(flags, "cursor"\)/g) ?? []).length >= 5);
   assert.match(text, /budget: structured\.budget/);
@@ -185,7 +185,7 @@ test("command projections preserve opaque cursors and nested budgets", async () 
 });
 
 test("obsolete aggregate readers are absent from canonical source and non-generated routes", async () => {
-  await assert.rejects(access(new URL("Tools/go/inspect.cs", editor)));
+  await assert.rejects(access(new URL("Tools/game-object/inspect.cs", editor)));
   await assert.rejects(access(new URL("Tools/scene/data.cs", editor)));
   const [goRoute, sceneRoute] = await Promise.all([
     readFile("src/bridge/domains/game-object.ts", "utf8"),

@@ -152,7 +152,7 @@ namespace UnityCli.Tests
         public void RecoveryBlockedAuthorizationRevokesItsExactUnconsumedGrant()
         {
             var requestId = "runtime-blocked-authorization";
-            var request = Request(requestId, "runtime-tool.run");
+            var request = Request(requestId, "catalog.player.run");
             var digest = Digest('2');
             var deadline = Deadline();
             var admission = Admission(requestId, digest, deadline);
@@ -171,13 +171,13 @@ namespace UnityCli.Tests
             var first = PublishBypass("runtime-first");
             Assert.That(first.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
 
-            var unauthorizedRequest = Request("runtime-unauthorized", "runtime-tool.run");
+            var unauthorizedRequest = Request("runtime-unauthorized", "catalog.player.run");
             var unauthorized = bridge.PublishRuntimeRequest(unauthorizedRequest, Deadline(), Digest('b'), new UnityCliRuntimeBridge.RuntimeAdmissionInput());
             Assert.That(unauthorized.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
             Assert.That(unauthorized.Error, Does.Contain("E_ADMISSION_REQUIRED"));
             Assert.That(PublishBypass("runtime-first").Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Existing));
 
-            var faultRequest = Request("runtime-publication-fault", "runtime-tool.run");
+            var faultRequest = Request("runtime-publication-fault", "catalog.player.run");
             var faultDigest = Digest('c');
             var faultAdmission = Admission(faultRequest["requestId"] as string, faultDigest, Deadline());
             bridge.ExpectRuntimeBoundaryForTests("before-runtime-publish", () => { throw new InvalidOperationException("injected publication fault"); });
@@ -187,7 +187,7 @@ namespace UnityCli.Tests
 
             for (var index = 1; index < 128; index++)
                 Assert.That(PublishBypass("runtime-capacity-" + index).Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
-            var fullRequest = Request("runtime-capacity-rejected", "runtime-tool.run");
+            var fullRequest = Request("runtime-capacity-rejected", "catalog.player.run");
             var fullDigest = Digest('d');
             var full = bridge.PublishRuntimeRequest(fullRequest, Deadline(), fullDigest, Admission("runtime-capacity-rejected", fullDigest, Deadline()));
             Assert.That(full.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.QueueFull));
@@ -199,7 +199,7 @@ namespace UnityCli.Tests
         public void CompensationFaultRetainsExactOwnerUntilBoundedOnlineRecovery()
         {
             var requestId = "runtime-compensation-fault";
-            var request = Request(requestId, "runtime-tool.run");
+            var request = Request(requestId, "catalog.player.run");
             var digest = Digest('7');
             var deadline = Deadline();
             var admission = Admission(requestId, digest, deadline);
@@ -255,7 +255,7 @@ namespace UnityCli.Tests
             var requestId = "runtime-expired-replay";
             var digest = DigestFor(requestId);
             var originalDeadline = utcNowMs + 500L;
-            var originalRequest = Request(requestId, "runtime-tool.list", originalDeadline);
+            var originalRequest = Request(requestId, "catalog.player.list", originalDeadline);
             var seeded = bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput());
             Assert.That(seeded.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
             var terminalWork = TakeNext();
@@ -275,7 +275,7 @@ namespace UnityCli.Tests
             Assert.That(mismatchTask.Result.Error, Does.Contain("E_REQUEST_REPLAY_MISMATCH"));
 
             var expired = utcNowMs - 1L;
-            var miss = bridge.PublishRuntimeRequest(Request("runtime-expired-miss", "runtime-tool.list", expired), expired, DigestFor("runtime-expired-miss"), new UnityCliRuntimeBridge.RuntimeAdmissionInput());
+            var miss = bridge.PublishRuntimeRequest(Request("runtime-expired-miss", "catalog.player.list", expired), expired, DigestFor("runtime-expired-miss"), new UnityCliRuntimeBridge.RuntimeAdmissionInput());
             Assert.That(miss.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Rejected));
             Assert.That(miss.Error, Does.Contain("E_SCHEMA_INVALID"));
             Assert.That(bridge.PublishRuntimeRequest(originalRequest, originalDeadline, digest, new UnityCliRuntimeBridge.RuntimeAdmissionInput()).Outcome,
@@ -286,7 +286,7 @@ namespace UnityCli.Tests
         public void RunningRequestDeadlineReturnsTimeoutWithoutWaitingForTerminalOwner()
         {
             var deadline = utcNowMs + 10L;
-            var request = Request("runtime-running-deadline", "runtime-tool.run", deadline);
+            var request = Request("runtime-running-deadline", "catalog.player.run", deadline);
             var digest = Digest('9');
             var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission("runtime-running-deadline", digest, deadline));
             Assert.That(publication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
@@ -310,7 +310,7 @@ namespace UnityCli.Tests
         public void BlockedCompletionRetainsTerminalAndExactDuplicateUntilOwnerIsDefinitelyAbsent()
         {
             var requestId = "runtime-blocked-completion";
-            var request = Request(requestId, "runtime-tool.run");
+            var request = Request(requestId, "catalog.player.run");
             var digest = Digest('8');
             var deadline = Deadline();
             var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission(requestId, digest, deadline));
@@ -336,7 +336,7 @@ namespace UnityCli.Tests
         public void RecoveryBlockedFrozenTerminalSettlesDuringShutdownWithoutAPump()
         {
             var requestId = "runtime-blocked-frozen-shutdown";
-            var request = Request(requestId, "runtime-tool.run");
+            var request = Request(requestId, "catalog.player.run");
             var digest = Digest('3');
             var deadline = Deadline();
             var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission(requestId, digest, deadline));
@@ -357,7 +357,7 @@ namespace UnityCli.Tests
         public void ShutdownFinalizesQueuedAdmissionOwnerBeforeAnyDequeueEffectOwnership()
         {
             var requestId = "runtime-queued-shutdown";
-            var request = Request(requestId, "runtime-tool.run");
+            var request = Request(requestId, "catalog.player.run");
             var digest = Digest('6');
             var deadline = Deadline();
             var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission(requestId, digest, deadline));
@@ -378,13 +378,13 @@ namespace UnityCli.Tests
         [Test]
         public void RecoveryBlockedShutdownSettlesQueuedAndRunningAgainstCapturedPoolExactlyOnce()
         {
-            var runningRequest = Request("runtime-running-shutdown", "runtime-tool.run");
+            var runningRequest = Request("runtime-running-shutdown", "catalog.player.run");
             var runningDigest = Digest('e');
             var runningPublication = bridge.PublishRuntimeRequest(runningRequest, Deadline(), runningDigest,
                 Admission("runtime-running-shutdown", runningDigest, Deadline()));
             Assert.That(runningPublication.Outcome, Is.EqualTo(UnityCliRuntimeBridge.RuntimePublicationOutcome.Published));
             var running = TakeNext();
-            var queuedRequest = Request("runtime-blocked-queued-shutdown", "runtime-tool.run");
+            var queuedRequest = Request("runtime-blocked-queued-shutdown", "catalog.player.run");
             var queuedDigest = Digest('5');
             var queuedPublication = bridge.PublishRuntimeRequest(queuedRequest, Deadline(), queuedDigest,
                 Admission("runtime-blocked-queued-shutdown", queuedDigest, Deadline()));
@@ -411,7 +411,7 @@ namespace UnityCli.Tests
         public void SettlementBackoffUsesMonotonicClockAcrossUtcJumps()
         {
             var requestId = "runtime-monotonic-settlement";
-            var request = Request(requestId, "runtime-tool.run");
+            var request = Request(requestId, "catalog.player.run");
             var digest = Digest('4');
             var deadline = Deadline();
             var publication = bridge.PublishRuntimeRequest(request, deadline, digest, Admission(requestId, digest, deadline));
@@ -438,7 +438,7 @@ namespace UnityCli.Tests
 
         private UnityCliRuntimeBridge.RuntimePublicationResult PublishBypass(string requestId)
         {
-            return bridge.PublishRuntimeRequest(Request(requestId, "runtime-tool.list"), Deadline(), DigestFor(requestId), new UnityCliRuntimeBridge.RuntimeAdmissionInput());
+            return bridge.PublishRuntimeRequest(Request(requestId, "catalog.player.list"), Deadline(), DigestFor(requestId), new UnityCliRuntimeBridge.RuntimeAdmissionInput());
         }
 
         private UnityCliRuntimeBridge.RuntimeAdmissionInput Admission(string requestId, string digest, long deadline)

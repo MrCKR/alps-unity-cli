@@ -83,18 +83,18 @@ test("docs cache missing is structured and default cache can fall back online", 
   assert.equal((online.data as { mode: string }).mode, "online");
 });
 
-test("reflect.type and reflect.member return assembly-backed signatures", async () => {
+test("type-inspection.get-type and type-inspection.get-member return assembly-backed signatures", async () => {
   const dir = await reflectCache();
-  const type = await run("reflect.type", { name: "UnityEngine.Camera", reflectDir: dir, format: "text" });
-  const member = await run("reflect.member", { member: "UnityEngine.Camera.Render", reflectDir: dir });
+  const type = await run("type-inspection.get-type", { name: "UnityEngine.Camera", reflectDir: dir, format: "text" });
+  const member = await run("type-inspection.get-member", { member: "UnityEngine.Camera.Render", reflectDir: dir });
   assert.ok(type.ok, JSON.stringify(type));
   assert.ok(member.ok, JSON.stringify(member));
   assert.equal((type.data as { type: { assembly: string } }).type.assembly, "UnityEngine.CoreModule");
   assert.equal((member.data as { member: { signature: string } }).member.signature, "public void Render()");
 });
 
-test("reflect.search pages type and member matches", async () => {
-  const result = await run("reflect.search", { query: "Render", reflectDir: await reflectCache(), pageSize: 1 });
+test("type-inspection.search pages type and member matches", async () => {
+  const result = await run("type-inspection.search", { query: "Render", reflectDir: await reflectCache(), pageSize: 1 });
   assert.ok(result.ok, JSON.stringify(result));
   const data = result.data as { items: Array<{ kind: string }>; pageInfo: { total: number } };
   assert.equal(data.items.length, 1);
@@ -103,15 +103,15 @@ test("reflect.search pages type and member matches", async () => {
 });
 
 test("reflect ambiguity, assembly failure, and missing cache fail closed", async () => {
-  const ambiguous = await run("reflect.type", { name: "Camera", reflectDir: await reflectCache({ duplicate: true }) });
+  const ambiguous = await run("type-inspection.get-type", { name: "Camera", reflectDir: await reflectCache({ duplicate: true }) });
   assert.ok(!ambiguous.ok);
   assert.equal(ambiguous.error?.code, "REFLECT_TYPE_AMBIGUOUS");
 
-  const failed = await run("reflect.search", { query: "Camera", reflectDir: await reflectCache({ failed: true }) });
+  const failed = await run("type-inspection.search", { query: "Camera", reflectDir: await reflectCache({ failed: true }) });
   assert.ok(!failed.ok);
   assert.equal(failed.error?.code, "REFLECT_ASSEMBLY_LOAD_FAILED");
 
-  const missing = await run("reflect.type", { name: "Camera", reflectDir: "Z:/missing-reflect" });
+  const missing = await run("type-inspection.get-type", { name: "Camera", reflectDir: "Z:/missing-reflect" });
   assert.ok(!missing.ok);
   assert.equal(missing.error?.code, "REFLECT_CACHE_MISSING");
 });

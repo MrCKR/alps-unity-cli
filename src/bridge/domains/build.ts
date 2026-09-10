@@ -9,19 +9,19 @@ function structuredInput(flags: Record<string, unknown>): Record<string, unknown
 function stringValue(value: unknown): string | undefined { return typeof value === "string" ? value : undefined; }
 
 export const buildBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "build", command: "scene-list", bridgeCommand: "project-tool.run", toolName: "build.scene.list", buildArgs: emptyArgs },
-  { group: "build", command: "scene-add", bridgeCommand: "project-tool.run", toolName: "build.scene.add", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "scene-remove", bridgeCommand: "project-tool.run", toolName: "build.scene.remove", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "scene-enable", bridgeCommand: "project-tool.run", toolName: "build.scene.enable", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "scene-disable", bridgeCommand: "project-tool.run", toolName: "build.scene.disable", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "platform-get", bridgeCommand: "project-tool.run", toolName: "build.platform.get", buildArgs: emptyArgs },
-  { group: "build", command: "platform-set", bridgeCommand: "project-tool.run", toolName: "build.platform.set", buildArgs: targetArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "profile-list", bridgeCommand: "project-tool.run", toolName: "build.profile.list", buildArgs: emptyArgs },
-  { group: "build", command: "profile-create", bridgeCommand: "project-tool.run", toolName: "build.profile.create", buildArgs: profileArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "profile-switch", bridgeCommand: "project-tool.run", toolName: "build.profile.switch", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "profile-modify", bridgeCommand: "project-tool.run", toolName: "build.profile.modify", buildArgs: profileArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "build", command: "settings-get", bridgeCommand: "project-tool.run", toolName: "build.settings.get", buildArgs: emptyArgs },
-  { group: "build", command: "settings-set", bridgeCommand: "project-tool.run", toolName: "build.settings.set", buildArgs: settingsArgs, destructiveHint: true, supportsDryRun: true }
+  { group: "build", command: "scene.list", bridgeCommand: "catalog.editor.run", toolName: "build.scene.list", buildArgs: emptyArgs },
+  { group: "build", command: "scene.add", bridgeCommand: "catalog.editor.run", toolName: "build.scene.add", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "build", command: "scene.remove", bridgeCommand: "catalog.editor.run", toolName: "build.scene.remove", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "build", command: "scene.enable", bridgeCommand: "catalog.editor.run", toolName: "build.scene.enable", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "build", command: "scene.disable", bridgeCommand: "catalog.editor.run", toolName: "build.scene.disable", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "build", command: "platform.get", bridgeCommand: "catalog.editor.run", toolName: "build.platform.get", buildArgs: emptyArgs },
+  { group: "build", command: "platform.set", bridgeCommand: "catalog.editor.run", toolName: "build.platform.set", buildArgs: targetArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "build", command: "profile.list", bridgeCommand: "catalog.editor.run", toolName: "build.profile.list", buildArgs: emptyArgs },
+  { group: "build", command: "profile.create", bridgeCommand: "catalog.editor.run", toolName: "build.profile.create", buildArgs: profileArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "build", command: "profile.switch", bridgeCommand: "catalog.editor.run", toolName: "build.profile.switch", buildArgs: pathArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "build", command: "profile.modify", bridgeCommand: "catalog.editor.run", toolName: "build.profile.modify", buildArgs: profileArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "build", command: "settings.get", bridgeCommand: "catalog.editor.run", toolName: "build.settings.get", buildArgs: emptyArgs },
+  { group: "build", command: "settings.set", bridgeCommand: "catalog.editor.run", toolName: "build.settings.set", buildArgs: settingsArgs, destructiveHint: true, supportsDryRun: true }
 ];
 
 function emptyArgs(): Record<string, unknown> { return {}; }

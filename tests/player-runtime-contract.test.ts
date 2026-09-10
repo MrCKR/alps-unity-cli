@@ -64,7 +64,7 @@ test("runtime listener and registry freeze one loopback session identity", async
   assert.match(bridge, /"x-unity-cli-target"\] = "runtime"/);
   assert.match(bridge, /ReadObject\(request, "execution"\)/);
   assert.match(bridge, /absoluteDeadlineUtc/);
-  assert.match(bridge, /runtime-tool\.list/);
+  assert.match(bridge, /catalog\.player\.list/);
   assert.doesNotMatch(bridge, /Application\.Quit|eval|HotReload/);
 
   assert.match(registry, /"Local\\\\UnityCli\.Registry\." \+ identity\.InstanceId/);
@@ -79,7 +79,7 @@ test("runtime listener and registry freeze one loopback session identity", async
 });
 
 test("Runtime observation Tools are owned by the TS catalog and routed through one Player dispatcher", async () => {
-  const names = ["runtime.console", "runtime.log", "runtime.state", "runtime.ui.capture-element"];
+  const names = ["player-runtime.console", "player-runtime.log", "player-runtime.state", "player-runtime.ui.capture-element"];
   for (const name of names) {
     const tool = findToolByName(name);
     assert.ok(tool, name);
@@ -91,11 +91,11 @@ test("Runtime observation Tools are owned by the TS catalog and routed through o
   }
 
   let calls = 0;
-  const result = await dispatchTool("runtime.state", undefined, { input: "{}" }, {
+  const result = await dispatchTool("player-runtime.state", undefined, { input: "{}" }, {
     bridgeExecute: async (request) => {
       calls += 1;
-      assert.equal(request.command, "runtime-tool.run");
-      assert.deepEqual(request.input, { name: "runtime.state", input: {} });
+      assert.equal(request.command, "catalog.player.run");
+      assert.deepEqual(request.input, { name: "player-runtime.state", input: {} });
       return { ok: true, requestId: request.requestId, data: { result: {
         runtimeSessionId: `session-${"a".repeat(64)}`, buildId: "b".repeat(32), observedAt: new Date().toISOString(),
         unityVersion: "2022.3.61f1", platform: "WindowsPlayer", productName: "fixture", applicationVersion: "1.0",
@@ -112,7 +112,7 @@ test("Runtime observation Tools are owned by the TS catalog and routed through o
 });
 
 test("Runtime controls stay session-only and package-gated", async () => {
-  const names = ["runtime.input.key", "runtime.input.pointer", "runtime.target-framerate.set", "runtime.time-scale.set"];
+  const names = ["player-runtime.input.key", "player-runtime.input.pointer", "player-runtime.target-framerate.set", "player-runtime.time-scale.set"];
   for (const name of names) {
     const tool = findToolByName(name);
     assert.ok(tool, name);
@@ -121,14 +121,14 @@ test("Runtime controls stay session-only and package-gated", async () => {
     assert.equal(tool.supportsDryRun, true);
     assert.deepEqual(tool.sideEffects, ["runtime-session"]);
   }
-  assert.deepEqual(findToolByName("runtime.input.key")?.requiresPackages, ["com.unity.inputsystem"]);
-  assert.deepEqual(findToolByName("runtime.input.pointer")?.requiresPackages, ["com.unity.inputsystem"]);
+  assert.deepEqual(findToolByName("player-runtime.input.key")?.requiresPackages, ["com.unity.inputsystem"]);
+  assert.deepEqual(findToolByName("player-runtime.input.pointer")?.requiresPackages, ["com.unity.inputsystem"]);
 
   const tools = await readFile("unitypkg/Runtime/Tools/UnityCliRuntimeTools.cs", "utf8");
-  assert.match(tools, /case "runtime\.target-framerate\.set"/);
-  assert.match(tools, /case "runtime\.time-scale\.set"/);
-  assert.match(tools, /case "runtime\.input\.key"/);
-  assert.match(tools, /case "runtime\.input\.pointer"/);
+  assert.match(tools, /case "player-runtime\.target-framerate\.set"/);
+  assert.match(tools, /case "player-runtime\.time-scale\.set"/);
+  assert.match(tools, /case "player-runtime\.input\.key"/);
+  assert.match(tools, /case "player-runtime\.input\.pointer"/);
   assert.match(tools, /Application\.targetFrameRate =/);
   assert.match(tools, /Time\.timeScale =/);
   assert.match(tools, /LowLevel\.StateEvent/);

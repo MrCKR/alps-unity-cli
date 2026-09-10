@@ -87,9 +87,9 @@ test("physics live descriptors expose representative semantics", async () => {
 });
 
 test("bridge specs resolve for physics tools", () => {
-  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint-add", "physics.joint.add"], ["joint-remove", "physics.joint.remove"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
+  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint.add", "physics.joint.add"], ["joint.remove", "physics.joint.remove"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
     const spec = bridgeCommandRegistry.lookup("physics", cmd);
-    assert.equal(spec?.bridgeCommand, "project-tool.run", `physics ${cmd} should route via project-tool.run`);
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `physics ${cmd} should route via catalog.editor.run`);
     assert.equal(spec?.toolName, expected, `physics ${cmd} toolName should match`);
   }
 });

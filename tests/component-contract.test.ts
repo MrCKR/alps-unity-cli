@@ -138,13 +138,13 @@ test("component tools are contract-discovered and expose expected live descripto
 
 test("bridge specs resolve for component deep tools", () => {
   const componentGet = bridgeCommandRegistry.lookup("component", "get");
-  assert.equal(componentGet?.bridgeCommand, "project-tool.run");
+  assert.equal(componentGet?.bridgeCommand, "catalog.editor.run");
   assert.equal(componentGet?.toolName, "component.get");
   const componentModify = bridgeCommandRegistry.lookup("component", "modify");
-  assert.equal(componentModify?.bridgeCommand, "project-tool.run");
+  assert.equal(componentModify?.bridgeCommand, "catalog.editor.run");
   assert.equal(componentModify?.toolName, "component.modify");
   const componentListTypes = bridgeCommandRegistry.lookup("component", "list-types");
-  assert.equal(componentListTypes?.bridgeCommand, "project-tool.run");
+  assert.equal(componentListTypes?.bridgeCommand, "catalog.editor.run");
   assert.equal(componentListTypes?.toolName, "component.list-types");
 });
 
@@ -178,7 +178,7 @@ test("C# handlers exist for component deep commands (RegisterCommand or IUnityCl
 
 test("C# component lifecycle handlers support properties and indexed duplicate components", async () => {
   const toolSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/add.cs", import.meta.url), "utf8");
-  const supportSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs", import.meta.url), "utf8");
+  const supportSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/game-object/GameObjectToolSupport.cs", import.meta.url), "utf8");
   const setSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/set.cs", import.meta.url), "utf8");
   assert.match(toolSource, /\[UnityCliAnyJson\]\s+public Dictionary<string, object> Properties/);
   assert.match(setSource, /\[UnityCliAnyJson\]\s+public object Value/);
@@ -225,6 +225,6 @@ test("C# component deep handlers return typed Result via IUnityCliTool", async (
   assert.match(modifySource, /ObjectPatch\.ApplyVerifiedSerializedPatches/, "component.modify should apply prevalidated serialized path patches");
   const listSource = await readFile(new URL("../unitypkg/Editor/Tools/component/list-types.cs", import.meta.url), "utf8");
   assert.match(listSource, /Name = "component\.list-types"/, "component.list-types should be an IUnityCliTool");
-  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs", import.meta.url), "utf8");
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/game-object/GameObjectToolSupport.cs", import.meta.url), "utf8");
   assert.match(supportSource, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "component.get should inherit shared read-scope conflict behavior");
 });

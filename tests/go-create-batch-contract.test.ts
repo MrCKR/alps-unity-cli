@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 
-const toolPath = "unitypkg/Editor/Tools/go/create.cs";
+const toolPath = "unitypkg/Editor/Tools/game-object/create.cs";
 const bridgePath = "src/bridge/domains/game-object.ts";
 
-test("go.create exposes one bounded typed batch on the canonical Tool", async () => {
+test("game-object.create exposes one bounded typed batch on the canonical Tool", async () => {
   const source = await readFile(toolPath, "utf8");
   assert.match(source, /private const int MaxBatchCount = 1000/);
   assert.match(source, /public int\? Count \{ get; set; \}/);
@@ -14,11 +14,11 @@ test("go.create exposes one bounded typed batch on the canonical Tool", async ()
   assert.match(source, /public List<List<double>> Rotations \{ get; set; \}/);
   assert.match(source, /public List<List<double>> Scales \{ get; set; \}/);
   assert.match(source, /public List<GameObjectDetail> GameObjects \{ get; set; \}/);
-  assert.match(source, /Name = "go\.create"/);
+  assert.match(source, /Name = "game-object\.create"/);
   assert.doesNotMatch(source, /Name = "go\.create-batch"/);
 });
 
-test("go.create prevalidates the whole batch before one effect barrier", async () => {
+test("game-object.create prevalidates the whole batch before one effect barrier", async () => {
   const source = await readFile(toolPath, "utf8");
   assert.equal((source.match(/ctx\.CommitEffect\(\)/g) ?? []).length, 1);
   assert.ok(source.indexOf("var plan = Prepare") < source.indexOf("ctx.CommitEffect()"));
@@ -30,9 +30,9 @@ test("go.create prevalidates the whole batch before one effect barrier", async (
   assert.match(source, /ParsePrimitiveType\(request\.Primitive\)/);
 });
 
-test("go.create keeps one Undo group and proves the ordered fresh object set", async () => {
+test("game-object.create keeps one Undo group and proves the ordered fresh object set", async () => {
   const source = await readFile(toolPath, "utf8");
-  assert.match(source, /UnityCliSceneMutation\.BeginUndoGroup\("go\.create"\)/);
+  assert.match(source, /UnityCliSceneMutation\.BeginUndoGroup\("game-object\.create"\)/);
   assert.match(source, /finally[\s\S]*?UnityCliSceneMutation\.EndUndoGroup\(undoGroup\)/);
   assert.doesNotMatch(source, /Undo\./);
   assert.match(source, /var instanceIds = new List<int>\(plan\.Count\)/);
@@ -41,10 +41,10 @@ test("go.create keeps one Undo group and proves the ordered fresh object set", a
   assert.match(source, /observed\.transform\.parent != plan\.Parent/);
   assert.match(source, /TransformMatches\(observed\.transform, expected\)/);
   assert.match(source, /GameObjects = observed/);
-  assert.match(source, /new PlannedEffect \{ Type = "go\.create", Count = observed\.Count/);
+  assert.match(source, /new PlannedEffect \{ Type = "game-object.create", Count = observed\.Count/);
 });
 
-test("go.create bridge forwards the structured batch without flattening vectors", async () => {
+test("game-object.create bridge forwards the structured batch without flattening vectors", async () => {
   const source = await readFile(bridgePath, "utf8");
   assert.match(source, /count: numberFlag\(flags, "count"\) \?\? numberValue\(structured\.count\)/);
   assert.match(source, /positions: structured\.positions/);
@@ -54,12 +54,12 @@ test("go.create bridge forwards the structured batch without flattening vectors"
   assert.match(source, /rotationY: floatFlag\(flags, "rotation-y"\) \?\? numberValue\(structured\.rotationY\) \?\? numberValue\(rotation\?\.y\)/);
   assert.match(source, /scaleZ: floatFlag\(flags, "scale-z"\) \?\? numberValue\(structured\.scaleZ\) \?\? numberValue\(scale\?\.z\)/);
 
-  const spec = bridgeCommandRegistry.lookup("go", "create");
+  const spec = bridgeCommandRegistry.lookup("game-object", "create");
   assert.ok(spec);
   const input = {
     name: "Probe", count: 2, positions: [[0, 0, 0], [1, 0, 0]],
     x: 4, rotationY: 90, scaleZ: 2
   };
-  const built = await spec.buildArgs({ command: "go.create", flags: { __structuredInput: JSON.stringify(input) } });
+  const built = await spec.buildArgs({ command: "game-object.create", flags: { __structuredInput: JSON.stringify(input) } });
   assert.deepEqual(built, input);
 });

@@ -10,11 +10,11 @@ async function source(path: string): Promise<string> {
 
 test("core atomic business mutations return readback state rather than requested values", async () => {
   const [enabled, speed, parameter, assign, weight, material, rigidbody, settings, sprite] = await Promise.all([
-    source("Tools/animation/animator/set-enabled.cs"),
-    source("Tools/animation/animator/set-speed.cs"),
-    source("Tools/animation/animator/set-parameter.cs"),
-    source("Tools/controller/assign.cs"),
-    source("Tools/controller/set-layer-weight.cs"),
+    source("Tools/animator/set-enabled.cs"),
+    source("Tools/animator/set-speed.cs"),
+    source("Tools/animator/set-parameter.cs"),
+    source("Tools/animator-controller/assign.cs"),
+    source("Tools/animator-controller/set-layer-weight.cs"),
     source("Tools/material/assign.cs"),
     source("Tools/physics/rigidbody.cs"),
     source("Tools/physics/settings.cs"),
@@ -103,9 +103,9 @@ test("adjacent core tools expose observed business objects after mutation", asyn
   const [buildSettings, importSettings, objectModify, componentSet, gameObjectModify] = await Promise.all([
     source("Tools/build/settings/set.cs"),
     source("Tools/texture/import-settings.cs"),
-    source("Tools/object/modify.cs"),
+    source("Tools/serialized-object/patch.cs"),
     source("Tools/component/set.cs"),
-    source("Tools/go/modify.cs")
+    source("Tools/game-object/modify.cs")
   ]);
 
   assert.match(buildSettings, /var result = BuildSettingsToolSupport\.Read\(\)/);

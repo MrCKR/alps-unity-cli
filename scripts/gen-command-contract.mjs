@@ -15,17 +15,17 @@ const DEFAULT_TIMEOUT_MS = 30000;
 const publicToolInventory = collectPublicToolInventory(process.cwd());
 
 const bridgeOnlyEntries = new Map([
-  ["project-tool.health", { handler_type: "bridge", destructive: false }],
-  ["project-tool.groups", { handler_type: "bridge", destructive: false }],
-  ["project-tool.summary", { handler_type: "bridge", destructive: false }],
-  ["project-tool.describe", { handler_type: "bridge", destructive: false }],
-  ["project-tool.list", { handler_type: "bridge", destructive: false }],
-  ["project-tool.run", { handler_type: "bridge", destructive: false }],
-  ["runtime-tool.groups", { handler_type: "bridge", destructive: false }],
-  ["runtime-tool.summary", { handler_type: "bridge", destructive: false }],
-  ["runtime-tool.describe", { handler_type: "bridge", destructive: false }],
-  ["runtime-tool.list", { handler_type: "bridge", destructive: false }],
-  ["runtime-tool.run", { handler_type: "bridge", destructive: false }]
+  ["catalog.editor.health", { handler_type: "bridge", destructive: false }],
+  ["catalog.editor.groups", { handler_type: "bridge", destructive: false }],
+  ["catalog.editor.summary", { handler_type: "bridge", destructive: false }],
+  ["catalog.editor.describe", { handler_type: "bridge", destructive: false }],
+  ["catalog.editor.list", { handler_type: "bridge", destructive: false }],
+  ["catalog.editor.run", { handler_type: "bridge", destructive: false }],
+  ["catalog.player.groups", { handler_type: "bridge", destructive: false }],
+  ["catalog.player.summary", { handler_type: "bridge", destructive: false }],
+  ["catalog.player.describe", { handler_type: "bridge", destructive: false }],
+  ["catalog.player.list", { handler_type: "bridge", destructive: false }],
+  ["catalog.player.run", { handler_type: "bridge", destructive: false }]
 ]);
 
 const entries = new Map();

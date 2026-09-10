@@ -234,7 +234,7 @@ namespace UnityCli.Tests
                 "internal.editor.compile.Status",
                 "internal.editor.state.snapshot.extra",
                 "internal.unknown.status",
-                "project-tool.run",
+                "catalog.editor.run",
                 "profiler.status",
                 "extension.status"
             };
@@ -258,7 +258,7 @@ namespace UnityCli.Tests
             Assert.That(UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand("internal.navmesh.bake.snapshot"), Is.True);
             Assert.That(UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand("internal.occlusion.bake.snapshot"), Is.True);
             Assert.That(UnityCliBridgeQueuePolicy.IsOrdinaryReadInternalCommand("internal.navmesh.bake.plan"), Is.False);
-            Assert.That(UnityCliBridgeQueuePolicy.Classify("project-tool.run", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
+            Assert.That(UnityCliBridgeQueuePolicy.Classify("catalog.editor.run", UnityCliBridgeQueuePolicy.WorkClass.Mutation),
                 Is.EqualTo(UnityCliBridgeQueuePolicy.WorkClass.Mutation));
             Assert.Throws<ArgumentException>(() => UnityCliBridgeQueuePolicy.Classify(SafeStatusCommand, UnityCliBridgeQueuePolicy.WorkClass.Mutation));
         }
@@ -349,7 +349,7 @@ namespace UnityCli.Tests
         {
             if (workClass == UnityCliBridgeQueuePolicy.WorkClass.SafeStatus)
                 throw new ArgumentException("Tests must create SafeStatus through its exact command.", "workClass");
-            return new UnityCliBridgeQueuePolicy.QueueNode(id, "project-tool.run", workClass);
+            return new UnityCliBridgeQueuePolicy.QueueNode(id, "catalog.editor.run", workClass);
         }
 
         private static UnityCliBridgeQueuePolicy.QueueNode Safe(string id)

@@ -90,9 +90,9 @@
   "compile": {
     "publicOwner": "src/tools/editor/compile.ts",
     "privateCommands": ["internal.editor.compile.start", "internal.editor.compile.status"],
-    "inputFields": ["refresh", "path", "forceUpdate", "importRecursive", "includeWarnings"],
-    "forbiddenInputFields": ["waitReady"],
-    "proof": "owned CompilationPipeline cycle terminal, zero compiler errors, import/compile/reload stable and Editor ready",
+    "inputFields": ["path", "forceUpdate", "importRecursive", "includeWarnings"],
+    "forbiddenInputFields": ["waitReady", "refresh"],
+    "proof": "asset refresh followed by either an attributed Unity-owned CompilationPipeline cycle terminal or explicit unchanged terminal, zero compiler errors, import/compile/reload stable and Editor ready",
     "diagnostics": ["CompilationPipeline.assemblyCompilationFinished", "CompilationPipeline.compilationFinished"],
     "errors": ["E_UNITY_COMPILE_FAILED", "E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "E_COMPILE_CYCLE_UNATTRIBUTED", "E_EXECUTION_TIMEOUT", "E_UNITY_TRANSITION_TIMEOUT"]
   },

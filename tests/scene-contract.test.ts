@@ -15,7 +15,7 @@ const SCENE_COMMANDS = [
   "scene.hierarchy",
   "scene.list-opened",
   "scene.load",
-  "scene.move-object",
+  "game-object.move-to-scene",
   "scene.save",
   "scene.set-active",
   "scene.unload",
@@ -65,7 +65,7 @@ test("scene live descriptors expose expected read/write semantics", async () => 
 test("bridge specs resolve for scene tools", () => {
   for (const [cmd, toolName] of [["active", "scene.active"], ["create", "scene.create"], ["load", "scene.load"], ["save", "scene.save"], ["unload", "scene.unload"], ["set-active", "scene.set-active"], ["list-opened", "scene.list-opened"], ["gameobject", "scene.gameobject"], ["hierarchy", "scene.hierarchy"], ["view-frame", "scene.view-frame"]] as const) {
     const spec = bridgeCommandRegistry.lookup("scene", cmd);
-    assert.equal(spec?.bridgeCommand, "project-tool.run", `scene ${cmd} should route via project-tool.run`);
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `scene ${cmd} should route via catalog.editor.run`);
     assert.equal(spec?.toolName, toolName, `scene ${cmd} toolName should match`);
   }
 });

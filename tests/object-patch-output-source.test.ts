@@ -13,7 +13,7 @@ test("verified object patch engine has one direct replace path and no audit/log 
 });
 
 test("object and component modify results expose only business readback", async () => {
-  for (const path of ["Tools/object/modify.cs", "Tools/component/modify.cs"]) {
+  for (const path of ["Tools/serialized-object/patch.cs", "Tools/component/modify.cs"]) {
     const source = await readFile(`${root}${path}`, "utf8");
     const resultStart = source.indexOf("public sealed class Result");
     const resultEnd = source.indexOf("public ToolDescriptor Describe", resultStart);

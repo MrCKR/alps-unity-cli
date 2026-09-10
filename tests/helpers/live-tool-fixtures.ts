@@ -87,7 +87,7 @@ export function projectAuditTool(overrides: Partial<ToolMetadata> = {}): ToolMet
     name: "project.audit",
     summary: "Audit project state.",
     description: "Audit project state and return project-local diagnostics.",
-    group: "project",
+    group: "project-settings",
     source: "project",
     ...overrides
   });

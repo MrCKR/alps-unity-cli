@@ -75,7 +75,7 @@ test("durable status Bridge path is read-only, bounded, and digest-internal", as
   assert.match(coordinator, /requestId is required and must be a safe root request identity/);
   assert.doesNotMatch(coordinator, /public sealed class Args[\s\S]*Digest/);
   assert.match(operation, /UnityCliDurableStatusCoordinator\.IsCommand\(request\.Command\)/);
-  assert.match(operation, /SaveDirectMutationAcceptedRoot\(request\.RequestId, requestDigest, contract\.ToolName\)/);
+  assert.match(operation, /SaveDirectMutationAcceptedRoot\(request, requestDigest, contract\.ToolName\)/);
   assert.match(dispatcher, /resolveCatalogIndependentOperabilityTool\(tool\.name\)\?\.handler === "offline"/);
   assert.doesNotMatch(operation, /SaveDirectMutationAcceptedRoot\(request\.RequestId, requestDigest, request\.Command\)/);
   for (const [, command] of cases) assert.match(queuePolicy, new RegExp(command.replaceAll(".", "\\.")));

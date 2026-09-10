@@ -468,27 +468,27 @@ test("validateExtensionManifestContracts validates manifests against bridge rout
   );
 });
 
-test("URP, HDRP, Cinemachine, and VFX extension bridge specs route through project-tool.run", () => {
+test("URP, HDRP, Cinemachine, and VFX extension bridge specs route through catalog.editor.run", () => {
   const expected = [
-    ["urp", "feature-list", "urp.feature.list"],
-    ["urp", "feature-add", "urp.feature.add"],
-    ["urp", "feature-toggle", "urp.feature.toggle"],
-    ["urp", "feature-configure", "urp.feature.configure"],
-    ["urp", "feature-remove", "urp.feature.remove"],
-    ["urp", "volume-list", "urp.volume.list"],
-    ["urp", "volume-create", "urp.volume.create"],
-    ["urp", "volume-info", "urp.volume.info"],
-    ["urp", "volume-add-effect", "urp.volume.add-effect"],
-    ["urp", "volume-set", "urp.volume.set"],
-    ["urp", "settings-get", "urp.settings.get"],
-    ["urp", "settings-set", "urp.settings.set"],
-    ["hdrp", "volume-list", "hdrp.volume.list"],
-    ["hdrp", "volume-create", "hdrp.volume.create"],
-    ["hdrp", "volume-info", "hdrp.volume.info"],
-    ["hdrp", "volume-add-effect", "hdrp.volume.add-effect"],
-    ["hdrp", "volume-set", "hdrp.volume.set"],
-    ["hdrp", "settings-get", "hdrp.settings.get"],
-    ["hdrp", "settings-set", "hdrp.settings.set"],
+    ["urp", "feature.list", "urp.feature.list"],
+    ["urp", "feature.add", "urp.feature.add"],
+    ["urp", "feature.toggle", "urp.feature.toggle"],
+    ["urp", "feature.configure", "urp.feature.configure"],
+    ["urp", "feature.remove", "urp.feature.remove"],
+    ["urp", "volume.list", "urp.volume.list"],
+    ["urp", "volume.create", "urp.volume.create"],
+    ["urp", "volume.info", "urp.volume.info"],
+    ["urp", "volume.add-effect", "urp.volume.add-effect"],
+    ["urp", "volume.set", "urp.volume.set"],
+    ["urp", "settings.get", "urp.settings.get"],
+    ["urp", "settings.set", "urp.settings.set"],
+    ["hdrp", "volume.list", "hdrp.volume.list"],
+    ["hdrp", "volume.create", "hdrp.volume.create"],
+    ["hdrp", "volume.info", "hdrp.volume.info"],
+    ["hdrp", "volume.add-effect", "hdrp.volume.add-effect"],
+    ["hdrp", "volume.set", "hdrp.volume.set"],
+    ["hdrp", "settings.get", "hdrp.settings.get"],
+    ["hdrp", "settings.set", "hdrp.settings.set"],
     ["cinemachine", "ping", "cinemachine.ping"],
     ["vfx", "graph.info", "vfx.graph.info"],
     ["vfx", "graph.create", "vfx.graph.create"],
@@ -498,7 +498,7 @@ test("URP, HDRP, Cinemachine, and VFX extension bridge specs route through proje
   ] as const;
   for (const [group, command, toolName] of expected) {
     const spec = bridgeCommandRegistry.lookup(group, command);
-    assert.equal(spec?.bridgeCommand, "project-tool.run", `${toolName}: bridge command`);
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `${toolName}: bridge command`);
     assert.equal(spec?.toolName, toolName, `${toolName}: tool name`);
   }
 });

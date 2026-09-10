@@ -6,7 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using UnityEditor;
-using UnityEditor.Compilation;
 using UnityCli.Protocol;
 
 namespace UnityCli
@@ -31,30 +30,36 @@ namespace UnityCli
                 }
                 protected override void ValidateLoadedRoot(Dictionary<string, object> root)
                 {
-                    ValidateRootContract(root, new[] { "sequence", "runId", "refresh", "path", "forceUpdate", "importRecursive", "includeWarnings", "diagnostics", "diagnosticErrorCount", "diagnosticWarningCount", "diagnosticInfoCount", "diagnosticsTruncated", "startedCycle", "startedAt", "finishedAt", "reloadObserved", "rootContractDigest" },
+                    ValidateRootContract(root, new[] { "sequence", "runId", "refresh", "path", "forceUpdate", "importRecursive", "includeWarnings", "compilationObserved", "compileObservationSequence", "startedSequence", "diagnostics", "diagnosticErrorCount", "diagnosticWarningCount", "diagnosticInfoCount", "diagnosticsTruncated", "stableFrames", "startedCycle", "startedAt", "finishedAt", "reloadObserved", "rootContractDigest" },
                         "queued", "prepared", "dispatching", "awaiting_started", "compiling", "cycle_finished");
-                    object sequence; object refresh; object forceUpdate; object recursive; object warnings; object diagnostics; object errorCount; object warningCount; object infoCount; object truncated;
+                    object sequence; object refresh; object forceUpdate; object recursive; object warnings; object observed; object diagnostics; object errorCount; object warningCount; object infoCount; object truncated; object stableFrames;
                     if (!root.TryGetValue("sequence", out sequence) || !(sequence is long) || (long)sequence <= 0
                         || string.IsNullOrWhiteSpace(Text(root, "runId"))
                         || !root.TryGetValue("refresh", out refresh) || !(refresh is bool)
                         || !root.TryGetValue("forceUpdate", out forceUpdate) || !(forceUpdate is bool)
                         || !root.TryGetValue("importRecursive", out recursive) || !(recursive is bool)
                         || !root.TryGetValue("includeWarnings", out warnings) || !(warnings is bool)
+                        || !root.TryGetValue("compilationObserved", out observed) || !(observed is bool)
+                        || !root.TryGetValue("compileObservationSequence", out sequence) || !(sequence is long) || (long)sequence < 0
+                        || !root.TryGetValue("startedSequence", out sequence) || !(sequence is long) || (long)sequence < 0
                         || !root.TryGetValue("diagnostics", out diagnostics) || !(diagnostics is List<object>)
                         || !root.TryGetValue("diagnosticErrorCount", out errorCount) || !(errorCount is long) || (long)errorCount < 0 || (long)errorCount > 1000000
                         || !root.TryGetValue("diagnosticWarningCount", out warningCount) || !(warningCount is long) || (long)warningCount < 0 || (long)warningCount > 1000000
                         || !root.TryGetValue("diagnosticInfoCount", out infoCount) || !(infoCount is long) || (long)infoCount < 0 || (long)infoCount > 1000000
-                        || !root.TryGetValue("diagnosticsTruncated", out truncated) || !(truncated is long) || (long)truncated < 0 || (long)truncated > 1000000)
+                        || !root.TryGetValue("diagnosticsTruncated", out truncated) || !(truncated is long) || (long)truncated < 0 || (long)truncated > 1000000
+                        || !root.TryGetValue("stableFrames", out stableFrames) || !(stableFrames is long) || (long)stableFrames < 0
+                        || string.IsNullOrWhiteSpace(Text(root, "startedAt")))
                         throw new InvalidDataException("Compile active root fields are invalid.");
                     if (!string.Equals(Text(root, "rootContractDigest"), CompileRootContractDigest(root), StringComparison.Ordinal))
                         throw new InvalidDataException("Compile immutable root contract changed.");
                     ValidateBoundedDiagnostics(root, "diagnostics", "diagnosticErrorCount", "diagnosticWarningCount", "diagnosticInfoCount", "diagnosticsTruncated", (bool)warnings);
                     var phase = Text(root, "phase");
-                    var fenced = HasExactEffectFence("compile", root, "compile-dispatch");
+                    var fenced = HasExactEffectFence("compile", root, "asset-refresh-dispatch");
                     if ((phase == "queued" || phase == "prepared") == fenced)
                         throw new InvalidDataException("Compile effect fence is inconsistent with phase.");
-                    if ((phase == "compiling" || phase == "cycle_finished")
-                        && (Long(root, "startedCycle") <= 0 || string.IsNullOrWhiteSpace(Text(root, "startedAt"))))
+                    if ((bool)observed != (phase == "compiling" || phase == "cycle_finished"))
+                        throw new InvalidDataException("Compile observation state is inconsistent with phase.");
+                    if ((bool)observed && (Long(root, "startedCycle") <= 0 || Long(root, "startedSequence") <= Long(root, "compileObservationSequence")))
                         throw new InvalidDataException("Compile active cycle identity is invalid.");
                 }
 
@@ -67,11 +72,20 @@ namespace UnityCli
                     });
                 }
 
-                protected override object Planned(object value) { return new Dictionary<string, object> { { "plannedEffects", new List<object> { new Dictionary<string, object> { { "type", "script-compile" } } } } }; }
+                protected override object Planned(object value)
+                {
+                    var args = (StartArgs)value;
+                    var effects = new List<object>();
+                    if (!string.IsNullOrEmpty(args.Path)) effects.Add(new Dictionary<string, object> { { "type", "asset-import" }, { "path", args.Path } });
+                    else effects.Add(new Dictionary<string, object> { { "type", "asset-refresh" } });
+                    effects.Add(new Dictionary<string, object> { { "type", "script-compile" } });
+                    effects.Add(new Dictionary<string, object> { { "type", "domain-reload" } });
+                    return new Dictionary<string, object> { { "plannedEffects", effects } };
+                }
                 protected override Dictionary<string, object> CreateRoot(BridgeRequest request, string digest, object value)
                 {
                     var args = (StartArgs)value;
-                    var root = new Dictionary<string, object> { { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc }, { "phase", "queued" }, { "sequence", NextSequenceLocked() }, { "runId", "compile-" + digest.Substring(0, 32) }, { "refresh", args.Refresh ?? true }, { "path", args.Path }, { "forceUpdate", args.ForceUpdate ?? false }, { "importRecursive", args.ImportRecursive ?? false }, { "includeWarnings", args.IncludeWarnings ?? true }, { "diagnostics", new List<object>() }, { "diagnosticErrorCount", 0L }, { "diagnosticWarningCount", 0L }, { "diagnosticInfoCount", 0L }, { "diagnosticsTruncated", 0L } };
+                    var root = new Dictionary<string, object> { { "requestId", request.RequestId }, { "editorSessionId", EditorSessionId() }, { "requestDigest", digest }, { "deadline", request.Execution.AbsoluteDeadlineUtc }, { "phase", "queued" }, { "sequence", NextSequenceLocked() }, { "runId", "compile-" + digest.Substring(0, 32) }, { "refresh", string.IsNullOrEmpty(args.Path) }, { "path", args.Path }, { "forceUpdate", args.ForceUpdate ?? false }, { "importRecursive", args.ImportRecursive ?? false }, { "includeWarnings", args.IncludeWarnings ?? true }, { "compilationObserved", false }, { "compileObservationSequence", 0L }, { "startedSequence", 0L }, { "diagnostics", new List<object>() }, { "diagnosticErrorCount", 0L }, { "diagnosticWarningCount", 0L }, { "diagnosticInfoCount", 0L }, { "diagnosticsTruncated", 0L }, { "stableFrames", 0L }, { "startedAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) }, { "reloadObserved", false } };
                     root["rootContractDigest"] = CompileRootContractDigest(root);
                     return root;
                 }
@@ -81,6 +95,14 @@ namespace UnityCli
                     var phase = Text(root, "phase");
                     if (phase == "queued") { Update(x => x["phase"] = "prepared"); return; }
                     if (phase == "prepared") { if (!EditorApplication.isCompiling && !EditorApplication.isUpdating && !IsDomainReloading()) Dispatch(root); return; }
+                    if (phase == "awaiting_started" && !EditorApplication.isCompiling && !EditorApplication.isUpdating && !IsDomainReloading())
+                    {
+                        var frames = Long(root, "stableFrames") + 1L;
+                        root["stableFrames"] = frames;
+                        Update(x => x["stableFrames"] = frames);
+                        if (frames >= 3L) Complete(root);
+                        return;
+                    }
                     if (phase == "cycle_finished" && !EditorApplication.isCompiling && !EditorApplication.isUpdating && !IsDomainReloading()) Complete(root);
                 }
                 protected override object BuildSuccessData(Dictionary<string, object> root)
@@ -90,17 +112,30 @@ namespace UnityCli
                     var assemblies = typed.Where(x => !string.IsNullOrEmpty(Text(x, "assembly"))).Select(x => Text(x, "assembly")).Distinct(StringComparer.Ordinal).Count();
                     var startedAt = Text(root, "startedAt"); var finishedAt = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
                     var durationMs = DateTimeOffset.TryParse(startedAt, out var started) ? (long)Math.Max(0, (DateTimeOffset.UtcNow - started).TotalMilliseconds) : 0L;
-                    var refresh = Bool(root, "refresh"); var path = string.IsNullOrEmpty(Text(root, "path")) ? null : Text(root, "path");
-                    var compile = new Dictionary<string, object> { { "completed", true }, { "refresh", refresh }, { "path", path }, { "startedAt", startedAt }, { "finishedAt", finishedAt }, { "durationMs", durationMs }, { "assemblyCount", (long)assemblies }, { "errorCount", (long)errors }, { "warningCount", (long)warnings }, { "status", warnings > 0 ? "warnings" : "clean" } };
-                    var effects = new List<object>(); if (path != null) effects.Add(new Dictionary<string, object> { { "type", "asset-import" }, { "path", path } }); else if (refresh) effects.Add(new Dictionary<string, object> { { "type", "asset-refresh" } }); effects.Add(new Dictionary<string, object> { { "type", "script-compile" } }); effects.Add(new Dictionary<string, object> { { "type", "domain-reload" } });
+                    var refresh = Bool(root, "refresh"); var path = string.IsNullOrEmpty(Text(root, "path")) ? null : Text(root, "path"); var compilationTriggered = Bool(root, "compilationObserved");
+                    var status = compilationTriggered ? (warnings > 0 ? "warnings" : "clean") : "unchanged";
+                    var compile = new Dictionary<string, object> { { "completed", true }, { "compilationTriggered", compilationTriggered }, { "noOpReason", compilationTriggered ? null : "no-script-changes" }, { "refresh", refresh }, { "path", path }, { "startedAt", startedAt }, { "finishedAt", finishedAt }, { "durationMs", durationMs }, { "assemblyCount", (long)assemblies }, { "errorCount", (long)errors }, { "warningCount", (long)warnings }, { "status", status } };
+                    var effects = new List<object>(); if (path != null) effects.Add(new Dictionary<string, object> { { "type", "asset-import" }, { "path", path } }); else if (refresh) effects.Add(new Dictionary<string, object> { { "type", "asset-refresh" } }); if (compilationTriggered) { effects.Add(new Dictionary<string, object> { { "type", "script-compile" } }); effects.Add(new Dictionary<string, object> { { "type", "domain-reload" } }); }
                     var state = new Dictionary<string, object> { { "status", "ready" }, { "compile", new Dictionary<string, object> { { "known", true }, { "value", false } } }, { "import", new Dictionary<string, object> { { "known", true }, { "value", false } } }, { "playMode", new Dictionary<string, object> { { "known", true }, { "value", EditorApplication.isPlaying ? "play" : "edit" } } } };
                     return new Dictionary<string, object> { { "compile", compile }, { "diagnostics", diagnostics }, { "editorState", state }, { "plannedEffects", effects } };
                 }
+                /// <summary>刷新前冻结事件序号；刷新后的编译是否发生完全由 Unity Asset Pipeline 决定。</summary>
                 private void Dispatch(Dictionary<string, object> root)
                 {
                     var id = Text(root, "requestId"); if (!string.IsNullOrEmpty(activeDispatchRequestId)) return; activeDispatchRequestId = id;
-                    try { root = CrossEffectFence(root, "compile-dispatch", "dispatching"); var path = Text(root, "path"); if (!string.IsNullOrEmpty(path)) AssetDatabase.ImportAsset(path); else if (Bool(root, "refresh")) AssetDatabase.Refresh(Bool(root, "forceUpdate") ? ImportAssetOptions.ForceUpdate : ImportAssetOptions.Default); if (!EditorApplication.isCompiling) CompilationPipeline.RequestScriptCompilation(); Update(x => { if (Text(x, "phase") == "dispatching") x["phase"] = "awaiting_started"; }); }
-                    catch (Exception e) { Fail(root, "E_EXECUTION_TIMEOUT", "Compilation dispatch result cannot be confirmed: " + e.Message + "; check the business state."); }
+                    try
+                    {
+                        var observationSequence = UnityCliCompilationEventBroker.CurrentCompilationEventSequence();
+                        if (UnityCliCompilationEventBroker.SequenceCorrupt) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Compilation event sequence is corrupt; refresh is forbidden.");
+                        Update(x => { x["compileObservationSequence"] = observationSequence; x["stableFrames"] = 0L; });
+                        root["compileObservationSequence"] = observationSequence;
+                        root = CrossEffectFence(root, "asset-refresh-dispatch", "dispatching");
+                        var path = Text(root, "path");
+                        if (!string.IsNullOrEmpty(path)) AssetDatabase.ImportAsset(path);
+                        else AssetDatabase.Refresh(Bool(root, "forceUpdate") ? ImportAssetOptions.ForceUpdate : ImportAssetOptions.Default);
+                        Update(x => { if (Text(x, "phase") == "dispatching") x["phase"] = "awaiting_started"; });
+                    }
+                    catch (Exception e) { Fail(root, "E_EXECUTION_TIMEOUT", "Compilation refresh result cannot be confirmed: " + e.Message + "; check the business state."); }
                     finally { activeDispatchRequestId = null; }
                 }
                 private void Complete(Dictionary<string, object> root) { if (Long(root, "diagnosticErrorCount") > 0) Fail(root, "E_UNITY_COMPILE_FAILED", "Unity reported compiler errors.", BuildCompileFailureDetails(root), new[] { "Fix the listed compiler diagnostics before retrying." }); else Succeed(root); }
@@ -108,13 +143,13 @@ namespace UnityCli
                 {
                     return new Dictionary<string, object>
                     {
-                        { "compile", new Dictionary<string, object> { { "completed", true }, { "errorCount", Long(root, "diagnosticErrorCount") }, { "warningCount", Long(root, "diagnosticWarningCount") }, { "status", "errors" }, { "diagnosticsTruncated", Long(root, "diagnosticsTruncated") } } },
+                        { "compile", new Dictionary<string, object> { { "completed", true }, { "compilationTriggered", true }, { "noOpReason", null }, { "errorCount", Long(root, "diagnosticErrorCount") }, { "warningCount", Long(root, "diagnosticWarningCount") }, { "status", "errors" }, { "diagnosticsTruncated", Long(root, "diagnosticsTruncated") } } },
                         { "diagnostics", root["diagnostics"] }
                     };
                 }
                 internal void BeforeReload() { Update(x => x["reloadObserved"] = true); }
                 internal long CurrentOwnedCycle() { var root = Load(); return root != null && UnityCliSessionMutationLease.IsOwnedBy(Text(root, "requestId"), Text(root, "requestDigest")) ? Long(root, "startedCycle") : 0; }
-                internal void OnCompilationStarted(long cycle, DateTime startedAt) { Update(x => { if (Text(x, "phase") == "dispatching" || Text(x, "phase") == "awaiting_started") { x["startedCycle"] = cycle; x["startedAt"] = startedAt.ToString("O", CultureInfo.InvariantCulture); x["phase"] = "compiling"; } }); }
+                internal void OnCompilationStarted(long cycle, long sequence, DateTime startedAt) { Update(x => { if ((Text(x, "phase") == "dispatching" || Text(x, "phase") == "awaiting_started") && sequence > Long(x, "compileObservationSequence")) { x["startedCycle"] = cycle; x["startedSequence"] = sequence; x["compilationObserved"] = true; x["stableFrames"] = 0L; x["phase"] = "compiling"; } }); }
                 internal void OnAssemblyCompilationFinished(long cycle, List<Dictionary<string, object>> diagnostics) { Update(x => { if (Text(x, "phase") == "compiling" && Long(x, "startedCycle") == cycle) AppendBoundedDiagnostics(x, "diagnostics", "diagnosticErrorCount", "diagnosticWarningCount", "diagnosticInfoCount", "diagnosticsTruncated", Bool(x, "includeWarnings"), diagnostics); }); }
                 internal void OnCompilationFinished(long cycle, DateTime finishedAt) { Update(x => { if (Text(x, "phase") == "compiling" && Long(x, "startedCycle") == cycle) { x["finishedAt"] = finishedAt.ToString("O", CultureInfo.InvariantCulture); x["phase"] = "cycle_finished"; } }); }
             }
@@ -128,51 +163,25 @@ namespace UnityCli
             internal static void BeforeReload() { operation.BeforeReload(); }
             internal static void Tick() { operation.Tick(); }
             internal static long CurrentOwnedCycle() { return operation.CurrentOwnedCycle(); }
-            internal static void RequestRefreshCompilation(string requestId, string requestDigest)
-            {
-                if (!UnityCliSessionMutationLease.IsOwnedBy(requestId, requestDigest)) throw new BridgeCommandException("E_UNITY_BUSY", "Refresh root does not own the exact mutation lease.");
-                var dispatchSequence = UnityCliCompilationEventBroker.CurrentCompilationEventSequence();
-                if (UnityCliCompilationEventBroker.SequenceCorrupt)
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Refresh compilation sequence is corrupt; dispatch is forbidden.");
-                var refreshRoot = UnityCliActiveOperation.Load("refresh");
-                if (refreshRoot == null || Text(refreshRoot, "requestId") != requestId || Text(refreshRoot, "requestDigest") != requestDigest)
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Refresh compilation root identity cannot be proven.");
-                if (UnityCliReloadOperation.HasExactEffectFence("refresh", refreshRoot, "compile-dispatch"))
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Refresh compilation effect fence was already crossed.");
-                UnityCliReloadOperation.WriteEffectFence("refresh", refreshRoot, "compile-dispatch");
-                UpdateRefresh(requestId, requestDigest, x =>
-                {
-                    if (!Bool(x, "compile") || Bool(x, "compilationRequested") || Text(x, "phase") != "refresh_returned")
-                        throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Refresh compilation dispatch state is invalid.");
-                    x["compilationRequested"] = true; x["compileDispatchSequence"] = dispatchSequence; x["compilePhase"] = "dispatching";
-                });
-                var confirmed = UnityCliActiveOperation.Load("refresh");
-                if (confirmed == null || Text(confirmed, "requestId") != requestId || Text(confirmed, "requestDigest") != requestDigest
-                    || Text(confirmed, "compilePhase") != "dispatching" || !UnityCliReloadOperation.HasExactEffectFence("refresh", confirmed, "compile-dispatch"))
-                    throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Refresh compilation post-fence state cannot be confirmed.");
-                if (!UnityCliSessionMutationLease.IsOwnedBy(requestId, requestDigest)) throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Refresh lost its exact lease before compilation dispatch.");
-                CompilationPipeline.RequestScriptCompilation();
-                UpdateRefresh(requestId, requestDigest, x => { if (Text(x, "compilePhase") == "dispatching") x["compilePhase"] = "awaiting_started"; });
-            }
             internal static void OnCompilationStarted(long cycle, long sequence, DateTime startedAt)
             {
-                operation.OnCompilationStarted(cycle, startedAt);
-                UpdateRefresh(null, null, x =>
+                operation.OnCompilationStarted(cycle, sequence, startedAt);
+                UpdateRefresh(x =>
                 {
                     var phase = Text(x, "compilePhase");
-                    if (Bool(x, "compile") && Bool(x, "compilationRequested")
-                        && (phase == "dispatching" || phase == "awaiting_started")
-                        && sequence > Long(x, "compileDispatchSequence"))
+                    if (Bool(x, "compile") && Bool(x, "compilationObservationStarted")
+                        && phase == "awaiting_started"
+                        && sequence > Long(x, "compileObservationSequence"))
                     {
                         x["compileStartedCycle"] = cycle; x["compileStartedSequence"] = sequence;
-                        x["compilePhase"] = "compiling"; x["compilationObserved"] = true;
+                        x["compilePhase"] = "compiling"; x["compilationObserved"] = true; x["stableFrames"] = 0L;
                     }
                 });
             }
             internal static void OnAssemblyCompilationFinished(long cycle, long sequence, string assembly, List<Dictionary<string, object>> diagnostics)
             {
                 operation.OnAssemblyCompilationFinished(cycle, diagnostics);
-                UpdateRefresh(null, null, x =>
+                UpdateRefresh(x =>
                 {
                     if (Text(x, "compilePhase") == "compiling" && Long(x, "compileStartedCycle") == cycle
                         && sequence > Long(x, "compileStartedSequence"))
@@ -182,19 +191,17 @@ namespace UnityCli
             internal static void OnCompilationFinished(long cycle, long sequence, DateTime finishedAt)
             {
                 operation.OnCompilationFinished(cycle, finishedAt);
-                UpdateRefresh(null, null, x =>
+                UpdateRefresh(x =>
                 {
                     if (Text(x, "compilePhase") == "compiling" && Long(x, "compileStartedCycle") == cycle
                         && sequence > Long(x, "compileStartedSequence"))
                     { x["compileFinishedSequence"] = sequence; x["compilePhase"] = "cycle_finished"; }
                 });
             }
-            private static void UpdateRefresh(string id, string digest, Action<Dictionary<string, object>> action)
+            private static void UpdateRefresh(Action<Dictionary<string, object>> action)
             {
                 if (!UnityCliActiveOperation.Exists("refresh")) return;
                 var root = UnityCliActiveOperation.Load("refresh");
-                if (id != null && Text(root, "requestId") != id) return;
-                if (digest != null && Text(root, "requestDigest") != digest) throw new BridgeCommandException("E_REQUEST_ID_REUSED", "Refresh request identity changed during compilation dispatch.");
                 if (!UnityCliSessionMutationLease.IsOwnedBy(Text(root, "requestId"), Text(root, "requestDigest"))) return;
                 action(root);
                 UnityCliActiveOperation.Save("refresh", root);
@@ -264,7 +271,7 @@ namespace UnityCli
             private static string Text(IDictionary<string, object> value, string key) { object item; return value != null && value.TryGetValue(key, out item) && item != null ? Convert.ToString(item, CultureInfo.InvariantCulture) : string.Empty; }
             private static bool Bool(IDictionary<string, object> value, string key) { object item; return value != null && value.TryGetValue(key, out item) && item is bool && (bool)item; }
             private static long Long(IDictionary<string, object> value, string key) { long result; return long.TryParse(Text(value, key), out result) ? result : 0; }
-            private sealed class StartArgs { public bool? Refresh { get; set; } public string Path { get; set; } public bool? ForceUpdate { get; set; } public bool? ImportRecursive { get; set; } public bool? IncludeWarnings { get; set; } public string ExpectedEditorSessionId { get; set; } }
+            private sealed class StartArgs { public string Path { get; set; } public bool? ForceUpdate { get; set; } public bool? ImportRecursive { get; set; } public bool? IncludeWarnings { get; set; } public string ExpectedEditorSessionId { get; set; } }
         }
     }
 }

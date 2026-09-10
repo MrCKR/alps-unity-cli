@@ -32,25 +32,25 @@ alps-unity-cli的安全模型围绕三个核心原则：Tool副作用必须准�
 | `tools run texture.modify` | 修改 Texture 资产 |
 | `tools run texture.delete` | 删除 Texture 资产 |
 | `tools run shader.delete` | 删除 Shader 资产 |
-| `tools run object.modify` | 修改场景对象或持久资产数据 |
+| `tools run serialized-object.patch` | 修改场景对象或持久资产数据 |
 | `tools run component.modify` | 修改场景组件或持久 Prefab/资产组件 |
 | `tools run texture.import-settings` | 持久化 TextureImporter 设置 |
 | `tools run texture.sprite` | 持久化 Sprite importer 与切片设置 |
-| `tools run graphics.quality` | 持久化 QualitySettings |
-| `tools run graphics.pipeline-settings` | 持久化默认 RenderPipelineAsset 并触发资产导入 |
-| `tools run graphics.bake-settings` | 持久化 LightingSettings 与场景绑定 |
+| `tools run rendering.quality` | 持久化 QualitySettings |
+| `tools run rendering.pipeline.settings` | 持久化默认 RenderPipelineAsset 并触发资产导入 |
+| `tools run lighting.bake.settings` | 持久化 LightingSettings 与场景绑定 |
 | `tools run build.platform.set` | 持久切换 active BuildTarget |
 | `tools run build.profile.switch` | 持久切换 active Build Profile |
 | `tools run editor.menu` | 执行编辑器菜单项 |
-| `tools run reflection.method.call` | 调用精确同步 C# overload，并要求独立 completion proof |
+| `tools run runtime-reflection.method.invoke` | 调用精确同步 C# overload，并要求独立 completion proof |
 | `tools run package.install` | 安装包 |
 | `tools run package.remove` | 移除包 |
 | `tools run package.deploy` | 复制本地 package 源到项目 Packages 目录 |
 | `tools run package.restore` | 从 package.deploy 备份恢复或移除部署目录 |
 | `tools run package.bridge-remove` | 移除 init 复制的 Bridge 包 |
-| `tools run code.exec` | 在已打开的 Unity Editor 中执行代码 |
+| `tools run code.execute` | 在已打开的 Unity Editor 中执行代码 |
 
-`code.exec`保留完整的同步C#执行能力，不按代码内容拒绝死循环、长时间sleep、阻塞等待、锁等待、同步I/O或长期占用Unity API。调用方在提交这类代码前必须先判断它对当前结果是否确有必要，并考虑有界写法或现有Tool能否达到同一结果；确有必要时仍可原样执行。代码一旦在Unity Editor主线程开始，`--timeout-ms`和取消只能停止CLI等待，不能强制中止正在运行的C#。Unity可能无响应，mutation owner可能无法收尾，业务状态可能部分改变或无法证明，恢复可能需要结束Editor进程。此时timeout不表示代码已经停止，不能据此直接重试。`--dry-run`只返回source hash和planned effect，不编译、不执行，也不验证代码能够结束。
+`code.execute`保留完整的同步C#执行能力，不按代码内容拒绝死循环、长时间sleep、阻塞等待、锁等待、同步I/O或长期占用Unity API。调用方在提交这类代码前必须先判断它对当前结果是否确有必要，并考虑有界写法或现有Tool能否达到同一结果；确有必要时仍可原样执行。代码一旦在Unity Editor主线程开始，`--timeout-ms`和取消只能停止CLI等待，不能强制中止正在运行的C#。Unity可能无响应，mutation owner可能无法收尾，业务状态可能部分改变或无法证明，恢复可能需要结束Editor进程。此时timeout不表示代码已经停止，不能据此直接重试。`--dry-run`只返回source hash和planned effect，不编译、不执行，也不验证代码能够结束。
 
 ### 可选预览
 

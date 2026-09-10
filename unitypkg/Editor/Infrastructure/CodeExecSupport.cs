@@ -36,7 +36,7 @@ namespace UnityCli
         private static void RegisterCodeExecCommand(BridgeCommandRegistry registry)
         {
             registry.Register<UnityCli.Protocol.BridgeRequest>(
-                "code.exec",
+                "code.execute",
                 "code",
                 true,
                 60000,
@@ -49,7 +49,7 @@ namespace UnityCli
         private static string CodeExec(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             if (request.Execution != null && request.Execution.DryRun == true)
-                throw new BridgeCommandException("E_DRY_RUN_UNSUPPORTED", "Raw Bridge code.exec dry-run cannot execute or compile caller source.", "Use the public tools run code.exec --dry-run path, which returns the CLI-side source preview without Bridge dispatch.");
+                throw new BridgeCommandException("E_DRY_RUN_UNSUPPORTED", "Raw Bridge code.execute dry-run cannot execute or compile caller source.", "Use the public tools run code.execute --dry-run path, which returns the CLI-side source preview without Bridge dispatch.");
             var source = request.StringArg("sourceText");
             // raw Bridge不读取调用方路径；公开CLI已按入口deadline有界读取并内联唯一源码。
             if (string.IsNullOrWhiteSpace(source))
@@ -60,11 +60,11 @@ namespace UnityCli
             var result = ExecuteCodeSource(request, source, cancellationToken);
             WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
             var serialized = SerializeCodeExecutionResult(request.RequestId, result);
-            if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "code.exec", ResolveRequestCompletionContract(request), result.Data);
+            if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "code.execute", ResolveRequestCompletionContract(request), result.Data);
             return serialized;
         }
 
-        /// <summary>所有 code.exec terminal 统一经过同一 Bridge envelope 与总 byte 上限。</summary>
+        /// <summary>所有 code.execute terminal 统一经过同一 Bridge envelope 与总 byte 上限。</summary>
         private static string SerializeCodeExecutionResult(string requestId, CodeExecutionResult result)
         {
             object envelope = result.Ok

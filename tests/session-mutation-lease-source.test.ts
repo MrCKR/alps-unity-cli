@@ -278,13 +278,23 @@ test("TestRunner attribution persists dispatch, returned identity, callback iden
   assert.doesNotMatch(testCoordinator, /RequestJournal|E_REQUEST_OUTCOME_UNKNOWN/);
 });
 
-test("refresh delegates compile dispatch and callback attribution to compile coordinator", async () => {
+test("compile and refresh observe only Unity-triggered compilation after asset refresh", async () => {
   const [refresh, compile] = await Promise.all([
     source("unitypkg/Editor/Infrastructure/UnityCliLiveRefreshCoordinator.cs"),
     source("unitypkg/Editor/Infrastructure/UnityCliCompileCoordinator.cs"),
   ]);
-  assert.match(refresh, /UnityCliCompileCoordinator\.RequestRefreshCompilation/);
-  assert.doesNotMatch(refresh, /CompilationPipeline\.RequestScriptCompilation|RequestJournal|E_REQUEST_OUTCOME_UNKNOWN/);
+  assert.doesNotMatch(refresh, /RequestRefreshCompilation|RequestScriptCompilation|RequestJournal|E_REQUEST_OUTCOME_UNKNOWN/);
+  assert.doesNotMatch(compile, /RequestRefreshCompilation|RequestScriptCompilation/);
+  assertBefore(refresh, "CurrentCompilationEventSequence()", "AssetDatabase.Refresh()");
+  assertBefore(compile, "CurrentCompilationEventSequence()", "AssetDatabase.Refresh(");
+  assert.match(refresh, /compilationObservationStarted[\s\S]*compileObservationSequence/);
+  assert.match(compile, /sequence > Long\(x, "compileObservationSequence"\)/);
+  const digestStart = compile.indexOf("private static string CompileRootContractDigest");
+  const digestEnd = compile.indexOf("protected override object Planned", digestStart);
+  assert.ok(digestStart >= 0 && digestEnd > digestStart);
+  assert.doesNotMatch(compile.slice(digestStart, digestEnd), /"startedAt"/);
+  assert.match(compile, /var status = compilationTriggered \? \(warnings > 0 \? "warnings" : "clean"\) : "unchanged"/);
+  assert.match(compile, /"compilationTriggered", compilationTriggered[\s\S]*"noOpReason", compilationTriggered \? null : "no-script-changes"/);
   assert.match(refresh, /compileDiagnosticsTruncated/);
   assert.match(compile, /target\.Count >= 200[\s\S]*512 \* 1024/);
   assert.match(compile, /BoundedDiagnosticText\(Text\(source, "message"\), 4096\)/);
@@ -296,8 +306,6 @@ test("refresh delegates compile dispatch and callback attribution to compile coo
   assert.match(refresh, /Scope \{ get \{ return "refresh"; \} \}/);
   assert.match(refresh, /UnityCliReloadOperation/);
   assert.match(refresh, /E_EXECUTION_TIMEOUT/);
-  assert.match(compile, /RequestRefreshCompilation/);
-  assert.match(compile, /UpdateRefresh\(null, null, x =>/);
-  assert.match(compile, /CurrentCompilationEventSequence[\s\S]*compileDispatchSequence[\s\S]*compilationRequested[\s\S]*sequence > Long\(x, "compileDispatchSequence"\)/);
+  assert.match(compile, /UpdateRefresh\(x =>/);
   assert.match(compile, /compileDiagnostics/);
 });

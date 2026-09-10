@@ -35,7 +35,7 @@ test("Occlusion只公开四个批准的canonical Tool", () => {
 test("Occlusion clear通过唯一project-tool bridge spec路由", () => {
   const spec = bridgeCommandRegistry.lookup("occlusion", "bake-clear");
   assert.ok(spec);
-  assert.equal(spec?.bridgeCommand, "project-tool.run");
+  assert.equal(spec?.bridgeCommand, "catalog.editor.run");
   assert.equal(spec?.toolName, "occlusion.bake-clear");
   assert.equal(spec?.supportsDryRun, true);
 });

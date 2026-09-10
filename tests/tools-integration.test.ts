@@ -13,18 +13,18 @@ process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 const disconnected = { dataDir: "Z:/definitely-missing-unity-cli-data" } as const;
 const injectedBridge = async (payload: BridgeRequest) => ({ ok: true as const, requestId: payload.requestId, data: {} });
 const goFindTool = makeLiveTool({
-  name: "go.find",
+  name: "game-object.find",
   summary: "Find scene objects by name.",
   description: "Find matching scene objects by name and return a bounded result page.",
-  group: "go",
+  group: "game-object",
   inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"], additionalProperties: false },
   examples: [{
     description: "Find an object named Player.",
-    argv: ["tools", "run", "go.find", "--input", "{\"name\":\"Player\"}"],
+    argv: ["tools", "run", "game-object.find", "--input", "{\"name\":\"Player\"}"],
   }],
 });
 const cameraScreenshotTool = makeLiveTool({
-  name: "camera.screenshot",
+  name: "screenshot.from-camera",
   summary: "Capture a screenshot from a Unity camera.",
   description: "Capture a screenshot from a Unity camera and return the saved artifact metadata.",
   group: "camera",
@@ -129,17 +129,17 @@ test("each discovery root performs one bounded catalog transport per target", as
     }),
     bridgeExecute: async (payload: BridgeRequest) => {
       calls.set(payload.command, (calls.get(payload.command) ?? 0) + 1);
-      if (payload.command.endsWith(".groups")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, groups: payload.command.startsWith("project") ? [{ name: live.group, toolCount: 1 }] : [] } };
+      if (payload.command.endsWith(".groups")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, groups: payload.command.startsWith("catalog.editor") ? [{ name: live.group, toolCount: 1 }] : [] } };
       if (payload.command.endsWith(".summary")) {
         const input = payload.input as { limit: number; localNames: string[] };
-        const liveNames = payload.command.startsWith("project") ? [summary.name] : [];
+        const liveNames = payload.command.startsWith("catalog.editor") ? [summary.name] : [];
         const allNames = [...new Set([...input.localNames, ...liveNames])].sort();
         const pageNames = allNames.slice(0, input.limit);
         const data = {
           catalogGeneration: `${payload.command}-generation`,
           total: liveNames.length,
           hasMore: allNames.length > input.limit,
-          tools: payload.command.startsWith("project") && pageNames.includes(summary.name) ? [summary] : [],
+          tools: payload.command.startsWith("catalog.editor") && pageNames.includes(summary.name) ? [summary] : [],
         };
         return { ok: true as const, requestId: payload.requestId, data: {
           ...data,
@@ -147,7 +147,7 @@ test("each discovery root performs one bounded catalog transport per target", as
           continuationToken: `${payload.command}-opaque`,
         } };
       }
-      if (payload.command.endsWith(".describe")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, found: payload.command.startsWith("project"), ...(payload.command.startsWith("project") ? { descriptor: descriptorPayload } : {}) } };
+      if (payload.command.endsWith(".describe")) return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: `${payload.command}-generation`, found: payload.command.startsWith("catalog.editor"), ...(payload.command.startsWith("catalog.editor") ? { descriptor: descriptorPayload } : {}) } };
       throw new Error(`unexpected catalog command ${payload.command}`);
     },
   };
@@ -163,12 +163,12 @@ test("each discovery root performs one bounded catalog transport per target", as
     assert.deepEqual(acquisitions.slice(before), ["editor", "runtime"], argv.join(" "));
   }
 
-  for (const command of ["project-tool.groups", "runtime-tool.groups", "project-tool.describe", "runtime-tool.describe"])
+  for (const command of ["catalog.editor.groups", "catalog.player.groups", "catalog.editor.describe", "catalog.player.describe"])
     assert.equal(calls.get(command), 1, command);
-  assert.equal(calls.get("project-tool.summary"), 2);
-  assert.equal(calls.get("runtime-tool.summary"), 2);
-  assert.equal(calls.get("project-tool.list") ?? 0, 0);
-  assert.equal(calls.get("runtime-tool.list") ?? 0, 0);
+  assert.equal(calls.get("catalog.editor.summary"), 2);
+  assert.equal(calls.get("catalog.player.summary"), 2);
+  assert.equal(calls.get("catalog.editor.list") ?? 0, 0);
+  assert.equal(calls.get("catalog.player.list") ?? 0, 0);
   assert.deepEqual(acquisitions, ["editor", "runtime", "editor", "runtime", "editor", "runtime", "editor", "runtime"]);
   const summaryBytes = Buffer.byteLength(JSON.stringify(summary), "utf8");
   const descriptorBytes = Buffer.byteLength(JSON.stringify(descriptorPayload), "utf8");
@@ -218,14 +218,14 @@ test("tools run carries exact discovery provenance into the business root admiss
       completeRootAdmission: async () => undefined,
     }),
     bridgeExecute: async (payload: BridgeRequest) => {
-      if (payload.command === "project-tool.describe") return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: "editor-generation", found: true, descriptor: bridgeDescriptor(live) } };
-      if (payload.command === "runtime-tool.describe") return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: "runtime-generation", found: false } };
-      if (payload.command === "project-tool.run") return { ok: true as const, requestId: payload.requestId, data: { result: { includeInactive: false, items: [], matchCount: 0, pageInfo: { cursor: 0, pageSize: 100, total: 0 }, prefabStageOpen: false, preferPrefabStage: false, query: "Nothing", searchMethod: "by_name" } } };
+      if (payload.command === "catalog.editor.describe") return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: "editor-generation", found: true, descriptor: bridgeDescriptor(live) } };
+      if (payload.command === "catalog.player.describe") return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: "runtime-generation", found: false } };
+      if (payload.command === "catalog.editor.run") return { ok: true as const, requestId: payload.requestId, data: { result: { includeInactive: false, items: [], matchCount: 0, pageInfo: { cursor: 0, pageSize: 100, total: 0 }, prefabStageOpen: false, preferPrefabStage: false, query: "Nothing", searchMethod: "by_name" } } };
       throw new Error(`unexpected command ${payload.command}`);
     },
   };
 
-  const result = await execute(["tools", "run", "go.find", "--input", "{\"name\":\"Nothing\"}"], runtime as never);
+  const result = await execute(["tools", "run", "game-object.find", "--input", "{\"name\":\"Nothing\"}"], runtime as never);
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(admissions.map((request) => request.target), ["editor", "runtime", "editor"]);
   assert.equal(admissions[0].captureDiscoveryProvenance, true);
@@ -332,7 +332,7 @@ test("private summary and exact protocols fail closed on extra payload and wrong
   const runtimeExact = await readRuntimeCatalogDescriptor({}, {
     bridgeExecute: async (payload: BridgeRequest) => {
       runtimeDescribeCalls += 1;
-      assert.equal(payload.command, "runtime-tool.describe");
+      assert.equal(payload.command, "catalog.player.describe");
       assert.deepEqual(payload.input, { name: live.name });
       return { ok: true, requestId: payload.requestId, data: { catalogGeneration: "r".repeat(64), found: false } };
     },
@@ -403,7 +403,7 @@ test("tools search returns sorted routing-only pages without input or source ech
   assert.deepEqual(names, [...names].sort());
   assert.ok(names.includes("scene.hierarchy"));
   assert.ok(names.some((name) => name.includes("console")));
-  assert.ok(names.some((name) => name.startsWith("screenshot.") || name === "camera.screenshot"));
+  assert.ok(names.some((name) => name.startsWith("screenshot.") || name === "screenshot.from-camera"));
 });
 
 test("tools search trims and filters tokens, matches every routing field case-insensitively, and handles single/empty/no-match", async () => {
@@ -540,7 +540,7 @@ test("tools catalog对UnityPipeline保留namespace违规fail closed", async () =
       name: "UnityPipeline_native",
       summary: "Invalid native prefix.",
       description: "A native Tool cannot occupy the official attribute prefix.",
-      group: "project",
+      group: "project-settings",
       source: "project",
       contractProfile: "native",
     }),
@@ -596,7 +596,7 @@ test("重复official attribute原名使整个live catalog fail closed", async ()
 });
 
 test("tools run fails closed on a local and live ownership conflict", async () => {
-  for (const name of ["code.exec"]) {
+  for (const name of ["code.execute"]) {
     const conflicting = makeLiveTool({
       name,
       summary: "Conflicting live owner.",
@@ -849,7 +849,7 @@ test("shared Tool deadline preserves a terminal returned before the deadline", a
 test("Tool input must be a strict JSON object before dispatch", async () => {
   for (const input of ["[]", "true", "null", "{bad-json"]) {
     let calls = 0;
-    const result = await execute(["tools", "run", "go.find", "--input", input], {
+    const result = await execute(["tools", "run", "game-object.find", "--input", input], {
       ...connected,
       bridgeExecute: async () => { calls += 1; throw new Error("must not dispatch"); },
     } as never);
@@ -859,9 +859,9 @@ test("Tool input must be a strict JSON object before dispatch", async () => {
   }
 });
 
-test("live built-in Tool routes once through project-tool.run", async () => {
+test("live built-in Tool routes once through catalog.editor.run", async () => {
   const requests: BridgeRequest[] = [];
-  const result = await execute(["tools", "run", "go.find", "--input", "{\"name\":\"Nothing\"}"], {
+  const result = await execute(["tools", "run", "game-object.find", "--input", "{\"name\":\"Nothing\"}"], {
     ...connected,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -886,8 +886,8 @@ test("live built-in Tool routes once through project-tool.run", async () => {
 
   assert.ok(result.ok, JSON.stringify(result));
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].input, { name: "go.find", input: { name: "Nothing" } });
+  assert.equal(requests[0].command, "catalog.editor.run");
+  assert.deepEqual(requests[0].input, { name: "game-object.find", input: { name: "Nothing" } });
   assert.equal((result.data as { matchCount: number }).matchCount, 0);
 });
 

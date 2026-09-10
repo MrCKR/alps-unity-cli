@@ -11,7 +11,7 @@ namespace UnityCli
     public static partial class UnityCliBridge
     {
         /// <summary>
-        /// object.modify 与 component.modify 共用的 verified SerializedProperty patch 引擎。
+        /// serialized-object.patch 与 component.modify 共用的 verified SerializedProperty patch 引擎。
         /// 公开契约只允许非空 direct replace，不保留 reflection merge/add/remove 旁路。
         /// </summary>
         internal static class ObjectPatch

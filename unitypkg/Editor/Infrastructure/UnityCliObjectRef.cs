@@ -99,7 +99,7 @@ namespace UnityCli
 
                 throw new BridgeCommandException("E_OBJECTREF_REQUIRED",
                     "Object reference required: pass instanceId, assetPath/guid, or path/name.",
-                    "Run object.get-data --input '{\"instanceId\":12345}' or '{\"assetPath\":\"Assets/Mat.mat\"}'.");
+                    "Run serialized-object.read --input '{\"instanceId\":12345}' or '{\"assetPath\":\"Assets/Mat.mat\"}'.");
             }
 
             /// <summary>解析 GameObject 引用。</summary>
@@ -127,12 +127,12 @@ namespace UnityCli
                     if (go != null) return go;
                     throw new BridgeCommandException("E_OBJECTREF_GAMEOBJECT_REQUIRED",
                         "No GameObject matched path/name '" + path + "' in any loaded scene.",
-                        "Run go.find to locate the GameObject and obtain its instanceId, then pass that instanceId.");
+                        "Run game-object.find to locate the GameObject and obtain its instanceId, then pass that instanceId.");
                 }
 
                 throw new BridgeCommandException("E_OBJECTREF_GAMEOBJECT_REQUIRED",
                     "GameObject reference required: pass instanceId or path/name.",
-                    "Run go.find to locate the GameObject and obtain its instanceId.");
+                    "Run game-object.find to locate the GameObject and obtain its instanceId.");
             }
 
             /// <summary>
@@ -282,7 +282,7 @@ namespace UnityCli
                 var secondPath = UnityCliHierarchyPager.Path(second, budget);
                 throw new BridgeCommandException("E_OBJECTREF_AMBIGUOUS",
                     "Path '" + path + "' matches multiple GameObjects: " + firstPath + ", " + secondPath,
-                    "Pass the instanceId from go.find to disambiguate objects in different loaded scenes.");
+                    "Pass the instanceId from game-object.find to disambiguate objects in different loaded scenes.");
             }
 
             /// <summary>
@@ -373,7 +373,7 @@ namespace UnityCli
                 }
                 throw new BridgeCommandException("E_OBJECTREF_AMBIGUOUS",
                     "Path '" + path + "' matches " + matches.Count + " GameObjects: " + string.Join(", ", candidates),
-                    "Pass the full hierarchy path from a scene root, or use go.find to obtain the instanceId.");
+                    "Pass the full hierarchy path from a scene root, or use game-object.find to obtain the instanceId.");
             }
         }
     }

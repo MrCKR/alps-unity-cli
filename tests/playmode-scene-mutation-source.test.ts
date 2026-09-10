@@ -35,8 +35,8 @@ test("scene mutation helper separates Edit Mode persistence from Play Mode runti
   assert.match(helper, /if \(!IsPlaying && target != null\) EditorUtility\.SetDirty/);
 });
 
-test("go.delete verifies synchronous PlayMode destruction before reporting success", async () => {
-  const deleteSource = await source("unitypkg/Editor/Tools/go/delete.cs");
+test("game-object.delete verifies synchronous PlayMode destruction before reporting success", async () => {
+  const deleteSource = await source("unitypkg/Editor/Tools/game-object/delete.cs");
   const destroy = deleteSource.indexOf("UnityCliSceneMutation.DestroyObject(gameObject)");
   const verify = deleteSource.indexOf("if (gameObject != null)");
   const success = deleteSource.indexOf("Destroyed = true");
@@ -56,19 +56,19 @@ test("PlayMode scene tools use the mutation helper instead of unsafe Editor APIs
     "unitypkg/Editor/Tools/component/modify.cs",
     "unitypkg/Editor/Tools/component/remove.cs",
     "unitypkg/Editor/Tools/component/set.cs",
-    "unitypkg/Editor/Tools/go/create.cs",
-    "unitypkg/Editor/Tools/go/delete.cs",
-    "unitypkg/Editor/Tools/go/duplicate.cs",
-    "unitypkg/Editor/Tools/go/look-at.cs",
-    "unitypkg/Editor/Tools/go/modify.cs",
-    "unitypkg/Editor/Tools/go/move-relative.cs",
-    "unitypkg/Editor/Tools/go/set-parent.cs",
+    "unitypkg/Editor/Tools/game-object/create.cs",
+    "unitypkg/Editor/Tools/game-object/delete.cs",
+    "unitypkg/Editor/Tools/game-object/duplicate.cs",
+    "unitypkg/Editor/Tools/game-object/look-at.cs",
+    "unitypkg/Editor/Tools/game-object/modify.cs",
+    "unitypkg/Editor/Tools/game-object/move-relative.cs",
+    "unitypkg/Editor/Tools/game-object/set-parent.cs",
     "unitypkg/Editor/Tools/material/set-renderer-color.cs",
     "unitypkg/Editor/Tools/material/assign.cs",
-    "unitypkg/Editor/Tools/controller/assign.cs",
-    "unitypkg/Editor/Tools/graphics/light-probe-group.cs",
-    "unitypkg/Editor/Tools/graphics/reflection-probe.cs",
-    "unitypkg/Editor/Tools/graphics/skybox-set-material.cs",
+    "unitypkg/Editor/Tools/animator-controller/assign.cs",
+    "unitypkg/Editor/Tools/lighting/light-probe-group.cs",
+    "unitypkg/Editor/Tools/lighting/reflection-probe.cs",
+    "unitypkg/Editor/Tools/lighting/skybox/set-material.cs",
     "unitypkg/Editor/Tools/physics/assign-material.cs",
     "unitypkg/Editor/Tools/physics/force.cs",
     "unitypkg/Editor/Tools/physics/joint/add.cs",
@@ -88,7 +88,7 @@ test("PlayMode scene tools use the mutation helper instead of unsafe Editor APIs
   assert.match(prefab, /GetCorrespondingObjectFromSource/);
   assert.doesNotMatch(prefab, /UnityEngine\.Object\.Instantiate\(prefab\)/);
 
-  const objectModify = await source("unitypkg/Editor/Tools/object/modify.cs");
+  const objectModify = await source("unitypkg/Editor/Tools/serialized-object/patch.cs");
   assert.match(objectModify, /E_TOOL_PLAYMODE_UNAVAILABLE/);
   assert.match(objectModify, /EditorUtility\.IsPersistent\(target\)/);
   assert.match(objectModify, /UnityCliSceneMutation\.MarkSceneObjectDirty\(target\)/);
@@ -115,10 +115,10 @@ test("supported PlayMode descriptors contain no direct unsafe Editor mutation ca
 
 test("retained graphics replacements declare their final PlayMode behavior", async () => {
   const [quality, pipeline, group, reflection] = await Promise.all([
-    source("unitypkg/Editor/Tools/graphics/quality.cs"),
-    source("unitypkg/Editor/Tools/graphics/pipeline-settings.cs"),
-    source("unitypkg/Editor/Tools/graphics/light-probe-group.cs"),
-    source("unitypkg/Editor/Tools/graphics/reflection-probe.cs"),
+    source("unitypkg/Editor/Tools/rendering/quality.cs"),
+    source("unitypkg/Editor/Tools/rendering/pipeline/settings.cs"),
+    source("unitypkg/Editor/Tools/lighting/light-probe-group.cs"),
+    source("unitypkg/Editor/Tools/lighting/reflection-probe.cs"),
   ]);
 
   for (const value of [quality, pipeline]) {
@@ -131,7 +131,7 @@ test("retained graphics replacements declare their final PlayMode behavior", asy
 });
 
 test("temporary EditMode cleanup descriptors avoid shared Undo probing", async () => {
-  const deleteSource = await source("unitypkg/Editor/Tools/go/delete.cs");
+  const deleteSource = await source("unitypkg/Editor/Tools/game-object/delete.cs");
   assert.match(deleteSource, /EditMode stays dirty, and final PlayMode proof requires reading editor\.state/);
   assert.match(deleteSource, /call scene\.load once with the exact active scene path/);
   assert.match(deleteSource, /do not probe or repeat editor\.undo/);
@@ -151,10 +151,10 @@ test("persistent writes are explicitly editor-only", async () => {
     "unitypkg/Editor/Tools/editor/undo.cs", "unitypkg/Editor/Tools/editor/redo.cs",
     "unitypkg/Editor/Tools/asset/create.cs", "unitypkg/Editor/Tools/texture/create.cs", "unitypkg/Editor/Tools/shader/create.cs",
     "unitypkg/Editor/Tools/scriptable-object/create.cs", "unitypkg/Editor/Tools/material/create.cs", "unitypkg/Editor/Tools/physics/material.cs",
-    "unitypkg/Editor/Tools/animation/clip/create.cs", "unitypkg/Editor/Tools/animation/animator/set-parameter.cs", "unitypkg/Editor/Tools/controller/create.cs",
-    "unitypkg/Editor/Tools/graphics/skybox-set-properties.cs",
+    "unitypkg/Editor/Tools/animation-clip/clip/create.cs", "unitypkg/Editor/Tools/animator/set-parameter.cs", "unitypkg/Editor/Tools/animator-controller/create.cs",
+    "unitypkg/Editor/Tools/lighting/skybox/set-properties.cs",
     "unitypkg/Editor/Tools/prefab/create.cs", "unitypkg/Editor/Tools/scene/save.cs",
-    "unitypkg/Editor/Tools/build/settings/set.cs", "unitypkg/Editor/Tools/project/layer/add.cs",
+    "unitypkg/Editor/Tools/build/settings/set.cs", "unitypkg/Editor/Tools/project-settings/layer/add.cs",
     "extensions/urp/unitypkg/Editor/Urp/settings-set.cs", "extensions/hdrp/unitypkg/Editor/Hdrp/settings-set.cs"
   ];
 

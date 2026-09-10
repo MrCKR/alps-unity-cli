@@ -2,22 +2,21 @@ import { assetArgs, boolFlag, compactArgs, numberFlag, queryArgs, stringFlag } f
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const assetBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "asset", command: "search", bridgeCommand: "project-tool.run", toolName: "asset.search", buildArgs: assetQueryArgs },
-  { group: "asset", command: "info", bridgeCommand: "project-tool.run", toolName: "asset.info", buildArgs: assetQueryArgs },
-  { group: "asset", command: "create", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs, destructiveHint: true },
-  { group: "asset", command: "mkdir", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs, destructiveHint: true },
-  { group: "asset", command: "import", bridgeCommand: "project-tool.run", toolName: "asset.import", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "asset", command: "import-settings", bridgeCommand: "project-tool.run", toolName: "asset.import-settings", buildArgs: assetQueryArgs },
-  { group: "asset", command: "import-settings-set", bridgeCommand: "project-tool.run", toolName: "asset.import-settings.set", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "asset", command: "modify", bridgeCommand: "project-tool.run", toolName: "asset.modify", buildArgs: assetMutationArgs, destructiveHint: true },
-  { group: "asset", command: "delete", bridgeCommand: "project-tool.run", toolName: "asset.delete", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "asset", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "asset.duplicate", buildArgs: assetMutationArgs, destructiveHint: true },
-  { group: "asset", command: "move", bridgeCommand: "project-tool.run", toolName: "asset.move", buildArgs: assetMutationArgs, destructiveHint: true },
-  { group: "asset", command: "rename", bridgeCommand: "project-tool.run", toolName: "asset.rename", buildArgs: assetMutationArgs, destructiveHint: true },
-  { group: "asset", command: "search-built-in", bridgeCommand: "project-tool.run", toolName: "asset.search-built-in", buildArgs: assetSearchBuiltInArgs },
-  { group: "asset", command: "get-data", bridgeCommand: "project-tool.run", toolName: "asset.get-data", buildArgs: assetGetDataArgs },
-  { group: "asset", command: "get-components", bridgeCommand: "project-tool.run", toolName: "asset.get-components", buildArgs: assetGetComponentsArgs },
-  { group: "asset", command: "preview", bridgeCommand: "project-tool.run", toolName: "asset.preview", buildArgs: assetPreviewArgs }
+  { group: "asset", command: "search", bridgeCommand: "catalog.editor.run", toolName: "asset.search", buildArgs: assetQueryArgs },
+  { group: "asset", command: "info", bridgeCommand: "catalog.editor.run", toolName: "asset.info", buildArgs: assetQueryArgs },
+  { group: "asset", command: "create", bridgeCommand: "catalog.editor.run", toolName: "asset.create", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "import", bridgeCommand: "catalog.editor.run", toolName: "asset.import", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "asset", command: "import-settings", bridgeCommand: "catalog.editor.run", toolName: "asset.import-settings", buildArgs: assetQueryArgs },
+  { group: "asset", command: "import-settings.set", bridgeCommand: "catalog.editor.run", toolName: "asset.import-settings.set", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "asset", command: "write-text", bridgeCommand: "catalog.editor.run", toolName: "asset.write-text", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "delete", bridgeCommand: "catalog.editor.run", toolName: "asset.delete", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "asset", command: "duplicate", bridgeCommand: "catalog.editor.run", toolName: "asset.duplicate", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "move", bridgeCommand: "catalog.editor.run", toolName: "asset.move", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "rename", bridgeCommand: "catalog.editor.run", toolName: "asset.rename", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "search-built-in", bridgeCommand: "catalog.editor.run", toolName: "asset.search-built-in", buildArgs: assetSearchBuiltInArgs },
+  { group: "asset", command: "get-data", bridgeCommand: "catalog.editor.run", toolName: "asset.get-data", buildArgs: assetGetDataArgs },
+  { group: "asset", command: "get-components", bridgeCommand: "catalog.editor.run", toolName: "asset.get-components", buildArgs: assetGetComponentsArgs },
+  { group: "asset", command: "preview", bridgeCommand: "catalog.editor.run", toolName: "asset.preview", buildArgs: assetPreviewArgs }
 ];
 
 /** 读取 tools run --input 中无法映射为简单 flag 的结构化字段。 */

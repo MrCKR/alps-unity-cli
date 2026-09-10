@@ -51,6 +51,7 @@ test("direct-call semantics 固定 immutable request、单 generation read 与 o
     admission: { exactObservationExclusion: string[]; exactObservationRule: string };
     contextRead: { ordinary: { journal: boolean; completion: string }; "editor.state": { budgetMs: number; bridgeProbeBudgetMs: number; journal: boolean; privateBridgeCommand: string } };
     directCall: { terminal: string; timeout: string; replay: string; audit: string; oneDeadline: string; localTimeoutOwnership: string; localProcessExit: string };
+    compile: { inputFields: string[]; forbiddenInputFields: string[]; proof: string };
     deferredDelivery?: unknown;
   };
   assert.match(semantics.request.digest, /exactRequestBodyBytes/);
@@ -70,6 +71,9 @@ test("direct-call semantics 固定 immutable request、单 generation read 与 o
   assert.match(semantics.directCall.timeout, /E_EXECUTION_TIMEOUT/);
   assert.match(semantics.directCall.replay, /cross-session mutation redelivery is forbidden/);
   assert.match(semantics.directCall.audit, /session-level append log/);
+  assert.deepEqual(semantics.compile.inputFields, ["path", "forceUpdate", "importRecursive", "includeWarnings"]);
+  assert.deepEqual(semantics.compile.forbiddenInputFields, ["waitReady", "refresh"]);
+  assert.match(semantics.compile.proof, /asset refresh[\s\S]*Unity-owned CompilationPipeline cycle terminal or explicit unchanged terminal/);
   assert.equal(semantics.deferredDelivery, undefined);
   assert.doesNotMatch(JSON.stringify(semantics), /\bjobs\b|--job|\bbatch\b/);
 });

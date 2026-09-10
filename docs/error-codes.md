@@ -73,7 +73,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_RUNTIME_NOT_READY` | Runtime 工具需 Play Mode | 先 `tools run editor.play`，transient 可重试 |
+| `E_RUNTIME_NOT_READY` | Runtime 工具需 Play Mode | 先 `tools run editor.play-mode.start`，transient 可重试 |
 | `E_RUNTIME_SESSION_STALE` | 运行时会话过期 | 重新进入 Play Mode |
 | `E_RUNTIME_TIMEOUT` | 运行时操作超时 | 增加 `--timeout-ms` 或重试 |
 
@@ -135,7 +135,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_PROJECT_SETTINGS_NO_FIELDS` | setter没有提供任何批准字段 | 按`tools describe project.*-settings.set`提供至少一个字段 |
 | `E_PROJECT_SETTINGS_INVALID` | 数值边界、分页、axis或Player enum输入非法 | 按错误中的精确字段约束修正输入 |
 | `E_PROJECT_SETTINGS_LIMIT_EXCEEDED` | legacy Input Manager超过4096个axis，无法在公开有界读取内安全扫描 | 减少Input Manager axis数量后重试 |
-| `E_PROJECT_INPUT_AXIS_NOT_FOUND` | 没有完全同名的legacy Input Manager axis | 先分页读取`project.input-settings`并传精确名称 |
+| `E_PROJECT_INPUT_AXIS_NOT_FOUND` | 没有完全同名的legacy Input Manager axis | 先分页读取`project-settings.input-settings`并传精确名称 |
 | `E_PROJECT_SETTINGS_TARGET_CHANGED` | 冻结的Input axis index/name在effect前漂移 | fresh读取Input设置后提交新请求 |
 | `E_PROJECT_SETTINGS_VERIFY_FAILED` | typed readback或ProjectSettings文件SHA未证明持久化终态 | 读取对应`project.*-settings`后再决定是否重试 |
 
@@ -183,7 +183,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_METHOD_NOT_FOUND` | 方法名或显式参数签名不存在 | 运行 `reflection.method.find` 并核对 `parameterType` |
+| `E_METHOD_NOT_FOUND` | 方法名或显式参数签名不存在 | 运行 `runtime-reflection.method.find` 并核对 `parameterType` |
 | `E_METHOD_AMBIGUOUS` | 多个 overload 与参数数量匹配 | 将选中签名的 `parameterType` 数组作为 `parameterTypes` 重试 |
 | `E_TYPE_NOT_FOUND` | 目标类型或参数类型不存在 | 使用完整 C# type name |
 
@@ -214,7 +214,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 ### nextActions 规则
 
 - Instance 错误的 `nextActions` 必须指向 `instances list`、显式 `--instance`、项目路径或关闭重复 Editor
-- Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
+- Runtime 错误的 `nextActions` 必须指向 `tools run editor.play-mode.start` 或 Play Mode 相关操作
 - Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search <k1|k2|...>` 或 `tools describe`
 - 弹窗 blocker 的 `nextActions` 必须指向先 `tools run editor.dialogs`，再 `tools run editor.dialog.click`；不得要求人工处理、预定义按钮列表、launch-only 入口或额外确认
 - 诊断错误的 `nextActions` 必须指向顶层 `doctor` 或对应 owner（`instances list`、`editor.state`、`extensions doctor`、Unity Console）

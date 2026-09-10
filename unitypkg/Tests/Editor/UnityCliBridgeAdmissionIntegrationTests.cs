@@ -830,7 +830,7 @@ namespace UnityCli.Tests
             else staleItem = EnqueueBypass(stale, out created);
             Assert.That(created, Is.True);
             var ordinary = Request("ordinary-after-stale-" + command.Replace('.', '-'));
-            ordinary.Command = "project-tool.list";
+            ordinary.Command = "catalog.editor.list";
             EnqueueBypass(ordinary, out created);
             Assert.That(created, Is.True);
 
@@ -911,7 +911,7 @@ namespace UnityCli.Tests
             for (var index = 0; index < UnityCliBridgeQueuePolicy.MaxFifoNodesExaminedPerTick + 1; index++)
             {
                 var request = Request("actual-queue-scan-" + index.ToString());
-                request.Command = "project-tool.list";
+                request.Command = "catalog.editor.list";
                 var raw = RequestBytes(request);
                 var item = new UnityCliBridge.BridgeWorkItem(state, request, raw,
                     UnityCliRequestDigest.Compute(raw, request.InstanceId), state.ListenerId, state.ListenerGeneration,
@@ -937,7 +937,7 @@ namespace UnityCli.Tests
         [Test]
         public void SafeStatusBeyondBlockedPrefixStartsWithinBoundAndIndexSurvivesAttachAndClose()
         {
-            PublishQueueItem("blocked-mutation", "project-tool.run", UnityCliBridgeQueuePolicy.WorkClass.Mutation);
+            PublishQueueItem("blocked-mutation", "catalog.editor.run", UnityCliBridgeQueuePolicy.WorkClass.Mutation);
             for (var index = 0; index < 127; index++)
                 PublishQueueItem("pending-control-" + index.ToString(), "internal.navmesh.bake.cancel", UnityCliBridgeQueuePolicy.WorkClass.Control);
             var safeRequest = Request("safe-status-129");
@@ -1061,8 +1061,8 @@ namespace UnityCli.Tests
             var requests = new[]
             {
                 ProjectToolRequest("worker-rigidbody", "physics.rigidbody", new Dictionary<string, object> { { "target", "MissingTarget" } }),
-                ProjectToolRequest("worker-reflection", "graphics.reflection-probe", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } }),
-                ProjectToolRequest("worker-light-probes", "graphics.light-probe-group", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } }),
+                ProjectToolRequest("worker-reflection", "lighting.reflection-probe", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } }),
+                ProjectToolRequest("worker-light-probes", "lighting.light-probe-group", new Dictionary<string, object> { { "target", "MissingTarget" }, { "create", true } }),
                 ProjectToolRequest("worker-scene-read", "scene.active", new Dictionary<string, object>())
             };
 
@@ -1187,7 +1187,7 @@ namespace UnityCli.Tests
         private static BridgeRequest ProjectToolRequest(string requestId, string toolName, Dictionary<string, object> input)
         {
             var request = Request(requestId);
-            request.Command = "project-tool.run";
+            request.Command = "catalog.editor.run";
             request.Input = new Dictionary<string, object> { { "name", toolName }, { "input", input } };
             return request;
         }

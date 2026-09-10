@@ -8,11 +8,11 @@ async function source(path: string): Promise<string> {
 
 test("targeted observed-state tools use stable fresh readback before returning", async () => {
   const paths = [
-    "../unitypkg/Editor/Tools/animation/play.cs",
-    "../unitypkg/Editor/Tools/animation/stop.cs",
+    "../unitypkg/Editor/Tools/animator/play.cs",
+    "../unitypkg/Editor/Tools/animator/stop.cs",
     "../unitypkg/Editor/Tools/editor/pause.cs",
-    "../unitypkg/Editor/Tools/graphics/bake-cancel.cs",
-    "../unitypkg/Editor/Tools/graphics/bake-start.cs",
+    "../unitypkg/Editor/Tools/lighting/bake/cancel.cs",
+    "../unitypkg/Editor/Tools/lighting/bake/start.cs",
   ];
   for (const path of paths) assert.match(await source(path), /ctx\.Wait\.UntilStable\(/, path);
 });

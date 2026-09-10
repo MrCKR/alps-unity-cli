@@ -7,7 +7,7 @@ const source = (path: string) => readFile(new URL(path, editor), "utf8");
 
 test("core graphics requests validate immutable plans before one commit and read back effects", async () => {
   const [quality, scene, pipeline, ambient, fog, reflection, properties, bakeSettings, bakeProbe, material, sun, support] = await Promise.all([
-    source("Tools/graphics/quality.cs"), source("Tools/graphics/scene-debug.cs"), source("Tools/graphics/pipeline-settings.cs"), source("Tools/graphics/skybox-set-ambient.cs"), source("Tools/graphics/skybox-set-fog.cs"), source("Tools/graphics/skybox-set-reflection.cs"), source("Tools/graphics/skybox-set-properties.cs"), source("Tools/graphics/bake-settings.cs"), source("Tools/graphics/bake-reflection-probe.cs"), source("Tools/graphics/skybox-set-material.cs"), source("Tools/graphics/skybox-set-sun.cs"), source("Tools/graphics/GraphicsToolSupport.cs"),
+    source("Tools/rendering/quality.cs"), source("Tools/rendering/scene-debug.cs"), source("Tools/rendering/pipeline/settings.cs"), source("Tools/lighting/skybox/set-ambient.cs"), source("Tools/lighting/skybox/set-fog.cs"), source("Tools/lighting/skybox/set-reflection.cs"), source("Tools/lighting/skybox/set-properties.cs"), source("Tools/lighting/bake/settings.cs"), source("Tools/lighting/bake/reflection-probe.cs"), source("Tools/lighting/skybox/set-material.cs"), source("Tools/lighting/skybox/set-sun.cs"), source("Tools/rendering/GraphicsToolSupport.cs"),
   ]);
   for (const text of [quality, pipeline, ambient, fog, reflection, properties, bakeSettings]) {
     assert.match(text, /ctx\.CommitEffect\(\)/);
@@ -50,10 +50,10 @@ test("core graphics requests validate immutable plans before one commit and read
 
 test("retained graphics mutations commit only writes and read back their owning state", async () => {
   const [quality, pipeline, group, reflection] = await Promise.all([
-    source("Tools/graphics/quality.cs"),
-    source("Tools/graphics/pipeline-settings.cs"),
-    source("Tools/graphics/light-probe-group.cs"),
-    source("Tools/graphics/reflection-probe.cs"),
+    source("Tools/rendering/quality.cs"),
+    source("Tools/rendering/pipeline/settings.cs"),
+    source("Tools/lighting/light-probe-group.cs"),
+    source("Tools/lighting/reflection-probe.cs"),
   ]);
 
   assert.match(quality, /var hasWrite = level\.HasValue \|\| request\.VSyncCount\.HasValue[\s\S]*request\.SoftParticles\.HasValue;/);

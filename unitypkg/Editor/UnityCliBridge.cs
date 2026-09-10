@@ -33,25 +33,6 @@ namespace UnityCli
         private const int PreferredPortRange = 4096;
         private const int PreferredPortRetryCount = 4;
         private const int DeterministicFallbackCount = 64;
-        private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview" };
-        private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.create", "scene.load", "scene.save" };
-        private static readonly string[] GameObjectCommands = { "go.find", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
-        private static readonly string[] AssetCommands = { "asset.search", "asset.info", "asset.create", "asset.import", "asset.modify", "asset.delete", "asset.duplicate", "asset.move", "asset.rename", "asset.refresh" };
-        private static readonly string[] ScreenshotCommands = { "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround" };
-        private static readonly string[] PrefabCommands = { "prefab.info", "prefab.hierarchy", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close" };
-        private static readonly string[] UiCommands = { "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy" };
-        private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
-        private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.volume", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.stats", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-info" };
-        private static readonly string[] PhysicsCommands = { "physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint.add", "physics.joint.remove", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.linecast", "physics.shapecast", "physics.validate" };
-        private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
-        private static readonly string[] AnimationCommands = { "animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop", "animator.get-info", "animator.get-parameter", "animator.set-parameter", "animator.crossfade", "animator.set-speed", "animator.set-enabled", "controller.create", "controller.add-state", "controller.add-transition", "controller.add-parameter", "controller.get-info", "controller.assign", "controller.add-layer", "controller.remove-layer", "controller.set-layer-weight", "controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child" };
-        private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
-        private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
-        private static readonly string[] EditorCommands = { "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove" };
-        private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify" };
-        private static readonly string[] CodeCommands = { "code.exec" };
-        private static readonly string[] ProjectToolCommands = { "project-tool.health", "project-tool.groups", "project-tool.summary", "project-tool.describe", "project-tool.list", "project-tool.run" };
-        private static readonly string[] RuntimeToolCommands = { "runtime-tool.groups", "runtime-tool.summary", "runtime-tool.describe", "runtime-tool.list", "runtime-tool.run" };
         private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = "listener-" + Guid.NewGuid().ToString("N");
@@ -370,7 +351,7 @@ namespace UnityCli
         private static CancellationTokenSource CreateExecutionLifetime(UnityCli.Protocol.BridgeRequest request)
         {
             var tokens = new List<CancellationToken> { BridgeLifetime.Token };
-            if (request != null && string.Equals(request.Command, "runtime-tool.run", StringComparison.Ordinal)) tokens.Add(runtimeSession.Token);
+            if (request != null && string.Equals(request.Command, "catalog.player.run", StringComparison.Ordinal)) tokens.Add(runtimeSession.Token);
             return CancellationTokenSource.CreateLinkedTokenSource(tokens.ToArray());
         }
 
@@ -466,9 +447,9 @@ namespace UnityCli
                 var allowedDuringPlayModeTransition = UnityCliDurableStatusCoordinator.IsCommand(request.Command) || UnityCliCompileCoordinator.IsCommand(request.Command) || UnityCliLiveRefreshCoordinator.IsCommand(request.Command) || UnityCliAssetRefreshCoordinator.IsCommand(request.Command) || UnityCliPackageEmbedCoordinator.IsCommand(request.Command) || UnityCliPackageResolveCoordinator.IsCommand(request.Command) || UnityCliTestRunCoordinator.IsCommand(request.Command) || UnityCliNavMeshBakeCoordinator.IsCommand(request.Command) || UnityCliOcclusionBakeCoordinator.IsCommand(request.Command)
                     || IsEditorStateSnapshotCommand(request.Command)
                     || request.Command == "editor.pause"
-                    || request.Command == "editor.stop"
+                    || request.Command == "editor.play-mode.stop"
                     || IsProjectToolCatalogReadCommand(request.Command)
-                    || request.Command == "runtime-tool.run"
+                    || request.Command == "catalog.player.run"
                     || IsDoctorAdmissionBypassCommand(request.Command);
 
                 if (!allowedDuringPlayModeTransition)

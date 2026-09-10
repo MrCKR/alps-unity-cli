@@ -45,7 +45,7 @@ namespace UnityCli.Tests
             Assert.That(acquired, Is.True);
             queueState.SaveOperation("direct-mutation", new Dictionary<string, object>
             {
-                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play" },
+                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play-mode.start" },
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", "effect_started" }
             });
             stateHookClearDirectRootOnce();
@@ -83,7 +83,7 @@ namespace UnityCli.Tests
             Consume(pool, requestId, digest, TestDeadline());
             queueState.SaveOperation("direct-mutation", new Dictionary<string, object>
             {
-                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play" },
+                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play-mode.start" },
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", "accepted_before_effect" }
             });
 
@@ -169,8 +169,8 @@ namespace UnityCli.Tests
             pool.Reset();
         }
 
-        [TestCase("editor.play", false, true)]
-        [TestCase("editor.stop", true, false)]
+        [TestCase("editor.play-mode.start", false, true)]
+        [TestCase("editor.play-mode.stop", true, false)]
         public void ReloadedPlayModeRootFreezesTypedSuccessAfterStableTargetIsObserved(string toolName, bool before, bool targetPlaying)
         {
             var requestId = Unique("playmode-success");
@@ -203,7 +203,7 @@ namespace UnityCli.Tests
             var digest = UnityCliRequestDigest.Compute(Encoding.UTF8.GetBytes(requestId), InstanceId);
             var pool = CreatePool("playmode-changing-session");
             Consume(pool, requestId, digest, TestDeadline());
-            queueState.SaveOperation("direct-mutation", PlayModeRoot(requestId, digest, "editor.play", false, DateTimeOffset.UtcNow.AddMinutes(1)));
+            queueState.SaveOperation("direct-mutation", PlayModeRoot(requestId, digest, "editor.play-mode.start", false, DateTimeOffset.UtcNow.AddMinutes(1)));
             Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
             Assert.That(acquired, Is.True);
 
@@ -229,7 +229,7 @@ namespace UnityCli.Tests
             var pool = CreatePool("playmode-deadline-session");
             Consume(pool, requestId, digest, TestDeadline());
             var deadline = DateTimeOffset.UtcNow.AddSeconds(-1);
-            queueState.SaveOperation("direct-mutation", PlayModeRoot(requestId, digest, "editor.play", false, deadline));
+            queueState.SaveOperation("direct-mutation", PlayModeRoot(requestId, digest, "editor.play-mode.start", false, deadline));
             Assert.That(queueState.TryAcquireLease(requestId, digest, out var acquired), Is.True);
             Assert.That(acquired, Is.True);
 
@@ -1298,7 +1298,7 @@ namespace UnityCli.Tests
         {
             return new Dictionary<string, object>
             {
-                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play" },
+                { "requestId", requestId }, { "requestDigest", digest }, { "toolName", "editor.play-mode.start" },
                 { "editorSessionId", UnityCliBridge.EditorSessionId() }, { "phase", phase }
             };
         }

@@ -2,24 +2,24 @@ import { boolFlag, compactArgs, contentFlag, numberFlag, queryArgs, stringFlag }
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const uiBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "ui", command: "canvas/create", bridgeCommand: "project-tool.run", toolName: "ui.canvas.create", buildArgs: uiArgs },
-  { group: "ui", command: "text/create", bridgeCommand: "project-tool.run", toolName: "ui.text.create", buildArgs: uiArgs },
-  { group: "ui", command: "button/create", bridgeCommand: "project-tool.run", toolName: "ui.button.create", buildArgs: uiArgs },
-  { group: "ui", command: "image/create", bridgeCommand: "project-tool.run", toolName: "ui.image.create", buildArgs: uiArgs },
-  { group: "ui", command: "document/info", bridgeCommand: "project-tool.run", toolName: "ui.document.info", buildArgs: uiArgs },
-  { group: "ui", command: "document/create", bridgeCommand: "project-tool.run", toolName: "ui.document.create", buildArgs: uiArgs, destructiveHint: true },
-  { group: "ui", command: "document/update", bridgeCommand: "project-tool.run", toolName: "ui.document.update", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "ui", command: "document/delete", bridgeCommand: "project-tool.run", toolName: "ui.document.delete", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "ui", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "ui.hierarchy", buildArgs: uiArgs },
-  { group: "ui", command: "attach-document", bridgeCommand: "project-tool.run", toolName: "ui.attach-document", buildArgs: uiAttachArgs, supportsDryRun: true },
-  { group: "ui", command: "detach-document", bridgeCommand: "project-tool.run", toolName: "ui.detach-document", buildArgs: uiAttachArgs, supportsDryRun: true },
-  { group: "ui", command: "create-panel-settings", bridgeCommand: "project-tool.run", toolName: "ui.create-panel-settings", buildArgs: uiPanelArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "ui", command: "update-panel-settings", bridgeCommand: "project-tool.run", toolName: "ui.update-panel-settings", buildArgs: uiPanelArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "ui", command: "get-visual-tree", bridgeCommand: "project-tool.run", toolName: "ui.get-visual-tree", buildArgs: uiVisualTreeArgs },
-  { group: "ui", command: "modify-visual-element", bridgeCommand: "project-tool.run", toolName: "ui.modify-visual-element", buildArgs: uiVisualElementArgs, supportsDryRun: true },
-  { group: "ui", command: "link-stylesheet", bridgeCommand: "project-tool.run", toolName: "ui.link-stylesheet", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "ui", command: "list-documents", bridgeCommand: "project-tool.run", toolName: "ui.list-documents", buildArgs: uiListArgs },
-  { group: "ui", command: "render-preview", bridgeCommand: "project-tool.run", toolName: "ui.render-preview", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true }
+  { group: "ui", command: "canvas.create", bridgeCommand: "catalog.editor.run", toolName: "ui.canvas.create", buildArgs: uiArgs },
+  { group: "ui", command: "text.create", bridgeCommand: "catalog.editor.run", toolName: "ui.text.create", buildArgs: uiArgs },
+  { group: "ui", command: "button.create", bridgeCommand: "catalog.editor.run", toolName: "ui.button.create", buildArgs: uiArgs },
+  { group: "ui", command: "image.create", bridgeCommand: "catalog.editor.run", toolName: "ui.image.create", buildArgs: uiArgs },
+  { group: "ui", command: "document.info", bridgeCommand: "catalog.editor.run", toolName: "ui.document.info", buildArgs: uiArgs },
+  { group: "ui", command: "document.create", bridgeCommand: "catalog.editor.run", toolName: "ui.document.create", buildArgs: uiArgs, destructiveHint: true },
+  { group: "ui", command: "document.update", bridgeCommand: "catalog.editor.run", toolName: "ui.document.update", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "document.delete", bridgeCommand: "catalog.editor.run", toolName: "ui.document.delete", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "hierarchy", bridgeCommand: "catalog.editor.run", toolName: "ui.hierarchy", buildArgs: uiArgs },
+  { group: "ui", command: "attach-document", bridgeCommand: "catalog.editor.run", toolName: "ui.attach-document", buildArgs: uiAttachArgs, supportsDryRun: true },
+  { group: "ui", command: "detach-document", bridgeCommand: "catalog.editor.run", toolName: "ui.detach-document", buildArgs: uiAttachArgs, supportsDryRun: true },
+  { group: "ui", command: "create-panel-settings", bridgeCommand: "catalog.editor.run", toolName: "ui.create-panel-settings", buildArgs: uiPanelArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "update-panel-settings", bridgeCommand: "catalog.editor.run", toolName: "ui.update-panel-settings", buildArgs: uiPanelArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "get-visual-tree", bridgeCommand: "catalog.editor.run", toolName: "ui.get-visual-tree", buildArgs: uiVisualTreeArgs },
+  { group: "ui", command: "modify-visual-element", bridgeCommand: "catalog.editor.run", toolName: "ui.modify-visual-element", buildArgs: uiVisualElementArgs, supportsDryRun: true },
+  { group: "ui", command: "link-stylesheet", bridgeCommand: "catalog.editor.run", toolName: "ui.link-stylesheet", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "list-documents", bridgeCommand: "catalog.editor.run", toolName: "ui.list-documents", buildArgs: uiListArgs },
+  { group: "ui", command: "render-preview", bridgeCommand: "catalog.editor.run", toolName: "ui.render-preview", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段

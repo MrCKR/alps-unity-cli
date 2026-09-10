@@ -138,7 +138,7 @@ test("supervisor consumes one absolute deadline and redelivers identical read by
     },
   });
 
-  const response = await supervisor.read({ requestId: "req_read", command: "project-tool.run", input: { name: "scene.hierarchy" }, timeoutMs: 5_000 });
+  const response = await supervisor.read({ requestId: "req_read", command: "catalog.editor.run", input: { name: "scene.hierarchy" }, timeoutMs: 5_000 });
   assert.equal(response.ok, true);
   assert.equal(bodies.length, 2);
   assert.equal(bodies[0], bodies[1]);
@@ -213,7 +213,7 @@ test("transition response handoff rejects non-status commands", async () => {
   );
 });
 
-test("runtime-tool commands select only the development Player target", async () => {
+test("catalog.player commands select only the development Player target", async () => {
   const selectedTargets: string[] = [];
   const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, {
     now: () => 10_000,
@@ -229,7 +229,7 @@ test("runtime-tool commands select only the development Player target", async ()
     },
   });
 
-  const response = await supervisor.read({ requestId: "req_runtime_catalog", command: "runtime-tool.list", input: {} });
+  const response = await supervisor.read({ requestId: "req_runtime_catalog", command: "catalog.player.list", input: {} });
   assert.equal(response.ok, true);
   assert.deepEqual(selectedTargets, ["runtime"]);
 });
@@ -250,7 +250,7 @@ test("caller absolute deadline is not truncated by the implicit execution defaul
 
   const response = await supervisor.execute({
     requestId: "req_caller_deadline",
-    command: "project-tool.run",
+    command: "catalog.editor.run",
     input: {},
     mutation: true,
     absoluteDeadlineMs: callerDeadlineMs,
@@ -270,7 +270,7 @@ test("supervisor retains its execution default when no caller deadline exists", 
     },
   });
 
-  const response = await supervisor.read({ requestId: "req_default_deadline", command: "project-tool.run", input: {} });
+  const response = await supervisor.read({ requestId: "req_default_deadline", command: "catalog.editor.run", input: {} });
   assert.equal(response.ok, true);
 });
 
@@ -295,7 +295,7 @@ test("query transport recovery rebinds generation without rebuilding request", a
     },
   });
 
-  const response = await supervisor.read({ requestId: "req_rebind", command: "project-tool.run", input: {}, timeoutMs: 2_000 });
+  const response = await supervisor.read({ requestId: "req_rebind", command: "catalog.editor.run", input: {}, timeoutMs: 2_000 });
   assert.equal(response.ok, true);
   assert.deepEqual(bodies, [bodies[0], bodies[0]]);
   assert.equal(now, 10_100);
@@ -324,7 +324,7 @@ test("same-session mutation redelivery reuses exact bytes, deadline, and durable
     },
   });
 
-  const response = await supervisor.execute({ requestId: "req_mutation", command: "project-tool.run", input: {}, timeoutMs: 5_000, mutation: true });
+  const response = await supervisor.execute({ requestId: "req_mutation", command: "catalog.editor.run", input: {}, timeoutMs: 5_000, mutation: true });
   assert.equal(response.ok, true);
   assert.deepEqual(posts.map((post) => post.sessionId), [SESSION_ID, SESSION_ID]);
   assert.deepEqual(posts.map((post) => post.generation), [1, 2]);
@@ -354,7 +354,7 @@ test("cross-session mutation stops after one POST and returns bounded outcome un
   });
 
   await assert.rejects(
-    supervisor.execute({ requestId: "req_cross_session_fence", command: "project-tool.run", input: {}, timeoutMs: 1_000, mutation: true }),
+    supervisor.execute({ requestId: "req_cross_session_fence", command: "catalog.editor.run", input: {}, timeoutMs: 1_000, mutation: true }),
     (error: unknown) => {
       assert.ok(error instanceof SessionSupervisorError);
       assert.equal(error.code, "E_EXECUTION_TIMEOUT");
@@ -399,7 +399,7 @@ test("read transport recovery may rerun on a replacement Editor session", async 
     },
   });
 
-  const response = await supervisor.read({ requestId: "req_cross_session_read", command: "project-tool.run", input: {}, timeoutMs: 2_000 });
+  const response = await supervisor.read({ requestId: "req_cross_session_read", command: "catalog.editor.run", input: {}, timeoutMs: 2_000 });
   assert.equal(response.ok, true);
   assert.deepEqual(posts.map((post) => post.sessionId), [SESSION_ID, replacementSessionId]);
   assert.deepEqual(posts.map((post) => post.generation), [1, 2]);
@@ -425,7 +425,7 @@ test("mutation without recoverable terminal becomes execution timeout at the one
   });
 
   await assert.rejects(
-    supervisor.execute({ requestId: "req_mutation_timeout", command: "project-tool.run", input: {}, timeoutMs: 250, mutation: true }),
+    supervisor.execute({ requestId: "req_mutation_timeout", command: "catalog.editor.run", input: {}, timeoutMs: 250, mutation: true }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
   assert.equal(posts, 1);
@@ -444,7 +444,7 @@ test("post-dispatch rebind failure becomes execution timeout", async () => {
   });
 
   await assert.rejects(
-    supervisor.execute({ requestId: "req_post_bind_failure", command: "project-tool.run", input: {}, timeoutMs: 500, mutation: true }),
+    supervisor.execute({ requestId: "req_post_bind_failure", command: "catalog.editor.run", input: {}, timeoutMs: 500, mutation: true }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
 });
@@ -458,7 +458,7 @@ test("initial selector is bounded by the immutable deadline", async () => {
   });
   const startedAt = Date.now();
   await assert.rejects(
-    supervisor.execute({ requestId: "req_selector_timeout", command: "project-tool.run", input: {}, timeoutMs: 30, mutation: false }),
+    supervisor.execute({ requestId: "req_selector_timeout", command: "catalog.editor.run", input: {}, timeoutMs: 30, mutation: false }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT",
   );
   assert.ok(Date.now() - startedAt < 250);
@@ -478,7 +478,7 @@ test("blocked session fails before POST and does not expose endpoint details", a
   });
 
   await assert.rejects(
-    supervisor.execute({ requestId: "req_blocked", command: "project-tool.run", input: {}, mutation: true }),
+    supervisor.execute({ requestId: "req_blocked", command: "catalog.editor.run", input: {}, mutation: true }),
     (error: unknown) => {
       assert.ok(error instanceof SessionSupervisorError);
       assert.equal(error.code, "E_UNITY_BLOCKED");
@@ -497,7 +497,7 @@ test("successful direct response performs zero Windows blocker observations", as
     observer: observer("observed-empty", calls),
     post: async (_binding, request) => ({ response: { ok: true, requestId: request.payload.requestId, data: { done: true } }, attestation: attestation(1) }),
   });
-  const result = await supervisor.read({ requestId: "req_zero_observer", command: "project-tool.run", input: {}, timeoutMs: 500 });
+  const result = await supervisor.read({ requestId: "req_zero_observer", command: "catalog.editor.run", input: {}, timeoutMs: 500 });
   assert.equal(result.ok, true);
   assert.equal(calls.value, 0);
 });
@@ -512,7 +512,7 @@ test("read transport failure returns observed blocker in the same error", async 
     post: async () => { throw new Error("modal blocked main thread"); },
   });
   await assert.rejects(
-    supervisor.read({ requestId: "req_read_blocker", command: "project-tool.run", input: {}, timeoutMs: 500 }),
+    supervisor.read({ requestId: "req_read_blocker", command: "catalog.editor.run", input: {}, timeoutMs: 500 }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_UNITY_BLOCKED"
       && Array.isArray(error.details?.blockers) && error.details.blockers.length === 1,
   );
@@ -528,7 +528,7 @@ test("post-dispatch mutation keeps execution timeout and attaches observed block
     post: async () => { throw new Error("response lost behind modal"); },
   });
   await assert.rejects(
-    supervisor.execute({ requestId: "req_mutation_blocker", command: "project-tool.run", input: {}, timeoutMs: 500, mutation: true }),
+    supervisor.execute({ requestId: "req_mutation_blocker", command: "catalog.editor.run", input: {}, timeoutMs: 500, mutation: true }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_EXECUTION_TIMEOUT"
       && Array.isArray(error.details?.blockers) && error.details.blockers.length === 1,
   );
@@ -544,7 +544,7 @@ test("Bridge execution timeout terminal is returned without an additional observ
       attestation: attestation(1),
     }),
   });
-  const result = await supervisor.execute({ requestId: "req_bridge_unknown", command: "project-tool.run", input: {}, timeoutMs: 500, mutation: true });
+  const result = await supervisor.execute({ requestId: "req_bridge_unknown", command: "catalog.editor.run", input: {}, timeoutMs: 500, mutation: true });
   assert.equal(result.ok, false);
   if (!result.ok) {
     assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
@@ -566,7 +566,7 @@ test("pre-registry selector failure reports unique process modal before dispatch
     post: async () => { posts += 1; throw new Error("must not post"); },
   });
   await assert.rejects(
-    supervisor.execute({ requestId: "req_pre_registry_blocker", command: "project-tool.run", input: {}, timeoutMs: 500, mutation: true }),
+    supervisor.execute({ requestId: "req_pre_registry_blocker", command: "catalog.editor.run", input: {}, timeoutMs: 500, mutation: true }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_UNITY_BLOCKED",
   );
   assert.equal(posts, 0);
@@ -594,7 +594,7 @@ test("unique starting Unity process waits for its first ready registry before on
       return { response: { ok: true, requestId: request.payload.requestId, data: { ready: true } }, attestation: attestation(2) };
     },
   });
-  const result = await supervisor.read({ requestId: "req_wait_first_registry", command: "project-tool.run", input: {}, timeoutMs: 1_000 });
+  const result = await supervisor.read({ requestId: "req_wait_first_registry", command: "catalog.editor.run", input: {}, timeoutMs: 1_000 });
   assert.equal(result.ok, true);
   assert.equal(selections, 3);
   assert.equal(posts, 1);
@@ -616,7 +616,7 @@ test("starting Unity registry wait stops at the original deadline without POST",
     post: async () => { posts += 1; throw new Error("must not post"); },
   });
   await assert.rejects(
-    supervisor.read({ requestId: "req_wait_first_registry_timeout", command: "project-tool.run", input: {}, timeoutMs: 300 }),
+    supervisor.read({ requestId: "req_wait_first_registry_timeout", command: "catalog.editor.run", input: {}, timeoutMs: 300 }),
     (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_UNITY_TRANSITION_TIMEOUT",
   );
   assert.equal(posts, 0);
@@ -636,7 +636,7 @@ test("missing registry does not wait when no matching Unity process is running",
     observer: observer("offline"),
   });
   await assert.rejects(
-    supervisor.read({ requestId: "req_no_process_no_wait", command: "project-tool.run", input: {}, timeoutMs: 500 }),
+    supervisor.read({ requestId: "req_no_process_no_wait", command: "catalog.editor.run", input: {}, timeoutMs: 500 }),
     (error: unknown) => error instanceof InstanceRegistryError && error.code === "E_INSTANCE_NOT_RUNNING",
   );
   assert.equal(sleeps, 0);
@@ -755,9 +755,9 @@ test("observeNow does not POST for offline or conflict observations", async () =
 });
 
 test("RequestDigest v1 binds instance identity and exact UTF-8 request bytes", () => {
-  const body = "{\"protocolVersion\":2,\"requestId\":\"req_digest\",\"instanceId\":\"unity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"command\":\"project-tool.run\",\"input\":{},\"execution\":{\"absoluteDeadlineUtc\":\"2026-07-16T00:00:00.000Z\",\"completionContractVersion\":1,\"requestDigestVersion\":1}}";
+  const body = "{\"protocolVersion\":2,\"requestId\":\"req_digest\",\"instanceId\":\"unity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"command\":\"catalog.editor.run\",\"input\":{},\"execution\":{\"absoluteDeadlineUtc\":\"2026-07-16T00:00:00.000Z\",\"completionContractVersion\":1,\"requestDigestVersion\":1}}";
   const digest = computeRequestDigestV1(INSTANCE_ID, Buffer.from(body, "utf8"));
-  assert.equal(digest, "0c8c90d9afafe0a4d3357249f7e4e739c9952e37f417550d44655b50652866eb");
+  assert.equal(digest, "70ae32ab942a1f0dc72c642835ddc67b34f22e4f5d34949e1745b4163602518a");
   assert.notEqual(computeRequestDigestV1(INSTANCE_ID, Buffer.from(`${body} `, "utf8")), digest);
   assert.notEqual(computeRequestDigestV1(`unity-${"c".repeat(64)}`, Buffer.from(body, "utf8")), digest);
 });
@@ -765,7 +765,7 @@ test("RequestDigest v1 binds instance identity and exact UTF-8 request bytes", (
 test("Bridge request v2 carries identity, immutable execution controls and remaining HTTP budget", () => {
   const frozen = freezeRequest({
     requestId: "req_contract",
-    command: "project-tool.run",
+    command: "catalog.editor.run",
     input: { name: "asset.info", input: {} },
     dryRun: true,
   }, INSTANCE_ID, 55_000);
@@ -896,7 +896,7 @@ test("session-affecting root recovers a lost response through exact consumed adm
   const sentConsumed: boolean[] = [];
   const admission: RootAdmissionLease = {
     requestId: "req_posted_listener_change",
-    command: "editor.play",
+    command: "editor.play-mode.start",
     rootFingerprint: "f".repeat(64),
     completionContractIdentity: "observed-state-v1",
     target: "editor",
@@ -931,8 +931,8 @@ test("session-affecting root recovers a lost response through exact consumed adm
 
   const response = await supervisor.execute({
     requestId: admission.requestId,
-    command: "project-tool.run",
-    input: { name: "editor.play", input: {} },
+    command: "catalog.editor.run",
+    input: { name: "editor.play-mode.start", input: {} },
     mutation: true,
     absoluteDeadlineMs: 7_000,
     rootAdmission: admission,
@@ -944,9 +944,9 @@ test("session-affecting root recovers a lost response through exact consumed adm
 
 test("post-dispatch listener recovery rejects generic tools, process changes, and catalog drift", async () => {
   const cases = [
-    { name: "generic-tool", command: "project.info", replacement: selection("ready", 2) },
-    { name: "process-change", command: "editor.play", replacement: selection("ready", 2, "editor", SESSION_ID, { processId: 202 }) },
-    { name: "catalog-drift", command: "editor.play", replacement: selection("ready", 2, "editor", SESSION_ID, { toolCatalogFingerprint: "d".repeat(64) }) },
+    { name: "generic-tool", command: "project-settings.info", replacement: selection("ready", 2) },
+    { name: "process-change", command: "editor.play-mode.start", replacement: selection("ready", 2, "editor", SESSION_ID, { processId: 202 }) },
+    { name: "catalog-drift", command: "editor.play-mode.start", replacement: selection("ready", 2, "editor", SESSION_ID, { toolCatalogFingerprint: "d".repeat(64) }) },
   ];
   for (const item of cases) {
     let now = 2_000;
@@ -984,7 +984,7 @@ test("post-dispatch listener recovery rejects generic tools, process changes, an
     });
     await assert.rejects(() => supervisor.execute({
       requestId: admission.requestId,
-      command: "project-tool.run",
+      command: "catalog.editor.run",
       input: { name: item.command, input: {} },
       mutation: true,
       absoluteDeadlineMs: 7_000,
@@ -1006,7 +1006,7 @@ test("explicit pre-effect admission rejection polls reacquire until capacity is 
   const sleeps: number[] = [];
   const admission: RootAdmissionLease = {
     requestId: "req_reacquire_capacity",
-    command: "project.info",
+    command: "project-settings.info",
     rootFingerprint: "f".repeat(64),
     completionContractIdentity: "atomic-read-v1",
     target: "editor",
@@ -1048,7 +1048,7 @@ test("explicit pre-effect admission rejection polls reacquire until capacity is 
       return { response: { ok: true, requestId: request.payload.requestId, data: { done: true } }, attestation: attestation(1) };
     },
   });
-  const result = await supervisor.read({ requestId: admission.requestId, command: "project-tool.run", input: {}, absoluteDeadlineMs: 4_000, rootAdmission: admission });
+  const result = await supervisor.read({ requestId: admission.requestId, command: "catalog.editor.run", input: {}, absoluteDeadlineMs: 4_000, rootAdmission: admission });
   assert.equal(result.ok, true);
   assert.equal(posts, 2);
   assert.equal(acquireCalls, 3);
@@ -1109,5 +1109,5 @@ test("durable roots and root-bound controls retain one immutable deadline and pe
     assert.match(bodies[0]!, /"absoluteDeadlineUtc":"1970-01-01T00:00:20.000Z"/);
   }
   const supervisor = new SessionSupervisor({ instance: INSTANCE_ID }, { dataDir: "test" }, { now: () => now, sleep: async () => undefined, select: async () => selection("ready", 1) });
-  await assert.rejects(() => supervisor.execute({ requestId: "req_forbidden_transition", command: "project-tool.run", input: {}, allowTransitionBinding: true }), (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_INTERNAL_INVOCATION_INVALID");
+  await assert.rejects(() => supervisor.execute({ requestId: "req_forbidden_transition", command: "catalog.editor.run", input: {}, allowTransitionBinding: true }), (error: unknown) => error instanceof SessionSupervisorError && error.code === "E_INTERNAL_INVOCATION_INVALID");
 });

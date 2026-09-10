@@ -16,22 +16,22 @@ const filledCsharpHandlerCommands = [
   "scene.create",
   "scene.load",
   "scene.save",
-  "go.create",
-  "go.modify",
-  "go.duplicate",
-  "go.move-relative",
-  "go.look-at",
-  "go.delete",
+  "game-object.create",
+  "game-object.modify",
+  "game-object.duplicate",
+  "game-object.move-relative",
+  "game-object.look-at",
+  "game-object.delete",
   "component.add",
   "component.remove",
   "component.set",
   "editor.undo",
   "editor.redo",
   "editor.resolution",
-  "project.tag.add",
-  "project.tag.remove",
-  "project.layer.add",
-  "project.layer.remove",
+  "project-settings.tag.add",
+  "project-settings.tag.remove",
+  "project-settings.layer.add",
+  "project-settings.layer.remove",
   "physics.collision-matrix",
   "physics.material",
   "physics.joint.add",
@@ -39,8 +39,8 @@ const filledCsharpHandlerCommands = [
   "physics.force",
   "physics.overlap",
   "physics.rigidbody",
-  "animation.clip.create",
-  "animation.clip.modify",
+  "animation-clip.create",
+  "animation-clip.update",
   "scriptable-object.create",
   "scriptable-object.info",
   "scriptable-object.list-types",
@@ -65,9 +65,9 @@ test("command contract keeps representative TS-local, C# built-in, and extension
 
   assert.equal(contracts.get("tools.group"), undefined);
   assert.equal(contracts.get("extension.status"), undefined);
-  assert.equal(contracts.get("project-tool.health")?.handler_type, "bridge");
-  assert.equal(contracts.get("project-tool.summary")?.handler_type, "bridge");
-  assert.equal(contracts.get("runtime-tool.describe")?.handler_type, "bridge");
+  assert.equal(contracts.get("catalog.editor.health")?.handler_type, "bridge");
+  assert.equal(contracts.get("catalog.editor.summary")?.handler_type, "bridge");
+  assert.equal(contracts.get("catalog.player.describe")?.handler_type, "bridge");
   assert.equal(contracts.get("build.run")?.handler_type, "hybrid");
   assert.equal(contracts.get("scene.hierarchy")?.handler_type, "bridge");
   assert.equal(contracts.get("probuilder.ping")?.handler_type, "bridge");
@@ -125,24 +125,24 @@ test("command contract marks representative routing correctly", () => {
 test("typed generic C# registry registrations are extracted from executable code", () => {
   const source = `
     registry.Register<UnityCli.Protocol.BridgeRequest>(
-      "project-tool.run", "project-tool", false, 30000, ProjectToolRun);
-    RegisterCommand(registry, "runtime-tool.list", "runtime-tool", false, RuntimeToolList);
+      "catalog.editor.run", "catalog", false, 30000, ProjectToolRun);
+    RegisterCommand(registry, "catalog.player.list", "catalog", false, RuntimeToolList);
   `;
 
-  assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source), ["project-tool.run", "runtime-tool.list"]);
+  assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source), ["catalog.editor.run", "catalog.player.list"]);
 });
 
 test("missing typed generic C# registry registration is reported by extraction", () => {
-  const source = `registry.Register<UnityCli.Protocol.BridgeRequest>("project-tool.run", "project-tool", false, 60000, ProjectToolRun);`;
+  const source = `registry.Register<UnityCli.Protocol.BridgeRequest>("catalog.editor.run", "catalog", false, 60000, ProjectToolRun);`;
 
   assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source.replace("Register<UnityCli.Protocol.BridgeRequest>", "RemovedRegister")), []);
 });
 
 test("C# registry extraction ignores similar comments and strings", () => {
   const source = `
-    // registry.Register<UnityCli.Protocol.BridgeRequest>("runtime-tool.run", "runtime-tool", false, 60000, RuntimeToolRun);
-    var example = "RegisterCommand(registry, \\\"project-tool.run\\\")";
-    /* RegisterCommand(registry, "project-tool.run", "project-tool", false, ProjectToolRun); */
+    // registry.Register<UnityCli.Protocol.BridgeRequest>("catalog.player.run", "catalog", false, 60000, RuntimeToolRun);
+    var example = "RegisterCommand(registry, \\\"catalog.editor.run\\\")";
+    /* RegisterCommand(registry, "catalog.editor.run", "catalog", false, ProjectToolRun); */
   `;
 
   assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source), []);

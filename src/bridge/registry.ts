@@ -7,25 +7,26 @@ import { consoleBridgeSpecs } from "./domains/console.js";
 import { doctorBridgeSpecs } from "./domains/doctor.js";
 import { editorBridgeSpecs } from "./domains/editor.js";
 import { gameObjectBridgeSpecs } from "./domains/game-object.js";
-import { graphicsBridgeSpecs } from "./domains/graphics.js";
+import { lightingBridgeSpecs } from "./domains/lighting.js";
 import { materialBridgeSpecs } from "./domains/material.js";
 import { navMeshBridgeSpecs } from "./domains/navmesh.js";
 import { occlusionBridgeSpecs } from "./domains/occlusion.js";
-import { objectBridgeSpecs } from "./domains/object.js";
-import { packageBridgeSpecs } from "./domains/package.js";
 import { physicsBridgeSpecs } from "./domains/physics.js";
 import { prefabBridgeSpecs } from "./domains/prefab.js";
 import { profilerBridgeSpecs } from "./domains/profiler.js";
-import { reflectionBridgeSpecs } from "./domains/reflection.js";
+import { renderingBridgeSpecs } from "./domains/rendering.js";
+import { runtimeReflectionBridgeSpecs } from "./domains/runtime-reflection.js";
 import { sceneBridgeSpecs } from "./domains/scene.js";
 import { screenshotBridgeSpecs } from "./domains/screenshot.js";
 import { scriptableObjectBridgeSpecs } from "./domains/scriptable-object.js";
+import { serializedObjectBridgeSpecs } from "./domains/serialized-object.js";
 import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
 import { timelineBridgeSpecs } from "./domains/timeline.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
-import { projectToolBridgeSpecs } from "./domains/project-tool.js";
-import { runtimeToolBridgeSpecs } from "./domains/runtime-tool.js";
+import { volumeBridgeSpecs } from "./domains/volume.js";
+import { catalogEditorBridgeSpecs } from "./domains/catalog-editor.js";
+import { catalogPlayerBridgeSpecs } from "./domains/catalog-player.js";
 import type { BridgeCommandSpec } from "./types.js";
 
 /**
@@ -40,7 +41,9 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...assetBridgeSpecs,
   ...prefabBridgeSpecs,
   ...materialBridgeSpecs,
-  ...graphicsBridgeSpecs,
+  ...lightingBridgeSpecs,
+  ...renderingBridgeSpecs,
+  ...volumeBridgeSpecs,
   ...physicsBridgeSpecs,
   ...profilerBridgeSpecs,
   ...shaderBridgeSpecs,
@@ -53,14 +56,13 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...editorBridgeSpecs,
   ...doctorBridgeSpecs,
   ...codeBridgeSpecs,
-  ...objectBridgeSpecs,
-  ...reflectionBridgeSpecs,
+  ...serializedObjectBridgeSpecs,
+  ...runtimeReflectionBridgeSpecs,
   ...screenshotBridgeSpecs,
   ...consoleBridgeSpecs,
-  ...packageBridgeSpecs,
   ...buildBridgeSpecs,
-  ...runtimeToolBridgeSpecs,
-  ...projectToolBridgeSpecs
+  ...catalogPlayerBridgeSpecs,
+  ...catalogEditorBridgeSpecs
 ];
 
 export class BridgeCommandRegistry {
@@ -105,7 +107,7 @@ export class BridgeCommandRegistry {
   public lookupBridgeCommand(bridgeCommand: string): BridgeCommandSpec | undefined {
     const specs = this.byBridgeCommand.get(bridgeCommand);
     if (!specs || specs.length === 0) return undefined;
-    // 优先返回通用 spec(无 toolName),避免工具特定 spec(如 scene.active 的 project-tool.run)被误用于通用路由
+    // 优先返回通用 spec(无 toolName),避免工具特定 spec(如 scene.active 的 catalog.editor.run)被误用于通用路由
     return specs.find((s) => !s.toolName) ?? specs[0];
   }
 

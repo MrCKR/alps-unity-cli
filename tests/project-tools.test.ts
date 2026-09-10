@@ -305,12 +305,12 @@ test("custom Tool rejects a malformed successful Bridge terminal without exposin
   const result = await execute(["tools", "run", "sample.echo", "--input", "{\"value\":\"hello\"}"], {
     dataDir: "Z:/missing-unity-cli-data",
     projectTools: [tool],
-    bridgeExecute: async (payload: BridgeRequest) => ({ ok: true, requestId: payload.requestId, data: { command: "project-tool.run" } }),
+    bridgeExecute: async (payload: BridgeRequest) => ({ ok: true, requestId: payload.requestId, data: { command: "catalog.editor.run" } }),
   } as never);
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.equal(result.error.code, "E_BRIDGE_RESPONSE_INVALID");
-  assert.equal(JSON.stringify(result).includes("project-tool.run"), false);
+  assert.equal(JSON.stringify(result).includes("catalog.editor.run"), false);
 });
 
 test("instance selector never becomes a Tool business field", async () => {
@@ -341,7 +341,7 @@ test("instance selector never becomes a Tool business field", async () => {
   assert.deepEqual((requests[0].input as { input: Record<string, unknown> }).input, { value: "hello", instance: "business-only" });
 });
 
-test("custom Tool runs once through direct project-tool.run and returns business data", async () => {
+test("custom Tool runs once through direct catalog.editor.run and returns business data", async () => {
   const tool = projectDescriptorToToolMetadata(descriptor());
   assert.ok(tool);
   const requests: BridgeRequest[] = [];
@@ -359,7 +359,7 @@ test("custom Tool runs once through direct project-tool.run and returns business
   assert.ok(result.ok, JSON.stringify(result));
   assert.deepEqual(result.data, { value: "hello" });
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal(requests[0].command, "catalog.editor.run");
   assert.deepEqual(requests[0].input, {
     name: "sample.echo",
     input: { value: "hello" },

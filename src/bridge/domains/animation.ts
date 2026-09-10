@@ -14,35 +14,35 @@ function structuredInput(flags: BridgeFlags): Record<string, unknown> {
 }
 
 export const animationBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "animation", command: "clip", bridgeCommand: "project-tool.run", toolName: "animation.clip", buildArgs: animationArgs },
-  { group: "animation", command: "clip.create", bridgeCommand: "project-tool.run", toolName: "animation.clip.create", buildArgs: animationArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "animation", command: "clip.modify", bridgeCommand: "project-tool.run", toolName: "animation.clip.modify", buildArgs: animationArgs, destructiveHint: true, supportsDryRun: true },
-  { group: "animation", command: "state", bridgeCommand: "project-tool.run", toolName: "animation.state", buildArgs: animationArgs },
-  { group: "animation", command: "play", bridgeCommand: "project-tool.run", toolName: "animation.play", buildArgs: animationArgs },
-  { group: "animation", command: "stop", bridgeCommand: "project-tool.run", toolName: "animation.stop", buildArgs: animationArgs },
-  { group: "animator", command: "get-info", bridgeCommand: "project-tool.run", toolName: "animator.get-info", buildArgs: animatorArgs },
-  { group: "animator", command: "get-parameter", bridgeCommand: "project-tool.run", toolName: "animator.get-parameter", buildArgs: animatorArgs },
-  { group: "animator", command: "set-parameter", bridgeCommand: "project-tool.run", toolName: "animator.set-parameter", buildArgs: animatorArgs, destructiveHint: true },
-  { group: "animator", command: "crossfade", bridgeCommand: "project-tool.run", toolName: "animator.crossfade", buildArgs: animatorArgs },
-  { group: "animator", command: "set-speed", bridgeCommand: "project-tool.run", toolName: "animator.set-speed", buildArgs: animatorArgs },
-  { group: "animator", command: "set-enabled", bridgeCommand: "project-tool.run", toolName: "animator.set-enabled", buildArgs: animatorArgs },
+  { group: "animation-clip", command: "read", bridgeCommand: "catalog.editor.run", toolName: "animation-clip.read", buildArgs: animationArgs },
+  { group: "animation-clip", command: "create", bridgeCommand: "catalog.editor.run", toolName: "animation-clip.create", buildArgs: animationArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "animation-clip", command: "update", bridgeCommand: "catalog.editor.run", toolName: "animation-clip.update", buildArgs: animationArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "animator", command: "get-state", bridgeCommand: "catalog.editor.run", toolName: "animator.get-state", buildArgs: animationArgs },
+  { group: "animator", command: "play", bridgeCommand: "catalog.editor.run", toolName: "animator.play", buildArgs: animationArgs },
+  { group: "animator", command: "stop", bridgeCommand: "catalog.editor.run", toolName: "animator.stop", buildArgs: animationArgs },
+  { group: "animator", command: "get-info", bridgeCommand: "catalog.editor.run", toolName: "animator.get-info", buildArgs: animatorArgs },
+  { group: "animator", command: "get-parameter", bridgeCommand: "catalog.editor.run", toolName: "animator.get-parameter", buildArgs: animatorArgs },
+  { group: "animator", command: "set-parameter", bridgeCommand: "catalog.editor.run", toolName: "animator.set-parameter", buildArgs: animatorArgs, destructiveHint: true },
+  { group: "animator", command: "crossfade", bridgeCommand: "catalog.editor.run", toolName: "animator.crossfade", buildArgs: animatorArgs },
+  { group: "animator", command: "set-speed", bridgeCommand: "catalog.editor.run", toolName: "animator.set-speed", buildArgs: animatorArgs },
+  { group: "animator", command: "set-enabled", bridgeCommand: "catalog.editor.run", toolName: "animator.set-enabled", buildArgs: animatorArgs },
   // ── controller.* AnimatorController editing tools ───
-  { group: "controller", command: "create", bridgeCommand: "project-tool.run", toolName: "controller.create", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "add-state", bridgeCommand: "project-tool.run", toolName: "controller.add-state", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "add-transition", bridgeCommand: "project-tool.run", toolName: "controller.add-transition", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "add-parameter", bridgeCommand: "project-tool.run", toolName: "controller.add-parameter", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "get-info", bridgeCommand: "project-tool.run", toolName: "controller.get-info", buildArgs: controllerArgs },
-  { group: "controller", command: "assign", bridgeCommand: "project-tool.run", toolName: "controller.assign", buildArgs: controllerArgs },
-  { group: "controller", command: "add-layer", bridgeCommand: "project-tool.run", toolName: "controller.add-layer", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "remove-layer", bridgeCommand: "project-tool.run", toolName: "controller.remove-layer", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "set-layer-weight", bridgeCommand: "project-tool.run", toolName: "controller.set-layer-weight", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "create-blend-tree-1d", bridgeCommand: "project-tool.run", toolName: "controller.create-blend-tree-1d", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "create-blend-tree-2d", bridgeCommand: "project-tool.run", toolName: "controller.create-blend-tree-2d", buildArgs: controllerArgs, destructiveHint: true },
-  { group: "controller", command: "add-blend-tree-child", bridgeCommand: "project-tool.run", toolName: "controller.add-blend-tree-child", buildArgs: controllerArgs, destructiveHint: true }
+  { group: "animator-controller", command: "create", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.create", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "add-state", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.add-state", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "add-transition", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.add-transition", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "add-parameter", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.add-parameter", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "get-info", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.get-info", buildArgs: controllerArgs },
+  { group: "animator-controller", command: "assign", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.assign", buildArgs: controllerArgs },
+  { group: "animator-controller", command: "add-layer", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.add-layer", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "remove-layer", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.remove-layer", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "set-layer-weight", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.set-layer-weight", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "create-blend-tree-1d", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.create-blend-tree-1d", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "create-blend-tree-2d", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.create-blend-tree-2d", buildArgs: controllerArgs, destructiveHint: true },
+  { group: "animator-controller", command: "add-blend-tree-child", bridgeCommand: "catalog.editor.run", toolName: "animator-controller.add-blend-tree-child", buildArgs: controllerArgs, destructiveHint: true }
 ];
 
 function animationArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  if (command === "animation.clip" || command === "animation.clip.create" || command === "animation.clip.modify") {
+  if (command === "animation-clip.read" || command === "animation-clip.create" || command === "animation-clip.update") {
     return compactArgs({
       path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "clip"),
       overwrite: boolFlag(flags, "overwrite"),
@@ -96,12 +96,12 @@ function animatorArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
 }
 
 function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  if (command === "controller.create") {
+  if (command === "animator-controller.create") {
     return compactArgs({
       controllerPath: positionalTarget ?? stringFlag(flags, "controller-path") ?? stringFlag(flags, "path")
     });
   }
-  if (command === "controller.add-state") {
+  if (command === "animator-controller.add-state") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       stateName: stringFlag(flags, "state-name") ?? stringFlag(flags, "name"),
@@ -111,7 +111,7 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
       isDefault: boolFlag(flags, "is-default")
     });
   }
-  if (command === "controller.add-transition") {
+  if (command === "animator-controller.add-transition") {
     const structured = structuredInput(flags);
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
@@ -124,7 +124,7 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
       conditions: stringFlag(flags, "conditions") ?? structured.conditions
     });
   }
-  if (command === "controller.add-parameter") {
+  if (command === "animator-controller.add-parameter") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       parameterName: stringFlag(flags, "parameter-name") ?? stringFlag(flags, "name"),
@@ -132,18 +132,18 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
       defaultValue: stringFlag(flags, "default-value")
     });
   }
-  if (command === "controller.get-info") {
+  if (command === "animator-controller.get-info") {
     return compactArgs({
       controllerPath: positionalTarget ?? stringFlag(flags, "controller-path") ?? stringFlag(flags, "path")
     });
   }
-  if (command === "controller.assign") {
+  if (command === "animator-controller.assign") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       target: stringFlag(flags, "target") ?? positionalTarget
     });
   }
-  if (command === "controller.add-layer") {
+  if (command === "animator-controller.add-layer") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       layerName: stringFlag(flags, "layer-name") ?? stringFlag(flags, "name"),
@@ -151,14 +151,14 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
       blendingMode: stringFlag(flags, "blending-mode") ?? "override"
     });
   }
-  if (command === "controller.remove-layer") {
+  if (command === "animator-controller.remove-layer") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       layerIndex: numberFlag(flags, "layer-index"),
       layerName: stringFlag(flags, "layer-name")
     });
   }
-  if (command === "controller.set-layer-weight") {
+  if (command === "animator-controller.set-layer-weight") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       layerIndex: numberFlag(flags, "layer-index"),
@@ -166,7 +166,7 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
       weight: floatFlag(flags, "weight")
     });
   }
-  if (command === "controller.create-blend-tree-1d") {
+  if (command === "animator-controller.create-blend-tree-1d") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       stateName: stringFlag(flags, "state-name") ?? stringFlag(flags, "name"),
@@ -174,7 +174,7 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
       layerIndex: numberFlag(flags, "layer-index") ?? 0
     });
   }
-  if (command === "controller.create-blend-tree-2d") {
+  if (command === "animator-controller.create-blend-tree-2d") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       stateName: stringFlag(flags, "state-name") ?? stringFlag(flags, "name"),
@@ -184,7 +184,7 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
       blendType: stringFlag(flags, "blend-type") ?? "simpledirectional2d"
     });
   }
-  if (command === "controller.add-blend-tree-child") {
+  if (command === "animator-controller.add-blend-tree-child") {
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       stateName: stringFlag(flags, "state-name") ?? stringFlag(flags, "name"),

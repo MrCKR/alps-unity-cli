@@ -169,7 +169,7 @@ test("command按live schema解析positional、named、bare boolean与AnyJSON并�
 
   assert.ok(result.ok, JSON.stringify(result));
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal(requests[0].command, "catalog.editor.run");
   assert.deepEqual(requests[0].input, {
     name: "UnityPipeline_eval",
     input: {
@@ -210,7 +210,7 @@ test("command与tools run对同一Tool产生相同typed input和业务结果", a
 test("command名称选择保持native exact优先且不做相似能力映射", async () => {
   const native = attributeEvalTool({
     name: "eval",
-    group: "project",
+    group: "project-settings",
     contractProfile: "native",
   });
   const attribute = attributeEvalTool();
@@ -288,18 +288,18 @@ test("online command resolution uses exact Runtime describe without injected pro
     }),
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      if (payload.command === "project-tool.describe") {
+      if (payload.command === "catalog.editor.describe") {
         const input = payload.input as { name: string; fallbackName?: string };
         const selected = descriptors.get(input.name) ?? (input.fallbackName ? descriptors.get(input.fallbackName) : undefined);
         return { ok: true as const, requestId: payload.requestId, data: {
           catalogGeneration: "e".repeat(64), found: Boolean(selected), ...(selected ? { descriptor: selected } : {}),
         } };
       }
-      if (payload.command === "runtime-tool.describe") {
+      if (payload.command === "catalog.player.describe") {
         assert.deepEqual(Object.keys(payload.input as object), ["name"]);
         return { ok: true as const, requestId: payload.requestId, data: { catalogGeneration: "r".repeat(64), found: false } };
       }
-      if (payload.command === "runtime-tool.run") return { ok: true as const, requestId: payload.requestId, data: { result: {
+      if (payload.command === "catalog.player.run") return { ok: true as const, requestId: payload.requestId, data: { result: {
         runtimeSessionId: "runtime-session", buildId: "build", observedAt: "2026-01-01T00:00:00Z", unityVersion: "6000.0", platform: "WindowsPlayer", productName: "Fixture", applicationVersion: "1",
         scene: { name: "Scene", buildIndex: 0, isLoaded: true }, frame: { frameCount: 1, realtimeSinceStartup: 1, targetFrameRate: 60 },
         time: { timeScale: 1, time: 1, unscaledTime: 1 }, screen: { width: 1, height: 1, dpi: 96, fullScreen: false, focused: true },
@@ -312,22 +312,22 @@ test("online command resolution uses exact Runtime describe without injected pro
 
   for (const argv of [
     ["command", native.name],
-    ["command", "runtime.state"],
+    ["command", "player-runtime.state"],
     ["command", "eval", "--code", "return 1;"],
     ["command", "eval", "--help"],
-    ["command", "runtime.state", "--help"],
+    ["command", "player-runtime.state", "--help"],
   ]) {
     const result = await execute(argv, runtime as never);
     assert.equal(result.ok, true, `${argv.join(" ")}: ${JSON.stringify(result)}`);
   }
 
-  const runtimeDescribes = requests.filter((request) => request.command === "runtime-tool.describe");
+  const runtimeDescribes = requests.filter((request) => request.command === "catalog.player.describe");
   assert.ok(runtimeDescribes.length >= 5);
   assert.ok(runtimeDescribes.every((request) => JSON.stringify(request.input) === JSON.stringify({ name: (request.input as { name: string }).name })));
-  const editorShort = requests.find((request) => request.command === "project-tool.describe" && (request.input as { name: string }).name === "eval");
+  const editorShort = requests.find((request) => request.command === "catalog.editor.describe" && (request.input as { name: string }).name === "eval");
   assert.deepEqual(editorShort?.input, { name: "eval", fallbackName: "UnityPipeline_eval" });
-  const business = requests.filter((request) => request.command.endsWith("-tool.run"));
-  assert.deepEqual(business.map((request) => request.command), ["project-tool.run", "runtime-tool.run", "project-tool.run"]);
+  const business = requests.filter((request) => request.command === "catalog.editor.run" || request.command === "catalog.player.run");
+  assert.deepEqual(business.map((request) => request.command), ["catalog.editor.run", "catalog.player.run", "catalog.editor.run"]);
 });
 
 test("command在effect前拒绝未知、缺值、重复与positional溢出", async () => {

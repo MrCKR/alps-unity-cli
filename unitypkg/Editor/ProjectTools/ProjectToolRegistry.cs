@@ -713,8 +713,8 @@ namespace UnityCli
 
         private static bool IsProjectToolCatalogReadCommand(string command)
         {
-            return command == "project-tool.health" || command == "project-tool.groups" || command == "project-tool.summary" || command == "project-tool.describe" || command == "project-tool.list"
-                || command == "runtime-tool.groups" || command == "runtime-tool.summary" || command == "runtime-tool.describe" || command == "runtime-tool.list";
+            return command == "catalog.editor.health" || command == "catalog.editor.groups" || command == "catalog.editor.summary" || command == "catalog.editor.describe" || command == "catalog.editor.list"
+                || command == "catalog.player.groups" || command == "catalog.player.summary" || command == "catalog.player.describe" || command == "catalog.player.list";
         }
 
         private static object ProjectToolGroups(UnityCli.Protocol.BridgeRequest request) { return ProjectToolCatalogGroups(request, false); }
@@ -779,13 +779,13 @@ namespace UnityCli
                     new[] { "Enter Play Mode before running this Tool." });
             }
 
-            // If the tool has Target=runtime, reject from project-tool.run and suggest runtime-tool.run
+            // If the tool has Target=runtime, reject from catalog.editor.run and suggest catalog.player.run
             if (definition.Target == "runtime")
             {
                 throw new BridgeCommandException("E_RUNTIME_TOOL_TARGET_MISMATCH",
-                    "Tool " + name + " has Target=runtime and must be executed via the runtime path (runtime-tool.run).",
+                    "Tool " + name + " has Target=runtime and must be executed via the runtime path (catalog.player.run).",
                     new Dictionary<string, object> { { "toolName", name }, { "toolTarget", definition.Target } },
-                    new[] { "Use runtime-tool.run <name> or tools run <name> with a runtime target to execute this tool in Play Mode." });
+                    new[] { "Use catalog.player.run <name> or tools run <name> with a runtime target to execute this tool in Play Mode." });
             }
             var dryRun = request.Execution != null && request.Execution.DryRun == true;
             var timeoutMs = request.ExecutionTimeoutMs(definition.DefaultTimeoutMs, definition.MaxTimeoutMs);

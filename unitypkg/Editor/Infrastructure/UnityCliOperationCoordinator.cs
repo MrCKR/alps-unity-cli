@@ -242,7 +242,7 @@ namespace UnityCli
             });
         }
 
-        /// <summary>editor.play-mode.status只读取editor.play/editor.stop的direct owner或其已发布终态。</summary>
+        /// <summary>editor.play-mode.status只读取editor.play-mode.start/editor.play-mode.stop的direct owner或其已发布终态。</summary>
         private static object ReadEditorPlayModeStatus(string requestId)
         {
             string requestDigest;
@@ -250,14 +250,14 @@ namespace UnityCli
             object terminal;
             if (UnityCliActiveOperation.TryGetTerminalByRequestId(DirectMutationTerminalScope, requestId, out requestDigest, out statusDomain, out terminal))
             {
-                if (statusDomain != "editor.play" && statusDomain != "editor.stop")
+                if (statusDomain != "editor.play-mode.start" && statusDomain != "editor.play-mode.stop")
                     throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "The requested Play Mode operation was not found in this status domain.");
                 return UnityCliDurableStatusCoordinator.Terminal(requestId, terminal);
             }
             var root = LoadDirectMutationRoot();
             var toolName = root == null ? null : root.ContainsKey("toolName") ? root["toolName"] as string : null;
             if (root == null || !string.Equals(root["requestId"] as string, requestId, StringComparison.Ordinal)
-                || (toolName != "editor.play" && toolName != "editor.stop"))
+                || (toolName != "editor.play-mode.start" && toolName != "editor.play-mode.stop"))
                 throw new BridgeCommandException("E_REQUEST_NOT_FOUND", "The requested Play Mode operation was not found in this Editor session.");
             return UnityCliDurableStatusCoordinator.Running(requestId, root["phase"] as string);
         }
@@ -270,7 +270,7 @@ namespace UnityCli
                 && !string.Equals(root["phase"] as string, "effect_started", StringComparison.Ordinal))
                 throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Direct mutation active state cannot cross its effect barrier.");
             var toolName = root["toolName"] as string;
-            if ((string.Equals(toolName, "editor.play", StringComparison.Ordinal) || string.Equals(toolName, "editor.stop", StringComparison.Ordinal))
+            if ((string.Equals(toolName, "editor.play-mode.start", StringComparison.Ordinal) || string.Equals(toolName, "editor.play-mode.stop", StringComparison.Ordinal))
                 && !root.ContainsKey("playModeWasPlaying"))
                 root["playModeWasPlaying"] = EditorApplication.isPlaying;
             root["phase"] = "effect_started";
@@ -376,7 +376,7 @@ namespace UnityCli
             catch (BridgeCommandException exception) { return SerializeBridgeExceptionEnvelope(requestId, exception); }
             var toolName = root["toolName"] as string;
             if (string.Equals(phase, "effect_started", StringComparison.Ordinal)
-                && (string.Equals(toolName, "editor.play", StringComparison.Ordinal) || string.Equals(toolName, "editor.stop", StringComparison.Ordinal)))
+                && (string.Equals(toolName, "editor.play-mode.start", StringComparison.Ordinal) || string.Equals(toolName, "editor.play-mode.stop", StringComparison.Ordinal)))
             {
                 if (!TryFinalizeRecoveredPlayModeRoot(
                     ProductionQueueState, requestId, requestDigest,
@@ -495,7 +495,7 @@ namespace UnityCli
                 try { root = LoadDirectMutationRoot(); }
                 catch { root = null; }
                 var toolName = root == null ? null : root["toolName"] as string;
-                if (toolName != "editor.play" && toolName != "editor.stop")
+                if (toolName != "editor.play-mode.start" && toolName != "editor.play-mode.stop")
                     finalized = TryResumeDirectMutation(requestId, requestDigest) != null;
             }
             if (finalized)
@@ -542,8 +542,8 @@ namespace UnityCli
             catch { return false; }
             if (!string.Equals(root["phase"] as string, "effect_started", StringComparison.Ordinal)) return false;
             var toolName = root["toolName"] as string;
-            var enterPlayMode = string.Equals(toolName, "editor.play", StringComparison.Ordinal);
-            if (!enterPlayMode && !string.Equals(toolName, "editor.stop", StringComparison.Ordinal)) return false;
+            var enterPlayMode = string.Equals(toolName, "editor.play-mode.start", StringComparison.Ordinal);
+            if (!enterPlayMode && !string.Equals(toolName, "editor.play-mode.stop", StringComparison.Ordinal)) return false;
 
             object beforeValue;
             object deadlineValue;
@@ -569,8 +569,8 @@ namespace UnityCli
                     IsPaused = isPaused
                 };
                 terminal = enterPlayMode
-                    ? (object)new EditorPlayTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play" } } }
-                    : new EditorStopTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.stop" } } };
+                    ? (object)new EditorPlayTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode.start" } } }
+                    : new EditorStopTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode.stop" } } };
                 PublishDirectMutationTerminal(state, requestId, requestDigest,
                     UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Success(requestId, terminal)));
             }
@@ -652,7 +652,7 @@ namespace UnityCli
             SessionState.SetBool(DirectMutationEffectCommittedSessionKey, true);
         }
 
-        /// <summary>code.exec等内部direct命令在首个用户effect前同样重验完整lease identity。</summary>
+        /// <summary>code.execute等内部direct命令在首个用户effect前同样重验完整lease identity。</summary>
         private static void BeginDirectEffect(string requestId)
         {
             var requestDigest = SessionState.GetString(DirectMutationRequestDigestSessionKey, string.Empty);
@@ -821,15 +821,15 @@ namespace UnityCli
             if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
             UnityCliToolCompletionContract contract;
             if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
-            if (string.Equals(toolName, "code.exec", StringComparison.Ordinal))
+            if (string.Equals(toolName, "code.execute", StringComparison.Ordinal))
                 return UnityCliToolCompletionRegistry.CodeExec;
             return ResolveRegisteredCustomToolCompletionContract(toolName);
         }
 
         private static string RequestToolName(BridgeRequest request)
         {
-            if (request != null && (string.Equals(request.Command, "project-tool.run", StringComparison.Ordinal)
-                || string.Equals(request.Command, "runtime-tool.run", StringComparison.Ordinal)))
+            if (request != null && (string.Equals(request.Command, "catalog.editor.run", StringComparison.Ordinal)
+                || string.Equals(request.Command, "catalog.player.run", StringComparison.Ordinal)))
             {
                 var input = request.Input as IDictionary<string, object>;
                 object rawName;
@@ -868,7 +868,7 @@ namespace UnityCli
             if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
             UnityCliToolCompletionContract contract;
             if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
-            return string.Equals(toolName, "code.exec", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
+            return string.Equals(toolName, "code.execute", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
         }
 
         private sealed class DurableMutationBarrierProof
@@ -906,8 +906,8 @@ namespace UnityCli
             var inputMutation = RequestMutationFromImmutableInput(contract.ToolName, input, out requiresSceneState);
             if (!requiresSceneState) return inputMutation;
             if (contract.ToolName == "physics.rigidbody") return RigidbodyNeedsMutation(input);
-            if (contract.ToolName == "graphics.reflection-probe") return CreateProbeNeedsMutation(input, true);
-            if (contract.ToolName == "graphics.light-probe-group") return CreateProbeNeedsMutation(input, false);
+            if (contract.ToolName == "lighting.reflection-probe") return CreateProbeNeedsMutation(input, true);
+            if (contract.ToolName == "lighting.light-probe-group") return CreateProbeNeedsMutation(input, false);
             return true;
         }
 
@@ -915,27 +915,27 @@ namespace UnityCli
         private static bool RequestMutationFromImmutableInput(string name, IDictionary<string, object> input, out bool requiresSceneState)
         {
             requiresSceneState = false;
-            if (name == "graphics.reflection-probe")
+            if (name == "lighting.reflection-probe")
             {
                 if (HasAnyMeaningfulInput(input, "mode", "resolution", "bounces", "hdr", "boxSize", "boxOffset")) return true;
                 requiresSceneState = InputBoolean(input, "create");
                 return false;
             }
-            if (name == "graphics.light-probe-group")
+            if (name == "lighting.light-probe-group")
             {
                 if (HasAnyMeaningfulInput(input, "positions")) return true;
                 requiresSceneState = InputBoolean(input, "create");
                 return false;
             }
-            if (name == "graphics.skybox-set-properties") return HasAllMeaningfulInput(input, "property", "value");
+            if (name == "lighting.skybox.set-properties") return HasAllMeaningfulInput(input, "property", "value");
             if (name == "build.settings.set") return HasAnyInput(input, "apiCompatibilityLevel", "applicationIdentifier", "bundleVersion", "companyId", "productName", "scriptingBackend");
-            if (name == "graphics.bake-settings") return HasAnyInput(input, "bakedGI", "bounces", "directSamples", "environmentSamples", "filtering", "indirectSamples", "lightingMode", "realtimeGI");
-            if (name == "graphics.quality") return HasAnyInput(input, "anisotropicFiltering", "antiAliasing", "lodBias", "masterTextureLimit", "maximumLODLevel", "qualityLevel", "realtimeReflectionProbes", "shadowDistance", "shadowResolution", "shadows", "softParticles", "vSyncCount");
-            if (name == "graphics.pipeline-settings") return HasAnyInput(input, "renderPipeline");
-            if (name == "graphics.skybox-set-ambient") return HasAnyMeaningfulInput(input, "ambientEquatorColor", "ambientGroundColor", "ambientSkyColor", "color", "intensity", "mode");
-            if (name == "graphics.skybox-set-fog") return HasAnyMeaningfulInput(input, "color", "density", "enabled", "endDistance", "mode", "startDistance");
-            if (name == "graphics.skybox-set-reflection") return HasAnyMeaningfulInput(input, "bounces", "intensity", "mode", "resolution");
-            if (name == "graphics.scene-debug") return HasAnyInput(input, "drawMode", "shadingMode");
+            if (name == "lighting.bake.settings") return HasAnyInput(input, "bakedGI", "bounces", "directSamples", "environmentSamples", "filtering", "indirectSamples", "lightingMode", "realtimeGI");
+            if (name == "rendering.quality") return HasAnyInput(input, "anisotropicFiltering", "antiAliasing", "lodBias", "masterTextureLimit", "maximumLODLevel", "qualityLevel", "realtimeReflectionProbes", "shadowDistance", "shadowResolution", "shadows", "softParticles", "vSyncCount");
+            if (name == "rendering.pipeline.settings") return HasAnyInput(input, "renderPipeline");
+            if (name == "lighting.skybox.set-ambient") return HasAnyMeaningfulInput(input, "ambientEquatorColor", "ambientGroundColor", "ambientSkyColor", "color", "intensity", "mode");
+            if (name == "lighting.skybox.set-fog") return HasAnyMeaningfulInput(input, "color", "density", "enabled", "endDistance", "mode", "startDistance");
+            if (name == "lighting.skybox.set-reflection") return HasAnyMeaningfulInput(input, "bounces", "intensity", "mode", "resolution");
+            if (name == "rendering.scene-debug") return HasAnyInput(input, "drawMode", "shadingMode");
             if (name == "physics.collision-matrix") return HasAllInput(input, "layerA", "layerB", "ignore");
             if (name == "physics.settings") return HasAnyInput(input, "autoSimulation", "bounceThreshold", "defaultContactOffset", "defaultSolverIterations", "defaultSolverVelocityIterations", "gravity", "gravity2d", "property", "queriesHitBackfaces", "queriesHitTriggers", "queriesStartInColliders", "value");
             if (name == "physics.rigidbody")
@@ -961,7 +961,7 @@ namespace UnityCli
         {
             var root = request.Input as IDictionary<string, object>;
             if (root == null) return new Dictionary<string, object>();
-            if (string.Equals(request.Command, "project-tool.run", StringComparison.Ordinal) || string.Equals(request.Command, "runtime-tool.run", StringComparison.Ordinal))
+            if (string.Equals(request.Command, "catalog.editor.run", StringComparison.Ordinal) || string.Equals(request.Command, "catalog.player.run", StringComparison.Ordinal))
             {
                 object nested;
                 var typed = root.TryGetValue("input", out nested) ? nested as IDictionary<string, object> : null;
@@ -1037,10 +1037,10 @@ namespace UnityCli
         {
             if (IsEditorStateSnapshotCommand(command) || IsDoctorDiagnosticCommand(command)) return true;
             return IsProjectToolCatalogReadCommand(command)
-                || string.Equals(command, "runtime-tool.groups", StringComparison.Ordinal)
-                || string.Equals(command, "runtime-tool.summary", StringComparison.Ordinal)
-                || string.Equals(command, "runtime-tool.describe", StringComparison.Ordinal)
-                || string.Equals(command, "runtime-tool.list", StringComparison.Ordinal);
+                || string.Equals(command, "catalog.player.groups", StringComparison.Ordinal)
+                || string.Equals(command, "catalog.player.summary", StringComparison.Ordinal)
+                || string.Equals(command, "catalog.player.describe", StringComparison.Ordinal)
+                || string.Equals(command, "catalog.player.list", StringComparison.Ordinal);
         }
 
         private static Dictionary<string, object> ValidateCoordinatedTerminal(string response, string requestId)

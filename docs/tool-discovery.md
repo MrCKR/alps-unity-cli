@@ -60,7 +60,7 @@ unitycli tools search 'project-summary|scene' --page-size 20 --cursor <nextCurso
 执行前读取单个 Tool 的完整 descriptor：
 
 ```powershell
-unitycli tools describe camera.screenshot
+unitycli tools describe screenshot.from-camera
 ```
 
 公开字段：

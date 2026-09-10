@@ -10,7 +10,7 @@ const COMMAND_SAMPLE_PATTERN = /\b(?:unitycli\s+)?tools\s+run\s+[\w.-]+\b/i;
 const LARGE_OUTPUT_PATTERN = /\b(pageInfo|cursor|nextCursor|plannedEffects|artifactDir|truncated)\b/i;
 
 const P0_EXAMPLE_TOOLS = new Set([
-  "code.exec",
+  "code.execute",
   "package.install",
   "package.remove",
   "package.deploy",
@@ -24,10 +24,10 @@ const P0_EXAMPLE_TOOLS = new Set([
 ]);
 
 const P0_OUTPUT_SCHEMA_TOOLS = new Set([
-  "code.exec",
+  "code.execute",
   "docs.search",
   "docs.get",
-  "reflect.search",
+  "type-inspection.search",
   "build.run",
   "navmesh.bake",
   "navmesh.surface.bake",
@@ -37,8 +37,8 @@ const P0_OUTPUT_SCHEMA_TOOLS = new Set([
 
 const LARGE_OUTPUT_TOOLS = new Set([
   "docs.search",
-  "reflect.search",
-  "code.exec"
+  "type-inspection.search",
+  "code.execute"
 ]);
 
 function descriptorText(tool: ResolvedToolMetadata): string {
@@ -65,15 +65,15 @@ function assertNoInternalSourceText(subject: string, text: string): void {
 test("TS-local descriptor registry owns exactly the current package-local tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    "asset.refresh", "asset.refresh.status", "build.player.status", "build.run", "code.exec", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
+    "asset.refresh", "asset.refresh.status", "build.player.status", "build.run", "code.execute", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
     "editor.dialogs", "editor.play-mode.status", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
     "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
     "occlusion.bake-status", "package.bridge-remove", "package.deploy",
     "package.embed", "package.install", "package.install.status", "package.registry.clear", "package.registry.set", "package.remove", "package.remove.status",
     "package.resolve", "package.restore", "package.scoped-registry.add", "package.scoped-registry.remove",
-    "reflect.member", "reflect.search", "reflect.type", "runtime.console", "runtime.input.key", "runtime.input.pointer",
-    "runtime.log", "runtime.state", "runtime.target-framerate.set", "runtime.time-scale.set", "runtime.ui.capture-element",
-    "test.cancel", "test.run", "test.run.status"
+    "player-runtime.console", "player-runtime.input.key", "player-runtime.input.pointer",
+    "player-runtime.log", "player-runtime.state", "player-runtime.target-framerate.set", "player-runtime.time-scale.set", "player-runtime.ui.capture-element",
+    "test.cancel", "test.run", "test.run.status", "type-inspection.get-member", "type-inspection.get-type", "type-inspection.search"
   ]);
   assert.equal(findToolByName("asset.refresh")?.handler, "hybrid");
 });
@@ -110,8 +110,8 @@ test("descriptions are call guidance, not duplicated summaries or embedded comma
   }
 });
 
-test("code.exec discovery keeps critical execution boundaries within its description budget", () => {
-  const tool = findToolByName("code.exec");
+test("code.execute discovery keeps critical execution boundaries within its description budget", () => {
+  const tool = findToolByName("code.execute");
   assert.ok(tool);
   assert.match(tool.summary, /cannot be force-stopped by timeout/i);
   assert.match(tool.description, /synchronously compile and execute trusted C# 8/i);
@@ -120,7 +120,7 @@ test("code.exec discovery keeps critical execution boundaries within its descrip
   assert.match(tool.description, /outcome-unknown/i);
   assert.match(tool.description, /completionProbe is optional/i);
   assert.match(tool.description, /Dry-run reports source hash/i);
-  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 1024, "code.exec description must remain within 1024 UTF-8 bytes");
+  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 1024, "code.execute description must remain within 1024 UTF-8 bytes");
 });
 
 test("large-output TS-local descriptors disclose output controls", () => {

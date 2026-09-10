@@ -8,10 +8,10 @@ async function source(path: string): Promise<string> {
 
 test("observed animation and bake tools wait for stable readback", async () => {
   const [play, stop, bakeStart, bakeCancel] = await Promise.all([
-    source("../unitypkg/Editor/Tools/animation/play.cs"),
-    source("../unitypkg/Editor/Tools/animation/stop.cs"),
-    source("../unitypkg/Editor/Tools/graphics/bake-start.cs"),
-    source("../unitypkg/Editor/Tools/graphics/bake-cancel.cs")
+    source("../unitypkg/Editor/Tools/animator/play.cs"),
+    source("../unitypkg/Editor/Tools/animator/stop.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake/start.cs"),
+    source("../unitypkg/Editor/Tools/lighting/bake/cancel.cs")
   ]);
 
   assert.match(play, /await ctx\.Wait\.UntilStable\([\s\S]*GetCurrentAnimatorStateInfo\(layer\)\.fullPathHash == expectedHash[\s\S]*TimeSpan\.FromMilliseconds\(ctx\.TimeoutMs\)[\s\S]*ct: ct\)/);
@@ -96,17 +96,17 @@ test("oracle core mutations prevalidate inputs and return fresh proof", async ()
     source("../unitypkg/Editor/Tools/camera/multiview.cs"),
     source("../unitypkg/Editor/Tools/camera/create.cs"),
     source("../unitypkg/Editor/Tools/camera/lens.cs"),
-    source("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs"),
-    source("../unitypkg/Editor/Tools/go/create.cs"),
-    source("../unitypkg/Editor/Tools/go/modify.cs"),
-    source("../unitypkg/Editor/Tools/go/move-relative.cs"),
-    source("../unitypkg/Editor/Tools/go/set-parent.cs"),
+    source("../unitypkg/Editor/Tools/game-object/GameObjectToolSupport.cs"),
+    source("../unitypkg/Editor/Tools/game-object/create.cs"),
+    source("../unitypkg/Editor/Tools/game-object/modify.cs"),
+    source("../unitypkg/Editor/Tools/game-object/move-relative.cs"),
+    source("../unitypkg/Editor/Tools/game-object/set-parent.cs"),
     source("../unitypkg/Editor/Tools/material/set-renderer-color.cs"),
     source("../unitypkg/Editor/Tools/prefab/instantiate.cs"),
-    source("../unitypkg/Editor/Tools/scene/move-object.cs"),
-    source("../unitypkg/Editor/Tools/animation/clip/create.cs"),
-    source("../unitypkg/Editor/Tools/animation/clip/modify.cs"),
-    source("../unitypkg/Editor/Tools/animation/AnimationToolSupport.cs"),
+    source("../unitypkg/Editor/Tools/game-object/move-to-scene.cs"),
+    source("../unitypkg/Editor/Tools/animation-clip/clip/create.cs"),
+    source("../unitypkg/Editor/Tools/animation-clip/clip/modify.cs"),
+    source("../unitypkg/Editor/Tools/animation-clip/AnimationToolSupport.cs"),
     source("../unitypkg/Editor/Tools/build/scene/add.cs")
   ]);
 

@@ -9,14 +9,14 @@ import { contractToolNames, discoverLiveTools, listCsFiles, readEditorCsSources 
 /** Object 域契约测试：离线 metadata 断言迁移到 live discovery + 源码/契约断言。 */
 
 test("object tools are contract-discovered and expose expected live descriptor fields", async () => {
-  assert.deepEqual(contractToolNames("object"), ["object.get-data", "object.modify"]);
+  assert.deepEqual(contractToolNames("serialized-object"), ["serialized-object.patch", "serialized-object.read"]);
 
   const tools = await discoverLiveTools(
     makeLiveTool({
-      name: "object.get-data",
+      name: "serialized-object.read",
       summary: "Read serialized object data.",
       description: "Read deep serialized object data; paths and viewQuery are mutually exclusive.",
-      group: "object",
+      group: "serialized-object",
       inputSchema: {
         type: "object",
         properties: {
@@ -32,10 +32,10 @@ test("object tools are contract-discovered and expose expected live descriptor f
       outputSchema: { type: "object", properties: { fields: { type: "array" }, path: { type: "string" }, truncated: { type: "boolean" }, nextPath: { type: "string" } } }
     }),
     makeLiveTool({
-      name: "object.modify",
+      name: "serialized-object.patch",
       summary: "Patch serialized object data.",
       description: "Patch serialized object data.",
-      group: "object",
+      group: "serialized-object",
       destructiveHint: true,
       supportsDryRun: true,
       playModeSupport: "session-affecting",
@@ -43,7 +43,7 @@ test("object tools are contract-discovered and expose expected live descriptor f
     })
   );
 
-  const getData = tools.get("object.get-data")!;
+  const getData = tools.get("serialized-object.read")!;
   assert.equal(getData.destructiveHint, false);
   assert.equal(getData.handler, "bridge");
   assert.equal(getData.playModeSupport, "supported");
@@ -63,7 +63,7 @@ test("object tools are contract-discovered and expose expected live descriptor f
   assert.equal(getOutput.data, undefined);
   assert.match(getData.description, /mutually exclusive/);
 
-  const modify = tools.get("object.modify")!;
+  const modify = tools.get("serialized-object.patch")!;
   const modifyProps = modify.inputSchema.properties as Record<string, unknown>;
   assert.equal(modify.destructiveHint, true);
   assert.equal(modify.supportsDryRun, true);
@@ -74,28 +74,28 @@ test("object tools are contract-discovered and expose expected live descriptor f
 });
 
 test("bridge specs resolve for object tools", () => {
-  const objectGet = bridgeCommandRegistry.lookup("object", "get-data");
-  assert.equal(objectGet?.bridgeCommand, "project-tool.run");
-  const objectModify = bridgeCommandRegistry.lookup("object", "modify");
-  assert.equal(objectModify?.bridgeCommand, "project-tool.run");
+  const objectGet = bridgeCommandRegistry.lookup("serialized-object", "read");
+  assert.equal(objectGet?.bridgeCommand, "catalog.editor.run");
+  const objectModify = bridgeCommandRegistry.lookup("serialized-object", "patch");
+  assert.equal(objectModify?.bridgeCommand, "catalog.editor.run");
 });
 
 test("contract entries exist for object tools with present C# handler", () => {
-  for (const name of ["object.get-data", "object.modify"]) {
+  for (const name of ["serialized-object.read", "serialized-object.patch"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
     assert.equal(contract?.csharp_handler, "present", `${name} should have present C# handler`);
   }
 });
 
-test("object.modify exposes destructive metadata because Edit Mode can target persistent assets", () => {
-  const command = bridgeCommandRegistry.lookup("object", "modify");
+test("serialized-object.patch exposes destructive metadata because Edit Mode can target persistent assets", () => {
+  const command = bridgeCommandRegistry.lookup("serialized-object", "patch");
   assert.equal(command?.destructiveHint, true);
 });
 
 test("object commands are exposed by typed C# tools", async () => {
   const allSource = await readEditorCsSources();
-  for (const command of ["object.get-data", "object.modify"]) {
+  for (const command of ["serialized-object.read", "serialized-object.patch"]) {
     assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose its public tool name`);
   }
 });
@@ -135,15 +135,15 @@ test("object patch applies one verified serialized write path and proves fresh v
   assert.doesNotMatch(source, /WriteBackValueType|PropertyInfo\.SetValue|dictionary\[segment\.Name\]/);
 });
 
-test("object.modify implements IUnityCliTool with dry-run support", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/object/modify.cs", import.meta.url), "utf8");
+test("serialized-object.patch implements IUnityCliTool with dry-run support", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/serialized-object/patch.cs", import.meta.url), "utf8");
   assert.match(source, /class ObjectModifyTool/, "ObjectModifyTool should exist");
-  assert.match(source, /DryRun/, "object.modify should support dry-run");
+  assert.match(source, /DryRun/, "serialized-object.patch should support dry-run");
 });
 
 test("C# object serializer implements path aggregate and viewQuery conflict", async () => {
   const serializer = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectSerializer.cs", import.meta.url), "utf8");
-  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/object/ObjectToolSupport.cs", import.meta.url), "utf8");
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/serialized-object/ObjectToolSupport.cs", import.meta.url), "utf8");
   assert.match(serializer, /BuildPathReadAggregate[\s\S]*NewMember\("\$", "UnityCli\.PathReadAggregate", budget\)/, "paths should return a stable aggregate envelope");
   assert.match(serializer, /TryReadPath[\s\S]*ReadPathSegment[\s\S]*ReadIndexer/, "paths should read exact nested members and indexers");
   assert.match(supportSource, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "object serializer options should reject paths and viewQuery together");
@@ -161,7 +161,7 @@ test("C# object serializer represents non-finite dynamic numbers without invalid
 test("bounded Unity readers expose opaque string continuation in the same cursor domain", async () => {
   const paths = [
     "../unitypkg/Editor/Tools/scene/hierarchy.cs",
-    "../unitypkg/Editor/Tools/go/find.cs",
+    "../unitypkg/Editor/Tools/game-object/find.cs",
     "../unitypkg/Editor/Tools/profiler/hierarchy.cs"
   ];
   for (const path of paths) {
@@ -171,15 +171,15 @@ test("bounded Unity readers expose opaque string continuation in the same cursor
   }
 });
 
-test("scene.gameobject stays lightweight while object.get-data owns deep reads", async () => {
+test("scene.gameobject stays lightweight while serialized-object.read owns deep reads", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "scene.gameobject", summary: "Read one GameObject summary.", description: "Read one lightweight GameObject summary.", group: "scene" }),
-    makeLiveTool({ name: "object.get-data", summary: "Read serialized object data.", description: "Read deep serialized object data.", group: "object" })
+    makeLiveTool({ name: "serialized-object.read", summary: "Read serialized object data.", description: "Read deep serialized object data.", group: "serialized-object" })
   );
   const gameObject = tools.get("scene.gameobject")!;
-  const getData = tools.get("object.get-data")!;
+  const getData = tools.get("serialized-object.read")!;
   assert.notEqual(gameObject.name, getData.name);
   assert.match(gameObject.description, /lightweight/i);
   assert.match(getData.description, /deep/i);
-  await assert.rejects(readFile(new URL("../unitypkg/Editor/Tools/go/inspect.cs", import.meta.url), "utf8"));
+  await assert.rejects(readFile(new URL("../unitypkg/Editor/Tools/game-object/inspect.cs", import.meta.url), "utf8"));
 });
