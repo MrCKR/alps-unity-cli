@@ -121,6 +121,6 @@ unitycli extensions doctor --project <path>         # 扩展诊断
 ## 取证与依赖
 
 - 扩展基础设施：`extensions list/install/remove/doctor`、`init --auto-detect`、缺依赖 descriptor 的 `available:false` / `unavailableReason` 与执行错误的 `nextActions`。
-- ProBuilder：源码位于 `extensions/probuilder/`，安装后位于 `Packages/com.alpsckr.unitycli/Extensions/probuilder/`，通过 project-tool bridge 路由提供扩展工具；所有 operation replay 固定于 `com.unity.probuilder@5.2.4`，版本不匹配时在 effect 前拒绝。
+- ProBuilder：源码位于 `extensions/probuilder/`，安装后位于 `Packages/com.alpsckr.unitycli/Extensions/probuilder/`，通过 catalog bridge 路由提供扩展工具；所有 operation replay 固定于 `com.unity.probuilder@5.2.4`，版本不匹配时在 effect 前拒绝。
 - Cinemachine/VFX/URP/HDRP：源码位于对应 `extensions/<id>/` 目录，安装后位于 `Packages/com.alpsckr.unitycli/Extensions/<id>/`，通过 metadata、bridge domain 和 C# command handler 提供 live Bridge 工具。
 - 验证入口：`npm test`、`npm run contracts:validate`、extension availability tests。

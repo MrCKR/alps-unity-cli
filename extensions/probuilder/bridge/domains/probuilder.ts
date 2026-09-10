@@ -7,7 +7,7 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
  * Each CLI command is routed through the catalog.editor.run bridge command
  * to reach ProBuilder IUnityCliTool handlers in the Unity package. The
  * bridgeCommand field is always "catalog.editor.run";
- * the toolName field carries the underlying project-tool name (e.g.
+ * the toolName field carries the underlying catalog tool name (e.g.
  * "probuilder.ping"). The buildArgs output is wrapped into { name, input }
  * so the C# ProjectToolRun handler receives both the tool name and its
  * JSON input payload.

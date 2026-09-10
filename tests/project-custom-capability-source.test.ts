@@ -126,7 +126,7 @@ test("typed custom Tools retain async schema, completion, availability, and exec
   assert.match(registry, /\{ "available", ToolAvailableNow\(definition\) \}/);
 });
 
-test("legacy project Context registries are absent while retained Tool owners stay on runtime-tool routes", async () => {
+test("legacy project Context registries are absent while retained Tool owners stay on catalog.player routes", async () => {
   const [runtimeDomain, dispatcher] = await Promise.all([
     readFile(runtimeBridgeDomainPath, "utf8"),
     readFile(toolDispatcherPath, "utf8"),

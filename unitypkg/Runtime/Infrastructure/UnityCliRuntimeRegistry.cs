@@ -131,7 +131,7 @@ namespace UnityCli
                 },
                 { "progress", new List<object>() }, { "blockers", new List<object>() },
                 { "unityVersion", Application.unityVersion }, { "buildStamp", buildStamp },
-                { "toolCatalogFingerprint", "runtime-tool-executor" }, { "executablePath", executablePath }, { "buildId", buildId }
+                { "toolCatalogFingerprint", "player-runtime-executor" }, { "executablePath", executablePath }, { "buildId", buildId }
             };
         }
 

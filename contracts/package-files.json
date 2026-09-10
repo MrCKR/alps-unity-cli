@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.5.0",
-  "sourceHash": "f7d0a238c4db8a1ce41e3456f13d5a5dca25d93c06c8e9119456460484208183",
+  "sourceHash": "1e2a2f1137012c67e311375361f93ddf68672822dcf92c2f94bcb249a77ef1df",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -1866,8 +1866,8 @@
     },
     {
       "path": "Runtime/Infrastructure/UnityCliRuntimeRegistry.cs",
-      "size": 18518,
-      "sha256": "9e08ba71cf42d0ad6bd77bd26a7ac04a6360abda3a26f8b232a4e93e155c445e"
+      "size": 18520,
+      "sha256": "8950c367c2e22dd4597ff3cc855f905bc155996d70508828566c37e10fee8e54"
     },
     {
       "path": "Runtime/Properties/AssemblyInfo.cs",
@@ -1901,8 +1901,8 @@
     },
     {
       "path": "Shared/UnityCliBridgeQueuePolicy.cs",
-      "size": 19905,
-      "sha256": "0510042ca344c104f1d1db049f3fbfab3146cc4c24ef36d8eb7d748862a6c608"
+      "size": 19908,
+      "sha256": "89e1034ac96f86d04b8fe59e1797ba2813260a199a2192b9fcf1f03d20f266b0"
     },
     {
       "path": "Shared/UnityCliBridgeWorkItemState.cs",

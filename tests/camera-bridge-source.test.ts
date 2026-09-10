@@ -86,7 +86,7 @@ test("one-capability-per-file camera tools route through catalog.editor.run with
     assert.match(source, /IUnityCliTool/);
     assert.match(source, new RegExp(`Name = "${name.replace(".", "\\.")}"`));
     assert.match(source, /ToolDescriptor Describe\(\)/);
-    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `${name} must use the typed project-tool route`);
+    assert.equal(spec?.bridgeCommand, "catalog.editor.run", `${name} must use the typed catalog.editor.run route`);
     assert.equal(spec?.toolName, name, `${name} route must preserve its public tool name`);
     assert.equal(contract?.csharp_handler, "present", `${name} must have a typed C# contract handler`);
   }

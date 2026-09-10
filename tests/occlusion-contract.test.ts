@@ -32,7 +32,7 @@ test("Occlusion只公开四个批准的canonical Tool", () => {
   assert.doesNotMatch(source, /bake_occlusion_culling|cancel_occlusion_bake|clear_occlusion_culling|occlusion_bake_status/);
 });
 
-test("Occlusion clear通过唯一project-tool bridge spec路由", () => {
+test("Occlusion clear通过唯一catalog.editor.run bridge spec路由", () => {
   const spec = bridgeCommandRegistry.lookup("occlusion", "bake-clear");
   assert.ok(spec);
   assert.equal(spec?.bridgeCommand, "catalog.editor.run");

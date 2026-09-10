@@ -29,7 +29,7 @@ export async function readEditorCsSources(): Promise<string> {
 }
 
 /**
- * 将测试内构造的 descriptor 按真实 project-tool discovery 路径归一化，
+ * 将测试内构造的 descriptor 按真实 catalog discovery 路径归一化，
  * 避免重新依赖离线 metadata 注册表。
  */
 export async function discoverLiveTools(...tools: ToolMetadata[]): Promise<Map<string, ResolvedToolMetadata>> {

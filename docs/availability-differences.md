@@ -66,7 +66,7 @@ Editor 与 Runtime 能力在两种模式中都保持可发现。`available`、`u
 
 1. `unitycli tools run editor.play-mode.start --input '{}'`
 2. `unitycli tools run editor.state --input '{}'`
-3. 重新 `tools describe <runtime-tool>` 或直接按 `nextActions` 调用
+3. 重新 `tools describe <player-runtime 工具名>` 或直接按 `nextActions` 调用
 
 Editor-only Tool 在 PlayMode 中同样保持可见，但执行继续返回准确错误。
 

@@ -170,7 +170,7 @@ namespace UnityCli
             return workClass;
         }
 
-        /// <summary>精确白名单不接受后缀、大小写或project-tool间接名称。</summary>
+        /// <summary>精确白名单不接受后缀、大小写或历史命名的间接拼写。</summary>
         public static bool IsSafeStatusCommand(string command)
         {
             switch (command)
