@@ -211,7 +211,7 @@ test("ensurePackageBridge refreshes orphaned legacy metadata when the package di
   const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
   assert.equal(installed.packageVersion, "0.5.0");
   assert.equal(metadata.packageVersion, "0.5.0");
-  assert.equal(metadata.cliCompatibilityRange, ">=0.4.0 <0.5.0");
+  assert.equal(metadata.cliCompatibilityRange, ">=0.5.0 <0.6.0");
   assert.match(String(metadata.managedFilesSha256), /^[a-f0-9]{64}$/);
 });
 
@@ -473,7 +473,7 @@ test("ensurePackageBridge republishes tampered identity and compatibility metada
     await ensurePackageBridge(project);
     const observed = JSON.parse(await readFile(installed.installMetadataPath, "utf8")) as Record<string, unknown>;
     assert.equal(observed.packageName, "com.alpsckr.unitycli");
-    assert.equal(observed.cliCompatibilityRange, ">=0.4.0 <0.5.0");
+    assert.equal(observed.cliCompatibilityRange, ">=0.5.0 <0.6.0");
   }
 });
 
