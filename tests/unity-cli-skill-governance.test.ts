@@ -51,7 +51,7 @@ test("public runtime Skill routes operations without embedding the setup workflo
 
   assert.match(skill, /目标未知、需要审计当前连接或错误要求检查实例时/);
   assert.match(skill, /不了解能力领域时可先看 group，已有业务关键词时可直接 search/);
-  assert.match(skill, /有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `code\.exec`/);
+  assert.match(skill, /有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `code\.execute`/);
   assert.match(skill, /稳定发现、typed schema、结构化结果、明确副作用、重复使用或团队共享/);
   assert.match(skill, /references\/custom-tools\.md/);
 

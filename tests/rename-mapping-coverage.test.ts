@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import test from "node:test";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
@@ -65,4 +65,85 @@ test("old catalog identities are absent from the current contract and bridge reg
       assert.equal(stale, undefined, message);
     }
   }
+});
+
+/** 残留扫描允许命中白名单：迁移记录、本测试自身、问题登记历史。 */
+const RESIDUE_ALLOWED = (rel: string) =>
+  rel === "specs/catalog-rename-mapping-0.5.0.json" ||
+  rel === "tests/rename-mapping-coverage.test.ts" ||
+  rel.startsWith(".issues");
+
+/** 残留扫描覆盖的产品面文本根目录与扩展名；二进制与依赖目录排除。 */
+const RESIDUE_ROOTS = ["src", "unitypkg", "extensions", "contracts", "docs", "scripts", "tests", "specs", "skills", ".pi"];
+const RESIDUE_EXTENSIONS = new Set([".ts", ".cs", ".json", ".md", ".mjs", ".js", ".cjs", ".txt", ".yml", ".yaml", ".asmdef"]);
+const RESIDUE_SKIP_DIRS = new Set([".git", "node_modules", "dist", "coverage", "Dev", "Library", "Temp", "obj", "bin", ".temp", ".codegraph"]);
+
+/** 递归收集残留扫描目标文件相对路径。 */
+function collectResidueFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (RESIDUE_SKIP_DIRS.has(entry.name)) continue;
+      collectResidueFiles(`${dir}/${entry.name}`, out);
+    } else if (RESIDUE_EXTENSIONS.has(entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase())) {
+      out.push(`${dir}/${entry.name}`.replaceAll("\\", "/"));
+    }
+  }
+  return out;
+}
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** 按行聚合命中，产出 file:line [token] 行文本 形式的可操作失败信息。 */
+function scanResidue(files: string[], pattern: RegExp): string[] {
+  const failures: string[] = [];
+  for (const file of files) {
+    const rel = file.replaceAll("\\", "/");
+    if (RESIDUE_ALLOWED(rel)) continue;
+    let text: string;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of text.split("\n")) {
+      pattern.lastIndex = 0;
+      const match = pattern.exec(line);
+      if (match) failures.push(`${rel} [${match[0]}] ${line.trim().slice(0, 160)}`);
+    }
+  }
+  return failures;
+}
+
+test("renamed old tool names leave no residue in product-facing text", () => {
+  // 词边界完整匹配旧点分工具名，避免子串误报；命中白名单外文件即失败。
+  const dotted = new RegExp(
+    `(?<![A-Za-z0-9_.\\-])(${renames.map((m) => escapeRegex(m.old)).join("|")})(?![A-Za-z0-9_.\\-])`, "g",
+  );
+  const files = [
+    ...RESIDUE_ROOTS.map((root) => collectResidueFiles(root)).flat(),
+    "README.md",
+    "AGENTS.md",
+    "package.json",
+  ].filter((file) => statSync(file).isFile());
+  const failures = scanResidue(files, dotted);
+  assert.deepEqual(failures, [], `old tool-name residue found:\n${failures.join("\n")}`);
+});
+
+test("renamed old group names leave no backtick-prefixed glob residue", () => {
+  // 反引号 + 旧组名 + 点：捉住 `go.*`、`project.*-settings` 这类 glob 风格旧引用；
+  // 当前组如 project-settings 因连字符不匹配，不会误报。
+  const contract = JSON.parse(readFileSync("contracts/command-contract.json", "utf8")) as { commands: Array<{ group: string }> };
+  const currentGroups = new Set(contract.commands.map((entry) => entry.group));
+  const oldGroups = [...new Set(renames.map((m) => m.old.split(".")[0]))].filter((group) => !currentGroups.has(group));
+  assert.ok(oldGroups.length > 0, "expected at least one renamed group");
+  const globPattern = new RegExp("`(" + oldGroups.map(escapeRegex).join("|") + ")\\.", "g");
+  const files = [
+    ...collectResidueFiles("docs"),
+    ...collectResidueFiles("skills"),
+    ...collectResidueFiles(".pi"),
+    "README.md",
+    "AGENTS.md",
+  ].filter((file) => statSync(file).isFile());
+  const failures = scanResidue(files, globPattern);
+  assert.deepEqual(failures, [], `old group glob residue found:\n${failures.join("\n")}`);
 });

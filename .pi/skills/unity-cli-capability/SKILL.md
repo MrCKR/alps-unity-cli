@@ -161,7 +161,7 @@ Describe 不得包含：
 - 对资产文件执行真实持久化创建、修改或删除，如 `.asset`、`.unity`、`.controller`、`.mat`、`.png`。
 - 修改 `Packages/manifest.json` 或 `ProjectSettings/`。
 - 写入持久化光照数据，如 lightmap、reflection probe bake。
-- 执行任意代码，如 `code.exec`、`editor.menu`、`reflection.method.call`。
+- 执行任意代码，如 `code.execute`、`editor.menu`、`runtime-reflection.method.invoke`。
 
 以下能力不标记为 destructive：
 

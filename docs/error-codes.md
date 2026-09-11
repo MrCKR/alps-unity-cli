@@ -137,7 +137,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_PROJECT_SETTINGS_LIMIT_EXCEEDED` | legacy Input Manager超过4096个axis，无法在公开有界读取内安全扫描 | 减少Input Manager axis数量后重试 |
 | `E_PROJECT_INPUT_AXIS_NOT_FOUND` | 没有完全同名的legacy Input Manager axis | 先分页读取`project-settings.input-settings`并传精确名称 |
 | `E_PROJECT_SETTINGS_TARGET_CHANGED` | 冻结的Input axis index/name在effect前漂移 | fresh读取Input设置后提交新请求 |
-| `E_PROJECT_SETTINGS_VERIFY_FAILED` | typed readback或ProjectSettings文件SHA未证明持久化终态 | 读取对应`project.*-settings`后再决定是否重试 |
+| `E_PROJECT_SETTINGS_VERIFY_FAILED` | typed readback或ProjectSettings文件SHA未证明持久化终态 | 读取对应`project-settings.*`后再决定是否重试 |
 
 ### Editor Utility 错误
 

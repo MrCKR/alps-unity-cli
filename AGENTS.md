@@ -63,7 +63,7 @@ CLI控制面：
 硬规则：
 
 - 未经项目所有者明确批准，不得新增用户可见顶层命令。
-- `scene`、`asset`、`camera`、`go`、`prefab`、`package`、`build`、`test`、`editor`、`profiler` 等 Unity 能力域不得成为顶层命令。
+- `scene`、`asset`、`camera`、`game-object`、`prefab`、`package`、`build`、`test`、`editor`、`profiler` 等 Unity 能力域不得成为顶层命令。
 - 新增或修改Unity能力必须进入唯一Tool catalog；结构化调用使用`tools run <tool>`，schema参数调用使用`command <name>`，二者必须复用同一descriptor、dispatcher、安全、completion和JSON envelope。
 - `[CliCommand("name")]`只以`UnityPipeline_name`、group `UnityPipeline`进入`tools`；`command name`可选择该Tool，native完整精确名重名时native优先，attribute仍可用完整前缀名调用。禁止相似名称或语义映射。
 - README、docs、Skill、tests、contract和源码只能使用当前CLI形态，不得保留旧顶层命令、迁移语义或兼容说明。

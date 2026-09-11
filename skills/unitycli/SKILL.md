@@ -55,7 +55,7 @@ PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。�
 
 ## 能力扩展
 
-现有 Tool 不适合时，先判断是否真的需要 Unity 侧执行。普通源码或文本仍可直接处理；有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `code.exec`。同步 C# 开始后不能由 CLI timeout 中止，复杂等待或不确定终态先读 `references/operation-protocol.md`。
+现有 Tool 不适合时，先判断是否真的需要 Unity 侧执行。普通源码或文本仍可直接处理；有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `code.execute`。同步 C# 开始后不能由 CLI timeout 中止，复杂等待或不确定终态先读 `references/operation-protocol.md`。
 
 当能力需要稳定发现、typed schema、结构化结果、明确副作用、重复使用或团队共享时，读取 `references/custom-tools.md` 并实现项目自定义 `IUnityCliTool<TReq,TRes>`。自定义 Tool 仍从当前 catalog 发现、describe 和调用，不假设名称、group 或输入。
 
