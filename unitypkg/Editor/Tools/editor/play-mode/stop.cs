@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace UnityCli
 {
     /// <summary>editor.play-mode.stop — 退出 Play Mode。</summary>
-    public class EditorStopTool : IUnityCliTool<EditorStopTool.Request, EditorStopTool.Response>
+    public class EditorPlayModeStopTool : IUnityCliTool<EditorPlayModeStopTool.Request, EditorPlayModeStopTool.Response>
     {
         public sealed class Request { }
         public sealed class Response { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }

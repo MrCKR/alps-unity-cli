@@ -2,7 +2,7 @@
 namespace UnityCli
 {
     /// <summary>修改active build target的PlayerSettings批准字段。</summary>
-    public sealed class ProjectPlayerSettingsSetTool : IUnityCliTool<ProjectPlayerSettingsSetRequest, ProjectPlayerSettingsSetResult>
+    public sealed class ProjectSettingsPlayerSettingsSetTool : IUnityCliTool<ProjectPlayerSettingsSetRequest, ProjectPlayerSettingsSetResult>
     {
         public ToolDescriptor Describe() => new()
         {

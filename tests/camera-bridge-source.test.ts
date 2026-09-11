@@ -98,7 +98,7 @@ test("one-capability-per-file camera tools route through catalog.editor.run with
   assert.ok(createSource.indexOf("ParseCameraClearFlags(request.ClearFlags)") < createSource.indexOf("new GameObject(name)"));
 });
 
-test("Unity Bridge animation and vfx commands expose assets, target resolver diagnostics and package checks", async () => {
+test("Unity Bridge animation-clip, animator, animator-controller and vfx commands expose assets, target resolver diagnostics and package checks", async () => {
   const source = await readUnityBridgeSources();
   const vfxSource = await readExtensionSources("vfx-graph");
 
@@ -489,14 +489,16 @@ test("Unity Bridge C# string literals stay balanced", async () => {
   }
 });
 
-test("Unity Bridge graphics and physics commands expose settings, raycast and diagnostics", async () => {
+test("Unity Bridge rendering, volume and physics commands expose settings, raycast and diagnostics", async () => {
   const source = await readUnityBridgeSources();
 
   assert.match(source, /QualitySettings\.SetQualityLevel/);
   assert.match(source, /GraphicsSettings\.defaultRenderPipeline/);
   assert.match(source, /RenderPipelineAsset/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.pipeline", "graphics", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.volume", "graphics", false/);
+  assert.match(source, /Name = "rendering\.pipeline\.info",[^\n]*Group = "rendering",/);
+  assert.match(source, /Name = "rendering\.pipeline\.settings",[^\n]*Group = "rendering",/);
+  assert.match(source, /Name = "volume\.list",[^\n]*Group = "volume",/);
+  assert.doesNotMatch(source, /Group = "graphics"/);
   assert.match(source, /FindType\("UnityEngine\.Rendering\.Volume"\)/);
   assert.match(source, /Physics\.gravity/);
   assert.match(source, /Physics2D\.gravity/);

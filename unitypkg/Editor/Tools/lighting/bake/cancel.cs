@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 namespace UnityCli
 {
     /// <summary>lighting.bake.cancel — 取消正在运行的光照烘焙。</summary>
-    public class GraphicsBakeCancelTool : IUnityCliTool<GraphicsBakeCancelTool.Request, GraphicsBakeCancelTool.Result>
+    public class LightingBakeCancelTool : IUnityCliTool<LightingBakeCancelTool.Request, LightingBakeCancelTool.Result>
     {
         public sealed class Request { }
         public sealed class Result { public bool Baking { get; set; } public bool Cancelled { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

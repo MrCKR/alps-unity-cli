@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator.get-state — 读取目标 Animator 的当前状态信息。</summary>
-    public class AnimationStateTool : IUnityCliTool<AnimationStateTool.Request, AnimationStateTool.Result>
+    public class AnimatorGetStateTool : IUnityCliTool<AnimatorGetStateTool.Request, AnimatorGetStateTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public int? Layer { get; set; } }
         public sealed class Result { public AnimatorInfo Animator { get; set; } }

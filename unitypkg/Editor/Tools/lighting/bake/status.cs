@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 namespace UnityCli
 {
     /// <summary>lighting.bake.status — 读取光照烘焙状态。</summary>
-    public class GraphicsBakeStatusTool : IUnityCliTool<GraphicsBakeStatusTool.Request, GraphicsBakeStatusTool.Result>
+    public class LightingBakeStatusTool : IUnityCliTool<LightingBakeStatusTool.Request, LightingBakeStatusTool.Result>
     {
         public sealed class Request { }
         public sealed class Result { public bool Baking { get; set; } public double Progress { get; set; } public BakeModeInfo Mode { get; set; } }

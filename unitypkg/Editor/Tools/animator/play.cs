@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator.play — 播放指定 Animator 状态。</summary>
-    public class AnimationPlayTool : IUnityCliTool<AnimationPlayTool.Request, AnimationPlayTool.Result>
+    public class AnimatorPlayTool : IUnityCliTool<AnimatorPlayTool.Request, AnimatorPlayTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public string State { get; set; } public int? Layer { get; set; } public float? NormalizedTime { get; set; } }
         public sealed class Result { public AnimatorInfo Animator { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }

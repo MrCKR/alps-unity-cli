@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 namespace UnityCli
 {
     /// <summary>lighting.bake.start — 异步启动光照烘焙。</summary>
-    public class GraphicsBakeStartTool : IUnityCliTool<GraphicsBakeStartTool.Request, GraphicsBakeStartTool.Result>
+    public class LightingBakeStartTool : IUnityCliTool<LightingBakeStartTool.Request, LightingBakeStartTool.Result>
     {
         public sealed class Request { }
         public sealed class Result { public bool Baking { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

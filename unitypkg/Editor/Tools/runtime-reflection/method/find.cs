@@ -5,7 +5,7 @@ using System.Reflection;
 namespace UnityCli
 {
     /// <summary>runtime-reflection.method.find — stable raw method ordinal pagination under one reflection budget。</summary>
-    public class ReflectionMethodFindTool : IUnityCliTool<ReflectionMethodFindTool.Request, ReflectionMethodFindTool.Result>
+    public class RuntimeReflectionMethodFindTool : IUnityCliTool<RuntimeReflectionMethodFindTool.Request, RuntimeReflectionMethodFindTool.Result>
     {
         public sealed class Request
         {

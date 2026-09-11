@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.get-info — 读取 Controller 层/状态/参数信息。</summary>
-    public class ControllerGetInfoTool : IUnityCliTool<ControllerGetInfoTool.Request, ControllerGetInfoTool.Result>
+    public class AnimatorControllerGetInfoTool : IUnityCliTool<AnimatorControllerGetInfoTool.Request, AnimatorControllerGetInfoTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } }
         public sealed class Result { public ControllerInfo Controller { get; set; } public List<AnimatorParameterInfo> Parameters { get; set; } }
@@ -17,7 +17,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             var parameters = new List<AnimatorParameterInfo>();
             foreach (var p in controller.parameters) parameters.Add(new AnimatorParameterInfo { Name = p.name, Type = p.type.ToString(), DefaultFloat = p.defaultFloat, DefaultInt = p.defaultInt, DefaultBool = p.defaultBool });
             return new System.Threading.Tasks.ValueTask<Result>(new Result { Controller = new ControllerInfo { Path = path, Guid = AssetDatabase.AssetPathToGUID(path), Name = controller.name, LayerCount = controller.layers.Length, ParameterCount = controller.parameters.Length }, Parameters = parameters });

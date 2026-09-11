@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 namespace UnityCli
 {
-    public class GraphicsSceneDebugTool : IUnityCliTool<GraphicsSceneDebugTool.Request, GraphicsSceneDebugTool.Result>
+    public class RenderingSceneDebugTool : IUnityCliTool<RenderingSceneDebugTool.Request, RenderingSceneDebugTool.Result>
     {
         public sealed class Request { public string ShadingMode { get; set; } public string DrawMode { get; set; } }
         public sealed class Result { public bool SceneViewAvailable { get; set; } public string CurrentDrawMode { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

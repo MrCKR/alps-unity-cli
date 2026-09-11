@@ -178,7 +178,7 @@ Describe 不得包含：
 破坏性描述必须三层一致：
 
 1. Bridge spec `destructiveHint`：`src/bridge/domains/*.ts`。
-2. CLI 安全策略：`src/security-policy.ts`。
+2. CLI tool metadata 与 bridge spec 的 `destructiveHint`：`src/tools/**`、`src/bridge/domains/*.ts`，由 `src/contracts/command-contract.ts` 做一致性校验。
 3. C# descriptor / registry：`ToolDescriptor.DestructiveHint` 或运行时 descriptor。
 
 任一层声明 destructive 时三层必须同步；该声明不构成授权门。CLI 路径和 C# `RegisterCommand` 的真实执行语义不得冲突。

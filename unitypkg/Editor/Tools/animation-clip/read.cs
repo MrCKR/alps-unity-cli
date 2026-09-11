@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animation-clip.read — 读取 AnimationClip 资产的设置、绑定曲线和事件。</summary>
-    public class AnimationClipTool : IUnityCliTool<AnimationClipTool.Request, AnimationClipTool.Result>
+    public class AnimationClipReadTool : IUnityCliTool<AnimationClipReadTool.Request, AnimationClipReadTool.Result>
     {
         public sealed class Request { public string Path { get; set; } public int? MaxCurveKeys { get; set; } }
         public sealed class Result { public AnimationClipInfo Clip { get; set; } }

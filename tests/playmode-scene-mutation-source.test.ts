@@ -113,7 +113,7 @@ test("supported PlayMode descriptors contain no direct unsafe Editor mutation ca
   }
 });
 
-test("retained graphics replacements declare their final PlayMode behavior", async () => {
+test("retained rendering and lighting replacements declare their final PlayMode behavior", async () => {
   const [quality, pipeline, group, reflection] = await Promise.all([
     source("unitypkg/Editor/Tools/rendering/quality.cs"),
     source("unitypkg/Editor/Tools/rendering/pipeline/settings.cs"),

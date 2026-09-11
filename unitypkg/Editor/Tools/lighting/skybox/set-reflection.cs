@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 namespace UnityCli
 {
-    public class GraphicsSkyboxSetReflectionTool : IUnityCliTool<GraphicsSkyboxSetReflectionTool.Request, GraphicsSkyboxSetReflectionTool.Result>
+    public class LightingSkyboxSetReflectionTool : IUnityCliTool<LightingSkyboxSetReflectionTool.Request, LightingSkyboxSetReflectionTool.Result>
     {
         public sealed class Request { public string Mode { get; set; } public int? Bounces { get; set; } public float? Intensity { get; set; } public string Resolution { get; set; } }
         public sealed class Result { public string DefaultReflectionMode { get; set; } public long ReflectionBounces { get; set; } public double ReflectionIntensity { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

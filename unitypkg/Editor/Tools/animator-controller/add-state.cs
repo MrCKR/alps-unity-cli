@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.add-state — 在指定层添加状态。</summary>
-    public class ControllerAddStateTool : IUnityCliTool<ControllerAddStateTool.Request, ControllerAddStateTool.Result>
+    public class AnimatorControllerAddStateTool : IUnityCliTool<AnimatorControllerAddStateTool.Request, AnimatorControllerAddStateTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string StateName { get; set; } public string ClipPath { get; set; } public int? LayerIndex { get; set; } public float? Speed { get; set; } public bool? IsDefault { get; set; } }
         public sealed class Result { public string Path { get; set; } public string StateName { get; set; } public bool HasMotion { get; set; } public string MotionName { get; set; } public double Speed { get; set; } public bool IsDefault { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
@@ -17,7 +17,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             if (string.IsNullOrEmpty(r.StateName)) throw new UnityCliBridge.BridgeCommandException("E_STATE_NAME_REQUIRED", "animator-controller.add-state requires stateName.", "Pass a name for the new state.");
             var layerIndex = r.LayerIndex ?? 0;
             if (layerIndex < 0 || layerIndex >= controller.layers.Length) throw new UnityCliBridge.BridgeCommandException("E_LAYER_INDEX_INVALID", "Layer index out of range.", "Run animator-controller.get-info to inspect available layers.");

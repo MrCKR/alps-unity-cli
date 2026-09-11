@@ -8,7 +8,7 @@ namespace UnityCli
     /// <summary>
     /// serialized-object.patch — 使用可验证的 SerializedProperty pathPatches 修改 Unity Object。
     /// </summary>
-    public class ObjectModifyTool : IUnityCliTool<ObjectModifyTool.Request, ObjectModifyTool.Result>
+    public class SerializedObjectPatchTool : IUnityCliTool<SerializedObjectPatchTool.Request, SerializedObjectPatchTool.Result>
     {
         public sealed class Request : IUnityCliObjectReferenceInput, IUnityCliObjectSerializationInput
         {

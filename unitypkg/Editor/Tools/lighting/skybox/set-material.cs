@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>lighting.skybox.set-material — 设置 RenderSettings.skybox 材质。</summary>
-    public class GraphicsSkyboxSetMaterialTool : IUnityCliTool<GraphicsSkyboxSetMaterialTool.Request, GraphicsSkyboxSetMaterialTool.Result>
+    public class LightingSkyboxSetMaterialTool : IUnityCliTool<LightingSkyboxSetMaterialTool.Request, LightingSkyboxSetMaterialTool.Result>
     {
         public sealed class Request { public string Material { get; set; } }
         public sealed class Result { public string Skybox { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

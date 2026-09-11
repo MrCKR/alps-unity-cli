@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace UnityCli
 {
     /// <summary>editor.play-mode.start — 进入 Play Mode。</summary>
-    public class EditorPlayTool : IUnityCliTool<EditorPlayTool.Request, EditorPlayTool.Response>
+    public class EditorPlayModeStartTool : IUnityCliTool<EditorPlayModeStartTool.Request, EditorPlayModeStartTool.Response>
     {
         public sealed class Request { }
         public sealed class Response { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }

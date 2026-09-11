@@ -2,7 +2,7 @@
 namespace UnityCli
 {
     /// <summary>runtime-reflection.type.schema — live 类型 schema 的有界成员/definition 分页。</summary>
-    public class TypeSchemaTool : IUnityCliTool<TypeSchemaTool.Request, TypeSchemaTool.Result>
+    public class RuntimeReflectionTypeSchemaTool : IUnityCliTool<RuntimeReflectionTypeSchemaTool.Request, RuntimeReflectionTypeSchemaTool.Result>
     {
         public sealed class Request
         {

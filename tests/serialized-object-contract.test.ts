@@ -8,7 +8,7 @@ import { contractToolNames, discoverLiveTools, listCsFiles, readEditorCsSources 
 
 /** Object 域契约测试：离线 metadata 断言迁移到 live discovery + 源码/契约断言。 */
 
-test("object tools are contract-discovered and expose expected live descriptor fields", async () => {
+test("serialized-object tools are contract-discovered and expose expected live descriptor fields", async () => {
   assert.deepEqual(contractToolNames("serialized-object"), ["serialized-object.patch", "serialized-object.read"]);
 
   const tools = await discoverLiveTools(
@@ -73,14 +73,14 @@ test("object tools are contract-discovered and expose expected live descriptor f
   assert.equal(modifyProps.jsonPatch, undefined);
 });
 
-test("bridge specs resolve for object tools", () => {
+test("bridge specs resolve for serialized-object tools", () => {
   const objectGet = bridgeCommandRegistry.lookup("serialized-object", "read");
   assert.equal(objectGet?.bridgeCommand, "catalog.editor.run");
   const objectModify = bridgeCommandRegistry.lookup("serialized-object", "patch");
   assert.equal(objectModify?.bridgeCommand, "catalog.editor.run");
 });
 
-test("contract entries exist for object tools with present C# handler", () => {
+test("contract entries exist for serialized-object tools with present C# handler", () => {
   for (const name of ["serialized-object.read", "serialized-object.patch"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
@@ -93,7 +93,7 @@ test("serialized-object.patch exposes destructive metadata because Edit Mode can
   assert.equal(command?.destructiveHint, true);
 });
 
-test("object commands are exposed by typed C# tools", async () => {
+test("serialized-object commands are exposed by typed C# tools", async () => {
   const allSource = await readEditorCsSources();
   for (const command of ["serialized-object.read", "serialized-object.patch"]) {
     assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose its public tool name`);
@@ -108,7 +108,7 @@ test("C# infrastructure files exist for ObjectRef, serializer and patch", async 
   assert.ok(names.includes("UnityCliObjectPatch.cs"));
 });
 
-test("object patch accepts only directly verifiable SerializedProperty replace operations", async () => {
+test("serialized-object.patch accepts only directly verifiable SerializedProperty replace operations", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectPatch.cs", import.meta.url), "utf8");
   assert.match(source, /serialized\.FindProperty\(path\)/);
   assert.match(source, /string\.Equals\(op, "replace", StringComparison\.OrdinalIgnoreCase\)/);
@@ -117,7 +117,7 @@ test("object patch accepts only directly verifiable SerializedProperty replace o
   assert.doesNotMatch(source, /path\.Split|NavigationFrame|ApplyMergePatch|ApplyPathPatches/);
 });
 
-test("object patch enum verification resolves names and indexes without numeric Convert", async () => {
+test("serialized-object.patch enum verification resolves names and indexes without numeric Convert", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectPatch.cs", import.meta.url), "utf8");
   const enumSection = source.slice(source.indexOf("private static int GetEnumValueIndex"), source.indexOf("/// <summary>应用 pathPatches"));
   assert.match(enumSection, /property\.enumNames/);
@@ -126,7 +126,7 @@ test("object patch enum verification resolves names and indexes without numeric 
   assert.doesNotMatch(enumSection, /Convert\.ToInt32/);
 });
 
-test("object patch applies one verified serialized write path and proves fresh values", async () => {
+test("serialized-object.patch applies one verified serialized write path and proves fresh values", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectPatch.cs", import.meta.url), "utf8");
   assert.match(source, /ApplyVerifiedSerializedPatches/);
   assert.match(source, /serialized\.ApplyModifiedPropertiesWithoutUndo\(\)/);
@@ -137,11 +137,11 @@ test("object patch applies one verified serialized write path and proves fresh v
 
 test("serialized-object.patch implements IUnityCliTool with dry-run support", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/serialized-object/patch.cs", import.meta.url), "utf8");
-  assert.match(source, /class ObjectModifyTool/, "ObjectModifyTool should exist");
+  assert.match(source, /class SerializedObjectPatchTool/, "SerializedObjectPatchTool should exist");
   assert.match(source, /DryRun/, "serialized-object.patch should support dry-run");
 });
 
-test("C# object serializer implements path aggregate and viewQuery conflict", async () => {
+test("C# serialized-object serializer implements path aggregate and viewQuery conflict", async () => {
   const serializer = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectSerializer.cs", import.meta.url), "utf8");
   const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/serialized-object/ObjectToolSupport.cs", import.meta.url), "utf8");
   assert.match(serializer, /BuildPathReadAggregate[\s\S]*NewMember\("\$", "UnityCli\.PathReadAggregate", budget\)/, "paths should return a stable aggregate envelope");
@@ -149,7 +149,7 @@ test("C# object serializer implements path aggregate and viewQuery conflict", as
   assert.match(supportSource, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "object serializer options should reject paths and viewQuery together");
 });
 
-test("C# object serializer represents non-finite dynamic numbers without invalid JSON", async () => {
+test("C# serialized-object serializer represents non-finite dynamic numbers without invalid JSON", async () => {
   const serializer = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectSerializer.cs", import.meta.url), "utf8");
   assert.match(serializer, /JsonNumberData\(double value\)/);
   assert.match(serializer, /double\.IsNaN\(value\)[\s\S]*return "NaN"/);

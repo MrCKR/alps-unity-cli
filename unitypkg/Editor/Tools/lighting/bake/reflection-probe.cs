@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEngine;
 namespace UnityCli
 {
-    public class GraphicsBakeReflectionProbeTool : IUnityCliTool<GraphicsBakeReflectionProbeTool.Request, GraphicsBakeReflectionProbeTool.Result>
+    public class LightingBakeReflectionProbeTool : IUnityCliTool<LightingBakeReflectionProbeTool.Request, LightingBakeReflectionProbeTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public string Path { get; set; } }
         public sealed class Result { public ReflectionProbeInfo Probe { get; set; } public bool Baked { get; set; } public string ArtifactPath { get; set; } public long SizeBytes { get; set; } public string Sha256 { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

@@ -36,7 +36,7 @@ test("rendering family exposes dedicated quality, pipeline, probe, and unified s
   assert.deepEqual(contractToolNames("volume"), [...GRAPHICS_COMMANDS].filter((name) => name.startsWith("volume.")).sort());
 });
 
-test("graphics live descriptors expose representative play mode semantics", async () => {
+test("rendering, lighting and volume live descriptors expose representative play mode semantics", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "rendering.pipeline.info", summary: "Read render pipeline and quality info.", description: "Read render pipeline and quality info.", group: "rendering" }),
     makeLiveTool({ name: "lighting.skybox.get", summary: "Read skybox settings.", description: "Read skybox settings.", group: "rendering" }),
@@ -61,7 +61,7 @@ test("graphics live descriptors expose representative play mode semantics", asyn
   assert.equal(bakeSettings.playModeSupport, "editor-only");
 });
 
-test("bridge specs resolve for all graphics tools", () => {
+test("bridge specs resolve for all rendering, lighting and volume tools", () => {
   for (const name of GRAPHICS_COMMANDS) {
     const dot = name.indexOf(".");
     const spec = bridgeCommandRegistry.lookup(name.slice(0, dot), name.slice(dot + 1));
@@ -71,7 +71,7 @@ test("bridge specs resolve for all graphics tools", () => {
   }
 });
 
-test("contract entries exist for all graphics tools with present C# handler", () => {
+test("contract entries exist for all rendering, lighting and volume tools with present C# handler", () => {
   for (const name of GRAPHICS_COMMANDS) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in contract`);
@@ -79,7 +79,7 @@ test("contract entries exist for all graphics tools with present C# handler", ()
   }
 });
 
-test("graphics C# handlers are registered", async () => {
+test("rendering, lighting and volume C# handlers are registered", async () => {
   const allSource = await readEditorCsSources();
   for (const command of GRAPHICS_COMMANDS) {
     const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
@@ -88,12 +88,12 @@ test("graphics C# handlers are registered", async () => {
   }
 });
 
-test("graphics C# error recovery hints use current tools run forms", async () => {
+test("rendering C# error recovery hints use current tools run forms", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/rendering/", import.meta.url));
   assert.match(source, /tools run rendering\.quality/, "error hints should route to tools run rendering.quality");
 });
 
-test("graphics bridge spec forwards structured --input fields", async () => {
+test("rendering, lighting and volume bridge specs forward structured --input fields", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/rendering.js", import.meta.url), "utf8")
     + await readFile(new URL("../src/bridge/domains/lighting.js", import.meta.url), "utf8")
     + await readFile(new URL("../src/bridge/domains/volume.js", import.meta.url), "utf8");
@@ -109,7 +109,7 @@ test("skybox property writes reject non-Assets materials and persist before read
   assert.match(source, /E_SKYBOX_ASSET_PATH_INVALID[\s\S]*ctx\.CommitEffect\(\)[\s\S]*EditorUtility\.SetDirty\(skybox\)[\s\S]*AssetDatabase\.SaveAssetIfDirty\(skybox\)[\s\S]*ReloadAsset<Material>/, "skybox writes must persist the exact asset before fresh readback");
 });
 
-test("graphics dedicated replacements expose fresh mutation readback and bounded unified stats", async () => {
+test("rendering and lighting dedicated replacements expose fresh mutation readback and bounded unified stats", async () => {
   const [quality, pipeline, lightProbe, reflectionProbe, stats] = await Promise.all([
     readFile(new URL("../unitypkg/Editor/Tools/rendering/quality.cs", import.meta.url), "utf8"),
     readFile(new URL("../unitypkg/Editor/Tools/rendering/pipeline/settings.cs", import.meta.url), "utf8"),
@@ -129,7 +129,7 @@ test("graphics dedicated replacements expose fresh mutation readback and bounded
   assert.match(stats, /PlayModeSupport = "supported"/);
 });
 
-test("graphics C# keeps current pipeline/quality/bake implementation details", async () => {
+test("rendering and lighting C# keeps current pipeline/quality/bake implementation details", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/rendering/", import.meta.url))
     + await readCsSources(new URL("../unitypkg/Editor/Tools/lighting/", import.meta.url));
   assert.match(source, /ResolveQualityLevel[\s\S]*QualitySettings\.names[\s\S]*E_QUALITY_LEVEL_INVALID/, "graphics quality should resolve index or quality level name");

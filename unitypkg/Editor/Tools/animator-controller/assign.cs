@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.assign — 将 Controller 分配到目标 Animator。</summary>
-    public class ControllerAssignTool : IUnityCliTool<ControllerAssignTool.Request, ControllerAssignTool.Result>
+    public class AnimatorControllerAssignTool : IUnityCliTool<AnimatorControllerAssignTool.Request, AnimatorControllerAssignTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string Target { get; set; } }
         public sealed class Result { public string ControllerName { get; set; } public string ControllerPath { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
@@ -17,7 +17,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             var go = GameObjectToolSupport.ResolveUniqueTarget(r.Target, "animator-controller.assign requires target.");
             var animator = go.GetComponent<Animator>();
             ctx.CommitEffect();

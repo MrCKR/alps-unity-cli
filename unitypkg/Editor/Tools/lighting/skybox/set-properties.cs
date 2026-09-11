@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>lighting.skybox.set-properties — 设置当前 skybox 材质的 shader 属性。</summary>
-    public class GraphicsSkyboxSetPropertiesTool : IUnityCliTool<GraphicsSkyboxSetPropertiesTool.Request, GraphicsSkyboxSetPropertiesTool.Result>
+    public class LightingSkyboxSetPropertiesTool : IUnityCliTool<LightingSkyboxSetPropertiesTool.Request, LightingSkyboxSetPropertiesTool.Result>
     {
         public sealed class Request { public string Property { get; set; } public string Value { get; set; } }
         public sealed class Result { public string Skybox { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

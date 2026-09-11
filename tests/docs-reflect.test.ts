@@ -102,7 +102,7 @@ test("type-inspection.search pages type and member matches", async () => {
   assert.equal(data.pageInfo.total, 2);
 });
 
-test("reflect ambiguity, assembly failure, and missing cache fail closed", async () => {
+test("type-inspection ambiguity, assembly failure, and missing cache fail closed", async () => {
   const ambiguous = await run("type-inspection.get-type", { name: "Camera", reflectDir: await reflectCache({ duplicate: true }) });
   assert.ok(!ambiguous.ok);
   assert.equal(ambiguous.error?.code, "REFLECT_TYPE_AMBIGUOUS");

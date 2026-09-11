@@ -8,7 +8,7 @@ import { contractToolNames, discoverLiveTools, readEditorCsSources } from "./hel
 
 /** Reflection 域契约测试：descriptor 改走 live discovery。 */
 
-test("reflection group tools exist with correct live descriptor hints", async () => {
+test("runtime-reflection group tools exist with correct live descriptor hints", async () => {
   assert.deepEqual(contractToolNames("runtime-reflection"), ["runtime-reflection.method.find", "runtime-reflection.method.invoke", "runtime-reflection.type.schema"]);
 
   const tools = await discoverLiveTools(
@@ -106,7 +106,7 @@ test("reflection probe bake requires Unity output and a readable cubemap artifac
   assert.match(source, /var bytes = File\.ReadAllBytes\(outputPath\)/);
 });
 
-test("bridge specs resolve for reflection and type tools", () => {
+test("bridge specs resolve for runtime-reflection tools", () => {
   const methodFind = bridgeCommandRegistry.lookup("runtime-reflection", "method.find");
   assert.equal(methodFind?.bridgeCommand, "catalog.editor.run");
   const methodCall = bridgeCommandRegistry.lookup("runtime-reflection", "method.invoke");
@@ -115,7 +115,7 @@ test("bridge specs resolve for reflection and type tools", () => {
   assert.equal(typeSchema?.bridgeCommand, "catalog.editor.run");
 });
 
-test("contract entries exist for reflection and type tools with present C# handler", () => {
+test("contract entries exist for runtime-reflection tools with present C# handler", () => {
   for (const name of ["runtime-reflection.method.find", "runtime-reflection.method.invoke", "runtime-reflection.type.schema"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
@@ -128,7 +128,7 @@ test("runtime-reflection.method.invoke exposes destructive metadata", () => {
   assert.equal(command?.destructiveHint, true);
 });
 
-test("reflection and type commands are exposed by typed C# tools", async () => {
+test("runtime-reflection commands are exposed by typed C# tools", async () => {
   const allSource = await readEditorCsSources();
   for (const command of ["runtime-reflection.method.find", "runtime-reflection.method.invoke", "runtime-reflection.type.schema"]) {
     assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose the public tool name through IUnityCliTool`);

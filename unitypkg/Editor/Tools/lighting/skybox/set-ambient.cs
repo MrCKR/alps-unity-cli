@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 namespace UnityCli
 {
-    public class GraphicsSkyboxSetAmbientTool : IUnityCliTool<GraphicsSkyboxSetAmbientTool.Request, GraphicsSkyboxSetAmbientTool.Result>
+    public class LightingSkyboxSetAmbientTool : IUnityCliTool<LightingSkyboxSetAmbientTool.Request, LightingSkyboxSetAmbientTool.Result>
     {
         public sealed class Request { public string Mode { get; set; } public float? Intensity { get; set; } public string Color { get; set; } public string AmbientEquatorColor { get; set; } public string AmbientGroundColor { get; set; } public string AmbientSkyColor { get; set; } }
         public sealed class Result { public string AmbientMode { get; set; } public double AmbientIntensity { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

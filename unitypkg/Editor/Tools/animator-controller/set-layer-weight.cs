@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.set-layer-weight — 设置层权重。</summary>
-    public class ControllerSetLayerWeightTool : IUnityCliTool<ControllerSetLayerWeightTool.Request, ControllerSetLayerWeightTool.Result>
+    public class AnimatorControllerSetLayerWeightTool : IUnityCliTool<AnimatorControllerSetLayerWeightTool.Request, AnimatorControllerSetLayerWeightTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public int? LayerIndex { get; set; } public string LayerName { get; set; } public float? Weight { get; set; } }
         public sealed class Result { public string Path { get; set; } public string LayerName { get; set; } public double Weight { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
@@ -17,7 +17,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             var idx = -1;
             if (r.LayerIndex.HasValue) idx = r.LayerIndex.Value;
             else if (!string.IsNullOrEmpty(r.LayerName)) { for (var i = 0; i < controller.layers.Length; i++) if (controller.layers[i].name == r.LayerName) { idx = i; break; } }

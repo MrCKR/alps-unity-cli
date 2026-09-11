@@ -2,7 +2,7 @@
 namespace UnityCli
 {
     /// <summary>修改AudioManager批准字段并证明精确文件持久化。</summary>
-    public sealed class ProjectAudioSettingsSetTool : IUnityCliTool<ProjectAudioSettingsSetRequest, ProjectAudioSettingsSetResult>
+    public sealed class ProjectSettingsAudioSettingsSetTool : IUnityCliTool<ProjectAudioSettingsSetRequest, ProjectAudioSettingsSetResult>
     {
         public ToolDescriptor Describe() => new()
         {

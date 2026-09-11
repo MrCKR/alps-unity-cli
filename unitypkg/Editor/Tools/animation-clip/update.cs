@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animation-clip.update — 修改已存在 AnimationClip 的 clip 级设置。</summary>
-    public class AnimationClipModifyTool : IUnityCliTool<AnimationClipModifyTool.Request, AnimationClipModifyTool.Result>
+    public class AnimationClipUpdateTool : IUnityCliTool<AnimationClipUpdateTool.Request, AnimationClipUpdateTool.Result>
     {
         public sealed class Request { public string Path { get; set; } public float? FrameRate { get; set; } public bool? Legacy { get; set; } public string WrapMode { get; set; } public bool? LoopTime { get; set; } public float? StartTime { get; set; } public float? StopTime { get; set; } public float? Length { get; set; } public int? MaxCurveKeys { get; set; } }
         public sealed class Result { public bool DryRun { get; set; } public AnimationClipInfo Clip { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }

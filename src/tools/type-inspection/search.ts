@@ -35,7 +35,7 @@ export interface ReflectSearchResult {
 export default defineTool<ReflectSearchRequest, ReflectSearchResult>({
   name: "type-inspection.search",
   summary: "Search cached C# types and members by query, returning ranked, paged results.",
-  description: "Search cached C# types and members by query, returning ranked, paged results. Use this to discover exact type/member names before type-inspection.get-type or reflect.member. Results include both type and member matches scored by the query.",
+  description: "Search cached C# types and members by query, returning ranked, paged results. Use this to discover exact type/member names before type-inspection.get-type or type-inspection.get-member. Results include both type and member matches scored by the query.",
   group: "type-inspection",
   destructiveHint: false,
   playModeSupport: "supported",

@@ -12,8 +12,8 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>
-    /// graphics 域 IUnityCliTool 共享 helper:渲染管线摘要、QualitySettings、Volume 反射、
-    /// 渲染统计、颜色解析、天空盒环境设置。仅供 graphics 域自包含工具复用。
+    /// rendering、lighting、volume 组 IUnityCliTool 共享 helper:渲染管线摘要、QualitySettings、
+    /// Volume 反射、渲染统计、颜色解析、天空盒环境设置。仅供这些 graphics 域自包含工具复用。
     /// </summary>
     public static class GraphicsToolSupport
     {

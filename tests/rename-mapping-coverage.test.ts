@@ -74,8 +74,8 @@ const RESIDUE_ALLOWED = (rel: string) =>
   rel.startsWith(".issues");
 
 /** 残留扫描覆盖的产品面文本根目录与扩展名；二进制与依赖目录排除。 */
-const RESIDUE_ROOTS = ["src", "unitypkg", "extensions", "contracts", "docs", "scripts", "tests", "specs", "skills", ".pi"];
-const RESIDUE_EXTENSIONS = new Set([".ts", ".cs", ".json", ".md", ".mjs", ".js", ".cjs", ".txt", ".yml", ".yaml", ".asmdef"]);
+const RESIDUE_ROOTS = ["src", "unitypkg", "extensions", "contracts", "docs", "scripts", "tests", "specs", "skills", ".pi", "schemas", "Packages"];
+const RESIDUE_EXTENSIONS = new Set([".ts", ".cs", ".json", ".md", ".mjs", ".js", ".cjs", ".txt", ".yml", ".yaml", ".asmdef", ".ps1", ".jsonl"]);
 const RESIDUE_SKIP_DIRS = new Set([".git", "node_modules", "dist", "coverage", "Dev", "Library", "Temp", "obj", "bin", ".temp", ".codegraph"]);
 
 /** 递归收集残留扫描目标文件相对路径。 */
@@ -114,16 +114,21 @@ function scanResidue(files: string[], pattern: RegExp): string[] {
   return failures;
 }
 
-test("renamed old tool names leave no residue in product-facing text", () => {
-  // 词边界完整匹配旧点分工具名，避免子串误报；命中白名单外文件即失败。
+test("superseded catalog identities leave no residue in product-facing text", () => {
+  // 词边界完整匹配旧点分工具名：两侧只排除标识符字符与 `-`，不能把 `.` 也排除，
+  // 否则「旧名 + 句点」（旧名出现在句子末尾或写入嵌套路径）会被整个漏掉。
+  // `-` 必须保留在两侧字符类中，用于放行 game-object / animator-controller / player-runtime / runtime-reflection 等新名。
   const dotted = new RegExp(
-    `(?<![A-Za-z0-9_.\\-])(${renames.map((m) => escapeRegex(m.old)).join("|")})(?![A-Za-z0-9_.\\-])`, "g",
+    `(?<![A-Za-z0-9_-])(${renames.map((m) => escapeRegex(m.old)).join("|")})(?![A-Za-z0-9_-])`, "g",
   );
   const files = [
     ...RESIDUE_ROOTS.map((root) => collectResidueFiles(root)).flat(),
     "README.md",
     "AGENTS.md",
     "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "tsconfig.test.json",
   ].filter((file) => statSync(file).isFile());
   const failures = scanResidue(files, dotted);
   assert.deepEqual(failures, [], `old tool-name residue found:\n${failures.join("\n")}`);

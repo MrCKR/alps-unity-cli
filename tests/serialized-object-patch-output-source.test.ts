@@ -4,7 +4,7 @@ import test from "node:test";
 
 const root = "unitypkg/Editor/";
 
-test("verified object patch engine has one direct replace path and no audit/log tree", async () => {
+test("verified serialized-object.patch engine has one direct replace path and no audit/log tree", async () => {
   const source = await readFile(`${root}Infrastructure/UnityCliObjectPatch.cs`, "utf8");
   assert.match(source, /Only non-empty pathPatches on directly writable SerializedProperties/);
   assert.match(source, /ApplyVerifiedSerializedPatches/);
@@ -12,7 +12,7 @@ test("verified object patch engine has one direct replace path and no audit/log 
   assert.doesNotMatch(source, /ApplyPathPatches|ApplyMergePatch|ResultData|AuditEntries|List<string> Logs/);
 });
 
-test("object and component modify results expose only business readback", async () => {
+test("serialized-object.patch and component modify results expose only business readback", async () => {
   for (const path of ["Tools/serialized-object/patch.cs", "Tools/component/modify.cs"]) {
     const source = await readFile(`${root}${path}`, "utf8");
     const resultStart = source.indexOf("public sealed class Result");

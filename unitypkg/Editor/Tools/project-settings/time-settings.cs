@@ -2,7 +2,7 @@
 namespace UnityCli
 {
     /// <summary>读取TimeManager批准的持久化字段。</summary>
-    public sealed class ProjectTimeSettingsTool : IUnityCliTool<ProjectSettingsReadRequest, ProjectTimeSettingsSnapshot>
+    public sealed class ProjectSettingsTimeSettingsTool : IUnityCliTool<ProjectSettingsReadRequest, ProjectTimeSettingsSnapshot>
     {
         public ToolDescriptor Describe() => new()
         {

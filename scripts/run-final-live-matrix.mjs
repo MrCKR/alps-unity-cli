@@ -319,7 +319,7 @@ class Matrix {
   /** 会话设置与全局 PlayMode transition 不能跨 runner 进程复用。 */
   invalidateSessionControls() {
     for (const id of [...this.prior.keys()]) {
-      const globalTransition = ["tool.editor.play.transition", "playmode.ready", "tool.editor.stop.transition", "playmode.exit-ready"].includes(id);
+      const globalTransition = ["tool.editor.play-mode.start.transition", "playmode.ready", "tool.editor.play-mode.stop.transition", "playmode.exit-ready"].includes(id);
       const processLocalFixture = [
         "control.setup.", "control.reset.", "control.final-reset.", "control.pipeline-final-restore.",
         "control.playmode-fast.", "control.playmode-restore.", "control.playmode-initial-restore.",
@@ -330,7 +330,7 @@ class Matrix {
   }
   /** PlayMode coverage 入口再次清除 transition，确保当前进程真实进入并退出。 */
   invalidateFailedPlayModeControls() {
-    for (const id of ["tool.editor.play.transition", "playmode.ready", "tool.editor.stop.transition", "playmode.exit-ready"]) this.prior.delete(id);
+    for (const id of ["tool.editor.play-mode.start.transition", "playmode.ready", "tool.editor.play-mode.stop.transition", "playmode.exit-ready"]) this.prior.delete(id);
   }
   argv(base, project = this.o.project) { return publicMatrixArgv(base, project, this.o.project, this.o.target); }
   /** 复用证据必须同时绑定 build、project 与 target，避免跨环境跳过 case。 */
@@ -1701,7 +1701,7 @@ export function ownedSceneBakeCleanupPlan(beforeFiles, afterFiles) {
 }
 
 async function prepareOwnedBakeStartSnapshot(m, caseId, project) {
-  const state = await m.call(`${caseId}.baseline.graphics.bake-start`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
+  const state = await m.call(`${caseId}.baseline.lighting.bake.start`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
     const path = e?.data?.state?.activeScene?.value?.path;
     return r.exitCode === 0 && isReadyEditorState(e, false) && typeof path === "string" && path.length > 0 ? null : "lighting.bake.start baseline scene is not a ready saved Assets scene.";
   }, { baseline: { sourceCase: caseId, capability: "lighting.bake.start", artifactState: true } }, project);
@@ -1711,7 +1711,7 @@ async function prepareOwnedBakeStartSnapshot(m, caseId, project) {
   const backupRoot = resolve(evidenceRoot, "owned-bake-snapshots", caseId);
   try { return await persistSceneBakeSnapshot(await readSceneBakeState(project, scenePath), backupRoot, evidenceRoot, caseId); }
   catch (error) {
-    const failure = await m.failed(`${caseId}.baseline.graphics.bake-start.snapshot`, `Unable to freeze scene bake artifacts before effect: ${String(error?.message ?? error)}`, { baseline: { sourceCase: caseId, capability: "lighting.bake.start", artifactState: true } });
+    const failure = await m.failed(`${caseId}.baseline.lighting.bake.start.snapshot`, `Unable to freeze scene bake artifacts before effect: ${String(error?.message ?? error)}`, { baseline: { sourceCase: caseId, capability: "lighting.bake.start", artifactState: true } });
     return stopAfterTerminalFailure(failure);
   }
 }
@@ -1723,7 +1723,7 @@ async function recoverPendingOwnedBakeStartSnapshot(m, caseId, project) {
   let snapshot;
   try { snapshot = await loadSceneBakeSnapshot(project, backupRoot, evidenceRoot); }
   catch (error) {
-    const failure = await m.failed(`${caseId}.recovery.graphics.bake-start.snapshot`, `Persisted bake snapshot cannot be trusted: ${String(error?.message ?? error)}`, { recovery: { sourceCase: caseId, artifactState: true } });
+    const failure = await m.failed(`${caseId}.recovery.lighting.bake.start.snapshot`, `Persisted bake snapshot cannot be trusted: ${String(error?.message ?? error)}`, { recovery: { sourceCase: caseId, artifactState: true } });
     return stopAfterTerminalFailure(failure);
   }
   if (!snapshot || snapshot.status === "clean") return null;
@@ -1731,7 +1731,7 @@ async function recoverPendingOwnedBakeStartSnapshot(m, caseId, project) {
     const prior = m.prior.get(caseId);
     const knownTerminal = prior?.assertion?.status === "PASS" && prior?.envelope?.ok === true && prior?.exitCode === 0;
     if (!knownTerminal) {
-      const failure = await m.failed(`${caseId}.recovery.graphics.bake-start.terminal-unproven`, "A prepared lighting.bake.start snapshot has no proven terminal success; inspect the scene before deciding whether to retry.", { recovery: { sourceCase: caseId, artifactState: true, terminalUnproven: true } });
+      const failure = await m.failed(`${caseId}.recovery.lighting.bake.start.terminal-unproven`, "A prepared lighting.bake.start snapshot has no proven terminal success; inspect the scene before deciding whether to retry.", { recovery: { sourceCase: caseId, artifactState: true, terminalUnproven: true } });
       return stopAfterTerminalFailure(failure);
     }
     await writeSceneBakeSnapshotStatus(snapshot, "effect-terminal", prior.envelope.requestId ?? null);
@@ -1763,14 +1763,14 @@ async function recoverAllPendingOwnedBakeSnapshots(m) {
 /** 成功bake-start必须等待只读收敛，再精确恢复effect前文件闭包。 */
 async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project, snapshot) {
   if (name !== "lighting.bake.start" || record.envelope?.ok !== true || record.exitCode !== 0 || flags.includes("--dry-run")) return null;
-  if (!snapshot || snapshot.status !== "effect-terminal") return m.failed(`${caseId}.cleanup.graphics.bake-start.snapshot`, "lighting.bake.start terminal PASS has no effect-before terminal snapshot.", { cleanup: { sourceCase: caseId, artifactState: true } });
+  if (!snapshot || snapshot.status !== "effect-terminal") return m.failed(`${caseId}.cleanup.lighting.bake.start.snapshot`, "lighting.bake.start terminal PASS has no effect-before terminal snapshot.", { cleanup: { sourceCase: caseId, artifactState: true } });
   const statusDescriptor = await getDescriptor(m, "tool", "lighting.bake.status");
-  if (!statusDescriptor) return m.failed(`${caseId}.cleanup.graphics.bake-status.descriptor`, "lighting.bake.status descriptor is unavailable before cleanup.", { cleanup: { sourceCase: caseId, artifactState: true } });
+  if (!statusDescriptor) return m.failed(`${caseId}.cleanup.lighting.bake.status.descriptor`, "lighting.bake.status descriptor is unavailable before cleanup.", { cleanup: { sourceCase: caseId, artifactState: true } });
   const deadline = Date.now() + Math.min(m.o.timeoutMs, 120000);
   let terminal = null;
   for (let attempt = 1; Date.now() < deadline; attempt += 1) {
     const statusTimeoutMs = Math.max(1000, Math.min(10000, deadline - Date.now()));
-    const status = await m.call(`${caseId}.cleanup.graphics.bake-status.${attempt}`, argvFor("tool", "lighting.bake.status", {}, ["--timeout-ms", String(statusTimeoutMs)]), (e, r) => {
+    const status = await m.call(`${caseId}.cleanup.lighting.bake.status.${attempt}`, argvFor("tool", "lighting.bake.status", {}, ["--timeout-ms", String(statusTimeoutMs)]), (e, r) => {
       const issue = r.exitCode === 0 ? assertPositiveSuccess(e, statusDescriptor?.resultSchema ?? {}) : `lighting.bake.status cleanup read exited ${r.exitCode}.`;
       return issue ?? (typeof e?.data?.baking === "boolean" ? null : "lighting.bake.status did not return a boolean baking state.");
     }, { cleanup: { sourceCase: caseId, capability: "lighting.bake.status", artifactState: true, attempt } }, project);
@@ -1778,9 +1778,9 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
     if (status.envelope.data.baking === false) { terminal = status; break; }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
   }
-  if (!terminal) return m.failed(`${caseId}.cleanup.graphics.bake-status.timeout`, "lighting.bake.start did not converge before the cleanup deadline.", { cleanup: { sourceCase: caseId, artifactState: true } });
+  if (!terminal) return m.failed(`${caseId}.cleanup.lighting.bake.status.timeout`, "lighting.bake.start did not converge before the cleanup deadline.", { cleanup: { sourceCase: caseId, artifactState: true } });
 
-  const ready = await m.call(`${caseId}.cleanup.graphics.bake-start.ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
+  const ready = await m.call(`${caseId}.cleanup.lighting.bake.start.ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
     return r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Editor did not become ready after lighting.bake.start completed.";
   }, { cleanup: { sourceCase: caseId, artifactState: true }, retryAssertion: true }, project);
   stopAfterTerminalFailure(ready);
@@ -1791,7 +1791,7 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
     after = await readSceneBakeState(project, snapshot.scenePath);
     plan = ownedSceneBakeCleanupPlan(snapshot.files, after.files);
   } catch (error) {
-    return m.failed(`${caseId}.cleanup.graphics.bake-start.plan`, `Unable to build exact bake artifact cleanup: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
+    return m.failed(`${caseId}.cleanup.lighting.bake.start.plan`, `Unable to build exact bake artifact cleanup: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
   }
 
   const deleteDescriptor = plan.deleteAssets.length > 0 ? await getDescriptor(m, "tool", "asset.delete") : {};
@@ -1819,7 +1819,7 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
       await writeFile(file.absolutePath, bytes);
     }
   } catch (error) {
-    return m.failed(`${caseId}.cleanup.graphics.bake-start.restore`, `Exact bake artifact byte restore failed: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
+    return m.failed(`${caseId}.cleanup.lighting.bake.start.restore`, `Exact bake artifact byte restore failed: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
   }
 
   for (const path of plan.refreshAssets) {
@@ -1830,7 +1830,7 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
     stopAfterTerminalFailure(refreshed);
   }
 
-  const finalReady = await m.call(`${caseId}.cleanup.graphics.bake-start.final-ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
+  const finalReady = await m.call(`${caseId}.cleanup.lighting.bake.start.final-ready`, ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e, r) => {
     return r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Editor did not become ready after bake artifact restore.";
   }, { cleanup: { sourceCase: caseId, artifactState: true }, retryAssertion: true }, project);
   stopAfterTerminalFailure(finalReady);
@@ -1840,14 +1840,14 @@ async function cleanupOwnedBakeStartCase(m, caseId, name, record, flags, project
     const expected = snapshot.files.map((file) => `${file.path}\0${file.sha256}`).sort();
     const actual = final.files.map((file) => `${file.path}\0${file.sha256}`).sort();
     if (expected.length !== actual.length || expected.some((value, index) => value !== actual[index])) throw new Error("Final scene bake artifact path/digest closure differs from the effect-before snapshot.");
-    const proof = await m.call(`${caseId}.cleanup.graphics.bake-start.proof`, ["tools", "run", "editor.state", "--input", "{}"], (e, r) => r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Final bake cleanup proof is not ready Edit Mode.", {
+    const proof = await m.call(`${caseId}.cleanup.lighting.bake.start.proof`, ["tools", "run", "editor.state", "--input", "{}"], (e, r) => r.exitCode === 0 && isReadyEditorState(e, false) ? null : "Final bake cleanup proof is not ready Edit Mode.", {
       cleanup: { sourceCase: caseId, capability: "lighting.bake.start", artifactState: true, baselineFileCount: expected.length, finalFileCount: actual.length, restored: plan }
     }, project);
     stopAfterTerminalFailure(proof);
     await writeSceneBakeSnapshotStatus(snapshot, "clean", snapshot.terminalRequestId);
     return proof;
   } catch (error) {
-    return m.failed(`${caseId}.cleanup.graphics.bake-start.proof`, `Bake artifact cleanup proof failed: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
+    return m.failed(`${caseId}.cleanup.lighting.bake.start.proof`, `Bake artifact cleanup proof failed: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
   }
 }
 
@@ -2322,7 +2322,7 @@ async function invoke(m, kind, name, id, d, input, flags, positive, phase, proje
   if (bakeSnapshot && record.envelope?.ok === true && record.exitCode === 0) {
     try { await writeSceneBakeSnapshotStatus(bakeSnapshot, "effect-terminal", record.envelope.requestId ?? null); }
     catch (error) {
-      const failure = await m.failed(`${caseId}.cleanup.graphics.bake-start.snapshot`, `Unable to persist terminal bake cleanup ownership: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
+      const failure = await m.failed(`${caseId}.cleanup.lighting.bake.start.snapshot`, `Unable to persist terminal bake cleanup ownership: ${String(error?.message ?? error)}`, { cleanup: { sourceCase: caseId, artifactState: true } });
       return stopAfterTerminalFailure(failure);
     }
   }
@@ -2590,11 +2590,11 @@ async function playMode(m) {
   const play = m.discovered.tools.find((n) => n === "editor.play-mode.start"); const stop = m.discovered.tools.find((n) => n === "editor.play-mode.stop"); if (!play || !stop) return blockTerminal(m, "playmode.transition", "Public editor.play-mode.start/editor.play-mode.stop capabilities are not discoverable.");
   const pd = await getDescriptor(m, "tool", play), sd = await getDescriptor(m, "tool", stop); let p, s; try { p = parsePublicExample(pd.examples?.[0], "tool", play); s = parsePublicExample(sd.examples?.[0], "tool", stop); } catch (e) { return blockTerminal(m, "playmode.transition", `Transition example invalid: ${e.message}`); }
   await invoke(m, "tool", play, "transition", pd, p.input, p.flags, true, "transition");
-  const playReady = await m.call("playmode.ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, true) ? null : "Editor state did not report ready Play Mode after editor.play.", { retryAssertion: true });
+  const playReady = await m.call("playmode.ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, true) ? null : "Editor state did not report ready Play Mode after editor.play-mode.start.", { retryAssertion: true });
   stopAfterTerminalFailure(playReady);
   await coverToolsWithPipelineFixtures(m, "play", new Set([play, stop]));
   await invoke(m, "tool", stop, "transition", sd, s.input, s.flags, true, "transition");
-  const exitReady = await m.call("playmode.exit-ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, false) ? null : "Editor state did not report ready Edit Mode after editor.stop.", { retryAssertion: true });
+  const exitReady = await m.call("playmode.exit-ready", ["tools", "run", "editor.state", "--input", "{}", "--timeout-ms", "10000"], (e) => isReadyEditorState(e, false) ? null : "Editor state did not report ready Edit Mode after editor.play-mode.stop.", { retryAssertion: true });
   stopAfterTerminalFailure(exitReady);
 }
 const FIXTURE_ASSERTIONS = {

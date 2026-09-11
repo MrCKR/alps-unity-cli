@@ -41,7 +41,7 @@ namespace UnityCli
             }
             if (gameObject == null)
             {
-                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject context target not found.", "Pass input target, path, or id. Use a scene context such as scene.cameras to discover reusable scene object references.");
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject context target not found.", "Pass input target, path, or id. Use a scene context such as scene.hierarchy to discover reusable scene object references.");
             }
             return gameObject;
         }

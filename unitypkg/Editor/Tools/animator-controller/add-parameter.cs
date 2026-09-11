@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.add-parameter — 添加参数到 Controller。</summary>
-    public class ControllerAddParameterTool : IUnityCliTool<ControllerAddParameterTool.Request, ControllerAddParameterTool.Result>
+    public class AnimatorControllerAddParameterTool : IUnityCliTool<AnimatorControllerAddParameterTool.Request, AnimatorControllerAddParameterTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string ParameterName { get; set; } public string ParameterType { get; set; } public string DefaultValue { get; set; } }
         public sealed class Result { public string Path { get; set; } public string ParameterName { get; set; } public string ParameterType { get; set; } public long TotalParameters { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
@@ -17,7 +17,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             if (string.IsNullOrEmpty(r.ParameterName)) throw new UnityCliBridge.BridgeCommandException("E_PARAMETER_NAME_REQUIRED", "animator-controller.add-parameter requires parameterName.", "Pass a name for the new parameter.");
             foreach (var existing in controller.parameters) if (existing.name == r.ParameterName) throw new UnityCliBridge.BridgeCommandException("E_PARAMETER_EXISTS", "Parameter '" + r.ParameterName + "' already exists.", "Use animator.set-parameter to change its default value.");
             var typeStr = (r.ParameterType ?? "float").ToLowerInvariant();

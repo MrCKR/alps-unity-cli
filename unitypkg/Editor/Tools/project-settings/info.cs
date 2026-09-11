@@ -7,7 +7,7 @@ namespace UnityCli.Tools.Project
     /// <summary>
     /// project-settings.info 只读 Tool：读取 Unity 项目基础元数据。
     /// </summary>
-    public class ProjectInfoTool : IUnityCliTool<ProjectInfoTool.Request, ProjectInfoTool.Result>
+    public class ProjectSettingsInfoTool : IUnityCliTool<ProjectSettingsInfoTool.Request, ProjectSettingsInfoTool.Result>
     {
         public sealed class Request { }
 

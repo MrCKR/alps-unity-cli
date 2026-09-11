@@ -8,7 +8,7 @@ async function source(path: string): Promise<string> {
   return readFile(new URL(path, editorUrl), "utf8");
 }
 
-test("animation, component, and controller mutations prove completion through concrete readback", async () => {
+test("animation-clip, animator, component, and animator-controller mutations prove completion through concrete readback", async () => {
   const [clipCreate, clipModify, enabled, parameter, speed, componentAdd, componentModify, componentRemove, componentSet, controllerCreate, addLayer, addParameter, addState, addTransition, assign, blend1d, blend2d, blendChild, removeLayer, layerWeight] = await Promise.all([
     source("Tools/animation-clip/create.cs"), source("Tools/animation-clip/update.cs"), source("Tools/animator/set-enabled.cs"), source("Tools/animator/set-parameter.cs"), source("Tools/animator/set-speed.cs"), source("Tools/component/add.cs"), source("Tools/component/modify.cs"), source("Tools/component/remove.cs"), source("Tools/component/set.cs"), source("Tools/animator-controller/create.cs"), source("Tools/animator-controller/add-layer.cs"), source("Tools/animator-controller/add-parameter.cs"), source("Tools/animator-controller/add-state.cs"), source("Tools/animator-controller/add-transition.cs"), source("Tools/animator-controller/assign.cs"), source("Tools/animator-controller/create-blend-tree-1d.cs"), source("Tools/animator-controller/create-blend-tree-2d.cs"), source("Tools/animator-controller/add-blend-tree-child.cs"), source("Tools/animator-controller/remove-layer.cs"), source("Tools/animator-controller/set-layer-weight.cs")
   ]);

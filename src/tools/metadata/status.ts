@@ -1,7 +1,7 @@
 import { bridgeCommandRegistry } from "../../bridge/index.js";
 import type { ToolHandler, ToolMetadata, ToolSupportStatus } from "./types.js";
 
-const OFFLINE_TOOL_PREFIXES = ["docs.", "reflect."];
+const OFFLINE_TOOL_PREFIXES = ["docs.", "type-inspection."];
 const OFFLINE_TOOL_NAMES = new Set([
   "editor.dialog.click",
   "package.bridge-remove",

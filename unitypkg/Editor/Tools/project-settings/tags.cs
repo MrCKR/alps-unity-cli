@@ -6,7 +6,7 @@ namespace UnityCli.Tools.Project
     /// <summary>
     /// project-settings.tags 只读 Tool：读取 TagManager 中定义的标签列表。
     /// </summary>
-    public class ProjectTagsTool : IUnityCliTool<ProjectTagsTool.Request, ProjectTagsTool.Result>
+    public class ProjectSettingsTagsTool : IUnityCliTool<ProjectSettingsTagsTool.Request, ProjectSettingsTagsTool.Result>
     {
         public sealed class Request { }
 

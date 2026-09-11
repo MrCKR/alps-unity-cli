@@ -5,7 +5,7 @@ import test from "node:test";
 const editor = new URL("../unitypkg/Editor/", import.meta.url);
 const source = (path: string) => readFile(new URL(path, editor), "utf8");
 
-test("core graphics requests validate immutable plans before one commit and read back effects", async () => {
+test("core rendering and lighting requests validate immutable plans before one commit and read back effects", async () => {
   const [quality, scene, pipeline, ambient, fog, reflection, properties, bakeSettings, bakeProbe, material, sun, support] = await Promise.all([
     source("Tools/rendering/quality.cs"), source("Tools/rendering/scene-debug.cs"), source("Tools/rendering/pipeline/settings.cs"), source("Tools/lighting/skybox/set-ambient.cs"), source("Tools/lighting/skybox/set-fog.cs"), source("Tools/lighting/skybox/set-reflection.cs"), source("Tools/lighting/skybox/set-properties.cs"), source("Tools/lighting/bake/settings.cs"), source("Tools/lighting/bake/reflection-probe.cs"), source("Tools/lighting/skybox/set-material.cs"), source("Tools/lighting/skybox/set-sun.cs"), source("Tools/rendering/GraphicsToolSupport.cs"),
   ]);
@@ -48,7 +48,7 @@ test("core graphics requests validate immutable plans before one commit and read
   assert.match(bakeProbe, /bytes\[0\] == 0x76/);
 });
 
-test("retained graphics mutations commit only writes and read back their owning state", async () => {
+test("retained rendering and lighting mutations commit only writes and read back their owning state", async () => {
   const [quality, pipeline, group, reflection] = await Promise.all([
     source("Tools/rendering/quality.cs"),
     source("Tools/rendering/pipeline/settings.cs"),

@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 namespace UnityCli
 {
     /// <summary>lighting.bake.settings — 读取/写入 LightingSettings。</summary>
-    public class GraphicsBakeSettingsTool : IUnityCliTool<GraphicsBakeSettingsTool.Request, GraphicsBakeSettingsTool.Result>
+    public class LightingBakeSettingsTool : IUnityCliTool<LightingBakeSettingsTool.Request, LightingBakeSettingsTool.Result>
     {
         public sealed class Request { public string Scene { get; set; } public string LightingMode { get; set; } public bool? BakedGI { get; set; } public bool? RealtimeGI { get; set; } public int? DirectSamples { get; set; } public int? IndirectSamples { get; set; } public int? EnvironmentSamples { get; set; } public int? Bounces { get; set; } public string Filtering { get; set; } }
         public sealed class Result { public LightingSettingsInfo Settings { get; set; } public string ScenePath { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

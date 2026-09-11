@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 namespace UnityCli
 {
-    public class GraphicsSkyboxSetFogTool : IUnityCliTool<GraphicsSkyboxSetFogTool.Request, GraphicsSkyboxSetFogTool.Result>
+    public class LightingSkyboxSetFogTool : IUnityCliTool<LightingSkyboxSetFogTool.Request, LightingSkyboxSetFogTool.Result>
     {
         public sealed class Request { public bool? Enabled { get; set; } public string Mode { get; set; } public string Color { get; set; } public float? Density { get; set; } public float? StartDistance { get; set; } public float? EndDistance { get; set; } }
         public sealed class Result { public bool Fog { get; set; } public string FogMode { get; set; } public string FogColor { get; set; } public double FogDensity { get; set; } public double FogStartDistance { get; set; } public double FogEndDistance { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

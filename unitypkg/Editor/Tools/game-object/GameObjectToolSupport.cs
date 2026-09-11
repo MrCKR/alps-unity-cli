@@ -425,7 +425,7 @@ namespace UnityCli
             {
                 return new ComponentPropertyChange(propertyName, ConvertComponentValue(value, field.FieldType), field.FieldType, null, field, value);
             }
-            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use component.get or type.schema to inspect writable public fields/properties.");
+            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use component.get or runtime-reflection.type.schema to inspect writable public fields/properties.");
         }
 
         public static void ApplyComponentPropertyChanges(Component component, List<ComponentPropertyChange> changes)
@@ -456,7 +456,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_COMPONENT_VALUE_INVALID",
                     "Component value could not be converted to " + type.Name + ": " + exception.Message,
-                    "Pass a JSON value matching the writable member type shown by component.get or type.schema.");
+                    "Pass a JSON value matching the writable member type shown by component.get or runtime-reflection.type.schema.");
             }
         }
 
@@ -545,25 +545,8 @@ namespace UnityCli
         public string SideEffects { get; set; }
     }
 
-    /// <summary>层级搜索结果项。</summary>
-    public sealed class GoFindItem
-    {
-        public long Id { get; set; }
-        public string Name { get; set; }
-        public string Path { get; set; }
-        public bool Active { get; set; }
-        public bool ActiveInHierarchy { get; set; }
-        public string Tag { get; set; }
-        public long Layer { get; set; }
-        public long ChildCount { get; set; }
-        public bool ChildrenTruncated { get; set; }
-        public long ComponentCount { get; set; }
-        public List<string> ComponentTypes { get; set; }
-        public List<string> Components { get; set; }
-    }
-
     /// <summary>分页信息。</summary>
-    public sealed class GoPageInfo
+    public sealed class GameObjectPageInfo
     {
         public long PageSize { get; set; }
         public long Cursor { get; set; }

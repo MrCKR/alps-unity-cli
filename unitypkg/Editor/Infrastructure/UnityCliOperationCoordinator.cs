@@ -569,8 +569,8 @@ namespace UnityCli
                     IsPaused = isPaused
                 };
                 terminal = enterPlayMode
-                    ? (object)new EditorPlayTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode.start" } } }
-                    : new EditorStopTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode.stop" } } };
+                    ? (object)new EditorPlayModeStartTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode.start" } } }
+                    : new EditorPlayModeStopTool.Response { Result = result, State = readState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play-mode.stop" } } };
                 PublishDirectMutationTerminal(state, requestId, requestDigest,
                     UnityCliSerializer.Serialize(ProtocolEnvelopeFactory.Success(requestId, terminal)));
             }

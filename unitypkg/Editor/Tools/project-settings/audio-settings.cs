@@ -2,7 +2,7 @@
 namespace UnityCli
 {
     /// <summary>读取AudioManager批准字段和磁盘身份。</summary>
-    public sealed class ProjectAudioSettingsTool : IUnityCliTool<ProjectSettingsReadRequest, ProjectAudioSettingsSnapshot>
+    public sealed class ProjectSettingsAudioSettingsTool : IUnityCliTool<ProjectSettingsReadRequest, ProjectAudioSettingsSnapshot>
     {
         public ToolDescriptor Describe() => new()
         {

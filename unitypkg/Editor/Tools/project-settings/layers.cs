@@ -7,7 +7,7 @@ namespace UnityCli.Tools.Project
     /// <summary>
     /// project-settings.layers 只读 Tool：读取 TagManager 中定义的 Layer 索引和名称。
     /// </summary>
-    public class ProjectLayersTool : IUnityCliTool<ProjectLayersTool.Request, ProjectLayersTool.Result>
+    public class ProjectSettingsLayersTool : IUnityCliTool<ProjectSettingsLayersTool.Request, ProjectSettingsLayersTool.Result>
     {
         public sealed class Request { }
 

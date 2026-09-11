@@ -2,7 +2,7 @@
 namespace UnityCli
 {
     /// <summary>分页读取legacy Input Manager批准字段。</summary>
-    public sealed class ProjectInputSettingsTool : IUnityCliTool<ProjectInputSettingsRequest, ProjectInputSettingsResult>
+    public sealed class ProjectSettingsInputSettingsTool : IUnityCliTool<ProjectInputSettingsRequest, ProjectInputSettingsResult>
     {
         public ToolDescriptor Describe() => new()
         {

@@ -1071,9 +1071,9 @@ test("direct case retries generation changes only for read-only steps", async ()
   };
   const definitions = [{ id: "read", kind: "tool", name: "scene.gameobject", input: {}, readOnly: true }];
 
-  assert.equal(await runDirectCasePhase(matrix, "tool.code.exec", "setup", definitions, {}, "C:\\DevProject"), true);
+  assert.equal(await runDirectCasePhase(matrix, "tool.code.execute", "setup", definitions, {}, "C:\\DevProject"), true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].id, "tool.code.exec.setup.read");
+  assert.equal(calls[0].id, "tool.code.execute.setup.read");
   assert.deepEqual(calls[0].meta.retryErrorCodes, ["E_READ_GENERATION_CHANGED"]);
   assert.equal(calls[0].meta.retryMaxAttempts, 3);
   assert.equal(shouldRetryMatrixCall(calls[0].meta, { error: { code: "E_OTHER" } }, "failure", 1, 3), false);
@@ -1094,9 +1094,9 @@ test("direct case never retries mutation steps on generation change", async () =
   };
   const definitions = [{ id: "mutate", kind: "tool", name: "code.execute", input: {} }];
 
-  assert.equal(await runDirectCasePhase(matrix, "tool.code.exec", "mutation", definitions, {}, "C:\\DevProject"), false);
+  assert.equal(await runDirectCasePhase(matrix, "tool.code.execute", "mutation", definitions, {}, "C:\\DevProject"), false);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].id, "tool.code.exec.mutation.mutate");
+  assert.equal(calls[0].id, "tool.code.execute.mutation.mutate");
   assert.equal(calls[0].meta.retryErrorCodes, undefined);
 });
 

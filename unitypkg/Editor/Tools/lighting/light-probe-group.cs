@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>lighting.light-probe-group — 管理 LightProbeGroup 组件与探针位置。</summary>
-    public class GraphicsLightProbeGroupTool : IUnityCliTool<GraphicsLightProbeGroupTool.Request, GraphicsLightProbeGroupTool.Result>
+    public class LightingLightProbeGroupTool : IUnityCliTool<LightingLightProbeGroupTool.Request, LightingLightProbeGroupTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public bool? Create { get; set; } public string Positions { get; set; } }
         public sealed class Result { public GraphicsProbeTarget Target { get; set; } public long ProbeCount { get; set; } public List<Vector3Data> Positions { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

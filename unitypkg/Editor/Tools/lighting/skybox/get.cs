@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>lighting.skybox.get — 读取天空盒/环境/雾/反射设置。</summary>
-    public class GraphicsSkyboxGetTool : IUnityCliTool<GraphicsSkyboxGetTool.Request, GraphicsSkyboxGetTool.Result>
+    public class LightingSkyboxGetTool : IUnityCliTool<LightingSkyboxGetTool.Request, LightingSkyboxGetTool.Result>
     {
         public sealed class Request { }
         public sealed class Result { public SkyboxInfo Skybox { get; set; } }

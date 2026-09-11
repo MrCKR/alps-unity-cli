@@ -25,7 +25,7 @@ namespace UnityCli
         {
             public long Count { get; set; }
             public List<ComponentTypeInfo> Types { get; set; }
-            public GoPageInfo PageInfo { get; set; }
+            public GameObjectPageInfo PageInfo { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -72,7 +72,7 @@ namespace UnityCli
             {
                 Count = total,
                 Types = page.ConvertAll(t => new ComponentTypeInfo { FullName = t.FullName, Name = t.Name, Assembly = t.Assembly.GetName().Name, Namespace = t.Namespace }),
-                PageInfo = new GoPageInfo { PageSize = pageSize, Cursor = cursor, NextCursor = nextCursor, Total = total }
+                PageInfo = new GameObjectPageInfo { PageSize = pageSize, Cursor = cursor, NextCursor = nextCursor, Total = total }
             };
             return new System.Threading.Tasks.ValueTask<Result>(result);
         }

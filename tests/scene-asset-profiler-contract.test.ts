@@ -59,7 +59,7 @@ test("Build Profile Tools stay registered on every supported Unity version", asy
   assert.doesNotMatch(registry, /E_UNITY_PLAY_MODE: Exit Play Mode before executing this editor-only Tool/);
 });
 
-test("asset/search scene/hierarchy go/find and editor/console sources keep current implementation", async () => {
+test("asset/search scene/hierarchy game-object.find and editor/console sources keep current implementation", async () => {
   const assetSource = await readCsSources(new URL("../unitypkg/Editor/Tools/asset/", import.meta.url));
   const assetSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/AssetToolSupport.cs", import.meta.url), "utf8");
   const sceneSource = await readCsSources(new URL("../unitypkg/Editor/Tools/scene/", import.meta.url));
@@ -93,7 +93,7 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   assert.match(goSource, /GameObject look-at requires a lookAt target[\s\S]*game-object\.look-at --input/);
   assert.doesNotMatch(goSource, /unitycli scene hierarchy/);
 
-  assert.match(consoleSource, /class ConsoleGetTool : IUnityCliTool/);
+  assert.match(consoleSource, /class ConsoleReadTool : IUnityCliTool/);
   assert.match(consoleSource, /EditorToolSupport\.ReadConsolePage\(request\.Type, request\.Filter, pageSize, ctx\.UseReadBudget\(request\.Budget\)\)/);
   assert.match(menuSource, /class EditorMenuTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(request\.Path\)/);
   assert.match(menuSource, /E_MENU_COMPLETION_UNSUPPORTED[\s\S]*Use a dedicated Tool, or use File\/Save/);
@@ -129,7 +129,7 @@ test("asset preview and delete expose only terminal observed state", async () =>
   assert.match(deleteSource, /E_ASSET_DELETE_PROOF_MISSING/);
 });
 
-test("build/animation/package sources keep current typed-result flows", async () => {
+test("build/animation-clip/package sources keep current typed-result flows", async () => {
   const buildSource = await readCsSources(new URL("../unitypkg/Editor/Tools/build/", import.meta.url));
   const animationSource = await readCsSources(new URL("../unitypkg/Editor/Tools/animation-clip/", import.meta.url));
   const controllerSource = await readCsSources(new URL("../unitypkg/Editor/Tools/animator-controller/", import.meta.url));
@@ -150,9 +150,9 @@ test("build/animation/package sources keep current typed-result flows", async ()
   assert.match(animationSource, /if \(r\.LoopTime\.HasValue\) settings\.loopTime = r\.LoopTime\.Value/);
   assert.match(animationSource, /var wm = AnimationToolSupport\.ValidateClipSettings\(r\.FrameRate, r\.WrapMode, r\.StartTime, r\.StopTime, r\.Length\)/);
   assert.match(animationSource, /if \(!string\.IsNullOrEmpty\(r\.WrapMode\)\) clip\.wrapMode = wm/);
-  assert.match(controllerSource, /ControllerCreateBlendTree1DTool[\s\S]*E_STATE_EXISTS/);
-  assert.match(controllerSource, /ControllerCreateBlendTree2DTool[\s\S]*E_STATE_EXISTS/);
-  assert.match(controllerSource, /ControllerGetInfoTool[\s\S]*Parameters = parameters/);
+  assert.match(controllerSource, /AnimatorControllerCreateBlendTree1DTool[\s\S]*E_STATE_EXISTS/);
+  assert.match(controllerSource, /AnimatorControllerCreateBlendTree2DTool[\s\S]*E_STATE_EXISTS/);
+  assert.match(controllerSource, /AnimatorControllerGetInfoTool[\s\S]*Parameters = parameters/);
   assert.doesNotMatch(controllerSource, /controller get-info <path>/);
   assert.doesNotMatch(controllerSource, /animation\.clip action=create/);
 

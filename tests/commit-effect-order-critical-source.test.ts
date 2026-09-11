@@ -38,7 +38,7 @@ test("critical asset and create handlers commit immediately before their first e
   assertBefore(material, "ctx.CommitEffect();", "AssetDatabase.CreateAsset", "material.create asset");
 });
 
-test("graphics and prefab validate before committing and profile proof does not replay", async () => {
+test("lighting and prefab validate before committing and profile proof does not replay", async () => {
   const [lightProbe, reflectionProbe, prefab, profile] = await Promise.all([
     readTool("Tools/lighting/light-probe-group.cs"),
     readTool("Tools/lighting/reflection-probe.cs"),

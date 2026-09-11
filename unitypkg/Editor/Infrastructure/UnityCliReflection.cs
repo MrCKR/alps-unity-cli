@@ -701,7 +701,7 @@ namespace UnityCli
                         if (parameterType == null)
                         {
                             if (budget.IsExhausted) throw new UnityCliRequestBudgetExceededException(budget.ExhaustedDimension);
-                            throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Parameter type not found: " + parameterTypeName, "Use the full parameterType returned by reflection.method.find.");
+                            throw new BridgeCommandException("E_TYPE_NOT_FOUND", "Parameter type not found: " + parameterTypeName, "Use the full parameterType returned by runtime-reflection.method.find.");
                         }
                         selectedParameterTypes.Add(parameterType);
                     }

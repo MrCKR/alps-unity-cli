@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 namespace UnityCli
 {
     /// <summary>lighting.bake.clear — 清除光照烘焙数据。</summary>
-    public class GraphicsBakeClearTool : IUnityCliTool<GraphicsBakeClearTool.Request, GraphicsBakeClearTool.Result>
+    public class LightingBakeClearTool : IUnityCliTool<LightingBakeClearTool.Request, LightingBakeClearTool.Result>
     {
         public sealed class Request { public bool? BakedData { get; set; } public bool? RealtimeData { get; set; } }
         public sealed class Result { public bool ClearedBakedData { get; set; } public bool ClearedRealtimeData { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

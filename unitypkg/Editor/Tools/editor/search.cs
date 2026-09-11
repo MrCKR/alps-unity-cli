@@ -10,7 +10,7 @@ namespace UnityCli
         {
             Name = "editor.search",
             Summary = "Run a bounded Unity Search query with explicit provider metadata and paging.",
-            Description = "Uses UnityEditor.Search directly across active Unity Search providers. providers accepts at most 16 exact active provider IDs; omission uses the active provider set. offset accepts 0..10000 and limit defaults to 50 with a maximum of 200. At most offset+limit+1 items are scanned and only the requested page is retained. This is provider-level Unity Search, not an alias for asset.search or go.find.",
+            Description = "Uses UnityEditor.Search directly across active Unity Search providers. providers accepts at most 16 exact active provider IDs; omission uses the active provider set. offset accepts 0..10000 and limit defaults to 50 with a maximum of 200. At most offset+limit+1 items are scanned and only the requested page is retained. This is provider-level Unity Search, not an alias for asset.search or game-object.find.",
             Group = "editor",
             DestructiveHint = false,
             SupportsDryRun = false,

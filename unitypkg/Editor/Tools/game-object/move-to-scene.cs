@@ -9,7 +9,7 @@ namespace UnityCli
     /// <summary>
     /// game-object.move-to-scene — 将 GameObject 移动到另一个已加载场景。
     /// </summary>
-    public class SceneMoveObjectTool : IUnityCliTool<SceneMoveObjectTool.Request, SceneMoveObjectTool.Result>
+    public class GameObjectMoveToSceneTool : IUnityCliTool<GameObjectMoveToSceneTool.Request, GameObjectMoveToSceneTool.Result>
     {
         public sealed class Request
         {

@@ -6,7 +6,7 @@ namespace UnityCli
     /// <summary>
     /// serialized-object.read — 读取任意 UnityEngine.Object 的深序列化数据。只读。
     /// </summary>
-    public class ObjectGetDataTool : IUnityCliTool<ObjectGetDataTool.Request, ObjectGetDataTool.Result>
+    public class SerializedObjectReadTool : IUnityCliTool<SerializedObjectReadTool.Request, SerializedObjectReadTool.Result>
     {
         public sealed class Request : IUnityCliObjectReferenceInput, IUnityCliObjectSerializationInput
         {

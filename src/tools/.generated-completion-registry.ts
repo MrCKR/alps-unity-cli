@@ -47,7 +47,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.AnimationClipTool",
+    "implementationType": "UnityCli.AnimationClipReadTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -63,7 +63,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.AnimationClipModifyTool",
+    "implementationType": "UnityCli.AnimationClipUpdateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -79,7 +79,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerAddBlendTreeChildTool",
+    "implementationType": "UnityCli.AnimatorControllerAddBlendTreeChildTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -95,7 +95,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerAddLayerTool",
+    "implementationType": "UnityCli.AnimatorControllerAddLayerTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -111,7 +111,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerAddParameterTool",
+    "implementationType": "UnityCli.AnimatorControllerAddParameterTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -127,7 +127,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerAddStateTool",
+    "implementationType": "UnityCli.AnimatorControllerAddStateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -143,7 +143,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerAddTransitionTool",
+    "implementationType": "UnityCli.AnimatorControllerAddTransitionTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -159,7 +159,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerAssignTool",
+    "implementationType": "UnityCli.AnimatorControllerAssignTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -175,7 +175,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerCreateTool",
+    "implementationType": "UnityCli.AnimatorControllerCreateTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -191,7 +191,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerCreateBlendTree1DTool",
+    "implementationType": "UnityCli.AnimatorControllerCreateBlendTree1DTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -207,7 +207,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerCreateBlendTree2DTool",
+    "implementationType": "UnityCli.AnimatorControllerCreateBlendTree2DTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -223,7 +223,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerGetInfoTool",
+    "implementationType": "UnityCli.AnimatorControllerGetInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -239,7 +239,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerRemoveLayerTool",
+    "implementationType": "UnityCli.AnimatorControllerRemoveLayerTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -255,7 +255,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ControllerSetLayerWeightTool",
+    "implementationType": "UnityCli.AnimatorControllerSetLayerWeightTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -319,7 +319,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.AnimationStateTool",
+    "implementationType": "UnityCli.AnimatorGetStateTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -335,7 +335,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.AnimationPlayTool",
+    "implementationType": "UnityCli.AnimatorPlayTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -399,7 +399,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.AnimationStopTool",
+    "implementationType": "UnityCli.AnimatorStopTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -667,7 +667,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.AssetModifyTool",
+    "implementationType": "UnityCli.AssetWriteTextTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1365,7 +1365,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ConsoleGetTool",
+    "implementationType": "UnityCli.ConsoleReadTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -1563,7 +1563,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.EditorPlayTool",
+    "implementationType": "UnityCli.EditorPlayModeStartTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1593,7 +1593,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.EditorStopTool",
+    "implementationType": "UnityCli.EditorPlayModeStopTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -1877,7 +1877,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.SceneMoveObjectTool",
+    "implementationType": "UnityCli.GameObjectMoveToSceneTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2021,7 +2021,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsBakeCancelTool",
+    "implementationType": "UnityCli.LightingBakeCancelTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2037,7 +2037,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsBakeClearTool",
+    "implementationType": "UnityCli.LightingBakeClearTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2053,7 +2053,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsBakeReflectionProbeTool",
+    "implementationType": "UnityCli.LightingBakeReflectionProbeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2069,7 +2069,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsBakeSettingsTool",
+    "implementationType": "UnityCli.LightingBakeSettingsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2085,7 +2085,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "reobserve-or-fail-closed",
     "completionDriverId": "observed-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsBakeStartTool",
+    "implementationType": "UnityCli.LightingBakeStartTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2101,7 +2101,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsBakeStatusTool",
+    "implementationType": "UnityCli.LightingBakeStatusTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2117,7 +2117,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsLightProbeGroupTool",
+    "implementationType": "UnityCli.LightingLightProbeGroupTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2133,7 +2133,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsReflectionProbeTool",
+    "implementationType": "UnityCli.LightingReflectionProbeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2149,7 +2149,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsSkyboxGetTool",
+    "implementationType": "UnityCli.LightingSkyboxGetTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -2165,7 +2165,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsSkyboxSetAmbientTool",
+    "implementationType": "UnityCli.LightingSkyboxSetAmbientTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2181,7 +2181,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsSkyboxSetFogTool",
+    "implementationType": "UnityCli.LightingSkyboxSetFogTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2197,7 +2197,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsSkyboxSetMaterialTool",
+    "implementationType": "UnityCli.LightingSkyboxSetMaterialTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2213,7 +2213,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsSkyboxSetPropertiesTool",
+    "implementationType": "UnityCli.LightingSkyboxSetPropertiesTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2229,7 +2229,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsSkyboxSetReflectionTool",
+    "implementationType": "UnityCli.LightingSkyboxSetReflectionTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -2245,7 +2245,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsSkyboxSetSunTool",
+    "implementationType": "UnityCli.LightingSkyboxSetSunTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4221,7 +4221,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectAudioSettingsTool",
+    "implementationType": "UnityCli.ProjectSettingsAudioSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4237,7 +4237,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectAudioSettingsSetTool",
+    "implementationType": "UnityCli.ProjectSettingsAudioSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4253,7 +4253,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.Tools.Project.ProjectInfoTool",
+    "implementationType": "UnityCli.Tools.Project.ProjectSettingsInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4269,7 +4269,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectInputSettingsTool",
+    "implementationType": "UnityCli.ProjectSettingsInputSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4285,7 +4285,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectInputSettingsSetTool",
+    "implementationType": "UnityCli.ProjectSettingsInputSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4301,7 +4301,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectLayerAddTool",
+    "implementationType": "UnityCli.ProjectSettingsLayerAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4317,7 +4317,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectLayerRemoveTool",
+    "implementationType": "UnityCli.ProjectSettingsLayerRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4333,7 +4333,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.Tools.Project.ProjectLayersTool",
+    "implementationType": "UnityCli.Tools.Project.ProjectSettingsLayersTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4349,7 +4349,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectPlayerSettingsTool",
+    "implementationType": "UnityCli.ProjectSettingsPlayerSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4365,7 +4365,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectPlayerSettingsSetTool",
+    "implementationType": "UnityCli.ProjectSettingsPlayerSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4381,7 +4381,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectTagAddTool",
+    "implementationType": "UnityCli.ProjectSettingsTagAddTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4397,7 +4397,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectTagRemoveTool",
+    "implementationType": "UnityCli.ProjectSettingsTagRemoveTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4413,7 +4413,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.Tools.Project.ProjectTagsTool",
+    "implementationType": "UnityCli.Tools.Project.ProjectSettingsTagsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4429,7 +4429,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectTimeSettingsTool",
+    "implementationType": "UnityCli.ProjectSettingsTimeSettingsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4445,7 +4445,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ProjectTimeSettingsSetTool",
+    "implementationType": "UnityCli.ProjectSettingsTimeSettingsSetTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4461,7 +4461,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsPipelineInfoTool",
+    "implementationType": "UnityCli.RenderingPipelineInfoTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4477,7 +4477,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsPipelineSettingsTool",
+    "implementationType": "UnityCli.RenderingPipelineSettingsTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4493,7 +4493,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsQualityTool",
+    "implementationType": "UnityCli.RenderingQualityTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4509,7 +4509,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsSceneDebugTool",
+    "implementationType": "UnityCli.RenderingSceneDebugTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4525,7 +4525,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsStatsTool",
+    "implementationType": "UnityCli.RenderingStatsTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4541,7 +4541,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ReflectionMethodFindTool",
+    "implementationType": "UnityCli.RuntimeReflectionMethodFindTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4557,7 +4557,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "observed-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ReflectionMethodCallTool",
+    "implementationType": "UnityCli.RuntimeReflectionMethodInvokeTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4573,7 +4573,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.TypeSchemaTool",
+    "implementationType": "UnityCli.RuntimeReflectionTypeSchemaTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -4813,7 +4813,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "external-proof-or-unknown",
     "completionDriverId": "external-terminal-readback-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.CameraScreenshotTool",
+    "implementationType": "UnityCli.ScreenshotFromCameraTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -4989,7 +4989,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ObjectModifyTool",
+    "implementationType": "UnityCli.SerializedObjectPatchTool",
     "journalPolicy": "required",
     "mutation": true
   },
@@ -5005,7 +5005,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.ObjectGetDataTool",
+    "implementationType": "UnityCli.SerializedObjectReadTool",
     "journalPolicy": "none",
     "mutation": false
   },
@@ -6305,7 +6305,7 @@ export const GENERATED_TOOL_COMPLETION_CONTRACTS: readonly GeneratedToolCompleti
     "outcomeUnknownPolicy": "caller-responsibility",
     "completionDriverId": "atomic-typed-result-v1",
     "assemblyName": "UnityCli.Editor",
-    "implementationType": "UnityCli.GraphicsVolumeTool",
+    "implementationType": "UnityCli.VolumeListTool",
     "journalPolicy": "none",
     "mutation": false
   }

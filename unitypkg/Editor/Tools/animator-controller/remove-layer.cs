@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.remove-layer — 移除 Controller 层。</summary>
-    public class ControllerRemoveLayerTool : IUnityCliTool<ControllerRemoveLayerTool.Request, ControllerRemoveLayerTool.Result>
+    public class AnimatorControllerRemoveLayerTool : IUnityCliTool<AnimatorControllerRemoveLayerTool.Request, AnimatorControllerRemoveLayerTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public int? LayerIndex { get; set; } public string LayerName { get; set; } }
         public sealed class Result { public string Path { get; set; } public long RemovedLayerIndex { get; set; } public string RemovedLayerName { get; set; } public long RemainingLayerCount { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
@@ -17,7 +17,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             if (!r.LayerIndex.HasValue && string.IsNullOrEmpty(r.LayerName)) throw new UnityCliBridge.BridgeCommandException("E_LAYER_IDENTIFIER_REQUIRED", "animator-controller.remove-layer requires layerIndex or layerName.", "Pass either a layer index or a layer name.");
             var removeIndex = -1; var removeName = "";
             if (r.LayerIndex.HasValue) { removeIndex = r.LayerIndex.Value; if (removeIndex < 0 || removeIndex >= controller.layers.Length) throw new UnityCliBridge.BridgeCommandException("E_LAYER_NOT_FOUND", "Layer index out of range: " + removeIndex, "Run animator-controller.get-info to inspect layers."); removeName = controller.layers[removeIndex].name; }

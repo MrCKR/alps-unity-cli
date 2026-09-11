@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>rendering.pipeline.info — 读取渲染管线摘要与 QualitySettings(只读)。</summary>
-    public class GraphicsPipelineInfoTool : IUnityCliTool<GraphicsPipelineInfoTool.Request, GraphicsPipelineInfoTool.Result>
+    public class RenderingPipelineInfoTool : IUnityCliTool<RenderingPipelineInfoTool.Request, RenderingPipelineInfoTool.Result>
     {
         public sealed class Request { }
         public sealed class Result { public GraphicsSummary Graphics { get; set; } public QualitySettingsInfo QualitySettings { get; set; } }

@@ -9,7 +9,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>rendering.pipeline.settings — 设置 GraphicsSettings.defaultRenderPipeline。</summary>
-    public class GraphicsPipelineSettingsTool : IUnityCliTool<GraphicsPipelineSettingsTool.Request, GraphicsPipelineSettingsTool.Result>
+    public class RenderingPipelineSettingsTool : IUnityCliTool<RenderingPipelineSettingsTool.Request, RenderingPipelineSettingsTool.Result>
     {
         public sealed class Request { public string RenderPipeline { get; set; } }
         public sealed class Result { public GraphicsSummary Graphics { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

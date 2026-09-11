@@ -88,7 +88,7 @@ test("core B mutation tools commit exactly once before their effect", async () =
   }
 });
 
-test("reflection and profiler load commit at their first irreversible effect", async () => {
+test("runtime-reflection and profiler load commit at their first irreversible effect", async () => {
   const [reflection, profilerLoad] = await Promise.all([
     readFile(new URL("Tools/runtime-reflection/method/invoke.cs", editorUrl), "utf8"),
     readFile(new URL("Tools/profiler/load.cs", editorUrl), "utf8")

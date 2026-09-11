@@ -8,7 +8,7 @@ import { discoverLiveTools, readEditorCsSources } from "./helpers/csharp-test-he
 
 const PROJECT_TOOLS = ["project-settings.tag.add", "project-settings.tag.remove", "project-settings.layer.add", "project-settings.layer.remove"];
 
-test("project tag and layer tools expose independent persistent-write descriptors", async () => {
+test("project-settings tag and layer tools expose independent persistent-write descriptors", async () => {
   const tools = await discoverLiveTools(...PROJECT_TOOLS.map((name) => makeLiveTool({ name, summary: "Mutate TagManager.", description: "Writes ProjectSettings/TagManager.asset.", group: "project-settings", destructiveHint: true, playModeSupport: "supported", sideEffects: ["project-settings-write"], inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" } } } })));
   for (const name of PROJECT_TOOLS) {
     const tool = tools.get(name)!;
@@ -20,7 +20,7 @@ test("project tag and layer tools expose independent persistent-write descriptor
   }
 });
 
-test("bridge specs resolve for independent project tools", () => {
+test("bridge specs resolve for independent project-settings tools", () => {
   for (const name of PROJECT_TOOLS) {
     const [domain, ...rest] = name.split(".");
     const spec = bridgeCommandRegistry.lookup(domain, rest.join("."));
@@ -29,17 +29,17 @@ test("bridge specs resolve for independent project tools", () => {
   }
 });
 
-test("contract entries exist for independent project tools with present C# handlers", () => {
+test("contract entries exist for independent project-settings tools with present C# handlers", () => {
   for (const name of PROJECT_TOOLS) assert.equal(findCommandContract(name)?.csharp_handler, "present");
 });
 
-test("C# handlers exist for independent project tools", async () => {
+test("C# handlers exist for independent project-settings tools", async () => {
   const allSource = await readEditorCsSources();
   for (const command of PROJECT_TOOLS) assert.ok(allSource.includes(`Name = "${command}"`), `${command} should be an IUnityCliTool`);
   assert.doesNotMatch(allSource, /Name = "project\.(tag|layer)"/);
 });
 
-test("project tag and layer no-op returns before its sole effect barrier", async () => {
+test("project-settings tag and layer no-op returns before its sole effect barrier", async () => {
   const support = await readFile(new URL("../unitypkg/Editor/Tools/project-settings/ProjectTagLayerToolSupport.cs", import.meta.url), "utf8");
   const noOp = support.indexOf("if (!plan.Changed)");
   const commit = support.indexOf("ctx.CommitEffect()");
@@ -47,7 +47,7 @@ test("project tag and layer no-op returns before its sole effect barrier", async
   assert.match(support, /NoOpReason = add \? "already-present" : "already-absent"/);
 });
 
-test("project bridge spec forwards name and index without action", async () => {
+test("project-settings bridge spec forwards name and index without action", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/editor.js", import.meta.url), "utf8");
   assert.match(spec, /stringField\(flags, "name"\)/);
   assert.match(spec, /numberField\(flags, "index"\)/);

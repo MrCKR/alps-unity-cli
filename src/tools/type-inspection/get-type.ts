@@ -25,7 +25,7 @@ export interface ReflectTypeResult {
 export default defineTool<ReflectTypeRequest, ReflectTypeResult>({
   name: "type-inspection.get-type",
   summary: "Look up a C# type and its member names in the offline Unity reflection cache.",
-  description: "Look up a C# type and its member names in the offline Unity reflection cache. Use this to verify a type exists and read its public member names before writing C# or calling reflection.method.*. Use type-inspection.search first when the exact type name is unknown.",
+  description: "Look up a C# type and its member names in the offline Unity reflection cache. Use this to verify a type exists and read its public member names before writing C# or calling runtime-reflection.method.*. Use type-inspection.search first when the exact type name is unknown.",
   group: "type-inspection",
   destructiveHint: false,
   playModeSupport: "supported",

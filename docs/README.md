@@ -42,5 +42,4 @@
 ## 相关目录
 
 - `schemas/`：公开 JSON Schema 契约。
-- `examples/`：Editor、runtime、自定义 Tool 示例。
-- `skills/unitycli/`：AI Agent 入口 Skill 与按需引文。
+- `skills/unitycli/`：AI Agent 入口 Skill、按需引文与 `examples/` 示例。

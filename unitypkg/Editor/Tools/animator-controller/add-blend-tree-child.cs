@@ -9,7 +9,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.add-blend-tree-child — 向 BlendTree 添加子动画。</summary>
-    public class ControllerAddBlendTreeChildTool : IUnityCliTool<ControllerAddBlendTreeChildTool.Request, ControllerAddBlendTreeChildTool.Result>
+    public class AnimatorControllerAddBlendTreeChildTool : IUnityCliTool<AnimatorControllerAddBlendTreeChildTool.Request, AnimatorControllerAddBlendTreeChildTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string StateName { get; set; } public string ClipPath { get; set; } public int? LayerIndex { get; set; } public float? Threshold { get; set; } public float? PositionX { get; set; } public float? PositionY { get; set; } }
         public sealed class Result { public string Path { get; set; } public string StateName { get; set; } public long ChildCount { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
@@ -19,7 +19,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             var layerIndex = r.LayerIndex ?? 0;
             if (layerIndex < 0 || layerIndex >= controller.layers.Length) throw new UnityCliBridge.BridgeCommandException("E_LAYER_INDEX_INVALID", "Layer index out of range.", "Run animator-controller.get-info to inspect layers.");
             var sm = controller.layers[layerIndex].stateMachine;

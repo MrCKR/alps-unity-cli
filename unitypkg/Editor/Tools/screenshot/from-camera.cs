@@ -7,7 +7,7 @@ namespace UnityCli
     /// <summary>
     /// screenshot.from-camera — 从指定 Camera 渲染 PNG/JPG 截图到文件。
     /// </summary>
-    public class CameraScreenshotTool : IUnityCliTool<CameraScreenshotTool.Request, CameraCapture>
+    public class ScreenshotFromCameraTool : IUnityCliTool<ScreenshotFromCameraTool.Request, CameraCapture>
     {
         public sealed class Request
         {

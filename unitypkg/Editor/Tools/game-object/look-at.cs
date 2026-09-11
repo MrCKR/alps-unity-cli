@@ -55,7 +55,7 @@ namespace UnityCli
             var gameObjectId = gameObject.GetInstanceID();
             var direction = lookAt.transform.position - gameObject.transform.position;
             if (direction.sqrMagnitude <= Mathf.Epsilon)
-                throw new UnityCliBridge.BridgeCommandException("E_GO_LOOK_AT_DIRECTION_INVALID", "GameObject look-at target must not share the target position.", "Move one object before calling go.look-at.");
+                throw new UnityCliBridge.BridgeCommandException("E_GO_LOOK_AT_DIRECTION_INVALID", "GameObject look-at target must not share the target position.", "Move one object before calling game-object.look-at.");
             // 在 barrier 前冻结 LookAt 的不可变期望旋转，写入后只接受 fresh readback。
             var expectedRotation = Quaternion.LookRotation(direction);
             ctx.CommitEffect();

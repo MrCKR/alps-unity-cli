@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.create — 创建 AnimatorController 资产。</summary>
-    public class ControllerCreateTool : IUnityCliTool<ControllerCreateTool.Request, ControllerCreateTool.Result>
+    public class AnimatorControllerCreateTool : IUnityCliTool<AnimatorControllerCreateTool.Request, AnimatorControllerCreateTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } }
         public sealed class Result { public ControllerInfo Controller { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }

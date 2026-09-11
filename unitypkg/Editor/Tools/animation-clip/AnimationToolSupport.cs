@@ -53,7 +53,7 @@ namespace UnityCli
         {
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
             if (clip == null)
-                throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with animation.clip.create.");
+                throw new UnityCliBridge.BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with animation-clip.create.");
             return clip;
         }
 

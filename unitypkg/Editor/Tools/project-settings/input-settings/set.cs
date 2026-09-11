@@ -2,7 +2,7 @@
 namespace UnityCli
 {
     /// <summary>按唯一axis名称修改legacy Input Manager批准字段。</summary>
-    public sealed class ProjectInputSettingsSetTool : IUnityCliTool<ProjectInputSettingsSetRequest, ProjectInputSettingsSetResult>
+    public sealed class ProjectSettingsInputSettingsSetTool : IUnityCliTool<ProjectInputSettingsSetRequest, ProjectInputSettingsSetResult>
     {
         public ToolDescriptor Describe() => new()
         {

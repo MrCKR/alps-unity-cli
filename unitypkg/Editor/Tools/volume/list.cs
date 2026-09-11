@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>volume.list — 列出场景中的 Volume 组件(通过反射,兼容 URP/HDRP)。</summary>
-    public class GraphicsVolumeTool : IUnityCliTool<GraphicsVolumeTool.Request, GraphicsVolumeTool.Result>
+    public class VolumeListTool : IUnityCliTool<VolumeListTool.Request, VolumeListTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public int PageSize { get; set; } public string Cursor { get; set; } }
         public sealed class Result { public List<VolumeInfo> Volumes { get; set; } public long Count { get; set; } public PageInfo PageInfo { get; set; } }

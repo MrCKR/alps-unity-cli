@@ -9,7 +9,7 @@ namespace UnityCli
     /// <summary>
     /// rendering.quality — 读取/写入 QualitySettings(qualityLevel/vSync/antiAliasing/shadowDistance 等)。
     /// </summary>
-    public class GraphicsQualityTool : IUnityCliTool<GraphicsQualityTool.Request, GraphicsQualityTool.Result>
+    public class RenderingQualityTool : IUnityCliTool<RenderingQualityTool.Request, RenderingQualityTool.Result>
     {
         public sealed class Request
         {

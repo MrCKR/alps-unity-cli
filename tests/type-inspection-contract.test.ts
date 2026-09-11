@@ -28,7 +28,7 @@ test("type-inspection group tools exist with offline handler and supported play 
   assert.equal(search.playModeSupport, "supported");
 });
 
-test("reflect tools expose examples and argument descriptions", () => {
+test("type-inspection tools expose examples and argument descriptions", () => {
   for (const name of ["type-inspection.get-type", "type-inspection.get-member", "type-inspection.search"]) {
     const tool = findToolByName(name)!;
     assert.ok(tool.examples?.length, `${name} should expose examples`);

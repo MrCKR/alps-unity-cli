@@ -7,10 +7,6 @@ export function toolPublicRoute(tool: { name: string }): string {
   return `tools run ${tool.name}`;
 }
 
-const DOCS_TOPIC_OVERRIDES = new Map<string, string>([
-  ["type.schema", "reflection"]
-]);
-
 const LONG_RUNNING_TOOL_NAMES = new Set<string>([
   "asset.refresh",
   "build.run",
@@ -85,12 +81,6 @@ const MEDIUM_RISK_TOOL_NAMES = new Set([
   "ui.link-stylesheet",
   "ui.update-panel-settings"
 ]);
-
-/** 生成文档归类；少数跨 group 文档归属由集中 override 维护。 */
-export function toolDocsTopic(tool: { name: string; group: string; source?: ToolSource; target?: string }): string {
-  if (tool.name.startsWith("animator.") || tool.name.startsWith("animator-controller.")) return "animation";
-  return DOCS_TOPIC_OVERRIDES.get(tool.name) ?? tool.group;
-}
 
 /** 生成可用范围；除 runtime 工具外默认是 Editor session。 */
 export function toolAvailabilityScope(tool: { availabilityScope?: string; target?: string }): string {

@@ -103,7 +103,7 @@ unitycli extensions doctor --project <path>         # 扩展诊断
 
 | 扩展 | 状态 | 说明 |
 |------|------|------|
-| ProBuilder | ✅ 已实现 | 36 个扩展工具（create-shape/extrude-faces/delete-faces 等），只接受 `com.unity.probuilder@5.2.4` |
+| ProBuilder | ✅ 已实现 | 37 个扩展工具（create-shape/extrude-faces/delete-faces 等），只接受 `com.unity.probuilder@5.2.4` |
 | Cinemachine | ✅ 已实现 | Cinemachine camera/target/lens/shot 等工具，需要 `com.unity.cinemachine` |
 | VFX Graph | ✅ 已实现 | VFX Graph、ParticleSystem、LineRenderer、TrailRenderer 相关工具；VFX Graph 子集需要 `com.unity.visualeffectgraph` |
 | URP | ✅ 已实现 | URP renderer feature、volume、settings 等工具，需要 `com.unity.render-pipelines.universal` |

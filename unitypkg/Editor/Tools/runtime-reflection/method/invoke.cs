@@ -7,7 +7,7 @@ namespace UnityCli
     /// <summary>
     /// <summary>通过反射调用任意 C# 方法。</summary>
     /// </summary>
-    public class ReflectionMethodCallTool : IUnityCliTool<ReflectionMethodCallTool.Request, ReflectionMethodCallTool.Result>
+    public class RuntimeReflectionMethodInvokeTool : IUnityCliTool<RuntimeReflectionMethodInvokeTool.Request, RuntimeReflectionMethodInvokeTool.Result>
     {
         public sealed class Request
         {

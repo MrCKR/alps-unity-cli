@@ -88,7 +88,7 @@ Each Unity domain validates the complete Tool table before publishing its single
 ## Cross-Reference
 
 - Runtime and execution errors: [error-codes](./error-codes.md)
-- Tool descriptor field coverage: [tool-discovery](./tool-discovery.md) §Descriptor field coverage
+- Tool descriptor field coverage: [tool-discovery](./tool-discovery.md) §tools describe
 - Tool metadata schema: [../schemas/tool-metadata.schema.json](../schemas/tool-metadata.schema.json)
-- Security policy source: `src/security-policy.ts` and `src/security.ts`
-- AI skill (compact version): [/skills/unitycli/SKILL.md](../skills/unitycli/SKILL.md)
+- Destructive metadata source: TS tool metadata and bridge specs (`src/tools/**`, `src/bridge/domains/*.ts`) plus C# `ToolDescriptor.DestructiveHint`, cross-checked by `src/contracts/command-contract.ts`
+- AI skill entry: [skills/unitycli/SKILL.md](../skills/unitycli/SKILL.md)

@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.add-transition — 在状态间添加转换。</summary>
-    public class ControllerAddTransitionTool : IUnityCliTool<ControllerAddTransitionTool.Request, ControllerAddTransitionTool.Result>
+    public class AnimatorControllerAddTransitionTool : IUnityCliTool<AnimatorControllerAddTransitionTool.Request, AnimatorControllerAddTransitionTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string FromState { get; set; } public string ToState { get; set; } public int? LayerIndex { get; set; } public bool? HasExitTime { get; set; } public float? Duration { get; set; } public float? ExitTime { get; set; } public string Conditions { get; set; } }
         public sealed class Result { public string Path { get; set; } public string ToState { get; set; } public bool HasExitTime { get; set; } public double Duration { get; set; } public long ConditionCount { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
@@ -17,7 +17,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             if (string.IsNullOrEmpty(r.FromState) || string.IsNullOrEmpty(r.ToState)) throw new UnityCliBridge.BridgeCommandException("E_STATE_NAME_REQUIRED", "animator-controller.add-transition requires fromState and toState.", "Pass source and destination state names.");
             var layerIndex = r.LayerIndex ?? 0;
             if (layerIndex < 0 || layerIndex >= controller.layers.Length) throw new UnityCliBridge.BridgeCommandException("E_LAYER_INDEX_INVALID", "Layer index out of range.", "Run animator-controller.get-info to inspect available layers.");

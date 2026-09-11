@@ -6,7 +6,7 @@ async function source(path: string): Promise<string> {
   return readFile(new URL(path, import.meta.url), "utf8");
 }
 
-test("observed animation and bake tools wait for stable readback", async () => {
+test("observed animator and bake tools wait for stable readback", async () => {
   const [play, stop, bakeStart, bakeCancel] = await Promise.all([
     source("../unitypkg/Editor/Tools/animator/play.cs"),
     source("../unitypkg/Editor/Tools/animator/stop.cs"),

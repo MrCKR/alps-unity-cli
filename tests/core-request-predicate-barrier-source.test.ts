@@ -12,7 +12,7 @@ function body(text: string): string {
   return text.slice(text.indexOf("ExecuteAsync"));
 }
 
-test("supported dry-runs bypass direct proof refusal while graphics reads remain journal-free", async () => {
+test("supported dry-runs bypass direct proof refusal while lighting reads remain journal-free", async () => {
   const coordinator = await source("Infrastructure/UnityCliOperationCoordinator.cs");
   assert.match(coordinator, /contract\.DeliveryMode, "direct-terminal"/);
   assert.match(coordinator, /RequestRequiresMutation[\s\S]*request\.Execution\.DryRun == true\)\) return false/);

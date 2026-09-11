@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator-controller.create-blend-tree-2d — 创建 2D BlendTree 状态。</summary>
-    public class ControllerCreateBlendTree2DTool : IUnityCliTool<ControllerCreateBlendTree2DTool.Request, ControllerCreateBlendTree2DTool.Result>
+    public class AnimatorControllerCreateBlendTree2DTool : IUnityCliTool<AnimatorControllerCreateBlendTree2DTool.Request, AnimatorControllerCreateBlendTree2DTool.Result>
     {
         public sealed class Request { public string ControllerPath { get; set; } public string StateName { get; set; } public string BlendParameterX { get; set; } public string BlendParameterY { get; set; } public int? LayerIndex { get; set; } public string BlendType { get; set; } }
         public sealed class Result { public string Path { get; set; } public string StateName { get; set; } public string BlendType { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }
@@ -17,7 +17,7 @@ namespace UnityCli
         {
             var path = AnimationToolSupport.RequireControllerPath(r.ControllerPath);
             var controller = AnimationToolSupport.LoadControllerAsset(path);
-            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with controller.create.");
+            if (controller == null) throw new UnityCliBridge.BridgeCommandException("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + path, "Check the path or create one with animator-controller.create.");
             if (string.IsNullOrEmpty(r.StateName)) throw new UnityCliBridge.BridgeCommandException("E_STATE_NAME_REQUIRED", "animator-controller.create-blend-tree-2d requires stateName.", "Pass a name for the blend tree state.");
             var layerIndex = r.LayerIndex ?? 0;
             if (layerIndex < 0 || layerIndex >= controller.layers.Length) throw new UnityCliBridge.BridgeCommandException("E_LAYER_INDEX_INVALID", "Layer index out of range.", "Run animator-controller.get-info to inspect layers.");

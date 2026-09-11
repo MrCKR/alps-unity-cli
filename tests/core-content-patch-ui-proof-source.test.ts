@@ -20,7 +20,7 @@ test("content mutations validate before commit and prove fresh bytes or pixels",
   }
 });
 
-test("object patches are validate-only serialized patches with fresh readback", async () => {
+test("serialized-object patches are validate-only with fresh readback", async () => {
   const [patch, objectModify, componentModify] = await Promise.all([
     source("Infrastructure/UnityCliObjectPatch.cs"), source("Tools/serialized-object/patch.cs"), source("Tools/component/modify.cs")
   ]);

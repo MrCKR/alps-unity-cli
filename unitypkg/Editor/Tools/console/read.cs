@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace UnityCli
 {
     /// <summary>console.read — 按稳定 raw Console 位置执行有界过滤与续页。</summary>
-    public class ConsoleGetTool : IUnityCliTool<ConsoleGetTool.Request, ConsoleGetTool.Result>
+    public class ConsoleReadTool : IUnityCliTool<ConsoleReadTool.Request, ConsoleReadTool.Result>
     {
         public sealed class Request
         {

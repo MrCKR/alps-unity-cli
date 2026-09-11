@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>animator.stop — 停止/重置目标 Animator。</summary>
-    public class AnimationStopTool : IUnityCliTool<AnimationStopTool.Request, AnimationStopTool.Result>
+    public class AnimatorStopTool : IUnityCliTool<AnimatorStopTool.Request, AnimatorStopTool.Result>
     {
         public sealed class Request { public string Target { get; set; } }
         public sealed class Result { public AnimatorInfo Animator { get; set; } public List<AnimationPlannedEffect> PlannedEffects { get; set; } }

@@ -6,7 +6,7 @@ using UnityEngine;
 namespace UnityCli
 {
     /// <summary>rendering.stats — 读取渲染统计(drawCalls/batches/triangles/vertices 等)。</summary>
-    public class GraphicsStatsTool : IUnityCliTool<GraphicsStatsTool.Request, GraphicsStatsTool.Result>
+    public class RenderingStatsTool : IUnityCliTool<RenderingStatsTool.Request, RenderingStatsTool.Result>
     {
         public sealed class Request { }
         public sealed class Result { public RenderStatsInfo Stats { get; set; } }

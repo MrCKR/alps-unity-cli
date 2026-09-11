@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>lighting.skybox.set-sun — 设置 RenderSettings.sun 方向光。</summary>
-    public class GraphicsSkyboxSetSunTool : IUnityCliTool<GraphicsSkyboxSetSunTool.Request, GraphicsSkyboxSetSunTool.Result>
+    public class LightingSkyboxSetSunTool : IUnityCliTool<LightingSkyboxSetSunTool.Request, LightingSkyboxSetSunTool.Result>
     {
         public sealed class Request { public string Target { get; set; } }
         public sealed class Result { public string Sun { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

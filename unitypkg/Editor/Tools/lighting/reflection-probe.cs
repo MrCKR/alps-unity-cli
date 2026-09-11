@@ -9,7 +9,7 @@ using UnityEngine.Rendering;
 namespace UnityCli
 {
     /// <summary>lighting.reflection-probe — 管理 ReflectionProbe 组件。</summary>
-    public class GraphicsReflectionProbeTool : IUnityCliTool<GraphicsReflectionProbeTool.Request, GraphicsReflectionProbeTool.Result>
+    public class LightingReflectionProbeTool : IUnityCliTool<LightingReflectionProbeTool.Request, LightingReflectionProbeTool.Result>
     {
         public sealed class Request { public string Target { get; set; } public bool? Create { get; set; } public string Mode { get; set; } public int? Resolution { get; set; } public int? Bounces { get; set; } public bool? Hdr { get; set; } public string BoxSize { get; set; } public string BoxOffset { get; set; } }
         public sealed class Result { public GraphicsProbeTarget Target { get; set; } public ReflectionProbeInfo Probe { get; set; } public List<GraphicsPlannedEffect> PlannedEffects { get; set; } }

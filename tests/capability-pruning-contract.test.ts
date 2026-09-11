@@ -20,9 +20,7 @@ const REMOVED_TOOLS = [
 ] as const;
 
 const REMOVED_ROUTES = [
-  ["editor", "console"], ["scene", "build-settings"], ["go", "inspect"], ["scene", "data"],
-  ["graphics", "settings"], ["graphics", "pipeline-quality"], ["graphics", "probe-positions"],
-  ["graphics", "stats-counters"], ["graphics", "stats-memory"], ["physics", "raycast-all"],
+  ["editor", "console"], ["scene", "build-settings"], ["scene", "data"], ["physics", "raycast-all"],
 ] as const;
 
 test("all 18 removed identities are absent from canonical source and runtime routing", async () => {

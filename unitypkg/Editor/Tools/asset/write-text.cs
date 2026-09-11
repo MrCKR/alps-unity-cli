@@ -8,7 +8,7 @@ namespace UnityCli
     /// <summary>
     /// asset.write-text — 用新 content 覆盖文本类资产文件并重新导入。
     /// </summary>
-    public class AssetModifyTool : IUnityCliTool<AssetModifyTool.Request, AssetModifyTool.Result>
+    public class AssetWriteTextTool : IUnityCliTool<AssetWriteTextTool.Request, AssetWriteTextTool.Result>
     {
         public sealed class Request
         {
