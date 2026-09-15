@@ -18,7 +18,7 @@ compatibility: 适用于 alps-unity-cli 仓库；需要 read 和项目现有验�
 - native Tool使用完整精确名；official attribute Tool在`tools`中固定使用`UnityPipeline_<原名>`与`UnityPipeline`group，并可由attribute原名选择。
 - native精确重名优先，attribute仍可由完整前缀名选择；禁止相似名称、case、snake/camel或语义映射。
 - business argv只能按目标live `inputSchema`解析为typed input，随后复用统一dispatcher。
-- official attribute原名重复，或native占用保留前缀/group，必须使整个live registry fail closed。
+- 单个工具/同名冲突/provider 失败只隔离受影响名称：official attribute 原名重复时冲突双方都不可调用，native 占用保留前缀/group 只禁用该实现，其他工具与基础观察继续工作。
 - official attribute method必须static且非泛型；只接受同步`void`/结果值或`Task`/`Task<T>`，拒绝`async void`和其他awaitable。`RuntimeOnly=true`只投影runtime-only。
 - `[CliArg]`与`IStructuredCommandInput`必须派生封闭typed schema；`object`、Json.NET token或无法静态派生的值才显式使用`x-unityCliAnyJson`。未知字段、缺失required、递归DTO和重复投影名必须在effect前失败。
 - official attribute Tool固定使用`official-attribute` profile、`arbitrary-method-invocation` side effect、`execute-user-code` permission和`supportsDryRun:false`；参数冻结后只跨一次effect barrier，`Task`超时不得声称取消底层method。
@@ -59,6 +59,7 @@ Tool必须满足：
 - Registry v3只负责identity发现、lifecycle publication与listener generation交接；不得作为实时消息队列或主线程活性证明。
 - Health v3必须同时返回严格transport identity与只读内存main-thread pulse；transport可达不能替代pulse，pulse不能证明具体业务effect。
 - 公开`editor.state.status`固定归约为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。`conflict`只允许用于至少两个verified live project claim；观察失败或权限不足必须是`unverifiable`。
+- 实时观察失败时不得用 Registry 上一次 publication 的 PlayMode/compile/import、progress 或 lifecycle 回填当前状态：这些字段必须为 unknown，只保留本次独立观察到的 blocker。已验证进程但缺少实时响应证据时为`unresponsive`，不能断言主线程已经卡死；仅添加 `stale` 标记不代替该规则。
 - `blocked`由独立Windows modal观察证明；`editor.state`、`editor.dialogs`与`editor.dialog.click`使用exact frozen本地descriptor进入同一dispatcher，不得依赖Unity主线程或live catalog观察/恢复。其他Tool与catalog listing不得建立静态fallback。
 - Domain Reload只使用Registry lifecycle、新listener generation与该generation首个main-thread pulse交接；禁止固定时长reload marker或双轨判定。
 - 同一次mutation只允许在`editorSessionId`不变时续接完全相同的request bytes；首次POST后session改变必须禁止第二次POST，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。

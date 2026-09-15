@@ -169,7 +169,7 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void NthEntryFailureCannotReplaceThePublishedSlot()
+        public void AbortedCatalogCannotReplaceThePublishedSlot()
         {
             var previousCatalog = publishedField.GetValue(null);
             var previousHealth = healthField.GetValue(null);
@@ -180,12 +180,50 @@ namespace UnityCli.Tests
                 PublishThroughProductionSlot(candidate, 1L);
                 var publishedCandidate = publishedField.GetValue(null);
 
-                var failed = NewBuilder(1, 1);
-                Add(failed, Definition("fixture.first", "project", "native", "fixture"), "ProjectInterface");
-                Assert.That(() => Add(failed, Definition("fixture.first", "project", "native", "fixture"), "ProjectInterface"), Throws.TypeOf<TargetInvocationException>());
-                Assert.That(() => PublishThroughProductionSlot(failed, 1L), Throws.TypeOf<TargetInvocationException>());
+                // 只有共享发现基础设施失败的 abort 才使本次 publication 整体不可用。
+                var aborted = NewBuilder(1, 1);
+                Add(aborted, Definition("fixture.first", "project", "native", "fixture"), "ProjectInterface");
+                Invoke(aborted, "Abort");
+                Assert.That(() => PublishThroughProductionSlot(aborted, 1L), Throws.TypeOf<TargetInvocationException>());
                 Assert.That(publishedField.GetValue(null), Is.SameAs(publishedCandidate));
                 Assert.That(ReadPublishedSnapshot(), Is.SameAs(Property(publishedCandidate, "Snapshot").GetValue(publishedCandidate)));
+            }
+            finally
+            {
+                publishedField.SetValue(null, previousCatalog);
+                healthField.SetValue(null, previousHealth);
+            }
+        }
+
+        [Test]
+        public void IsolatableRegistrationsAreExcludedWithoutAbortingTheRemainingCatalog()
+        {
+            var previousCatalog = publishedField.GetValue(null);
+            var previousHealth = healthField.GetValue(null);
+            try
+            {
+                // 同名冲突：先到者与后来者均不可执行，但发布本身成功；来源按编译身份去重。
+                var duplicate = NewBuilder(1, 1);
+                Add(duplicate, Definition("fixture.duplicate", "built-in", "native", "fixture"), "BuiltIn");
+                Add(duplicate, Definition("fixture.duplicate", "project", "native", "fixture"), "ProjectInterface");
+                var duplicateSnapshot = PublishThroughProductionSlot(duplicate, 1L);
+                Assert.That(Int(duplicateSnapshot, "ToolCount"), Is.EqualTo(0));
+                Assert.That(Int(duplicateSnapshot, "DiagnosticCount"), Is.EqualTo(1));
+                var conflict = ((IEnumerable)Property(duplicateSnapshot, "Diagnostics").GetValue(duplicateSnapshot)).Cast<object>().Single();
+                Assert.That((string)Property(conflict, "Kind").GetValue(conflict), Is.EqualTo("conflict"));
+                Assert.That((string)Property(conflict, "Name").GetValue(conflict), Is.EqualTo("fixture.duplicate"));
+                Assert.That(((IEnumerable)Property(conflict, "Sources").GetValue(conflict)).Cast<string>().Count(), Is.EqualTo(2));
+
+                // 单个非法描述符只禁用那个名称，同轮其他健康候选照常发布。
+                var mixed = NewBuilder(1, 1);
+                Add(mixed, Definition("fixture.healthy", "project", "native", "fixture"), "ProjectInterface");
+                Add(mixed, Definition("fixture." + new string('n', 249), "project", "native", "fixture"), "ProjectInterface");
+                var mixedSnapshot = PublishThroughProductionSlot(mixed, 1L);
+                Assert.That(Int(mixedSnapshot, "ToolCount"), Is.EqualTo(1));
+                Assert.That(Int(mixedSnapshot, "DiagnosticCount"), Is.EqualTo(1));
+                var descriptorNames = ((IEnumerable)Property(mixedSnapshot, "Descriptors").GetValue(mixedSnapshot))
+                    .Cast<object>().Select(item => (string)Property(item, "Name").GetValue(item)).ToList();
+                Assert.That(descriptorNames, Is.EqualTo(new[] { "fixture.healthy" }));
             }
             finally
             {
@@ -222,35 +260,124 @@ namespace UnityCli.Tests
         }
 
         [Test]
-        public void DuplicateInvalidOrOversizedDescriptorFaultsBuilderWithoutPublication()
+        public void IsolatedProviderFaultsExcludeItsWholeContribution()
         {
-            var duplicate = NewBuilder(1, 1);
-            Add(duplicate, Definition("fixture.duplicate", "project", "native", "fixture"), "ProjectInterface");
-            Assert.That(() => Add(duplicate, Definition("fixture.duplicate", "project", "native", "fixture"), "ProjectInterface"), Throws.TypeOf<TargetInvocationException>());
-            Assert.That(() => PublishThroughProductionSlot(duplicate, 1L), Throws.TypeOf<TargetInvocationException>());
+            var previousCatalog = publishedField.GetValue(null);
+            var previousHealth = healthField.GetValue(null);
+            try
+            {
+                // provider 枚举失败后，它先前贡献的候选也必须一并撤销，不能保留半份结果。
+                var builder = NewBuilder(2, 2);
+                Add(builder, Definition("fixture.trusted", "project", "native", "fixture"), "ProjectInterface");
+                Add(builder, Definition("fixture.partial", "built-in", "native", "fixture"), "BuiltIn");
+                Invoke(builder, "RecordProviderFailure", bridgeType.Assembly.GetName().FullName, "provider could not be enumerated completely");
+                var snapshot = PublishThroughProductionSlot(builder, 1L);
 
-            var oversized = NewBuilder(1, 1);
-            Assert.That(() => Add(oversized, Definition("fixture." + new string('n', 249), "project", "native", "fixture"), "ProjectInterface"), Throws.TypeOf<TargetInvocationException>());
-            Assert.That(() => PublishThroughProductionSlot(oversized, 1L), Throws.TypeOf<TargetInvocationException>());
+                var descriptorNames = ((IEnumerable)Property(snapshot, "Descriptors").GetValue(snapshot))
+                    .Cast<object>().Select(item => (string)Property(item, "Name").GetValue(item)).ToList();
+                Assert.That(descriptorNames.Contains("fixture.partial"), Is.False);
+                Assert.That(descriptorNames.Contains("fixture.trusted"), Is.True);
+                Assert.That(Int(snapshot, "DiagnosticCount"), Is.EqualTo(1));
+                var provider = ((IEnumerable)Property(snapshot, "Diagnostics").GetValue(snapshot)).Cast<object>().Single();
+                Assert.That((string)Property(provider, "Kind").GetValue(provider), Is.EqualTo("provider"));
+            }
+            finally
+            {
+                publishedField.SetValue(null, previousCatalog);
+                healthField.SetValue(null, previousHealth);
+            }
+        }
+
+        [Test]
+        public void ConflictingToolNameIsRejectedAsNameConflictForDescribeAndRun()
+        {
+            var previousCatalog = publishedField.GetValue(null);
+            var previousHealth = healthField.GetValue(null);
+            try
+            {
+                var builder = NewBuilder(1, 1);
+                Add(builder, Definition("fixture.conflict", "project", "native", "fixture"), "ProjectInterface");
+                Add(builder, Definition("fixture.conflict", "project", "native", "fixture"), "ProjectInterface");
+                PublishThroughProductionSlot(builder, 1L);
+
+                // describe 不得静默退化成 found:false，run 不得回退到另一个同名实现。
+                var describeRequest = new UnityCli.Protocol.BridgeRequest
+                {
+                    Input = new Dictionary<string, object> { { "name", "fixture.conflict" } }
+                };
+                var describeException = Assert.Throws<TargetInvocationException>(() => bridgeType
+                    .GetMethod("ProjectToolCatalogDescribe", BindingFlags.NonPublic | BindingFlags.Static)
+                    .Invoke(null, new object[] { describeRequest, false }));
+                var describeFailure = (UnityCliBridge.BridgeCommandException)describeException.InnerException;
+                Assert.That(describeFailure.Code, Is.EqualTo("E_TOOL_NAME_CONFLICT"));
+                Assert.That(describeFailure.Transient, Is.False);
+                Assert.That(describeFailure.RetryAfterMs, Is.EqualTo(0));
+
+                var runRequest = new UnityCli.Protocol.BridgeRequest
+                {
+                    Input = new Dictionary<string, object> { { "name", "fixture.conflict" }, { "input", new Dictionary<string, object>() } }
+                };
+                var runValue = (ValueTask<object>)bridgeType
+                    .GetMethod("ProjectToolRun", BindingFlags.NonPublic | BindingFlags.Static)
+                    .Invoke(null, new object[] { runRequest, CancellationToken.None });
+                var runFailure = Assert.Throws<UnityCliBridge.BridgeCommandException>(() => runValue.AsTask().GetAwaiter().GetResult());
+                Assert.That(runFailure.Code, Is.EqualTo("E_TOOL_NAME_CONFLICT"));
+            }
+            finally
+            {
+                publishedField.SetValue(null, previousCatalog);
+                healthField.SetValue(null, previousHealth);
+            }
+        }
+
+        [Test]
+        public void ValidateProviderKindMismatchRejectsOnlyTheOffendingCandidate()
+        {
+            var previousCatalog = publishedField.GetValue(null);
+            var previousHealth = healthField.GetValue(null);
+            try
+            {
+                // official-attribute 声明没有保留前缀/group：只禁用该实现，不影响同轮合法名称。
+                var builder = NewBuilder(1, 1);
+                Add(builder, Definition("fixture.legit", "project", "native", "fixture"), "ProjectInterface");
+                Add(builder, Definition("fixture.spoof", "project", "official-attribute", "fixture"), "OfficialAttribute");
+                var snapshot = PublishThroughProductionSlot(builder, 1L);
+                var descriptorNames = ((IEnumerable)Property(snapshot, "Descriptors").GetValue(snapshot))
+                    .Cast<object>().Select(item => (string)Property(item, "Name").GetValue(item)).ToList();
+                Assert.That(descriptorNames, Is.EqualTo(new[] { "fixture.legit" }));
+                Assert.That(Int(snapshot, "DiagnosticCount"), Is.EqualTo(1));
+                var rejected = ((IEnumerable)Property(snapshot, "Diagnostics").GetValue(snapshot)).Cast<object>().Single();
+                Assert.That((string)Property(rejected, "Kind").GetValue(rejected), Is.EqualTo("rejected"));
+                Assert.That((string)Property(rejected, "Name").GetValue(rejected), Is.EqualTo("fixture.spoof"));
+            }
+            finally
+            {
+                publishedField.SetValue(null, previousCatalog);
+                healthField.SetValue(null, previousHealth);
+            }
         }
 
         [Test]
         public void MultibyteDescriptorBoundsAndCompleteCatalogEnvelopesUseUtf8Bytes()
         {
-            var accepted = NewBuilder(1, 1);
-            Assert.That(() => Add(accepted, Definition("fixture.utf8.accepted", "project", "native", new string('组', 85), new string('界', 170) + "ab"), "ProjectInterface"), Throws.Nothing);
-
-            var rejected = NewBuilder(1, 1);
-            Assert.That(() => Add(rejected, Definition("fixture.utf8.too-long", "project", "native", new string('组', 85), new string('界', 170) + "abc"), "ProjectInterface"),
-                Throws.TypeOf<TargetInvocationException>());
-            var rejectedGroup = NewBuilder(1, 1);
-            Assert.That(() => Add(rejectedGroup, Definition("fixture.utf8.group-too-long", "project", "native", new string('组', 86)), "ProjectInterface"),
-                Throws.TypeOf<TargetInvocationException>());
-
             var previousCatalog = publishedField.GetValue(null);
             var previousHealth = healthField.GetValue(null);
             try
             {
+                // 超限描述符只隔离该名称；边界仍按 wire UTF-8 字节计算。
+                var accepted = NewBuilder(1, 1);
+                Add(accepted, Definition("fixture.utf8.accepted", "project", "native", new string('组', 85), new string('界', 170) + "ab"), "ProjectInterface");
+                var acceptedSnapshot = PublishThroughProductionSlot(accepted, 1L);
+                Assert.That(Int(acceptedSnapshot, "ToolCount"), Is.EqualTo(1));
+                Assert.That(Int(acceptedSnapshot, "DiagnosticCount"), Is.EqualTo(0));
+
+                var rejected = NewBuilder(1, 1);
+                Add(rejected, Definition("fixture.utf8.too-long", "project", "native", new string('组', 85), new string('界', 170) + "abc"), "ProjectInterface");
+                Assert.That(Int(PublishThroughProductionSlot(rejected, 1L), "ToolCount"), Is.EqualTo(0));
+                var rejectedGroup = NewBuilder(1, 1);
+                Add(rejectedGroup, Definition("fixture.utf8.group-too-long", "project", "native", new string('组', 86)), "ProjectInterface");
+                Assert.That(Int(PublishThroughProductionSlot(rejectedGroup, 1L), "ToolCount"), Is.EqualTo(0));
+
                 var builder = NewBuilder(4096, 1);
                 for (var index = 0; index < 4096; index++)
                     Add(builder, Definition("fixture.bound." + index.ToString("D4"), "project", "native", "g" + index.ToString("D4"), new string('界', 170)), "ProjectInterface");

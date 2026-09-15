@@ -568,10 +568,30 @@ namespace UnityCli
                 { "progress", SnapshotProgress() },
                 { "blockers", new List<object>() },
                 { "unityVersion", Application.unityVersion },
-                { "buildStamp", BridgeBuildStamp() },
-                { "toolCatalogFingerprint", ProjectToolCatalogSnapshotReader.Read().ToolCatalogFingerprint }
+                { "buildStamp", BridgeBuildStamp() }
             };
+            // 目录指纹是可选字段：目录不可用时宁可省略，也不能阻断基础状态 publication。
+            var catalogFingerprint = CurrentToolCatalogFingerprint();
+            if (!string.IsNullOrEmpty(catalogFingerprint)) session["toolCatalogFingerprint"] = catalogFingerprint;
             return session;
+        }
+
+        /// <summary>
+        /// 基础 Registry/Health 不依赖健康可执行目录；目录失败时返回空值，
+        /// 使重用旧目录指纹的跨 reload 恢复被拒绝，而不是隐式沿用上一代证明。
+        /// </summary>
+        private static string CurrentToolCatalogFingerprint()
+        {
+            try
+            {
+                var snapshot = ProjectToolCatalogSnapshotReader.Read();
+                return snapshot == null ? null : snapshot.ToolCatalogFingerprint;
+            }
+            catch (Exception exception)
+            {
+                WriteLog("instance_publication_catalog_unavailable " + exception.GetType().Name + ": " + BoundedCatalogDiagnostic(exception.Message));
+                return null;
+            }
         }
 
         private static Dictionary<string, object> ListenerData(string now)

@@ -144,13 +144,12 @@ export async function readEditorState(context: EditorStateReadContext, dependenc
   if (observed.outcome === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], [], false);
   if (observed.outcome === "offline") return makeResult(inspected, undefined, "offline", undefined, [], [], false);
   if (observed.outcome === "unproven") return makeResult(inspected, undefined, "unverifiable", undefined, [], [], false);
-  const snapshot = parseSnapshot(session.lastUnitySnapshot, session);
-  const progress = sanitizeProgress(session.progress);
-  const blockers = [...sanitizeEditorBlockers(session.blockers), ...observed.blockers];
-  const status = observed.outcome === "unsupported"
-    ? "unresponsive"
-    : fallbackStatus(session, progress, blockers);
-  return makeResult(inspected, session, status, snapshot, progress, blockers, false);
+  // 实时观察失败后，Registry 上一次 publication 的字段不再是当前事实：
+  // 旧 PlayMode/compile/import、旧 progress 与历史 lifecycle 都不能继续作为当前状态返回。
+  // 进程身份已验证但拿不到实时响应证据时，只能报告 unresponsive，并只保留本次独立观察到的 blocker。
+  const blockers = sanitizeEditorBlockers(observed.blockers);
+  const status = blockers.length > 0 ? "blocked" : "unresponsive";
+  return makeResult(inspected, session, status, undefined, [], blockers, false);
 }
 
 /** 将身份与可响应性终态映射为稳定公开错误；blocked/transitioning 仍由具体业务决定。 */
@@ -265,12 +264,6 @@ function observedStatus(snapshot: Snapshot | undefined, progress: EditorStatePro
   if (blockers.length > 0) return "blocked";
   if (!snapshot || !isLiveSnapshot(snapshot) || progress.length > 0 || snapshotTransitioning(snapshot)) return "transitioning";
   return "ready";
-}
-function fallbackStatus(session: RegistrySession, progress: EditorStateProgress[], blockers: EditorStateBlocker[]): EditorStateResult["status"] {
-  if (session.lifecycle === "blocked" || blockers.length > 0) return "blocked";
-  if (session.lifecycle !== "ready" || progress.length > 0) return "transitioning";
-  // Registry publication是历史快照；Bridge/main-thread未响应时不能独立证明ready。
-  return "unresponsive";
 }
 function snapshotTransitioning(snapshot: Snapshot): boolean {
   for (const field of ["compile", "import", "build"] as const) if (snapshot.fields[field].known && snapshot.fields[field].value === true) return true;

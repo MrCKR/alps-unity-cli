@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.5.0",
-  "sourceHash": "d6d15a31bd5805dd0a88e7908e98fdc93e832ee479254c73fe11856aba26eb28",
+  "sourceHash": "a5694e2e494372d2b4a6dcf1612be9f2558ed3f5c6932ba87f50f07fe1bca66e",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -121,8 +121,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliDoctorDiagnostics.cs",
-      "size": 12175,
-      "sha256": "5c717649feb129f199f003f0aa90b1336a49f42c225b00117847a2ce77e22734"
+      "size": 12428,
+      "sha256": "6e40706720b88e93e9f3f7d73a7a5f2836fa82f745db4836b34ba61706f3f89d"
     },
     {
       "path": "Editor/Infrastructure/UnityCliDurableStatusCoordinator.cs",
@@ -146,8 +146,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliInstanceRegistry.cs",
-      "size": 40498,
-      "sha256": "be02b6f11781e90865a1050f535788376e114469cee96804eef90a5789cf981a"
+      "size": 41475,
+      "sha256": "28fc20bbcac0df560650d83dbe4e2c6aea63406d74bbe03891bd8cd88ec6dfb5"
     },
     {
       "path": "Editor/Infrastructure/UnityCliJson.cs",
@@ -316,13 +316,13 @@
     },
     {
       "path": "Editor/ProjectTools/OfficialAttributeToolRegistry.cs",
-      "size": 55915,
-      "sha256": "a0c9eebce5b796126d766519ecde8b6aebff2e591e1f5d5e7bf9a2e6e0ecc125"
+      "size": 56767,
+      "sha256": "b8e05b032bb0444dab4bf394a4bf8914c44182b488410bec20d851d35432de87"
     },
     {
       "path": "Editor/ProjectTools/ProjectToolRegistry.cs",
-      "size": 68378,
-      "sha256": "cd3531c60944aee8fb04aaeb9049642c03bad52b14ec593da1a7ef39a9984b75"
+      "size": 76479,
+      "sha256": "50a4f376e9f00ed75a62cf96ce1894ff3661561841896e3ae9dc87277497d99d"
     },
     {
       "path": "Editor/ProjectTools/ProjectToolSchemaValidator.cs",
@@ -331,8 +331,8 @@
     },
     {
       "path": "Editor/ProjectTools/RegisteredTool.cs",
-      "size": 28944,
-      "sha256": "1271714693974811350ce878b7cda02d99f603a4b0f6b0359d87cf55dc47949d"
+      "size": 41704,
+      "sha256": "b20addf16d83858bfa83e9fda094d7cf0d83e6507426ef57c2994829fcc6223a"
     },
     {
       "path": "Editor/ProjectTools/UnityCliProjectToolContext.cs",
@@ -1846,8 +1846,8 @@
     },
     {
       "path": "Editor/UnityCliBridge.cs",
-      "size": 24777,
-      "sha256": "c5916dc392ee6adba68aca27f7c59a25d9963fc234ef4baaccad911f2efa23a5"
+      "size": 24851,
+      "sha256": "5fd369c5ac73bae1bf4678f78ed0f458ee55ece16941d7c8709eb8359fd58a79"
     },
     {
       "path": "Editor/UnityCliBridgeBuildInfo.cs",
@@ -2006,8 +2006,8 @@
     },
     {
       "path": "Tests/Editor/UnityCliToolCatalogTests.cs",
-      "size": 32468,
-      "sha256": "abe2e886ca4591390ee39c4b8fe0c9d5b4a923a8a78b5891969ff39765e773a3"
+      "size": 40316,
+      "sha256": "ff5d03e945d1456c892215d8cab72d04ae776c736485a01a405a6157c28e6748"
     },
     {
       "path": "Tests/Runtime/UnityCli.Runtime.Tests.asmdef",

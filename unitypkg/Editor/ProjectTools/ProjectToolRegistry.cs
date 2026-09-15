@@ -51,20 +51,26 @@ namespace UnityCli
         {
             if (builder == null) throw new ArgumentNullException("builder");
             if (definition == null) throw new ArgumentNullException("definition");
-            ValidateOfficialAttributeNamespace(definition);
+            var namespaceFailure = ReservedNamespaceFailure(definition);
+            if (namespaceFailure != null)
+            {
+                builder.RecordToolFailure(definition.Name, namespaceFailure);
+                return;
+            }
             builder.Add(definition, providerKind);
         }
 
-        /// <summary>保留namespace只属于official attribute投影；任一owner违规使整轮pending registry作废。</summary>
-        private static void ValidateOfficialAttributeNamespace(RegisteredTool definition)
+        /// <summary>保留namespace只属于official attribute投影；违规实现只被禁用，不掠夺合法权威名称。</summary>
+        private static string ReservedNamespaceFailure(RegisteredTool definition)
         {
             var officialAttribute = string.Equals(definition.ContractProfile, "official-attribute", StringComparison.Ordinal);
             var usesPrefix = definition.Name.StartsWith(OfficialAttributeToolPrefix, StringComparison.Ordinal);
             var usesGroup = string.Equals(definition.Group, OfficialAttributeToolGroup, StringComparison.Ordinal);
             if (officialAttribute && (!usesPrefix || !usesGroup))
-                throw new InvalidOperationException("Official attribute Tool must use the reserved UnityPipeline_ name prefix and UnityPipeline group: " + definition.Name + ".");
+                return "Official attribute Tool must use the reserved UnityPipeline_ name prefix and UnityPipeline group: " + definition.Name + ".";
             if (!officialAttribute && (usesPrefix || usesGroup))
-                throw new InvalidOperationException("Native Tool cannot use the reserved UnityPipeline_ name prefix or UnityPipeline group: " + definition.Name + ".");
+                return "Native Tool cannot use the reserved UnityPipeline_ name prefix or UnityPipeline group: " + definition.Name + ".";
+            return null;
         }
 
         /// <summary>InitializeOnLoad静态构造函数调用一次；局部pending完整成功后才原子发布。</summary>
@@ -100,19 +106,48 @@ namespace UnityCli
             var ownership = RegistryOwnershipResolver.Load(candidates);
             foreach (var assembly in candidates)
             {
-                builder.RecordProviderMetadata(assembly.GetName().FullName);
+                var assemblyIdentity = assembly.GetName().FullName;
+                builder.RecordProviderMetadata(assemblyIdentity);
                 Type[] types;
                 try { types = assembly.GetTypes(); }
-                catch (ReflectionTypeLoadException exception) { throw new InvalidOperationException("Unable to inspect every type in Tool provider assembly " + assembly.FullName + ".", exception); }
-                catch (Exception exception) { throw new InvalidOperationException("Unable to inspect Tool provider assembly " + assembly.FullName + ".", exception); }
+                catch (Exception exception)
+                {
+                    // provider 自身无法完整枚举时排除它已贡献的全部候选，其他可信 provider 继续。
+                    builder.RecordProviderFailure(assemblyIdentity, ProviderFailureDiagnostic(assembly, exception));
+                    WriteLog("tool_provider_isolated assembly=" + assemblyIdentity + " error=" + ProviderFailureDiagnostic(assembly, exception));
+                    continue;
+                }
                 foreach (var type in types)
                 {
                     if (type == null) continue;
-                    TryRegisterInterfaceProjectTool(builder, ownership, assembly, type);
-                    TryRegisterOfficialAttributeTools(builder, ownership, assembly, type);
+                    try
+                    {
+                        TryRegisterInterfaceProjectTool(builder, ownership, assembly, type);
+                        TryRegisterOfficialAttributeTools(builder, ownership, assembly, type);
+                    }
+                    catch (Exception exception)
+                    {
+                        // 未归类失败无法归因到单个候选：按 provider 级隔离，撤销它已贡献的候选并继续其他 provider。
+                        builder.RecordProviderFailure(assemblyIdentity, ProviderFailureDiagnostic(assembly, exception));
+                        WriteLog("tool_provider_isolated assembly=" + assemblyIdentity + " error=" + ProviderFailureDiagnostic(assembly, exception));
+                        break;
+                    }
                 }
             }
             ownership.ValidateComplete();
+        }
+
+        /// <summary>provider 枚举失败的诊断只取有界异常链，不展开完整 LoaderExceptions 集合。</summary>
+        private static string ProviderFailureDiagnostic(Assembly assembly, Exception exception)
+        {
+            var text = "Unable to inspect every type in Tool provider assembly " + (assembly == null ? "<unknown>" : assembly.FullName) + ". " + ExceptionChain(exception);
+            var loader = exception as ReflectionTypeLoadException;
+            if (loader != null && loader.LoaderExceptions != null)
+            {
+                var first = loader.LoaderExceptions.FirstOrDefault(item => item != null);
+                if (first != null) text += " First loader exception: " + first.GetType().Name + ": " + first.Message;
+            }
+            return BoundedCatalogDiagnostic(text);
         }
 
         private static bool ProjectToolCatalogReady()
@@ -126,7 +161,8 @@ namespace UnityCli
             var candidate = builder.Publish(elapsedMilliseconds, WriteProjectToolCatalogInitializedLog);
             Volatile.Write(ref publishedProjectToolCatalog, candidate);
             Volatile.Write(ref projectToolCatalogHealth, new UnityCliToolCatalogHealthSnapshot(
-                true, candidate.Snapshot.ToolCount, string.Empty, string.Empty));
+                true, candidate.Snapshot.ToolCount, string.Empty, string.Empty,
+                candidate.Snapshot.Diagnostics, candidate.Snapshot.DiagnosticCount));
             return candidate.Snapshot;
         }
 
@@ -140,7 +176,20 @@ namespace UnityCli
                 + " extension=" + snapshot.ExtensionToolCount.ToString(CultureInfo.InvariantCulture)
                 + " projectInterface=" + snapshot.ProjectInterfaceToolCount.ToString(CultureInfo.InvariantCulture)
                 + " officialAttribute=" + snapshot.OfficialAttributeToolCount.ToString(CultureInfo.InvariantCulture)
+                + " isolated=" + snapshot.DiagnosticCount.ToString(CultureInfo.InvariantCulture)
                 + " elapsedMs=" + snapshot.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture));
+            if (snapshot.DiagnosticCount > 0)
+                WriteLog("tool_catalog_isolated_registrations count=" + snapshot.DiagnosticCount.ToString(CultureInfo.InvariantCulture)
+                    + " detail=" + IsolatedRegistrationSummary(snapshot));
+        }
+
+        /// <summary>隔离诊断只写一条有界汇总，不逐工具同步追加日志。</summary>
+        private static string IsolatedRegistrationSummary(UnityCliToolCatalogSnapshot snapshot)
+        {
+            var parts = snapshot.Diagnostics.Take(8).Select(item => item.Kind + ":" + item.Name + "(" + string.Join(",", item.Sources.ToArray()) + ")").ToArray();
+            var text = string.Join(" | ", parts);
+            if (snapshot.DiagnosticTruncated) text += " | truncated";
+            return BoundedCatalogDiagnostic(text);
         }
 
         /// <summary>执行入口读取唯一 published executable table；失败 domain 内绝不重建。</summary>
@@ -171,14 +220,90 @@ namespace UnityCli
             var result = new Dictionary<string, object>
             {
                 { "ready", health.Ready },
-                { "toolCount", (long)health.ToolCount }
+                { "toolCount", (long)health.ToolCount },
+                { "isolatedCount", (long)health.DiagnosticCount },
+                { "isolatedTruncated", health.DiagnosticTruncated }
             };
             if (!health.Ready)
             {
                 result["failure"] = BoundedCatalogDiagnostic(health.Failure);
                 result["nextActions"] = new[] { health.NextAction };
             }
+            else if (health.DiagnosticCount > 0)
+            {
+                result["isolated"] = health.Diagnostics.Select(ToolCatalogDiagnosticData).ToList();
+            }
             return result;
+        }
+
+        /// <summary>公开诊断 DTO 只含编译元数据身份，不带源码路径、堆栈或内部路由字段。</summary>
+        private static Dictionary<string, object> ToolCatalogDiagnosticData(UnityCliToolCatalogDiagnostic diagnostic)
+        {
+            var data = new Dictionary<string, object>
+            {
+                { "kind", diagnostic.Kind },
+                { "name", diagnostic.Name },
+                { "reason", diagnostic.Reason },
+                { "sources", diagnostic.Sources.ToArray() }
+            };
+            if (diagnostic.Truncated) data["sourcesTruncated"] = true;
+            return data;
+        }
+
+        /// <summary>名称不在可执行目录时按同一冻结判定区分冲突、被拒绝与真正不存在；无可归因结论时返回 null。</summary>
+        private static BridgeCommandException CatalogToolUnavailable(UnityCliPublishedToolCatalog catalog, string name)
+        {
+            if (catalog == null || string.IsNullOrEmpty(name)) return null;
+            var index = catalog.DiagnosticIndex;
+            if (index.IsConflicted(name))
+                return new BridgeCommandException(
+                    "E_TOOL_NAME_CONFLICT",
+                    "Tool name is registered by multiple implementations in the current Unity domain: " + name + ".",
+                    CatalogDiagnosticDetails(index, name),
+                    CatalogDiagnosticNextActions(),
+                    false,
+                    0);
+            string reason;
+            if (index.TryRejectedReason(name, out reason))
+                return new BridgeCommandException(
+                    "E_TOOL_REGISTRATION_FAILED",
+                    "Tool was rejected while building the current Unity domain catalog: " + name + ". " + reason,
+                    CatalogDiagnosticDetails(index, name),
+                    CatalogDiagnosticNextActions(),
+                    false,
+                    0);
+            if (catalog.Snapshot.DiagnosticTruncated || index.NamesTruncated)
+                return new BridgeCommandException(
+                    "E_TOOL_REGISTRATION_FAILED",
+                    "Tool is not in the executable catalog and this domain reported more registration faults than its bounded diagnostic list can show: " + name + ".",
+                    CatalogDiagnosticDetails(index, name),
+                    CatalogDiagnosticNextActions(),
+                    false,
+                    0);
+            return null;
+        }
+
+        /// <summary>details 只列有界来源，不暴露 listener、端口或项目路径。</summary>
+        private static Dictionary<string, object> CatalogDiagnosticDetails(UnityCliToolCatalogDiagnosticIndex index, string name)
+        {
+            var details = new Dictionary<string, object> { { "toolName", name } };
+            var diagnostic = index.Entries.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.Ordinal));
+            if (diagnostic != null)
+            {
+                details["reason"] = diagnostic.Reason;
+                details["sources"] = diagnostic.Sources.ToArray();
+                if (diagnostic.Truncated) details["sourcesTruncated"] = true;
+            }
+            return details;
+        }
+
+        private static string[] CatalogDiagnosticNextActions()
+        {
+            return new[]
+            {
+                "Fix the reported Tool definition or duplicate command name in the selected Unity project, then let Unity compile and reload the domain before rediscovering the catalog.",
+                "Run unitycli doctor to read the bounded catalog isolation summary for this instance."
+            };
         }
 
         private static string BoundedCatalogDiagnostic(string value)
@@ -247,7 +372,8 @@ namespace UnityCli
             }
             catch (Exception e)
             {
-                throw new InvalidOperationException("Tool implementation cannot be instantiated: " + type.FullName + ".", e);
+                builder.RecordToolFailure(type.FullName, ExceptionChain(new InvalidOperationException("Tool implementation cannot be instantiated: " + type.FullName + ".", e)));
+                return;
             }
 
             ToolDescriptor descriptor = null;
@@ -260,13 +386,26 @@ namespace UnityCli
             }
             catch (Exception e)
             {
-                throw new InvalidOperationException("Tool descriptor failed: " + type.FullName + ".", e);
+                builder.RecordToolFailure(type.FullName, ExceptionChain(new InvalidOperationException("Tool descriptor failed: " + type.FullName + ".", e)));
+                return;
             }
             if (descriptor == null || string.IsNullOrEmpty(descriptor.Name))
-                throw new InvalidOperationException("Tool descriptor is incomplete: " + type.FullName + ".");
+            {
+                builder.RecordToolFailure(type.FullName, "Tool descriptor is incomplete: " + type.FullName + ".");
+                return;
+            }
 
             RegisteredTool definition;
-            var ownership = ownershipResolver.Resolve(type, descriptor.Name);
+            RegistryToolOwnership ownership;
+            try
+            {
+                ownership = ownershipResolver.Resolve(type, descriptor.Name);
+            }
+            catch (Exception exception)
+            {
+                builder.RecordToolFailure(descriptor.Name, ExceptionChain(new InvalidOperationException("Tool ownership could not be resolved: " + type.FullName + ".", exception)));
+                return;
+            }
             try
             {
                 var factory = typeof(UnityCliBridge).GetMethod("CreateRegisteredTool", BindingFlags.Static | BindingFlags.NonPublic)
@@ -277,7 +416,8 @@ namespace UnityCli
             {
                 var diagnostics = ExceptionChain(exception);
                 WriteLog("custom_tool_registration_failed type=" + type.FullName + " error=" + diagnostics);
-                throw new InvalidOperationException("Tool registration failed: " + type.FullName + ": " + diagnostics, exception);
+                builder.RecordToolFailure(descriptor.Name, "Tool registration failed: " + type.FullName + ": " + diagnostics);
+                return;
             }
             var providerKind = string.Equals(ownership.Source, "built-in", StringComparison.Ordinal)
                 ? UnityCliToolProviderKind.BuiltIn
@@ -652,7 +792,8 @@ namespace UnityCli
         {
             if (runtimeOnly) RequireProjectToolCatalogInputKeys(request, "name");
             else RequireProjectToolCatalogInputKeys(request, "name", "fallbackName");
-            var catalog = ProjectToolCatalogSnapshotReader.Read();
+            var published = ReadPublishedProjectToolCatalog();
+            var catalog = published.Snapshot;
             var args = request.DeserializeArgs<ProjectToolCatalogArgs>() ?? new ProjectToolCatalogArgs();
             if (string.IsNullOrWhiteSpace(args.Name) || Utf8ByteCount(args.Name) > 256)
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "Catalog describe name is required and must not exceed 256 UTF-8 bytes.");
@@ -664,6 +805,13 @@ namespace UnityCli
             var definition = catalog.Descriptors.FirstOrDefault(tool => string.Equals(tool.Name, args.Name, StringComparison.Ordinal) && availableForTarget(tool));
             if (definition == null && args.FallbackName != null)
                 definition = catalog.Descriptors.FirstOrDefault(tool => string.Equals(tool.Name, args.FallbackName, StringComparison.Ordinal) && availableForTarget(tool));
+            if (definition == null)
+            {
+                // 冲突/被拒绝的名称不能静默退化成 found:false，否则 AI 只能看到“工具不存在”。
+                var unavailable = CatalogToolUnavailable(published, args.Name)
+                    ?? (args.FallbackName != null ? CatalogToolUnavailable(published, args.FallbackName) : null);
+                if (unavailable != null) throw unavailable;
+            }
             var found = definition != null;
             var result = new Dictionary<string, object> { { "catalogGeneration", generation }, { "found", found } };
             if (found)
@@ -750,6 +898,9 @@ namespace UnityCli
             var name = args.Name;
             if (string.IsNullOrEmpty(name) || !catalog.ExecutableTools.ContainsKey(name))
             {
+                // 同一冻结判定优先于泛化 E_TOOL_NOT_FOUND，且不静默回退到其他实现。
+                var unavailable = CatalogToolUnavailable(catalog, name);
+                if (unavailable != null) throw unavailable;
                 throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unitycli tools group --instance <id|projectPath|alias> or tools search <keyword> to inspect the connected instance catalog.");
             }
 

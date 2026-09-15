@@ -38,6 +38,9 @@ function healthyCatalog(overrides: Record<string, unknown> = {}): Record<string,
       providerMetadataReadCount: 20,
       aggregateSuccessLogCount: 1,
     },
+    isolatedCount: 0,
+    isolatedTruncated: false,
+    isolated: [],
     ...overrides,
   };
 }
@@ -240,6 +243,37 @@ test("doctor accepts the immutable catalog aggregate without per-Tool pin state"
   assert.doesNotMatch(JSON.stringify(catalog), /fingerprint|rePin|blockedTools|blockedCount/i);
 });
 
+test("doctor reports isolated catalog registrations as a bounded warning instead of a connection failure", async (t) => {
+  const fixture = await doctorFixture();
+  t.after(() => fixture.health.close());
+  const bridge = healthyDoctorBridge(fixture);
+  const isolated = [{
+    kind: "conflict",
+    name: "UnityPipeline_automation_get_battle_state",
+    reason: "Multiple Tool registrations use the same exact name: UnityPipeline_automation_get_battle_state.",
+    sources: ["Game.Editor!HeroSkillAutomationCommands.automation_get_battle_state", "Game.Editor!AiGameAutomation.get_battle_state"],
+    sourcesTruncated: false,
+  }];
+  const result = await handleDoctorCommand({ instance: fixture.identity.instanceId }, await doctorRuntime(fixture, async (payload) => {
+    if (payload.command === "internal.doctor.catalog") {
+      return { ok: true, requestId: payload.requestId, data: healthyCatalog({
+        toolCount: 326,
+        providerCounts: { builtIn: 300, extension: 10, projectInterface: 15, officialAttribute: 1 },
+        isolatedCount: 1,
+        isolatedTruncated: false,
+        isolated,
+      }) };
+    }
+    return bridge(payload);
+  }), "req_doctor_catalog_isolated");
+  const catalog = checks(result).find((check) => check.name === "catalog_integrity");
+  assert.equal(catalog?.status, "warn");
+  assert.equal(catalog?.details?.toolCount, 326);
+  assert.equal(catalog?.details?.isolatedCount, 1);
+  assert.deepEqual(catalog?.details?.isolated, isolated);
+  assert.doesNotMatch(JSON.stringify(catalog), /BRIDGE_CONNECTION_FAILED/);
+});
+
 test("doctor rejects malformed catalog aggregate and publication boundaries", async (t) => {
   const fixture = await doctorFixture();
   t.after(() => fixture.health.close());
@@ -273,6 +307,10 @@ test("doctor rejects malformed catalog aggregate and publication boundaries", as
     healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, providerMetadataReadCount: 19 } }),
     healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, aggregateSuccessLogCount: 2 } }),
     healthyCatalog({ publicationDiagnostics: { ...publicationDiagnostics, internalPath: "forbidden" } }),
+    healthyCatalog({ isolatedCount: 1 }),
+    healthyCatalog({ isolated: [{ kind: "conflict", name: "fixture.conflict", reason: "duplicate", sources: ["asm!Type"] }] }),
+    healthyCatalog({ isolatedCount: 1, isolated: [{ kind: "unknown-kind", name: "fixture.conflict", reason: "duplicate", sources: ["asm!Type"] }] }),
+    healthyCatalog({ isolatedCount: 1, isolatedTruncated: true, isolated: [{ kind: "conflict", name: "fixture.conflict", reason: "duplicate", sources: ["asm!Type", 7] }] }),
   ];
 
   for (const [index, catalog] of invalidCatalogs.entries()) {

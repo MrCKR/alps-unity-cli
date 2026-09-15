@@ -165,22 +165,20 @@ namespace UnityCli
             StartListener();
         }
 
-        /// <summary>handoff 与 Tool snapshot 均完成后才允许发布 listener；失败时整个 startup fail closed。</summary>
+        /// <summary>
+        /// handoff 完成后即可发布基础 listener。目录局部隔离或整体不可用改由 catalog health 单独表达，
+        /// 不再阻断状态观察与诊断；只有 handoff 自身失败才继续 fail closed。
+        /// </summary>
         private static bool CompleteBridgeStartup(out string handoffState, out string handoffError)
         {
             WriteLog("bridge_pipeline_handoff_started");
             if (!UnityCliPipelineHandoff.EnsureAppliedOnce(out handoffState, out handoffError)) return false;
-            try
+            if (!ProjectToolCatalogReady())
             {
-                ReadPublishedProjectToolCatalogSnapshot();
-                return true;
+                var health = ProjectToolCatalogHealthSnapshotReader.Read();
+                WriteLog("bridge_startup_catalog_unavailable degraded=true failure=" + BoundedCatalogDiagnostic(health.Failure));
             }
-            catch (Exception exception)
-            {
-                handoffState = "tool-registry-unhealthy";
-                handoffError = exception.GetType().Name + ": " + exception.Message;
-                return false;
-            }
+            return true;
         }
 
         private static void StartListener()

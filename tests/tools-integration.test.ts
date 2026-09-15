@@ -6,6 +6,7 @@ import { readEditorCatalogDescriptor, readEditorCatalogSummary, readRuntimeCatal
 import { execute } from "../src/cli.js";
 import type { ToolMetadata } from "../src/tools/metadata/index.js";
 import { makeLiveTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
+import { resolveCatalogTool } from "../src/tools/catalog.js";
 import { LocalEffectBarrier, completeUnconsumedRootAdmission, settleToolExecutionAtDeadline } from "../src/tools/dispatcher.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
@@ -909,4 +910,39 @@ test("unknown tools and subcommands return stable errors with current search gui
   const subcommand = await execute(["tools", "unknown"], disconnected);
   assert.ok(!subcommand.ok);
   assert.equal(subcommand.error?.code, "UNKNOWN_TOOLS_COMMAND");
+});
+
+test("live catalog name conflicts surface as E_TOOL_NAME_CONFLICT instead of not-found or a silent fallback", async () => {
+  const calls: string[] = [];
+  const conflict = {
+    ok: false as const,
+    error: {
+      code: "E_TOOL_NAME_CONFLICT",
+      message: "Tool name is registered by multiple implementations in the current Unity domain: UnityPipeline_automation_get_battle_state.",
+      nextActions: ["Fix the reported Tool definition or duplicate command name in the selected Unity project, then let Unity compile and reload the domain before rediscovering the catalog."],
+      transient: false,
+      retryAfterMs: 0,
+      details: { toolName: "UnityPipeline_automation_get_battle_state", sources: ["Game.Editor!HeroSkillAutomationCommands.automation_get_battle_state", "Game.Editor!AiGameAutomation.get_battle_state"] },
+    },
+  };
+  const runtime = {
+    ...disconnected,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      calls.push(payload.command);
+      if (payload.command === "catalog.editor.describe") return { ...conflict, requestId: payload.requestId };
+      if (payload.command === "catalog.player.describe") {
+        return { ok: false as const, requestId: payload.requestId, error: { code: "E_RUNTIME_NOT_RUNNING", message: "No Development Player is running.", nextActions: [], transient: false, retryAfterMs: 0 } };
+      }
+      throw new Error(`unexpected command ${payload.command}`);
+    },
+  } as never;
+
+  // 冲突名称必须在第一个精确目标上就终止，不得当作不存在，也不得询问其他目标后回退。
+  const resolved = await resolveCatalogTool("UnityPipeline_automation_get_battle_state", {}, runtime, "req_conflict_describe");
+  assert.equal(resolved.ok, false);
+  if (resolved.ok) return;
+  assert.equal(resolved.error.code, "E_TOOL_NAME_CONFLICT");
+  assert.deepEqual(calls, ["catalog.editor.describe"]);
+  assert.doesNotMatch(JSON.stringify(resolved), /E_TOOL_NOT_FOUND|E_TOOL_NOT_FOUND_FOR_TARGET/);
+  assert.match(JSON.stringify(resolved), /automation_get_battle_state/);
 });

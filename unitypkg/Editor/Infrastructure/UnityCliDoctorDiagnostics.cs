@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
@@ -53,6 +54,9 @@ namespace UnityCli
             {
                 { "identity", DoctorCatalogIdentity },
                 { "toolCount", (long)catalog.ToolCount },
+                { "isolatedCount", (long)catalog.DiagnosticCount },
+                { "isolatedTruncated", catalog.DiagnosticTruncated },
+                { "isolated", catalog.Diagnostics.Select(ToolCatalogDiagnosticData).ToList() },
                 { "providerCounts", new Dictionary<string, object>
                     {
                         { "builtIn", (long)catalog.BuiltInToolCount },

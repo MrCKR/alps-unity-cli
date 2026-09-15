@@ -51,7 +51,9 @@ test("Pipeline package provider在注册前抑制且其他attribute继续共享p
   ]);
   assert.match(registry, /var builder = new UnityCliToolCatalogBuilder\(\)/);
   assert.match(registry, /PublishProjectToolCatalog\(builder/);
-  assert.match(registry, /ReflectionTypeLoadException exception\)[^\n]*throw new InvalidOperationException/);
+  // provider 枚举失败不再使整张表作废；它排除该 provider 已贡献的候选并继续其他 provider。
+  assert.match(registry, /builder\.RecordProviderFailure\(assemblyIdentity, ProviderFailureDiagnostic\(assembly, exception\)\)/);
+  assert.doesNotMatch(registry, /ReflectionTypeLoadException exception\)[^\n]*throw new InvalidOperationException/);
   assert.doesNotMatch(registry, /ReflectionTypeLoadException exception\)[^\n]*types = exception\.Types/);
   assert.match(registry, /catch \(Exception exception\)[\s\S]*?UnityCliToolCatalogHealthSnapshot/);
   assert.match(registry, /ownership\.ValidateComplete\(\)/);
@@ -68,9 +70,12 @@ test("Pipeline package provider在注册前抑制且其他attribute继续共享p
   assert.match(official, /Name = toolName/);
   assert.match(official, /Group = OfficialAttributeToolGroup/);
   assert.match(official, /RegisterProjectTool\(builder, definition, UnityCliToolProviderKind\.OfficialAttribute\)/);
-  assert.match(registeredTool, /Duplicate tool registration/);
-  assert.match(registry, /ValidateOfficialAttributeNamespace\(definition\)/);
+  // 同名注册不再 fault 整张表：先到者与后来者同时不可执行，并记入有界冲突诊断。
+  assert.match(registeredTool, /diagnostics\.AddConflict\(definition\.Name/);
+  assert.match(registeredTool, /internal void Abort\(\) \{ faulted = true; \}/);
+  assert.match(registry, /ReservedNamespaceFailure\(definition\)/);
   assert.match(registry, /Native Tool cannot use the reserved UnityPipeline_/);
+  assert.match(registry, /builder\.RecordToolFailure\(definition\.Name, namespaceFailure\)/);
 });
 
 test("official descriptors expose the conservative machine contract", async () => {

@@ -18,14 +18,14 @@ unitycli command --instance <id|projectPath|alias>
 3. `command UnityPipeline_<name>`显式选择该attribute Tool。
 4. 不做snake_case、camelCase、dotted name、相似能力或语义映射；未注册名称返回`E_TOOL_NOT_FOUND_FOR_TARGET`。
 
-`[CliCommand("test")]`在`tools`目录中只显示为`UnityPipeline_test`，group固定为`UnityPipeline`。两个attribute方法使用同一原名，或native Tool占用`UnityPipeline_`前缀/`UnityPipeline` group，会使整个live registry fail closed。
+`[CliCommand("test")]`在`tools`目录中只显示为`UnityPipeline_test`，group固定为`UnityPipeline`。同名冲突时两个实现都不可调用；native Tool占用`UnityPipeline_`前缀/`UnityPipeline` group时只禁用该实现。两种情形都只隔离受影响的名称，其他工具和Bridge基础观察继续工作，`tools describe`与`doctor`返回有界冲突来源。
 
 ## Official Attribute Profile
 
 registry按完整类型名识别Unity官方`[CliCommand]`、`[CliArg]`和`IStructuredCommandInput`，core package不建立对`com.unity.pipeline`的编译依赖。method声明assembly属于exact Package ID `com.unity.pipeline`时，该provider已由native能力吸收并在注册前整体抑制；项目与其他Package中的attribute方法不受影响。过滤不使用命令名、namespace、assembly名称或attribute定义assembly。attributed method必须是static、非泛型，并且只接受以下返回形态：
 
 - 同步`void`或同步结果值。
-- `Task`或`Task<T>`；`async void`和其他自定义awaitable使整个registry fail closed。
+- `Task`或`Task<T>`；`async void`和其他自定义awaitable使该命令被隔离为不可调用，其他命令继续发布。
 - `RuntimeOnly=true`固定投影为runtime-only；其余attribute Tool投影为editor target。
 
 每个method参数按`[CliArg]`名称、描述、`Required`和CLR默认值生成schema。schema default和生成example表示合法默认行为与调用形状，不代表调用方当前任务意图；任务明确指定业务值时，第一次执行必须使用任务值，不能先以default/example做连通性或probe调用。实现`IStructuredCommandInput`的具体DTO按public writable member递归生成封闭object schema，未知字段、缺少required member、递归类型和重复投影名在effect前失败。scalar、enum、date-time、UUID、dictionary和array保持typed schema；`object`、Json.NET `JToken`族与其他无法静态派生的值显式使用`x-unityCliAnyJson`，不会猜测字符串格式或静默套用默认值。

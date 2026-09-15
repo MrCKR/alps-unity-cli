@@ -56,11 +56,22 @@ interface DoctorCatalogPublicationDiagnostics {
   aggregateSuccessLogCount: number;
 }
 
+interface DoctorCatalogIsolatedEntry {
+  kind: string;
+  name: string;
+  reason: string;
+  sources: string[];
+  sourcesTruncated: boolean;
+}
+
 interface DoctorCatalogData {
   identity: typeof DOCTOR_CATALOG_IDENTITY;
   toolCount: number;
   providerCounts: DoctorCatalogProviderCounts;
   publicationDiagnostics: DoctorCatalogPublicationDiagnostics;
+  isolatedCount: number;
+  isolatedTruncated: boolean;
+  isolated: DoctorCatalogIsolatedEntry[];
 }
 
 export interface DoctorRuntime extends BridgeRuntime {
@@ -288,15 +299,23 @@ async function checkCatalogIntegrity(
   }
   const data = doctorCatalogData(result.data);
   if (!data) return invalidLiveCheck("catalog_integrity", "Catalog integrity read returned an invalid bounded DTO.");
+  const isolated = data.isolatedCount > 0;
   return {
     name: "catalog_integrity",
-    status: "pass",
-    message: `The immutable domain catalog contains ${data.toolCount} registered Tool(s).`,
+    status: isolated ? "warn" : "pass",
+    message: isolated
+      ? `The immutable domain catalog published ${data.toolCount} Tool(s) and isolated ${data.isolatedCount} registration fault(s) instead of failing the whole catalog.`
+      : `The immutable domain catalog contains ${data.toolCount} registered Tool(s).`,
     details: {
       identity: data.identity,
       toolCount: data.toolCount,
       providerCounts: data.providerCounts,
       publicationDiagnostics: data.publicationDiagnostics,
+      ...(isolated ? {
+        isolatedCount: data.isolatedCount,
+        isolatedTruncated: data.isolatedTruncated,
+        isolated: data.isolated,
+      } : {}),
     },
   };
 }
@@ -575,9 +594,12 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-/** catalog DTO 只接受唯一 published snapshot 的 aggregate，并校验 count parity 与固定 publication 边界。 */
+const MAX_DOCTOR_CATALOG_ISOLATED_ENTRIES = 64;
+const MAX_DOCTOR_CATALOG_ISOLATED_SOURCES = 8;
+
+/** catalog DTO 只接受唯一 published snapshot 的 aggregate，并校验 count parity、隔离摘要与固定 publication 边界。 */
 function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
-  const data = exactRecord(value, ["identity", "toolCount", "providerCounts", "publicationDiagnostics"]);
+  const data = exactRecord(value, ["identity", "toolCount", "providerCounts", "publicationDiagnostics", "isolatedCount", "isolatedTruncated", "isolated"]);
   if (!data) return undefined;
   const providerCounts = exactRecord(data.providerCounts, ["builtIn", "extension", "projectInterface", "officialAttribute"]);
   const publication = exactRecord(data.publicationDiagnostics, [
@@ -616,12 +638,61 @@ function doctorCatalogData(value: unknown): DoctorCatalogData | undefined {
     aggregateSuccessLogCount: publication.aggregateSuccessLogCount,
   };
 
+  const isolated = doctorCatalogIsolated(data.isolated);
+  if (isolated === undefined
+    || !isNonNegativeInteger(data.isolatedCount) || data.isolatedCount > MAX_DOCTOR_CATALOG_TOOLS
+    || typeof data.isolatedTruncated !== "boolean"
+    || (data.isolatedCount === 0) !== (isolated.length === 0)
+    || data.isolatedTruncated !== data.isolatedCount > isolated.length) return undefined;
+
   return {
     identity: DOCTOR_CATALOG_IDENTITY,
     toolCount,
     providerCounts: typedProviderCounts,
     publicationDiagnostics: typedPublication,
+    isolatedCount: data.isolatedCount,
+    isolatedTruncated: data.isolatedTruncated,
+    isolated,
   };
+}
+
+/** 隔离明细只含编译元数据身份，条目数与来源数都有硬上限。 */
+function doctorCatalogIsolated(value: unknown): DoctorCatalogIsolatedEntry[] | undefined {
+  if (!Array.isArray(value) || value.length > MAX_DOCTOR_CATALOG_ISOLATED_ENTRIES) return undefined;
+  const entries: DoctorCatalogIsolatedEntry[] = [];
+  for (const item of value) {
+    const record = exactRecord(item, ["kind", "name", "reason", "sources", "sourcesTruncated"]);
+    if (!record) {
+      const withoutTruncation = exactRecord(item, ["kind", "name", "reason", "sources"]);
+      if (!withoutTruncation) return undefined;
+      const parsed = doctorCatalogIsolatedEntry(withoutTruncation, false);
+      if (!parsed) return undefined;
+      entries.push(parsed);
+      continue;
+    }
+    if (typeof record.sourcesTruncated !== "boolean") return undefined;
+    const parsed = doctorCatalogIsolatedEntry(record, record.sourcesTruncated);
+    if (!parsed) return undefined;
+    entries.push(parsed);
+  }
+  return entries;
+}
+
+function doctorCatalogIsolatedEntry(record: Record<string, unknown>, sourcesTruncated: boolean): DoctorCatalogIsolatedEntry | undefined {
+  const kind = record.kind;
+  const name = record.name;
+  const reason = record.reason;
+  const sources = record.sources;
+  if (typeof kind !== "string" || (kind !== "conflict" && kind !== "rejected" && kind !== "provider")
+    || typeof name !== "string" || name.length === 0 || utf8ByteLength(name) > 256
+    || typeof reason !== "string" || utf8ByteLength(reason) > 512
+    || !Array.isArray(sources) || sources.length > MAX_DOCTOR_CATALOG_ISOLATED_SOURCES
+    || sources.some((source) => typeof source !== "string" || source.length === 0 || utf8ByteLength(source) > 256)) return undefined;
+  return { kind, name, reason, sources: sources as string[], sourcesTruncated };
+}
+
+function utf8ByteLength(value: string): number {
+  return Buffer.byteLength(value, "utf8");
 }
 
 function exactRecord(value: unknown, fields: readonly string[]): Record<string, unknown> | undefined {

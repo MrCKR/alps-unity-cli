@@ -44,7 +44,7 @@ tools describe <tool>    # exact-name descriptor projection
 tools run <tool> --input <json>
 ```
 
-Descriptions expose the input and execution boundary required for one correct call. Internal output schemas and completion metadata validate terminal business data but are not duplicated into public discovery output. Each Unity domain publishes one immutable executable catalog slot; its descriptor-only projection is derived during the same publication and cannot expose invokers, CLR types, writable metadata, or a second catalog cache. A catalog build failure leaves the prior slot intact and is reported by a separate read-only health snapshot.
+Descriptions expose the input and execution boundary required for one correct call. Internal output schemas and completion metadata validate terminal business data but are not duplicated into public discovery output. Each Unity domain publishes one immutable executable catalog slot; its descriptor-only projection is derived during the same publication and cannot expose invokers, CLR types, writable metadata, or a second catalog cache. A single candidate, duplicate name or provider fault is isolated inside that one publication and reported by a separate read-only health snapshot; only a shared discovery-infrastructure failure aborts the catalog, leaving the prior slot intact.
 
 ## Installation Control Plane
 

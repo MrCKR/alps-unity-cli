@@ -185,6 +185,48 @@ namespace UnityCli
         public bool Mutation { get; }
     }
 
+    /// <summary>
+    /// 一次 publication 内的局部故障诊断；只保存编译元数据身份，不查源码、不读 PDB。
+    /// kind 固定 conflict/rejected/provider，供 describe、run 与 doctor 共用同一冻结结论。
+    /// </summary>
+    internal sealed class UnityCliToolCatalogDiagnostic
+    {
+        internal const string Conflict = "conflict";
+        internal const string Rejected = "rejected";
+        internal const string Provider = "provider";
+        internal const int MaxSources = 8;
+        internal const int MaxNameChars = 256;
+        internal const int MaxReasonChars = 512;
+
+        internal UnityCliToolCatalogDiagnostic(string kind, string name, string reason, IEnumerable<string> sources)
+        {
+            Kind = kind ?? string.Empty;
+            Name = Bounded(name, MaxNameChars);
+            Reason = Bounded(reason, MaxReasonChars);
+            var items = (sources ?? Enumerable.Empty<string>())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => Bounded(value, MaxNameChars))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            Truncated = items.Length > MaxSources;
+            Sources = new ReadOnlyCollection<string>(items.Take(MaxSources).ToArray());
+        }
+
+        internal string Kind { get; }
+        internal string Name { get; }
+        internal string Reason { get; }
+        internal IReadOnlyList<string> Sources { get; }
+        internal bool Truncated { get; }
+
+        /// <summary>诊断文本统一截断，避免长异常把故障明细放大成无界输出。</summary>
+        internal static string Bounded(string value, int maximumChars)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            return value.Length <= maximumChars ? value : value.Substring(0, maximumChars) + "…";
+        }
+    }
+
     internal enum UnityCliToolProviderKind
     {
         BuiltIn,
@@ -244,7 +286,9 @@ namespace UnityCli
             int projectInterfaceToolCount,
             int officialAttributeToolCount,
             long elapsedMilliseconds,
-            UnityCliToolCatalogOperationJournal operations)
+            UnityCliToolCatalogOperationJournal operations,
+            IEnumerable<UnityCliToolCatalogDiagnostic> diagnostics = null,
+            int diagnosticCount = 0)
         {
             Descriptors = new ReadOnlyCollection<RegisteredToolDescriptor>(
                 descriptors.OrderBy(item => item.Name, StringComparer.Ordinal).ToArray());
@@ -257,6 +301,12 @@ namespace UnityCli
             ProjectInterfaceToolCount = projectInterfaceToolCount;
             OfficialAttributeToolCount = officialAttributeToolCount;
             if (operations == null) throw new ArgumentNullException("operations");
+            Diagnostics = new ReadOnlyCollection<UnityCliToolCatalogDiagnostic>(
+                (diagnostics ?? Enumerable.Empty<UnityCliToolCatalogDiagnostic>())
+                    .OrderBy(item => item.Kind, StringComparer.Ordinal)
+                    .ThenBy(item => item.Name, StringComparer.Ordinal)
+                    .ToArray());
+            DiagnosticCount = Math.Max(0, diagnosticCount);
             ElapsedMilliseconds = Math.Max(0, elapsedMilliseconds);
             DiscoveryPassCount = operations.Count(UnityCliToolCatalogOperationKind.DiscoveryPass);
             ProviderMetadataReadCount = operations.Count(UnityCliToolCatalogOperationKind.ProviderMetadataRead);
@@ -266,6 +316,11 @@ namespace UnityCli
         public IReadOnlyList<RegisteredToolDescriptor> Descriptors { get; }
         public string ToolCatalogFingerprint { get; }
         public int ToolCount { get { return Descriptors.Count; } }
+        /// <summary>本次实际可执行目录的分类故障条目；冲突/拒绝/provider 三类共享同一冻结列表。</summary>
+        public IReadOnlyList<UnityCliToolCatalogDiagnostic> Diagnostics { get; }
+        /// <summary>诊断条目在被有界投影前的真实总数；与 Diagnostics.Count 不等时表示已截断。</summary>
+        public int DiagnosticCount { get; }
+        public bool DiagnosticTruncated { get { return DiagnosticCount > Diagnostics.Count; } }
         public int AssemblyCount { get; }
         public int ProviderAssemblyCount { get; }
         public int BuiltInToolCount { get; }
@@ -282,48 +337,151 @@ namespace UnityCli
     internal sealed class UnityCliToolCatalogHealthSnapshot
     {
         internal UnityCliToolCatalogHealthSnapshot(bool ready, int toolCount, string failure, string nextAction)
+            : this(ready, toolCount, failure, nextAction, null, 0)
+        {
+        }
+
+        internal UnityCliToolCatalogHealthSnapshot(
+            bool ready,
+            int toolCount,
+            string failure,
+            string nextAction,
+            IEnumerable<UnityCliToolCatalogDiagnostic> diagnostics,
+            int diagnosticCount)
         {
             Ready = ready;
             ToolCount = Math.Max(0, toolCount);
             Failure = failure ?? string.Empty;
             NextAction = nextAction ?? string.Empty;
+            Diagnostics = new ReadOnlyCollection<UnityCliToolCatalogDiagnostic>(
+                (diagnostics ?? Enumerable.Empty<UnityCliToolCatalogDiagnostic>())
+                    .OrderBy(item => item.Kind, StringComparer.Ordinal)
+                    .ThenBy(item => item.Name, StringComparer.Ordinal)
+                    .ToArray());
+            DiagnosticCount = Math.Max(0, diagnosticCount);
         }
 
         public bool Ready { get; }
         public int ToolCount { get; }
         public string Failure { get; }
         public string NextAction { get; }
+        /// <summary>局部隔离后仍可发布的故障摘要；Ready=true 时它描述降级而非失败。</summary>
+        public IReadOnlyList<UnityCliToolCatalogDiagnostic> Diagnostics { get; }
+        public int DiagnosticCount { get; }
+        public bool DiagnosticTruncated { get { return DiagnosticCount > Diagnostics.Count; } }
     }
 
     /// <summary>唯一原子 publication；executable table 与其 descriptor 投影同源、同代。</summary>
     internal sealed class UnityCliPublishedToolCatalog
     {
-        internal UnityCliPublishedToolCatalog(Dictionary<string, RegisteredTool> tools, UnityCliToolCatalogSnapshot snapshot)
+        internal UnityCliPublishedToolCatalog(Dictionary<string, RegisteredTool> tools, UnityCliToolCatalogSnapshot snapshot, UnityCliToolCatalogDiagnosticIndex diagnosticIndex)
         {
             ExecutableTools = new ReadOnlyDictionary<string, RegisteredTool>(
                 new Dictionary<string, RegisteredTool>(tools, StringComparer.Ordinal));
             Snapshot = snapshot ?? throw new ArgumentNullException("snapshot");
+            DiagnosticIndex = diagnosticIndex ?? new UnityCliToolCatalogDiagnosticIndex();
         }
 
         internal IReadOnlyDictionary<string, RegisteredTool> ExecutableTools { get; }
         internal UnityCliToolCatalogSnapshot Snapshot { get; }
+        /// <summary>名称级故障判定；describe/run 用它区分冲突、拒绝与真正不存在。</summary>
+        internal UnityCliToolCatalogDiagnosticIndex DiagnosticIndex { get; }
     }
 
-    /// <summary>纯内存 pending registry；任一验证失败后永久 fault，失败对象不能替换 publication slot。</summary>
+    /// <summary>
+    /// 一次 publication 的局部故障冻结索引。名称级判定（是否冲突、拒绝原因）不因诊断展示截断而丢失；
+    /// 展示条目本身有界，避免大量坏定义把内存与输出放大。
+    /// </summary>
+    internal sealed class UnityCliToolCatalogDiagnosticIndex
+    {
+        internal const int MaxDiagnosticEntries = 64;
+        internal const int MaxKnownNames = 4096;
+
+        private readonly List<UnityCliToolCatalogDiagnostic> entries = new List<UnityCliToolCatalogDiagnostic>();
+        private readonly HashSet<string> conflictedNames = new HashSet<string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> rejectedReasons = new Dictionary<string, string>(StringComparer.Ordinal);
+        private readonly HashSet<string> failedProviders = new HashSet<string>(StringComparer.Ordinal);
+        private int count;
+
+        internal int Count { get { return count; } }
+        internal bool NamesTruncated { get; private set; }
+        internal IReadOnlyList<UnityCliToolCatalogDiagnostic> Entries
+        {
+            get
+            {
+                return new ReadOnlyCollection<UnityCliToolCatalogDiagnostic>(
+                    entries.OrderBy(item => item.Kind, StringComparer.Ordinal).ThenBy(item => item.Name, StringComparer.Ordinal).ToArray());
+            }
+        }
+
+        internal bool IsConflicted(string name)
+        {
+            return !string.IsNullOrEmpty(name) && conflictedNames.Contains(name);
+        }
+
+        internal bool TryRejectedReason(string name, out string reason)
+        {
+            reason = null;
+            return !string.IsNullOrEmpty(name) && rejectedReasons.TryGetValue(name, out reason);
+        }
+
+        internal void AddConflict(string name, string reason, IEnumerable<string> sources)
+        {
+            count++;
+            if (conflictedNames.Count >= MaxKnownNames) NamesTruncated = true;
+            else conflictedNames.Add(name);
+            Append(new UnityCliToolCatalogDiagnostic(UnityCliToolCatalogDiagnostic.Conflict, name, reason, sources));
+        }
+
+        /// <summary>同名冲突追加后续来源；已冻结的判定不因展示条目上限而回退。</summary>
+        internal void AddConflictSource(string name, IEnumerable<string> sources, string reason)
+        {
+            count++;
+            if (conflictedNames.Count >= MaxKnownNames) NamesTruncated = true;
+            else conflictedNames.Add(name);
+            var existing = entries.FirstOrDefault(item => item.Kind == UnityCliToolCatalogDiagnostic.Conflict
+                && string.Equals(item.Name, name, StringComparison.Ordinal));
+            if (existing != null) entries.Remove(existing);
+            Append(new UnityCliToolCatalogDiagnostic(UnityCliToolCatalogDiagnostic.Conflict, name, reason,
+                (existing?.Sources ?? new string[0]).Concat(sources ?? Enumerable.Empty<string>()).ToArray()));
+        }
+
+        internal void AddRejection(string name, string reason, IEnumerable<string> sources)
+        {
+            count++;
+            if (rejectedReasons.Count >= MaxKnownNames) NamesTruncated = true;
+            else rejectedReasons[name] = reason ?? string.Empty;
+            Append(new UnityCliToolCatalogDiagnostic(UnityCliToolCatalogDiagnostic.Rejected, name, reason, sources));
+        }
+
+        internal void AddProviderFailure(string assemblyIdentity, string reason)
+        {
+            count++;
+            failedProviders.Add(assemblyIdentity ?? string.Empty);
+            Append(new UnityCliToolCatalogDiagnostic(UnityCliToolCatalogDiagnostic.Provider, assemblyIdentity, reason, new[] { assemblyIdentity }));
+        }
+
+        /// <summary>只保留有界展示条目；判定数据已经在上方独立记录。</summary>
+        private void Append(UnityCliToolCatalogDiagnostic diagnostic)
+        {
+            if (diagnostic == null || entries.Count >= MaxDiagnosticEntries) return;
+            entries.Add(diagnostic);
+        }
+    }
+
+    /// <summary>纯内存 pending registry；局部候选错误只禁用受影响名称，共享基础设施失败才整体 abort。</summary>
     internal sealed class UnityCliToolCatalogBuilder
     {
         private readonly Dictionary<string, RegisteredTool> pending = new Dictionary<string, RegisteredTool>(StringComparer.Ordinal);
+        private readonly Dictionary<string, UnityCliToolProviderKind> pendingProviderKinds = new Dictionary<string, UnityCliToolProviderKind>(StringComparer.Ordinal);
         private readonly HashSet<string> providerMetadata = new HashSet<string>(StringComparer.Ordinal);
+        private readonly UnityCliToolCatalogDiagnosticIndex diagnostics = new UnityCliToolCatalogDiagnosticIndex();
         private readonly UnityCliToolCatalogOperationJournal operations = new UnityCliToolCatalogOperationJournal();
         private bool discoveryStarted;
         private bool faulted;
         private bool published;
         private int assemblyCount;
         private int expectedProviderAssemblyCount;
-        private int builtInToolCount;
-        private int extensionToolCount;
-        private int projectInterfaceToolCount;
-        private int officialAttributeToolCount;
 
         internal void BeginDiscovery(int loadedAssemblyCount, int candidateProviderAssemblyCount)
         {
@@ -345,28 +503,61 @@ namespace UnityCli
             operations.Record(UnityCliToolCatalogOperationKind.ProviderMetadataRead);
         }
 
+        /// <summary>
+        /// 单个候选失败只禁用该名称并记入有界诊断，不再 fault 整张表；
+        /// 共享发现基础设施失败（abort）才使本次 publication 整体不可用。
+        /// </summary>
         internal void Add(RegisteredTool definition, UnityCliToolProviderKind providerKind)
         {
             if (!discoveryStarted || published || faulted) throw new InvalidOperationException("Tool catalog builder is not writable.");
-            try
+            if (definition == null)
             {
-                Validate(definition, providerKind);
-                if (pending.ContainsKey(definition.Name)) throw new InvalidOperationException("Duplicate tool registration: " + definition.Name);
-                pending.Add(definition.Name, definition);
-                switch (providerKind)
-                {
-                    case UnityCliToolProviderKind.BuiltIn: builtInToolCount++; break;
-                    case UnityCliToolProviderKind.Extension: extensionToolCount++; break;
-                    case UnityCliToolProviderKind.ProjectInterface: projectInterfaceToolCount++; break;
-                    case UnityCliToolProviderKind.OfficialAttribute: officialAttributeToolCount++; break;
-                    default: throw new ArgumentOutOfRangeException("providerKind");
-                }
+                diagnostics.AddRejection("<unnamed>", "Tool registration candidate is null.", new[] { "<unknown>" });
+                return;
             }
-            catch
+            var failure = ValidationFailure(definition, providerKind);
+            if (failure != null)
             {
-                faulted = true;
-                throw;
+                diagnostics.AddRejection(SafeName(definition), failure, new[] { SourceIdentityOf(definition) });
+                return;
             }
+            if (diagnostics.IsConflicted(definition.Name))
+            {
+                diagnostics.AddConflictSource(definition.Name, new[] { SourceIdentityOf(definition) }, ConflictReason(definition.Name));
+                return;
+            }
+            RegisteredTool existing;
+            if (pending.TryGetValue(definition.Name, out existing))
+            {
+                // 先到者与后来者同时禁用；不按发现顺序挑一个，也不保留半份结果。
+                pending.Remove(definition.Name);
+                pendingProviderKinds.Remove(definition.Name);
+                diagnostics.AddConflict(definition.Name, ConflictReason(definition.Name),
+                    new[] { SourceIdentityOf(existing), SourceIdentityOf(definition) });
+                return;
+            }
+            pending.Add(definition.Name, definition);
+            pendingProviderKinds[definition.Name] = providerKind;
+        }
+
+        /// <summary>无法构造 descriptor 的候选只记录类型身份；名称级判定不回退。</summary>
+        internal void RecordToolFailure(string identity, string reason)
+        {
+            if (!discoveryStarted || published || faulted) throw new InvalidOperationException("Tool catalog builder is not writable.");
+            diagnostics.AddRejection(identity ?? "<unnamed>", reason, new[] { identity ?? "<unknown>" });
+        }
+
+        /// <summary>provider 枚举或归属无法信任时，排除它已贡献的全部候选并继续其他 provider。</summary>
+        internal void RecordProviderFailure(string assemblyIdentity, string reason)
+        {
+            if (!discoveryStarted || published || faulted) throw new InvalidOperationException("Tool catalog builder is not writable.");
+            if (string.IsNullOrWhiteSpace(assemblyIdentity)) throw new ArgumentException("Provider assembly identity is required.", "assemblyIdentity");
+            foreach (var name in pending.Where(item => string.Equals(item.Value.OwnerIdentity == null ? null : item.Value.OwnerIdentity.AssemblyIdentity, assemblyIdentity, StringComparison.Ordinal)).Select(item => item.Key).ToList())
+            {
+                pending.Remove(name);
+                pendingProviderKinds.Remove(name);
+            }
+            diagnostics.AddProviderFailure(assemblyIdentity, reason);
         }
 
         internal void Abort() { faulted = true; }
@@ -379,8 +570,6 @@ namespace UnityCli
             if (writeAggregateSuccessLog == null) throw new ArgumentNullException("writeAggregateSuccessLog");
             if (providerMetadata.Count != expectedProviderAssemblyCount)
                 throw new InvalidOperationException("Tool catalog provider metadata does not match the discovered provider assembly set.");
-            if (builtInToolCount + extensionToolCount + projectInterfaceToolCount + officialAttributeToolCount != pending.Count)
-                throw new InvalidOperationException("Tool catalog provider counts do not match the pending table.");
 
             operations.Record(UnityCliToolCatalogOperationKind.AggregateSuccessLog);
             var orderedTools = pending.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal).ToArray();
@@ -402,12 +591,14 @@ namespace UnityCli
                 toolCatalogFingerprint,
                 assemblyCount,
                 providerMetadata.Count,
-                builtInToolCount,
-                extensionToolCount,
-                projectInterfaceToolCount,
-                officialAttributeToolCount,
+                CountProvider(UnityCliToolProviderKind.BuiltIn),
+                CountProvider(UnityCliToolProviderKind.Extension),
+                CountProvider(UnityCliToolProviderKind.ProjectInterface),
+                CountProvider(UnityCliToolProviderKind.OfficialAttribute),
                 elapsedMilliseconds,
-                operations);
+                operations,
+                diagnostics.Entries,
+                diagnostics.Count);
             try
             {
                 writeAggregateSuccessLog(snapshot);
@@ -418,7 +609,51 @@ namespace UnityCli
                 throw;
             }
             published = true;
-            return new UnityCliPublishedToolCatalog(pending, snapshot);
+            return new UnityCliPublishedToolCatalog(pending, snapshot, diagnostics);
+        }
+
+        private int CountProvider(UnityCliToolProviderKind kind)
+        {
+            return pendingProviderKinds.Values.Count(value => value == kind);
+        }
+
+        /// <summary>校验失败文本只取最内层可执行原因，不把整链异常塞进诊断。</summary>
+        private static string ValidationFailure(RegisteredTool definition, UnityCliToolProviderKind providerKind)
+        {
+            try
+            {
+                Validate(definition, providerKind);
+                return null;
+            }
+            catch (Exception exception)
+            {
+                var parts = new List<string>();
+                for (var current = exception; current != null && parts.Count < 4; current = current.InnerException) parts.Add(current.Message);
+                return UnityCliToolCatalogDiagnostic.Bounded(string.Join(" -> ", parts.ToArray()), UnityCliToolCatalogDiagnostic.MaxReasonChars);
+            }
+        }
+
+        private static string SafeName(RegisteredTool definition)
+        {
+            return string.IsNullOrWhiteSpace(definition.Name) ? "<unnamed>" : definition.Name;
+        }
+
+        private static string ConflictReason(string name)
+        {
+            return "Multiple Tool registrations use the same exact name: " + name + ".";
+        }
+
+        /// <summary>来源只用编译元数据身份，不在构建期查源码或 PDB。</summary>
+        private static string SourceIdentityOf(RegisteredTool tool)
+        {
+            if (tool == null || tool.OwnerIdentity == null) return "<unknown>";
+            var assembly = tool.OwnerIdentity.AssemblyIdentity
+                ?? (tool.OwnerIdentity.Assembly == null ? null : tool.OwnerIdentity.Assembly.GetName().FullName)
+                ?? "<unknown-assembly>";
+            var type = tool.OwnerIdentity.ImplementationType == null ? "<unknown-type>" : tool.OwnerIdentity.ImplementationType.FullName;
+            var text = assembly + "!" + type;
+            if (tool.OfficialAttributeBinding != null && tool.OfficialAttributeBinding.Method != null) text += "." + tool.OfficialAttributeBinding.Method.Name;
+            return text;
         }
 
         private static void Validate(RegisteredTool definition, UnityCliToolProviderKind providerKind)

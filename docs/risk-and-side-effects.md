@@ -83,7 +83,7 @@ Each Unity domain validates the complete Tool table before publishing its single
 |-----------|-----------|------------|
 | Dry-run is not available for every destructive tool | Medium | Invoke directly with declared effects; use preview only where supported |
 | Project tool registration changes only when Unity replaces the domain | Low | Re-discover after compilation/reload; bind exact session/listener provenance and let the first business POST reject stale generation |
-| Catalog publication can fail closed on an ownership or descriptor error | Medium | Use `doctor` for transport and catalog-health results, fix the reported definition, then reload Unity |
+| Catalog publication isolates an ownership, duplicate-name or descriptor error instead of failing the whole catalog | Medium | Use `doctor` for transport and catalog-health results, fix the reported definition, then reload Unity; `tools describe` and `tools run` return the frozen isolation result for the affected name |
 
 ## Cross-Reference
 

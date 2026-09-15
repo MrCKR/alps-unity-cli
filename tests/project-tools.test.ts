@@ -273,7 +273,11 @@ test("C# registry publishes native profiles only after complete pending-table va
   assert.match(source, /\{ "contractProfile", definition\.ContractProfile \}/);
   assert.match(source, /builder\.Publish[\s\S]*Volatile\.Write/);
   assert.match(source, /E_TOOL_REGISTRY_UNHEALTHY/);
-  assert.match(builder, /faulted[\s\S]*Duplicate tool registration/);
+  // 局部候选错误只禁用名称并记入有界诊断；只有共享发现失败的 Abort 才使整张表不可用。
+  assert.match(builder, /diagnostics\.IsConflicted\(definition\.Name\)/);
+  assert.match(builder, /diagnostics\.AddConflict\(definition\.Name/);
+  assert.match(builder, /internal void Abort\(\) \{ faulted = true; \}/);
+  assert.match(source, /E_TOOL_NAME_CONFLICT/);
 });
 
 test("Bridge catalog summary bounds main-thread projection before descriptor serialization", () => {

@@ -88,7 +88,12 @@ test("editor.state accepts only a complete matching v1 snapshot and strips trans
   assert.match(source, /observedAtMs <= now/);
   assert.match(source, /field\.known \? Object\.prototype\.hasOwnProperty\.call\(field, "value"\)/);
   assert.match(source, /typeof record\.kind !== "string" \|\| record\.kind\.length === 0/);
-  assert.match(source, /function fallbackStatus\(session: RegistrySession/);
+  // 实时观察失败后不得用旧 Registry 快照回填当前状态字段或历史 progress。
+  assert.match(source, /const blockers = sanitizeEditorBlockers\(observed\.blockers\)/);
+  assert.match(source, /const status = blockers\.length > 0 \? "blocked" : "unresponsive"/);
+  assert.match(source, /return makeResult\(inspected, session, status, undefined, \[\], blockers, false\)/);
+  assert.doesNotMatch(source, /lastUnitySnapshot/);
+  assert.doesNotMatch(source, /function fallbackStatus\(session: RegistrySession/);
 });
 
 async function stateFixture(sessionCount = 1) {

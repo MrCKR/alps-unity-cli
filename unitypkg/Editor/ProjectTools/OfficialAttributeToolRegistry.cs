@@ -111,9 +111,27 @@ namespace UnityCli
 
             foreach (var method in methods)
             {
-                var definition = CreateOfficialAttributeTool(ownershipResolver, type, method);
+                // 单个 attributed method 的签名/schema/契约失败只禁用该命令，其他方法继续。
+                RegisteredTool definition;
+                try
+                {
+                    definition = CreateOfficialAttributeTool(ownershipResolver, type, method);
+                }
+                catch (Exception exception)
+                {
+                    builder.RecordToolFailure(OfficialMethodIdentity(type, method), ExceptionChain(exception));
+                    continue;
+                }
                 RegisterProjectTool(builder, definition, UnityCliToolProviderKind.OfficialAttribute);
             }
+        }
+
+        /// <summary>无法构造 descriptor 时只用编译元数据身份作为诊断标识。</summary>
+        private static string OfficialMethodIdentity(Type type, MethodInfo method)
+        {
+            var typeName = type == null ? "<unknown-type>" : type.FullName;
+            var methodName = method == null ? "<unknown-method>" : method.Name;
+            return typeName + "." + methodName;
         }
 
         /// <summary>

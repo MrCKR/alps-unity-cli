@@ -82,7 +82,9 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
 | `E_TOOL_NOT_FOUND_FOR_TARGET` | 名称不属于当前实例完整 Tool 目录 | 重新运行 `tools group` / `tools search <k1|k2|...>` |
-| `E_TOOL_REGISTRY_UNHEALTHY` | 当前实例 Tool catalog 含 malformed descriptor、重复名称或 ownership 冲突 | 修复实例 registry 后重新 discovery |
+| `E_TOOL_NAME_CONFLICT` | 同一完整 Tool 名称在当前 domain 有多个实现；全部冲突实现不可调用 | 修正重复的命令名后让 Unity 重新编译并 reload domain，再重新 discovery |
+| `E_TOOL_REGISTRATION_FAILED` | 工具已声明但在构建 catalog 时被拒绝 | 读取 `doctor` 的隔离摘要与 `error.details.sources`，修正该工具定义后 reload |
+| `E_TOOL_REGISTRY_UNHEALTHY` | 当前 domain 的 Tool catalog 整体不可用：共享发现基础设施失败，无法构建可信执行表 | 修复后让 Unity 重新编译并 reload domain；局部故障改用 `isolatedCount` 与 `E_TOOL_NAME_CONFLICT` / `E_TOOL_REGISTRATION_FAILED` |
 | `E_SCHEMA_INVALID` | 输入不符合 schema，包括公开数值范围 | 查看对应 `tools describe` 的 inputSchema |
 | `E_REQUEST_BUDGET_INVALID` | request-wide预算为零、负数或超过公开上限 | 传正值且不超过descriptor/schema最大值 |
 | `E_REQUEST_BUDGET_EXCEEDED` | 读取在完整结果前耗尽scan/node/getter/reflection/time/UTF-8预算 | 使用返回的continuation，或收紧selector/提高上限内预算 |
