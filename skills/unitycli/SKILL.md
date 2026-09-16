@@ -8,6 +8,26 @@ FeedbackMode: off
 
 `unitycli` 是 AI 操作已打开 Unity Editor 的运行时导航入口，不是固定工具手册。根据任务发现当前 catalog，读取所选 descriptor，再构造调用。
 
+## 安装与更新路由
+
+安装和更新都必须由用户明确提出。普通 Unity 任务中，即使找不到 `unitycli`、Bridge 或 Skill，也不得自动安装、更新或联网检查版本；应说明需要用户明确提出安装或更新后再继续。
+
+- 用户明确要求安装 `unitycli`，且 CLI 尚不可用时，安装当前用户的 CLI：
+
+  ```powershell
+  npm install -g @alpsckr/unitycli@latest
+  ```
+
+  CLI 可用后执行 `unitycli init help`，再按返回的 `nextActions` 和 `aiInstructions` 完成用户要求的安装与对应的 `--check`。如果用户只要求安装 Bridge 或 Skill，不要额外扩大为其他组件。不要从 Skill 自行猜测项目、Skill 目录或 Bridge 参数。
+- 用户明确要求更新 `unitycli` CLI 时，执行：
+
+  ```powershell
+  npm install -g @alpsckr/unitycli@latest
+  ```
+
+  更新完成后重新执行 `unitycli init help`。用户同时明确要求更新 Bridge 或 Skill 时，再按新版协议处理对应目标；没有指定的目标不主动更新。需要替换正在使用的 Bridge 时，仍遵守协议中的准确项目和正常关闭 Editor 规则。
+- 用户只明确要求安装或更新 CLI、Bridge、Skill 其中一项时，只处理该项；不要把一次请求扩展成所有组件的安装或更新。安装和更新中的 Bridge、Skill 效果仍按协议独立校验。
+
 ## 路由
 
 - 需要 Unity 内存、Editor API、导入/编译、PlayMode 或业务效果证明时使用 CLI。

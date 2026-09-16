@@ -45,7 +45,7 @@ test("public runtime Skill routes operations without embedding the setup workflo
 
   assert.match(skill, /运行时导航入口，不是固定工具手册/);
   assert.doesNotMatch(skill, /^## 安装协议$/m);
-  for (const setupDetail of ["aiInstructions", "init discover", "init package --close-editor", "init skill --target"]) {
+  for (const setupDetail of ["init discover", "init package --close-editor", "init skill --target"]) {
     assert.doesNotMatch(skill, new RegExp(setupDetail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 
