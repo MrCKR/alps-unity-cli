@@ -65,13 +65,16 @@ function allDocFiles(): string[] {
 
 // ── Current commands that MUST appear in docs ──
 
-const REQUIRED_COMMANDS = [
+const RUNTIME_COMMANDS = [
   "tools group",            // actual command to list groups
   "tools group list",       // actual command to list tools in a group
   "tools describe",         // actual command for full descriptor
   "tools run",              // actual command to execute
   "tools search",           // actual command for keyword search
   "command",                // same Tool catalog, schema argument invocation
+];
+
+const EXTENSION_COMMANDS = [
   "extensions list",        // actual command to list extensions
   "extensions install",     // actual command to install extension
   "extensions remove",      // actual command to remove extension
@@ -97,19 +100,17 @@ const STALE_ERROR_CODES = [
 // ── Tests ──────────────────────────────────────────────────
 
 test("docs contain required current command references", () => {
-  // Check that README and SKILL.md contain all required commands
-  const requiredFiles = ["README.md", "skills/unitycli/SKILL.md"];
+  // 主 Skill 聚焦运行时用法，扩展管理命令由安装引用文件承载。
+  const requiredFiles = [
+    { file: "README.md", commands: [...RUNTIME_COMMANDS, ...EXTENSION_COMMANDS] },
+    { file: "skills/unitycli/SKILL.md", commands: RUNTIME_COMMANDS },
+    { file: "skills/unitycli/references/installation.md", commands: EXTENSION_COMMANDS },
+  ];
   const violations: string[] = [];
 
-  for (const file of requiredFiles) {
-    let content: string;
-    try {
-      content = readDocFile(file);
-    } catch {
-      continue;
-    }
-
-    for (const cmd of REQUIRED_COMMANDS) {
+  for (const { file, commands } of requiredFiles) {
+    const content = readDocFile(file);
+    for (const cmd of commands) {
       if (!content.includes(cmd)) {
         violations.push(`${file}: missing required command "${cmd}"`);
       }

@@ -16,6 +16,8 @@ const publicDocs = [
   "docs/safety-boundaries.md",
   "skills/unitycli/SKILL.md",
   "skills/unitycli/references/custom-tools.md",
+  "skills/unitycli/references/installation.md",
+  "skills/unitycli/references/operation-protocol.md",
 ];
 
 test("stable session public docs contain only current identity and terminal semantics", async () => {
@@ -27,9 +29,10 @@ test("stable session public docs contain only current identity and terminal sema
     /--bridge-endpoint/,
     /E_TARGET_(?:STALE|UNREACHABLE)/,
     /started-before-http-timeout/,
-    /tools run[^\n]* --project\b/,
-    /tools run[^\n]* --unity\b/,
-    /tools run[^\n]* --include-custom\b/,
+    // 禁用参数只检查同一命令片段，不能跨反引号误读相邻 command/安装命令。
+    /tools run[^`\r\n]* --project\b/,
+    /tools run[^`\r\n]* --unity\b/,
+    /tools run[^`\r\n]* --include-custom\b/,
     /\b(?:logPath|logsRef|jobId|supportsJob|job-deferred)\b/,
     /\b(?:capabilityType|cliCommand|supportStatus|directInvocationPolicy|frozenDeliveryPolicy|extensionAvailability|missingPackageIds)\b/,
     /--unity\b/,

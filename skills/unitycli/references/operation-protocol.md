@@ -70,16 +70,3 @@ compile、import、domain reload和listener generation交接由session superviso
 `editor.state`公开状态固定为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。它与`editor.dialogs`、`editor.dialog.click`是仅有的三个exact观察名称：使用冻结本地descriptor进入统一dispatcher，不依赖可能被阻断的Live catalog或普通业务admission；alias、group、handler和其他offline Tool不继承该路径。`tools describe`可精确学习这三个descriptor。三者仍执行schema、availability、completion和结果校验，共用从dispatch开始的一份absolute deadline；`editor.state`只可发出一次private snapshot观察，dialogs仅Windows可用。`conflict`只表示至少两个verified live claim；身份读取失败使用`unverifiable`，transport存在但主线程不推进使用`unresponsive`。原错误包含`details.blockers`时，先`tools run editor.dialogs`。点击前使用当前返回的dialogId和规范化button label；只能选择当前可见且enabled的按钮。点击会保留最小pre-effect预算，deadline先到会关闭首次effect barrier；点击后必须证明弹窗消失或状态改变。
 
 `build.run`、`test.run`、`editor.refresh`、`code.execute` 和需要刷新 Editor 的 Package Tool 在一次调用内等待最终业务结果。超时只表示该次调用没有可信终态，后续动作由调用方决定。`code.execute`的同步C#一旦在Unity主线程开始，timeout不能中止它；死循环、阻塞等待或长期Unity API调用可继续占用Editor。调用方应先判断这类代码是否确有必要；决定执行后应把timeout视为outcome unknown并在重试前观察业务状态。
-
-## 扩展与安装
-
-Extension 控制面使用：
-
-```powershell
-unitycli extensions list --project <path>
-unitycli extensions install <id> --project <path>
-unitycli extensions remove <id> --project <path>
-unitycli extensions doctor --project <path>
-```
-
-安装协议先使用`unitycli init help`学习，再由`init discover`只读返回当前项目计划。Bridge使用`init package --project <UnityProject>`安装；准确目标Unity正在运行且用户同意正常关闭时增加`--close-editor`，不得强制终止或替用户处理未保存场景。Skill明确目录使用`init skill --target <SkillDirectory>`，预设目标仍可使用`init skill --agent <.agents|claude> --scope <workspace|user>`，workspace scope同时传`--workspace <path>`；每种形式都用原命令加`--check`校验。用户已指定的目标不得重复询问。Bridge与Skill是独立效果，一个失败不阻断另一个。不得使用裸`init`或把两种效果合并为一个命令。Unity project文件投影完成后，如任务要求Editor效果，仍需在已连接实例中完成import/compile和业务readback。
