@@ -5,6 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { readAssemblyIdentity } from "./assembly-identity.js";
 
 export interface UnityManifest {
   dependencies?: Record<string, string>;
@@ -412,9 +413,11 @@ export type PackageBridgeInspectionStatus = "installed" | "missing" | "damaged" 
 export interface PackageAssemblyConflict {
   assemblyFileName: string;
   provider: string;
-  source: "Packages" | "PackageCache";
+  source: "Packages" | "PackageCache" | "Assets";
   relativePath: string;
   sha256: string;
+  /** 仅当该文件按 assembly identity 命中受保护依赖时出现，用于指出异名同 identity 的冲突。 */
+  assemblyIdentity?: string;
 }
 
 export interface PackageAssemblyInspection {
@@ -454,15 +457,19 @@ interface CanonicalPackageFiles {
 
 interface PackageAssemblyConflictPolicy {
   protectedAssemblyFileNames: string[];
+  protectedAssemblyIdentities: string[];
   allowedPackageProviders: string[];
   maxDirectories: number;
   maxFiles: number;
   maxConflicts: number;
+  maxIdentityFiles: number;
 }
 
 interface PackageAssemblyClosureContract {
   schemaVersion: number;
   packageName: string;
+  bundledAssemblies?: Array<{ assemblyName?: string }>;
+  editorProvidedAssemblies?: Array<{ assemblyName?: string }>;
   conflictPolicy: PackageAssemblyConflictPolicy;
 }
 
@@ -1425,13 +1432,26 @@ async function readPackageAssemblyConflictPolicy(): Promise<PackageAssemblyConfl
       || !Array.isArray(policy.allowedPackageProviders) || !policy.allowedPackageProviders.every((item) => typeof item === "string" && item.length > 0)
       || !Number.isSafeInteger(policy.maxDirectories) || policy.maxDirectories <= 0
       || !Number.isSafeInteger(policy.maxFiles) || policy.maxFiles <= 0
+      || !Number.isSafeInteger(policy.maxIdentityFiles) || policy.maxIdentityFiles <= 0
       || !Number.isSafeInteger(policy.maxConflicts) || policy.maxConflicts <= 0) {
       throw new Error("assembly conflict policy schema is invalid");
     }
-    return policy;
+    // 受保护 identity 由 closure 已声明的随包与 Editor 提供程序集派生，不维护第二份名单。
+    const protectedAssemblyIdentities = [...new Set([...nameList(contract.bundledAssemblies), ...nameList(contract.editorProvidedAssemblies)])];
+    if (protectedAssemblyIdentities.length === 0) throw new Error("assembly conflict policy requires protected assembly identities");
+    return { ...policy, protectedAssemblyIdentities };
   } catch (error) {
     throw packageSourceIntegrityError(error instanceof Error ? error.message : String(error));
   }
+}
+
+/** 取 closure 条目声明的 assemblyName 集合；缺失或非法身份不静默跳过。 */
+function nameList(entries: Array<{ assemblyName?: string }> | undefined): string[] {
+  if (!Array.isArray(entries)) return [];
+  return entries.map((entry) => {
+    if (typeof entry.assemblyName !== "string" || entry.assemblyName.length === 0) throw new Error("assembly conflict policy requires an assemblyName for every declared assembly");
+    return entry.assemblyName;
+  });
 }
 
 function packageCacheProvider(directoryName: string): string {
@@ -1443,19 +1463,26 @@ function packageAssemblyScanError(code: string, message: string, details: Record
   return new PackageManagerError(code, message, ["Inspect the reported package path, then remove or update the conflicting package before retrying init."], details);
 }
 
-/** 只读扫描项目 Package roots 中会遮蔽 UnityCLI 显式预编译引用的同名程序集。 */
+/**
+ * 只读扫描项目 Assets、已解析 Packages 与 Library/PackageCache 中会遮蔽 UnityCLI 显式预编译引用的程序集。
+ * 命中判定同时使用受保护文件名与 assembly identity，因此异名同 identity 的副本同样被拦下；
+ * 扫描排除 Bridge 包自身，并在目录/文件/冲突/身份读取预算耗尽时 fail closed，不静默返回 clear。
+ */
 export async function inspectPackageAssemblyConflicts(projectPath: string): Promise<PackageAssemblyInspection> {
   const projectRoot = packagePaths(projectPath).projectPath;
   const policy = await readPackageAssemblyConflictPolicy();
   const protectedNames = new Set(policy.protectedAssemblyFileNames.map((item) => item.toLowerCase()));
+  const protectedIdentities = new Set(policy.protectedAssemblyIdentities.map((item) => item.toLowerCase()));
   const allowedProviders = new Set(policy.allowedPackageProviders.map((item) => item.toLowerCase()));
   const conflicts: PackageAssemblyConflict[] = [];
   const allowedMatches: PackageAssemblyConflict[] = [];
   let scannedDirectories = 0;
   let scannedFiles = 0;
-  const queue: Array<{ directory: string; provider: string; source: "Packages" | "PackageCache" }> = [];
+  let scannedIdentityFiles = 0;
+  type ScanSource = "Packages" | "PackageCache" | "Assets";
+  const queue: Array<{ directory: string; provider: string; source: ScanSource }> = [];
 
-  const addPackageRoots = async (root: string, source: "Packages" | "PackageCache"): Promise<void> => {
+  const addPackageRoots = async (root: string, source: ScanSource): Promise<void> => {
     let entries;
     try { entries = await readdir(root, { withFileTypes: true }); }
     catch (error) {
@@ -1466,14 +1493,23 @@ export async function inspectPackageAssemblyConflicts(projectPath: string): Prom
     for (const entry of entries.sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)) {
       if (entry.isSymbolicLink()) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_UNSAFE", "Package assembly scan found a linked package root.", { path: posix.normalize(relative(projectRoot, join(root, entry.name)).split("\\").join("/")) });
       if (!entry.isDirectory()) continue;
+      if (entry.name.toLowerCase() === bridgePackageName) continue;
       const provider = source === "Packages" ? entry.name : packageCacheProvider(entry.name);
-      if (provider.toLowerCase() === bridgePackageName) continue;
       queue.push({ directory: join(root, entry.name), provider, source });
     }
   };
 
   await addPackageRoots(join(projectRoot, "Packages"), "Packages");
   await addPackageRoots(join(projectRoot, "Library", "PackageCache"), "PackageCache");
+  // Assets 根以自身相对路径作为 provider，任何受保护依赖都不属于允许 package provider。
+  if (await directoryExists(join(projectRoot, "Assets"))) queue.push({ directory: join(projectRoot, "Assets"), provider: "Assets", source: "Assets" });
+
+  const recordMatch = (match: PackageAssemblyConflict): void => {
+    if (allowedProviders.has(match.provider.toLowerCase())) { allowedMatches.push(match); return; }
+    conflicts.push(match);
+    if (conflicts.length >= policy.maxConflicts) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_LIMIT", "Package assembly scan reached its conflict limit.", { scannedDirectories, scannedFiles, conflicts });
+  };
+
   for (let index = 0; index < queue.length; index += 1) {
     const current = queue[index];
     scannedDirectories += 1;
@@ -1483,23 +1519,38 @@ export async function inspectPackageAssemblyConflicts(projectPath: string): Prom
       const absolute = join(current.directory, entry.name);
       const relativePath = posix.normalize(relative(projectRoot, absolute).split("\\").join("/"));
       if (entry.isSymbolicLink()) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_UNSAFE", "Package assembly scan found a linked entry.", { path: relativePath, provider: current.provider });
-      if (entry.isDirectory()) { queue.push({ ...current, directory: absolute }); continue; }
+      if (entry.isDirectory()) {
+        if (entry.name.toLowerCase() === bridgePackageName) continue;
+        const provider = current.source === "Assets" ? (relativePath.length <= 256 ? relativePath : "Assets") : current.provider;
+        queue.push({ ...current, directory: absolute, provider });
+        continue;
+      }
       if (!entry.isFile()) continue;
       scannedFiles += 1;
       if (scannedFiles > policy.maxFiles) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_LIMIT", "Package assembly scan exceeded its file limit.", { scannedDirectories, scannedFiles });
-      if (!protectedNames.has(entry.name.toLowerCase())) continue;
-      const match: PackageAssemblyConflict = {
+      if (protectedNames.has(entry.name.toLowerCase())) {
+        recordMatch({
+          assemblyFileName: entry.name,
+          provider: current.provider,
+          source: current.source,
+          relativePath,
+          sha256: createHash("sha256").update(await readFile(absolute)).digest("hex"),
+        });
+        continue;
+      }
+      if (!entry.name.toLowerCase().endsWith(".dll") || allowedProviders.has(current.provider.toLowerCase())) continue;
+      scannedIdentityFiles += 1;
+      if (scannedIdentityFiles > policy.maxIdentityFiles) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_LIMIT", "Package assembly scan exceeded its identity-read limit.", { scannedDirectories, scannedFiles, scannedIdentityFiles });
+      const identity = await readAssemblyIdentity(absolute);
+      if (!identity || !protectedIdentities.has(identity.name.toLowerCase())) continue;
+      recordMatch({
         assemblyFileName: entry.name,
         provider: current.provider,
         source: current.source,
         relativePath,
         sha256: createHash("sha256").update(await readFile(absolute)).digest("hex"),
-      };
-      if (allowedProviders.has(current.provider.toLowerCase())) allowedMatches.push(match);
-      else {
-        conflicts.push(match);
-        if (conflicts.length >= policy.maxConflicts) throw packageAssemblyScanError("PACKAGE_ASSEMBLY_SCAN_LIMIT", "Package assembly scan reached its conflict limit.", { scannedDirectories, scannedFiles, conflicts });
-      }
+        assemblyIdentity: `${identity.name}, Version=${identity.version}, Culture=${identity.culture || "neutral"}, PublicKeyToken=${identity.publicKeyToken ?? "null"}`,
+      });
     }
   }
   return { status: conflicts.length ? "conflict" : "clear", conflicts, allowedMatches, scannedDirectories, scannedFiles };

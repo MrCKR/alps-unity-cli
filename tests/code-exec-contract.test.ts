@@ -48,14 +48,15 @@ test("Shared exception projection grants exact Editor internals access without a
 });
 
 test("raw code.execute dry-run cannot compile source and normal execution rechecks the exact lease", async () => {
-  const [support, coordinator, runtimeCode, toolSource, dispatcher] = await Promise.all([
+  const [support, compiler, coordinator, runtimeCode, toolSource, dispatcher] = await Promise.all([
     readFile("unitypkg/Editor/Infrastructure/CodeExecSupport.cs", "utf8"),
+    readFile("unitypkg/Editor/Infrastructure/DynamicCodeCompiler.cs", "utf8"),
     readFile("unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs", "utf8"),
     readFile("src/runtime-code.ts", "utf8"),
     readFile("src/tools/code/execute.ts", "utf8"),
     readFile("src/tools/dispatcher.ts", "utf8"),
   ]);
-  const entry = support.slice(support.indexOf("private static string CodeExec"), support.indexOf("private static string WrapCodeSource"));
+  const entry = support.slice(support.indexOf("ValueTask<string> CodeExec"), support.indexOf("private static string WrapCodeSource"));
   assert.ok(entry.indexOf("request.Execution.DryRun == true") < entry.indexOf("request.StringArg(\"sourceText\")"));
   assert.match(entry, /E_DRY_RUN_UNSUPPORTED/);
   assert.doesNotMatch(entry, /File\.ReadAllText|sourcePath/);
@@ -69,12 +70,15 @@ test("raw code.execute dry-run cannot compile source and normal execution rechec
   assert.doesNotMatch(entry, /CodeSuccessData\([^;]+NormalizeReturnValue/);
   assert.match(entry, /catch \(Exception exception\)[\s\S]*ReferenceEquals\(exception, effectBarrierException\)[\s\S]*ReferenceEquals\(exception, completionProbeException\)[\s\S]*throw;[\s\S]*E_CODE_RUNTIME_EXCEPTION/);
   assert.match(entry, /BeginCodeEffect[\s\S]*cancellationToken\.IsCancellationRequested[\s\S]*TryDeadlineRemainingMs[\s\S]*BeginDirectEffect\(request\.RequestId\)/);
-  assert.match(support, /RunUnityCompiler[\s\S]*cancellationToken[\s\S]*TryDeadlineRemainingMs[\s\S]*WaitForExit\(Math\.Max[\s\S]*TerminateCompiler/);
-  assert.match(support, /CompileWithUnityCompiler[\s\S]*Library", "UnityCli", "code-exec-temp"[\s\S]*finally[\s\S]*DeleteTemporaryCodeFile/);
+  // 编译子进程与固定临时目录的唯一 owner 已抽取到共享编译器；同一不变式改在新 owner 上校验。
+  assert.match(compiler, /RunUnityCompilerAsync[\s\S]*deadlineOk[\s\S]*waiter\.Until[\s\S]*TerminateCompiler/);
+  assert.match(compiler, /MaxCompileSeconds[\s\S]*Task\.WaitAll[\s\S]*TerminateCompiler/);
+  assert.match(compiler, /TemporaryRoot\(\)[\s\S]*"Library", "UnityCli", "code-exec-temp"[\s\S]*finally[\s\S]*DeleteTemporaryCodeFile/);
   assert.doesNotMatch(support, /Microsoft\.CodeAnalysis|CompileInProcess|CodeExecUseInProcessRoslyn|CompileWithCscFallback/);
-  assert.match(support, /DefaultCodeReferences\(request\.StringArg\("refs"\), request, cancellationToken\)[\s\S]*EnsureCodePreEffectDeadline/);
+  assert.doesNotMatch(compiler, /Microsoft\.CodeAnalysis|CompileInProcess|CodeExecUseInProcessRoslyn|CompileWithCscFallback/);
+  assert.match(compiler, /CollectReferences[\s\S]*deadlineOk\(\)[\s\S]*OperationCanceledException/);
   assert.match(support, /RoslynReferenceFailure[\s\S]*E_REFERENCE_RESOLUTION_FAILED/);
-  const referenceDiscovery = support.slice(support.indexOf("private static IEnumerable<string> DefaultCodeReferences"), support.indexOf("private static IEnumerable<string> SplitCsv"));
+  const referenceDiscovery = compiler.slice(compiler.indexOf("internal static List<string> CollectReferences"), compiler.indexOf("private static void AddReference"));
   assert.doesNotMatch(referenceDiscovery, /File\.Exists|File\.Open|Directory\.GetFiles/);
   assert.doesNotMatch(support, /ValidateCodeReferences|WaitForExit\(60000\)|E_CODE_RUNTIME_FAILED/);
   assert.match(support, /UnityCliExceptionProjection\.Project\(exception\)[\s\S]*projection\.PublicMessage/);

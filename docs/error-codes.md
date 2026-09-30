@@ -189,6 +189,32 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_METHOD_AMBIGUOUS` | 多个 overload 与参数数量匹配 | 将选中签名的 `parameterType` 数组作为 `parameterTypes` 重试 |
 | `E_TYPE_NOT_FOUND` | 目标类型或参数类型不存在 | 使用完整 C# type name |
 
+### Method Hook 错误
+
+`method-hook.*` 复用统一 envelope，并使用下列稳定业务错误码。`E_UNITY_BUSY` 与 `E_EXECUTION_TIMEOUT` 保持既有准入前无 effect 与执行后 outcome-unknown 语义。
+
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_SCHEMA_INVALID` | DTO 字段、枚举或跨字段约束不合法（例如没有任何捕获或回调行为、activation 取值非法） | 按 `message` 指出字段与合法形状后重新提交 |
+| `E_HOOK_BACKEND_UNAVAILABLE` | 受包内 Harmony 依赖支持的后端不可用，或 hook host 未在当前 domain 初始化 | 确认包内含 `Editor/Plugins/0Harmony.dll` 后让 Unity reload domain |
+| `E_HOOK_DEPENDENCY_CONFLICT` | 已加载的依赖身份不是随包的 `0Harmony`，或其物理位置不在本 Package 内 | 移除项目中重复的 Harmony 程序集，再重装 Package |
+| `E_HOOK_TARGET_NOT_FOUND` | exact target 或捕获字段不存在（程序集、类型、方法、字段或签名不匹配） | 用 `runtime-reflection.method.find` 确认真实签名后重新提交 |
+| `E_HOOK_TARGET_AMBIGUOUS` | 同名程序集或同签名方法存在多个匹配 | 用精确 `parameterTypes` 缩小到唯一方法 |
+| `E_HOOK_METHOD_UNSUPPORTED` | 目标属于不支持类别（抽象、native/extern、无 IL、开放泛型、构造器、值类型实例、ref-return、指针、状态机方法） | 改选受支持的托管实例或静态方法，或观察其调用方 |
+| `E_HOOK_NOT_FOUND` | 当前 session 没有该 hookId 的定义 | 读取 `method-hook.list` 获取定义 |
+| `E_HOOK_SESSION_STALE` | 定义属于其他 Editor session | 在当前 session 重新读取定义后重试 |
+| `E_HOOK_REVISION_STALE` | `expectedRevision` 与当前定义不一致 | 读取 `method-hook.info` 取得当前 revision 后重试 |
+| `E_CODE_COMPILE_FAILED` | 回调源码编译失败 | 按 `details.diagnostics` 修正回调源码 |
+| `E_HOOK_PATCH_FAILED` | 建立或撤销本 CLI 自己的 Patch 失败 | 检查 Unity Console 与目标签名后重新提交 |
+| `E_HOOK_STORE_FAILED` | 定义快照无法发布或读回，终态无法证明 | 检查项目 `Library/UnityCli/method-hooks` 可写性；先观察业务状态再决定后续 |
+| `E_HOOK_CALLBACK_FAILED` | 回调抛错导致该定义停止派发 | 读取 `method-hook.info` 的 last fault，修正后显式 replace 或 enable |
+| `E_HOOK_CALLBACK_OVERRUN` | 回调正常返回但超过 overrun 阈值 | 缩短回调耗时；该阈值不是抢占式超时 |
+| `E_HOOK_THREAD_UNSUPPORTED` | 命中发生在非主线程 | 选择主线程业务入口；原方法语义未被改变 |
+| `E_HOOK_LIMIT_EXCEEDED` | 定义、源码、State 或快照超出已声明的硬上限 | 按上限摘要缩小输入；`disable`/`remove` 仍然可用 |
+| `E_HOOK_COMPILE_BUDGET_EXHAUSTED` | 当前域的回调编译产物数量或字节预算耗尽 | 停用或删除其他定义，或 reload domain；删除不会回收已加载程序集 |
+| `E_HOOK_EVENT_CURSOR_EXPIRED` | cursor 早于事件保留窗口 | 用返回的 `oldestAvailableCursor` 重新开始读取 |
+| `E_CONTINUATION_STALE` | cursor 绑定的 Editor session 或筛选条件已变化 | 不使用 cursor 重新读取当前尾页 |
+
 ### 执行错误
 
 | 错误码 | 含义 |
@@ -228,3 +254,4 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 - `retryAfterMs`
 
 错误恢复逻辑必须读取上述 camelCase 字段。
+

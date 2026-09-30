@@ -1,0 +1,20 @@
+{
+    "name": "UnityCli.Hooks.Editor",
+    "rootNamespace": "UnityCli.Hooks",
+    "references": [
+        "UnityCli.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "autoReferenced": false,
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "0Harmony.dll"
+    ],
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

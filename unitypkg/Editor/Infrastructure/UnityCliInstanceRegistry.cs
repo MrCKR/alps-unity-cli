@@ -59,7 +59,7 @@ namespace UnityCli
             return canonicalIdentity;
         }
 
-        private static string ProjectRoot()
+        internal static string ProjectRoot()
         {
             return ProjectIdentity().DisplayProjectPath;
         }

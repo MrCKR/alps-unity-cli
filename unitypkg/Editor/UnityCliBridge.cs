@@ -85,6 +85,7 @@ namespace UnityCli
             UnityCliTestRunCoordinator.Initialize();
             UnityCliNavMeshBakeCoordinator.Initialize();
             UnityCliOcclusionBakeCoordinator.Initialize();
+            MethodHookHost.InitializeAfterReload();
             ReconcileRestoredAdmissionRoots();
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
@@ -262,6 +263,7 @@ namespace UnityCli
             UnityCliTestRunCoordinator.BeforeReload();
             UnityCliNavMeshBakeCoordinator.BeforeReload();
             UnityCliOcclusionBakeCoordinator.BeforeReload();
+            MethodHookHost.BeforeReload();
             BridgeLifetime.Cancel();
             CancelQueuedWork(queuedBeforeReload);
             CancelPendingWaits("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
@@ -319,6 +321,7 @@ namespace UnityCli
             UnityCliTestRunCoordinator.Shutdown();
             UnityCliNavMeshBakeCoordinator.Shutdown();
             UnityCliOcclusionBakeCoordinator.Shutdown();
+            MethodHookHost.Shutdown();
             BridgeLifetime.Cancel();
             CancelPendingWaits("E_UNITY_QUITTING", "Unity Editor is quitting.", "Restart Unity and retry the request.", 5000);
             DeleteInstanceRegistration();
@@ -329,6 +332,7 @@ namespace UnityCli
         private static void OnBridgePlayModeStateChanged(PlayModeStateChange state)
         {
             playModeChanging = state == PlayModeStateChange.ExitingEditMode || state == PlayModeStateChange.ExitingPlayMode;
+            MethodHookHost.OnPlayModeStateChanged(state);
             if (state == PlayModeStateChange.ExitingPlayMode)
             {
                 runtimeSession.Cancel();

@@ -133,6 +133,25 @@ unitycli command --project-path C:\path\UnityProject --page-size 20 --cursor <ne
 
 In PowerShell, quote pipe-separated search keywords with single quotes.
 
+## Live Method Hooks
+
+The `method-hook` group installs live interceptors on an exact managed method of the current Editor domain before a Play run, observes calls, modifies behaviour, or executes bounded C# callbacks, and keeps those definitions across Play sessions and domain reloads within one Editor session:
+
+```powershell
+unitycli command method-hook.install --label ai-movement-order --target '{"assemblyName":"Assembly-CSharp","typeName":"Game.AiController","methodName":"BeginMovement","parameterTypes":[],"returnType":"System.Void","isStatic":false}' --capture '{"arguments":true}' --instance C:\path\UnityProject
+unitycli command method-hook.list --instance C:\path\UnityProject
+unitycli command method-hook.events --hook-id hook-0123456789abcdef --instance C:\path\UnityProject
+```
+
+Boundaries worth knowing before using the group:
+
+- Definitions belong to one Editor session and are discarded on Editor restart; installing a hook is not persistent authorization for arbitrary code.
+- Call sites compiled before the patch keep the original behaviour, so an installed definition can legitimately produce no hits. Use `method-hook.events` or a real business readback to prove a hit.
+- Callback source is compiled on demand through the editor-bundled C# compiler and loaded into the current domain; this is not a project compile, but it costs a compiler subprocess and cannot be unloaded individually.
+- `disable` and `remove` stop future dispatch and restore the original behaviour; they do not roll back effects that earlier invocations already produced.
+
+`unitycli tools describe method-hook.install` documents the exact target identity, capture options, callback context API, resource budgets and error recovery for the selected instance. Pure observation with capture options starts no compiler, because a definition without callback source does not need one.
+
 ## Output
 
 Every command returns one JSON envelope. stdout is compact single-line JSON by default; use `--pretty` only for indented output.

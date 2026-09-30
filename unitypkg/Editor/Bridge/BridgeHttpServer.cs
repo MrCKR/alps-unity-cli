@@ -150,13 +150,23 @@ namespace UnityCli
             return "Packages/com.alpsckr.unitycli/Editor/UnityCliBridge.cs";
         }
 
+        /// <summary>包内资产根路径；由唯一包资产路径推导，供其它 owner 拼接包内固定资产。</summary>
+        internal static string BridgePackageAssetRoot()
+        {
+            const string bridgeSuffix = "/Editor/UnityCliBridge.cs";
+            var assetPath = BridgePackageAssetPath();
+            return assetPath.EndsWith(bridgeSuffix, StringComparison.Ordinal)
+                ? assetPath.Substring(0, assetPath.Length - bridgeSuffix.Length)
+                : assetPath;
+        }
+
         private static string BridgePackageName()
         {
             var package = BridgePackageInfo();
             return package == null ? "unknown" : package.name;
         }
 
-        private static string BridgePackageResolvedPath()
+        internal static string BridgePackageResolvedPath()
         {
             var package = BridgePackageInfo();
             return package == null ? string.Empty : package.resolvedPath;

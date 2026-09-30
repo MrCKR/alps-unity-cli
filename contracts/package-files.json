@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.5.3",
-  "sourceHash": "b5768bf1bc50f210e7109121036691fa601081fc12b8c9f24dbe4b04cffaf7b9",
+  "sourceHash": "ef0b5e65d68e4d5450083cc502a9d47f050ce01b532146e1e514e3af7e422d0c",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
-      "size": 120,
-      "sha256": "c92975ae24685fc2ee2a84e4f44d3e8637a8e6c7a1acc0ddf33e69a1cc641fba"
+      "size": 296,
+      "sha256": "785faff367e0786b84deb2fe3a2cdbf1c4834c607b5e07493d9401ba4e392fdc"
     },
     {
       "path": "Editor/Bridge/BridgeCommandContext.cs",
@@ -26,8 +26,8 @@
     },
     {
       "path": "Editor/Bridge/BridgeHttpServer.cs",
-      "size": 28292,
-      "sha256": "ff96a7718b384a9c960c48ded8e85c73f1eeea54c6ba2d8cea8d5601c1a51b44"
+      "size": 28813,
+      "sha256": "0aa03b7db966b5a20488f75862e5ab59aaba06ecdde3b9d87c5656704fbfa495"
     },
     {
       "path": "Editor/Bridge/BridgeQueueState.cs",
@@ -61,13 +61,68 @@
     },
     {
       "path": "Editor/Generated/UnityCliToolCompletionRegistry.g.cs",
-      "size": 169281,
-      "sha256": "584dd30a3da8d2c789390393dd462ce944c871d26784f2951a42cb708e45d849"
+      "size": 173006,
+      "sha256": "238865842bd89c1c78d1f56f3009e2db943f6d70bab4292fb41c2eaf5f57bb4b"
     },
     {
       "path": "Editor/Infrastructure/CodeExecSupport.cs",
-      "size": 33965,
-      "sha256": "c6003090da14248a115476dafa44d2d413e02afa06dbaa41367f748ec57b352c"
+      "size": 25239,
+      "sha256": "cf0f0741156394cc71e5134747f1b281f77a740967b510994511a2a222c94bc1"
+    },
+    {
+      "path": "Editor/Infrastructure/DynamicCodeCompiler.cs",
+      "size": 18547,
+      "sha256": "0731aa332b10255de8a119138d43b1567638c482a70181b841eb0ce1bc126cba"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookAbi.cs",
+      "size": 13173,
+      "sha256": "9dbf2a98b1c350cfe15d1a78675dd53035558c99492a7f368a1ef9ad1ca39401"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookDefinition.cs",
+      "size": 26126,
+      "sha256": "083d56916caa566f8e7854c0553385a642004e9101390bc4489c554c1b4179a3"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookEventBuffer.cs",
+      "size": 17486,
+      "sha256": "5c76d7901cc53abe9dd2ad706c619060d3125401bbb33beec9f12b9206fc3d75"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookHost.Dispatch.cs",
+      "size": 19136,
+      "sha256": "f78d18239f5f9ef401b28e1a15e237e2f75efcd72e85a8de759e1d49f3937c83"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookHost.Operations.cs",
+      "size": 40395,
+      "sha256": "ab794f2be39a2d950b8adac6e09cc8a1f58cc97516615c07166fa75b12f3d4e8"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookHost.cs",
+      "size": 67442,
+      "sha256": "d3f87d332bc17ee2ce09e04eb53c899ea113345b4f880d694cfd1377c154a108"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookLimits.cs",
+      "size": 8534,
+      "sha256": "8e752eb653043d27bf26d71f755e4c4af414f804e998d244cc13398f156f97db"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookProjection.cs",
+      "size": 13879,
+      "sha256": "748cb3381dfc603cebda4f4f32bd137f641e29933848a65510d3e86de0b9ca90"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookStore.cs",
+      "size": 7597,
+      "sha256": "9a76e1d8af5ec991baab0e6074a3a47d2b32ca8e995418cd52e2dd279694e93c"
+    },
+    {
+      "path": "Editor/Infrastructure/MethodHooks/MethodHookTargetResolver.cs",
+      "size": 12596,
+      "sha256": "2ca4e9c87e4544ba9f9b5273114e5680a2f078cc10e82d32c5e0fe40807b8947"
     },
     {
       "path": "Editor/Infrastructure/RegistryOwnershipResolver.cs",
@@ -146,8 +201,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliInstanceRegistry.cs",
-      "size": 41475,
-      "sha256": "28fc20bbcac0df560650d83dbe4e2c6aea63406d74bbe03891bd8cd88ec6dfb5"
+      "size": 41476,
+      "sha256": "07e1f2a57238f3c55d24e19293e3818978b4feaf953ab6a0fef3f6f68b952092"
     },
     {
       "path": "Editor/Infrastructure/UnityCliJson.cs",
@@ -171,8 +226,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliLog.cs",
-      "size": 6055,
-      "sha256": "77f87ba7661358e5d4d71887c36d0159ec3220a2b0203eae0442864e3ecb6de5"
+      "size": 6056,
+      "sha256": "306f7d39a867722b80219d951a2be1e80899f92af413bf03d3c10014179422fd"
     },
     {
       "path": "Editor/Infrastructure/UnityCliNavMeshBakeCoordinator.cs",
@@ -286,8 +341,8 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliStateIO.cs",
-      "size": 3478,
-      "sha256": "73b29821c9083f4e8e77b15595e395d35123194dd0b46816917dac040449f0f7"
+      "size": 3494,
+      "sha256": "9b6795558421eca432275c87afe7d12ebb82a2e799095fc9934f32dc9dcd75db"
     },
     {
       "path": "Editor/Infrastructure/UnityCliTestRunCoordinator.cs",
@@ -306,8 +361,18 @@
     },
     {
       "path": "Editor/Infrastructure/UnityCliWaiter.cs",
-      "size": 32647,
-      "sha256": "9bba649f10df111c0479dfb5979c7ba0c14c82d6de4e7802826027c152f63fff"
+      "size": 32712,
+      "sha256": "27d4857f8a17dc201b1c95201ceef2b824e75166f40e7cf3f7de1b6ada315a80"
+    },
+    {
+      "path": "Editor/Plugins/0Harmony.dll",
+      "size": 2461696,
+      "sha256": "7b9e756306fa3d7620e02a857c8927a6ab04973f9bd8a77d3866700a6deac55c"
+    },
+    {
+      "path": "Editor/Plugins/0Harmony.dll.meta",
+      "size": 526,
+      "sha256": "dd13904773d256325983ee357484c7f9907dcfff4bc5702dc51a1daa4971e7ba"
     },
     {
       "path": "Editor/ProjectTools/IUnityCliTool.cs",
@@ -998,6 +1063,51 @@
       "path": "Editor/Tools/material/set.cs",
       "size": 7266,
       "sha256": "3839f8fe8fa87bd5822b4a8f36639fd857d36523d84a67883da16aab8f1dfff8"
+    },
+    {
+      "path": "Editor/Tools/method-hook/MethodHookDtos.cs",
+      "size": 14575,
+      "sha256": "b08334edb3717f4affdf0c96ab7a4a77d8ae1aa0717c55b74351b3fcb59bccab"
+    },
+    {
+      "path": "Editor/Tools/method-hook/disable.cs",
+      "size": 3177,
+      "sha256": "cd8ed3f6356affa6852757bf01d34559879565f8702038d84a2dccd43c0e743f"
+    },
+    {
+      "path": "Editor/Tools/method-hook/enable.cs",
+      "size": 4119,
+      "sha256": "8618727e8f79519fa18d9b3011370e65ce892ef0e6993274b92f5f5f73471082"
+    },
+    {
+      "path": "Editor/Tools/method-hook/events.cs",
+      "size": 3517,
+      "sha256": "5bbd63d5193b19c3f01d96510b061bb4a2cd25c09b6a27b464614db9714b1d90"
+    },
+    {
+      "path": "Editor/Tools/method-hook/info.cs",
+      "size": 2479,
+      "sha256": "5232a207bdf7440f9788bb7d867d8c6edb84c4539101944994ff7cb6c8d19f02"
+    },
+    {
+      "path": "Editor/Tools/method-hook/install.cs",
+      "size": 6267,
+      "sha256": "82dd10a0e2cb987d43b9f02f719cb172f03c120a507c95457dffcb5222acdfe9"
+    },
+    {
+      "path": "Editor/Tools/method-hook/list.cs",
+      "size": 2949,
+      "sha256": "3640fab2cf6e89219bd4a3ccac52ab24dfb12b42099c24149489a9ff1308555e"
+    },
+    {
+      "path": "Editor/Tools/method-hook/remove.cs",
+      "size": 3261,
+      "sha256": "050c1891f905ecaf84bf0e360e994c80c76ba5e1a2e04cd15d497cd44ee88d92"
+    },
+    {
+      "path": "Editor/Tools/method-hook/replace.cs",
+      "size": 4077,
+      "sha256": "9087932dcb5a8d843c7a3e41ff79ff8105281e2f071bfbdd93128c7c33fe9cc2"
     },
     {
       "path": "Editor/Tools/navmesh/NavMeshToolSupport.cs",
@@ -1846,13 +1956,28 @@
     },
     {
       "path": "Editor/UnityCliBridge.cs",
-      "size": 24851,
-      "sha256": "5fd369c5ac73bae1bf4678f78ed0f458ee55ece16941d7c8709eb8359fd58a79"
+      "size": 25043,
+      "sha256": "ea785946a821405716499e323325fa81ce6ef6315c54098105cc058e6f00b7a5"
     },
     {
       "path": "Editor/UnityCliBridgeBuildInfo.cs",
       "size": 160,
       "sha256": "02e68b977856c03f4b437faa44cb5e4cf4bf0d2d19d71ca2c93e4fdee7f56dba"
+    },
+    {
+      "path": "Hooks/MethodHookAdapterEmitter.cs",
+      "size": 10383,
+      "sha256": "3990d1897557ba9f141728260e4746055d7d1b01742215d09c64e1b3c5ad10db"
+    },
+    {
+      "path": "Hooks/MethodHookHarmonyBackend.cs",
+      "size": 10934,
+      "sha256": "53e81bb5874d4354855f9543f07e0a8026e410c4bb0ea872dd41553364653f8c"
+    },
+    {
+      "path": "Hooks/UnityCli.Hooks.Editor.asmdef",
+      "size": 450,
+      "sha256": "12abd162090070ac058050facf37445d9f1e940a7a6b4d8596219647f7693210"
     },
     {
       "path": "Runtime/Infrastructure/UnityCliRuntimeBridge.cs",
@@ -1995,6 +2120,16 @@
       "sha256": "c7b0e378f50d486425f866c55bdf87a6400cb95f0e50e0442f78d36b76c713af"
     },
     {
+      "path": "Tests/Editor/UnityCliMethodHookIntegrationTests.cs",
+      "size": 32230,
+      "sha256": "068ed8aedfd54208147c577364edfa3870f7082a0433fc7338e340fe0912db5a"
+    },
+    {
+      "path": "Tests/Editor/UnityCliMethodHookTests.cs",
+      "size": 17742,
+      "sha256": "f3721de8ffcc232bf6d0eec6d8884864fcbc57efb18eb9f471e18e37a30bf2f5"
+    },
+    {
       "path": "Tests/Editor/UnityCliRequestBudgetTests.cs",
       "size": 33096,
       "sha256": "4815d54989432b784e272cd4cbad6f5383ded157e7f11001c16e73858927fc10"
@@ -2018,6 +2153,11 @@
       "path": "Tests/Runtime/UnityCliRuntimeCatalogValidationTests.cs",
       "size": 1291,
       "sha256": "d02355d051fda58ab55964fe7db62cc9f8da5ef53a28ef2e52cf037f9356cd6e"
+    },
+    {
+      "path": "Third Party Notices.md",
+      "size": 1646,
+      "sha256": "accc8c3e5a377628607498a59a5cb9beef6c72a656be89d96d602d2ffd578f7f"
     },
     {
       "path": "UnityCli.Editor.asmdef",

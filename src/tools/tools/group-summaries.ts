@@ -19,6 +19,7 @@ export const GROUP_SUMMARIES: Record<string, string> = {
   hdrp: "High Definition Render Pipeline asset settings and per-effect configuration of scene Volume components.",
   lighting: "Lightmapping bake, light probes, reflection probes, skybox, ambient, and fog settings.",
   material: "Create, inspect, assign, and edit material properties on assets and renderers.",
+  "method-hook": "Live Editor method hooks: install/replace, enable/disable, remove, list/info, and bounded events for observing calls, modifying behavior, and executing C# callbacks.",
   navmesh: "NavMesh bake settings, baking, and baked data clearing.",
   occlusion: "Occlusion culling bake lifecycle: bake, status, cancel, and clearing baked data.",
   package: "Unity package mutation, resolve, embed, deploy, restore, and registry configuration with durable proof.",

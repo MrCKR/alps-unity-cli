@@ -2,7 +2,18 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "minimumUnityVersion": "2022.3",
-  "bundledAssemblies": [],
+  "bundledAssemblies": [
+    {
+      "path": "Editor/Plugins/0Harmony.dll",
+      "fileName": "0Harmony.dll",
+      "assemblyName": "0Harmony",
+      "assemblyVersion": "2.4.2.0",
+      "targetFramework": "net472",
+      "provider": "Lib.Harmony 2.4.2 (NuGet)",
+      "license": "MIT",
+      "sha256": "7b9e756306fa3d7620e02a857c8927a6ab04973f9bd8a77d3866700a6deac55c"
+    }
+  ],
   "editorProvidedAssemblies": [
     {
       "fileName": "Newtonsoft.Json.dll",
@@ -14,20 +25,41 @@
   ],
   "compiler": {
     "mode": "editor-bundled-csc-subprocess",
+    "sharedOwner": "Editor/Infrastructure/DynamicCodeCompiler.cs",
     "monoRelativePath": "MonoBleedingEdge/bin/mono.exe",
     "compilerRelativePath": "MonoBleedingEdge/lib/mono/4.5/csc.exe",
     "packageOwnedRoslyn": false,
     "temporaryRoot": "Library/UnityCli/code-exec-temp"
   },
+  "hookBackend": {
+    "asmdefPath": "Hooks/UnityCli.Hooks.Editor.asmdef",
+    "assemblyName": "UnityCli.Hooks.Editor",
+    "typeName": "UnityCli.Hooks.MethodHookHarmonyBackend",
+    "precompiledReferences": [
+      "0Harmony.dll"
+    ],
+    "references": [
+      "UnityCli.Editor"
+    ],
+    "ownerId": "unitycli.method-hook",
+    "pluginAssetRelativePath": "/Editor/Plugins/0Harmony.dll",
+    "pluginImporterRequirements": {
+      "compatibleWithAnyPlatform": false,
+      "compatibleWithEditor": true,
+      "preloaded": false
+    }
+  },
   "conflictPolicy": {
     "protectedAssemblyFileNames": [
+      "0Harmony.dll",
       "Newtonsoft.Json.dll"
     ],
     "allowedPackageProviders": [
       "com.unity.nuget.newtonsoft-json"
     ],
-    "maxDirectories": 4096,
-    "maxFiles": 50000,
-    "maxConflicts": 100
+    "maxDirectories": 8192,
+    "maxFiles": 100000,
+    "maxIdentityFiles": 4096,
+    "maxConflicts": 200
   }
 }

@@ -1479,6 +1479,78 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "method-hook.disable",
+      "group": "method-hook",
+      "command": "disable",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "method-hook.enable",
+      "group": "method-hook",
+      "command": "enable",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "method-hook.events",
+      "group": "method-hook",
+      "command": "events",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "method-hook.info",
+      "group": "method-hook",
+      "command": "info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "method-hook.install",
+      "group": "method-hook",
+      "command": "install",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "method-hook.list",
+      "group": "method-hook",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "method-hook.remove",
+      "group": "method-hook",
+      "command": "remove",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "method-hook.replace",
+      "group": "method-hook",
+      "command": "replace",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "navmesh.bake",
       "group": "navmesh",
       "command": "bake",

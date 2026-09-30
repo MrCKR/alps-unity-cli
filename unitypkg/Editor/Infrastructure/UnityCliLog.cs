@@ -106,7 +106,7 @@ namespace UnityCli
             };
         }
 
-        private static void WriteLog(string line)
+        internal static void WriteLog(string line)
         {
             try
             {

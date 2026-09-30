@@ -1331,6 +1331,230 @@
       ]
     },
     {
+      "toolName": "method-hook.install",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/method-hook/install.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "observed-state",
+      "completionPredicate": {
+        "kind": "owned-definition-terminal-readback",
+        "description": "method-hook.install 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+      },
+      "proofSource": {
+        "kind": "owned-definition-and-attachment-readback",
+        "description": "method-hook.install 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+      },
+      "reloadPolicy": {
+        "kind": "definition-owned-not-request-owned",
+        "description": "长期效果由 session 内的 Hook Definition 拥有；请求达到终态后不再占用 admission、mutation lease 或请求取消令牌，跨 reload 重挂由 hook host 的恢复流程负责。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "reobserve-or-fail-closed",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 method-hook.list 或 method-hook.info 的业务状态，再决定是否提交新的调用。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "await",
+        "scheduler-wait"
+      ]
+    },
+    {
+      "toolName": "method-hook.replace",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/method-hook/replace.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "observed-state",
+      "completionPredicate": {
+        "kind": "owned-definition-terminal-readback",
+        "description": "method-hook.replace 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+      },
+      "proofSource": {
+        "kind": "owned-definition-and-attachment-readback",
+        "description": "method-hook.replace 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+      },
+      "reloadPolicy": {
+        "kind": "definition-owned-not-request-owned",
+        "description": "长期效果由 session 内的 Hook Definition 拥有；请求达到终态后不再占用 admission、mutation lease 或请求取消令牌，跨 reload 重挂由 hook host 的恢复流程负责。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "reobserve-or-fail-closed",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 method-hook.list 或 method-hook.info 的业务状态，再决定是否提交新的调用。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "await",
+        "scheduler-wait"
+      ]
+    },
+    {
+      "toolName": "method-hook.enable",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/method-hook/enable.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "observed-state",
+      "completionPredicate": {
+        "kind": "owned-definition-terminal-readback",
+        "description": "method-hook.enable 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+      },
+      "proofSource": {
+        "kind": "owned-definition-and-attachment-readback",
+        "description": "method-hook.enable 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+      },
+      "reloadPolicy": {
+        "kind": "definition-owned-not-request-owned",
+        "description": "长期效果由 session 内的 Hook Definition 拥有；请求达到终态后不再占用 admission、mutation lease 或请求取消令牌，跨 reload 重挂由 hook host 的恢复流程负责。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "reobserve-or-fail-closed",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 method-hook.list 或 method-hook.info 的业务状态，再决定是否提交新的调用。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "await",
+        "scheduler-wait"
+      ]
+    },
+    {
+      "toolName": "method-hook.disable",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/method-hook/disable.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "observed-state",
+      "completionPredicate": {
+        "kind": "owned-definition-terminal-readback",
+        "description": "method-hook.disable 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+      },
+      "proofSource": {
+        "kind": "owned-definition-and-attachment-readback",
+        "description": "method-hook.disable 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+      },
+      "reloadPolicy": {
+        "kind": "definition-owned-not-request-owned",
+        "description": "长期效果由 session 内的 Hook Definition 拥有；请求达到终态后不再占用 admission、mutation lease 或请求取消令牌，跨 reload 重挂由 hook host 的恢复流程负责。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "reobserve-or-fail-closed",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 method-hook.list 或 method-hook.info 的业务状态，再决定是否提交新的调用。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "scheduler-wait"
+      ]
+    },
+    {
+      "toolName": "method-hook.remove",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/method-hook/remove.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "observed-state",
+      "completionPredicate": {
+        "kind": "owned-definition-terminal-readback",
+        "description": "method-hook.remove 的终态由 host 自己拥有的定义快照与本 CLI Adapter/gate 的 fresh readback 证明；返回体必须与持久化后的同 session 定义一致。"
+      },
+      "proofSource": {
+        "kind": "owned-definition-and-attachment-readback",
+        "description": "method-hook.remove 的 proof 来自 host owner：定义 revision/state 的 fresh 读回、本 CLI Adapter 在该 exact target 上的 patch 计数，以及快照 publication 结果。"
+      },
+      "reloadPolicy": {
+        "kind": "definition-owned-not-request-owned",
+        "description": "长期效果由 session 内的 Hook Definition 拥有；请求达到终态后不再占用 admission、mutation lease 或请求取消令牌，跨 reload 重挂由 hook host 的恢复流程负责。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "reobserve-or-fail-closed",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方先读取 method-hook.list 或 method-hook.info 的业务状态，再决定是否提交新的调用。"
+      },
+      "asyncSignals": [
+        "value-task",
+        "scheduler-wait"
+      ]
+    },
+    {
+      "toolName": "method-hook.list",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/method-hook/list.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "method-hook.list 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
+      },
+      "proofSource": {
+        "kind": "typed-result-readback",
+        "description": "method-hook.list 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由调用方负责；只读 Tool 不保留请求级恢复状态，也不因发现旧快照触发清理或恢复。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责重新读取当前定义与事件状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "method-hook.info",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/method-hook/info.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "method-hook.info 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
+      },
+      "proofSource": {
+        "kind": "typed-result-readback",
+        "description": "method-hook.info 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由调用方负责；只读 Tool 不保留请求级恢复状态，也不因发现旧快照触发清理或恢复。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责重新读取当前定义与事件状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
+      "toolName": "method-hook.events",
+      "descriptorOwner": "built-in",
+      "source": "unitypkg/Editor/Tools/method-hook/events.cs",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "method-hook.events 的完整 typed business result 通过 output schema；只读读取不触发恢复、编译、重挂或清理。"
+      },
+      "proofSource": {
+        "kind": "typed-result-readback",
+        "description": "method-hook.events 的 proof 来自一次性 typed result 与其内部一致的 host 快照读回；该路径不写任何持久状态。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "跨重载续接由调用方负责；只读 Tool 不保留请求级恢复状态，也不因发现旧快照触发清理或恢复。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "执行超时或终态无法确认时返回 E_EXECUTION_TIMEOUT；调用方负责重新读取当前定义与事件状态后决定后续操作。"
+      },
+      "asyncSignals": [
+        "value-task"
+      ]
+    },
+    {
       "toolName": "screenshot.from-camera",
       "descriptorOwner": "built-in",
       "source": "unitypkg/Editor/Tools/screenshot/from-camera.cs",

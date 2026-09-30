@@ -17,8 +17,8 @@ namespace UnityCli
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool MoveFileExW(string existingFileName, string newFileName, uint flags);
 
-        /// <summary>临时文件落盘后 write-through 替换；供 coordinator 的 durable 状态写入复用。</summary>
-        private static void DurableWriteText(string path, string content)
+        /// <summary>临时文件落盘后 write-through 替换；供 coordinator 与 hook 快照的 durable 状态写入复用。</summary>
+        internal static void DurableWriteText(string path, string content)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             var temporary = path + ".tmp";

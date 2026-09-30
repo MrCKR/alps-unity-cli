@@ -712,6 +712,7 @@ namespace UnityCli
             TickCoordinator("test.run", UnityCliBridge.UnityCliTestRunCoordinator.Tick);
             TickCoordinator("navmesh.bake", UnityCliBridge.UnityCliNavMeshBakeCoordinator.Tick);
             TickCoordinator("occlusion.bake", UnityCliBridge.UnityCliOcclusionBakeCoordinator.Tick);
+            TickCoordinator("method-hook", MethodHookHost.Tick);
             TickCoordinator("editor.autotick", PumpAutoTick);
             MainThreadContinuations.Drain();
             var now = DateTime.UtcNow;
