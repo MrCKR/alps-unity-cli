@@ -31,12 +31,13 @@ async function handleInitPackage(args: string[], flags: Record<string, string | 
   const remaining = (): number => Math.max(0, absoluteDeadlineMs - Date.now());
   try {
     const identity = resolveProjectIdentity(resolve(projectFlag));
-    const { ensurePackageBridge, inspectPackageBridge, preparePackageBridgeInstall, PackageManagerError } = await import("../package-manager.js");
+    const { ensurePackageBridge, inspectPackageBridge, preparePackageBridgeInstall, packageAssemblyConflictNextActions, PackageManagerError } = await import("../package-manager.js");
     if (check) {
       const inspection = await inspectPackageBridge(identity.canonicalProjectPath);
+      // 冲突指引与安装路径复用同一 owner，避免只报告状态却不给出处理办法。
       const nextActions = inspection.status === "installed" ? []
         : inspection.status === "conflict"
-          ? ["Resolve the reported assembly conflict, then rerun the same init package command."]
+          ? packageAssemblyConflictNextActions()
           : ["Run `unitycli init package --project <UnityProject>` to converge the Bridge package to the bundled version."];
       return success(requestId, { action: "init_package_check", projectPath: identity.canonicalProjectPath, package: inspection, nextActions });
     }

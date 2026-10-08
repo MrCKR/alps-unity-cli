@@ -39,6 +39,10 @@ test("init help is self-contained for minimal decisions, explicit targets, norma
   assert.match(instructions, /independent authorized effects/i);
   assert.match(instructions, /failure blocks only that effect/i);
   assert.match(instructions, /corresponding `--check`/);
+  assert.match(instructions, /PACKAGE_ASSEMBLY_CONFLICT/);
+  assert.match(instructions, /PACKAGE_ASSEMBLY_SCAN_BUDGET_EXHAUSTED/);
+  assert.match(instructions, /never delete, move, or rename project files yourself/i);
+  assert.match(instructions, /let the user decide which copy to remove or relocate/i);
   assert.doesNotMatch(instructions, /Stop immediately after the first unexpected|do not continue with later installation/i);
   assert.doesNotMatch(JSON.stringify(data), /README|pkg-only|skill-only/);
 });

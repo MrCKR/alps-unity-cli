@@ -31,6 +31,7 @@ export function handleInitHelp(args: string[], flags: Record<string, string | bo
       "Bridge and Skill installation are independent authorized effects. A failure blocks only that effect and its check; continue other user-authorized independent installation effects and report every final status.",
       "Run one corresponding `--check` after each successful package or Skill installation and verify its business status.",
       "For a recoverable installation error, follow its exact nextActions after the required external state changes. Do not create unbounded retries or change the user's selected targets.",
+      "A pre-effect package precheck block means no package file was written: `PACKAGE_ASSEMBLY_CONFLICT` reports copies of a protected dependency that the Bridge must own inside its own package, so report the exact paths and identities from details.conflicts, let the user decide which copy to remove or relocate, and never delete, move, or rename project files yourself; `PACKAGE_ASSEMBLY_SCAN_BUDGET_EXHAUSTED` is a scan-scale backstop, not a conflict, so report its counts instead of changing the project.",
       "Do not start or restart Unity Editor during installation. Normal close is allowed only for the exact project and only through the explicitly authorized --close-editor package call.",
       "The user's installation request authorizes the selected package and Skill effects; do not add confirmation gates except the separate close-Editor decision.",
     ],

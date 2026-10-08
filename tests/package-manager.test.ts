@@ -144,10 +144,10 @@ test("Bridge inspection distinguishes missing, damaged, drifted, and repaired in
   }
 });
 
-test("assembly conflict inspection blocks unknown providers and allows Pipeline plus official Newtonsoft", async () => {
+test("assembly conflict inspection blocks any other provider of the bundled assembly", async () => {
   const project = await makeUnityProject();
   try {
-    const otherDll = join(project, "Packages", "com.example.conflict", "Plugins", "Newtonsoft.Json.dll");
+    const otherDll = join(project, "Packages", "com.example.conflict", "Plugins", "0Harmony.dll");
     const pipelineDll = join(project, "Packages", "com.unity.pipeline", "Runtime", "Plugins", "CodeAnalysis", "Microsoft.CodeAnalysis.dll");
     await mkdir(join(otherDll, ".."), { recursive: true });
     await mkdir(join(pipelineDll, ".."), { recursive: true });
@@ -158,7 +158,7 @@ test("assembly conflict inspection blocks unknown providers and allows Pipeline 
     assert.equal(conflict.status, "conflict");
     assert.equal(conflict.conflicts.length, 1);
     assert.equal(conflict.conflicts[0].provider, "com.example.conflict");
-    assert.equal(conflict.conflicts[0].assemblyFileName, "Newtonsoft.Json.dll");
+    assert.equal(conflict.conflicts[0].assemblyFileName, "0Harmony.dll");
     assert.match(conflict.conflicts[0].sha256, /^[a-f0-9]{64}$/);
     await assert.rejects(() => preparePackageBridgeInstall(project), (error: unknown) => {
       const typed = error as { code?: string; details?: { conflicts?: Array<{ relativePath?: string }> }; nextActions?: string[] };
@@ -171,7 +171,7 @@ test("assembly conflict inspection blocks unknown providers and allows Pipeline 
     assert.equal((await inspectPackageBridge(project)).status, "conflict");
 
     await rm(join(project, "Packages", "com.example.conflict"), { recursive: true, force: true });
-    const cacheDll = join(project, "Library", "PackageCache", "com.example.cached@1.0.0", "Runtime", "Newtonsoft.Json.dll");
+    const cacheDll = join(project, "Library", "PackageCache", "com.example.cached@1.0.0", "Runtime", "0Harmony.dll");
     await mkdir(join(cacheDll, ".."), { recursive: true });
     await writeFile(cacheDll, "cached conflict", "utf8");
     const cacheConflict = await inspectPackageAssemblyConflicts(project);
@@ -179,14 +179,18 @@ test("assembly conflict inspection blocks unknown providers and allows Pipeline 
     assert.equal(cacheConflict.conflicts[0].source, "PackageCache");
     await rm(join(project, "Library", "PackageCache", "com.example.cached@1.0.0"), { recursive: true, force: true });
 
-    const officialDll = join(project, "Packages", "com.unity.nuget.newtonsoft-json", "Runtime", "Newtonsoft.Json.dll");
-    await mkdir(join(officialDll, ".."), { recursive: true });
-    await writeFile(officialDll, "official provider", "utf8");
+    // Newtonsoft 不再受保护：项目自带副本、官方包副本与第三方副本都不阻止 Bridge 安装。
+    for (const copy of [
+      join(project, "Assets", "ThirdLib", "Newtonsoft.Json", "Newtonsoft.Json.dll"),
+      join(project, "Packages", "com.unity.nuget.newtonsoft-json", "Runtime", "Newtonsoft.Json.dll"),
+      join(project, "Packages", "com.example.vendor", "Plugins", "Newtonsoft.Json.dll")
+    ]) {
+      await mkdir(join(copy, ".."), { recursive: true });
+      await writeFile(copy, "project supplied json.net", "utf8");
+    }
     const clear = await inspectPackageAssemblyConflicts(project);
-    assert.equal(clear.status, "clear");
+    assert.equal(clear.status, "clear", JSON.stringify(clear.conflicts));
     assert.equal(clear.conflicts.length, 0);
-    assert.equal(clear.allowedMatches.length, 1);
-    assert.equal(clear.allowedMatches[0].provider, "com.unity.nuget.newtonsoft-json");
     const installed = await ensurePackageBridge(project);
     assert.equal((await checkPackageBridge(project)).sourceHash, installed.sourceHash);
   } finally {

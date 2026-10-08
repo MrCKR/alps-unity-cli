@@ -159,7 +159,7 @@ test("init package rejects missing project, positional arguments, old flags, and
 test("init package exposes structured assembly conflicts before target effects", async () => {
   const project = await makeUnityProject();
   try {
-    const conflict = join(project, "Packages", "com.example.conflict", "Plugins", "Newtonsoft.Json.dll");
+    const conflict = join(project, "Packages", "com.example.conflict", "Plugins", "0Harmony.dll");
     await mkdir(join(conflict, ".."), { recursive: true });
     await writeFile(conflict, "conflict", "utf8");
     const result = await execute(["init", "package", "--project", project], runtime(project) as never);
@@ -170,9 +170,23 @@ test("init package exposes structured assembly conflicts before target effects",
       assert.equal(details.conflicts?.[0]?.provider, "com.example.conflict");
       assert.match(String(details.conflicts?.[0]?.relativePath), /com\.example\.conflict/);
       assert.match(String(details.conflicts?.[0]?.sha256), /^[a-f0-9]{64}$/);
-      assert.ok(result.error.nextActions.length > 0);
+      const guidance = result.error.nextActions.join("\n");
+      assert.match(guidance, /identicalToPackageDependency/);
+      assert.match(guidance, /never delete, move, or rename project files yourself/i);
+      assert.match(guidance, /nothing was installed/i);
     }
     await assert.rejects(() => readFile(join(project, "Packages", "com.alpsckr.unitycli", "package.json")), { code: "ENOENT" });
+
+    // 只读检查路径必须给出与安装路径同一份冲突处理指引，不能只说“有冲突”。
+    const checked = await execute(["init", "package", "--project", project, "--check"], runtime(project) as never);
+    assert.equal(checked.ok, true, JSON.stringify(checked));
+    if (checked.ok) {
+      const data = checked.data as { package?: { status?: string }; nextActions?: string[] };
+      assert.equal(data.package?.status, "conflict");
+      const checkGuidance = (data.nextActions ?? []).join("\n");
+      assert.match(checkGuidance, /identicalToPackageDependency/);
+      assert.match(checkGuidance, /never delete, move, or rename project files yourself/i);
+    }
   } finally {
     await rm(project, { recursive: true, force: true });
   }

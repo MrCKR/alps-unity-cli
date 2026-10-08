@@ -13,9 +13,7 @@
     "autoReferenced": true,
     "allowUnsafeCode": false,
     "overrideReferences": true,
-    "precompiledReferences": [
-        "Newtonsoft.Json.dll"
-    ],
+    "precompiledReferences": [],
     "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false

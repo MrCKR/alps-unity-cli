@@ -14,15 +14,6 @@
       "sha256": "7b9e756306fa3d7620e02a857c8927a6ab04973f9bd8a77d3866700a6deac55c"
     }
   ],
-  "editorProvidedAssemblies": [
-    {
-      "fileName": "Newtonsoft.Json.dll",
-      "assemblyName": "Newtonsoft.Json",
-      "minimumAssemblyVersion": "13.0.0.0",
-      "provider": "Unity Editor/Data/Managed",
-      "referencedBy": "UnityCli.Editor.asmdef"
-    }
-  ],
   "compiler": {
     "mode": "editor-bundled-csc-subprocess",
     "sharedOwner": "Editor/Infrastructure/DynamicCodeCompiler.cs",
@@ -51,14 +42,10 @@
   },
   "conflictPolicy": {
     "protectedAssemblyFileNames": [
-      "0Harmony.dll",
-      "Newtonsoft.Json.dll"
+      "0Harmony.dll"
     ],
-    "allowedPackageProviders": [
-      "com.unity.nuget.newtonsoft-json"
-    ],
-    "maxDirectories": 8192,
-    "maxFiles": 100000,
+    "maxDirectories": 65536,
+    "maxScannedEntries": 4000000,
     "maxIdentityFiles": 4096,
     "maxConflicts": 200
   }

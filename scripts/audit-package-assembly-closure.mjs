@@ -47,18 +47,16 @@ for (const entry of contract.bundledAssemblies ?? []) {
   }
 }
 
-const expectedPrecompiled = (contract.editorProvidedAssemblies ?? []).map((entry) => entry.fileName).sort();
 const actualPrecompiled = [...(editorAsmdef.precompiledReferences ?? [])].sort();
-if (JSON.stringify(actualPrecompiled) !== JSON.stringify(expectedPrecompiled)) failures.push(`UnityCli.Editor.asmdef precompiledReferences mismatch: expected ${JSON.stringify(expectedPrecompiled)}, actual ${JSON.stringify(actualPrecompiled)}`);
+if (actualPrecompiled.length !== 0) failures.push(`UnityCli.Editor.asmdef must not reference project precompiled assemblies: ${JSON.stringify(actualPrecompiled)}`);
 if (editorAsmdef.overrideReferences !== true) failures.push("UnityCli.Editor.asmdef must keep overrideReferences=true");
 
-// 受保护文件名由随包 DLL 与 Editor 提供 DLL 的并集推导，不单独维护第二份名单。
+// 受保护文件名只由随包 DLL 派生：Editor 提供程序集不再进入受保护集合。
 const bundledFileNames = (contract.bundledAssemblies ?? []).map((entry) => entry.fileName);
-const expectedProtected = [...new Set([...expectedPrecompiled, ...bundledFileNames])].sort();
+const expectedProtected = [...new Set(bundledFileNames)].sort();
 const protectedAssemblies = [...(contract.conflictPolicy?.protectedAssemblyFileNames ?? [])].sort();
-if (JSON.stringify(protectedAssemblies) !== JSON.stringify(expectedProtected)) failures.push(`conflictPolicy protected assemblies must equal the bundled plus Editor-provided DLL file names: expected ${JSON.stringify(expectedProtected)}`);
+if (JSON.stringify(protectedAssemblies) !== JSON.stringify(expectedProtected)) failures.push(`conflictPolicy protected assemblies must equal the bundled DLL file names: expected ${JSON.stringify(expectedProtected)}`);
 if (expectedProtected.some((name) => typeof name !== "string" || !name)) failures.push("protected assembly file names must be non-empty strings");
-if (bundledFileNames.some((name) => expectedPrecompiled.includes(name))) failures.push("a bundled assembly cannot also be declared as Editor-provided");
 
 // 每个随包 DLL 必须声明完整来源与身份，供安装冲突检查与许可证归档使用。
 for (const entry of contract.bundledAssemblies ?? []) {
@@ -68,11 +66,10 @@ for (const entry of contract.bundledAssemblies ?? []) {
   if (typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256)) failures.push(`bundled assembly ${entry.path ?? "<unknown>"} must declare a lowercase sha256`);
   if (typeof entry.path === "string" && !entry.path.endsWith(entry.fileName ?? "")) failures.push(`bundled assembly path must end with its fileName: ${entry.path}`);
 }
-if (!Array.isArray(contract.conflictPolicy?.allowedPackageProviders) || !contract.conflictPolicy.allowedPackageProviders.includes("com.unity.nuget.newtonsoft-json")) failures.push("conflictPolicy must allow the official Newtonsoft package provider");
-for (const entry of [...(contract.bundledAssemblies ?? []), ...(contract.editorProvidedAssemblies ?? [])]) {
+for (const entry of contract.bundledAssemblies ?? []) {
   if (typeof entry.assemblyName !== "string" || !entry.assemblyName) failures.push(`protected assembly ${entry.fileName ?? "<unknown>"} must declare an assemblyName for identity matching`);
 }
-for (const field of ["maxDirectories", "maxFiles", "maxIdentityFiles", "maxConflicts"]) {
+for (const field of ["maxDirectories", "maxScannedEntries", "maxIdentityFiles", "maxConflicts"]) {
   const value = contract.conflictPolicy?.[field];
   if (!Number.isSafeInteger(value) || value <= 0) failures.push(`conflictPolicy ${field} must be a positive integer`);
 }
@@ -163,9 +160,8 @@ const result = {
   packageName: packageManifest.name,
   minimumUnityVersion: packageManifest.unity,
   bundledAssemblies: dlls,
-  editorProvidedAssemblies: expectedPrecompiled,
   compilerMode: contract.compiler?.mode,
-  conflictPolicy: { protectedAssemblies, allowedPackageProviders: contract.conflictPolicy?.allowedPackageProviders ?? [] },
+  conflictPolicy: { protectedAssemblies },
   failures,
 };
 console.log(JSON.stringify(result, null, 2));

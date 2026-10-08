@@ -47,6 +47,10 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_EDITOR_CLOSE_FAILED` | 无法向准确目标Editor发送正常关闭请求 | 用户正常关闭该项目后重新安装；不得强制终止 |
 | `E_EDITOR_CLOSE_BLOCKED` | 正常关闭后Editor仍存在，通常有未保存或modal提示 | 由用户处理Unity提示并正常关闭，再重新安装 |
 | `PACKAGE_DIRECTORY_LOCKED` | Windows持续占用现有Bridge目录，原子替换无法提交 | 关闭使用该Package的Unity、IDE或扫描进程，再重新安装；不要手工部分删除 |
+| `PACKAGE_ASSEMBLY_CONFLICT` | 项目其他来源提供了UnityCLI必须独占的随包程序集（文件名或assembly identity命中） | 预检在effect前，未写入任何文件。按`details.conflicts`判定：带`identicalToPackageDependency:true`的是与包内字节一致的冗余副本，可由用户移除；项目或Player构建确实需要的副本无法用包内（仅Editor）副本代替，此时应如实报告该项目无法安装Bridge。不得自行删除/移动/重命名项目文件，也存在Assets/Packages/PackageCache内部改名或搬移都清不掉的identity匹配 |
+| `PACKAGE_ASSEMBLY_CONFLICT_LIMIT` | 冲突数量超过可枚举上限 | 按`details.conflicts`处理已列出的冲突后重跑；不要删除整个目录 |
+| `PACKAGE_ASSEMBLY_SCAN_BUDGET_EXHAUSTED` | 扫描规模超出兜底预算，**不代表存在冲突** | 按`details.budget`、`details.limits`、`details.roots`与`details.largestDirectories`报告规模；不得为此删除项目内容或修改已安装包 |
+| `PACKAGE_ASSEMBLY_SCAN_UNSAFE` | 扫描遇到符号链接条目，无法证明扫描范围 | 将`details.path`指出的链接替换为真实项目内容后重跑 |
 | `E_INIT_SKILL_TARGET_REQUIRED` | 既未给出明确Skill目录，也未给出预设agent/scope | 使用`--target <SkillDirectory>`，或选择一个预设目标 |
 | `E_INIT_SKILL_TARGET_CONFLICT` | 明确`--target`与预设agent/scope参数混用 | 保留明确目录或预设形式之一 |
 | `E_INIT_SKILL_TARGET_INVALID` | 明确目标不是安全的本地`unitycli`目录，或位于安装事务目录 | 传独立的固定本地完整目录，例如`.pi/skills/unitycli` |
