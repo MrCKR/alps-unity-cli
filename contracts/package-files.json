@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
-  "packageVersion": "0.6.0",
-  "sourceHash": "140ef959b0a90bd6a6ac6be66cef9e53379ed5f8be32168fa157f5c3c2cd5fd7",
+  "packageVersion": "0.6.1",
+  "sourceHash": "2ab944b642d2ab377d7bf7b60915188eeddb00f210eb336e74ed52b0b2f80b0b",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -81,8 +81,8 @@
     },
     {
       "path": "Editor/Infrastructure/MethodHooks/MethodHookDefinition.cs",
-      "size": 26126,
-      "sha256": "083d56916caa566f8e7854c0553385a642004e9101390bc4489c554c1b4179a3"
+      "size": 25622,
+      "sha256": "8003e29dafba163e2ab1ed60b827a3016b57fccfed08f1b5497508afb38aabfa"
     },
     {
       "path": "Editor/Infrastructure/MethodHooks/MethodHookEventBuffer.cs",
@@ -96,13 +96,13 @@
     },
     {
       "path": "Editor/Infrastructure/MethodHooks/MethodHookHost.Operations.cs",
-      "size": 40395,
-      "sha256": "ab794f2be39a2d950b8adac6e09cc8a1f58cc97516615c07166fa75b12f3d4e8"
+      "size": 39656,
+      "sha256": "684015619f4b56c13e09e323906c8f0a958334a7f9a232b44ba4591684f8f201"
     },
     {
       "path": "Editor/Infrastructure/MethodHooks/MethodHookHost.cs",
-      "size": 67442,
-      "sha256": "d3f87d332bc17ee2ce09e04eb53c899ea113345b4f880d694cfd1377c154a108"
+      "size": 66248,
+      "sha256": "1c38bb1e713f5c4c0cfc95fa38ad393c929658862c82ca2e9718c1db9b220e1a"
     },
     {
       "path": "Editor/Infrastructure/MethodHooks/MethodHookLimits.cs",
@@ -1076,8 +1076,8 @@
     },
     {
       "path": "Editor/Tools/method-hook/enable.cs",
-      "size": 4119,
-      "sha256": "8618727e8f79519fa18d9b3011370e65ce892ef0e6993274b92f5f5f73471082"
+      "size": 4117,
+      "sha256": "d76eb7d4175fac7a8ef3ca671fbb3956cb1fab84c6aa4d711b7f2322d9268b55"
     },
     {
       "path": "Editor/Tools/method-hook/events.cs",
@@ -1091,8 +1091,8 @@
     },
     {
       "path": "Editor/Tools/method-hook/install.cs",
-      "size": 6267,
-      "sha256": "82dd10a0e2cb987d43b9f02f719cb172f03c120a507c95457dffcb5222acdfe9"
+      "size": 6265,
+      "sha256": "f2d81c03f3bf90c4999dfc914e79625f6e59cb97e6c32915fc1e2667cabdbbcf"
     },
     {
       "path": "Editor/Tools/method-hook/list.cs",
@@ -1106,8 +1106,8 @@
     },
     {
       "path": "Editor/Tools/method-hook/replace.cs",
-      "size": 4077,
-      "sha256": "9087932dcb5a8d843c7a3e41ff79ff8105281e2f071bfbdd93128c7c33fe9cc2"
+      "size": 4075,
+      "sha256": "a7dda2b00522283f1140d5798a9903b34a934c6a38728020aa3cc176b8c4d8e3"
     },
     {
       "path": "Editor/Tools/navmesh/NavMeshToolSupport.cs",
@@ -2167,7 +2167,7 @@
     {
       "path": "package.json",
       "size": 268,
-      "sha256": "12a3c58f519bb2eb0e6663baca462b47e987d2d134900cf937d46810a87cadee"
+      "sha256": "73eb2b40566cc5a86c67173c35f53293efb1e146c383ff72d318bd102b4ada83"
     }
   ]
 }
