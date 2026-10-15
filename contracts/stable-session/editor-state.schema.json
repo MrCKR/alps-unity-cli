@@ -45,9 +45,13 @@
     "observation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["freshness"],
+      "required": ["freshness", "reason"],
       "properties": {
-        "freshness": { "enum": ["live", "fresh", "stale", "unknown"] }
+        "freshness": { "enum": ["live", "fresh", "stale", "unknown"] },
+        "reason": {
+          "description": "Why Unity process identity could not be proven; null when this read proved it.",
+          "enum": ["access-denied", "timeout", "unavailable", "mismatch", null]
+        }
       }
     }
   },

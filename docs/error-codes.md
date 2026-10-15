@@ -66,7 +66,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_INSTANCE_NOT_FOUND` | selector 在当前截止时间内没有对应项目记录 | 核对项目路径/alias；完整instance ID在目标Unity启动时会等待首次记录 |
 | `E_INSTANCE_NOT_RUNNING` | 项目 identity 已确定，且没有可验证的运行中 Editor | 打开该项目；CLI会在本次调用内等待首次ready记录 |
 | `E_INSTANCE_CONFLICT` | 至少两个已验证live process claim声明同一项目 | 关闭重复Editor，只保留目标session |
-| `E_INSTANCE_UNVERIFIABLE` | PID/start、project claim、Registry读取或权限证据不完整 | 重新观察identity；不得把未知mutation自动重投 |
+| `E_INSTANCE_UNVERIFIABLE` | PID/start、project claim、Registry读取或权限证据不完整 | 先读`details.reason`：`access-denied`表示当前宿主拒绝OS进程查询，应在能读取Unity进程身份的会话中重新观察；不得把未知mutation自动重投 |
 | `E_INSTANCE_IDENTITY_MISMATCH` | 当前Unity无法在截止时间内重建并证明一致的项目身份 | 更新匹配的CLI/Package，打开该项目并重新观察；不要手工修改内部记录 |
 | `E_UNITY_UNRESPONSIVE` | transport identity存在，但近期Unity主线程pulse或Bridge响应不可证明 | 读取`editor.state`与`editor.dialogs`后处理transition/modal |
 | `E_INSTANCE_PROJECT_MISMATCH` | 显式项目约束与 selector 指向不同 identity | 统一 `--project` 和 `--instance` |

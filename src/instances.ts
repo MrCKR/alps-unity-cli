@@ -110,11 +110,58 @@ export interface UnityInstance {
   buildStamp?: string;
   toolCatalogFingerprint?: string;
   claimVerification: "verified" | "unverifiable" | "none";
+  claimReason?: IdentityEvidenceReason;
   processClaimIds?: number[];
+}
+
+/**
+ * 进程身份证据不可用的有界归因。
+ * 只描述观察失败原因供调用方形成恢复决策；不改变 status 归约、identity 证明强度或 fail-closed 语义。
+ */
+export type IdentityEvidenceReason = "access-denied" | "timeout" | "unavailable" | "mismatch";
+
+const ACCESS_DENIED_MARKERS = ["access is denied", "access denied", "requested registry access is not allowed", "拒绝访问", "没有权限"];
+
+/** 只在明确权限拒绝特征时归因 access-denied；其他失败保持 unavailable，禁止猜测。 */
+function classifyIdentityEvidenceFailure(text: string | null | undefined, timedOut: boolean): IdentityEvidenceReason {
+  if (timedOut) return "timeout";
+  const normalized = (text ?? "").toLowerCase();
+  return ACCESS_DENIED_MARKERS.some((marker) => normalized.includes(marker)) ? "access-denied" : "unavailable";
+}
+
+/** execFile 失败文本只用于归因，不进入业务结果。 */
+function failureReasonFromError(error: unknown): IdentityEvidenceReason {
+  if (!error || typeof error !== "object") return "unavailable";
+  const record = error as Record<string, unknown>;
+  const text = [record.stderr, record.stdout, (error as Error).message].filter((value): value is string => typeof value === "string").join(" ");
+  return classifyIdentityEvidenceFailure(text, record.killed === true || record.code === "ETIMEDOUT");
+}
+
+/** 取本次观察的首个失败归因；无观察级归因时按 live claim 数量区分 mismatch 与 unavailable。 */
+function claimEvidenceReason(claims: RegistrySession[], observations: Map<number, ProcessObservation> | undefined, aliveClaims: number): IdentityEvidenceReason {
+  if (!observations) return "unavailable";
+  const observed = claims.map((session) => observations.get(session.processId)?.reason).find((reason): reason is IdentityEvidenceReason => !!reason);
+  return observed ?? (aliveClaims > 1 ? "mismatch" : "unavailable");
+}
+
+/** 权限拒绝与普通观察失败的恢复路径不同；两者都禁止重试结果未知的 mutation。 */
+export function unverifiableNextActions(reason: IdentityEvidenceReason | undefined): string[] {
+  if (reason === "access-denied") {
+    return [
+      "This host denied OS process inspection, so Unity process identity cannot be proven from this session.",
+      "Run the CLI from a host session that can read Unity process identity, then observe editor.state again.",
+      "Do not retry a prior mutation whose outcome is unknown.",
+    ];
+  }
+  return [
+    "Run unitycli instances list or tools run editor.state to observe the current identity again.",
+    "Do not retry a prior mutation whose outcome is unknown.",
+  ];
 }
 
 export interface ProjectProcessClaimInspection {
   verification: "verified" | "unverifiable" | "unsupported";
+  reason?: IdentityEvidenceReason;
   processIds: number[];
   processClaims?: Array<{ processId: number; processStartedAt: string }>;
 }
@@ -159,6 +206,7 @@ interface ProcessObservation {
   processStartedAt?: string;
   executablePath?: string;
   state: "alive" | "dead" | "unverifiable";
+  reason?: IdentityEvidenceReason;
 }
 
 export type SessionProcessVerification = "verified" | "dead" | "unverifiable";
@@ -461,7 +509,7 @@ export async function selectTransitionInstanceForFlags(
     && (claims.processIds.length !== 1 || claims.processIds[0] !== session.processId);
   if (verification === "dead") throw targetNotRunning(instance, target);
   if (verification !== "verified" || contradictoryClaim) {
-    throw targetUnverifiable({ ...instance, processClaimIds: claims?.processIds ?? [] }, target);
+    throw targetUnverifiable({ ...instance, processClaimIds: claims?.processIds ?? [], ...(claims?.reason ? { claimReason: claims.reason } : {}) }, target);
   }
   return { instance: { ...instance, ...(claims ? { processClaimIds: claims.processIds } : {}) }, matchedBy: selection.matchedBy };
 }
@@ -546,11 +594,8 @@ function targetConflict(_instance: UnityInstance, target: InstanceTarget): Insta
 }
 
 /** identity观察不完整时fail closed，但不得建议关闭并不存在的duplicate。 */
-function targetUnverifiable(_instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
-  return new InstanceRegistryError("E_INSTANCE_UNVERIFIABLE", `The selected ${target} process identity could not be verified safely.`, [
-    "Run unitycli instances list or tools run editor.state to observe the current identity again.",
-    "Do not retry a prior mutation whose outcome is unknown.",
-  ]);
+function targetUnverifiable(instance: UnityInstance, target: InstanceTarget): InstanceRegistryError {
+  return new InstanceRegistryError("E_INSTANCE_UNVERIFIABLE", `The selected ${target} process identity could not be verified safely.`, unverifiableNextActions(instance.claimReason), instance.claimReason ? { reason: instance.claimReason } : undefined);
 }
 
 /** 即时观察只归约原始 registry：不得发 health 请求或扫描旧 PID。 */
@@ -602,6 +647,7 @@ export function reduceObservationRegistryRecord(record: InstanceRegistryV3, obse
     buildStamp: activeSession?.buildStamp,
     toolCatalogFingerprint: activeSession?.toolCatalogFingerprint,
     claimVerification: sessions.length === 0 ? "none" : processUnverifiable ? "unverifiable" : "verified",
+    ...(status === "unverifiable" ? { claimReason: claimEvidenceReason(sessions, observations, verifiedSessions.length) } : {}),
   };
 }
 
@@ -719,8 +765,8 @@ export async function inspectProjectProcessClaims(identity: RegistryIdentity | P
     const processClaims = processes.map((item) => ({ processId: item.processId, processStartedAt: item.processStartedAt }))
       .sort((left, right) => left.processId - right.processId);
     return { verification: "verified", processIds: [...new Set(processClaims.map((item) => item.processId))], processClaims };
-  } catch {
-    return { verification: "unverifiable", processIds: [] };
+  } catch (error) {
+    return { verification: "unverifiable", reason: failureReasonFromError(error), processIds: [] };
   }
 }
 
@@ -759,11 +805,12 @@ export function applyProjectProcessClaimInspection(instance: UnityInstance, insp
   const exact = inspection.processIds.length === 1
     && registeredEditorProcessIds.length === 1
     && inspection.processIds[0] === registeredEditorProcessIds[0];
-  return exact ? { ...instance, processClaimIds: inspection.processIds } : unverifiableInstance(instance, inspection.processIds);
+  // 命令行 claim 与registry claim互相矛盾才归因 mismatch；观察本身失败时保留原归因。
+  return exact ? { ...instance, processClaimIds: inspection.processIds } : unverifiableInstance(instance, inspection.processIds, "mismatch");
 }
 
 /** 无法证明唯一ownership时清除任何可执行session，但绝不伪造duplicate blocker。 */
-function unverifiableInstance(instance: UnityInstance, processClaimIds: number[]): UnityInstance {
+function unverifiableInstance(instance: UnityInstance, processClaimIds: number[], reason: IdentityEvidenceReason): UnityInstance {
   return {
     ...instance,
     status: "unverifiable",
@@ -775,6 +822,7 @@ function unverifiableInstance(instance: UnityInstance, processClaimIds: number[]
     progress: [],
     blockers: [],
     claimVerification: "unverifiable",
+    claimReason: reason,
     processClaimIds,
   };
 }
@@ -849,6 +897,7 @@ export async function reduceRegistryRecord(
     buildStamp: selected?.buildStamp,
     toolCatalogFingerprint: selected?.toolCatalogFingerprint,
     claimVerification: claims.length === 0 ? "none" : status === "unverifiable" ? "unverifiable" : "verified",
+    ...(status === "unverifiable" ? { claimReason: claimEvidenceReason(allClaims, observations, allClaims.filter((session) => observations.get(session.processId)?.state === "alive").length) } : {}),
   };
 }
 
@@ -1070,13 +1119,14 @@ export async function probeProcessObservations(processIds: number[], timeoutMs =
     "  $process = Get-Process -Id ([int]$id) -ErrorAction SilentlyContinue",
     "  if ($null -eq $process) { [pscustomobject]@{ processId=[int]$id; state='dead' }; continue }",
     "  try { [pscustomobject]@{ processId=[int]$id; state='alive'; processStartedAt=$process.StartTime.ToUniversalTime().ToString('O'); executablePath=$process.Path } }",
-    "  catch { [pscustomobject]@{ processId=[int]$id; state='unverifiable' } }",
+    "  catch { [pscustomobject]@{ processId=[int]$id; state='unverifiable'; error=[string]$_.Exception.Message } }",
     "}",
     "@($items) | ConvertTo-Json -Compress -Depth 3",
   ].join("\n");
   const execution = runPowerShell(command, { UNITY_CLI_PROCESS_IDS: JSON.stringify(ids) }, Math.max(1, timeoutMs));
   if (execution.status !== 0 || execution.error) {
-    return new Map(ids.map((processId) => [processId, { processId, state: "unverifiable" as const }]));
+    const reason = classifyIdentityEvidenceFailure(`${execution.stderr ?? ""} ${execution.error?.message ?? ""}`, execution.signal === "SIGTERM" || (execution.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT");
+    return new Map(ids.map((processId) => [processId, { processId, state: "unverifiable" as const, reason }]));
   }
   try {
     const line = execution.stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).at(-1);
@@ -1090,10 +1140,12 @@ export async function probeProcessObservations(processIds: number[], timeoutMs =
         state,
         processStartedAt: typeof item.processStartedAt === "string" ? item.processStartedAt : undefined,
         executablePath: typeof item.executablePath === "string" ? item.executablePath : undefined,
+        // 内层 catch 回传真实异常文本；缺失时退回脚本级 stderr 归因。
+        ...(state === "unverifiable" ? { reason: classifyIdentityEvidenceFailure(typeof item.error === "string" ? item.error : execution.stderr, false) } : {}),
       } satisfies ProcessObservation];
     }));
   } catch {
-    return new Map(ids.map((processId) => [processId, { processId, state: "unverifiable" as const }]));
+    return new Map(ids.map((processId) => [processId, { processId, state: "unverifiable" as const, reason: "unavailable" as const }]));
   }
 }
 

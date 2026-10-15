@@ -5,7 +5,9 @@ import {
   applyProjectProcessClaimInspection,
   inspectProjectProcessClaims,
   selectObservationInstanceForFlags,
+  unverifiableNextActions,
   verifyRegistrySessionProcess,
+  type IdentityEvidenceReason,
   type ProjectProcessClaimInspection,
   type RegistryIdentity,
   type RegistrySession,
@@ -42,7 +44,7 @@ export interface EditorStateResult {
   state: { compile: ObservedField; import: ObservedField; build: ObservedField; playMode: ObservedField; prefabStage: ObservedField; activeScene: ObservedField; runtime: ObservedField };
   progress: EditorStateProgress[];
   blockers: EditorStateBlocker[];
-  observation: { freshness: Freshness };
+  observation: { freshness: Freshness; reason: IdentityEvidenceReason | null };
 }
 
 const STATE_FIELDS = ["compile", "import", "build", "playMode", "prefabStage", "activeScene", "runtime"] as const;
@@ -101,7 +103,7 @@ export async function readEditorState(context: EditorStateReadContext, dependenc
     if (observed.outcome === "conflict") return makeResult(instance, undefined, "conflict", undefined, [], [], false);
     if (observed.outcome === "offline") return makeResult(instance, undefined, "offline", undefined, [], [], false);
     if (observed.outcome === "observed-empty") return makeResult(instance, undefined, "transitioning", undefined, [], [], false);
-    return makeResult(instance, undefined, "unverifiable", undefined, [], [], false);
+    return makeResult(instance, undefined, "unverifiable", undefined, [], [], false, observed.evidenceReason);
   }
 
   const fallbackBudgetMs = remaining(observationDeadlineMs);
@@ -138,12 +140,12 @@ export async function readEditorState(context: EditorStateReadContext, dependenc
     if (independent.outcome === "observed-blocked") return makeResult(inspected, undefined, "blocked", undefined, [], sanitizeEditorBlockers(independent.blockers), false);
     if (independent.outcome === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], [], false);
     if (independent.outcome === "offline") return makeResult(inspected, undefined, "offline", undefined, [], [], false);
-    return makeResult(inspected, undefined, "unverifiable", undefined, [], [], false);
+    return makeResult(inspected, undefined, "unverifiable", undefined, [], [], false, independent.evidenceReason);
   }
   const observed = await observeVerifiedRegistrySession(identityOf(instance), session, observationDeadlineMs, verification, processClaims, observer);
   if (observed.outcome === "conflict") return makeResult(inspected, undefined, "conflict", undefined, [], [], false);
   if (observed.outcome === "offline") return makeResult(inspected, undefined, "offline", undefined, [], [], false);
-  if (observed.outcome === "unproven") return makeResult(inspected, undefined, "unverifiable", undefined, [], [], false);
+  if (observed.outcome === "unproven") return makeResult(inspected, undefined, "unverifiable", undefined, [], [], false, observed.evidenceReason);
   // 实时观察失败后，Registry 上一次 publication 的字段不再是当前事实：
   // 旧 PlayMode/compile/import、旧 progress 与历史 lifecycle 都不能继续作为当前状态返回。
   // 进程身份已验证但拿不到实时响应证据时，只能报告 unresponsive，并只保留本次独立观察到的 blocker。
@@ -158,7 +160,8 @@ export function rejectUnavailableEditorState(state: EditorStateResult, operation
     throw new StructuredToolError("E_INSTANCE_CONFLICT", `Multiple verified Unity Editor processes claim the project selected for ${operation}.`, ["Close duplicate Unity Editor processes and retry after editor.state reports one verified session."], { status: state.status });
   }
   if (state.status === "unverifiable") {
-    throw new StructuredToolError("E_INSTANCE_UNVERIFIABLE", `${operation} cannot prove one Unity process identity safely.`, ["Inspect instances list and editor.state; do not retry a prior mutation whose outcome is unknown."], { status: state.status });
+    const reason = state.observation.reason ?? "unavailable";
+    throw new StructuredToolError("E_INSTANCE_UNVERIFIABLE", `${operation} cannot prove one Unity process identity safely.`, unverifiableNextActions(reason), { status: state.status, reason });
   }
   if (state.status === "unresponsive") {
     throw new StructuredToolError("E_UNITY_UNRESPONSIVE", `${operation} cannot proceed because the verified Unity Editor main thread is not responsive.`, ["Inspect editor.state and editor.dialogs before deciding whether to submit a new request."], { status: state.status }, true, 250);
@@ -230,7 +233,8 @@ function hasExactKeys(value: Record<string, unknown>, names: readonly string[]):
   return keys.length === names.length && names.every((name) => Object.prototype.hasOwnProperty.call(value, name));
 }
 
-function makeResult(instance: UnityInstance, session: RegistrySession | undefined, status: EditorStateResult["status"], snapshot: Snapshot | undefined, progress: EditorStateProgress[], blockers: EditorStateBlocker[], live: boolean): EditorStateResult {
+/** unverifiable 终态只公开本次观察的归因；其他状态不披露证据来源。 */
+function makeResult(instance: UnityInstance, session: RegistrySession | undefined, status: EditorStateResult["status"], snapshot: Snapshot | undefined, progress: EditorStateProgress[], blockers: EditorStateBlocker[], live: boolean, observedReason?: IdentityEvidenceReason): EditorStateResult {
   const now = Date.now();
   const observedAt = snapshot?.observedAt ?? null;
   const observedAtMs = observedAt ? Date.parse(observedAt) : Number.NaN;
@@ -247,7 +251,7 @@ function makeResult(instance: UnityInstance, session: RegistrySession | undefine
     state,
     progress,
     blockers,
-    observation: { freshness },
+    observation: { freshness, reason: status === "unverifiable" ? observedReason ?? instance.claimReason ?? "unavailable" : null },
   };
 }
 

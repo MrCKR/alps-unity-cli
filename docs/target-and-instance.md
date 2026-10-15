@@ -28,7 +28,7 @@ unitycli instances prune --instance <id|projectPath|alias>
 | `transitioning` | compile、import、domain reload、listener交接或其他转换正在进行 |
 | `blocked` | 已证明存在需要外部处理的精确modal blocker |
 | `unresponsive` | transport identity存在，但近期Unity主线程pulse或Bridge响应无法证明 |
-| `unverifiable` | PID/start、project claim或文件观察不完整，无法安全证明唯一ownership |
+| `unverifiable` | PID/start、project claim或文件观察不完整，无法安全证明唯一ownership；`editor.state.observation.reason`给出本次失败归因 |
 | `offline` | 该项目没有已证明存活的Editor session |
 | `conflict` | 至少两个已验证live process claim同属该project identity |
 
@@ -47,6 +47,8 @@ Tool discovery、describe、`tools run`与`command`使用同一严格选择规�
 目标项目已有唯一Unity进程但尚未发布记录、正在编译/导入/重载或正在更换连接时，CLI会在原命令截止时间内等待；Unity没有运行时不会进行无意义的完整等待。完整instance ID无法反推出项目路径，因此显式ID会直接等待其固定记录直到截止时间。
 
 不存在按PID、短hash、单个存活Editor或任意健康实例自动选取的路径。只有至少两个已验证live process claim才返回`E_INSTANCE_CONFLICT`；权限失败、超时或PID/start/project identity无法证明时返回`E_INSTANCE_UNVERIFIABLE`。选定项目已证明无运行进程时返回`E_INSTANCE_NOT_RUNNING`。
+
+`E_INSTANCE_UNVERIFIABLE`的`details.reason`区分`access-denied`、`timeout`、`unavailable`与`mismatch`。`access-denied`表示当前宿主拒绝OS进程查询，与Unity侧状态无关；此类`nextActions`指向宿主会话而不是Unity。归因只改变`nextActions`，不改变identity证明强度或fail-closed语义。
 
 ```powershell
 unitycli tools describe editor.compile --instance <project-path>
@@ -78,7 +80,7 @@ alias 绑定完整 `instanceId`、canonical project path 和 canonicalization ve
 - 准入deadline到达返回effect-before `E_UNITY_BUSY`并证明业务请求未发送；
 - 放行后的超时或终态前断连返回`E_EXECUTION_TIMEOUT`，调用方必须先观察业务状态，再作新的提交决策。
 
-普通读取型Tool的成功结果来自同一validated generation的完整读取。exact `editor.state`、`editor.dialogs`、`editor.dialog.click`和六个域专用durable status Tool使用frozen本地descriptor进入同一dispatcher，不依赖可能被transition、modal或业务mutation阻断的Live catalog，三个Editor观察Tool不执行普通业务admission acquire/revoke；域status仍严格选择目标实例、取得独立只读root admission并只发送域绑定SafeStatus读取，但不取得mutation lease。`editor.state`在同一dispatch absolute deadline内合并Registry v3、Health v3内存主线程pulse、一次private snapshot Bridge观察、PID/start、project claim和Windows modal证据，返回七态与freshness；4秒/10秒子上限只能缩短该deadline。dialogs保持Windows-only，click仍重新证明exact PID/start/dialog/button并只执行一次effect。其他Tool与catalog listing仍严格依赖Live实例和普通准入。Domain Reload只由Registry lifecycle、新listener generation和该generation首个主线程pulse证明，不读取固定时长marker文件。
+普通读取型Tool的成功结果来自同一validated generation的完整读取。exact `editor.state`、`editor.dialogs`、`editor.dialog.click`和六个域专用durable status Tool使用frozen本地descriptor进入同一dispatcher，不依赖可能被transition、modal或业务mutation阻断的Live catalog，三个Editor观察Tool不执行普通业务admission acquire/revoke；域status仍严格选择目标实例、取得独立只读root admission并只发送域绑定SafeStatus读取，但不取得mutation lease。`editor.state`在同一dispatch absolute deadline内合并Registry v3、Health v3内存主线程pulse、一次private snapshot Bridge观察、PID/start、project claim和Windows modal证据，返回七态、freshness与本次identity证据归因；4秒/10秒子上限只能缩短该deadline。dialogs保持Windows-only，click仍重新证明exact PID/start/dialog/button并只执行一次effect。其他Tool与catalog listing仍严格依赖Live实例和普通准入。Domain Reload只由Registry lifecycle、新listener generation和该generation首个主线程pulse证明，不读取固定时长marker文件。
 
 ## Development Player Sidecar
 

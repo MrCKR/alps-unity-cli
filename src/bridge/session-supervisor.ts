@@ -7,6 +7,7 @@ import {
   selectInstanceForFlags,
   selectObservationInstanceForFlags,
   selectTransitionInstanceForFlags,
+  unverifiableNextActions,
   type InstanceSelection,
   type InstanceTarget,
   type RegistrySession,
@@ -973,10 +974,7 @@ function observedTransition(instance: UnityInstance): SessionSupervisorError {
 }
 
 function unverifiable(instance: UnityInstance): SessionSupervisorError {
-  return new SessionSupervisorError("E_INSTANCE_UNVERIFIABLE", "Unity process ownership could not be verified safely.", [
-    "Run unitycli instances list or tools run editor.state to observe the identity again.",
-    "Do not retry a prior mutation whose outcome is unknown.",
-  ], publicSessionDetails(instance), true, REGISTRY_POLL_INTERVAL_MS);
+  return new SessionSupervisorError("E_INSTANCE_UNVERIFIABLE", "Unity process ownership could not be verified safely.", unverifiableNextActions(instance.claimReason), { ...publicSessionDetails(instance), reason: instance.claimReason ?? "unavailable" }, true, REGISTRY_POLL_INTERVAL_MS);
 }
 
 function unresponsive(instance: UnityInstance): SessionSupervisorError {

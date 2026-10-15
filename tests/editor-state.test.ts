@@ -479,3 +479,75 @@ test("generated editor.state descriptor is exactly the stable public output sche
     await rm(fixture.root, { recursive: true, force: true });
   }
 });
+
+/** 捕获 rejectUnavailableEditorState 的稳定错误投影。 */
+function captureUnverifiableError(state: Parameters<typeof rejectUnavailableEditorState>[0]): { code: string; details?: Record<string, unknown>; nextActions: string[] } {
+  try {
+    rejectUnavailableEditorState(state, "fixture.operation");
+  } catch (error) {
+    return error as { code: string; details?: Record<string, unknown>; nextActions: string[] };
+  }
+  throw new Error("expected E_INSTANCE_UNVERIFIABLE");
+}
+
+test("editor.state attributes an unverifiable read to its failing evidence source", async () => {
+  const fixture = await stateFixture();
+  try {
+    const denied = reduceObservationRegistryRecord(makeRegistry(fixture.identity, [fixture.session]), new Map([[fixture.session.processId, {
+      processId: fixture.session.processId,
+      state: "unverifiable" as const,
+      reason: "access-denied" as const,
+    }]]));
+    assert.equal(denied.status, "unverifiable");
+    assert.equal(denied.activeSession, undefined);
+    assert.equal(denied.claimReason, "access-denied");
+
+    const deniedResult = await readEditorState({
+      requestId: "state-evidence-denied", flags: { instance: fixture.project }, dataDir: fixture.dataDir,
+      bridgeExecute: async () => { throw new Error("must not post"); },
+    }, {
+      selectObservation: async () => ({ instance: denied, matchedBy: "projectPath" as const }),
+      observer: { observe: async () => ({ outcome: "unproven" as const, blockers: [], reason: "process-claims-unverifiable" }) },
+    });
+    assert.equal(deniedResult.status, "unverifiable");
+    assert.equal(deniedResult.observation.reason, "access-denied");
+    assert.equal(deniedResult.observation.freshness, "unknown");
+
+    // observer 自己的归因优先于 instance 级归因，两者都只描述本次观察。
+    const observedResult = await readEditorState({
+      requestId: "state-evidence-timeout", flags: { instance: fixture.project }, dataDir: fixture.dataDir,
+      bridgeExecute: async () => { throw new Error("must not post"); },
+    }, {
+      selectObservation: async () => ({ instance: { ...denied, claimReason: undefined }, matchedBy: "projectPath" as const }),
+      observer: { observe: async () => ({ outcome: "unproven" as const, blockers: [], reason: "deadline", evidenceReason: "timeout" as const }) },
+    });
+    assert.equal(observedResult.observation.reason, "timeout");
+
+    const timeoutError = captureUnverifiableError(observedResult);
+    assert.deepEqual(timeoutError.details, { status: "unverifiable", reason: "timeout" });
+    assert.match(timeoutError.nextActions.join("\n"), /observe the current identity again/);
+
+    const permissionError = captureUnverifiableError(deniedResult);
+    assert.deepEqual(permissionError.details, { status: "unverifiable", reason: "access-denied" });
+    assert.match(permissionError.nextActions.join("\n"), /host denied OS process inspection/);
+    assert.doesNotMatch(permissionError.nextActions.join("\n"), /observe the current identity again/);
+
+    // 已证明 identity 的读取不披露证据来源。
+    const active = reduceObservationRegistryRecord(makeRegistry(fixture.identity, [{ ...fixture.session, lifecycle: "ready" }]), new Map([[fixture.session.processId, {
+      processId: fixture.session.processId, state: "alive" as const,
+      processStartedAt: fixture.session.processStartedAt, executablePath: process.execPath,
+    }]]));
+    const ready = await readEditorState({
+      requestId: "state-evidence-ready", flags: { instance: fixture.project }, dataDir: fixture.dataDir,
+      bridgeExecute: async (payload) => ({ ok: true, requestId: payload.requestId, data: { snapshot: snapshot(fixture.session), progress: [], blockers: [] } }),
+    }, {
+      selectObservation: async () => ({ instance: active, matchedBy: "projectPath" as const }),
+      verifySession: async () => "verified",
+      inspectClaims: async () => ({ verification: "verified" as const, processIds: [fixture.session.processId], processClaims: [{ processId: fixture.session.processId, processStartedAt: fixture.session.processStartedAt }] }),
+    });
+    assert.equal(ready.status, "ready");
+    assert.equal(ready.observation.reason, null);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});

@@ -6,6 +6,7 @@ import test from "node:test";
 import type { BridgeRequest } from "../src/bridge/types.js";
 import { execute } from "../src/cli.js";
 import { validateSchema } from "../src/schema/validator.js";
+import { unverifiableNextActions } from "../src/instances.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 const contract = JSON.parse(await readFile("contracts/instances-contract.json", "utf8")) as any;
@@ -48,6 +49,20 @@ test("actual instances list and prune envelopes pass the closed schema", async (
     assert.ok(validateSchema(schema, wrongRetention).length > 0);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("unverifiable recovery separates host permission denial from other observation failures", () => {
+  const denied = unverifiableNextActions("access-denied").join("\n");
+  assert.match(denied, /host denied OS process inspection/);
+  assert.match(denied, /Do not retry a prior mutation whose outcome is unknown/);
+  assert.doesNotMatch(denied, /observe the current identity again/);
+
+  for (const reason of ["timeout", "unavailable", "mismatch", undefined] as const) {
+    const actions = unverifiableNextActions(reason).join("\n");
+    assert.match(actions, /observe the current identity again/, String(reason));
+    assert.doesNotMatch(actions, /host denied OS process inspection/, String(reason));
+    assert.match(actions, /Do not retry a prior mutation whose outcome is unknown/, String(reason));
   }
 });
 

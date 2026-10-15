@@ -73,6 +73,7 @@ PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。�
 - `--timeout-ms` 应为 host 保留至少 5000 ms 的进程退出时间。不得手工每100毫秒循环轮询；超时不会停止 Unity、已开始的 effect 或 C# 工作。
 - `instances list` 默认过滤 offline 实例并只列出可用实例；需要完整盘点时使用 `instances list --all`，并读取 `invalidRecordCount`。旧、损坏或不可读记录由 CLI 隔离，不要读取、删除或改写内部记录文件；需要清理时使用 `instances prune --instance <id>`，依据返回的 `removed`、`deferred`、`remaining` 计数。启动、编译或 reload 后只等待有界 readiness。
 - 失败时根据结构化 error 和 `nextActions` 形成恢复决策。`transient:true` 与 `nextActions` 仍是建议，不构成额外授权门。
+- `unverifiable`（`editor.state.status` 或 `E_INSTANCE_UNVERIFIABLE`）表示 CLI 无法证明唯一 Unity 进程归属，不表示 Unity 故障。先读 `observation.reason` 或 `error.details.reason`：`access-denied` 表示当前宿主拒绝 OS 进程查询，重复同一只读调用或改换其他 Tool 都不会成功，应在能读取 Unity 进程身份的会话中重试；`timeout`、`unavailable` 与 `mismatch` 才值得重新观察。任何归因下都不得重投结果未知的 mutation。
 - `E_EXECUTION_TIMEOUT`、放行后连接丢失或缺少可信 terminal envelope只表示没有可信终态。对于`asset.refresh`、player build、Play Mode、Package install/remove/update和`test.run`，先按需发现对应域的`.status` Tool并只传原root `requestId`读取同一Editor session的active phase或exact terminal；status不重放effect。其他能力使用只读Tool或业务readback形成新的业务决策；CLI不自动重放，首次mutation POST后Editor session改变时也不会向新session重投。
 - 状态观察使用 `instances`、`doctor` 或 `editor.state`，不操作内部 registry 或 transport。
 - `auth`、Unity Hub、Cloud、License 和 proxy 属于外部控制面，不由 `unitycli` 代管。

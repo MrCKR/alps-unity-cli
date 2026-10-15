@@ -40,8 +40,22 @@ test("observer stops at the original deadline after process verification", async
     probe: async () => { throw new Error("expired observation must not probe UI"); },
   });
   assert.deepEqual(await observer.observe(identity, 2_000, { processId: 101, processStartedAt }), {
-    outcome: "unproven", blockers: [], reason: "deadline",
+    outcome: "unproven", blockers: [], reason: "deadline", evidenceReason: "timeout",
   });
+});
+
+test("observer attributes an unusable process scan to its evidence source", async () => {
+  for (const [reason, expected] of [["access-denied", "access-denied"], [undefined, "unavailable"]] as const) {
+    const observer = new EditorBlockerObserver({
+      now: () => 1_000,
+      inspect: async () => ({ verification: "unverifiable", ...(reason ? { reason } : {}), processIds: [] }),
+      verifySession: async () => { throw new Error("unusable scan must not verify sessions"); },
+      probe: async () => { throw new Error("unusable scan must not probe UI"); },
+    });
+    const result = await observer.observe(identity, 2_000, { processId: 101, processStartedAt });
+    assert.equal(result.outcome, "unproven");
+    assert.equal(result.evidenceReason, expected);
+  }
 });
 
 test("observer does not replace contradictory claims with a registry process", async () => {
