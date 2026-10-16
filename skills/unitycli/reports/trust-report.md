@@ -3,7 +3,7 @@
 Status: governed local package
 Owner: alps-unity-cli maintainers
 Review cadence: per-release
-Reviewed: 2026-08-05
+Reviewed: 2026-10-16 for release 0.7.0
 
 ## Scope
 
@@ -35,12 +35,19 @@ The Skill does not add confirmation, intent review, or a predefined operation ra
 
 ## Verified Evidence
 
-- Full repository tests: 876/876 PASS; targeted Skill/installer/docs regression: 61/61 PASS.
-- Recorder concurrency, rotation, privacy negatives, PowerShell 5.1 BOM, and non-ASCII stdout: PASS.
-- Public exact-target and preset runtime install, drifted update, check, marker preservation, and installed-recorder smoke: PASS.
-- Resource boundary: limit 1300 estimated initial-load tokens. The recorded 963 (Skill body 691) is the 2026-08-05 governance-audit measurement (`.plan/Skill分发治理与反馈闭环/evidence/static/DIR-003/resource-boundary.json`, taken while `references` held four files); its estimator is not part of this repository, so it is not a live value. Current `SKILL.md`: 106 lines / 5,793 characters / 10,605 UTF-8 bytes.
-- Trigger fixture gate: 29/29 classifications.
-- Output assertion gate: 5/5 with-skill cases, 100% pass rate.
+Verified for release 0.7.0 (2026-10-16):
+
+- Full repository suite: 1392/1392 PASS.
+- Skill governance and projection: the installer projects byte-identical runtime bundles for both hosts; the installed Skill keeps its `experience/` records across an update and still passes the integrity check.
+- Recorder concurrency, rotation, privacy negatives, PowerShell 5.1 BOM, non-ASCII Skill path, missing `SKILL.md` refusal, and reparse-point refusal: PASS.
+- Current package facts: `SKILL.md` 106 lines / 5,813 characters / 10,625 UTF-8 bytes; references 5; recorded output cases 7; trigger classification cases 33.
+
+Recorded by the 2026-08-05 audit (not re-run for 0.7.0):
+
+- Full repository suite at that time: 876/876 PASS; targeted Skill/installer/docs regression: 61/61 PASS.
+- Resource boundary: limit 1300 estimated initial-load tokens; the audit measured 963 (Skill body 691) while `references` held four files. Its estimator is not part of this repository, so the figure is not a live value.
+- Trigger fixture gate: 29/29 classifications on the fixture as it stood then.
+- Output assertion gate: 5/5 with-skill cases on the cases as they stood then; executing the assertions needs the external evaluator, which this repository does not ship.
 - Dev Unity compile: 0 errors, 0 warnings; Editor returned live/ready/edit.
 - Clean Agent runtime discovery and read-only business verification: PASS.
 

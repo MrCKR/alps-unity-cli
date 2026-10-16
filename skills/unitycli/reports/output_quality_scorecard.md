@@ -4,6 +4,8 @@ Release: 0.1.10
 Status: governed baseline
 Captured: 2026-08-06
 
+This file is a captured baseline for the release above; its figures describe that capture. Current per-release facts live in `trust-report.md`.
+
 ## Output Contract
 
 Normal task responses have no additional fixed format. A feedback summary is appended only when `FeedbackMode` is on, a real friction event occurred, and the recorder returned `ok:true`. With feedback off or no friction, there is no feedback record and no feedback summary.
@@ -14,7 +16,7 @@ The feedback output contract requires category, concise issue summary, optional 
 
 | Dimension | Result | Evidence | Residual |
 |---|---:|---|---|
-| Initial context budget | Limit 1300; this baseline captured 963 / 1300 (Skill body: 691) | `resource-boundary.json` (2026-08-05 audit; estimator not in this repository) | Recorded value predates the fifth reference; current `SKILL.md` is 106 lines / 5,793 characters |
+| Initial context budget | Limit 1300; this baseline captured 963 / 1300 (Skill body: 691) | `resource-boundary.json` (2026-08-05 audit; estimator not in this repository) | Recorded value predates the fifth reference; current `SKILL.md` is 106 lines / 5,813 characters |
 | Broad Unity trigger fixture | PASS: 29 / 29 | `trigger-eval.json` | Deterministic semantic fixture, not production telemetry |
 | Runtime output assertions | PASS: 5 / 5 | `output-eval.json` | Recorded fixtures, not provider execution |
 | Baseline vs with-Skill delta | +100 points | 0% to 100% assertion pass rate | Baseline is a controlled comparison |

@@ -30,6 +30,10 @@ test("governed manifest declares ownership, runtime projection, contracts, and m
   assert.ok(manifest.owner);
   assert.equal(manifest.review_cadence, "per-release");
   assert.equal(manifest.maturity_tier, "governed");
+  // 信任报告声明 per-release 节奏，因此必须提到当前发布版本，否则会被静默跳过刷新。
+  const trustReport = await readFile(join(skillRoot, "reports", "trust-report.md"), "utf8");
+  const escapedVersion = packageJson.version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  assert.match(trustReport, new RegExp(`for release ${escapedVersion}\\b`), "trust report must be reviewed for the current release");
   assert.equal(manifest.lifecycle_stage, "governed");
   assert.deepEqual(manifest.runtime_projection.include, ["SKILL.md", "references/**", "scripts/**"]);
   assert.ok(manifest.runtime_projection.exclude.includes("manifest.json"));
