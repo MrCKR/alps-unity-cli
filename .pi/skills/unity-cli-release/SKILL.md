@@ -30,6 +30,8 @@ compatibility: 适用于 alps-unity-cli；需要 pwsh、npm、git 与已登录 n
 - `unitypkg/package.json` → `version`
 - `skills/unitycli/manifest.json` → `version`
 - `tests/package-manager.test.ts` → 当前版本断言
+- `src/package-manager.ts` → `cliCompatibilityRange`，必须写成当前小版本线 `>=a.b.0 <a.(b+1).0`（例如 0.7.1 时为 `>=0.7.0 <0.8.0`）；它是安装元数据的兼容声明，遗漏会让 `checkPackageBridge` 报 drift
+- `skills/unitycli/reports/trust-report.md` → `Reviewed: ... for release A.B.C`，治理测试断言它提到当前版本
 - `dist/` → 由 build 重新生成，不手改
 
 改完后验证三处 version 一致：
