@@ -3,7 +3,7 @@
   "identity": {
     "canonicalizationVersion": 1,
     "instanceId": "unity-<sha256(canonical UTF-8 project path)>",
-    "selectors": ["--instance <instanceId|canonicalProjectPath|alias>", "nearest Unity project root from CWD"],
+    "selectors": ["--instance <name|alias|projectPath>", "nearest Unity project root from CWD"],
     "forbiddenSelectors": ["PID", "port", "endpoint", "projectHash prefix", "--target", "active target", "single ready instance"]
   },
   "publicRoot": {

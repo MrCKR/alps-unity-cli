@@ -4,7 +4,7 @@
 
 ## 实例绑定
 
-每次调用可选传入 `--instance <full-instance-id|project-path|alias>`；显式 selector 优先于 CWD。未传时，CLI 只从当前 Unity 项目 CWD 解析目标，不保存 active target，也不猜测唯一存活实例。
+每次调用可选传入 `--instance <name|alias|projectPath>`；显式 selector 优先于 CWD。未传时，CLI 只从当前 Unity 项目 CWD 解析目标，不保存 active target，也不猜测唯一存活实例。
 
 ```powershell
 unitycli instances list
@@ -26,7 +26,7 @@ tools group
 
 ### `tools group`
 
-列出当前实例完整 Tool 目录中的分组与计数：
+列出当前实例完整 Tool 目录中的分组与计数。分组目录是一次性完整返回，不受 discovery 分页约束，也没有 `pageInfo`：
 
 ```powershell
 unitycli tools group

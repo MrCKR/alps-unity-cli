@@ -419,7 +419,7 @@ function explicitInstanceSelector(flags: Record<string, string | boolean>): stri
   const value = flags.instance;
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new InstanceRegistryError("E_INSTANCE_REQUIRED", "--instance requires a non-empty full instance id, project path, or alias.", [
-      "Pass --instance <full-name|alias|projectPath>, or remove the flag to select from the current Unity project CWD."
+      "Pass --instance <name|alias|projectPath>, or remove the flag to select from the current Unity project CWD."
     ]);
   }
   return value;

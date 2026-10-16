@@ -40,7 +40,7 @@ unitycli instances prune --instance <name|alias|projectPath>
 
 Tool discovery、describe、`tools run`与`command`使用同一严格选择规则：
 
-1. 显式 `--instance <full-instance-id|canonical-project-path|alias>`。
+1. 显式 `--instance <name|alias|projectPath>`。
 2. 未传 selector 时，从 CWD 向上寻找最近的 Unity project root，并解析其 canonical identity。
 3. 无法得到唯一项目身份时返回结构化 instance error。
 

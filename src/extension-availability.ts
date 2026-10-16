@@ -79,7 +79,7 @@ export async function checkToolExtensionAvailability(
   if (!extension) return available();
   if (!snapshot.projectPath || !snapshot.state) {
     return unavailable(extensionId, undefined, undefined, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN", `Tool "${tool.name}" requires a project path to verify extension physical installation.`, [
-      "Select the running Unity project with --instance <id|canonical-project-path|alias>.",
+      "Select the running Unity project with --instance <name|alias|projectPath>.",
       `Run unitycli extensions doctor --project <path> to inspect ${extensionId}.`,
     ]);
   }
