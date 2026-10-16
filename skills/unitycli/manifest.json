@@ -34,6 +34,7 @@
       "agents/**",
       "evals/**",
       "examples/**",
+      "experience/**",
       "security/**",
       "reports/**",
       "manifest.json"
@@ -62,7 +63,7 @@
   },
   "output_contract": {
     "normal_task_response": "No additional fixed format is imposed.",
-    "feedback_summary_condition": "FeedbackMode is on, a real friction event occurred, and the recorder returned ok:true.",
+    "feedback_summary_condition": "Either FeedbackMode is on and a real friction event occurred, or the user explicitly asked for a record in the current request; in both cases the recorder returned ok:true.",
     "feedback_summary_fields": [
       "category",
       "summary",
@@ -81,7 +82,7 @@
   "rollback_boundary": {
     "skill_install": "The installer retains one fixed previous projection until the new runtime bundle passes filesystem readback.",
     "feedback_mode": "Bundle updates preserve the installed legal FeedbackMode value.",
-    "feedback_records": "Append-only user-local records are not automatically rolled back; retention is bounded by one main file and three archives.",
+    "feedback_records": "Append-only records inside the installed Skill experience directory are not automatically rolled back; retention is bounded by one main file and three archives, and a Skill update keeps that directory.",
     "caller_authority": "Timeout and retry decisions remain with the caller; governance metadata does not add an execution gate."
   },
   "permissions": {
@@ -91,14 +92,15 @@
       "Public unitycli JSON output"
     ],
     "subprocess": [
-      "powershell.exe for scripts/record-feedback.ps1 when FeedbackMode is on and friction occurred"
+      "powershell.exe for scripts/record-feedback.ps1 when FeedbackMode is on with friction, or when the user explicitly asked for a record in the current request"
     ],
     "file_write": [
-      "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.jsonl",
-      "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.1.jsonl",
-      "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.2.jsonl",
-      "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.3.jsonl"
-    ]
+      "experience/feedback.jsonl",
+      "experience/feedback.1.jsonl",
+      "experience/feedback.2.jsonl",
+      "experience/feedback.3.jsonl"
+    ],
+    "file_write_scope": "installed Skill directory"
   },
   "evidence_status": {
     "automated_tests": "available",
