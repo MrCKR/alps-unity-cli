@@ -7,7 +7,7 @@ import { execute } from "../src/cli.js";
 import "../src/tools/.generated-registry.js";
 import editorStateTool, { observeVerifiedRegistrySession, readEditorState, rejectUnavailableEditorState } from "../src/tools/editor/state.js";
 import { defineToolMetadata } from "../src/tools/define.js";
-import { EditorBlockerObserver } from "../src/editor-blocker-observer.js";
+import { EditorBlockerObserver, editorBlockerLabel } from "../src/editor-blocker-observer.js";
 import { reduceObservationRegistryRecord, type ProjectProcessClaimInspection, type SessionProcessVerification } from "../src/instances.js";
 import { registryIdentity, createUnityProject, makeRegistry, makeRegistrySession, writeRegistry } from "./helpers/instance-registry-v3.js";
 
@@ -244,7 +244,7 @@ test("readEditorState lets an exact modal override raw uncertainty but does not 
       } },
     });
     assert.equal(blocked.status, "blocked");
-    assert.deepEqual(blocked.blockers.map((blocker) => blocker.title), ["Exact Modal"]);
+    assert.deepEqual(blocked.blockers.map((blocker) => editorBlockerLabel(blocker)), ["Exact Modal"]);
     assert.equal(observerCalls, 1);
 
     const stillUnverifiable = await readEditorState({ ...context, requestId: "state-still-unverifiable" }, {

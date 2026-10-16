@@ -78,7 +78,7 @@ export async function executeBridgePayload(
 
     if (bridgeResult.ok === false) {
       const bridgeError = bridgeResult.error;
-      const details = command === "code.execute" && bridgeError.code === "E_UNITY_BUSY"
+      const details = command === "debug.code.execute" && bridgeError.code === "E_UNITY_BUSY"
         ? liveCodeBusyDetails(requestId, args, bridgeErrorDetails(bridgeError))
         : bridgeError.details;
       return failure(requestId, bridgeError.code, bridgeError.message, bridgeError.nextActions, details, {

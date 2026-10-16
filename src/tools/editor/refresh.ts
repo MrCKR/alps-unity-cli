@@ -4,7 +4,7 @@ import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { waitForEditorTransitionEnd } from "./readiness.js";
 import { rejectUnavailableEditorState } from "./state.js";
-import { blockersFromDetails, StructuredToolError } from "../errors.js";
+import { blockedEditorStateError, blockersFromDetails, StructuredToolError } from "../errors.js";
 
 export interface EditorRefreshRequest { compile?: boolean; }
 export interface EditorRefreshResult {
@@ -57,7 +57,7 @@ export default defineTool<EditorRefreshRequest, EditorRefreshResult | EditorRefr
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
     const state = await waitForEditorTransitionEnd(context, childId(context.requestId, "_refresh_state"), deadline);
     if (state.status === "blocked") {
-      throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot refresh assets.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
+      throw blockedEditorStateError("Unity Editor is blocked and cannot refresh assets.", state.blockers);
     }
     rejectUnavailableEditorState(state, "editor.refresh");
     if (!state.session.known || !state.session.editorSessionId) {

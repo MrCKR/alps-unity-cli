@@ -354,7 +354,7 @@ test("public descriptor audit rejects removed fields and default availability", 
 test("Live harness loads only CLI-owned result schemas from current compiled metadata", async () => {
   const schemas = await loadInternalResultSchemas(resolve("dist", "cli.js"));
   assert.ok(schemas.size >= 40 && schemas.size < 100);
-  assert.equal(schemas.get("code.execute")?.oneOf instanceof Array, true);
+  assert.equal(schemas.get("debug.code.execute")?.oneOf instanceof Array, true);
   assert.equal(schemas.get("editor.state")?.type, "object");
   assert.equal(schemas.has("package.list"), false);
 });
@@ -785,7 +785,7 @@ test("frozen direct cases are a complete request-specific closed set", async () 
       assert.equal(Object.hasOwn(probe, "context"), false, `${name} completionProbe must not use removed context`);
     }
     for (const setup of [...(recipe.setup ?? []), ...(recipe.before ?? []), ...(recipe.after ?? []), ...(recipe.cleanup ?? [])]) {
-      assert.notEqual(setup.name, "code.execute", `${name} must not use code.execute outside its own invocation`);
+      assert.notEqual(setup.name, "debug.code.execute", `${name} must not use debug.code.execute outside its own invocation`);
     }
   }
   const source = await readFile(new URL("./run-final-live-matrix.mjs", import.meta.url), "utf8");
@@ -915,8 +915,8 @@ test("active fixtures use only current public execution semantics", async () => 
       const argv = call.argv;
       const inputIndex = argv.indexOf("--input");
       const input = inputIndex < 0 ? {} : JSON.parse(argv[inputIndex + 1].replace(/\$\{[A-Za-z][A-Za-z0-9_]*\}/g, "0"));
-      if (argv[0] === "tools" && argv[2] === "code.execute") {
-        assert.ok(input.completionProbe, `${call.id ?? argv[2]} code.execute must declare completionProbe`);
+      if (argv[0] === "tools" && argv[2] === "debug.code.execute") {
+        assert.ok(input.completionProbe, `${call.id ?? argv[2]} debug.code.execute must declare completionProbe`);
         assert.equal(input.completionProbe.readTool, "scene.gameobject");
       }
       if (argv[0] === "tools" && argv[1] === "run" && argv[2] === "editor.state") assert.deepEqual(input, {});
@@ -1071,9 +1071,9 @@ test("direct case retries generation changes only for read-only steps", async ()
   };
   const definitions = [{ id: "read", kind: "tool", name: "scene.gameobject", input: {}, readOnly: true }];
 
-  assert.equal(await runDirectCasePhase(matrix, "tool.code.execute", "setup", definitions, {}, "C:\\DevProject"), true);
+  assert.equal(await runDirectCasePhase(matrix, "tool.debug.code.execute", "setup", definitions, {}, "C:\\DevProject"), true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].id, "tool.code.execute.setup.read");
+  assert.equal(calls[0].id, "tool.debug.code.execute.setup.read");
   assert.deepEqual(calls[0].meta.retryErrorCodes, ["E_READ_GENERATION_CHANGED"]);
   assert.equal(calls[0].meta.retryMaxAttempts, 3);
   assert.equal(shouldRetryMatrixCall(calls[0].meta, { error: { code: "E_OTHER" } }, "failure", 1, 3), false);
@@ -1092,11 +1092,11 @@ test("direct case never retries mutation steps on generation change", async () =
     },
     failed: async (_id, issue) => ({ assertion: { status: "FAIL", issue } })
   };
-  const definitions = [{ id: "mutate", kind: "tool", name: "code.execute", input: {} }];
+  const definitions = [{ id: "mutate", kind: "tool", name: "debug.code.execute", input: {} }];
 
-  assert.equal(await runDirectCasePhase(matrix, "tool.code.execute", "mutation", definitions, {}, "C:\\DevProject"), false);
+  assert.equal(await runDirectCasePhase(matrix, "tool.debug.code.execute", "mutation", definitions, {}, "C:\\DevProject"), false);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].id, "tool.code.execute.mutation.mutate");
+  assert.equal(calls[0].id, "tool.debug.code.execute.mutation.mutate");
   assert.equal(calls[0].meta.retryErrorCodes, undefined);
 });
 

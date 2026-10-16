@@ -62,7 +62,7 @@ async function runWriterOwnedPrune(flags: Record<string, string | boolean>, runt
       });
     }
     return failure(requestId, "BRIDGE_CONNECTION_FAILED", error instanceof Error ? error.message : String(error), [
-      "Open the target Unity project, then retry unitycli instances prune from that project or pass --instance <id|projectPath|alias>.",
+      "Open the target Unity project, then retry unitycli instances prune from that project or pass --instance <name|alias|projectPath>.",
     ], undefined, { transient: true, retryAfterMs: 100 });
   }
 }

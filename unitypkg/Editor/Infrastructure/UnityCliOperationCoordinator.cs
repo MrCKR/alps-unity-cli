@@ -652,7 +652,7 @@ namespace UnityCli
             SessionState.SetBool(DirectMutationEffectCommittedSessionKey, true);
         }
 
-        /// <summary>code.execute等内部direct命令在首个用户effect前同样重验完整lease identity。</summary>
+        /// <summary>debug.code.execute等内部direct命令在首个用户effect前同样重验完整lease identity。</summary>
         private static void BeginDirectEffect(string requestId)
         {
             var requestDigest = SessionState.GetString(DirectMutationRequestDigestSessionKey, string.Empty);
@@ -760,7 +760,7 @@ namespace UnityCli
             var normalized = UnityCliSerializer.Parse(UnityCliSerializer.Serialize(result));
             if (normalized == null) throw new BridgeCommandException("E_TOOL_COMPLETION_PROOF_INVALID", "Completion result is not a JSON value tree.", "Return a serializable typed business result.");
             if (string.Equals(contract.ExecutionClass, "atomic", StringComparison.Ordinal) && !contract.Mutation) return;
-            if (ContainsIntermediateStatus(normalized))
+            if (ContainsIntermediateStatus(normalized, DeclaresBoundedNonTerminalObservation(contract, normalized)))
                 throw new BridgeCommandException("E_TOOL_COMPLETION_PROOF_INVALID", "Completion result contains an intermediate accepted/requested/queued/started/triggered/running status.", "Wait for the Tool business terminal and return its stable readback.");
             if (string.Equals(contract.ExecutionClass, "atomic", StringComparison.Ordinal)) return;
             var terminalObject = normalized as IDictionary;
@@ -768,7 +768,26 @@ namespace UnityCli
                 throw new BridgeCommandException("E_TOOL_COMPLETION_PROOF_INVALID", "Non-atomic Tool result is not a non-empty typed business terminal.", "Return the Tool-specific terminal readback verified by its completion contract.");
         }
 
-        private static bool ContainsIntermediateStatus(object value)
+        /// <summary>
+        /// 运行观察型 Tool（声明 predicate 为 owned-run-terminal-readback）的终态是它自己那份运行记录：
+        /// 有限等待窗口到期时可以合法地返回 terminal=false 与当前证据，此时根级 state 就是运行的中间态。
+        /// 只有根级存在显式 terminal=false 才放宽根级 status/state/phase；terminal=true 或没有该布尔值
+        /// 仍按严格规则拒绝，Tool 仍不得为未完成的工作声称成功。
+        /// </summary>
+        private static bool DeclaresBoundedNonTerminalObservation(UnityCliToolCompletionContract contract, object normalized)
+        {
+            if (!string.Equals(contract.CompletionPredicate, "owned-run-terminal-readback", StringComparison.Ordinal)) return false;
+            var dictionary = normalized as IDictionary;
+            if (dictionary == null) return false;
+            foreach (DictionaryEntry entry in dictionary)
+            {
+                if (!string.Equals(Convert.ToString(entry.Key, CultureInfo.InvariantCulture), "terminal", StringComparison.Ordinal)) continue;
+                return entry.Value is bool && !(bool)entry.Value;
+            }
+            return false;
+        }
+
+        private static bool ContainsIntermediateStatus(object value, bool rootIsDeclaredBoundedObservation)
         {
             var dictionary = value as IDictionary;
             if (dictionary != null)
@@ -777,16 +796,18 @@ namespace UnityCli
                 {
                     var key = Convert.ToString(entry.Key, CultureInfo.InvariantCulture);
                     var text = entry.Value as string;
-                    if ((string.Equals(key, "status", StringComparison.OrdinalIgnoreCase)
+                    var namedRootState = string.Equals(key, "status", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(key, "state", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(key, "phase", StringComparison.OrdinalIgnoreCase)) && IsIntermediateStatus(text)) return true;
+                        || string.Equals(key, "phase", StringComparison.OrdinalIgnoreCase);
+                    // 在声明为非终态观察的根响应上，根级 state 允许是运行中间态；更深的字段一律仍受严格检查。
+                    if (namedRootState && IsIntermediateStatus(text) && !rootIsDeclaredBoundedObservation) return true;
                     if (IsIntermediateField(key) && IntermediateFieldIsSet(entry.Value)) return true;
-                    if (ContainsIntermediateStatus(entry.Value)) return true;
+                    if (ContainsIntermediateStatus(entry.Value, false)) return true;
                 }
                 return false;
             }
             var sequence = value as IEnumerable;
-            if (sequence != null && !(value is string)) foreach (var item in sequence) if (ContainsIntermediateStatus(item)) return true;
+            if (sequence != null && !(value is string)) foreach (var item in sequence) if (ContainsIntermediateStatus(item, false)) return true;
             return false;
         }
 
@@ -821,7 +842,7 @@ namespace UnityCli
             if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
             UnityCliToolCompletionContract contract;
             if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
-            if (string.Equals(toolName, "code.execute", StringComparison.Ordinal))
+            if (string.Equals(toolName, "debug.code.execute", StringComparison.Ordinal))
                 return UnityCliToolCompletionRegistry.CodeExec;
             return ResolveRegisteredCustomToolCompletionContract(toolName);
         }
@@ -868,7 +889,7 @@ namespace UnityCli
             if (IsInstanceCleanupCommand(toolName)) return InstanceCleanupCompletionContract();
             UnityCliToolCompletionContract contract;
             if (UnityCliToolCompletionRegistry.TryGet(toolName, out contract)) return contract;
-            return string.Equals(toolName, "code.execute", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
+            return string.Equals(toolName, "debug.code.execute", StringComparison.Ordinal) ? UnityCliToolCompletionRegistry.CodeExec : null;
         }
 
         private sealed class DurableMutationBarrierProof

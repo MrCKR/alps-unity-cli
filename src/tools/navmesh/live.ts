@@ -3,7 +3,7 @@ import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
 import { rejectUnavailableEditorState } from "../editor/state.js";
-import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
+import { blockedEditorStateError, blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 import type { ToolContext } from "../define.js";
 
 export type NavMeshBakeKind = "legacy" | "surfaces";
@@ -170,7 +170,7 @@ export async function cancelNavMeshBake(requestedOperationId: string | undefined
 async function bind(context: ToolContext, tool: string, requireEditMode: boolean): Promise<{ flags: BridgeFlags; sessionId: string }> {
   const deadline = deadlineOf(context);
   const state = await waitForEditorTransitionEnd(context, childId(context.requestId, "_navmesh_state"), deadline);
-  if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", `${tool} cannot run while the Editor is blocked.`, ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
+  if (state.status === "blocked") throw blockedEditorStateError(`${tool} cannot run while the Editor is blocked.`, state.blockers);
   rejectUnavailableEditorState(state, tool);
   if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", `${tool} could not bind one verified Editor session.`, ["Inspect editor.state and retry after the session is stable."]);
   if (requireEditMode && isPlaying(state.state.playMode.value)) throw new StructuredToolError("E_TOOL_PLAYMODE_UNAVAILABLE", `${tool} is available only in Edit Mode.`, ["Exit Play Mode, then retry."]);

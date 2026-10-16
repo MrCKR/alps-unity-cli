@@ -589,7 +589,7 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /Name = "editor\.pause"/);
   assert.match(source, /Name = "editor\.play-mode\.stop"/);
   assert.match(source, /Name = "editor\.menu"/);
-  assert.match(source, /Name = "console\.read"/);
+  assert.match(source, /Name = "debug\.console\.read"/);
   assert.match(source, /private static string BridgeBuildStamp\(\)/);
   assert.match(source, /private static string BridgeHealthJson\(\)/);
   assert.match(source, /private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3"/);

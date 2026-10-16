@@ -38,11 +38,22 @@ test("editor.state 公开 schema 不泄漏 transport generation", () => {
   assert.doesNotMatch(state, /endpoint|listenerId|actualPort|preferredPort|journalPhase/);
 });
 
-test("editor.state progress kind remains extensible and blockers are dialog DTOs", () => {
-  const schema = readFixture("editor-state.schema.json") as { $defs: { progress: { properties: { kind: unknown } }; blocker: { properties: { type: unknown; dialogId: unknown } } } };
+test("editor.state progress kind remains extensible and blockers carry the two exact DTOs", () => {
+  const schema = readFixture("editor-state.schema.json") as { $defs: { progress: { properties: { kind: unknown } }; blocker: { oneOf: Array<{ properties: Record<string, unknown>; required: string[]; additionalProperties: boolean }> } } };
   assert.deepEqual(schema.$defs.progress.properties.kind, { type: "string", minLength: 1 });
-  assert.deepEqual(schema.$defs.blocker.properties.type, { const: "dialog" });
-  assert.deepEqual(schema.$defs.blocker.properties.dialogId, { type: "string", minLength: 1 });
+  assert.equal(schema.$defs.blocker.oneOf.length, 2);
+  const [dialog, debugPause] = schema.$defs.blocker.oneOf;
+  assert.deepEqual(dialog.properties.type, { const: "dialog" });
+  assert.deepEqual(dialog.properties.dialogId, { type: "string", minLength: 1 });
+  assert.equal(dialog.additionalProperties, false);
+  assert.deepEqual(debugPause.properties.type, { const: "debug-pause" });
+  assert.equal(debugPause.additionalProperties, false);
+  for (const field of ["pauseId", "threadId", "mainThread", "methodIdentity", "targetKey", "position", "sessionId", "timeoutKind", "remainingMs", "pausedForMs", "resumeTool", "infoTool", "requiresUserAction", "source", "confidence"]) {
+    assert.ok(debugPause.required.includes(field), `the debug-pause blocker must require ${field}`);
+  }
+  assert.deepEqual(debugPause.properties.resumeTool, { const: "debug.pause.resume" });
+  assert.deepEqual(debugPause.properties.infoTool, { const: "debug.pause.list" });
+  assert.deepEqual(debugPause.properties.source, { const: "unity-debug-pause" });
 });
 
 test("direct-call semantics 固定 immutable request、单 generation read 与 observeNow", () => {

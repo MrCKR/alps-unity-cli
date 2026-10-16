@@ -3,7 +3,7 @@ import "./asset/refresh.js";
 import "./asset/refresh-status.js";
 import "./build/player-status.js";
 import "./build/run.js";
-import "./code/execute.js";
+import "./debug/code-execute.js";
 import "./docs/get.js";
 import "./docs/search.js";
 import "./editor/compile.js";

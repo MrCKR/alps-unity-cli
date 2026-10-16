@@ -23,7 +23,7 @@ namespace UnityCli
         private static void RegisterCodeExecCommand(BridgeCommandRegistry registry)
         {
             registry.Register<UnityCli.Protocol.BridgeRequest>(
-                "code.execute",
+                "debug.code.execute",
                 "code",
                 true,
                 60000,
@@ -37,7 +37,7 @@ namespace UnityCli
         private static async ValueTask<string> CodeExec(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             if (request.Execution != null && request.Execution.DryRun == true)
-                throw new BridgeCommandException("E_DRY_RUN_UNSUPPORTED", "Raw Bridge code.execute dry-run cannot execute or compile caller source.", "Use the public tools run code.execute --dry-run path, which returns the CLI-side source preview without Bridge dispatch.");
+                throw new BridgeCommandException("E_DRY_RUN_UNSUPPORTED", "Raw Bridge debug.code.execute dry-run cannot execute or compile caller source.", "Use the public tools run debug.code.execute --dry-run path, which returns the CLI-side source preview without Bridge dispatch.");
             var source = request.StringArg("sourceText");
             // raw Bridge不读取调用方路径；公开CLI已按入口deadline有界读取并内联唯一源码。
             if (string.IsNullOrWhiteSpace(source))
@@ -48,11 +48,11 @@ namespace UnityCli
             var result = await ExecuteCodeSource(request, source, cancellationToken);
             WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
             var serialized = SerializeCodeExecutionResult(request.RequestId, result);
-            if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "code.execute", ResolveRequestCompletionContract(request), result.Data);
+            if (result.Ok) RecordDirectCompletionEvidence(request.RequestId, "debug.code.execute", ResolveRequestCompletionContract(request), result.Data);
             return serialized;
         }
 
-        /// <summary>所有 code.execute terminal 统一经过同一 Bridge envelope 与总 byte 上限。</summary>
+        /// <summary>所有 debug.code.execute terminal 统一经过同一 Bridge envelope 与总 byte 上限。</summary>
         private static string SerializeCodeExecutionResult(string requestId, CodeExecutionResult result)
         {
             object envelope = result.Ok
@@ -76,16 +76,22 @@ namespace UnityCli
             int deadlineRemainingMs;
             if (!deadlineOk())
                 return CodeExecutionResult.Fail("E_EXECUTION_TIMEOUT", "Runtime Code compilation exceeded the immutable deadline.", new Dictionary<string, object>(), "Submit a new request after the Editor is responsive.");
-            if (!DynamicCodeCompiler.TryBeginCompilation())
+            // 唯一编译所有权与共享预算都来自 DebugCompilerOwner；主线程路径必须非阻塞取得所有权。
+            if (!DebugCompilerOwner.TryBeginOwnership(DebugCompilerLane.MainThreadTick))
                 return CodeExecutionResult.Fail("E_UNITY_BUSY", "Another dynamic compilation currently owns the single compiler.", new Dictionary<string, object> { { "owner", "dynamic-compiler" } }, "Wait for the current compilation to reach its terminal result, then submit this request again.");
-            byte[] assemblyBytes;
+            Assembly compiledAssembly;
             try
             {
-                var references = DynamicCodeCompiler.CollectReferences(request.StringArg("refs"), null, deadlineOk);
+                var wrappedSource = WrapCodeSource(source);
+                var candidateIdentity = DebugCompilerOwner.CandidateIdentity("debug.code.execute", wrappedSource, request.StringArg("defines"));
+                // 编译前的粗判：数量或累计字节已经用尽时不再启动编译。
+                var admission = DebugCompilerOwner.TryAdmitCandidate(candidateIdentity, 0L);
+                if (!admission.Admitted) return BudgetExhausted(admission);
+                var references = DebugCompilerOwner.References(request.StringArg("refs"), null, deadlineOk);
                 request.TryDeadlineRemainingMs(out deadlineRemainingMs);
                 var compileRequest = new DynamicCodeCompileRequest
                 {
-                    SourceText = WrapCodeSource(source),
+                    SourceText = wrappedSource,
                     SourceFileName = "source.cs",
                     ResponseFileName = "references.rsp",
                     AssemblyFileName = "assembly.dll",
@@ -97,7 +103,7 @@ namespace UnityCli
                     compileRequest,
                     references,
                     deadlineOk,
-                    new UnityCliWaiter(request.RequestId, "code.execute"),
+                    new UnityCliWaiter(request.RequestId, "debug.code.execute"),
                     TimeSpan.FromMilliseconds(Math.Max(1, deadlineRemainingMs)),
                     cancellationToken);
                 if (compilation.TimedOut)
@@ -113,7 +119,12 @@ namespace UnityCli
                         ? CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceFailure, details, "Check Unity/Editor/project assembly references and --refs.")
                         : CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", RoslynCompileFailureMessage(errors), details, "Fix compiler diagnostics and rerun code exec.");
                 }
-                assemblyBytes = compilation.AssemblyBytes;
+                // 加载前的精确准入：用真实 bytes 判定，超限则不加载该产物，并报告当前占用。
+                var loadAdmission = DebugCompilerOwner.TryAdmitCandidate(candidateIdentity, compilation.AssemblyBytes.LongLength);
+                if (!loadAdmission.Admitted) return BudgetExhausted(loadAdmission);
+                compiledAssembly = Assembly.Load(compilation.AssemblyBytes);
+                // 加载成功即占用：Mono 不能逐个卸载，后续 ABI 校验失败也不扣减。
+                DebugCompilerOwner.CommitLoadedArtifact(candidateIdentity, compilation.AssemblyBytes.LongLength, compiledAssembly.GetName().Name);
             }
             catch (OperationCanceledException)
             {
@@ -125,10 +136,9 @@ namespace UnityCli
             }
             finally
             {
-                DynamicCodeCompiler.EndCompilation();
+                DebugCompilerOwner.EndOwnership(DebugCompilerLane.MainThreadTick);
             }
 
-            var compiledAssembly = Assembly.Load(assemblyBytes);
             var type = compiledAssembly.GetType("UnityCli.RuntimeCode.Script", true);
             var method = type.GetMethod("Run", BindingFlags.Public | BindingFlags.Static);
             if (method == null || method.GetParameters().Length != 1 || method.GetParameters()[0].ParameterType != typeof(string))
@@ -166,6 +176,8 @@ namespace UnityCli
             var previousOut = Console.Out;
             var previousError = Console.Error;
             object returnValue = null;
+            // 返回值被有界投影裁剪时必须把事实带回结果，调用方才能区分完整值与残片。
+            var returnValueTruncated = false;
             Action invoke = () =>
             {
                 Console.SetOut(stdout);
@@ -173,7 +185,7 @@ namespace UnityCli
                 try
                 {
                     // 返回对象的ToString也属于caller effect，必须发生在fresh completion readback之前。
-                    returnValue = NormalizeReturnValue(method.Invoke(null, new object[] { argsJson ?? "{}" }));
+                    returnValue = NormalizeReturnValue(method.Invoke(null, new object[] { argsJson ?? "{}" }), out returnValueTruncated);
                 }
                 catch (TargetInvocationException exception) { throw exception.InnerException ?? exception; }
                 finally
@@ -208,8 +220,26 @@ namespace UnityCli
                     || ReferenceEquals(exception, completionProbeException)) throw;
                 return ExceptionFailure("E_CODE_RUNTIME_EXCEPTION", string.Empty, exception, stdout.ToString(), stderr.ToString(), "Inspect the bounded runtime exception cause chain and affected business state.");
             }
-            try { return CodeExecutionResult.Success(CodeSuccessData(stdout.ToString(), stderr.ToString(), stdout.Truncated, stderr.Truncated, returnValue, completion)); }
+            try { return CodeExecutionResult.Success(CodeSuccessData(stdout.ToString(), stderr.ToString(), stdout.Truncated, stderr.Truncated, returnValue, returnValueTruncated, completion)); }
             catch (Exception exception) { return ExceptionFailure("E_CODE_RUNTIME_EXCEPTION", string.Empty, exception, stdout.ToString(), stderr.ToString(), "Inspect the bounded return-value conversion cause chain and affected business state."); }
+        }
+
+        /// <summary>
+        /// 共享编译预算拒绝：投影当前占用（数量、字节、剩余）与显式 reload 建议。
+        /// owner 不自动 reload；已加载程序集只能由 Domain Reload 回收。
+        /// </summary>
+        private static CodeExecutionResult BudgetExhausted(DebugCompilerAdmission admission)
+        {
+            var details = new Dictionary<string, object>
+            {
+                { "reason", admission.Reason },
+                { "budget", admission.Report.ToData() }
+            };
+            return CodeExecutionResult.Fail(
+                DebugCompilerOwner.BudgetExhaustedCode,
+                "This domain cannot load another compiled artifact: " + admission.Reason + ".",
+                details,
+                DebugCompilerOwner.ReloadSuggestion);
         }
 
         /// <summary>caller effect紧前同时重验immutable deadline、cancel token与exact direct lease。</summary>
@@ -221,8 +251,8 @@ namespace UnityCli
             BeginDirectEffect(request.RequestId);
         }
 
-        // 将源码包装为运行时约定的 Script.Run 入口。
-        private static string WrapCodeSource(string source)
+        // 将源码包装为运行时约定的 Script.Run 入口。pause.evaluate 与 debug.code.execute 共用同一包装形状。
+        internal static string WrapCodeSource(string source)
         {
             if (Regex.IsMatch(source, "\\bpublic\\s+static\\s+object\\s+Run\\s*\\("))
             {
@@ -335,12 +365,6 @@ namespace UnityCli
             public override void Write(char[] buffer, int index, int count) { Write(new string(buffer, index, count)); }
         }
 
-        // 尽力删除临时文件，不因 Windows 延迟释放句柄影响命令结果。
-        internal static void DeleteTemporaryCodeFile(string path)
-        {
-            try { if (!string.IsNullOrEmpty(path) && File.Exists(path)) File.Delete(path); } catch { }
-        }
-
         /// <summary>
         /// 有界重试删除编译临时文件：子进程刚被终止时 Windows 可能仍持有句柄。
         /// 重试窗口固定且很短，不阻塞正常命令结果；调用方仍可依赖开工前的自愈清理。
@@ -364,16 +388,8 @@ namespace UnityCli
             }
         }
 
-        /// <summary>共享 compiler 的一次子进程结果；只供 DynamicCodeCompiler 使用。</summary>
-        internal sealed class RoslynCompilationHandle
-        {
-            public int ExitCode;
-            public string Output;
-            public bool TimedOut;
-        }
-
-        /// <summary>成功仅返回编译结果、运行返回值与 request-specific fresh readback。</summary>
-        private static Dictionary<string, object> CodeSuccessData(string stdout, string stderr, bool stdoutTruncated, bool stderrTruncated, object returnValue, UnityCliCompletionProbeReadback completion)
+        /// <summary>成功仅返回编译结果、运行返回值（含裁剪事实）与 request-specific fresh readback。</summary>
+        private static Dictionary<string, object> CodeSuccessData(string stdout, string stderr, bool stdoutTruncated, bool stderrTruncated, object returnValue, bool returnValueTruncated, UnityCliCompletionProbeReadback completion)
         {
             return new Dictionary<string, object>
             {
@@ -381,6 +397,9 @@ namespace UnityCli
                 { "runtime", new Dictionary<string, object>
                     {
                         { "returnValue", returnValue },
+                        // 显式值截断事实与适用的UTF-8字节预算：标量返回值为false，字符串返回值可能为true。
+                        { "returnValueTruncated", returnValueTruncated },
+                        { "returnValueByteBudget", (long)MaxCodeOutputBytes },
                         { "stdout", stdout }, { "stderr", stderr }, { "stdoutTruncated", stdoutTruncated }, { "stderrTruncated", stderrTruncated }
                     }
                 },
@@ -407,9 +426,10 @@ namespace UnityCli
             };
         }
 
-        // 将执行返回值规范化为序列化器支持的协议值。
-        private static object NormalizeReturnValue(object value)
+        // 将执行返回值规范化为序列化器支持的协议值；字符串返回按固定UTF-8字节预算裁剪并输出裁剪事实。
+        internal static object NormalizeReturnValue(object value, out bool truncated)
         {
+            truncated = false;
             if (value == null || value is bool || value is int || value is long) return value;
             if (value is float)
             {
@@ -426,7 +446,10 @@ namespace UnityCli
                 return number;
             }
             if (value is decimal) return Convert.ToDouble(value, CultureInfo.InvariantCulture);
-            return BoundedText(Convert.ToString(value, CultureInfo.InvariantCulture), MaxCodeOutputBytes);
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+            var bounded = BoundedText(text, MaxCodeOutputBytes);
+            truncated = bounded.Length != (text == null ? 0 : text.Length);
+            return bounded;
         }
 
         private sealed class CodeExecutionResult

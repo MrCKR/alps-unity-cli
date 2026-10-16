@@ -596,8 +596,8 @@ export function selectExactExternalSceneReloadDialog(dialogs) {
 }
 
 export const FROZEN_DIRECT_TOOL_NAMES = Object.freeze([
-  "animator.crossfade", "code.execute", "editor.undo", "editor.redo", "physics.simulation", "navmesh.surface.bake",
-  "prefab.overrides.apply", "prefab.overrides.revert", "prefab.variant.create", "runtime-reflection.method.invoke", "scene.view-frame",
+  "animator.crossfade", "debug.code.execute", "editor.undo", "editor.redo", "physics.simulation", "navmesh.surface.bake",
+  "prefab.overrides.apply", "prefab.overrides.revert", "prefab.variant.create", "debug.method.invoke", "scene.view-frame",
   "timeline.clip.add", "timeline.create", "timeline.info", "timeline.track.add",
   "probuilder.append-vertices-to-edge", "probuilder.auto-smooth", "probuilder.bevel-edges", "probuilder.bridge-edges", "probuilder.connect-elements",
   "probuilder.create-shape", "probuilder.duplicate-and-flip", "probuilder.extrude-edges", "probuilder.extrude-faces", "probuilder.flip-normals",
@@ -675,16 +675,16 @@ export const DIRECT_LIVE_CASES = Object.freeze({
     ],
     cleanup: [deleteTargetStep("delete-target")]
   },
-  "code.execute": {
+  "debug.code.execute": {
     setup: [step("create-target", "game-object.create", { name: "${target}", x: 0, y: 0, z: 0 }, { capture: { targetId: "/data/gameObject/id" } })],
     before: [readStep("target", "scene.gameobject", { target: "${target}", includeComponents: false }, { capture: { beforeX: "/data/gameObject/transform/position/x", beforeTargetId: "/data/gameObject/id" } })],
     preflight: [
-      step("dry-run", "code.execute", {
+      step("dry-run", "debug.code.execute", {
         code: "var go = GameObject.Find(\"${target}\"); go.transform.position = new Vector3(1f, go.transform.position.y, go.transform.position.z); return null;",
         completionProbe: completionProbe("${target}", "x", 0, 1)
       }, { flags: ["--dry-run"], expect: { equals: { "/data/dryRun": true } } })
     ],
-    invocation: step("invoke", "code.execute", {
+    invocation: step("invoke", "debug.code.execute", {
       code: "var go = GameObject.Find(\"${target}\"); go.transform.position = new Vector3(1f, go.transform.position.y, go.transform.position.z); return null;",
       completionProbe: completionProbe("${target}", "x", 0, 1)
     }, { expect: { equals: { "/data/completion/assertions/0/value": 1 } }, capture: { completionX: "/data/completion/assertions/0/value" } }),
@@ -942,15 +942,15 @@ export const DIRECT_LIVE_CASES = Object.freeze({
     ],
     cleanup: [deleteAssetStep("delete-timeline", "${timelinePath}")]
   },
-  "runtime-reflection.method.invoke": {
+  "debug.method.invoke": {
     setup: [step("create-target", "game-object.create", { name: "${target}", x: 0, y: 0, z: 0 })],
     before: [readStep("target", "scene.gameobject", { target: "${target}", includeComponents: false }, { capture: { beforeX: "/data/gameObject/transform/position/x", beforeTargetId: "/data/gameObject/id" } })],
     preflight: [
-      step("dry-run", "runtime-reflection.method.invoke", {
+      step("dry-run", "debug.method.invoke", {
         typeName: "UnityEngine.Transform", methodName: "Translate", parameterTypes: ["UnityEngine.Vector3", "UnityEngine.Space"], args: [{ x: 1, y: 0, z: 0 }, "World"], instanceRef: { path: "${target}" }, completionProbe: completionProbe("${target}", "x", 0, 1)
       }, { flags: ["--dry-run"], expect: { equals: { "/data/typeName": "UnityEngine.Transform", "/data/methodName": "Translate" } } })
     ],
-    invocation: step("invoke", "runtime-reflection.method.invoke", {
+    invocation: step("invoke", "debug.method.invoke", {
       typeName: "UnityEngine.Transform", methodName: "Translate", parameterTypes: ["UnityEngine.Vector3", "UnityEngine.Space"], args: [{ x: 1, y: 0, z: 0 }, "World"], instanceRef: { path: "${target}" }, completionProbe: completionProbe("${target}", "x", 0, 1)
     }, { expect: { equals: { "/data/completion/assertions/0/value": 1 } }, capture: { completionX: "/data/completion/assertions/0/value" } }),
     after: [readStep("target", "scene.gameobject", { target: "${target}", includeComponents: false }, { capture: { afterX: "/data/gameObject/transform/position/x", afterTargetId: "/data/gameObject/id" } })],

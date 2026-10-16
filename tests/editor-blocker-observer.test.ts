@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorBlockerObserver, sanitizeEditorBlockers } from "../src/editor-blocker-observer.js";
+import { EditorBlockerObserver, editorDialogBlockers, sanitizeEditorBlockers } from "../src/editor-blocker-observer.js";
 
 const identity = { instanceId: `unity-${"a".repeat(64)}`, canonicalProjectPath: "c:\\repo\\project", displayProjectPath: "C:\\repo\\project" };
 const processStartedAt = "2026-07-19T00:00:00.000Z";
@@ -102,7 +102,8 @@ for (const hasProjectPath of [true, false]) {
     });
     const result = await observer.observe(identity, 2_000, { processId: 101, processStartedAt });
     assert.equal(result.outcome, "observed-blocked");
-    assert.deepEqual(result.blockers[0]?.buttons, ["OK"]);
-    assert.match(result.blockers[0]?.dialogId ?? "", /^dialog_/);
+    const [dialog] = editorDialogBlockers(result.blockers);
+    assert.deepEqual(dialog?.buttons, ["OK"]);
+    assert.match(dialog?.dialogId ?? "", /^dialog_/);
   });
 }

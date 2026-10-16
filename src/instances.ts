@@ -109,6 +109,12 @@ export interface UnityInstance {
   unityVersion?: string;
   buildStamp?: string;
   toolCatalogFingerprint?: string;
+  /**
+   * 当前 live pause publication 证明的故意主线程暂停，独立于 pulse 与 blocker 列表。
+   * `blocked` 状态可能来自 Windows modal 或该 publication；调用方只有拿到这份证据
+   * 才能把暂停交给 Bridge 的同一控制通道，而不是本地伪装成弹窗阻断。
+   */
+  mainThreadDebugPause?: MainThreadDebugPause;
   claimVerification: "verified" | "unverifiable" | "none";
   claimReason?: IdentityEvidenceReason;
   processClaimIds?: number[];
@@ -168,7 +174,7 @@ export interface ProjectProcessClaimInspection {
 
 export interface InstanceSelection {
   instance: UnityInstance;
-  matchedBy: "alias" | "instanceId" | "projectPath" | "cwd";
+  matchedBy: "alias" | "name" | "instanceId" | "projectPath" | "cwd";
 }
 
 export interface InstanceRegistryReadResult {
@@ -217,6 +223,22 @@ interface MainThreadHealth {
   ageMs: number | null;
   listenerGeneration: number;
   lifecycle: RegistryLifecycle;
+  /** 当前 live pause publication 证明的故意主线程暂停；null 表示未发布。 */
+  debugPause: MainThreadDebugPause | null;
+}
+
+/**
+ * 由当前 live pause publication 发布的故意主线程暂停；不是文件、不是缓存。
+ *
+ * `timeoutKind` 与 `remainingMs` 是同一 publication 自带的可达事实：失败归因必须原样带出他们，
+ * 才能在 dispatch 已发生时指出现场的实际边界。旧 publication 缺少他们时省略，绝不回填或伪造。
+ */
+export interface MainThreadDebugPause {
+  pauseId: string;
+  threadId: number;
+  publishedSequence: number;
+  timeoutKind?: "bounded" | "unbounded";
+  remainingMs?: number;
 }
 
 export interface InstanceHealthInspection {
@@ -227,6 +249,8 @@ export interface InstanceHealthInspection {
     ageMs: number | null;
     lifecycle: RegistryLifecycle;
     fresh: boolean;
+    /** 独立于 pulse 的证据：主线程是否被故意暂停。 */
+    debugPause: MainThreadDebugPause | null;
   };
 }
 
@@ -281,9 +305,11 @@ export async function handleInstancesCommand(
     // 默认只展示有 session 的活跃实例；offline 历史残留用 --all 展开，避免上下文污染。
     const visible = includeAll ? instances : instances.filter((instance) => instance.status !== "offline");
     const hiddenOfflineCount = instances.length - visible.length;
+    // 公开选择名在全部已登记实例上计算，使 --all 过滤不影响名称。
+    const names = instanceNames(instances);
     return success(requestId, {
       instances: visible.map((instance) => {
-        const summary = instanceListSummary(instance);
+        const summary = instanceListSummary(instance, names.get(instance.instanceId) ?? instance.projectName);
         const alias = aliasByInstanceId.get(instance.instanceId);
         return alias ? { ...summary, alias } : summary;
       }),
@@ -308,7 +334,7 @@ export async function handleTargetCommand(
   if (command !== "alias") {
     return failure(requestId, "UNKNOWN_TARGET_COMMAND", "Only target alias list|set|unset is supported.", [
       "Run unitycli target alias list.",
-      "Pass --instance <instanceId|projectPath|alias> or run from a Unity project directory.",
+      "Pass --instance <name|alias|projectPath> or run from a Unity project directory.",
     ]);
   }
   return handleTargetAliasCommand(positional[0], positional.slice(1), flags, dataDir, requestId);
@@ -343,7 +369,7 @@ async function handleTargetAliasCommand(
     const selector = positional[0] ?? explicitInstance ?? stringFlag(flags, "project");
     const alias = positional[1] ?? stringFlag(flags, "alias");
     if (!selector || !alias) {
-      return failure(requestId, "E_INSTANCE_NOT_FOUND", "target alias set requires <projectPath|instanceId> <alias>.", [
+      return failure(requestId, "E_INSTANCE_NOT_FOUND", "target alias set requires <name|projectPath> <alias>.", [
         "Pass an existing Unity project path or a full deterministic instanceId.",
       ]);
     }
@@ -384,7 +410,7 @@ async function handleTargetAliasCommand(
     return success(requestId, { alias, instanceId: existing.instanceId });
   }
 
-  return failure(requestId, "UNKNOWN_TARGET_ALIAS_COMMAND", "Expected target alias list, target alias set <projectPath|instanceId> <alias>, or target alias unset <alias>.");
+  return failure(requestId, "UNKNOWN_TARGET_ALIAS_COMMAND", "Expected target alias list, target alias set <name|projectPath> <alias>, or target alias unset <alias>.");
 }
 
 /** 显式 instance flag 一旦出现就必须携带非空 selector，禁止降级到 CWD。 */
@@ -393,7 +419,7 @@ function explicitInstanceSelector(flags: Record<string, string | boolean>): stri
   const value = flags.instance;
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new InstanceRegistryError("E_INSTANCE_REQUIRED", "--instance requires a non-empty full instance id, project path, or alias.", [
-      "Pass --instance <full-id|projectPath|alias>, or remove the flag to select from the current Unity project CWD."
+      "Pass --instance <full-name|alias|projectPath>, or remove the flag to select from the current Unity project CWD."
     ]);
   }
   return value;
@@ -408,8 +434,8 @@ export async function currentInstanceProjectPath(
   try {
     const explicit = explicitInstanceSelector(flags);
     if (explicit === undefined) return resolveProjectIdentityFromCwd(cwd).displayProjectPath;
-    const identity = await resolveSelectorIdentity(explicit, dataDir);
-    return identity.displayProjectPath;
+    const resolved = await resolveSelectorIdentity(explicit, dataDir);
+    return resolved.identity.displayProjectPath;
   } catch {
     return undefined;
   }
@@ -534,7 +560,7 @@ async function resolveInstanceSelectionIdentity(
 ): Promise<{ identity: ProjectIdentity; matchedBy: InstanceSelection["matchedBy"]; explicit: string | undefined }> {
   if (stringFlag(flags, "bridge-endpoint")) {
     throw new InstanceRegistryError("E_OBSOLETE_OPTION", "--bridge-endpoint has been removed; transport binding is owned by the session supervisor.", [
-      "Pass --instance <instanceId|projectPath|alias> or run from the target Unity project directory.",
+      "Pass --instance <name|alias|projectPath> or run from the target Unity project directory.",
     ]);
   }
 
@@ -542,18 +568,13 @@ async function resolveInstanceSelectionIdentity(
     ? undefined
     : Math.max(0, observationDeadlineMs - Date.now());
   const explicit = explicitInstanceSelector(flags);
-  const identity = explicit !== undefined
-    ? await resolveSelectorIdentity(explicit, dataDir, remainingSelectorBudget(), observationDeadlineMs)
-    : observationDeadlineMs === undefined
-      ? resolveProjectIdentityFromCwd(cwd)
-      : await resolveProjectIdentityFromCwdAsync(cwd, { timeoutMs: remainingSelectorBudget() ?? 0 });
-  const matchedBy: InstanceSelection["matchedBy"] = explicit !== undefined
-    ? (await readAliasStore(dataDir)).aliases.some((binding) => binding.alias === explicit)
-      ? "alias"
-      : INSTANCE_ID_PATTERN.test(explicit)
-        ? "instanceId"
-        : "projectPath"
-    : "cwd";
+  const resolved = explicit === undefined
+    ? undefined
+    : await resolveSelectorIdentity(explicit, dataDir, remainingSelectorBudget(), observationDeadlineMs);
+  const identity = resolved?.identity ?? (observationDeadlineMs === undefined
+    ? resolveProjectIdentityFromCwd(cwd)
+    : await resolveProjectIdentityFromCwdAsync(cwd, { timeoutMs: remainingSelectorBudget() ?? 0 }));
+  const matchedBy: InstanceSelection["matchedBy"] = resolved?.matchedBy ?? "cwd";
 
   const projectConstraint = stringFlag(flags, "project");
   if (projectConstraint) {
@@ -721,7 +742,7 @@ export async function hasInstanceForFlags(
 export function instanceSelectionFailure(requestId: string, error: unknown): CliResult | undefined {
   if (error instanceof InstanceRegistryError || error instanceof ProjectIdentityError) {
     const nextActions = error instanceof InstanceRegistryError ? error.nextActions : [
-      "Pass --instance <instanceId|canonicalProjectPath|alias> or run from a local Unity project directory.",
+      "Pass --instance <name|alias|projectPath> or run from a local Unity project directory.",
     ];
     const details = error instanceof InstanceRegistryError ? error.details : error.details;
     return failure(requestId, error.code, error.message, nextActions, details, { transient: false, retryAfterMs: 0 });
@@ -855,17 +876,22 @@ export async function reduceRegistryRecord(
     const verifiedClaims = claims.filter((session) => observations.get(session.processId)?.state === "alive" && claimIsAlive(session, observations.get(session.processId)));
     const verifiedProcessIdentities = new Set(verifiedClaims.map(processIdentityKey));
     const unverifiable = claims.some((session) => observations.get(session.processId)?.state !== "alive");
-    if (verifiedProcessIdentities.size > 1) return { status: "conflict" as UnityInstanceStatus, claims, active: undefined };
-    if (unverifiable || verifiedClaims.length > 1 || (claims.length > 0 && verifiedClaims.length !== 1)) return { status: "unverifiable" as UnityInstanceStatus, claims, active: undefined };
+    if (verifiedProcessIdentities.size > 1) return { status: "conflict" as UnityInstanceStatus, claims, active: undefined, debugPause: null };
+    if (unverifiable || verifiedClaims.length > 1 || (claims.length > 0 && verifiedClaims.length !== 1)) return { status: "unverifiable" as UnityInstanceStatus, claims, active: undefined, debugPause: null };
     const active = verifiedClaims[0];
-    if (!active) return { status: "offline" as UnityInstanceStatus, claims, active: undefined };
-    if (active.blockers.length > 0 || active.lifecycle === "blocked") return { status: "blocked" as UnityInstanceStatus, claims, active };
-    if (lifecycleIsTransitioning(active.lifecycle) || active.progress.length > 0 || snapshotIsTransitioning(active.lastUnitySnapshot)) return { status: "transitioning" as UnityInstanceStatus, claims, active };
+    if (!active) return { status: "offline" as UnityInstanceStatus, claims, active: undefined, debugPause: null };
+    if (active.blockers.length > 0 || active.lifecycle === "blocked") return { status: "blocked" as UnityInstanceStatus, claims, active, debugPause: null };
+    if (lifecycleIsTransitioning(active.lifecycle) || active.progress.length > 0 || snapshotIsTransitioning(active.lastUnitySnapshot)) return { status: "transitioning" as UnityInstanceStatus, claims, active, debugPause: null };
     const health = await probeHealthIdentity(record.identity, active);
-    if (!health) return { status: "unresponsive" as UnityInstanceStatus, claims, active };
-    if (lifecycleIsTransitioning(health.mainThread.lifecycle)) return { status: "transitioning" as UnityInstanceStatus, claims, active };
-    return { status: healthMainThreadIsFresh(health, now) ? "ready" as UnityInstanceStatus : "unresponsive" as UnityInstanceStatus, claims, active };
+    if (!health) return { status: "unresponsive" as UnityInstanceStatus, claims, active, debugPause: null };
+    if (lifecycleIsTransitioning(health.mainThread.lifecycle)) return { status: "transitioning" as UnityInstanceStatus, claims, active, debugPause: health.mainThread.debugPause };
+    if (healthMainThreadIsFresh(health, now)) return { status: "ready" as UnityInstanceStatus, claims, active, debugPause: health.mainThread.debugPause };
+    // pulse 停止推进且有当前 live publication 证明的故意主线程暂停时，只能报告 blocked；
+    // 没有该证据时保持 unresponsive，绝不用旧文件或 worker 现场猜测因果。
+    return { status: health.mainThread.debugPause ? "blocked" as UnityInstanceStatus : "unresponsive" as UnityInstanceStatus, claims, active, debugPause: health.mainThread.debugPause };
   }));
+  // 暂停证据只来自本次 health publication；status 归约不因此改变。
+  const mainThreadDebugPause = evaluations.find((evaluation) => evaluation.debugPause)?.debugPause ?? undefined;
   const priority: UnityInstanceStatus[] = ["conflict", "unverifiable", "blocked", "ready", "transitioning", "unresponsive", "offline"];
   const status = priority.find((candidate) => evaluations.some((evaluation) => evaluation.status === candidate)) ?? "offline";
   const claims = target === "all" ? allClaims : evaluations[0].claims;
@@ -896,18 +922,18 @@ export async function reduceRegistryRecord(
     unityVersion: selected?.unityVersion,
     buildStamp: selected?.buildStamp,
     toolCatalogFingerprint: selected?.toolCatalogFingerprint,
+    ...(mainThreadDebugPause ? { mainThreadDebugPause } : {}),
     claimVerification: claims.length === 0 ? "none" : status === "unverifiable" ? "unverifiable" : "verified",
     ...(status === "unverifiable" ? { claimReason: claimEvidenceReason(allClaims, observations, allClaims.filter((session) => observations.get(session.processId)?.state === "alive").length) } : {}),
   };
 }
 
 /** public summary 不包含 endpoint、port 或 listener generation；null/空字段不输出以控制上下文。 */
-export function instanceListSummary(instance: UnityInstance): Record<string, unknown> {
+export function instanceListSummary(instance: UnityInstance, name: string): Record<string, unknown> {
   return {
-    instanceId: instance.instanceId,
+    name,
     canonicalProjectPath: instance.canonicalProjectPath,
     displayProjectPath: instance.displayProjectPath,
-    projectName: instance.projectName,
     status: instance.status,
     ...(instance.unityVersion ? { unityVersion: instance.unityVersion } : {}),
   };
@@ -1206,6 +1232,7 @@ async function probeHealthIdentity(identity: RegistryIdentity, session: Registry
         ageMs: rawMainThread?.ageMs === null ? null : Number(rawMainThread?.ageMs),
         listenerGeneration: Number(rawMainThread?.listenerGeneration),
         lifecycle: String(rawMainThread?.lifecycle ?? "") as RegistryLifecycle,
+        debugPause: parseMainThreadDebugPause(rawMainThread?.debugPause),
       },
       checkedAt,
     };
@@ -1259,7 +1286,34 @@ export async function inspectInstanceHealth(instance: UnityInstance, now = Date.
       ageMs,
       lifecycle: health.mainThread.lifecycle,
       fresh: healthMainThreadIsFresh(health, now),
+      debugPause: health.mainThread.debugPause,
     },
+  };
+}
+
+/**
+ * 故意暂停 publication 的严格解析：形状不完整时返回 null。
+ * 它独立于 transport identity 与主线程 pulse，因此"可达"或"有 pulse"都不能冒充或否定它。
+ */
+function parseMainThreadDebugPause(value: unknown): MainThreadDebugPause | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const pauseId = record.pauseId;
+  const threadId = record.threadId;
+  const publishedSequence = record.publishedSequence;
+  if (record.mainThread !== true) return null;
+  if (typeof pauseId !== "string" || pauseId.length === 0) return null;
+  if (!Number.isInteger(threadId) || (threadId as number) < 1) return null;
+  if (!Number.isInteger(publishedSequence) || (publishedSequence as number) < 1) return null;
+  // 边界事实按存在即严格校验处理：形状非法时省略该字段，但暂停证据本身仍然成立。
+  const timeoutKind = record.timeoutKind === "bounded" || record.timeoutKind === "unbounded" ? record.timeoutKind : undefined;
+  const remainingMs = typeof record.remainingMs === "number" && Number.isFinite(record.remainingMs) && record.remainingMs >= 0 ? record.remainingMs : undefined;
+  return {
+    pauseId,
+    threadId: threadId as number,
+    publishedSequence: publishedSequence as number,
+    ...(timeoutKind ? { timeoutKind } : {}),
+    ...(remainingMs === undefined ? {} : { remainingMs }),
   };
 }
 
@@ -1273,10 +1327,64 @@ function lifecycleIsTransitioning(lifecycle: RegistryLifecycle): boolean {
   return lifecycle !== "ready" && lifecycle !== "blocked";
 }
 
-async function resolveSelectorIdentity(selector: string, dataDir: string, observationBudgetMs?: number, observationDeadlineMs?: number): Promise<ProjectIdentity> {
+/**
+ * 公开选择名：项目名；同名实例按 canonicalProjectPath 稳定排序追加 -2、-3，且不占用其它实例的字面名。
+ * 名称在全部已登记实例上计算，且结果内部唯一；instanceId 不参与对外选择。
+ */
+export function instanceNames(instances: readonly UnityInstance[]): Map<string, string> {
+  const buckets = new Map<string, UnityInstance[]>();
+  for (const instance of instances) {
+    const base = instance.projectName?.trim() || instance.instanceId;
+    const bucket = buckets.get(base);
+    if (bucket) bucket.push(instance);
+    else buckets.set(base, [instance]);
+  }
+  const names = new Map<string, string>();
+  // 字面名先保留给自己的实例，生成的序号不得占用其它实例的字面名。
+  const reserved = new Set(buckets.keys());
+  const assigned = new Set<string>();
+  for (const base of [...buckets.keys()].sort()) {
+    const ordered = [...buckets.get(base)!].sort((left, right) => {
+      if (left.canonicalProjectPath !== right.canonicalProjectPath) return left.canonicalProjectPath < right.canonicalProjectPath ? -1 : 1;
+      return left.instanceId < right.instanceId ? -1 : 1;
+    });
+    ordered.forEach((instance, index) => {
+      let suffix = index + 1;
+      let candidate = suffix === 1 ? base : `${base}-${suffix}`;
+      while (assigned.has(candidate) || (candidate !== base && reserved.has(candidate))) {
+        suffix += 1;
+        candidate = `${base}-${suffix}`;
+      }
+      assigned.add(candidate);
+      names.set(instance.instanceId, candidate);
+    });
+  }
+  return names;
+}
+
+/** 按公开选择名解析；注册表不可用时返回 undefined，由后续路径分支给出自己的错误。 */
+async function resolveInstanceNameSelector(selector: string, dataDir: string): Promise<ProjectIdentity | undefined> {
+  if (INSTANCE_ID_PATTERN.test(selector)) return undefined;
+  const instances = await readInstances(dataDir, Date.now(), "all");
+  const names = instanceNames(instances);
+  const match = instances.find((instance) => names.get(instance.instanceId) === selector);
+  return match
+    ? projectIdentityFromRegistry({
+      instanceId: match.instanceId,
+      canonicalProjectPath: match.canonicalProjectPath,
+      displayProjectPath: match.displayProjectPath,
+    })
+    : undefined;
+}
+
+/** 显式选择器的解析顺序：alias → 公开选择名 → 完整 instanceId（内部）→ 项目路径。 */
+async function resolveSelectorIdentity(selector: string, dataDir: string, observationBudgetMs?: number, observationDeadlineMs?: number): Promise<{ identity: ProjectIdentity; matchedBy: "alias" | "name" | "instanceId" | "projectPath" }> {
   const store = await readAliasStore(dataDir);
   const alias = store.aliases.find((binding) => binding.alias === selector);
-  if (alias) return projectIdentityFromBinding(alias);
+  if (alias) return { identity: projectIdentityFromBinding(alias), matchedBy: "alias" };
+  // 路径形状的选择器不读注册表：公开名称不含路径分隔符，额外读取只会给每次调用增加延迟。
+  const byName = looksLikePath(selector) ? undefined : await resolveInstanceNameSelector(selector, dataDir);
+  if (byName) return { identity: byName, matchedBy: "name" };
   if (INSTANCE_ID_PATTERN.test(selector)) {
     // instanceId 已决定固定文件名；observation有截止时间时可等待启动中的writer首次发布。
     for (;;) {
@@ -1287,26 +1395,31 @@ async function resolveSelectorIdentity(selector: string, dataDir: string, observ
         if (observationDeadlineMs === undefined || !(error instanceof InstanceRegistryError)
           || (error.code !== "E_INSTANCE_IDENTITY_MISMATCH" && error.code !== "E_INSTANCE_UNVERIFIABLE")) throw error;
       }
-      if (record) return projectIdentityFromRegistry(record.identity);
+      if (record) return { identity: projectIdentityFromRegistry(record.identity), matchedBy: "instanceId" };
       const remainingMs = observationDeadlineMs === undefined ? 0 : observationDeadlineMs - Date.now();
       if (remainingMs <= 0) {
-        throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project identity not found: ${selector}.`, ["Pass an existing project path or run unitycli instances list."]);
+        throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project identity not found: ${selector}.`, ["Pass an existing project name, alias, or path, or run unitycli instances list."]);
       }
       await new Promise((complete) => setTimeout(complete, Math.min(100, remainingMs)));
     }
   }
   if (!looksLikePath(selector)) {
-    throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project alias not found: ${selector}.`, ["Run unitycli target alias list or pass a project path."]);
+    throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project name or alias not found: ${selector}.`, ["Run unitycli instances list or unitycli target alias list, or pass a project path."]);
   }
-  return observationBudgetMs === undefined
+  const identity = observationBudgetMs === undefined
     ? resolveProjectIdentity(selector)
-    : resolveProjectIdentityAsync(selector, { timeoutMs: observationBudgetMs });
+    : await resolveProjectIdentityAsync(selector, { timeoutMs: observationBudgetMs });
+  return { identity, matchedBy: "projectPath" };
 }
 
+/** target alias 的输入面：公开选择名或项目路径，或完整 instanceId。 */
 async function resolveAliasIdentity(selector: string, dataDir: string): Promise<ProjectIdentity> {
-  if (!INSTANCE_ID_PATTERN.test(selector)) return resolveProjectIdentity(selector);
+  if (!INSTANCE_ID_PATTERN.test(selector)) {
+    const byName = await resolveInstanceNameSelector(selector, dataDir);
+    return byName ?? resolveProjectIdentity(selector);
+  }
   const record = await readRegistryRecord(dataDir, selector);
-  if (!record) throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project identity not found: ${selector}.`, ["Pass an existing Unity project path."]);
+  if (!record) throw new InstanceRegistryError("E_INSTANCE_NOT_FOUND", `Unity project identity not found: ${selector}.`, ["Pass an existing Unity project name or path."]);
   return projectIdentityFromRegistry(record.identity);
 }
 

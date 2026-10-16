@@ -71,8 +71,8 @@ test("package-local Tool summaries stay concise and route-specific", () => {
   assert.match(tools.find((tool) => tool.name === "docs.get")!.summary, /offline|fallback/i);
   assert.match(tools.find((tool) => tool.name === "docs.search")!.summary, /search|offline/i);
   assert.match(tools.find((tool) => tool.name === "type-inspection.search")!.summary, /search|paged/i);
-  assert.match(tools.find((tool) => tool.name === "code.execute")!.summary, /execute|live|Editor/i);
-  assert.doesNotMatch(tools.find((tool) => tool.name === "code.execute")!.summary, /batch|job|headless/i);
+  assert.match(tools.find((tool) => tool.name === "debug.code.execute")!.summary, /execute|live|Editor/i);
+  assert.doesNotMatch(tools.find((tool) => tool.name === "debug.code.execute")!.summary, /batch|job|headless/i);
 });
 
 test("local read Tool descriptions are route-specific", () => {

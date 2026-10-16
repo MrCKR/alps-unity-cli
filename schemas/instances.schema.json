@@ -11,15 +11,14 @@
     "instanceSummary": {
       "type": "object",
       "properties": {
-        "instanceId": { "type": "string", "pattern": "^unity-[a-f0-9]{64}$" },
+        "name": { "type": "string", "minLength": 1 },
         "canonicalProjectPath": { "type": "string", "minLength": 3 },
         "displayProjectPath": { "type": "string", "minLength": 3 },
-        "projectName": { "type": "string", "minLength": 1 },
         "status": { "enum": ["ready", "transitioning", "blocked", "unresponsive", "unverifiable", "offline", "conflict"] },
         "unityVersion": { "type": "string", "minLength": 1 },
         "alias": { "type": "string", "minLength": 1 }
       },
-      "required": ["instanceId", "canonicalProjectPath", "displayProjectPath", "projectName", "status"],
+      "required": ["name", "canonicalProjectPath", "displayProjectPath", "status"],
       "additionalProperties": false
     },
     "listData": {

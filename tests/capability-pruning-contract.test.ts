@@ -53,7 +53,7 @@ test("replacement mutations expose fresh readback for the removed duplicate surf
     readFile("unitypkg/Editor/Tools/build/BuildSceneStateTool.cs", "utf8"),
     readFile("unitypkg/Editor/Tools/build/scene/add.cs", "utf8"),
     readFile("unitypkg/Editor/Tools/build/scene/remove.cs", "utf8"),
-    readFile("unitypkg/Editor/Tools/console/clear.cs", "utf8"),
+    readFile("unitypkg/Editor/Tools/debug/console/clear.cs", "utf8"),
     readFile("src/tools/package/live-resolve.ts", "utf8"),
   ]);
   assert.match(buildState, /Scene = BuildEntry\(scenes\[index\], index\)/);

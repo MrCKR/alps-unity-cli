@@ -84,9 +84,9 @@ Dev 调用矩阵：
 ### 固定配置
 
 - 主 Agent 必须指定 `subagent_type: "unity-cli-gate"`；不得以其他代理替代。
-- `.pi/agents/unity-cli-gate.md` 是本节规范的可执行投影，必须保持 `prompt_mode: replace`、`inherit_context: false`、`skills: false`，并且只暴露 `windows-pwsh/pwsh`。
-- `windows-pwsh` 不可用时判定为环境阻塞，不得回退到其他 shell 或代理。
-- 子代理必须实际运行在 `LMD/deepseek-v4-flash`；模型不可用、解析失败或 fallback 时门禁无效。
+- `.pi/agents/unity-cli-gate.md` 是本节规范的可执行投影，必须保持 `prompt_mode: replace`、`inherit_context: false`、`skills: false`，并且只暴露 `pwsh`（agent frontmatter 写 `tools: pwsh`；不得使用不存在或无法解析的扩展工具引用，否则子代理会得到零个工具）。
+- `pwsh` 工具不可用时判定为环境阻塞，不得回退到其他 shell 或代理。
+- 子代理必须实际运行在 `LMD/aliyun-deepseek-v4.1-flash`（精确 model id，不得依赖模糊名解析）；模型不可用、解析失败或 fallback 时门禁无效。
 - 正式门禁必须使用全新会话，禁止继承父上下文。产品修正后的重跑也必须创建新会话。
 - 修改本规范或 agent 定义时必须同步更新，并执行隔离自检。
 

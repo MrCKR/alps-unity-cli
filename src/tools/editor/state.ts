@@ -82,7 +82,7 @@ export async function readEditorState(context: EditorStateReadContext, dependenc
   const selectObservation = dependencies.selectObservation ?? selectObservationInstanceForFlags;
   const observer = dependencies.observer ?? new EditorBlockerObserver();
   const observationDeadlineMs = Math.min(startedAt + OBSERVATION_BUDGET_MS, context.absoluteDeadlineMs ?? Number.POSITIVE_INFINITY);
-  if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "UnityCLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <instanceId|projectPath|alias> or run from a Unity project directory."]);
+  if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "UnityCLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <name|alias|projectPath> or run from a Unity project directory."]);
   let selection: InstanceSelection;
   let instance: UnityInstance;
   try {
@@ -90,7 +90,7 @@ export async function readEditorState(context: EditorStateReadContext, dependenc
     instance = selection.instance;
   } catch (error) {
     if (error instanceof InstanceRegistryError || error instanceof ProjectIdentityError) {
-      throw new StructuredToolError(error.code, error.message, error instanceof InstanceRegistryError ? error.nextActions : ["Pass --instance <instanceId|canonicalProjectPath|alias> or run from a local Unity project directory."], error.details);
+      throw new StructuredToolError(error.code, error.message, error instanceof InstanceRegistryError ? error.nextActions : ["Pass --instance <name|alias|projectPath> or run from a local Unity project directory."], error.details);
     }
     throw error;
   }

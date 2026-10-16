@@ -1184,10 +1184,39 @@ namespace UnityCli
             if (EditorElementCaptureApiRequired(definition) && !EditorElementCaptureApiAvailable())
                 return false;
             if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
-                return EditorApplication.isPlaying && !IsPlayModeChanging();
+                return IsPlayingNow() && !IsPlayModeChangingNow();
             if (definition.PlayModeSupport == "editor-only")
-                return !EditorApplication.isPlayingOrWillChangePlaymode && !IsPlayModeChanging();
-            return !IsPlayModeChanging();
+                return !IsPlayingOrWillChangePlaymodeNow() && !IsPlayModeChangingNow();
+            return !IsPlayModeChangingNow();
+        }
+
+        /// <summary>
+        /// 主线程暂停期间的目录可用性判定标志。
+        /// 主线程停住时后台线程不得调用 Unity API，因此可用性改为读取主线程 tick 已冻结的 mode 缓存；
+        /// 此时主线程无法再切换 PlayMode，该缓存仍是当前 mode，极端情况下也会保守报告 transitioning 而不是伪造 ready。
+        /// </summary>
+        [ThreadStatic]
+        private static bool catalogOffMainRead;
+
+        internal static bool CatalogOffMainRead
+        {
+            get { return catalogOffMainRead; }
+            set { catalogOffMainRead = value; }
+        }
+
+        private static bool IsPlayingNow()
+        {
+            return catalogOffMainRead ? cachedIsPlaying : EditorApplication.isPlaying;
+        }
+
+        private static bool IsPlayModeChangingNow()
+        {
+            return catalogOffMainRead ? cachedIsPlayModeChanging : IsPlayModeChanging();
+        }
+
+        private static bool IsPlayingOrWillChangePlaymodeNow()
+        {
+            return catalogOffMainRead ? cachedIsPlayingOrWillChangePlaymode : EditorApplication.isPlayingOrWillChangePlaymode;
         }
 
         /// <summary>按执行门禁优先级返回与 available=false 对应的稳定原因。</summary>
@@ -1195,7 +1224,7 @@ namespace UnityCli
         {
             if (definition.Target == "runtime" || definition.PlayModeSupport == "runtime-only")
                 return "E_RUNTIME_NOT_READY: Enter Play Mode before executing this Tool.";
-            if (definition.PlayModeSupport == "editor-only" && EditorApplication.isPlayingOrWillChangePlaymode)
+            if (definition.PlayModeSupport == "editor-only" && IsPlayingOrWillChangePlaymodeNow())
                 return "E_TOOL_PLAYMODE_UNAVAILABLE: Exit Play Mode before executing this editor-only Tool.";
             if (BuildProfileApiRequired(definition) && BuildToolSupport.BuildProfileType() == null)
                 return "E_BUILD_PROFILE_API_UNAVAILABLE: This Unity Editor version does not expose the Build Profile API.";
@@ -1227,7 +1256,11 @@ namespace UnityCli
 #endif
         }
 
-        private static object CompleteProjectToolSuccess(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, object result)
+        /// <summary>
+        /// catalog.editor.run 成功终态的唯一构造点：公开 CLI 把该命令的成功响应投影为 data.result，
+        /// 因此正常执行路径与暂停控制通道都必须经由这里产出同一形状，不得各自包装。
+        /// </summary>
+        internal static object CompleteProjectToolSuccess(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, object result)
         {
             WriteLog("custom_tool_completed requestId=" + request.RequestId + " name=" + definition.Name);
             return new Dictionary<string, object> { { "result", result } };

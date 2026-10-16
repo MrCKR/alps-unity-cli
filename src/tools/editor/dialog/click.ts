@@ -21,7 +21,7 @@ export default defineTool<EditorDialogClickRequest, EditorDialogClickResult>({
   supportStatus: "cli-only",
   examples: [{ description: "Click the Cancel button returned by the dialog Context.", argv: ["tools", "run", "editor.dialog.click", "--input", '{"dialogId":"dialog_example","button":"Cancel"}'] }],
   async execute(request, context) {
-    if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "UnityCLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <instanceId|projectPath|alias> or run from a Unity project directory."]);
+    if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "UnityCLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <name|alias|projectPath> or run from a Unity project directory."]);
     const deadlineMs = context.absoluteDeadlineMs ?? Date.now() + 30_000;
     let instance;
     try { instance = (await selectObservationInstanceForFlags(context.flags ?? {}, context.dataDir, Math.max(0, deadlineMs - Date.now()))).instance; }

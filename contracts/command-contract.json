@@ -828,15 +828,6 @@
       ]
     },
     {
-      "bridgeCommand": "code.execute",
-      "group": "code",
-      "command": "execute",
-      "handler_type": "hybrid",
-      "csharp_handler": "present",
-      "destructive": true,
-      "timeout": 60000
-    },
-    {
       "bridgeCommand": "component.add",
       "group": "component",
       "command": "add",
@@ -891,18 +882,423 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "console.clear",
-      "group": "console",
-      "command": "clear",
+      "bridgeCommand": "debug.code.execute",
+      "group": "debug",
+      "command": "code.execute",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 60000
+    },
+    {
+      "bridgeCommand": "debug.console.clear",
+      "group": "debug",
+      "command": "console.clear",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "console.read",
-      "group": "console",
-      "command": "read",
+      "bridgeCommand": "debug.console.read",
+      "group": "debug",
+      "command": "console.read",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.events.read",
+      "group": "debug",
+      "command": "events.read",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.hook.disable",
+      "group": "debug",
+      "command": "hook.disable",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.hook.enable",
+      "group": "debug",
+      "command": "hook.enable",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.hook.info",
+      "group": "debug",
+      "command": "hook.info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.hook.install",
+      "group": "debug",
+      "command": "hook.install",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.hook.list",
+      "group": "debug",
+      "command": "hook.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.hook.remove",
+      "group": "debug",
+      "command": "hook.remove",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.hook.replace",
+      "group": "debug",
+      "command": "hook.replace",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.input.info",
+      "group": "debug",
+      "command": "input.info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.input.key",
+      "group": "debug",
+      "command": "input.key",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.input.pointer",
+      "group": "debug",
+      "command": "input.pointer",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.input.release",
+      "group": "debug",
+      "command": "input.release",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.method.find",
+      "group": "debug",
+      "command": "method.find",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.method.invoke",
+      "group": "debug",
+      "command": "method.invoke",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.pause.evaluate",
+      "group": "debug",
+      "command": "pause.evaluate",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.pause.inspect",
+      "group": "debug",
+      "command": "pause.inspect",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.pause.list",
+      "group": "debug",
+      "command": "pause.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.pause.resume",
+      "group": "debug",
+      "command": "pause.resume",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.pause.wait",
+      "group": "debug",
+      "command": "pause.wait",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.program.info",
+      "group": "debug",
+      "command": "program.info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.program.install",
+      "group": "debug",
+      "command": "program.install",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.program.list",
+      "group": "debug",
+      "command": "program.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.program.remove",
+      "group": "debug",
+      "command": "program.remove",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.program.replace",
+      "group": "debug",
+      "command": "program.replace",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.program.run",
+      "group": "debug",
+      "command": "program.run",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.program.stop",
+      "group": "debug",
+      "command": "program.stop",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.program.wait",
+      "group": "debug",
+      "command": "program.wait",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.run.begin",
+      "group": "debug",
+      "command": "run.begin",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.run.compare",
+      "group": "debug",
+      "command": "run.compare",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.run.end",
+      "group": "debug",
+      "command": "run.end",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.run.info",
+      "group": "debug",
+      "command": "run.info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.run.list",
+      "group": "debug",
+      "command": "run.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.run.wait",
+      "group": "debug",
+      "command": "run.wait",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.session.create",
+      "group": "debug",
+      "command": "session.create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.session.export",
+      "group": "debug",
+      "command": "session.export",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.session.import",
+      "group": "debug",
+      "command": "session.import",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.session.info",
+      "group": "debug",
+      "command": "session.info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.session.list",
+      "group": "debug",
+      "command": "session.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.session.remove",
+      "group": "debug",
+      "command": "session.remove",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.session.stop",
+      "group": "debug",
+      "command": "session.stop",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.thread.list",
+      "group": "debug",
+      "command": "thread.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.type.schema",
+      "group": "debug",
+      "command": "type.schema",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.value.read",
+      "group": "debug",
+      "command": "value.read",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.value.write",
+      "group": "debug",
+      "command": "value.write",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -1476,78 +1872,6 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "method-hook.disable",
-      "group": "method-hook",
-      "command": "disable",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "method-hook.enable",
-      "group": "method-hook",
-      "command": "enable",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": true,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "method-hook.events",
-      "group": "method-hook",
-      "command": "events",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "method-hook.info",
-      "group": "method-hook",
-      "command": "info",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "method-hook.install",
-      "group": "method-hook",
-      "command": "install",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": true,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "method-hook.list",
-      "group": "method-hook",
-      "command": "list",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "method-hook.remove",
-      "group": "method-hook",
-      "command": "remove",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "method-hook.replace",
-      "group": "method-hook",
-      "command": "replace",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2829,33 +3153,6 @@
       "bridgeCommand": "rendering.stats",
       "group": "rendering",
       "command": "stats",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "runtime-reflection.method.find",
-      "group": "runtime-reflection",
-      "command": "method.find",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "runtime-reflection.method.invoke",
-      "group": "runtime-reflection",
-      "command": "method.invoke",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": true,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "runtime-reflection.type.schema",
-      "group": "runtime-reflection",
-      "command": "type.schema",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,

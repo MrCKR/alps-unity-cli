@@ -192,6 +192,11 @@ namespace UnityCli
             try
             {
                 PrepareListenerGenerationForStart();
+                // 控制通道必须在任何 pause 资源安装之前发布；否则现场一旦停住就没有可达的解除路径。
+                DebugPauseControl.Activate();
+                // 控制通道会在后台线程上读取 session 状态；这里在主线程上先发布 SessionState 恢复事实，
+                // 使 off-main 服务不必（也不得）直接访问该主线程专属状态。
+                DebugSessionStore.PublishRecoveryFacts();
                 if (string.IsNullOrWhiteSpace(ListenerId)) throw new InvalidOperationException("Listener identity is unavailable.");
                 listener = new HttpListener();
                 port = StartHttpListener(listener);

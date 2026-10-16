@@ -39,7 +39,7 @@ const mutationTools = [
   ["project-settings.layer.remove", "Tools/project-settings/ProjectSettingsToolSupport.cs"],
   ["project-settings.tag.add", "Tools/project-settings/ProjectSettingsToolSupport.cs"],
   ["project-settings.tag.remove", "Tools/project-settings/ProjectSettingsToolSupport.cs"],
-  ["runtime-reflection.method.invoke", "Tools/runtime-reflection/method/invoke.cs"],
+  ["debug.method.invoke", "Tools/debug/method/invoke.cs"],
   ["scene.create", "Tools/scene/create.cs"],
   ["scene.load", "Tools/scene/load.cs"],
   ["game-object.move-to-scene", "Tools/game-object/move-to-scene.cs"],
@@ -90,7 +90,7 @@ test("core B mutation tools commit exactly once before their effect", async () =
 
 test("runtime-reflection and profiler load commit at their first irreversible effect", async () => {
   const [reflection, profilerLoad] = await Promise.all([
-    readFile(new URL("Tools/runtime-reflection/method/invoke.cs", editorUrl), "utf8"),
+    readFile(new URL("Tools/debug/method/invoke.cs", editorUrl), "utf8"),
     readFile(new URL("Tools/profiler/load.cs", editorUrl), "utf8")
   ]);
   assert.match(reflection, /PrepareCall\([\s\S]*ctx\.RunCompletionProbe\(request\.CompletionProbe, \(\) => data = UnityCliBridge\.ReflectionInvoker\.InvokePrepared\(prepared(?:, readBudget)?\)\)/);

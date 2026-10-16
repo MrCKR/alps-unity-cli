@@ -3,7 +3,7 @@ import { withTransitionBinding } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
 import { rejectUnavailableEditorState } from "../editor/state.js";
-import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
+import { blockedEditorStateError, blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 
 const BUILD_TARGETS = ["StandaloneWindows64", "StandaloneWindows", "StandaloneOSX", "StandaloneLinux64", "WebGL", "iOS", "Android"] as const;
 type BuildTarget = typeof BUILD_TARGETS[number];
@@ -29,7 +29,7 @@ export default defineTool<BuildRunRequest, BuildRunResult | BuildRunDryRunResult
     if (context.execution.dryRun) return { dryRun: true, plannedEffects: targets.map((target, index) => ({ type: "build-player" as const, target, outputPath: outputs[index]! })) };
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
     const state = await waitForEditorTransitionEnd(context, `${context.requestId}_build_state`, deadline);
-    if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot start a player build.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
+    if (state.status === "blocked") throw blockedEditorStateError("Unity Editor is blocked and cannot start a player build.", state.blockers);
     rejectUnavailableEditorState(state, "build.run");
     if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "build.run could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
     if (state.status !== "ready") throw new StructuredToolError("E_UNITY_TRANSITIONING", "build.run requires a stable Editor generation.", ["Wait for editor.state to become ready, then retry."], undefined, true, 250);

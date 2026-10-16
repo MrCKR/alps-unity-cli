@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { defaultDataDir } from "../platform.js";
-import { EditorBlockerObserver, sanitizeEditorBlockers, type EditorBlockerObservation } from "../editor-blocker-observer.js";
+import { EditorBlockerObserver, editorDialogBlockers, sanitizeEditorBlockers, type EditorBlockerObservation } from "../editor-blocker-observer.js";
 import {
   clearInstanceHealthCache,
   InstanceRegistryError,
@@ -639,9 +639,12 @@ export class SessionSupervisor {
         selection = await this.selectWithinDeadline({ instance: target.instanceId }, target.target, absoluteDeadlineMs, () => selectionTransitionTimeout(target.instanceId, absoluteDeadlineMs), allowTransitionBinding);
       }
       const instance = selection.instance;
-      if (instance.status === "blocked") throw blocked(instance);
+      // 主线程被本调试设施主动暂停时 registry 同样报 blocked，但可达集合由 Bridge 的同一 pause
+      // 控制通道在自己的 HTTP 线程上服务；这里必须把请求交给那个闸门，不能本地伪装成 modal 阻断。
+      // 只有没有当前 live pause publication 证明的 blocked（Windows modal / registry blocker）才在此拒绝。
+      if (instance.status === "blocked" && instance.mainThreadDebugPause === undefined) throw blocked(instance);
       if (instance.status === "unverifiable") throw unverifiable(instance);
-      if (instance.status === "ready" || (allowTransitionBinding && instance.status === "transitioning" && instance.activeSession)) return bindingFrom(instance);
+      if (instance.status === "ready" || instance.status === "blocked" || (allowTransitionBinding && instance.status === "transitioning" && instance.activeSession)) return bindingFrom(instance);
       if (observeOnly) throw instance.status === "unresponsive" ? unresponsive(instance) : observedTransition(instance);
       if (remainingBudget(absoluteDeadlineMs, this.dependencies.now()) <= 0) {
         throw instance.status === "unresponsive" ? unresponsive(instance) : transitionTimeout(instance, absoluteDeadlineMs);
@@ -655,7 +658,7 @@ export class SessionSupervisor {
   private async bindReplacement(target: SupervisorTarget, absoluteDeadlineMs: number, previous: ValidatedBinding, allowTransitionBinding = false): Promise<ValidatedBinding> {
     for (;;) {
       const selection = await this.selectWithinDeadline({ instance: target.instanceId }, target.target, absoluteDeadlineMs, () => selectionTransitionTimeout(target.instanceId, absoluteDeadlineMs), allowTransitionBinding);
-      if (selection.instance.status === "blocked") throw blocked(selection.instance);
+      if (selection.instance.status === "blocked" && selection.instance.mainThreadDebugPause === undefined) throw blocked(selection.instance);
       if (selection.instance.status === "unverifiable") throw unverifiable(selection.instance);
       if (selection.instance.status === "ready" || (allowTransitionBinding && selection.instance.status === "transitioning" && selection.instance.activeSession)) {
         const candidate = bindingFrom(selection.instance);
@@ -1007,7 +1010,7 @@ function deadlineError(mode: SessionSupervisorMode, instanceId: string, startedA
 
 function executionTimeout(instanceId: string, reason: string, observation?: EditorBlockerObservation): SessionSupervisorError {
   const blockers = observation?.outcome === "observed-blocked" ? sanitizeEditorBlockers(observation.blockers) : [];
-  const title = blockers[0]?.title;
+  const title = editorDialogBlockers(blockers)[0]?.title;
   return new SessionSupervisorError("E_EXECUTION_TIMEOUT", title
     ? `The request did not return a terminal result before its deadline; modal dialog '${title}' was observed.`
     : "The request did not return a terminal result before its deadline.", outcomeUnknownNextActions(), { instanceId, reason, outcome: "unknown", dispatch: "may-have-started", replay: "new-decision-required", ...(blockers.length > 0 ? { blockers } : {}) });
@@ -1015,7 +1018,7 @@ function executionTimeout(instanceId: string, reason: string, observation?: Edit
 
 function blockedObservation(instanceId: string, observation: EditorBlockerObservation, existing?: unknown): SessionSupervisorError {
   const blockers = sanitizeEditorBlockers([...(Array.isArray(existing) ? existing : []), ...observation.blockers]);
-  const title = blockers[0]?.title ?? "an external modal window";
+  const title = editorDialogBlockers(blockers)[0]?.title ?? "an external modal window";
   return new SessionSupervisorError("E_UNITY_BLOCKED", `Unity Editor is blocked by observed dialog '${title}'.`, blockerNextActions(), { instanceId, blockers });
 }
 

@@ -3,7 +3,7 @@ import { executeBridgePayload } from "../../bridge/index.js";
 import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { readEditorState, rejectUnavailableEditorState } from "../editor/state.js";
-import { StructuredToolError } from "../errors.js";
+import { blockedEditorStateError, StructuredToolError } from "../errors.js";
 
 export interface TestCancelRequest {}
 export interface TestCancelPlannedEffect { type: "test-run-cancel"; rootRequestId: string; runId: string; }
@@ -38,7 +38,7 @@ export default defineTool<TestCancelRequest, TestCancelResult>({
   async execute(_request, context) {
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 60_000);
     const state = await readEditorState({ requestId: childId(context.requestId, "_cancel_state"), flags: context.flags, dataDir: context.dataDir, bridgeExecute: context.bridgeExecute, absoluteDeadlineMs: deadline } as never);
-    if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot cancel tests through the main thread.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
+    if (state.status === "blocked") throw blockedEditorStateError("Unity Editor is blocked and cannot cancel tests through the main thread.", state.blockers);
     rejectUnavailableEditorState(state, "test.cancel");
     if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "test.cancel could not bind one verified Editor session.", ["Inspect editor.state before retrying."]);
     const flags: BridgeFlags = { ...(context.flags ?? {}), instance: state.identity.instanceId };

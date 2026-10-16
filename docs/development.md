@@ -30,7 +30,7 @@ The Package closure audit enforces:
 - exact canonical `unitypkg` file paths, sizes, per-file SHA-256, and tree hash;
 - zero package-owned Roslyn DLLs;
 - Unity-provided precompiled references;
-- the Unity Editor compiler path used by `code.execute`;
+- the Unity Editor compiler path used by `debug.code.execute`;
 - bounded assembly-conflict policy.
 
 ## Run The Source CLI

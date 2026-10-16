@@ -8,7 +8,7 @@
 
 ```powershell
 unitycli command --project-path C:\path\MyProject
-unitycli command --instance <id|projectPath|alias>
+unitycli command --instance <name|alias|projectPath>
 ```
 
 名称选择是exact且确定的：

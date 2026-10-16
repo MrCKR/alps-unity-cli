@@ -104,7 +104,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     if (parsed.flags["bridge-endpoint"] !== undefined || process.env.UNITY_CLI_BRIDGE_ENDPOINT !== undefined) {
       return failure(requestId, "E_OBSOLETE_OPTION", "Public Bridge endpoint selection has been removed.", [
-        "Pass --instance <instanceId|canonicalProjectPath|alias> or run from the target Unity project directory.",
+        "Pass --instance <name|alias|projectPath> or run from the target Unity project directory.",
         "Remove UNITY_CLI_BRIDGE_ENDPOINT from the process environment.",
       ]);
     }
@@ -115,7 +115,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     }
     if (parsed.flags.target !== undefined && usesLegacyTargetSelector(group, command)) {
       return failure(requestId, "E_OBSOLETE_OPTION", "--target is not an instance selector. Use --instance or Unity project CWD.", [
-        "Pass --instance <instanceId|canonicalProjectPath|alias>.",
+        "Pass --instance <name|alias|projectPath>.",
       ]);
     }
 
@@ -147,7 +147,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, [
       "Top-level commands are: tools, command, extensions, init, target, instances, doctor.",
       "Run unitycli tools group or unitycli command to discover Unity tools.",
-      "Run unitycli instances list, then pass --instance <id|projectPath|alias> or use a Unity project CWD.",
+      "Run unitycli instances list, then pass --instance <name|alias|projectPath> or use a Unity project CWD.",
       "Run unitycli --help."
     ]);
   } catch (error) {
@@ -199,7 +199,7 @@ async function handleTopLevelTarget(
   }
   return failure(requestId, "UNKNOWN_TARGET_COMMAND", "Expected target alias list|set|unset.", [
     "Run unitycli target alias list.",
-    "Run unitycli target alias set <projectPath|instanceId> <alias>."
+    "Run unitycli target alias set <name|projectPath> <alias>."
   ]);
 }
 
@@ -221,11 +221,11 @@ function help(): Record<string, unknown> {
   return {
     usage: "unitycli [options] <command> [options]",
     commands: [
-      "tools group [--instance <id|projectPath|alias>]",
-      "tools group list <group> [--page-size <n>] [--cursor <nextCursor>] [--instance <id|projectPath|alias>]",
-      "tools describe <tool> [--instance <id|projectPath|alias>]",
-      "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--artifact-dir <path>] [--runtime] [--instance <id|projectPath|alias>]",
-      "tools search <k1|k2|...> [--page-size <n>] [--cursor <nextCursor>] [--instance <id|projectPath|alias>]",
+      "tools group [--instance <name|alias|projectPath>]",
+      "tools group list <group> [--page-size <n>] [--cursor <nextCursor>] [--instance <name|alias|projectPath>]",
+      "tools describe <tool> [--instance <name|alias|projectPath>]",
+      "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--artifact-dir <path>] [--runtime] [--instance <name|alias|projectPath>]",
+      "tools search <k1|k2|...> [--page-size <n>] [--cursor <nextCursor>] [--instance <name|alias|projectPath>]",
       "command [--project-path <path>] [--page-size <n>] [--cursor <nextCursor>] [<name> [--field <value>|<positional>...]]",
       "extensions list [--project <path>]",
       "extensions install <id|name> [--project <path>]",
@@ -238,16 +238,16 @@ function help(): Record<string, unknown> {
       "init skill --agent <.agents|claude> --scope workspace --workspace <path> [--check] [--timeout-ms <n>]",
       "init skill --agent <.agents|claude> --scope user [--check] [--timeout-ms <n>]",
       "target alias list",
-      "target alias set <projectPath|instanceId> <alias> [--force]",
+      "target alias set <name|projectPath> <alias> [--force]",
       "target alias unset <alias>",
       "instances list [--all]",
       "instances prune",
-      "doctor [--instance <id|projectPath|alias>] [--project <path>]"
+      "doctor [--instance <name|alias|projectPath>] [--project <path>]"
     ],
     options: [
       "--pretty  Indent the JSON envelope; default stdout is compact single-line JSON."
     ],
-    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <full-id|canonical-project-path|alias>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Discovery lists default to 20 items, allow at most 100, and continue with `pageInfo.nextCursor`. Descriptor `examples[].input` is business JSON; optional `examples[].execution` carries dryRun and timeoutMs controls. Run `init help` for the self-contained AI installation protocol; Bridge and Skill installation are separate explicit effects. stdout is compact JSON unless `--pretty` is explicit. In PowerShell, wrap inline JSON and pipe-separated tools search keywords in single quotes."
+    note: "Top-level commands are: tools, command, extensions, init, target, instances, doctor. Unity capabilities share one Tool catalog: use `tools run <tool> --input <json>` or `command <name> <business-args>`. Live target resolution accepts only `--instance <name|alias|projectPath>`, `command --project-path <path>`, or the nearest Unity project root from CWD. When CWD is outside the selected Unity project, every `tools` discovery call requires `--instance <projectPath>`. `target` manages aliases only; endpoint, PID, active-target and single-instance fallback selection do not exist. Tool names returned by group list/search are exact; groups are filters and are never prepended. Discovery lists default to 20 items, allow at most 100, and continue with `pageInfo.nextCursor`. Descriptor `examples[].input` is business JSON; optional `examples[].execution` carries dryRun and timeoutMs controls. Run `init help` for the self-contained AI installation protocol; Bridge and Skill installation are separate explicit effects. stdout is compact JSON unless `--pretty` is explicit. In PowerShell, wrap inline JSON and pipe-separated tools search keywords in single quotes."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {

@@ -38,3 +38,6 @@ Desktop.ini
 .env
 .env.*
 !.env.example
+
+# 已安装 Skill 的经验库状态区（运行时写入，不进版本控制）
+skills/unitycli/experience/

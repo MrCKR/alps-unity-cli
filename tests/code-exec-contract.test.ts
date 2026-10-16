@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import codeExecute from "../src/tools/code/execute.js";
+import codeExecute from "../src/tools/debug/code-execute.js";
 
-test("code.execute publishes direct examples with and without a completion probe", () => {
+test("debug.code.execute publishes direct examples with and without a completion probe", () => {
   const plainExample = codeExecute.examples?.[0];
   const probeExample = codeExecute.examples?.[1];
   assert.ok(plainExample);
   assert.ok(probeExample);
-  assert.deepEqual(plainExample.argv?.slice(0, 3), ["tools", "run", "code.execute"]);
+  assert.deepEqual(plainExample.argv?.slice(0, 3), ["tools", "run", "debug.code.execute"]);
   const plainInputIndex = plainExample.argv!.indexOf("--input");
   const plainInput = JSON.parse(plainExample.argv![plainInputIndex + 1]!) as Record<string, unknown>;
   assert.equal(typeof plainInput.code, "string");
@@ -22,7 +22,7 @@ test("code.execute publishes direct examples with and without a completion probe
   assert.doesNotMatch(JSON.stringify(codeExecute.examples), /\{\.\.\.\}|--channel|batchmode|--job/);
 });
 
-test("code.execute clearly preserves necessary hazardous code and discloses the non-preemptible main-thread boundary", () => {
+test("debug.code.execute clearly preserves necessary hazardous code and discloses the non-preemptible main-thread boundary", () => {
   assert.match(codeExecute.summary, /cannot be force-stopped by timeout/i);
   assert.match(codeExecute.description, /does not reject infinite loops, long sleeps, blocking waits, lock contention/);
   assert.match(codeExecute.description, /Prefer a bounded alternative when possible/);
@@ -33,6 +33,36 @@ test("code.execute clearly preserves necessary hazardous code and discloses the 
   assert.match(codeExecute.description, /wait for this CLI process to exit and allow at least 5000ms beyond --timeout-ms/);
   assert.match(codeExecute.description, /Dry-run reports source hash/);
   assert.doesNotMatch(codeExecute.description, /reject(?:s|ed)? (?:dangerous|hazardous) code/i);
+});
+
+test("debug.code.execute publishes the exact wrapper declaration and never cuts a returned value silently", async () => {
+  const [support, toolSource, dispatcher, evaluation, pauseDtos, pauseTool] = await Promise.all([
+    readFile("unitypkg/Editor/Infrastructure/CodeExecSupport.cs", "utf8"),
+    readFile("src/tools/debug/code-execute.ts", "utf8"),
+    readFile("src/tools/dispatcher.ts", "utf8"),
+    readFile("unitypkg/Editor/Infrastructure/Debug/DebugPauseEvaluation.cs", "utf8"),
+    readFile("unitypkg/Editor/Tools/debug/pause/DebugPauseDtos.cs", "utf8"),
+    readFile("unitypkg/Editor/Tools/debug/pause/evaluate.cs", "utf8"),
+  ]);
+  // 包裹声明必须与 WrapCodeSource 的真实插入点逐字一致，否则调用方无法预防 CS0136 一类失败。
+  assert.match(support, /namespace UnityCli\.RuntimeCode \{ public static class Script \{ public static object Run\(string argsJson\) \{ " \+ source \+ " \} \} \}/);
+  assert.match(support, /namespace UnityCli\.RuntimeCode \{ public static class Script \{ " \+ source \+ " \} \}/);
+  assert.match(toolSource, /the body of exactly `public static object Run\(string argsJson\)` inside `namespace UnityCli\.RuntimeCode \{ public static class Script \{ \} \}`/);
+  assert.match(toolSource, /the wrapper declares no locals, so argsJson is the only pre-declared identifier/);
+  // 返回值裁剪事实必须随结果公开：C# 投影、runtime 字段与 CLI completion proof 三处一致。
+  assert.match(support, /NormalizeReturnValue\(object value, out bool truncated\)/);
+  assert.match(support, /truncated = bounded\.Length != \(text == null \? 0 : text\.Length\)/);
+  assert.match(support, /"returnValueTruncated", returnValueTruncated/);
+  assert.match(support, /"returnValueByteBudget", \(long\)MaxCodeOutputBytes/);
+  assert.match(toolSource, /returnValueTruncated: boolean; returnValueByteBudget: number/);
+  assert.match(dispatcher, /typeof runtime\.returnValueTruncated !== "boolean"/);
+  assert.match(dispatcher, /runtime\.returnValueByteBudget <= 0/);
+  // 同一条共享 Run 返回值路径上的暂停现场求值也必须带出裁剪事实。
+  assert.match(evaluation, /ProjectReturnValue\(object value, bool mainThread, out bool truncated\)/);
+  assert.match(evaluation, /truncated = truncation\.Truncated/);
+  assert.match(evaluation, /ReturnValueTruncated = returnValueTruncated/);
+  assert.match(pauseDtos, /public bool ReturnValueTruncated \{ get; set; \}/);
+  assert.match(pauseTool, /returnValueTruncated reports whether the returned value was cut/);
 });
 
 test("Shared exception projection grants exact Editor internals access without an asmdef cycle", async () => {
@@ -47,13 +77,14 @@ test("Shared exception projection grants exact Editor internals access without a
   assert.ok((JSON.parse(editorAssembly) as { references: string[] }).references.includes("UnityCli.Shared"));
 });
 
-test("raw code.execute dry-run cannot compile source and normal execution rechecks the exact lease", async () => {
-  const [support, compiler, coordinator, runtimeCode, toolSource, dispatcher] = await Promise.all([
+test("raw debug.code.execute dry-run cannot compile source and normal execution rechecks the exact lease", async () => {
+  const [support, compiler, compilerOwner, coordinator, runtimeCode, toolSource, dispatcher] = await Promise.all([
     readFile("unitypkg/Editor/Infrastructure/CodeExecSupport.cs", "utf8"),
     readFile("unitypkg/Editor/Infrastructure/DynamicCodeCompiler.cs", "utf8"),
+    readFile("unitypkg/Editor/Infrastructure/Compiler/DebugCompilerOwner.cs", "utf8"),
     readFile("unitypkg/Editor/Infrastructure/UnityCliOperationCoordinator.cs", "utf8"),
     readFile("src/runtime-code.ts", "utf8"),
-    readFile("src/tools/code/execute.ts", "utf8"),
+    readFile("src/tools/debug/code-execute.ts", "utf8"),
     readFile("src/tools/dispatcher.ts", "utf8"),
   ]);
   const entry = support.slice(support.indexOf("ValueTask<string> CodeExec"), support.indexOf("private static string WrapCodeSource"));
@@ -76,9 +107,11 @@ test("raw code.execute dry-run cannot compile source and normal execution rechec
   assert.match(compiler, /TemporaryRoot\(\)[\s\S]*"Library", "UnityCli", "code-exec-temp"[\s\S]*finally[\s\S]*DeleteTemporaryCodeFile/);
   assert.doesNotMatch(support, /Microsoft\.CodeAnalysis|CompileInProcess|CodeExecUseInProcessRoslyn|CompileWithCscFallback/);
   assert.doesNotMatch(compiler, /Microsoft\.CodeAnalysis|CompileInProcess|CodeExecUseInProcessRoslyn|CompileWithCscFallback/);
-  assert.match(compiler, /CollectReferences[\s\S]*deadlineOk\(\)[\s\S]*OperationCanceledException/);
+  // 引用发现、快照指纹与加载产物预算的唯一 owner 现在是 DebugCompilerOwner；同一不变式改在新 owner 上校验。
+  assert.match(compilerOwner, /internal static List<string> References\(string refsCsv, List<string> extraReferences, Func<bool> deadlineOk\)[\s\S]*OperationCanceledException/);
+  assert.match(compilerOwner, /internal static string ReferenceFingerprint\(\)/);
   assert.match(support, /RoslynReferenceFailure[\s\S]*E_REFERENCE_RESOLUTION_FAILED/);
-  const referenceDiscovery = compiler.slice(compiler.indexOf("internal static List<string> CollectReferences"), compiler.indexOf("private static void AddReference"));
+  const referenceDiscovery = compilerOwner.slice(compilerOwner.indexOf("internal static List<string> References("), compilerOwner.indexOf("private static void AddReference"));
   assert.doesNotMatch(referenceDiscovery, /File\.Exists|File\.Open|Directory\.GetFiles/);
   assert.doesNotMatch(support, /ValidateCodeReferences|WaitForExit\(60000\)|E_CODE_RUNTIME_FAILED/);
   assert.match(support, /UnityCliExceptionProjection\.Project\(exception\)[\s\S]*projection\.PublicMessage/);
@@ -93,7 +126,7 @@ test("raw code.execute dry-run cannot compile source and normal execution rechec
   assert.match(runtimeCode, /executeBridgePayload[\s\S]*absoluteDeadlineMs \}\);/);
   assert.match(runtimeCode, /function normalizeTimeout[\s\S]*return Math\.trunc\(value\)/);
   assert.doesNotMatch(runtimeCode, /Math\.min\(Math\.trunc\(value\), 600_000\)/);
-  assert.match(dispatcher, /parseTypedInput\(flags, requestId, name === "code\.execute" \? 1024 \* 1024 : undefined, [^)]+\)/);
+  assert.match(dispatcher, /parseTypedInput\(flags, requestId, name === "debug\.code\.execute" \? 1024 \* 1024 : undefined, [^)]+\)/);
   assert.match(dispatcher, /readBoundedInputFile[\s\S]*beforeInputDeadline[\s\S]*handle\.read/);
   assert.match(dispatcher, /readStdin\(maxBytes, absoluteDeadlineMs\)[\s\S]*InputDeadlineExceeded/);
   assert.match(dispatcher, /E_CODE_INPUT_TOO_LARGE/);

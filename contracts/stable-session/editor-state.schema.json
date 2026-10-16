@@ -69,19 +69,47 @@
       }
     },
     "blocker": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "dialogId", "title", "message", "buttons", "requiresUserAction", "source", "confidence"],
-      "properties": {
-        "type": { "const": "dialog" },
-        "dialogId": { "type": "string", "minLength": 1 },
-        "title": { "type": "string" },
-        "message": { "type": "string" },
-        "buttons": { "type": "array", "items": { "type": "string" } },
-        "requiresUserAction": { "const": true },
-        "source": { "const": "windows-ui" },
-        "confidence": { "const": "exact" }
-      }
+      "description": "Public blocker DTO. Two exact variants exist: an independently observed Windows modal (source windows-ui) and a deliberate main-thread debug pause proven by the current live pause publication (source unity-debug-pause).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "dialogId", "title", "message", "buttons", "requiresUserAction", "source", "confidence"],
+          "properties": {
+            "type": { "const": "dialog" },
+            "dialogId": { "type": "string", "minLength": 1 },
+            "title": { "type": "string" },
+            "message": { "type": "string" },
+            "buttons": { "type": "array", "items": { "type": "string" } },
+            "requiresUserAction": { "const": true },
+            "source": { "const": "windows-ui" },
+            "confidence": { "const": "exact" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "pauseId", "threadId", "mainThread", "methodIdentity", "targetKey", "position", "sessionId", "timeoutKind", "remainingMs", "pausedForMs", "resumeTool", "infoTool", "requiresUserAction", "source", "confidence"],
+          "properties": {
+            "type": { "const": "debug-pause" },
+            "pauseId": { "type": "string", "minLength": 1 },
+            "threadId": { "type": "integer", "minimum": 1 },
+            "mainThread": { "type": "boolean" },
+            "methodIdentity": { "type": "string" },
+            "targetKey": { "type": "string" },
+            "position": { "enum": ["prefix", "postfix"] },
+            "sessionId": { "type": "string" },
+            "timeoutKind": { "enum": ["bounded", "unbounded"] },
+            "remainingMs": { "type": "number", "minimum": 0 },
+            "pausedForMs": { "type": "number", "minimum": 0 },
+            "resumeTool": { "const": "debug.pause.resume" },
+            "infoTool": { "const": "debug.pause.list" },
+            "requiresUserAction": { "const": false },
+            "source": { "const": "unity-debug-pause" },
+            "confidence": { "const": "exact" }
+          }
+        }
+      ]
     },
     "observedField": {
       "type": "object",

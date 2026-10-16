@@ -171,7 +171,7 @@ namespace UnityCli.Hooks
             foreach (var pair in owners)
             {
                 if (index > 0) builder.Append("; ");
-                if (index >= MethodHookLimits.MaxForeignOwnerEntries) { builder.Append("..."); break; }
+                if (index >= DebugLimits.MaxForeignOwnerEntries) { builder.Append("..."); break; }
                 builder.Append(pair.Key).Append(" (prefix ").Append(pair.Value[0].ToString(CultureInfo.InvariantCulture))
                     .Append(", postfix ").Append(pair.Value[1].ToString(CultureInfo.InvariantCulture))
                     .Append(", finalizer ").Append(pair.Value[2].ToString(CultureInfo.InvariantCulture)).Append(')');

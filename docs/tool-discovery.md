@@ -8,7 +8,7 @@
 
 ```powershell
 unitycli instances list
-unitycli tools group --instance <id|projectPath|alias>
+unitycli tools group --instance <name|alias|projectPath>
 ```
 
 本文示例省略 `--instance` 时，默认命令运行在目标 Unity 项目 CWD。

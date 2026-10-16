@@ -5,8 +5,8 @@
     "file_write": {
       "decision": "approved",
       "reviewer": "project owner",
-      "reason": "The owner explicitly selected bounded local rolling JSONL as the feedback persistence mechanism.",
-      "scope": "%LOCALAPPDATA%\\UnityCli\\feedback\\feedback.jsonl plus feedback.1.jsonl through feedback.3.jsonl; LOCALAPPDATA must resolve to a fixed local drive and contain no existing reparse path component",
+      "reason": "The owner explicitly selected bounded rolling JSONL inside the installed Skill as the feedback persistence mechanism.",
+      "scope": "<installed Skill>/experience/feedback.jsonl plus feedback.1.jsonl through feedback.3.jsonl; the Skill root must resolve to a fixed local drive and contain no existing reparse path component",
       "expires_at": "2027-08-05",
       "evidence": [
         "Owner decision D008",
@@ -22,7 +22,7 @@
     "subprocess": {
       "decision": "approved",
       "reviewer": "project owner",
-      "reason": "The installed Skill invokes only the bundled PowerShell feedback recorder when feedback is enabled and friction occurred.",
+      "reason": "The installed Skill invokes only the bundled PowerShell feedback recorder when FeedbackMode is on with friction, or when the user explicitly asked for a record in the current request.",
       "scope": "powershell.exe executing scripts/record-feedback.ps1",
       "expires_at": "2027-08-05",
       "evidence": [

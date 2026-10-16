@@ -11,7 +11,7 @@ const LONG_RUNNING_TOOL_NAMES = new Set<string>([
   "asset.refresh",
   "build.run",
   "cinemachine.create",
-  "code.execute",
+  "debug.code.execute",
   "editor.compile",
   "editor.refresh",
   "lighting.bake.start",
@@ -58,7 +58,7 @@ const HIGH_RISK_TOOL_NAMES = new Set(["component.modify"]);
 const MEDIUM_RISK_TOOL_NAMES = new Set([
   "animation-clip.create",
   "animation-clip.update",
-  "console.clear",
+  "debug.console.clear",
   "lighting.bake.reflection-probe",
   "lighting.bake.start",
   "navmesh.bake",

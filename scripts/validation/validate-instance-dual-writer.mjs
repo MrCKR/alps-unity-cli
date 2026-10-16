@@ -63,7 +63,7 @@ finally
     if (System.IO.File.Exists(productReady)) System.IO.File.Delete(productReady);
 }
 `;
-const productPromise = run(process.execPath, [cli, "tools", "run", "code.execute", "--instance", instanceId, "--input", JSON.stringify({ code }), "--timeout-ms", "120000"]);
+const productPromise = run(process.execPath, [cli, "tools", "run", "debug.code.execute", "--instance", instanceId, "--input", JSON.stringify({ code }), "--timeout-ms", "120000"]);
 await waitFor(() => exists(productReady), 60_000, "Product writer did not reach the coordinated call.");
 
 const writerEnv = {

@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 
 const execFileAsync = promisify(execFile);
-const scriptPath = resolve("skills", "unitycli", "scripts", "record-feedback.ps1");
 const skillPath = resolve("skills", "unitycli", "SKILL.md");
+const skillManifestPath = resolve("skills", "unitycli", "manifest.json");
 const operationProtocolPath = resolve("skills", "unitycli", "references", "operation-protocol.md");
+const feedbackReferencePath = resolve("skills", "unitycli", "references", "feedback.md");
+const scriptName = "record-feedback.ps1";
+const skillScriptPath = resolve("skills", "unitycli", "scripts", scriptName);
 
 interface FeedbackRecord {
   schemaVersion: number;
@@ -24,8 +27,27 @@ interface FeedbackRecord {
   resolved: boolean;
 }
 
-/** 在隔离的 LOCALAPPDATA 下调用 Windows PowerShell 5.1 recorder。 */
-async function runFeedback(localAppData: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+/**
+ * 构造隔离的 Skill 安装夹具：根目录含 SKILL.md，recorder 位于 scripts/。
+ * 经验库由脚本写入夹具根的 experience/，因此测试不会触碰仓库内的 Skill 目录。
+ */
+async function createSkillFixture(prefix: string, leafName?: string): Promise<string> {
+  const parent = await mkdtemp(join(tmpdir(), prefix));
+  const root = leafName ? join(parent, leafName) : parent;
+  if (leafName) await mkdir(root);
+  await mkdir(join(root, "scripts"), { recursive: true });
+  await cp(skillPath, join(root, "SKILL.md"));
+  await cp(skillScriptPath, join(root, "scripts", scriptName));
+  return root;
+}
+
+/** 经验库固定位于 Skill 根目录下的 experience/。 */
+function feedbackDir(skillRoot: string): string {
+  return join(skillRoot, "experience");
+}
+
+/** 在隔离的 Skill 夹具内调用 Windows PowerShell 5.1 recorder。 */
+async function runFeedback(skillRoot: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   return execFileAsync("powershell.exe", [
     "-NoLogo",
     "-NoProfile",
@@ -33,10 +55,10 @@ async function runFeedback(localAppData: string, args: string[]): Promise<{ stdo
     "-ExecutionPolicy",
     "Bypass",
     "-File",
-    scriptPath,
+    join(skillRoot, "scripts", scriptName),
     ...args,
   ], {
-    env: { ...process.env, LOCALAPPDATA: localAppData },
+    env: { ...process.env },
     maxBuffer: 2 * 1024 * 1024,
     windowsHide: true,
   });
@@ -48,10 +70,10 @@ async function readJsonLines(path: string): Promise<FeedbackRecord[]> {
   return text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as FeedbackRecord);
 }
 
-test("feedback recorder writes one bounded local record", async () => {
-  const localAppData = await mkdtemp(join(tmpdir(), "unity-cli-feedback-"));
+test("feedback recorder writes one bounded record inside the installed Skill", async () => {
+  const skillRoot = await createSkillFixture("unity-cli-feedback-");
   try {
-    const { stdout, stderr } = await runFeedback(localAppData, [
+    const { stdout, stderr } = await runFeedback(skillRoot, [
       "-Category", "ambiguity",
       "-Summary", "Descriptor exposed two valid target interpretations.",
       "-Workaround", "Used readback to choose the canonical target.",
@@ -61,7 +83,7 @@ test("feedback recorder writes one bounded local record", async () => {
     ]);
     assert.equal(stderr, "");
     const result = JSON.parse(stdout) as { ok: boolean; recordId: string; path: string; rotated: boolean };
-    const expectedPath = join(localAppData, "UnityCli", "feedback", "feedback.jsonl");
+    const expectedPath = join(feedbackDir(skillRoot), "feedback.jsonl");
     assert.equal(result.ok, true);
     assert.equal(result.path, expectedPath);
     assert.equal(result.rotated, false);
@@ -81,16 +103,16 @@ test("feedback recorder writes one bounded local record", async () => {
       resolved: true,
     });
     assert.match(records[0].createdAtUtc, /^\d{4}-\d{2}-\d{2}T/);
-    assert.deepEqual(await readdir(join(localAppData, "UnityCli", "feedback")), ["feedback.jsonl"]);
+    assert.deepEqual(await readdir(feedbackDir(skillRoot)), ["feedback.jsonl"]);
   } finally {
-    await rm(localAppData, { recursive: true, force: true });
+    await rm(skillRoot, { recursive: true, force: true });
   }
 });
 
 test("feedback recorder accepts dotted tool names without misjudging them as hostnames", async () => {
-  const localAppData = await mkdtemp(join(tmpdir(), "unity-cli-feedback-toolname-"));
+  const skillRoot = await createSkillFixture("unity-cli-feedback-toolname-");
   try {
-    const { stdout } = await runFeedback(localAppData, [
+    const { stdout } = await runFeedback(skillRoot, [
       "-Category", "ambiguity",
       "-Summary", "scene.gameobject.components returned two component interpretations.",
       "-Phase", "describe",
@@ -98,27 +120,25 @@ test("feedback recorder accepts dotted tool names without misjudging them as hos
     const result = JSON.parse(stdout) as { ok: boolean };
     assert.equal(result.ok, true);
   } finally {
-    await rm(localAppData, { recursive: true, force: true });
+    await rm(skillRoot, { recursive: true, force: true });
   }
 });
 
-test("feedback recorder emits UTF-8 JSON when LOCALAPPDATA contains non-ASCII characters", async () => {
-  const parent = await mkdtemp(join(tmpdir(), "unity-cli-feedback-unicode-"));
-  const localAppData = join(parent, "本地数据");
-  await mkdir(localAppData);
+test("feedback recorder emits UTF-8 JSON when the Skill path contains non-ASCII characters", async () => {
+  const skillRoot = await createSkillFixture("unity-cli-feedback-unicode-", "技能库");
   try {
-    const { stdout } = await runFeedback(localAppData, [
+    const { stdout } = await runFeedback(skillRoot, [
       "-Category", "missing",
       "-Summary", "缺少可发现的只读状态。",
       "-Phase", "discovery",
     ]);
     const result = JSON.parse(stdout) as { ok: boolean; path: string };
     assert.equal(result.ok, true);
-    assert.equal(result.path, join(localAppData, "UnityCli", "feedback", "feedback.jsonl"));
+    assert.equal(result.path, join(feedbackDir(skillRoot), "feedback.jsonl"));
     const [record] = await readJsonLines(result.path);
     assert.equal(record.summary, "缺少可发现的只读状态。");
   } finally {
-    await rm(parent, { recursive: true, force: true });
+    await rm(skillRoot, { recursive: true, force: true });
   }
 });
 
@@ -144,38 +164,45 @@ test("feedback recorder rejects secrets, paths, multiline input, and incomplete 
     ["-Category", "workaround", "-Summary", "A workaround was needed."],
   ];
   for (const args of invalidCases) {
-    const localAppData = await mkdtemp(join(tmpdir(), "unity-cli-feedback-invalid-"));
+    const skillRoot = await createSkillFixture("unity-cli-feedback-invalid-");
     try {
-      await assert.rejects(() => runFeedback(localAppData, args));
-      await assert.rejects(() => stat(join(localAppData, "UnityCli", "feedback", "feedback.jsonl")));
+      await assert.rejects(() => runFeedback(skillRoot, args));
+      await assert.rejects(() => stat(join(feedbackDir(skillRoot), "feedback.jsonl")));
     } finally {
-      await rm(localAppData, { recursive: true, force: true });
+      await rm(skillRoot, { recursive: true, force: true });
     }
   }
 });
 
-test("feedback recorder rejects a UNC LOCALAPPDATA before creating output", async () => {
-  await assert.rejects(
-    () => runFeedback("\\\\server\\share", [
-      "-Category", "ambiguity",
-      "-Summary", "Descriptor required manual interpretation.",
-      "-Phase", "describe",
-    ]),
-    (error: unknown) => {
-      const stderr = (error as { stderr?: string }).stderr ?? "";
-      assert.match(stderr, /fixed local drive/);
-      return true;
-    },
-  );
+test("feedback recorder refuses a script that does not sit under a Skill root", async () => {
+  const skillRoot = await createSkillFixture("unity-cli-feedback-noroot-");
+  try {
+    await rm(join(skillRoot, "SKILL.md"), { force: true });
+    await assert.rejects(
+      () => runFeedback(skillRoot, [
+        "-Category", "ambiguity",
+        "-Summary", "Descriptor required manual interpretation.",
+        "-Phase", "describe",
+      ]),
+      (error: unknown) => {
+        const stderr = (error as { stderr?: string }).stderr ?? "";
+        assert.match(stderr, /SKILL\.md/);
+        return true;
+      },
+    );
+    await assert.rejects(() => stat(join(feedbackDir(skillRoot), "feedback.jsonl")));
+  } finally {
+    await rm(skillRoot, { recursive: true, force: true });
+  }
 });
 
-test("feedback recorder rejects reparse points below LOCALAPPDATA", async () => {
-  const localAppData = await mkdtemp(join(tmpdir(), "unity-cli-feedback-reparse-"));
+test("feedback recorder rejects a reparse point on the experience path", async () => {
+  const skillRoot = await createSkillFixture("unity-cli-feedback-reparse-");
   const redirected = await mkdtemp(join(tmpdir(), "unity-cli-feedback-redirected-"));
   try {
-    await symlink(redirected, join(localAppData, "UnityCli"), "junction");
+    await symlink(redirected, feedbackDir(skillRoot), "junction");
     await assert.rejects(
-      () => runFeedback(localAppData, [
+      () => runFeedback(skillRoot, [
         "-Category", "ambiguity",
         "-Summary", "Descriptor required manual interpretation.",
         "-Phase", "describe",
@@ -186,35 +213,35 @@ test("feedback recorder rejects reparse points below LOCALAPPDATA", async () => 
         return true;
       },
     );
-    await assert.rejects(() => stat(join(redirected, "feedback", "feedback.jsonl")));
+    await assert.rejects(() => stat(join(redirected, "feedback.jsonl")));
   } finally {
-    await rm(localAppData, { recursive: true, force: true });
+    await rm(skillRoot, { recursive: true, force: true });
     await rm(redirected, { recursive: true, force: true });
   }
 });
 
 test("feedback recorder serializes concurrent writers", async () => {
-  const localAppData = await mkdtemp(join(tmpdir(), "unity-cli-feedback-concurrent-"));
+  const skillRoot = await createSkillFixture("unity-cli-feedback-concurrent-");
   try {
-    await Promise.all(Array.from({ length: 16 }, (_, index) => runFeedback(localAppData, [
+    await Promise.all(Array.from({ length: 16 }, (_, index) => runFeedback(skillRoot, [
       "-Category", "failure",
       "-Summary", `Concurrent feedback ${index}`,
       "-Capability", "sample.tool",
       "-ErrorCode", "E_TOOL_NOT_FOUND_FOR_TARGET",
       "-Phase", "execute",
     ])));
-    const path = join(localAppData, "UnityCli", "feedback", "feedback.jsonl");
+    const path = join(feedbackDir(skillRoot), "feedback.jsonl");
     const records = await readJsonLines(path);
     assert.equal(records.length, 16);
     assert.equal(new Set(records.map((record) => record.recordId)).size, 16);
     assert.deepEqual(records.map((record) => record.summary).sort(), Array.from({ length: 16 }, (_, index) => `Concurrent feedback ${index}`).sort());
   } finally {
-    await rm(localAppData, { recursive: true, force: true });
+    await rm(skillRoot, { recursive: true, force: true });
   }
 });
 
 test("feedback recorder keeps exactly one main file and three bounded archives", async () => {
-  const localAppData = await mkdtemp(join(tmpdir(), "unity-cli-feedback-rotate-"));
+  const skillRoot = await createSkillFixture("unity-cli-feedback-rotate-");
   try {
     const command = [
       "$ErrorActionPreference='Stop'",
@@ -224,12 +251,12 @@ test("feedback recorder keeps exactly one main file and three bounded archives",
       "}",
     ].join("\n");
     await execFileAsync("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command], {
-      env: { ...process.env, LOCALAPPDATA: localAppData, UNITY_CLI_FEEDBACK_SCRIPT: scriptPath },
+      env: { ...process.env, UNITY_CLI_FEEDBACK_SCRIPT: join(skillRoot, "scripts", scriptName) },
       maxBuffer: 2 * 1024 * 1024,
       windowsHide: true,
     });
 
-    const root = join(localAppData, "UnityCli", "feedback");
+    const root = feedbackDir(skillRoot);
     const names = (await readdir(root)).sort();
     assert.deepEqual(names, ["feedback.1.jsonl", "feedback.2.jsonl", "feedback.3.jsonl", "feedback.jsonl"]);
     let recordCount = 0;
@@ -242,15 +269,16 @@ test("feedback recorder keeps exactly one main file and three bounded archives",
     }
     assert.ok(recordCount > 0 && recordCount < 650);
   } finally {
-    await rm(localAppData, { recursive: true, force: true });
+    await rm(skillRoot, { recursive: true, force: true });
   }
 });
 
 test("Skill feedback contract is opt-in, local, and preserves the cross-session mutation fence", async () => {
   const skill = await readFile(skillPath, "utf8");
   const operationProtocol = await readFile(operationProtocolPath, "utf8");
+  const feedbackReference = await readFile(feedbackReferencePath, "utf8");
   const customTools = await readFile(resolve("skills", "unitycli", "references", "custom-tools.md"), "utf8");
-  const script = await readFile(scriptPath);
+  const script = await readFile(skillScriptPath);
   assert.equal((skill.match(/^FeedbackMode:\s*(?:off|on)$/gm) ?? []).length, 1);
   assert.match(skill, /^FeedbackMode: off$/m);
   assert.match(skill, /tools search '<k1\|k2\|\.\.\.>'/);
@@ -263,12 +291,37 @@ test("Skill feedback contract is opt-in, local, and preserves the cross-session 
   assert.match(operationProtocol, /禁止向新session再次POST/);
   assert.match(customTools, /OutcomeUnknownPolicy = "caller-decides-after-timeout"/);
   assert.match(skill, /正常无摩擦调用不记录/);
-  assert.match(skill, /marker 为 `off` 时不得运行脚本/);
+  // 记录条件有两个独立来源：模式开关，或用户在当前请求中的明确要求。
+  assert.match(skill, /用户在当前请求中明确要求记录反馈时/);
+  assert.match(skill, /marker 为 `off` 且用户未明确要求时不得运行脚本/);
+  assert.match(skill, /不得把用户的可能意图推断为明确要求/);
   assert.match(skill, /脚本失败不改变 Unity 任务结论/);
+
+  const manifest = JSON.parse(await readFile(skillManifestPath, "utf8")) as {
+    output_contract: { feedback_summary_condition: string };
+    permissions: { file_write: string[]; file_write_scope?: string };
+    runtime_projection: { exclude: string[] };
+  };
+  assert.match(manifest.output_contract.feedback_summary_condition, /the user explicitly asked for a record in the current request/);
+  // 经验库是安装目录内的状态区：写入面是相对路径，且不进入投影清单。
+  assert.deepEqual(manifest.permissions.file_write, [
+    "experience/feedback.jsonl",
+    "experience/feedback.1.jsonl",
+    "experience/feedback.2.jsonl",
+    "experience/feedback.3.jsonl",
+  ]);
+  assert.equal(manifest.permissions.file_write_scope, "installed Skill directory");
+  assert.ok(manifest.runtime_projection.exclude.includes("experience/**"));
+  assert.match(feedbackReference, /experience\\/);
+  assert.match(feedbackReference, /状态区/);
 
   assert.deepEqual([...script.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
   const scriptText = script.toString("utf8");
-  assert.match(scriptText, /UnityCli\\feedback/);
+  // 记录根必须由脚本位置推导，且必须证明脚本位于 Skill 根目录。
+  assert.match(scriptText, /\$PSScriptRoot/);
+  assert.match(scriptText, /Join-Path \$skillRoot "experience"/);
+  assert.match(scriptText, /SKILL\.md/);
+  assert.doesNotMatch(scriptText, /LOCALAPPDATA/);
   assert.match(scriptText, /Local\\UnityCliFeedback_v1/);
   assert.doesNotMatch(scriptText, /Invoke-WebRequest|Invoke-RestMethod|HttpClient|WebClient|Start-BitsTransfer/i);
 });

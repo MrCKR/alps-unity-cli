@@ -55,7 +55,7 @@ test("public runtime Skill routes operations without embedding the setup workflo
 
   assert.match(skill, /目标未知、需要审计当前连接或错误要求检查实例时/);
   assert.match(skill, /当前会话首次发现或调用目标项目的 Unity 能力前，必须先执行 `tools group`/);
-  assert.match(skill, /有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `code\.execute`/);
+  assert.match(skill, /有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `debug\.code\.execute`/);
   assert.match(skill, /稳定发现、typed schema、结构化结果、明确副作用、重复使用或团队共享/);
   assert.match(skill, /references\/custom-tools\.md/);
 
@@ -80,7 +80,7 @@ test("agent interface is broad-triggered, PowerShell-local, and network-denied",
 test("file-backed output evals and governed reports are internally reachable", async () => {
   const casesPath = join(skillRoot, "evals", "output", "cases.jsonl");
   const cases = (await readFile(casesPath, "utf8")).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, any>);
-  assert.equal(cases.length, 5);
+  assert.equal(cases.length, 7);
   const fileBacked = cases.filter((item) => Array.isArray(item.input_files) && item.input_files.length > 0);
   assert.ok(fileBacked.length >= 2);
   for (const item of fileBacked) {
@@ -107,6 +107,7 @@ test("product installer projects byte-identical six-file runtime bundles for bot
   const expected = [
     "SKILL.md",
     "references/custom-tools.md",
+    "references/debugging.md",
     "references/feedback.md",
     "references/installation.md",
     "references/operation-protocol.md",

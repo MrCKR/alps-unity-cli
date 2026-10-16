@@ -13,17 +13,17 @@ ProBuilder 扩展包提供 36 个细粒度 Tool，用于在已打开的 Unity Ed
 
 ```bash
 # 列出 ProBuilder Tool
-unitycli tools group list probuilder --instance <instanceId|projectPath|alias>
+unitycli tools group list probuilder --instance <name|alias|projectPath>
 
 # 获取完整输入 schema、边界、错误与示例
-unitycli tools describe probuilder.create-shape --instance <instanceId|projectPath|alias>
-unitycli tools describe probuilder.extrude-faces --instance <instanceId|projectPath|alias>
+unitycli tools describe probuilder.create-shape --instance <name|alias|projectPath>
+unitycli tools describe probuilder.extrude-faces --instance <name|alias|projectPath>
 
 # 证明 Package 与 extension 可用
-unitycli tools run probuilder.ping --instance <instanceId|projectPath|alias>
+unitycli tools run probuilder.ping --instance <name|alias|projectPath>
 
 # 按 descriptor 创建形状
-unitycli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":"MyCube"}' --instance <instanceId|projectPath|alias>
+unitycli tools run probuilder.create-shape --input '{"shapeType":"Cube","name":"MyCube"}' --instance <name|alias|projectPath>
 ```
 
 不要根据本页猜测 face、edge 或 vertex index。先读取当前对象和 Live descriptor，再提交 mutation。

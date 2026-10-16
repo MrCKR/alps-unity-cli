@@ -1,0 +1,77 @@
+{
+  "issue": "ISSUE-084",
+  "sourceContract": "contracts/command-contract.json",
+  "commandCount": 418,
+  "mappings": [
+    {
+      "old": "code.execute",
+      "new": "debug.code.execute",
+      "group": "debug"
+    },
+    {
+      "old": "runtime-reflection.type.schema",
+      "new": "debug.type.schema",
+      "group": "debug"
+    },
+    {
+      "old": "runtime-reflection.method.find",
+      "new": "debug.method.find",
+      "group": "debug"
+    },
+    {
+      "old": "runtime-reflection.method.invoke",
+      "new": "debug.method.invoke",
+      "group": "debug"
+    },
+    {
+      "old": "method-hook.install",
+      "new": "debug.hook.install",
+      "group": "debug"
+    },
+    {
+      "old": "method-hook.replace",
+      "new": "debug.hook.replace",
+      "group": "debug"
+    },
+    {
+      "old": "method-hook.enable",
+      "new": "debug.hook.enable",
+      "group": "debug"
+    },
+    {
+      "old": "method-hook.disable",
+      "new": "debug.hook.disable",
+      "group": "debug"
+    },
+    {
+      "old": "method-hook.remove",
+      "new": "debug.hook.remove",
+      "group": "debug"
+    },
+    {
+      "old": "method-hook.list",
+      "new": "debug.hook.list",
+      "group": "debug"
+    },
+    {
+      "old": "method-hook.info",
+      "new": "debug.hook.info",
+      "group": "debug"
+    },
+    {
+      "old": "method-hook.events",
+      "new": "debug.events.read",
+      "group": "debug"
+    },
+    {
+      "old": "console.read",
+      "new": "debug.console.read",
+      "group": "debug"
+    },
+    {
+      "old": "console.clear",
+      "new": "debug.console.clear",
+      "group": "debug"
+    }
+  ]
+}

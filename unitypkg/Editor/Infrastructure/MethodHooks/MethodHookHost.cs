@@ -19,12 +19,22 @@ namespace UnityCli
     internal sealed class MethodHookInstallPlan
     {
         internal MethodHookResolvedTarget Resolved;
+        /// <summary>已解析的 exact 目标声明；持久化与 recipe 导出共用同一份声明数据，不重复推导。</summary>
+        internal MethodHookTargetSpec TargetSpec;
         internal MethodHookCapture Capture;
         internal MethodHookCallbackSpec Callbacks;
         internal string Activation;
         internal int Priority;
         internal bool EmitHitEvents;
         internal string Label;
+        /// <summary>声明 listener 时规范化后的监听状态；null 表示命中即生效。</summary>
+        internal MethodHookListenerState Listener;
+        /// <summary>已在唯一触发预算账本中预留的计划身份；本次 install 失败时必须释放。</summary>
+        internal string TriggerPlanId;
+        /// <summary>挂载方身份；直接 debug.hook.* 调用为空，program 挂载时为 program:&lt;programId&gt;。</summary>
+        internal string Owner;
+        /// <summary>断点配置与它占用的 session 资源槽位；未声明断点时为 null。</summary>
+        internal DebugPauseBreakpointPlan BreakpointPlan;
     }
 
     /// <summary>已编译并加载的回调；只在 effect barrier 之前产生 bytes 与类型。</summary>
@@ -50,14 +60,25 @@ namespace UnityCli
         internal bool NoOp;
         internal bool RequiresTargetResolve;
         internal MethodHookResolvedTarget Resolved;
+        /// <summary>声明或替换 listener 时规范化后的监听状态；null 表示本次不改变监听配置。</summary>
+        internal MethodHookListenerState Listener;
+        /// <summary>true 表示本次 replace 确实提交了 listener 字段（包括显式清除）。</summary>
+        internal bool ListenerSubmitted;
+        /// <summary>本次 replace 需要重新预留的计划身份；不改变监听配置时为空。</summary>
+        internal string TriggerPlanId;
+        /// <summary>提交时替换断点配置；省略字段表示保留当前断点。</summary>
+        internal DebugPauseBreakpointPlan BreakpointPlan;
+        /// <summary>true 表示本次 replace 确实提交了 breakpoint 字段。</summary>
+        internal bool BreakpointSubmitted;
     }
 
     /// <summary>
     /// Hook Definition 的唯一 host：状态机、exact 解析、调用上下文、事件、持久化与生命周期恢复。
     ///
     /// 约定：
-    /// - 所有状态只在 Unity 主线程读写；命中共现在其他线程时只记录有界 thread fault。
-    /// - 逻辑 gate 在建立/撤销 Attachment、持久化与 mutation 窗口内关闭，命中期间不做半更新派发。
+    /// - 定义、定义表与后端状态的写入只在 Unity 主线程发生；命中路径只读取不可变快照与原子字段，
+    ///   因此任意受支持托管线程都可以安全命中。
+    /// - 判断主线程身份依靠已绑定的主线程 id；无法证明时一律按 worker 处理，不调用 Unity 主线程 API。
     /// - 定义属于当前 Editor Session，Editor 重启后必须作废；fault/disabled 定义不自动复活。
     /// - 不注册 EditorApplication.update；恢复与延迟清理由现有中央 scheduler tick 推进。
     /// </summary>
@@ -71,30 +92,20 @@ namespace UnityCli
         private static readonly object Sync = new object();
         private static readonly Dictionary<string, MethodHookDefinition> Definitions = new Dictionary<string, MethodHookDefinition>(StringComparer.Ordinal);
         private static readonly Dictionary<string, MethodHookTargetRuntime> Targets = new Dictionary<string, MethodHookTargetRuntime>(StringComparer.Ordinal);
-        // 命中热路径只按当前域已安装的 MethodBase 查找，避免每次命中都重建 stable target key。
-        private static readonly Dictionary<MethodBase, MethodHookTargetRuntime> DispatchTargets = new Dictionary<MethodBase, MethodHookTargetRuntime>();
         private static readonly Dictionary<string, IUnityCliMethodHookCallback> CallbackCache = new Dictionary<string, IUnityCliMethodHookCallback>(StringComparer.Ordinal);
-        private static readonly HashSet<string> LoadedCallbackKeys = new HashSet<string>(StringComparer.Ordinal);
         private static readonly HashSet<string> AdapterIdentities = new HashSet<string>(StringComparer.Ordinal);
         private static readonly Dictionary<string, string> Suppression = new Dictionary<string, string>(StringComparer.Ordinal);
-        private static readonly List<string> DeferredDetach = new List<string>();
-        private static readonly MethodHookEventBuffer Events = new MethodHookEventBuffer();
         private static readonly Dispatcher dispatcherAdapter = new Dispatcher();
         private static readonly Stopwatch domainWatch = Stopwatch.StartNew();
 
-        [ThreadStatic] private static HashSet<string> activeHooks;
-        [ThreadStatic] private static Dictionary<string, List<MethodHookFrame>> frames;
-
         private static IUnityCliMethodHookBackend backend;
         private static string backendFailure;
-        private static bool initialized;
+        private static volatile bool initialized;
         private static bool playScope;
         private static long generation;
         private static long installSequence;
         private static long invocationSequence;
         private static long checkpointSequence;
-        private static long compiledArtifactBytes;
-        private static string domainReferenceFingerprint;
         private static int mainThreadId;
         private static long tickCounter;
         private static long playSessionIndex;
@@ -103,12 +114,6 @@ namespace UnityCli
         private static DateTime recoveryDeadlineUtc = DateTime.MaxValue;
         private static CancellationTokenSource restoreCancellation;
         private static bool restoreCompileInFlight;
-
-        private sealed class MethodHookFrame
-        {
-            internal long InvocationId;
-            internal bool Record;
-        }
 
         /// <summary>静态 host 无法实现接口，这里只做最小转发。</summary>
         private sealed class Dispatcher : IUnityCliMethodHookDispatcher
@@ -133,7 +138,14 @@ namespace UnityCli
         // 生命周期
         // ------------------------------------------------------------------
 
-        /// <summary>新域最早时机（等价 InitializeOnLoadMethod）建立重挂，不等 update 循环。</summary>
+        /// <summary>发布中的定义快照观察；语义 CAS 的期望值，发布成功后更新。</summary>
+        private static DebugStoreObservation definitionsObservation = new DebugStoreObservation();
+
+        /// <summary>发布中的事件 checkpoint 观察；语义 CAS 的期望值，发布成功后更新。</summary>
+        private static DebugStoreObservation eventsObservation = new DebugStoreObservation();
+
+        /// <summary>
+        /// 新域最早时机（等价 InitializeOnLoadMethod）建立重挂，不等 update 循环。</summary>
         internal static void InitializeAfterReload()
         {
             try
@@ -155,31 +167,49 @@ namespace UnityCli
             {
                 generation++;
                 domainWatch.Restart();
-                mainThreadId = Thread.CurrentThread.ManagedThreadId;
+                Volatile.Write(ref mainThreadId, Thread.CurrentThread.ManagedThreadId);
                 playScope = EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode;
                 restoreCancellation = new CancellationTokenSource();
                 MethodHookInterception.Bind(dispatcherAdapter);
-                var session = UnityCliBridge.EditorSessionId();
                 Suppression.Clear();
-                foreach (var pair in MethodHookStore.LoadSuppression()) Suppression[pair.Key] = pair.Value;
+                foreach (var pair in DebugStore.LoadSuppression()) Suppression[pair.Key] = pair.Value;
 
-                var definitionsPayload = MethodHookStore.LoadDefinitions(session);
-                var eventsPayload = MethodHookStore.LoadEvents(session);
+                // 定义与事件 checkpoint 只从统一 debug store 读取；不可用文件 fail closed 并记录缺口。
+                var eventFloor = DebugStore.EventFloor();
+                var definitionsObservationLoaded = DebugStore.ObserveDefinitions();
+                var eventsObservationLoaded = DebugStore.ObserveEvents();
+                string unusableReason;
+                if (!DebugStore.TryAccept(definitionsObservationLoaded, DebugStore.DefinitionsFormat, out unusableReason))
+                {
+                    DebugStore.LogUnusable(DebugStore.DefinitionsPath(), unusableReason);
+                    DebugEventStore.RecordGap(Math.Max(1, eventFloor), Math.Max(1, eventFloor), "definitions-file-unusable:" + unusableReason);
+                }
+                if (!DebugStore.TryAccept(eventsObservationLoaded, DebugStore.EventsFormat, out unusableReason))
+                {
+                    DebugStore.LogUnusable(DebugStore.EventsPath(), unusableReason);
+                    DebugEventStore.RecordGap(Math.Max(1, eventFloor), Math.Max(1, eventFloor), "events-file-unusable:" + unusableReason);
+                }
+                definitionsObservation = definitionsObservationLoaded;
+                eventsObservation = eventsObservationLoaded;
+                var definitionsPayload = definitionsObservation.Payload;
+                var eventsPayload = eventsObservation.Payload;
                 var definitions = ReadDefinitions(definitionsPayload, out var definitionsCheckpoint);
-                var eventFloor = MethodHookStore.EventFloor();
                 var eventsAccepted = eventsPayload != null && definitionsPayload != null && definitionsCheckpoint > 0
                     && Long(eventsPayload, "checkpoint") == definitionsCheckpoint;
                 if (definitionsPayload != null && eventsPayload == null)
-                    Events.RecordGap(Math.Max(1, eventFloor), Math.Max(1, eventFloor), "events-checkpoint-missing");
+                    DebugEventStore.RecordGap(Math.Max(1, eventFloor), Math.Max(1, eventFloor), "events-checkpoint-missing");
                 else if (eventsPayload != null && !eventsAccepted)
-                    Events.RecordGap(Math.Max(1, eventFloor), Math.Max(1, eventFloor), "events-checkpoint-mismatch");
-                Events.Restore(eventsAccepted ? Entries(eventsPayload) : null, eventFloor, ReadGaps(eventsPayload));
+                    DebugEventStore.RecordGap(Math.Max(1, eventFloor), Math.Max(1, eventFloor), "events-checkpoint-mismatch");
+                DebugEventStore.Restore(eventsAccepted ? Entries(eventsPayload) : null, eventFloor, ReadGaps(eventsPayload));
 
                 if (playScope && string.IsNullOrEmpty(playSessionId)) BeginSegment();
                 foreach (var definition in definitions)
                 {
                     InstallSequence(definition);
                     definition.StateBag = new MethodHookStateBag(definition.HookId, ReadStateValues(definition));
+                    // program 挂载的所有权只属于旧启动：新域里该 program 定义已经不存在，不得假装仍然有效。
+                    definition.Owner = string.Empty;
+                    if (definition.Listener != null) RestoreListener(definition);
                     // 恢复的定义必须先进入 host 定义表，list/info/events 与 tick 恢复才能看到它。
                     Definitions[definition.HookId] = definition;
                     string suppressed;
@@ -193,7 +223,10 @@ namespace UnityCli
                     if (definition.State == MethodHookState.Disabled || definition.State == MethodHookState.Faulted) continue;
                     definition.State = MethodHookState.Restoring;
                     RestoreAttachment(definition);
-                }                recoveryDeadlineUtc = DateTime.UtcNow.AddSeconds(MethodHookLimits.RecoveryBudgetSeconds);
+                }
+                // 恢复的定义在发布快照后才可能被命中；命中路径不遍历定义表。
+                PublishDispatchSnapshots();
+                recoveryDeadlineUtc = DateTime.UtcNow.AddSeconds(DebugLimits.RecoveryBudgetSeconds);
                 initialized = true;
                 if (definitions.Count > 0)
                     UnityCliBridge.WriteLog("method_hook_restore generation=" + generation.ToString(CultureInfo.InvariantCulture)
@@ -202,21 +235,58 @@ namespace UnityCli
             }
         }
 
-        /// <summary>重载前：关闭 gate、写 checkpoint、清理旧域 Attachment 与 pending 编译。</summary>
+        /// <summary>
+        /// 重载后的 listener 交接：触发预算必须在新域重新登记，否则账本会把不存在于本启动的计划当成有效；
+        /// 有限命中 listener 绝不自动重新武装，旧启动的命中次数不得被当成仍然成立的剩余次数。
+        /// </summary>
+        private static void RestoreListener(MethodHookDefinition definition)
+        {
+            var ownerId = "hook:" + definition.HookId;
+            int used;
+            var failure = DebugTriggerBudget.TryPlan(definition.Listener.SessionId, DebugTriggerBudget.KindListener, ownerId, out used);
+            if (failure != null)
+            {
+                definition.State = MethodHookState.Faulted;
+                definition.FaultCode = "E_DEBUG_TRIGGER_BUDGET_EXCEEDED";
+                definition.FaultMessage = "The planned injection budget refused this restored listener: " + failure + ".";
+                return;
+            }
+            definition.TriggerOwnerId = ownerId;
+            // 重载后必须重新建立 listener 声明的 phase 现场：它是新域的机制状态，旧域一个也不能留下。
+            var phaseFailure = InstallListenerPhaseSite(definition, ownerId, definition.Listener);
+            if (phaseFailure != null)
+            {
+                definition.State = MethodHookState.Faulted;
+                definition.FaultCode = "E_DEBUG_PLAYER_LOOP_UNAVAILABLE";
+                definition.FaultMessage = "The restored listener declares a PlayerLoop phase that could not be installed in this domain: " + phaseFailure + ".";
+                return;
+            }
+            if (definition.Listener.MaxHits <= 0L) return;
+            definition.State = MethodHookState.Disabled;
+            definition.FaultCode = "E_HOOK_LISTENER_NOT_REARMED";
+            definition.FaultMessage = "A one-shot or finite listener is not rearmed after a domain reload; enable it explicitly to start a new hit budget.";
+        }
+
+        /// <summary>
+        /// 重载前：先解除全部暂停现场，再写 checkpoint、回收线程侧状态、清理旧域 Attachment 与 pending 编译。
+        ///
+        /// 解除必须先于 <see cref="ResetDomainCaches"/>：该方法会直接丢弃现场注册表，之后 <c>resume</c> 再也找不到现场，
+        /// 未设时间边界的暂停命中线程将永远等不到解除信号（表现为挂死）。解除只置信号、不等待，不抢占用户同步代码。
+        /// </summary>
         internal static void BeforeReload()
         {
+            DebugPauseHost.ReleaseAll(DebugPauseReleaseReasons.DomainReload);
             List<MethodHookTargetRuntime> runtimes;
             lock (Sync)
             {
                 if (!initialized && Definitions.Count == 0) return;
                 initialized = false;
-                foreach (var runtime in Targets.Values) runtime.GateOpen = false;
                 try { CheckpointToDisk(); }
                 catch (Exception exception)
                 {
                     UnityCliBridge.WriteLog("method_hook_checkpoint_failed " + exception.GetType().Name + ": " + exception.Message);
                 }
-                runtimes = Targets.Values.ToList();
+                runtimes = new List<MethodHookTargetRuntime>(Targets.Values);
                 Targets.Clear();
                 DispatchTargets.Clear();
                 foreach (var definition in Definitions.Values)
@@ -226,6 +296,7 @@ namespace UnityCli
                     definition.CallbackKey = string.Empty;
                 }
             }
+            ResetDispatchThreadState();
             CancelPendingWork();
             foreach (var runtime in runtimes) TryDetach(runtime);
             MethodHookInterception.Bind(null);
@@ -235,25 +306,27 @@ namespace UnityCli
         /// <summary>Editor 正常退出：清理本 session 定义、Attachment 与快照文件。</summary>
         internal static void Shutdown()
         {
+            // 先解除全部暂停现场，否则仍在等待的线程会一直停到自己的超时。
+            DebugPauseHost.ReleaseAll(DebugPauseReleaseReasons.EditorShutdown);
             List<MethodHookTargetRuntime> runtimes;
             lock (Sync)
             {
                 initialized = false;
-                foreach (var runtime in Targets.Values) runtime.GateOpen = false;
-                runtimes = Targets.Values.ToList();
+                runtimes = new List<MethodHookTargetRuntime>(Targets.Values);
                 Targets.Clear();
                 DispatchTargets.Clear();
                 Definitions.Clear();
             }
+            ResetDispatchThreadState();
             CancelPendingWork();
             foreach (var runtime in runtimes) TryDetach(runtime);
             MethodHookInterception.Bind(null);
             ResetDomainCaches();
-            Events.Reset();
+            DebugEventStore.Reset();
             try
             {
-                MethodHookStore.DeleteOwnedFiles();
-                MethodHookStore.ClearSuppression();
+                DebugStore.DeleteOwnedFiles();
+                DebugStore.ClearSuppression();
             }
             catch (Exception exception)
             {
@@ -277,6 +350,9 @@ namespace UnityCli
             }
             if (state == PlayModeStateChange.EnteredEditMode)
             {
+                // Play 段结束：段内建立的暂停现场、phase 现场与它的 runtimeId 一起失效。
+                DebugPauseHost.ReleaseAll(DebugPauseReleaseReasons.PlayExit);
+                DebugPlayerLoopHost.ReleaseAll("play-exit");
                 lock (Sync)
                 {
                     playScope = false;
@@ -286,21 +362,21 @@ namespace UnityCli
             }
         }
 
-        /// <summary>中央 scheduler tick：延迟清理、恢复编译与恢复预算。</summary>
+        /// <summary>中央 scheduler tick：线程侧故障收尾、主线程身份补充、恢复编译与恢复预算。</summary>
         internal static void Tick()
         {
             if (!initialized) return;
-            tickCounter++;
-            List<string> detach = null;
+            Interlocked.Increment(ref tickCounter);
+            // 断点现场的 runtime/domain 身份与待释放的 session 资源槽位只在主线程归位。
+            DebugPauseHost.Pump();
+            // 线程侧请求只在本主线程 tick 上落地：持久化、detach 与 Unity 身份读取都不得在 worker 上发生。
+            ApplyPendingThreadFaults();
+            PublishInstanceSupplements();
+            ReleaseIdleThreadFrames();
             MethodHookDefinition restoring = null;
             List<MethodHookDefinition> expired = null;
             lock (Sync)
             {
-                if (DeferredDetach.Count > 0)
-                {
-                    detach = DeferredDetach.ToList();
-                    DeferredDetach.Clear();
-                }
                 var now = DateTime.UtcNow;
                 foreach (var definition in Definitions.Values)
                 {
@@ -314,13 +390,24 @@ namespace UnityCli
                     if (restoring == null && definition.HasCallbacks && definition.Callback == null) restoring = definition;
                 }
             }
-            if (detach != null) foreach (var key in detach) TryDeferredDetach(key);
             if (expired != null)
             {
                 foreach (var definition in expired)
-                    FaultDefinition(definition, "E_HOOK_RESTORE_BUDGET_EXHAUSTED", "The per-generation restore budget elapsed before this definition was reattached.", 0, "restore");
+                    FaultDefinition(definition, Volatile.Read(ref definition.Revision), "E_HOOK_RESTORE_BUDGET_EXHAUSTED", "The per-generation restore budget elapsed before this definition was reattached.", 0, "restore");
             }
             if (restoring != null && !restoreCompileInFlight) StartRestoreCompile(restoring);
+        }
+
+        /// <summary>回收已经空栈的线程记录，使一次性触达的线程不留下长期记录。</summary>
+        private static void ReleaseIdleThreadFrames()
+        {
+            if (ThreadFrames.IsEmpty) return;
+            foreach (var pair in ThreadFrames)
+            {
+                if (!pair.Value.IsEmpty) continue;
+                MethodHookThreadFrames released;
+                if (ThreadFrames.TryRemove(pair.Key, out released)) Interlocked.Decrement(ref threadRecordCount);
+            }
         }
 
 
@@ -332,7 +419,7 @@ namespace UnityCli
         private static void PersistDefinitions(string reason)
         {
             var checkpoint = ++checkpointSequence;
-            MethodHookStore.PublishDefinitions(BuildDefinitionsPayload(checkpoint));
+            definitionsObservation = DebugStore.Publish(DebugStore.DefinitionsPath(), DebugStore.DefinitionsFormat, BuildDefinitionsPayload(checkpoint), definitionsObservation);
             UnityCliBridge.WriteLog("method_hook_persist reason=" + reason + " definitions=" + Definitions.Count.ToString(CultureInfo.InvariantCulture)
                 + " checkpoint=" + checkpoint.ToString(CultureInfo.InvariantCulture));
         }
@@ -341,9 +428,9 @@ namespace UnityCli
         private static void CheckpointToDisk()
         {
             var checkpoint = ++checkpointSequence;
-            MethodHookStore.SetEventFloor(Events.OldestAvailableSequence);
-            MethodHookStore.PublishDefinitions(BuildDefinitionsPayload(checkpoint));
-            var snapshot = Events.Snapshot();
+            DebugStore.SetEventFloor(DebugEventStore.OldestAvailableSequence);
+            definitionsObservation = DebugStore.Publish(DebugStore.DefinitionsPath(), DebugStore.DefinitionsFormat, BuildDefinitionsPayload(checkpoint), definitionsObservation);
+            var snapshot = DebugEventStore.Snapshot();
             int dropped;
             var bounded = BuildBoundedEventCheckpoint(snapshot, out dropped);
             if (dropped > 0)
@@ -351,23 +438,21 @@ namespace UnityCli
                 // 被截断区间必须作为 history gap 与新域共享，不得伪装为完整历史。
                 var droppedOldest = snapshot.Count == 0 ? 0L : Convert.ToInt64(snapshot[0]["sequence"], CultureInfo.InvariantCulture);
                 var droppedNewest = bounded.Count == 0 ? droppedOldest : Convert.ToInt64(bounded[0]["sequence"], CultureInfo.InvariantCulture) - 1;
-                Events.RecordGap(droppedOldest, droppedNewest, "checkpoint-truncated");
+                DebugEventStore.RecordGap(droppedOldest, droppedNewest, "checkpoint-truncated");
                 UnityCliBridge.WriteLog("method_hook_checkpoint_truncated dropped=" + dropped.ToString(CultureInfo.InvariantCulture)
                     + " kept=" + bounded.Count.ToString(CultureInfo.InvariantCulture));
             }
-            MethodHookStore.PublishEvents(new Dictionary<string, object>
+            eventsObservation = DebugStore.Publish(DebugStore.EventsPath(), DebugStore.EventsFormat, new Dictionary<string, object>
             {
-                { "format", MethodHookStore.EventsFormat },
-                { "editorSessionId", UnityCliBridge.EditorSessionId() },
                 { "checkpoint", checkpoint },
-                { "sequenceFloor", Events.OldestAvailableSequence },
-                { "latestSequence", Events.LastSequence },
+                { "sequenceFloor", DebugEventStore.OldestAvailableSequence },
+                { "latestSequence", DebugEventStore.LatestSequence },
                 { "entries", bounded.Cast<object>().ToList() },
-                { "gaps", Events.Gaps.Select(gap => (object)new Dictionary<string, object>
+                { "gaps", DebugEventStore.Gaps.Select(gap => (object)new Dictionary<string, object>
                     {
                         { "fromSequence", gap.FromSequence }, { "toSequence", gap.ToSequence }, { "reason", gap.Reason ?? string.Empty }
                     }).ToList() }
-            });
+            }, eventsObservation);
         }
 
         /// <summary>
@@ -385,8 +470,8 @@ namespace UnityCli
                 var entry = snapshot[index];
                 long size = 0;
                 try { size = Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(entry)); }
-                catch { size = MethodHookLimits.MaxEventBytes; }
-                if (total + size > MethodHookLimits.MaxCheckpointEventBytes && kept.Count > 0) break;
+                catch { size = DebugLimits.MaxEventBytes; }
+                if (total + size > DebugLimits.MaxCheckpointEventBytes && kept.Count > 0) break;
                 kept.Add(entry);
                 total += size;
             }
@@ -399,11 +484,9 @@ namespace UnityCli
         {
             return new Dictionary<string, object>
             {
-                { "format", MethodHookStore.DefinitionsFormat },
-                { "editorSessionId", UnityCliBridge.EditorSessionId() },
                 { "publicationSequence", checkpoint },
                 { "checkpoint", checkpoint },
-                { "definitions", Definitions.Values.OrderBy(definition => definition.InstallSequence).Select(definition => (object)definition.ToData()).ToList() }
+                { "definitions", Definitions.Values.OrderBy(definition => definition.InstallSequence).Select(definition => (object)definition.ToSnapshotData()).ToList() }
             };
         }
 
@@ -421,10 +504,97 @@ namespace UnityCli
             {
                 var definition = MethodHookDefinition.FromData(item);
                 if (definition == null) continue;
-                if (result.Count >= MethodHookLimits.MaxDefinitionsPerSession) break;
+                if (result.Count >= DebugLimits.MaxDefinitionsPerSession) break;
                 result.Add(definition);
             }
             return result.OrderBy(definition => definition.InstallSequence).ToList();
+        }
+
+        /// <summary>
+        /// 导出属于该 session 的直接 Hook 定义数据。
+        ///
+        /// 只返回 owner 为空（由 debug.hook.* 直接安装）且 listener 或 breakpoint 声明的 session 匹配的定义；
+        /// program 挂载的 binding 由 program 定义自己携带，不得在 recipe 里再复制一份 Hook 定义。
+        /// 写出去的是声明投影：现场线程身份不进入 recipe，否则导出内容会被自己的导入按 excluded-content 拒绝。
+        /// </summary>
+        internal static List<Dictionary<string, object>> ExportDefinitions(string sessionId)
+        {
+            var result = new List<Dictionary<string, object>>();
+            if (string.IsNullOrEmpty(sessionId)) return result;
+            lock (Sync)
+            {
+                foreach (var definition in Definitions.Values.OrderBy(item => item.InstallSequence))
+                {
+                    if (result.Count >= DebugLimits.MaxDefinitionsPerSession) break;
+                    if (!string.IsNullOrEmpty(definition.Owner)) continue;
+                    var listenerSession = definition.Listener == null ? null : definition.Listener.SessionId;
+                    var breakpointSession = definition.Breakpoint == null ? null : definition.Breakpoint.SessionId;
+                    if (!string.Equals(listenerSession, sessionId, StringComparison.Ordinal)
+                        && !string.Equals(breakpointSession, sessionId, StringComparison.Ordinal)) continue;
+                    result.Add(definition.ToData());
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 由 recipe 数据登记一个未激活的 Hook 定义。
+        ///
+        /// 只登记配置：不解析目标、不编译回调、不挂 detour、不建立 listener phase 现场，也不占用触发预算。
+        /// 因此 import 不会执行 startup/cleanup 代码，也不会重放 recipe 里的任何操作；
+        /// 调用方之后显式 enable 时才会解析与编译，届时目标失效会返回精确的绑定错误。
+        /// </summary>
+        internal static MethodHookDefinition ImportDormant(Dictionary<string, object> data)
+        {
+            if (data == null) return null;
+            var imported = MethodHookDefinition.FromData(data);
+            if (imported == null) return null;
+            lock (Sync)
+            {
+                // recipe 可以被复用，但有效对象身份不能：导入使用新的 hookId 与 revision 1。
+                imported.HookId = "hook-" + Guid.NewGuid().ToString("N").Substring(0, 16);
+                imported.Revision = 1L;
+                imported.Owner = string.Empty;
+                imported.State = MethodHookState.Disabled;
+                imported.FaultCode = string.Empty;
+                imported.FaultMessage = "Imported from a recipe as a dormant definition; enable it explicitly to resolve the target and compile the callback in this domain.";
+                imported.Resolved = null;
+                imported.Callback = null;
+                imported.CallbackKey = string.Empty;
+                imported.HitCount = 0L;
+                imported.BypassCount = 0L;
+                imported.StaleFaults = 0L;
+                imported.SampleIndex = 0L;
+                imported.DispatchClosed = 0;
+                imported.TriggerOwnerId = string.Empty;
+                imported.InstallSequence = 0L;
+                InstallSequence(imported);
+                imported.StateBag = new MethodHookStateBag(imported.HookId, ReadStateValues(imported));
+                Definitions[imported.HookId] = imported;
+                PublishDispatchSnapshots();
+                PersistDefinitions("import");
+                UnityCliBridge.WriteLog("method_hook_imported_dormant hookId=" + imported.HookId);
+                return imported;
+            }
+        }
+
+        /// <summary>
+        /// 删除本次导入在失败时登记的 dormant 定义；只在同一 import 的补偿路径上调用，
+        /// 因此不可能删掉用户已有定义（它按新 hookId 精确删除）。
+        /// </summary>
+        internal static bool RemoveImportedDormant(string hookId)
+        {
+            if (string.IsNullOrEmpty(hookId)) return false;
+            lock (Sync)
+            {
+                MethodHookDefinition definition;
+                if (!Definitions.TryGetValue(hookId, out definition)) return true;
+                if (definition.State != MethodHookState.Disabled || !string.IsNullOrEmpty(definition.Owner)) return false;
+                Definitions.Remove(hookId);
+                PublishDispatchSnapshots();
+                PersistDefinitions("import-rollback");
+                return true;
+            }
         }
 
         private static List<Dictionary<string, object>> Entries(IDictionary<string, object> payload)
@@ -444,9 +614,9 @@ namespace UnityCli
             return result;
         }
 
-        private static List<MethodHookGap> ReadGaps(IDictionary<string, object> payload)
+        private static List<UnityCliDebugGap> ReadGaps(IDictionary<string, object> payload)
         {
-            var result = new List<MethodHookGap>();
+            var result = new List<UnityCliDebugGap>();
             if (payload == null) return result;
             object value;
             if (!payload.TryGetValue("gaps", out value)) return result;
@@ -456,7 +626,7 @@ namespace UnityCli
             {
                 var dictionary = item as IDictionary<string, object>;
                 if (dictionary == null) continue;
-                result.Add(new MethodHookGap
+                result.Add(new UnityCliDebugGap
                 {
                     FromSequence = Long(dictionary, "fromSequence"),
                     ToSequence = Long(dictionary, "toSequence"),
@@ -495,6 +665,12 @@ namespace UnityCli
         // target runtime、后端与 Attachment
         // ------------------------------------------------------------------
 
+        private static void EnsureTargetRuntimeDispatch(MethodHookTargetRuntime runtime)
+        {
+            // 新 target 先发布空快照，命中共现在到达时只会看到一致状态。
+            PublishDispatchSnapshot(runtime);
+        }
+
         private static MethodHookTargetRuntime EnsureTargetRuntime(MethodHookResolvedTarget resolved, MethodHookTargetSpec spec)
         {
             MethodHookTargetRuntime runtime;
@@ -515,6 +691,7 @@ namespace UnityCli
             Targets[targetKey] = runtime;
             DispatchTargets[resolved.Method] = runtime;
             AdapterIdentities.Add(runtime.TargetKey);
+            EnsureTargetRuntimeDispatch(runtime);
             return runtime;
         }
 
@@ -652,22 +829,21 @@ namespace UnityCli
             if (runtime == null) return false;
             // 无论是否还有其它定义，该定义必须立即离开派发列表；否则已删除的定义会继续生效。
             runtime.Definitions.Remove(definition);
-            if (runtime.Definitions.Count > 0) return false;
-            runtime.GateOpen = false;
+            if (runtime.Definitions.Count > 0)
+            {
+                PublishDispatchSnapshot(runtime);
+                return false;
+            }
+            Volatile.Write(ref runtime.Dispatch, MethodHookDispatch.Empty);
             TryDetach(runtime);
-            if (runtime.Method != null) DispatchTargets.Remove(runtime.Method);
+            if (runtime.Method != null)
+            {
+                MethodHookTargetRuntime removed;
+                DispatchTargets.TryRemove(runtime.Method, out removed);
+            }
             Targets.Remove(runtime.TargetKey);
             AdapterIdentities.Remove(runtime.TargetKey);
             return true;
-        }
-
-        private static void TryDeferredDetach(string targetKey)
-        {
-            MethodHookTargetRuntime runtime;
-            lock (Sync) runtime = FindRuntimeByKey(targetKey);
-            if (runtime == null) return;
-            if (runtime.Definitions.Count > 0) return;
-            TryDetach(runtime);
         }
 
         private static void RollbackDefinition(MethodHookDefinition definition, MethodHookTargetRuntime runtime)
@@ -680,11 +856,17 @@ namespace UnityCli
                     runtime.Definitions.Remove(definition);
                     if (runtime.Definitions.Count == 0)
                     {
+                        Volatile.Write(ref runtime.Dispatch, MethodHookDispatch.Empty);
                         TryDetach(runtime);
-                        if (runtime.Method != null) DispatchTargets.Remove(runtime.Method);
-                Targets.Remove(runtime.TargetKey);
+                        if (runtime.Method != null)
+                        {
+                            MethodHookTargetRuntime removed;
+                            DispatchTargets.TryRemove(runtime.Method, out removed);
+                        }
+                        Targets.Remove(runtime.TargetKey);
                         AdapterIdentities.Remove(runtime.TargetKey);
                     }
+                    else PublishDispatchSnapshot(runtime);
                 }
             }
         }
@@ -711,12 +893,13 @@ namespace UnityCli
                 UnityCliBridge.WriteLog("method_hook_callback_reuse key=" + key.Substring(0, 16));
                 return new MethodHookPreparedCallbacks { CompileKey = key, Callback = cached, Reused = true, PrefixHash = Hash(prefix), PostfixHash = Hash(postfix), SourceBytes = Encoding.UTF8.GetByteCount(prefix) + Encoding.UTF8.GetByteCount(postfix) };
             }
-            UnityCliBridge.WriteLog("method_hook_callback_compile key=" + key.Substring(0, 16) + " refs=" + ReferenceFingerprint().Substring(0, 16) + " " + ReferenceDiagnostics());
-            if (!DynamicCodeCompiler.TryBeginCompilation())
+            UnityCliBridge.WriteLog("method_hook_callback_compile key=" + key.Substring(0, 16) + " refs=" + DebugCompilerOwner.ReferenceFingerprint().Substring(0, 16) + " " + DebugCompilerOwner.ReferenceDiagnostics());
+            // 唯一编译所有权与共享产物预算都来自 DebugCompilerOwner；hook 只保留回调路由缓存。
+            if (!DebugCompilerOwner.TryBeginOwnership(DebugCompilerLane.MainThreadTick))
                 throw new BridgeCommandException("E_UNITY_BUSY", "Another dynamic compilation currently owns the single compiler.", new Dictionary<string, object> { { "owner", "dynamic-compiler" } }, new[] { "Wait for the current compilation to reach its terminal result, then submit this request again." }, true, 250);
             try
             {
-                lock (Sync) EnsureCompileBudget(0);
+                RequireCompileAdmission(key, 0L);
                 var stem = "UnityCli.HookCallback." + key.Substring(0, 16);
                 var source = BuildCallbackSource(key, prefix, postfix);
                 var compileRequest = new DynamicCodeCompileRequest
@@ -728,11 +911,11 @@ namespace UnityCli
                     PdbFileName = stem + ".pdb",
                     AssemblySimpleName = stem,
                     Defines = null,
-                    MaxSourceBytes = MethodHookLimits.MaxCallbackSourceBytes * 2,
-                    MaxArtifactBytes = MethodHookLimits.MaxSingleArtifactBytes
+                    MaxSourceBytes = DebugLimits.MaxCallbackSourceBytes * 2,
+                    MaxArtifactBytes = DebugLimits.MaxSingleArtifactBytes
                 };
                 List<string> references;
-                try { references = DynamicCodeCompiler.CollectReferences(null, null, () => !cancellationToken.IsCancellationRequested); }
+                try { references = DebugCompilerOwner.References(null, null, () => !cancellationToken.IsCancellationRequested); }
                 catch (OperationCanceledException) { throw new BridgeCommandException("E_EXECUTION_TIMEOUT", "Hook callback compilation exceeded the immutable deadline.", null, new[] { "Inspect the Editor state before submitting a new request." }); }
                 var compilation = await DynamicCodeCompiler.CompileAsync(compileRequest, references, () => !cancellationToken.IsCancellationRequested, waiter, timeout, cancellationToken);
                 if (compilation.TimedOut)
@@ -745,19 +928,16 @@ namespace UnityCli
                     var message = compilation.Diagnostics.Count == 0 ? "Hook callback compilation failed." : "Hook callback compilation failed: " + Convert.ToString(compilation.Diagnostics[0]["message"], CultureInfo.InvariantCulture);
                     throw new BridgeCommandException("E_CODE_COMPILE_FAILED", UnityCliBridge.BoundedText(message, 4096), details, new[] { "Fix the callback diagnostics described in details and submit the mutation again." });
                 }
-                // 累计预算必须在加载新产物前用真实 bytes 再次核对；超限则不加载该产物。
-                lock (Sync) EnsureCompileBudget(compilation.AssemblyBytes.LongLength);
+                // 加载前的精确准入：用真实 bytes 判定，拒绝时不加载该产物。
+                RequireCompileAdmission(key, compilation.AssemblyBytes.LongLength);
                 var loaded = Assembly.Load(compilation.AssemblyBytes);
+                // 加载成功即占用：Mono 不能逐个卸载，后续 ABI 校验失败也不扣减。
+                DebugCompilerOwner.CommitLoadedArtifact(key, compilation.AssemblyBytes.LongLength, loaded.GetName().Name);
                 var type = loaded.GetType(CallbackTypeName(key), false);
                 var instance = type == null ? null : Activator.CreateInstance(type) as IUnityCliMethodHookCallback;
                 if (instance == null)
                     throw new BridgeCommandException("E_HOOK_CALLBACK_FAILED", "The compiled callback does not implement the hook callback contract.", null, new[] { "Remove unsupported async or generic callback shapes and retry." });
-                lock (Sync)
-                {
-                    compiledArtifactBytes += compilation.AssemblyBytes.LongLength;
-                    LoadedCallbackKeys.Add(key);
-                    CallbackCache[key] = instance;
-                }
+                lock (Sync) CallbackCache[key] = instance;
                 return new MethodHookPreparedCallbacks
                 {
                     CompileKey = key,
@@ -769,17 +949,23 @@ namespace UnityCli
             }
             finally
             {
-                DynamicCodeCompiler.EndCompilation();
+                DebugCompilerOwner.EndOwnership(DebugCompilerLane.MainThreadTick);
             }
         }
 
-        /// <summary>编译预算按当前域曾加载的独特产物数与累计 bytes 计数。</summary>
-        private static void EnsureCompileBudget(long additionalBytes)
+        /// <summary>
+        /// 共享编译产物预算准入：拒绝时抛出稳定错误并携带当前占用（数量、字节、剩余）与 reload 建议。
+        /// owner 不自动 reload；remove/stop 不扣减已加载占用。
+        /// </summary>
+        private static void RequireCompileAdmission(string identity, long artifactBytes)
         {
-            if (LoadedCallbackKeys.Count >= MethodHookLimits.MaxCompiledArtifacts)
-                throw new BridgeCommandException("E_HOOK_COMPILE_BUDGET_EXHAUSTED", "This domain already loaded " + MethodHookLimits.MaxCompiledArtifacts.ToString(CultureInfo.InvariantCulture) + " distinct callback artifacts.", "Disable or remove hooks, or reload the domain, before loading another callback artifact.");
-            if (compiledArtifactBytes + additionalBytes > MethodHookLimits.MaxCompiledArtifactBytes)
-                throw new BridgeCommandException("E_HOOK_COMPILE_BUDGET_EXHAUSTED", "This domain already loaded the maximum callback assembly bytes.", "Disable or remove hooks, or reload the domain, before loading another callback artifact.");
+            var admission = DebugCompilerOwner.TryAdmitCandidate(identity, artifactBytes);
+            if (admission.Admitted) return;
+            throw new BridgeCommandException(
+                DebugCompilerOwner.BudgetExhaustedCode,
+                "This domain cannot load another compiled callback artifact: " + admission.Reason + ".",
+                new Dictionary<string, object> { { "reason", admission.Reason }, { "budget", admission.Report.ToData() } },
+                new[] { DebugCompilerOwner.ReloadSuggestion });
         }
 
         /// <summary>编译键包含源码、wrapper ABI、编译参数与引用 identity/MVID 摘要。</summary>
@@ -791,59 +977,8 @@ namespace UnityCli
                 { "prefix", prefix ?? string.Empty },
                 { "postfix", postfix ?? string.Empty },
                 { "compiler", "unity-mono-csc /langversion:latest /target:library" },
-                { "references", ReferenceFingerprint() }
+                { "references", DebugCompilerOwner.ReferenceFingerprint() }
             });
-        }
-
-        /// <summary>
-        /// 当前域的引用身份与 MVID 摘要，按域快照一次（域重载或启动时重新建立）。
-        /// 快照语义是必须的：若每次编译都重算，同域内任何后续加载（回调程序集、code.execute 动态程序集、
-        /// 其他功能的惰性加载）都会改变键，同源码再也无法复用，与“同域同 key 复用”的目标相矛盾。
-        /// 本功能自己生成的产物是输出而不是输入，必须排除。
-        /// </summary>
-        private static string ReferenceFingerprint()
-        {
-            if (domainReferenceFingerprint != null) return domainReferenceFingerprint;
-            var identities = new List<string>();
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                if (assembly.IsDynamic || IsOwnGeneratedAssembly(assembly)) continue;
-                try
-                {
-                    var name = assembly.GetName();
-                    var mvid = assembly.ManifestModule == null ? string.Empty : assembly.ManifestModule.ModuleVersionId.ToString("D");
-                    identities.Add((name.FullName ?? name.Name) + "#" + mvid);
-                }
-                catch
-                {
-                    // 无法读取身份的动态或已卸载程序集不参与指纹。
-                }
-            }
-            identities.Sort(StringComparer.Ordinal);
-            var fingerprint = UnityCliSerializer.Sha256Canonical(identities.Cast<object>().ToList());
-            lock (Sync) domainReferenceFingerprint = fingerprint;
-            return fingerprint;
-        }
-
-        /// <summary>判断程序集是否由本功能在运行时生成（回调 wrapper 或 Adapter 容器）。</summary>
-        private static bool IsOwnGeneratedAssembly(Assembly assembly)
-        {
-            var simpleName = assembly.GetName().Name ?? string.Empty;
-            return simpleName.StartsWith("UnityCli.HookCallback.", StringComparison.Ordinal)
-                || string.Equals(simpleName, "UnityCli.HookAdapters.Generated", StringComparison.Ordinal);
-        }
-
-        /// <summary>指纹内容的有界诊断：参与计数的程序集数量与排除掉的自家产物数量。</summary>
-        private static string ReferenceDiagnostics()
-        {
-            var count = 0;
-            var excluded = 0;
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                if (assembly.IsDynamic || IsOwnGeneratedAssembly(assembly)) { excluded++; continue; }
-                count++;
-            }
-            return "refCount=" + count.ToString(CultureInfo.InvariantCulture) + " excluded=" + excluded.ToString(CultureInfo.InvariantCulture);
         }
 
         private static string BuildCallbackSource(string key, string prefix, string postfix)
@@ -911,14 +1046,15 @@ namespace UnityCli
                     definition.PrefixHash = prepared.PrefixHash;
                     definition.PostfixHash = prepared.PostfixHash;
                     definition.State = definition.ActivationMatches(playScope) ? MethodHookState.Armed : MethodHookState.Dormant;
-                    AppendEvent(new MethodHookEventRecord
+                    // 回调编译完成改变了可执行配置，必须发布新快照。
+                    PublishDispatchSnapshots();
+                    AppendEvent(new UnityCliDebugEvent
                     {
                         HookId = definition.HookId,
                         Revision = definition.Revision,
                         Kind = "lifecycle",
                         PlaySessionId = playSessionId,
                         ClockSegment = clockSegment,
-                        Frame = tickCounter,
                         Name = "restored",
                         MethodIdentity = definition.TargetSpec == null ? string.Empty : definition.TargetSpec.TypeName + "." + definition.TargetSpec.MethodName
                     });
@@ -926,7 +1062,7 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                FaultDefinition(definition, exception is BridgeCommandException ? ((BridgeCommandException)exception).Code : "E_HOOK_CALLBACK_FAILED",
+                FaultDefinition(definition, Volatile.Read(ref definition.Revision), exception is BridgeCommandException ? ((BridgeCommandException)exception).Code : "E_HOOK_CALLBACK_FAILED",
                     exception.Message, 0, "restore");
             }
             finally
@@ -942,15 +1078,22 @@ namespace UnityCli
         internal static void ResetDomainCaches()
         {
             CallbackCache.Clear();
-            LoadedCallbackKeys.Clear();
             AdapterIdentities.Clear();
-            compiledArtifactBytes = 0;
-            domainReferenceFingerprint = null;
+            // 触发预算、日志订阅、PlayerLoop phase 现场与触发观测计数属于本次 Editor 启动：域边界一律回收。
+            DispatchClosedSessions.Clear();
+            DebugTriggerBudget.Reset();
+            DebugListenerHost.Reset();
+            DebugPlayerLoopHost.ReleaseAll("domain-reset");
+            // 编译所有权、引用快照与已加载产物占用统一由 DebugCompilerOwner 按 domain generation 归零。
+            DebugCompilerOwner.ResetDomain();
             restoreCompileInFlight = false;
             playSessionId = string.Empty;
             clockSegment = string.Empty;
             playSessionIndex = 0;
-            tickCounter = 0;
+            Interlocked.Exchange(ref tickCounter, 0L);
+            ResetDispatchThreadState();
+            // 暂停现场、覆盖缺口计数与本域身份快照都是本次 Editor 启动的机制状态，域边界一律回收。
+            DebugPauseHost.Reset();
         }
 
         private static void CancelPendingWork()
@@ -962,14 +1105,16 @@ namespace UnityCli
 
         private static MethodHookRuntimeSummary SummaryLocked()
         {
+            // 已加载编译产物的数量与字节只由共享 owner 记账，hook 不另存一份。
+            var compiled = DebugCompilerOwner.Budget();
             return new MethodHookRuntimeSummary
             {
                 EditorSessionId = UnityCliBridge.EditorSessionId(),
                 DefinitionCount = Definitions.Count,
                 TargetCount = Targets.Count,
                 AdapterIdentities = AdapterIdentities.Count,
-                CompiledArtifacts = LoadedCallbackKeys.Count,
-                CompiledArtifactBytes = compiledArtifactBytes,
+                CompiledArtifacts = compiled.Count,
+                CompiledArtifactBytes = compiled.Bytes,
                 ClockSegment = clockSegment,
                 PlaySessionId = playSessionId
             };
@@ -989,7 +1134,8 @@ namespace UnityCli
             clockSegment = (string.IsNullOrEmpty(playSessionId) ? "edit" : playSessionId) + ":seg-" + (DateTime.UtcNow.Ticks & 0xffff).ToString(CultureInfo.InvariantCulture);
             foreach (var definition in Definitions.Values)
             {
-                definition.SampleIndex = 0;
+                // 运行段切换重置采样基线；采样序号可能被任意线程读走，因此按原子写重置。
+                Interlocked.Exchange(ref definition.SampleIndex, 0L);
                 definition.StateBag = new MethodHookStateBag(definition.HookId);
             }
         }
@@ -1010,14 +1156,13 @@ namespace UnityCli
                 var desired = armed ? MethodHookState.Armed : MethodHookState.Dormant;
                 if (definition.State == desired) continue;
                 definition.State = desired;
-                AppendEvent(new MethodHookEventRecord
+                AppendEvent(new UnityCliDebugEvent
                 {
                     HookId = definition.HookId,
                     Revision = definition.Revision,
                     Kind = "lifecycle",
                     PlaySessionId = playSessionId,
                     ClockSegment = clockSegment,
-                    Frame = tickCounter,
                     Name = reason,
                     MethodIdentity = definition.TargetSpec == null ? string.Empty : definition.TargetSpec.TypeName + "." + definition.TargetSpec.MethodName
                 });
@@ -1026,46 +1171,61 @@ namespace UnityCli
 
         private static void AppendLifecycle(MethodHookDefinition definition, string name, string detail)
         {
-            AppendEvent(new MethodHookEventRecord
+            AppendEvent(new UnityCliDebugEvent
             {
                 HookId = definition.HookId,
                 Revision = definition.Revision,
                 Kind = "lifecycle",
                 PlaySessionId = playSessionId,
                 ClockSegment = clockSegment,
-                Frame = tickCounter,
                 Name = name,
                 Value = detail,
                 MethodIdentity = definition.TargetSpec == null ? string.Empty : definition.TargetSpec.TypeName + "." + definition.TargetSpec.MethodName
             });
         }
 
-        private static void AppendEvent(MethodHookEventRecord record)
+        /// <summary>
+        /// hook 事件统一入口：补齐来源、运行段与捕获点后交给唯一事件存储。
+        /// 线程身份与时钟溯源由存储按可证明的线程归属记录，调用方不得自行声明。
+        /// </summary>
+        private static void AppendEvent(UnityCliDebugEvent record)
         {
             record.PlaySessionId = string.IsNullOrEmpty(record.PlaySessionId) ? playSessionId : record.PlaySessionId;
             record.ClockSegment = string.IsNullOrEmpty(record.ClockSegment) ? clockSegment : record.ClockSegment;
-            record.Frame = record.Frame == 0 ? tickCounter : record.Frame;
-            Events.Append(record);
+            if (string.IsNullOrEmpty(record.SourceId))
+                record.SourceId = string.Equals(record.Kind, "lifecycle", StringComparison.Ordinal) ? UnityCliDebugSources.Lifecycle : UnityCliDebugSources.Hook;
+            if (string.IsNullOrEmpty(record.ExecutionPoint)) record.ExecutionPoint = ExecutionPointFor(record);
+            DebugEventStore.Append(record);
+        }
+
+        /// <summary>捕获点描述：命中使用事件种类，生命周期与故障带上事件名，便于读取端定位来源。</summary>
+        private static string ExecutionPointFor(UnityCliDebugEvent record)
+        {
+            var kind = record.Kind ?? string.Empty;
+            var name = string.IsNullOrEmpty(record.Name) ? "unknown" : record.Name;
+            if (string.Equals(kind, "lifecycle", StringComparison.Ordinal)) return "lifecycle:" + name;
+            if (string.Equals(kind, "fault", StringComparison.Ordinal)) return "fault:" + name;
+            return "dispatch:" + kind;
         }
 
         private static MethodHookDefinition RequireDefinition(string hookId, string editorSessionId, long? expectedRevision, bool allowUnknownSession = false)
         {
             if (string.IsNullOrWhiteSpace(hookId))
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "hookId is required.", "Pass the hookId returned by method-hook.install or method-hook.list.");
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "hookId is required.", "Pass the hookId returned by debug.hook.install or debug.hook.list.");
             if (!allowUnknownSession)
             {
                 if (string.IsNullOrWhiteSpace(editorSessionId))
                     throw new BridgeCommandException("E_SCHEMA_INVALID", "editorSessionId is required for this mutation.", "Pass the editorSessionId returned by install or info.");
                 if (!string.Equals(editorSessionId, UnityCliBridge.EditorSessionId(), StringComparison.Ordinal))
-                    throw new BridgeCommandException("E_HOOK_SESSION_STALE", "The definition belongs to a different Editor session.", null, new[] { "Re-read method-hook.list on the current session before mutating definitions." });
+                    throw new BridgeCommandException("E_HOOK_SESSION_STALE", "The definition belongs to a different Editor session.", null, new[] { "Re-read debug.hook.list on the current session before mutating definitions." });
             }
             lock (Sync)
             {
                 MethodHookDefinition definition;
                 if (!Definitions.TryGetValue(hookId, out definition))
-                    throw new BridgeCommandException("E_HOOK_NOT_FOUND", "No hook definition with that id exists in the current Editor session.", null, new[] { "Read method-hook.list to inspect the current definitions." });
+                    throw new BridgeCommandException("E_HOOK_NOT_FOUND", "No hook definition with that id exists in the current Editor session.", null, new[] { "Read debug.hook.list to inspect the current definitions." });
                 if (expectedRevision.HasValue && definition.Revision != expectedRevision.Value)
-                    throw new BridgeCommandException("E_HOOK_REVISION_STALE", "The definition revision changed from " + expectedRevision.Value.ToString(CultureInfo.InvariantCulture) + " to " + definition.Revision.ToString(CultureInfo.InvariantCulture) + ".", null, new[] { "Read method-hook.info for the current revision and retry with expectedRevision." });
+                    throw new BridgeCommandException("E_HOOK_REVISION_STALE", "The definition revision changed from " + expectedRevision.Value.ToString(CultureInfo.InvariantCulture) + " to " + definition.Revision.ToString(CultureInfo.InvariantCulture) + ".", null, new[] { "Read debug.hook.info for the current revision and retry with expectedRevision." });
                 return definition;
             }
         }
@@ -1076,11 +1236,11 @@ namespace UnityCli
             if (spec == null) return capture;
             capture.Arguments = spec.Arguments ?? false;
             capture.Result = spec.Result ?? false;
-            capture.SampleEvery = spec.SampleEvery == null ? 1 : Math.Min(Math.Max(1, spec.SampleEvery.Value), MethodHookLimits.MaxSampleEvery);
+            capture.SampleEvery = spec.SampleEvery == null ? 1 : Math.Min(Math.Max(1, spec.SampleEvery.Value), DebugLimits.MaxSampleEvery);
             if (spec.InstanceFields != null) foreach (var field in spec.InstanceFields) capture.InstanceFields.Add(NormalizeField(field));
             if (spec.StaticFields != null) foreach (var field in spec.StaticFields) capture.StaticFields.Add(NormalizeField(field));
-            if (capture.FieldCount > MethodHookLimits.MaxCaptureFields)
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "A hook captures at most " + MethodHookLimits.MaxCaptureFields.ToString(CultureInfo.InvariantCulture) + " exact fields.", "Reduce the captured field list.");
+            if (capture.FieldCount > DebugLimits.MaxCaptureFields)
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "A hook captures at most " + DebugLimits.MaxCaptureFields.ToString(CultureInfo.InvariantCulture) + " exact fields.", "Reduce the captured field list.");
             return capture;
         }
 
@@ -1096,9 +1256,9 @@ namespace UnityCli
             if (spec == null) return null;
             var prefix = spec.PrefixCode ?? string.Empty;
             var postfix = spec.PostfixCode ?? string.Empty;
-            if (Encoding.UTF8.GetByteCount(prefix) > MethodHookLimits.MaxCallbackSourceBytes)
+            if (Encoding.UTF8.GetByteCount(prefix) > DebugLimits.MaxCallbackSourceBytes)
                 throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "prefixCode exceeds the declared callback source budget.", null, new[] { "Split the callback into a smaller body or move shared logic into project code." });
-            if (Encoding.UTF8.GetByteCount(postfix) > MethodHookLimits.MaxCallbackSourceBytes)
+            if (Encoding.UTF8.GetByteCount(postfix) > DebugLimits.MaxCallbackSourceBytes)
                 throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "postfixCode exceeds the declared callback source budget.", null, new[] { "Split the callback into a smaller body or move shared logic into project code." });
             return new MethodHookCallbackSpec { PrefixCode = prefix, PostfixCode = postfix };
         }
@@ -1185,7 +1345,7 @@ namespace UnityCli
             }
             catch (Exception)
             {
-                throw new BridgeCommandException("E_CONTINUATION_STALE", "The list continuation no longer matches the current Editor session or filters.", null, new[] { "Re-read method-hook.list without a cursor." });
+                throw new BridgeCommandException("E_CONTINUATION_STALE", "The list continuation no longer matches the current Editor session or filters.", null, new[] { "Re-read debug.hook.list without a cursor." });
             }
         }
     }

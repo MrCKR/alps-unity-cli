@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using UnityEditor;
 using BridgeCommandException = UnityCli.UnityCliBridge.BridgeCommandException;
 
@@ -13,15 +14,17 @@ namespace UnityCli
     /// <summary>method-hook 的公开操作：安装、替换、启停、删除、摘要、精查与事件续读。</summary>
     internal static partial class MethodHookHost
     {
-        /// <summary>install 的 effect 前校验：语义、exact target、捕获字段、容量与后端可用。</summary>
-        internal static MethodHookInstallPlan PrepareInstall(MethodHookInstallRequest request)
+        /// <summary>install 的 effect 前校验：语义、exact target、捕获字段、listener、容量与后端可用。</summary>
+        internal static MethodHookInstallPlan PrepareInstall(MethodHookInstallRequest request, string owner = null)
         {
             EnsureReady();
-            if (request == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "method-hook.install requires a request body.", "Pass target plus capture or callbacks.");
+            if (request == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "debug.hook.install requires a request body.", "Pass target plus capture or callbacks.");
             var capture = NormalizeCapture(request.Capture);
             var callbacks = NormalizeCallbacks(request.Callbacks);
             if (!capture.HasBehaviour(callbacks))
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "A hook requires at least one effective capture or callback behaviour.", "Enable capture.arguments, capture.result, an instance or static field, or provide prefixCode/postfixCode.");
+            var listener = PrepareListener(request.Listener);
+            if (listener != null) RequireListenerSession(listener);
             var activation = string.IsNullOrEmpty(request.Activation) ? "play" : request.Activation;
             if (!string.Equals(activation, "play", StringComparison.Ordinal) && !string.Equals(activation, "editor-and-play", StringComparison.Ordinal))
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "activation must be play or editor-and-play.", "Pass activation: play or editor-and-play.");
@@ -29,33 +32,206 @@ namespace UnityCli
             EnsureBackend();
             lock (Sync)
             {
-                if (Definitions.Count >= MethodHookLimits.MaxDefinitionsPerSession)
-                    throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "The Editor session already holds " + MethodHookLimits.MaxDefinitionsPerSession.ToString(CultureInfo.InvariantCulture) + " hook definitions.", "Disable or remove a definition before installing another one.");
+                if (Definitions.Count >= DebugLimits.MaxDefinitionsPerSession)
+                    throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "The Editor session already holds " + DebugLimits.MaxDefinitionsPerSession.ToString(CultureInfo.InvariantCulture) + " hook definitions.", "Disable or remove a definition before installing another one.");
                 var targetKey = MethodHookTargetKey.From(resolved.Method).Text;
-                if (Definitions.Values.Count(definition => string.Equals(definition.TargetKey, targetKey, StringComparison.Ordinal)) >= MethodHookLimits.MaxDefinitionsPerTarget)
-                    throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "This exact target already has " + MethodHookLimits.MaxDefinitionsPerTarget.ToString(CultureInfo.InvariantCulture) + " hook definitions.", "Remove one of the definitions on this target before installing another one.");
-                if (!Targets.ContainsKey(MethodHookTargetKey.From(resolved.Method).Text) && AdapterIdentities.Count >= MethodHookLimits.MaxAdapterIdentities)
-                    throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "This domain already loaded " + MethodHookLimits.MaxAdapterIdentities.ToString(CultureInfo.InvariantCulture) + " distinct adapter identities.", "Reuse existing targets or restart the Editor before targeting a new one.");
+                if (Definitions.Values.Count(definition => string.Equals(definition.TargetKey, targetKey, StringComparison.Ordinal)) >= DebugLimits.MaxDefinitionsPerTarget)
+                    throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "This exact target already has " + DebugLimits.MaxDefinitionsPerTarget.ToString(CultureInfo.InvariantCulture) + " hook definitions.", "Remove one of the definitions on this target before installing another one.");
+                if (!Targets.ContainsKey(MethodHookTargetKey.From(resolved.Method).Text) && AdapterIdentities.Count >= DebugLimits.MaxAdapterIdentities)
+                    throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "This domain already loaded " + DebugLimits.MaxAdapterIdentities.ToString(CultureInfo.InvariantCulture) + " distinct adapter identities.", "Reuse existing targets or restart the Editor before targeting a new one.");
+                EnsureNoConflictingIntervention(targetKey, null, OwnsArbitraryIntervention(callbacks != null && (!string.IsNullOrWhiteSpace(callbacks.PrefixCode) || !string.IsNullOrWhiteSpace(callbacks.PostfixCode)), request.Breakpoint));
                 foreach (var field in capture.InstanceFields) field.Field = MethodHookTargetResolver.ResolveField(resolved.Method.DeclaringType, field.DeclaringType, field.FieldName);
                 foreach (var field in capture.StaticFields) field.Field = MethodHookTargetResolver.ResolveField(resolved.Method.DeclaringType, field.DeclaringType, field.FieldName);
-                if (callbacks != null && (!string.IsNullOrWhiteSpace(callbacks.PrefixCode) || !string.IsNullOrWhiteSpace(callbacks.PostfixCode))) EnsureCompileBudget(0);
+                if (callbacks != null && (!string.IsNullOrWhiteSpace(callbacks.PrefixCode) || !string.IsNullOrWhiteSpace(callbacks.PostfixCode)))
+                    RequireCompileAdmission(CompileKey(callbacks.PrefixCode ?? string.Empty, callbacks.PostfixCode ?? string.Empty), 0L);
+            }
+            // 触发预算预留发生在 effect 之前：拒绝时不会产生定义，也不会占用任何真实资源。
+            string triggerPlanId = null;
+            if (listener != null)
+            {
+                triggerPlanId = "hook-plan:" + Guid.NewGuid().ToString("N").Substring(0, 16);
+                int used;
+                var failure = DebugTriggerBudget.TryPlan(listener.SessionId, DebugTriggerBudget.KindListener, triggerPlanId, out used);
+                if (failure != null) throw TriggerBudgetRejection(listener, failure, used);
+            }
+            // 断点配置与其 session 资源槽位必须在 effect 之前保留；失败时归还未跨过 effect 的触发预算预留。
+            DebugPauseBreakpointPlan breakpointPlan = null;
+            if (request.Breakpoint != null)
+            {
+                try
+                {
+                    breakpointPlan = DebugPauseHost.Prepare(request.Breakpoint, "breakpoint");
+                }
+                catch
+                {
+                    ReleaseTriggerPlan(triggerPlanId);
+                    throw;
+                }
             }
             return new MethodHookInstallPlan
             {
                 Resolved = resolved,
+                TargetSpec = request.Target,
                 Capture = capture,
                 Callbacks = callbacks,
                 Activation = activation,
                 Priority = request.Priority ?? 0,
                 EmitHitEvents = request.EmitHitEvents ?? true,
-                Label = request.Label ?? string.Empty
+                Label = request.Label ?? string.Empty,
+                Listener = listener,
+                TriggerPlanId = triggerPlanId,
+                Owner = owner ?? string.Empty,
+                BreakpointPlan = breakpointPlan
             };
         }
 
-        /// <summary>effect barrier 之后建立 Attachment、原子保存并读回，然后打开 gate。</summary>
+        /// <summary>
+        /// 声明 listener 时必须指定一个存在且处于 open 的 session：
+        /// 已停止的 session 不再接收新的计划注入，也不允许往不存在的 owner 上挂新观察。
+        /// </summary>
+        private static void RequireListenerSession(MethodHookListenerState listener)
+        {
+            DebugSessionInfoResult info;
+            try
+            {
+                info = DebugSessionHost.Info(new DebugSessionInfoRequest { SessionId = listener.SessionId });
+            }
+            catch (BridgeCommandException)
+            {
+                throw new BridgeCommandException(
+                    "E_DEBUG_SESSION_NOT_FOUND",
+                    "The session that should own this listener does not exist in the current Editor session.",
+                    new Dictionary<string, object> { { "sessionId", listener.SessionId }, { "path", "$.listener.sessionId" } },
+                    new[]
+                    {
+                        "Run tools run debug.session.list to read the loaded session definitions.",
+                        "Run tools run debug.session.create to establish a new owner, then install the listener again."
+                    });
+            }
+            var state = info.Session == null ? string.Empty : info.Session.State;
+            if (string.Equals(state, UnityCliDebugSessionStates.Open, StringComparison.Ordinal)) return;
+            throw new BridgeCommandException(
+                "E_DEBUG_SESSION_NOT_OPEN",
+                "A session that is not open cannot accept a new planned injection.",
+                new Dictionary<string, object>
+                {
+                    { "sessionId", listener.SessionId },
+                    { "state", state },
+                    { "cleanupPending", info.Session != null && info.Session.CleanupPending },
+                    { "path", "$.listener.sessionId" }
+                },
+                new[]
+                {
+                    "Run tools run debug.session.info to read the current state and cleanup detail.",
+                    "Run tools run debug.session.create to start a new session for this investigation."
+                });
+        }
+
+        /// <summary>触发预算拒绝的稳定错误；携带当前占用与剩余预算。</summary>
+        private static BridgeCommandException TriggerBudgetRejection(MethodHookListenerState listener, string failure, int used)
+        {
+            return new BridgeCommandException(
+                "E_DEBUG_TRIGGER_BUDGET_EXCEEDED",
+                "The session has no free planned-injection budget, so this listener was refused before any effect.",
+                new Dictionary<string, object>
+                {
+                    { "reason", failure },
+                    { "sessionId", listener.SessionId },
+                    { "used", (long)used },
+                    { "max", (long)DebugLimits.MaxPlannedInjectionsPerSession },
+                    { "trigger", listener.Trigger }
+                },
+                new[]
+                {
+                    "Run tools run debug.hook.remove for a listener you no longer need, then install it again.",
+                    "Run tools run debug.session.info on the owning session to read its planned injection budget."
+                });
+        }
+
+        /// <summary>
+        /// program 挂载的 binding 只能由该 program 管理。直接的 debug.hook.* 变更必须在这里被拒绝，
+        /// 否则一次普通 replace/disable 会静默改掉 program-owned revision，使 program 与真实绑定脱节。
+        /// </summary>
+        private static void RequireHookOwner(string action, MethodHookDefinition definition, string callerOwner)
+        {
+            if (definition == null || string.IsNullOrEmpty(definition.Owner)) return;
+            if (string.Equals(definition.Owner, callerOwner ?? string.Empty, StringComparison.Ordinal)) return;
+            throw new BridgeCommandException(
+                "E_HOOK_OWNED_BY_PROGRAM",
+                "This hook definition is owned by a debug program binding, so a direct debug.hook." + action + " call cannot change it.",
+                new Dictionary<string, object>
+                {
+                    { "hookId", definition.HookId },
+                    { "owner", definition.Owner },
+                    { "action", action },
+                    { "revision", definition.Revision },
+                    { "targetKey", definition.TargetKey ?? string.Empty }
+                },
+                new[]
+                {
+                    "Run tools run debug.program.replace to change the program that owns this binding.",
+                    "Run tools run debug.program.stop or debug.program.remove to release the program-owned binding.",
+                    "Run tools run debug.program.list to read the programs of this Editor session."
+                });
+        }
+
+        /// <summary>
+        /// 冲突规则校验（effect 之前）：调用方回调体可以写任意状态，写范围无法静态证明，
+        /// 而 pause 断点同样让调用方代码在命中现场自行干预（pause.evaluate 可以改参数、跳过原方法并写结果），
+        /// 所以两者都是任意干预 owner：同一 exact target 上最多只能有一个活动 owner；
+        /// 纯结构化观察（含 snapshot 断点）不写目标状态，可以共存。
+        /// </summary>
+        private static void EnsureNoConflictingIntervention(string targetKey, MethodHookDefinition self, bool intervention)
+        {
+            if (!intervention || string.IsNullOrEmpty(targetKey)) return;
+            foreach (var definition in Definitions.Values)
+            {
+                if (ReferenceEquals(definition, self)) continue;
+                if (!OwnsArbitraryIntervention(definition.IsIntervention, BreakpointOf(definition))) continue;
+                if (!string.Equals(definition.TargetKey, targetKey, StringComparison.Ordinal)) continue;
+                var state = definition.State;
+                if (state != MethodHookState.Armed && state != MethodHookState.Dormant && state != MethodHookState.Restoring) continue;
+                var kind = IsPauseBreakpoint(BreakpointOf(definition)) ? "pause-breakpoint" : "callback";
+                throw new BridgeCommandException(
+                    "E_DEBUG_RESOURCE_CONFLICT",
+                    "This exact target already has an active " + (string.Equals(kind, "pause-breakpoint", StringComparison.Ordinal) ? "pause breakpoint" : "hook whose callback code owns an unprovable write scope") + ": " + definition.HookId + ".",
+                    new Dictionary<string, object> { { "targetKey", targetKey }, { "ownerHookId", definition.HookId }, { "scope", "arbitrary-intervention" }, { "ownerKind", kind } },
+                    new[] { "Remove, disable or replace that definition instead of adding a second arbitrary-intervention owner on the same exact target.", "Install capture-only observations on this target when independent observation is required." });
+            }
+        }
+
+        /// <summary>一个定义/提交是否持有同一 target 上的任意干预权：回调体或 pause 断点都算。
+        /// 定向测试与实现共用同一声明，不复制判定。</summary>
+        internal static bool OwnsArbitraryIntervention(bool hasCallbacks, MethodHookBreakpoint breakpoint)
+        {
+            return hasCallbacks || IsPauseBreakpoint(breakpoint);
+        }
+
+        /// <summary>提交时只能拿到断点 spec，因此同一判定必须对两种形态各有一份且语义一致。</summary>
+        internal static bool OwnsArbitraryIntervention(bool hasCallbacks, MethodHookBreakpointSpec breakpoint)
+        {
+            return hasCallbacks || IsPauseBreakpoint(breakpoint);
+        }
+
+        private static bool IsPauseBreakpoint(MethodHookBreakpoint breakpoint)
+        {
+            return breakpoint != null && string.Equals(breakpoint.Kind, DebugPauseBreakpointKinds.Pause, StringComparison.Ordinal);
+        }
+
+        private static bool IsPauseBreakpoint(MethodHookBreakpointSpec breakpoint)
+        {
+            return breakpoint != null && string.Equals(breakpoint.Kind, DebugPauseBreakpointKinds.Pause, StringComparison.Ordinal);
+        }
+
+        private static MethodHookBreakpoint BreakpointOf(MethodHookDefinition definition)
+        {
+            return definition == null ? null : definition.Breakpoint;
+        }
+
+        /// <summary>effect barrier 之后建立 Attachment、原子保存并读回，然后发布新的不可变派发快照。</summary>
         internal static MethodHookInstallResult ApplyInstall(MethodHookInstallPlan plan, MethodHookPreparedCallbacks prepared)
         {
-            if (plan == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "The install plan is unavailable.", "Submit method-hook.install again.");
+            if (plan == null) throw new BridgeCommandException("E_SCHEMA_INVALID", "The install plan is unavailable.", "Submit debug.hook.install again.");
             var definition = new MethodHookDefinition
             {
                 HookId = "hook-" + Guid.NewGuid().ToString("N").Substring(0, 16),
@@ -75,8 +251,16 @@ namespace UnityCli
                 CallbackKey = prepared == null ? string.Empty : prepared.CompileKey,
                 PrefixHash = prepared == null ? string.Empty : prepared.PrefixHash,
                 PostfixHash = prepared == null ? string.Empty : prepared.PostfixHash,
+                Listener = plan.Listener,
+                Owner = plan.Owner ?? string.Empty,
+                TriggerOwnerId = plan.TriggerPlanId ?? string.Empty
             };
             definition.StateBag = new MethodHookStateBag(definition.HookId);
+            if (plan.BreakpointPlan != null)
+            {
+                definition.Breakpoint = plan.BreakpointPlan.Breakpoint;
+                definition.BreakpointOwner = plan.BreakpointPlan.Owner;
+            }
             MethodHookTargetRuntime runtime;
             lock (Sync)
             {
@@ -84,27 +268,33 @@ namespace UnityCli
                 Definitions[definition.HookId] = definition;
                 runtime = EnsureTargetRuntime(plan.Resolved, definition.TargetSpec);
                 runtime.Definitions.Add(definition);
-                runtime.GateOpen = false;
             }
             try
             {
                 AttachIfNeeded(runtime);
+                // listener 声明的 phase 现场与定义同生命周期：失败走同一 rollback，不留半个定义。
+                var phaseFailure = InstallListenerPhaseSite(definition, definition.TriggerOwnerId, definition.Listener);
+                if (phaseFailure != null) throw DebugPlayerLoopHost.Unavailable(definition.Listener.Phase, phaseFailure);
                 lock (Sync)
                 {
                     definition.State = definition.ActivationMatches(playScope) ? MethodHookState.Armed : MethodHookState.Dormant;
                     PersistDefinitions("install");
+                    // 只有完整建立后一次发布：命中路径要么看到旧快照，要么看到新快照。
+                    PublishDispatchSnapshot(runtime);
                 }
                 AppendLifecycle(definition, "installed", MethodHookStateText.Of(definition.State));
             }
             catch (Exception)
             {
                 RollbackDefinition(definition, runtime);
+                ReleaseTriggerPlan(plan.TriggerPlanId);
+                DebugPauseHost.ReleaseUncommittedPlan(plan.BreakpointPlan);
                 throw;
             }
-            finally
-            {
-                lock (Sync) runtime.GateOpen = true;
-            }
+            // 定义已建立且已发布：断点的 session 资源槽位现在才成为活动资源。
+            DebugPauseHost.CommitPlan(plan.BreakpointPlan, definition.HookId);
+            // 该 session 的第 1 阶段条目必须存在：stop 时它关闭未来入口并取消 pending 投递。
+            RegisterSessionStopDispatch(definition);
             return new MethodHookInstallResult
             {
                 HookId = definition.HookId,
@@ -113,11 +303,81 @@ namespace UnityCli
                 EditorSessionId = UnityCliBridge.EditorSessionId(),
                 Activation = definition.Activation,
                 Priority = definition.Priority,
-                EventCursor = Events.BeginCursor(new MethodHookEventFilter { HookId = definition.HookId }, UnityCliBridge.EditorSessionId()),
+                EventCursor = DebugEventStore.BeginCursor(new UnityCliDebugEventFilter { HookId = definition.HookId }),
                 Target = MethodHookTargetResolver.Summarize(plan.Resolved, definition.TargetSpec),
                 Capture = definition.Capture.Summarize(),
-                Callbacks = SummarizeCallbacks(definition)
+                Callbacks = SummarizeCallbacks(definition),
+                Listener = SummarizeListener(definition.Listener),
+                Breakpoint = SummarizeBreakpoint(definition)
             };
+        }
+
+        /// <summary>把一个定义的断点配置投影为公开事实；未声明断点时整个字段为空。</summary>
+        internal static MethodHookBreakpointSummary SummarizeBreakpoint(MethodHookDefinition definition)
+        {
+            if (definition == null || definition.Breakpoint == null) return null;
+            var breakpoint = definition.Breakpoint;
+            var owner = definition.BreakpointOwner;
+            return new MethodHookBreakpointSummary
+            {
+                Present = true,
+                Kind = breakpoint.Kind,
+                Position = breakpoint.Position,
+                TimeoutKind = string.Equals(breakpoint.Kind, DebugPauseBreakpointKinds.Pause, StringComparison.Ordinal)
+                    ? (breakpoint.Unbounded ? DebugPauseTimeoutKinds.Unbounded : DebugPauseTimeoutKinds.Bounded)
+                    : string.Empty,
+                TimeoutDurationMs = breakpoint.Unbounded ? 0L : breakpoint.DurationMs,
+                StackDepth = breakpoint.StackDepth,
+                SessionId = breakpoint.SessionId ?? string.Empty,
+                ResourceRegistered = owner != null && !string.IsNullOrEmpty(owner.ResourceId),
+                ResourceId = owner == null || string.IsNullOrEmpty(owner.ResourceId) ? null : owner.ResourceId
+            };
+        }
+
+        /// <summary>
+        /// 释放一个定义占用的计划注入预算与 phase 现场。只释放本定义自己的预留，
+        /// 因此移除一个 listener 不会影响同一 session 上其他 listener 或输入的计划。
+        /// </summary>
+        private static void ReleaseTriggerPlan(string triggerOwnerId)
+        {
+            if (string.IsNullOrEmpty(triggerOwnerId)) return;
+            // 同一预留身份同时持有该 listener 的 phase 现场，因此在这里一并归还；未登记时是幂等 no-op。
+            DebugPlayerLoopHost.Release(triggerOwnerId);
+            DebugTriggerBudget.Release(triggerOwnerId);
+        }
+
+        /// <summary>
+        /// 声明 player-loop-phase 触发源的 listener 必须建立对应 phase 现场：否则该声明只是一句话，
+        /// 投递永远不会在声明的 phase 上取得执行权。返回非 null 表示稳定失败原因。
+        /// 现场记在同一触发预留身份下，release、disable、remove、replace 与 session stop 都会归还它。
+        /// </summary>
+        private static string InstallListenerPhaseSite(MethodHookDefinition definition, string ownerId, MethodHookListenerState listener)
+        {
+            if (definition == null || listener == null) return null;
+            if (!string.Equals(listener.Trigger, DebugTriggerSources.PlayerLoopPhase, StringComparison.Ordinal)) return null;
+            if (string.IsNullOrEmpty(ownerId)) return "owner-required";
+            var failure = DebugPlayerLoopHost.Install(listener.Phase, ownerId);
+            if (failure != null) return failure;
+            // session stop 不会删除 listener 定义，因此必须有一个显式清理条目归还 phase 现场；
+            // 同一 hook 的条目只注册一次，重复注册返回 conflict 属于幂等已存在。
+            var stepFailure = DebugSessionHost.RegisterCleanupStep(
+                listener.SessionId,
+                UnityCliDebugCleanupSteps.OrderOf(UnityCliDebugCleanupSteps.CloseObservation),
+                "player-loop-phase:" + definition.HookId,
+                UnityCliDebugFacilityOwners.Observation,
+                report =>
+                {
+                    // 读当前预留身份：replace 会换身份，闭包不得捕捉旧 token。
+                    if (!DebugPlayerLoopHost.Release(definition.TriggerOwnerId)) return true;
+                    if (report != null) report.ClosedObservations++;
+                    return true;
+                },
+                // 移除框架自己的 PlayerLoop 子系统只能通过主线程专属的 PlayerLoop 安装 API 完成：
+                // 主线程暂停期间由控制通道服务的 stop 必须推迟它，而不是在后台线程上执行。
+                true);
+            if (stepFailure == null || string.Equals(stepFailure, UnityCliDebugSessionFailures.CleanupStepConflict, StringComparison.Ordinal)) return null;
+            DebugPlayerLoopHost.Release(ownerId);
+            return "cleanup-step:" + stepFailure;
         }
 
         /// <summary>replace 的 effect 前校验；目标不变，因此不重新安装 detour。</summary>
@@ -125,11 +385,42 @@ namespace UnityCli
         {
             EnsureReady();
             var definition = RequireDefinition(request == null ? null : request.HookId, request == null ? null : request.EditorSessionId, request == null ? (long?)null : request.ExpectedRevision);
+            RequireHookOwner("replace", definition, null);
             var capture = NormalizeCapture(request.Capture);
             var callbacks = NormalizeCallbacks(request.Callbacks);
+            var listener = PrepareListener(request.Listener);
+            if (listener != null) RequireListenerSession(listener);
             if (!capture.HasBehaviour(callbacks))
                 throw new BridgeCommandException("E_SCHEMA_INVALID", "A hook requires at least one effective capture or callback behaviour.", "Enable capture fields or provide prefixCode/postfixCode.");
             if (callbacks != null && (!string.IsNullOrWhiteSpace(callbacks.PrefixCode) || !string.IsNullOrWhiteSpace(callbacks.PostfixCode))) EnsureBackend();
+            // 新 listener 的预算预留发生在 effect 之前：拒绝时旧配置保持不变。
+            string triggerPlanId = null;
+            if (listener != null)
+            {
+                triggerPlanId = "hook-plan:" + Guid.NewGuid().ToString("N").Substring(0, 16);
+                int used;
+                var failure = DebugTriggerBudget.TryPlan(listener.SessionId, DebugTriggerBudget.KindListener, triggerPlanId, out used);
+                if (failure != null) throw TriggerBudgetRejection(listener, failure, used);
+            }
+            // replace 可以引入回调体，因此必须在 effect 之前做同一冲突校验。
+            lock (Sync)
+            {
+                EnsureNoConflictingIntervention(definition.TargetKey, definition, OwnsArbitraryIntervention(callbacks != null && (!string.IsNullOrWhiteSpace(callbacks.PrefixCode) || !string.IsNullOrWhiteSpace(callbacks.PostfixCode)), request.Breakpoint != null ? request.Breakpoint : (MethodHookBreakpointSpec)null));
+            }
+            // 提交的断点配置同样必须在 effect 之前保留好 session 资源槽位。
+            DebugPauseBreakpointPlan breakpointPlan = null;
+            if (request.Breakpoint != null)
+            {
+                try
+                {
+                    breakpointPlan = DebugPauseHost.Prepare(request.Breakpoint, "breakpoint");
+                }
+                catch
+                {
+                    ReleaseTriggerPlan(triggerPlanId);
+                    throw;
+                }
+            }
             return new MethodHookMutationPlan
             {
                 Action = "replace",
@@ -137,7 +428,12 @@ namespace UnityCli
                 Capture = capture,
                 Callbacks = callbacks,
                 Priority = request.Priority ?? definition.Priority,
-                EmitHitEvents = request.EmitHitEvents ?? definition.EmitHitEvents
+                EmitHitEvents = request.EmitHitEvents ?? definition.EmitHitEvents,
+                Listener = listener,
+                ListenerSubmitted = request.Listener != null,
+                TriggerPlanId = triggerPlanId,
+                BreakpointPlan = breakpointPlan,
+                BreakpointSubmitted = request.Breakpoint != null
             };
         }
 
@@ -145,10 +441,21 @@ namespace UnityCli
         internal static MethodHookReplaceResult ApplyReplace(MethodHookMutationPlan plan, MethodHookPreparedCallbacks prepared)
         {
             var definition = plan.Definition;
+            // 先建立新 listener 声明的 phase 现场：失败时旧配置与旧现场完全不变，新旧只要一个真相。
+            var phaseFailure = InstallListenerPhaseSite(definition, plan.TriggerPlanId, plan.ListenerSubmitted ? plan.Listener : null);
+            if (phaseFailure != null)
+            {
+                ReleaseTriggerPlan(plan.TriggerPlanId);
+                throw DebugPlayerLoopHost.Unavailable(plan.Listener.Phase, phaseFailure);
+            }
             if (definition.State == MethodHookState.Disabled || definition.State == MethodHookState.Faulted)
             {
                 // 更新配置但不改变启停意图；faulted 仍需显式 enable 才重新激活。
-                lock (Sync) ApplyReplaceConfiguration(definition, plan, prepared);
+                lock (Sync)
+                {
+                    ApplyReplaceConfiguration(definition, plan, prepared);
+                    ApplyBreakpointReplace(definition, plan);
+                }
                 AppendLifecycle(definition, "replaced", "configuration-only");
                 return BuildReplaceResult(definition, true);
             }
@@ -156,17 +463,21 @@ namespace UnityCli
             lock (Sync)
             {
                 runtime = FindRuntimeByKey(definition.TargetKey);
-                if (runtime != null) runtime.GateOpen = false;
             }
             try
             {
-                lock (Sync) ApplyReplaceConfiguration(definition, plan, prepared);
+                lock (Sync)
+                {
+                    ApplyReplaceConfiguration(definition, plan, prepared);
+                    ApplyBreakpointReplace(definition, plan);
+                }
                 AppendLifecycle(definition, "replaced", "applied");
                 return BuildReplaceResult(definition, true);
             }
             finally
             {
-                if (runtime != null) lock (Sync) runtime.GateOpen = true;
+                // 替换后发布新快照；在途调用继续用它自己固定的旧 revision 完成。
+                if (runtime != null) lock (Sync) PublishDispatchSnapshot(runtime);
             }
         }
 
@@ -174,12 +485,29 @@ namespace UnityCli
         {
             var prefix = plan.Callbacks == null ? string.Empty : plan.Callbacks.PrefixCode ?? string.Empty;
             var postfix = plan.Callbacks == null ? string.Empty : plan.Callbacks.PostfixCode ?? string.Empty;
+            var listenChanged = plan.ListenerSubmitted && !ListenerEquals(definition.Listener, plan.Listener);
             var changed = !string.Equals(definition.PrefixCode, prefix, StringComparison.Ordinal)
                 || !string.Equals(definition.PostfixCode, postfix, StringComparison.Ordinal)
                 || !CaptureEquals(definition.Capture, plan.Capture)
                 || definition.Priority != plan.Priority
-                || definition.EmitHitEvents != plan.EmitHitEvents;
-            if (!changed) return;
+                || definition.EmitHitEvents != plan.EmitHitEvents
+                || listenChanged;
+            if (!changed)
+            {
+                // 配置未变时不得消耗新预留：新旧只要一个真相。
+                ReleaseTriggerPlan(plan.TriggerPlanId);
+                return;
+            }
+            if (listenChanged)
+            {
+                ReleaseTriggerPlan(definition.TriggerOwnerId);
+                definition.Listener = plan.Listener;
+                definition.TriggerOwnerId = plan.TriggerPlanId ?? string.Empty;
+            }
+            else
+            {
+                ReleaseTriggerPlan(plan.TriggerPlanId);
+            }
             definition.Capture = plan.Capture;
             definition.PrefixCode = prefix;
             definition.PostfixCode = postfix;
@@ -203,6 +531,20 @@ namespace UnityCli
             PersistDefinitions("replace");
         }
 
+        /// <summary>
+        /// 提交的断点配置接管：先释放旧配置的现场与 session 资源槽位，再接管新预留。
+        /// 未提交 breakpoint 字段时保留当前断点，与 listener 的"省略即保留"语义一致。
+        /// </summary>
+        private static void ApplyBreakpointReplace(MethodHookDefinition definition, MethodHookMutationPlan plan)
+        {
+            if (!plan.BreakpointSubmitted) return;
+            DebugPauseHost.ReleaseOwnership(definition, DebugPauseReleaseReasons.HookReplaced);
+            definition.Breakpoint = plan.BreakpointPlan == null ? null : plan.BreakpointPlan.Breakpoint;
+            definition.BreakpointOwner = plan.BreakpointPlan == null ? null : plan.BreakpointPlan.Owner;
+            DebugPauseHost.CommitPlan(plan.BreakpointPlan, definition.HookId);
+            PersistDefinitions("replace-breakpoint");
+        }
+
         private static MethodHookReplaceResult BuildReplaceResult(MethodHookDefinition definition, bool changed)
         {
             return new MethodHookReplaceResult
@@ -212,10 +554,12 @@ namespace UnityCli
                 State = MethodHookStateText.Of(definition.State),
                 Changed = changed,
                 EditorSessionId = UnityCliBridge.EditorSessionId(),
-                EventCursor = Events.BeginCursor(new MethodHookEventFilter { HookId = definition.HookId }, UnityCliBridge.EditorSessionId()),
+                EventCursor = DebugEventStore.BeginCursor(new UnityCliDebugEventFilter { HookId = definition.HookId }),
                 Target = definition.TargetSpec == null ? null : SummarizeStoredTarget(definition),
                 Capture = definition.Capture.Summarize(),
-                Callbacks = SummarizeCallbacks(definition)
+                Callbacks = SummarizeCallbacks(definition),
+                Listener = SummarizeListener(definition.Listener),
+                Breakpoint = SummarizeBreakpoint(definition)
             };
         }
 
@@ -224,6 +568,7 @@ namespace UnityCli
         {
             EnsureReady();
             var definition = RequireDefinition(request == null ? null : request.HookId, request == null ? null : request.EditorSessionId, request == null ? (long?)null : request.ExpectedRevision);
+            RequireHookOwner("enable", definition, null);
             var plan = new MethodHookMutationPlan { Action = "enable", Definition = definition };
             lock (Sync)
             {
@@ -239,8 +584,10 @@ namespace UnityCli
             lock (Sync)
             {
                 var known = Targets.ContainsKey(MethodHookTargetKey.From(plan.Resolved.Method).Text) || FindRuntimeByKey(definition.TargetKey) != null;
-                if (!known && AdapterIdentities.Count >= MethodHookLimits.MaxAdapterIdentities)
-                    throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "This domain already loaded " + MethodHookLimits.MaxAdapterIdentities.ToString(CultureInfo.InvariantCulture) + " distinct adapter identities.", "Restart the Editor before enabling a hook on a new target.");
+                if (!known && AdapterIdentities.Count >= DebugLimits.MaxAdapterIdentities)
+                    throw new BridgeCommandException("E_HOOK_LIMIT_EXCEEDED", "This domain already loaded " + DebugLimits.MaxAdapterIdentities.ToString(CultureInfo.InvariantCulture) + " distinct adapter identities.", "Restart the Editor before enabling a hook on a new target.");
+                // 重新激活回调定义相当于重新取得该 target 的干预权，因此必须重跑同一冲突校验。
+                EnsureNoConflictingIntervention(MethodHookTargetKey.From(plan.Resolved.Method).Text, definition, OwnsArbitraryIntervention(definition.IsIntervention, BreakpointOf(definition)));
             }
             return plan;
         }
@@ -260,7 +607,7 @@ namespace UnityCli
                         State = MethodHookStateText.Of(definition.State),
                         Changed = false,
                         EditorSessionId = UnityCliBridge.EditorSessionId(),
-                        EventCursor = Events.BeginCursor(new MethodHookEventFilter { HookId = definition.HookId }, UnityCliBridge.EditorSessionId())
+                        EventCursor = DebugEventStore.BeginCursor(new UnityCliDebugEventFilter { HookId = definition.HookId })
                     };
                 }
             }
@@ -277,7 +624,6 @@ namespace UnityCli
                     definition.PrefixHash = prepared.PrefixHash;
                     definition.PostfixHash = prepared.PostfixHash;
                 }
-                runtime.GateOpen = false;
             }
             try
             {
@@ -290,13 +636,14 @@ namespace UnityCli
                     definition.Revision++;
                     Suppression.Remove(definition.HookId);
                     PersistDefinitions("enable");
-                    MethodHookStore.SaveSuppression(Suppression);
+                    DebugStore.SaveSuppression(Suppression);
                 }
                 AppendLifecycle(definition, "enabled", MethodHookStateText.Of(definition.State));
             }
             finally
             {
-                lock (Sync) runtime.GateOpen = true;
+                // 新 revision 发布后旧 revision 的在途故障不再影响它。
+                lock (Sync) PublishDispatchSnapshot(runtime);
             }
             return new MethodHookEnableResult
             {
@@ -306,7 +653,7 @@ namespace UnityCli
                 Changed = true,
                 CallbackRecompiled = prepared != null,
                 EditorSessionId = UnityCliBridge.EditorSessionId(),
-                EventCursor = Events.BeginCursor(new MethodHookEventFilter { HookId = definition.HookId }, UnityCliBridge.EditorSessionId())
+                EventCursor = DebugEventStore.BeginCursor(new UnityCliDebugEventFilter { HookId = definition.HookId })
             };
         }
 
@@ -315,6 +662,7 @@ namespace UnityCli
         {
             EnsureReady();
             var definition = RequireDefinition(request == null ? null : request.HookId, request == null ? null : request.EditorSessionId, request == null ? (long?)null : request.ExpectedRevision);
+            RequireHookOwner("disable", definition, null);
             return new MethodHookMutationPlan
             {
                 Action = "disable",
@@ -342,7 +690,12 @@ namespace UnityCli
                 }
                 definition.State = MethodHookState.Disabled;
                 definition.Revision++;
+                // 断点的现场与 session 资源槽位随定义失效：disable 后不再保留现场。
+                DebugPauseHost.ReleaseOwnership(definition, DebugPauseReleaseReasons.HookDisabled);
                 var released = ReleaseAdapterIfUnused(definition);
+                // 已关闭的定义不再持有未来注入预算；enable 时不会自动恢复，必须重装 listener。
+                ReleaseTriggerPlan(definition.TriggerOwnerId);
+                definition.TriggerOwnerId = string.Empty;
                 PersistDefinitions("disable");
                 AppendLifecycle(definition, "disabled", "disabled");
                 return new MethodHookDisableResult
@@ -357,11 +710,12 @@ namespace UnityCli
             }
         }
 
-        /// <summary>remove 的 effect 前校验；不存在时返回 E_HOOK_NOT_FOUND。</summary>
-        internal static MethodHookMutationPlan PrepareRemove(MethodHookRemoveRequest request)
+        /// <summary>remove 的 effect 前校验；不存在时返回 E_HOOK_NOT_FOUND。callerOwner 只用于 program 解除自己的 binding。</summary>
+        internal static MethodHookMutationPlan PrepareRemove(MethodHookRemoveRequest request, string callerOwner = null)
         {
             EnsureReady();
             var definition = RequireDefinition(request == null ? null : request.HookId, request == null ? null : request.EditorSessionId, request == null ? (long?)null : request.ExpectedRevision);
+            RequireHookOwner("remove", definition, callerOwner);
             return new MethodHookMutationPlan { Action = "remove", Definition = definition };
         }
 
@@ -371,12 +725,19 @@ namespace UnityCli
             var definition = plan.Definition;
             lock (Sync)
             {
+                // 先关闭新入口：在途命中按自己的帧完成，但删除后不再进入该定义。
+                Volatile.Write(ref definition.DispatchClosed, (int)Volatile.Read(ref definition.Revision));
                 Definitions.Remove(definition.HookId);
                 Suppression.Remove(definition.HookId);
+                // 删除定义时其断点现场与资源槽位一齐释放，不留下无人认领的暂停。
+                DebugPauseHost.ReleaseOwnership(definition, DebugPauseReleaseReasons.HookRemoved);
+                // 定义被删除后它的计划注入必定不再执行，预算必须立即归还。
+                ReleaseTriggerPlan(definition.TriggerOwnerId);
+                definition.TriggerOwnerId = string.Empty;
                 var released = ReleaseAdapterIfUnused(definition);
                 var remaining = Definitions.Values.Count(item => string.Equals(item.TargetKey, definition.TargetKey, StringComparison.Ordinal));
                 PersistDefinitions("remove");
-                MethodHookStore.SaveSuppression(Suppression);
+                DebugStore.SaveSuppression(Suppression);
                 AppendLifecycle(definition, "removed", "removed");
                 return new MethodHookRemoveResult
                 {
@@ -395,7 +756,7 @@ namespace UnityCli
         {
             EnsureReady();
             var session = UnityCliBridge.EditorSessionId();
-            var limit = request == null || request.Limit == null ? MethodHookLimits.ListDefaultLimit : Math.Min(Math.Max(1, request.Limit.Value), MethodHookLimits.ListMaxLimit);
+            var limit = request == null || request.Limit == null ? DebugLimits.ListDefaultLimit : Math.Min(Math.Max(1, request.Limit.Value), DebugLimits.ListMaxLimit);
             var state = request == null ? null : request.State;
             var label = request == null ? null : request.Label;
             var scope = UnityCliSerializer.Sha256Canonical(new Dictionary<string, object>
@@ -418,13 +779,46 @@ namespace UnityCli
             var hasMore = nextOffset < ordered.Count;
             return new MethodHookListResult
             {
-                Items = page.Select(definition => definition.ToListItem()).ToList(),
+                Items = page.Select(definition => PublicItem(definition, session)).ToList(),
                 Total = ordered.Count,
                 NextOffset = nextOffset,
                 HasMore = hasMore,
                 NextCursor = hasMore ? EncodeOffsetCursor(session, scope, nextOffset) : null,
                 EditorSessionId = session
             };
+        }
+
+        /// <summary>
+        /// 按 exact target key 读取同一 target 上的定义摘要（不分页）。
+        /// 其他 owner 需要判断“这个 exact target 上是否已有 armed detour 与真实命中”时使用它：
+        /// 公开的 identity 文本不区分重载，用它匹配会挑错现场。
+        /// </summary>
+        internal static List<MethodHookListItem> ListByTargetKey(string targetKey)
+        {
+            EnsureReady();
+            var session = UnityCliBridge.EditorSessionId();
+            List<MethodHookDefinition> matches;
+            lock (Sync)
+            {
+                matches = Definitions.Values
+                    .Where(definition => string.Equals(definition.TargetKey, targetKey ?? string.Empty, StringComparison.Ordinal))
+                    .OrderBy(definition => definition.InstallSequence)
+                    .ToList();
+            }
+            return matches.Select(definition => PublicItem(definition, session)).ToList();
+        }
+
+        /// <summary>
+        /// F-16：列表项必须自足。只持有列表输出的客户端必须能直接对同一 identity 执行 remove/replace/disable，
+        /// 因此 editorSessionId、listener（trigger/phase 与命中计数）与断点摘要都在同一条目里给出。
+        /// </summary>
+        private static MethodHookListItem PublicItem(MethodHookDefinition definition, string session)
+        {
+            var item = definition.ToListItem();
+            item.EditorSessionId = session;
+            item.Listener = SummarizeListener(definition.Listener);
+            item.Breakpoint = SummarizeBreakpoint(definition);
+            return item;
         }
 
         /// <summary>只读精查一个定义；源码按 slot 分页且默认不返回。</summary>
@@ -456,6 +850,9 @@ namespace UnityCli
                 Target = definition.TargetSpec == null ? null : SummarizeStoredTarget(definition),
                 Capture = definition.Capture.Summarize(),
                 Callbacks = SummarizeCallbacks(definition),
+                // 精查必须与 install/replace/list 用同一份 listener 投影：未声明时为 null，声明时给出声明事实与只读计数。
+                Listener = SummarizeListener(definition.Listener),
+                Breakpoint = SummarizeBreakpoint(definition),
                 LastFault = string.IsNullOrEmpty(definition.FaultCode) ? null : new MethodHookFaultSummary
                 {
                     Code = definition.FaultCode,
@@ -466,12 +863,14 @@ namespace UnityCli
                 },
                 EventSummary = new MethodHookEventSummary
                 {
-                    TotalRecords = Events.Count,
-                    OldestAvailableCursor = Events.OldestAvailableSequence,
-                    LatestSequence = Events.LastSequence,
-                    Gaps = Events.Gaps.ToList()
+                    TotalRecords = DebugEventStore.Count,
+                    OldestAvailableCursor = DebugEventStore.OldestAvailableSequence,
+                    LatestSequence = DebugEventStore.LatestSequence,
+                    Gaps = DebugEventStore.Gaps.ToList()
                 },
                 StateBytes = definition.StateBag == null ? 0 : definition.StateBag.ByteSize,
+                StaleFaults = Interlocked.Read(ref definition.StaleFaults),
+                DroppedSupplements = Interlocked.Read(ref droppedSupplements),
                 AdapterIdentities = counters.AdapterIdentities,
                 CompiledArtifacts = counters.CompiledArtifacts,
                 CompiledArtifactBytes = counters.CompiledArtifactBytes,
@@ -482,7 +881,7 @@ namespace UnityCli
                 var source = string.Equals(request.SourceSlot, "postfix", StringComparison.Ordinal) ? definition.PostfixCode : definition.PrefixCode;
                 var offset = Math.Max(0, request.SourceOffset ?? 0);
                 var bytes = Encoding.UTF8.GetByteCount(source ?? string.Empty);
-                var page = SubstringByUtf8Bytes(source ?? string.Empty, offset, MethodHookLimits.MaxInfoSourcePageBytes);
+                var page = SubstringByUtf8Bytes(source ?? string.Empty, offset, DebugLimits.MaxInfoSourcePageBytes);
                 result.SourcePage = new MethodHookSourcePage
                 {
                     Slot = request.SourceSlot,
@@ -493,51 +892,6 @@ namespace UnityCli
                 };
             }
             return result;
-        }
-
-        /// <summary>只读事件续读；多个 reader 各自独立，不消费共享 cursor。</summary>
-        internal static MethodHookEventsResult ReadEvents(MethodHookEventsRequest request)
-        {
-            EnsureReady();
-            var session = UnityCliBridge.EditorSessionId();
-            var filter = new MethodHookEventFilter
-            {
-                HookId = request == null ? null : request.HookId,
-                Kind = request == null ? null : request.Kind,
-                PlaySessionId = request == null ? null : request.PlaySessionId
-            };
-            var limit = EventsPageSize(request == null ? (int?)null : request.Limit);
-            MethodHookEventPage page;
-            try
-            {
-                page = Events.Read(filter, request == null ? null : request.Cursor, session, limit);
-            }
-            catch (MethodHookCursorException exception)
-            {
-                var details = new Dictionary<string, object> { { "oldestAvailableCursor", Events.OldestAvailableSequence } };
-                throw new BridgeCommandException(exception.Code, exception.Message, details, exception.NextActions);
-            }
-            return new MethodHookEventsResult
-            {
-                Events = page.Records.Select(record => record.ToItem()).ToList(),
-                NextCursor = new MethodHookEventCursor
-                {
-                    EditorSessionId = session,
-                    ScopeHash = filter.ScopeKey(session),
-                    ScannedSequence = page.NextScannedSequence
-                }.Encode(),
-                HasMore = page.HasMore,
-                OldestAvailableCursor = page.OldestAvailableSequence,
-                Gaps = Events.Gaps.ToList(),
-                EditorSessionId = session
-            };
-        }
-
-        /// <summary>事件页的规范化上限；Tool 声明的 read budget 与 host 实际读取必须使用同一数值。</summary>
-        internal static int EventsPageSize(int? requested)
-        {
-            var value = requested ?? MethodHookLimits.EventsDefaultLimit;
-            return Math.Min(Math.Max(1, value), MethodHookLimits.EventsMaxLimit);
         }
 
         /// <summary>新域恢复时重建 Attachment：先解析并建立 detour，回调编译留给中央 tick。</summary>
@@ -553,14 +907,13 @@ namespace UnityCli
                 if (!definition.HasCallbacks)
                 {
                     definition.State = definition.ActivationMatches(playScope) ? MethodHookState.Armed : MethodHookState.Dormant;
-                    AppendEvent(new MethodHookEventRecord
+                    AppendEvent(new UnityCliDebugEvent
                     {
                         HookId = definition.HookId,
                         Revision = definition.Revision,
                         Kind = "lifecycle",
                         PlaySessionId = playSessionId,
                         ClockSegment = clockSegment,
-                        Frame = tickCounter,
                         Name = "reattached",
                         MethodIdentity = runtime.MethodIdentity
                     });
@@ -569,7 +922,7 @@ namespace UnityCli
             catch (Exception exception)
             {
                 var code = exception is BridgeCommandException ? ((BridgeCommandException)exception).Code : "E_HOOK_PATCH_FAILED";
-                FaultDefinition(definition, code, exception.Message, 0, "restore");
+                FaultDefinition(definition, Volatile.Read(ref definition.Revision), code, exception.Message, 0, "restore");
             }
         }
 
@@ -615,7 +968,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "method-hook.install",
+                        Type = "debug.hook.install",
                         State = "planned",
                         Note = "Would compile callback source when present, create one definition, attach the owned Adapter to the exact target and publish this session's snapshot. Compilation success and business hits are not proven by this preview."
                     }
@@ -645,7 +998,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "method-hook.replace",
+                        Type = "debug.hook.replace",
                         HookId = definition.HookId,
                         State = MethodHookStateText.Of(definition.State),
                         Note = "Would compile the new callback source when present and swap this definition's capture and callback configuration without reinstalling the target patch."
@@ -669,7 +1022,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "method-hook.enable",
+                        Type = "debug.hook.enable",
                         HookId = definition.HookId,
                         State = MethodHookStateText.Of(definition.State),
                         Note = plan.NoOp
@@ -695,7 +1048,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "method-hook.disable",
+                        Type = "debug.hook.disable",
                         HookId = definition.HookId,
                         State = MethodHookStateText.Of(definition.State),
                         Note = plan.NoOp
@@ -723,7 +1076,7 @@ namespace UnityCli
                 {
                     new MethodHookPlannedEffect
                     {
-                        Type = "method-hook.remove",
+                        Type = "debug.hook.remove",
                         HookId = definition.HookId,
                         State = "planned",
                         Note = remaining == 0

@@ -1,10 +1,9 @@
 ---
 description: 以陌生 AI 身份仅凭公开 CLI 完成真实 Unity 任务，验证能力是否易发现、易理解且可一次正确使用
 display_name: UnityCLI 陌生 AI 门禁
-model: LMD/deepseek-v4-flash
+model: LMD/aliyun-deepseek-v4.1-flash
 thinking: high
-tools: "ext:windows-pwsh/pwsh"
-extensions: windows-pwsh
+tools: pwsh
 skills: false
 prompt_mode: replace
 inherit_context: false

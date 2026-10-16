@@ -112,14 +112,14 @@ namespace UnityCli.Tests
         public void ProjectionStaysBoundedAndNeverTraversesArbitraryObjects()
         {
             var truncation = new MethodHookProjection.Truncation();
-            var huge = new string('x', MethodHookLimits.MaxProjectionStringBytes + 128);
+            var huge = new string('x', DebugLimits.MaxProjectionStringBytes + 128);
             var projectedString = MethodHookProjection.Project(huge, truncation);
             Assert.That(truncation.Truncated, Is.True);
             Assert.That(projectedString, Is.Not.Null);
 
             var deep = new Dictionary<string, object>();
             var cursor = deep;
-            for (var index = 0; index < MethodHookLimits.MaxProjectionDepth + 4; index++)
+            for (var index = 0; index < DebugLimits.MaxProjectionDepth + 4; index++)
             {
                 var child = new Dictionary<string, object>();
                 cursor["level" + index] = child;
@@ -129,11 +129,11 @@ namespace UnityCli.Tests
             Assert.DoesNotThrow(() => MethodHookProjection.Project(deep, projection));
             Assert.That(projection.Truncated, Is.True);
 
-            var wide = Enumerable.Range(0, MethodHookLimits.MaxProjectionItems + 16).Cast<object>().ToList();
+            var wide = Enumerable.Range(0, DebugLimits.MaxProjectionItems + 16).Cast<object>().ToList();
             var wideProjection = new MethodHookProjection.Truncation();
             var projectedWide = MethodHookProjection.Project(wide, wideProjection) as IList<object>;
             Assert.That(projectedWide, Is.Not.Null);
-            Assert.That(projectedWide.Count, Is.LessThanOrEqualTo(MethodHookLimits.MaxProjectionItems));
+            Assert.That(projectedWide.Count, Is.LessThanOrEqualTo(DebugLimits.MaxProjectionItems));
             Assert.That(wideProjection.Truncated, Is.True);
 
             var delegateValue = new Action(() => { });
@@ -163,7 +163,7 @@ namespace UnityCli.Tests
 
             var depth = new Dictionary<string, object>();
             var cursor = depth;
-            for (var index = 0; index < MethodHookLimits.MaxStateDepth + 3; index++)
+            for (var index = 0; index < DebugLimits.MaxStateDepth + 3; index++)
             {
                 var child = new Dictionary<string, object>();
                 cursor["level" + index] = child;
@@ -172,95 +172,29 @@ namespace UnityCli.Tests
             var depthFailure = Assert.Throws<UnityCliBridge.BridgeCommandException>(() => bag["deep"] = depth);
             Assert.That(depthFailure.Code, Is.EqualTo("E_HOOK_LIMIT_EXCEEDED"));
 
-            var byteFailure = Assert.Throws<UnityCliBridge.BridgeCommandException>(() => bag["huge"] = new string('y', MethodHookLimits.MaxStateBytes));
+            var byteFailure = Assert.Throws<UnityCliBridge.BridgeCommandException>(() => bag["huge"] = new string('y', DebugLimits.MaxStateBytes));
             Assert.That(byteFailure.Code, Is.EqualTo("E_HOOK_LIMIT_EXCEEDED"));
             Assert.That(bag.ContainsKey("huge"), Is.False, "a rejected write must not leave a partial entry");
         }
 
         [Test]
-        public void EventBufferAssignsSequencesTrimsOldestAndReportsGaps()
-        {
-            var buffer = new MethodHookEventBuffer();
-            for (var index = 0; index < 5; index++) buffer.Append(Record("hook-a", "prefix", index));
-            Assert.That(buffer.LastSequence, Is.EqualTo(5));
-            Assert.That(buffer.Count, Is.EqualTo(5));
-
-            var page = buffer.Read(new MethodHookEventFilter(), null, "session-test", 3);
-            Assert.That(page.Records.Select(record => record.Sequence), Is.EqualTo(new long[] { 3, 4, 5 }));
-            Assert.That(page.HasMore, Is.False);
-            Assert.That(page.NextScannedSequence, Is.EqualTo(5));
-
-            var filtered = buffer.Read(new MethodHookEventFilter { Kind = "postfix" }, null, "session-test", 10);
-            Assert.That(filtered.Records, Is.Empty);
-
-            buffer.RecordGap(10, 12, "checkpoint-missing");
-            Assert.That(buffer.Gaps.Count, Is.EqualTo(1));
-            Assert.That(buffer.Gaps[0].FromSequence, Is.EqualTo(10));
-        }
-
-        [Test]
-        public void EventCursorContinuesAfterTheLastScannedSequenceAndRejectsStaleScopes()
-        {
-            var buffer = new MethodHookEventBuffer();
-            for (var index = 0; index < 6; index++) buffer.Append(Record("hook-a", index % 2 == 0 ? "prefix" : "custom", index));
-            var filter = new MethodHookEventFilter { HookId = "hook-a" };
-            var start = buffer.BeginCursor(filter, "session-test");
-
-            buffer.Append(Record("hook-a", "prefix", 6));
-            var first = buffer.Read(filter, start, "session-test", 2);
-            Assert.That(first.Records.Count, Is.EqualTo(1), "only the newly appended record is after the install cursor");
-            Assert.That(first.Records[0].Sequence, Is.EqualTo(7));
-            Assert.That(first.HasMore, Is.False);
-
-            var next = new MethodHookEventCursor { EditorSessionId = "session-test", ScopeHash = filter.ScopeKey("session-test"), ScannedSequence = first.NextScannedSequence }.Encode();
-            var second = buffer.Read(filter, next, "session-test", 2);
-            Assert.That(second.Records, Is.Empty, "a cursor that already scanned the tail must not repeat records");
-
-            var otherFilter = new MethodHookEventFilter { Kind = "custom" };
-            var changedFilter = Assert.Throws<MethodHookCursorException>(() => buffer.Read(otherFilter, next, "session-test", 2));
-            Assert.That(changedFilter.Code, Is.EqualTo("E_CONTINUATION_STALE"));
-
-            var otherSession = Assert.Throws<MethodHookCursorException>(() => buffer.Read(filter, next, "session-other", 2));
-            Assert.That(otherSession.Code, Is.EqualTo("E_CONTINUATION_STALE"));
-        }
-
-        [Test]
-        public void EventCursorOlderThanTheRetainedWindowFailsWithTheReadableStart()
-        {
-            var seeded = new MethodHookEventBuffer();
-            for (var index = 0; index < 6; index++) seeded.Append(Record("hook-a", "prefix", index));
-            var retained = seeded.Snapshot().Skip(3).ToList();
-
-            var buffer = new MethodHookEventBuffer();
-            buffer.Restore(retained, 6, null);
-            Assert.That(buffer.OldestAvailableSequence, Is.EqualTo(3), "the readable start follows the oldest retained record");
-
-            var page = buffer.Read(new MethodHookEventFilter(), null, "session-test", 2);
-            Assert.That(page.Records.Select(record => record.Sequence), Is.EqualTo(new long[] { 5, 6 }));
-
-            var expired = new MethodHookEventCursor { EditorSessionId = "session-test", ScopeHash = new MethodHookEventFilter().ScopeKey("session-test"), ScannedSequence = 0 }.Encode();
-            var failure = Assert.Throws<MethodHookCursorException>(() => buffer.Read(new MethodHookEventFilter(), expired, "session-test", 2));
-            Assert.That(failure.Code, Is.EqualTo("E_HOOK_EVENT_CURSOR_EXPIRED"));
-        }
-
-        [Test]
         public void SessionScopedStoreKeysRoundTripWithinOneEditorStart()
         {
-            var previousFloor = MethodHookStore.EventFloor();
-            var previousSuppression = MethodHookStore.LoadSuppression();
+            var previousFloor = DebugStore.EventFloor();
+            var previousSuppression = DebugStore.LoadSuppression();
             try
             {
-                MethodHookStore.SetEventFloor(4321);
-                Assert.That(MethodHookStore.EventFloor(), Is.EqualTo(4321));
-                MethodHookStore.SaveSuppression(new Dictionary<string, string> { { "hook-1", "state save failed" } });
-                var suppression = MethodHookStore.LoadSuppression();
+                DebugStore.SetEventFloor(4321);
+                Assert.That(DebugStore.EventFloor(), Is.EqualTo(4321));
+                DebugStore.SaveSuppression(new Dictionary<string, string> { { "hook-1", "state save failed" } });
+                var suppression = DebugStore.LoadSuppression();
                 Assert.That(suppression.ContainsKey("hook-1"), Is.True);
                 Assert.That(suppression["hook-1"], Does.Contain("state save failed"));
             }
             finally
             {
-                MethodHookStore.SetEventFloor(previousFloor);
-                MethodHookStore.SaveSuppression(previousSuppression);
+                DebugStore.SetEventFloor(previousFloor);
+                DebugStore.SaveSuppression(previousSuppression);
             }
         }
 
@@ -287,7 +221,7 @@ namespace UnityCli.Tests
 
             long bytes = 0;
             foreach (var entry in kept) bytes += System.Text.Encoding.UTF8.GetByteCount(UnityCliSerializer.Serialize(entry));
-            Assert.That(bytes, Is.LessThanOrEqualTo(MethodHookLimits.MaxCheckpointEventBytes), "the checkpoint must stay inside its byte budget");
+            Assert.That(bytes, Is.LessThanOrEqualTo(DebugLimits.MaxCheckpointEventBytes), "the checkpoint must stay inside its byte budget");
             Assert.That((long)kept[kept.Count - 1]["sequence"], Is.EqualTo((long)snapshot[snapshot.Count - 1]["sequence"]), "the newest event must be retained");
             Assert.That((long)kept[0]["sequence"], Is.EqualTo((long)snapshot[snapshot.Count - kept.Count]["sequence"]), "the oldest retained event must be contiguous with the tail");
         }
@@ -295,38 +229,24 @@ namespace UnityCli.Tests
         [Test]
         public void ReadBudgetMemberCountsMatchThePublicDtos()
         {
-            Assert.That(UnityCliSchemaDeriver.SerializableMembers(typeof(MethodHookEventItem)).Count, Is.EqualTo(MethodHookLimits.EventItemMembers),
+            Assert.That(UnityCliSchemaDeriver.SerializableMembers(typeof(DebugEventItem)).Count, Is.EqualTo(DebugLimits.EventItemMembers),
                 "the events read budget is derived from EventItemMembers and must track the DTO");
-            Assert.That(UnityCliSchemaDeriver.SerializableMembers(typeof(MethodHookListItem)).Count, Is.EqualTo(MethodHookLimits.ListItemMembers),
+            Assert.That(UnityCliSchemaDeriver.SerializableMembers(typeof(MethodHookListItem)).Count, Is.EqualTo(DebugLimits.ListItemMembers),
                 "the list read budget is derived from ListItemMembers and must track the DTO");
-            Assert.That(MethodHookLimits.EventPageGetters(MethodHookLimits.EventsMaxLimit), Is.LessThanOrEqualTo(UnityCliRequestBudget.AbsoluteMaxGetters),
+            Assert.That(DebugLimits.EventPageGetters(DebugLimits.EventsMaxLimit), Is.LessThanOrEqualTo(UnityCliRequestBudget.AbsoluteMaxGetters),
                 "a full events page must stay inside the absolute read budget");
-            Assert.That(MethodHookLimits.ListPageGetters(MethodHookLimits.ListMaxLimit), Is.LessThanOrEqualTo(UnityCliRequestBudget.AbsoluteMaxGetters),
+            Assert.That(DebugLimits.ListPageGetters(DebugLimits.ListMaxLimit), Is.LessThanOrEqualTo(UnityCliRequestBudget.AbsoluteMaxGetters),
                 "a full list page must stay inside the absolute read budget");
         }
 
         [Test]
         public void LimitsSummaryStaysSingleSourcedAndBounded()
         {
-            var summary = MethodHookLimits.Summary();
-            Assert.That(summary, Does.Contain(MethodHookLimits.MaxDefinitionsPerSession.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            Assert.That(summary, Does.Contain(MethodHookLimits.MaxCompiledArtifacts.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            Assert.That(summary, Does.Contain(MethodHookLimits.RecoveryBudgetSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            var summary = DebugLimits.Summary();
+            Assert.That(summary, Does.Contain(DebugLimits.MaxDefinitionsPerSession.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            Assert.That(summary, Does.Contain(DebugLimits.MaxCompiledArtifacts.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            Assert.That(summary, Does.Contain(DebugLimits.RecoveryBudgetSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
 
-        private static MethodHookEventRecord Record(string hookId, string kind, int payload)
-        {
-            return new MethodHookEventRecord
-            {
-                HookId = hookId,
-                Revision = 1,
-                Kind = kind,
-                PlaySessionId = "play-1",
-                ClockSegment = "play-1:seg-1",
-                Frame = payload,
-                Name = kind,
-                Value = payload
-            };
-        }
     }
 }

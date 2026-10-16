@@ -59,13 +59,13 @@ Bridge and Skill installation are independent effects. The CLI is non-interactiv
 
 The Bridge source is the npm-local canonical `unitypkg`. `contracts/package-files.json` fixes every managed path, size, SHA-256, and the complete tree hash. Installation validates the source before planning and again before effect, publishes through staging/rename, and proves the target from fresh filesystem readback.
 
-UnityCLI carries no private Roslyn assemblies. `code.execute` and live method-hook callbacks share one dynamic code compiler owner that invokes the current Unity Editor's bounded Mono/csc subprocess, keeps one active compilation at a time, and always names its fixed temporary files under `Library/UnityCli/code-exec-temp`. `contracts/package-assembly-closure.json` fixes this boundary and the single bundled precompiled assembly that the package must own. `UnityCli.Editor` keeps `overrideReferences: true` with no precompiled project reference: the Bridge never binds Newtonsoft types at compile time and resolves them by assembly identity at runtime, so the project or the Editor decides which provider supplies JSON.NET.
+UnityCLI carries no private Roslyn assemblies. `debug.code.execute` and live method-hook callbacks share one dynamic code compiler owner that invokes the current Unity Editor's bounded Mono/csc subprocess, keeps one active compilation at a time, and always names its fixed temporary files under `Library/UnityCli/code-exec-temp`. `contracts/package-assembly-closure.json` fixes this boundary and the single bundled precompiled assembly that the package must own. `UnityCli.Editor` keeps `overrideReferences: true` with no precompiled project reference: the Bridge never binds Newtonsoft types at compile time and resolves them by assembly identity at runtime, so the project or the Editor decides which provider supplies JSON.NET.
 
 The bundled Harmony dependency is declared in the same closure contract together with the Editor-only hook backend asmdef, its exact precompiled reference, its references and its Harmony owner id. The backend assembly is not auto-referenced by project assemblies and contributes no public Tool: it only attaches and removes this CLI's own method patches. A missing or replaced dependency fails closed for the hook capability and does not take down the listener, the Tool catalog or state observation.
 
 ## Live Method Hooks
 
-The `method-hook` group hosts one capability family: install, replace, enable, disable and remove definitions, plus read-only list, info and bounded event reads. It reuses the existing Tool catalog, dispatcher, admission, completion and envelope; no separate transport or second descriptor exists.
+The `debug` group's hook family installs, replaces, enables, disables and removes definitions, plus read-only list, info and bounded event reads. It reuses the existing Tool catalog, dispatcher, admission, completion and envelope; no separate transport or second descriptor exists.
 
 Domain vocabulary is fixed in `CONTEXT.md`. Four boundaries follow from it:
 
@@ -74,7 +74,7 @@ Domain vocabulary is fixed in `CONTEXT.md`. Four boundaries follow from it:
 - A Hook Invocation is one intercepted call. Installing a definition and observing a call are different facts, and a managed call site compiled before the patch keeps the original behaviour.
 - A Hook Event is a bounded business record with its own cursor semantics. Events are evicted by count and byte budgets, gaps are reported explicitly, and event reads never delete records or consume another reader's cursor.
 
-Definitions, faults and buffered events are checkpointed into fixed files under `Library\UnityCli\method-hooks\`, published through the shared atomic replacement helper and accepted by a later domain only for the same Editor session and matching checkpoint identity. Recovery suppression for faulted or unsaved definitions lives in session state, so it survives a domain reload within one Editor start and disappears with the process.
+Definitions, faults and buffered events are checkpointed by the single debug store owner into fixed files under `Library\UnityCli\debug\`, published through the shared atomic replacement helper and accepted by a later domain only for the same Editor session and a matching payload checksum. Recovery suppression and the event sequence floor live in debug-domain session state keys that record the Editor session that wrote them, so they survive a domain reload within one Editor start and disappear with the process. A recipe export is a read-only snapshot of the current definition publication: it writes no file, later cursors read the same snapshot, and the session's earlier snapshot is replaced and its cursors invalidated by the next export.
 
 A hook hit never occupies a request. Installing a definition releases admission, the mutation lease and the request cancellation token as soon as its observed terminal is published, and later callbacks run under the definition's own authorization rather than a completed request.
 
@@ -94,7 +94,19 @@ conflict
 
 The current Unity writer replaces unusable prior state with its current identity and connection, then publishes `transitioning` before `ready`. CLI calls wait within their existing deadline when the selected Unity process is starting or changing connections. Live catalog discovery freezes exact session/listener provenance for the top-level invocation and root admission; a changed generation before the first business POST fails closed. Historical cleanup remains writer-owned: automatic cleanup and `instances prune` share one globally serialized, bounded retention function.
 
-A live mutation can continue across a reload only while the same Editor session owns the exact request. After the first mutation POST, a changed Editor session forbids redelivery. Timeout or disconnect before a trusted terminal response is outcome unknown.
+A live mutation can continue across a reload only while the same Editor session owns the exact request. After the first mutation POST, a changed session forbids redelivery. Timeout or disconnect before a trusted terminal response is outcome unknown.
+
+### Main-Thread Pause Control Channel
+
+A `pause` breakpoint stops the hit thread at its own call boundary. When that thread is the main thread, the normal Bridge queue can no longer take execution, so every business request would wait until its deadline. The pause control channel exists to keep the Editor inspectable and releasable instead:
+
+- The channel is published at bridge startup, before the listener accepts requests and therefore before any pause resource can be installed. A pause breakpoint is refused with `E_DEBUG_CONTROL_PLANE_UNAVAILABLE` while it is unpublished, because such a site would have no reachable release path.
+- While a main-thread pause is published, an incoming request is classified by a frozen allowlist. Reachable Read tools, the pause tools, discovery/describe, and `pauseId`-scoped value operations are served on the requesting thread itself, and their success reply is the same `result`-wrapped terminal the normal `catalog.editor.run` path produces, so the CLI projects it identically. Everything else returns `E_DEBUG_MAIN_THREAD_PAUSED` before any effect, with `pauseId`, `timeoutKind`, `remainingMs` and resume/list routing.
+- The channel is the only thing the paused thread services: a bounded on-site mailbox that executes one `inspect`, `evaluate` or `pauseId`-scoped value operation at a time on the paused thread and then returns to waiting. It never pumps Unity messages, business frames or general CLI mutations, and it registers no update callback.
+- Release and the bounded timeout never depend on the normal Editor update: the paused thread polls its own signal, so resume is never queued behind waiting requests. Only the paused thread's own code returning can end a running synchronous evaluation; otherwise the caller gets `pending` and the site stays held.
+- The single compiler owner advances csc on the paused thread through the `PauseService` lane, which is mutually exclusive with the main-thread tick lane. If the compiler is temporarily owned elsewhere, the evaluation returns `E_UNITY_BUSY` within a bounded budget, keeps the site, and still allows `inspect` and `resume`.
+
+The pause publication, transport identity and the normal main-thread pulse are three separate pieces of evidence. Health reports the current live pause publication under `mainThread.debugPause`; the pause never writes the pulse, and no file is ever used to claim a deliberate pause.
 
 ## Safety And Authorization
 

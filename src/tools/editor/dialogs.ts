@@ -22,7 +22,7 @@ export default defineTool<EditorDialogsRequest, EditorDialogsResult>({
 
 /** 只观察选定 Editor 的当前模态窗口，不执行桌面操作。 */
 export async function readEditorDialogs(request: EditorDialogsRequest, context: ToolContext): Promise<EditorDialogsResult> {
-  if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "UnityCLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <instanceId|projectPath|alias> or run from a Unity project directory."]);
+  if (!context.dataDir) throw new StructuredToolError("E_INSTANCE_NOT_FOUND", "UnityCLI data directory is required to resolve the selected Editor instance.", ["Pass --instance <name|alias|projectPath> or run from a Unity project directory."]);
   const deadlineMs = Math.min(Date.now() + 10_000, context.absoluteDeadlineMs ?? Number.POSITIVE_INFINITY);
   let instance;
   try { instance = (await selectObservationInstanceForFlags(context.flags ?? {}, context.dataDir, Math.max(0, deadlineMs - Date.now()))).instance; }

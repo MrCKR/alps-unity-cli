@@ -17,7 +17,13 @@
     {"text": "这个 Unity 场景里的灯光为什么没有生效？", "family": "cn_live_observation"},
     {"text": "帮我修改 Unity 的 PlayerController.cs，不需要打开 Editor。", "family": "cn_unity_source"},
     {"text": "检查 Prefab、Asset 导入和当前 PlayMode 状态。", "family": "cn_editor_state"},
-    {"text": "用 Unity Editor 运行一次构建并验证输出。", "family": "cn_build"}
+    {"text": "用 Unity Editor 运行一次构建并验证输出。", "family": "cn_build"},
+    {"text": "暂停 Unity 主线程，读取这个方法被调用时的参数。", "family": "debug_pause"},
+    {"text": "这个方法为什么没有按预期修改血量字段？请在已打开的 Unity Editor 里证明。", "family": "debug_observation"},
+    {"text": "在 Unity 里给这个方法加一个监听，记录每次调用的参数和返回值。", "family": "debug_hook"},
+    {"text": "证明我这次在 Unity 里按下的键确实被游戏逻辑接受了。", "family": "debug_acceptance"},
+    {"text": "导出这次 Unity 调查的配置，重启 Editor 后重新加载它。", "family": "debug_recipe"},
+    {"text": "这次 Unity 运行的结果可信吗？请给出结论和依据。", "family": "debug_verdict"}
   ],
   "should_not_trigger": [
     {"text": "Fix the React state update in this web dashboard.", "family": "web"},
@@ -29,11 +35,13 @@
     {"text": "Update the Kubernetes deployment manifest.", "family": "infrastructure"},
     {"text": "Write a SQL query for monthly revenue.", "family": "data"},
     {"text": "修复这个 Vue 页面里的表单校验。", "family": "cn_web"},
-    {"text": "解释普通 C# 控制台程序的 async await。", "family": "cn_dotnet"}
+    {"text": "解释普通 C# 控制台程序的 async await。", "family": "cn_dotnet"},
+    {"text": "在 Visual Studio 里给这个普通 C# 控制台程序加一个断点。", "family": "ide_debugger"}
   ],
   "near_neighbor": [
     {"text": "Compare several 3D game engines without choosing one.", "family": "game_engine_general"},
     {"text": "Review a generic C# math library used by several applications.", "family": "generic_csharp"},
-    {"text": "Design gameplay rules on paper without using any engine.", "family": "game_design"}
+    {"text": "Design gameplay rules on paper without using any engine.", "family": "game_design"},
+    {"text": "Read a .trace file that another profiler exported for a non-Unity service.", "family": "external_trace"}
   ]
 }

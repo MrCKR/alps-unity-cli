@@ -1398,7 +1398,7 @@ namespace UnityCli
         /// <summary>root观察不确定时用队列冻结身份建立可执行Recovery marker；候选缺失时继续保留WorkItem。</summary>
         private static AdmissionTransferResult PersistWorkItemRecoveryAfterTransferFailure(BridgeQueueState state, BridgeWorkItem item, AdmissionOwnerIdentity identity, string command, string response)
         {
-            if (identity == null || (!AdmissionDurableRootCommand(command) && command != "catalog.editor.run" && command != "code.execute"))
+            if (identity == null || (!AdmissionDurableRootCommand(command) && command != "catalog.editor.run" && command != "debug.code.execute"))
                 return AdmissionTransferResult.TransferPending;
             try
             {
@@ -1439,7 +1439,7 @@ namespace UnityCli
         private static AdmissionTransferResult TransferAdmissionAfterAcceptedWork(BridgeQueueState state, BridgeWorkItem item, AdmissionOwnerIdentity identity, string command, string response)
         {
             if (identity == null) return AdmissionTransferResult.NotAccepted;
-            var directMutation = command == "catalog.editor.run" || command == "code.execute";
+            var directMutation = command == "catalog.editor.run" || command == "debug.code.execute";
             if (!AdmissionDurableRootCommand(command) && !directMutation) return AdmissionTransferResult.NotAccepted;
             string markerScope;
             string rootScope;
@@ -1733,7 +1733,7 @@ namespace UnityCli
                     if (command == "internal.test.run.cancel") return false;
                     bool ownsLease;
                     if (!queueState.TryIsLeaseOwned(identity.RequestId, identity.RequestDigest, out ownsLease)) return false;
-                    if (command == "catalog.editor.run" || command == "code.execute")
+                    if (command == "catalog.editor.run" || command == "debug.code.execute")
                     {
                         durable = ownsLease;
                         return true;
@@ -1769,7 +1769,7 @@ namespace UnityCli
         /// <summary>deadline之后仍允许同字节direct request读取已发布terminal，不入队也不重新占slot。</summary>
         private static string AdmissionRecoveredDirectTerminal(UnityCli.Protocol.BridgeRequest request, byte[] rawRequestBytes)
         {
-            if (request == null || rawRequestBytes == null || (request.Command != "code.execute" && request.Command != "catalog.editor.run")) return null;
+            if (request == null || rawRequestBytes == null || (request.Command != "debug.code.execute" && request.Command != "catalog.editor.run")) return null;
             var digest = UnityCliRequestDigest.Compute(rawRequestBytes, request.InstanceId);
             object terminal;
             if (!UnityCliActiveOperation.TryGetTerminal("direct-mutation", request.RequestId, digest, out terminal)) return null;
@@ -1802,7 +1802,7 @@ namespace UnityCli
                 case "internal.navmesh.bake.start": return "navmesh-bake";
                 case "internal.occlusion.bake.start": return "occlusion-bake";
                 case "catalog.editor.run":
-                case "code.execute":
+                case "debug.code.execute":
                     return "direct-mutation";
                 default:
                     return null;
@@ -1833,7 +1833,7 @@ namespace UnityCli
                 || command == "internal.package.embed.start" || command == "internal.package.resolve.start"
                 || command == "internal.test.run.start" || command == "internal.test.run.cancel"
                 || command == "internal.navmesh.bake.start" || command == "internal.occlusion.bake.start"
-                || command == "catalog.editor.run" || command == "code.execute";
+                || command == "catalog.editor.run" || command == "debug.code.execute";
         }
 
         private static string AdmissionAcceptedTopDigest(BridgeQueueState state, string response, AdmissionOwnerIdentity identity, string command)
@@ -1867,7 +1867,7 @@ namespace UnityCli
                 || UnityCliPackageEmbedCoordinator.IsCommand(command) || UnityCliPackageResolveCoordinator.IsCommand(command)
                 || UnityCliTestRunCoordinator.IsCommand(command) || UnityCliNavMeshBakeCoordinator.IsCommand(command)
                 || UnityCliOcclusionBakeCoordinator.IsCommand(command)
-                || command == "catalog.editor.run" || command == "code.execute";
+                || command == "catalog.editor.run" || command == "debug.code.execute";
         }
 
         private static bool AdmissionBypassCommand(string command)

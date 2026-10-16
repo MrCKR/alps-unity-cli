@@ -33,7 +33,7 @@ test("cross-domain new tools keep contract entries with present C# handlers", ()
     "game-object.set-parent", "prefab.instantiate", "prefab.unpack",
     "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.preview",
     "shader.list", "shader.get-data", "texture.generate",
-    "console.read", "console.clear", "editor.selection.set", "editor.active-tool.set",
+    "debug.console.read", "debug.console.clear", "editor.selection.set", "editor.active-tool.set",
     "build.scene.list", "build.scene.add", "build.scene.remove", "build.scene.enable", "build.scene.disable",
     "build.platform.get", "build.platform.set", "build.profile.list", "build.profile.create", "build.profile.switch", "build.profile.modify", "build.settings.get", "build.settings.set",
     "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
@@ -64,7 +64,7 @@ test("asset/search scene/hierarchy game-object.find and editor/console sources k
   const assetSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/AssetToolSupport.cs", import.meta.url), "utf8");
   const sceneSource = await readCsSources(new URL("../unitypkg/Editor/Tools/scene/", import.meta.url));
   const goSource = await readCsSources(new URL("../unitypkg/Editor/Tools/game-object/", import.meta.url));
-  const consoleSource = await readFile(new URL("../unitypkg/Editor/Tools/console/read.cs", import.meta.url), "utf8");
+  const consoleSource = await readFile(new URL("../unitypkg/Editor/Tools/debug/console/read.cs", import.meta.url), "utf8");
   const menuSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/menu.cs", import.meta.url), "utf8");
 
   assert.match(assetSource, /AssetToolSupport\.NormalizeAssetSearchFolders\(request\.Path, request\.SearchInFolders\)/);
@@ -194,7 +194,7 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
 
     ["shader", "list", "catalog.editor.run"],
     ["texture", "generate", "catalog.editor.run"],
-    ["console", "read", "catalog.editor.run", "console.read"],
+    ["debug", "console.read", "catalog.editor.run", "debug.console.read"],
 
     ["editor", "selection.set", "catalog.editor.run"],
     ["build", "scene.list", "catalog.editor.run"],

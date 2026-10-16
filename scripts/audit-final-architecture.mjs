@@ -574,7 +574,7 @@ checks.push({
 const internalMetaRoutes = new Set([
   "catalog.editor.health", "catalog.editor.groups", "catalog.editor.summary", "catalog.editor.describe", "catalog.editor.list", "catalog.editor.run",
   "catalog.player.groups", "catalog.player.summary", "catalog.player.describe", "catalog.player.list", "catalog.player.run",
-  "code.execute"
+  "debug.code.execute"
 ]);
 const contractCsharpTools = new Set(contract.commands
   .filter((entry) => entry.csharp_handler === "present" && !internalMetaRoutes.has(entry.bridgeCommand))

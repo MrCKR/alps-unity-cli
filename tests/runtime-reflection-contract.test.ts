@@ -9,17 +9,17 @@ import { contractToolNames, discoverLiveTools, readEditorCsSources } from "./hel
 /** Reflection 域契约测试：descriptor 改走 live discovery。 */
 
 test("runtime-reflection group tools exist with correct live descriptor hints", async () => {
-  assert.deepEqual(contractToolNames("runtime-reflection"), ["runtime-reflection.method.find", "runtime-reflection.method.invoke", "runtime-reflection.type.schema"]);
+  assert.deepEqual(contractToolNames("debug").filter((name) => name.startsWith("debug.method.") || name.startsWith("debug.type.")), ["debug.method.find", "debug.method.invoke", "debug.type.schema"]);
 
   const tools = await discoverLiveTools(
-    makeLiveTool({ name: "runtime-reflection.method.find", summary: "Find reflected methods.", description: "Find reflected methods.", group: "runtime-reflection" }),
-    makeLiveTool({ name: "runtime-reflection.method.invoke", summary: "Invoke a reflected method.", description: "Invoke a reflected method; --dry-run previews supported calls.", group: "runtime-reflection", destructiveHint: true, supportsDryRun: true, permissions: ["arbitrary-method-invocation"] })
+    makeLiveTool({ name: "debug.method.find", summary: "Find reflected methods.", description: "Find reflected methods.", group: "debug" }),
+    makeLiveTool({ name: "debug.method.invoke", summary: "Invoke a reflected method.", description: "Invoke a reflected method; --dry-run previews supported calls.", group: "debug", destructiveHint: true, supportsDryRun: true, permissions: ["arbitrary-method-invocation"] })
   );
 
-  const find = tools.get("runtime-reflection.method.find")!;
+  const find = tools.get("debug.method.find")!;
   assert.equal(find.destructiveHint, false);
 
-  const call = tools.get("runtime-reflection.method.invoke")!;
+  const call = tools.get("debug.method.invoke")!;
   assert.equal(call.destructiveHint, true);
   assert.equal(call.riskLevel, "critical");
   assert.equal(call.supportsDryRun, true);
@@ -27,19 +27,19 @@ test("runtime-reflection group tools exist with correct live descriptor hints", 
   assert.doesNotMatch(call.description, /securityProof/i);
 });
 
-test("runtime-reflection.type.schema tool exists as live-discovered read-only bridge descriptor", async () => {
+test("debug.type.schema tool exists as live-discovered read-only bridge descriptor", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({
-      name: "runtime-reflection.type.schema",
+      name: "debug.type.schema",
       summary: "Generate a JSON schema for a C# type.",
       description: "Generate a JSON schema including enum, generic, and $defs references.",
-      group: "runtime-reflection",
+      group: "debug",
       inputSchema: { type: "object", properties: {} },
       outputSchema: { type: "object", properties: { definitionCount: { type: "integer" } } }
     })
   );
-  const schema = tools.get("runtime-reflection.type.schema")!;
-  assert.equal(schema.group, "runtime-reflection");
+  const schema = tools.get("debug.type.schema")!;
+  assert.equal(schema.group, "debug");
   assert.equal(schema.destructiveHint, false);
   assert.equal(schema.handler, "bridge");
   assert.match(schema.description, /enum/);
@@ -48,27 +48,27 @@ test("runtime-reflection.type.schema tool exists as live-discovered read-only br
   assert.match(JSON.stringify(schema.outputSchema), /definitionCount/);
 });
 
-test("runtime-reflection.method.invoke supports instanceRef without confirmation state", async () => {
+test("debug.method.invoke supports instanceRef without confirmation state", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({
-      name: "runtime-reflection.method.invoke",
+      name: "debug.method.invoke",
       summary: "Invoke a reflected method.",
       description: "Invoke a reflected method; --dry-run previews supported calls.",
-      group: "runtime-reflection",
+      group: "debug",
       destructiveHint: true,
       supportsDryRun: true,
       permissions: ["arbitrary-method-invocation"],
       inputSchema: { type: "object", properties: { instanceRef: { type: "string" } } }
     })
   );
-  const call = tools.get("runtime-reflection.method.invoke")!;
+  const call = tools.get("debug.method.invoke")!;
   const props = call.inputSchema.properties as Record<string, unknown>;
   assert.ok(props.instanceRef);
   assert.equal(props.security, undefined);
 });
 
-test("runtime-reflection.method.invoke example is executable and overload selection is explicit", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/runtime-reflection/method/invoke.cs", import.meta.url), "utf8");
+test("debug.method.invoke example is executable and overload selection is explicit", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/debug/method/invoke.cs", import.meta.url), "utf8");
   const reflection = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliReflection.cs", import.meta.url), "utf8");
   assert.match(source, /TypeName = "UnityEngine\.Mathf", MethodName = "Abs"/);
   assert.match(source, /ParameterTypes = new List<string> \{ "System\.Single" \}/);
@@ -83,7 +83,7 @@ test("runtime-reflection.method.invoke example is executable and overload select
   assert.match(reflection, /E_METHOD_INVOCATION_FAILED/);
   assert.doesNotMatch(reflection, /audit\["ok"\] = false/);
   assert.doesNotMatch(reflection, /type\.GetMethod\(methodName, bindings\)/);
-  const bridge = await readFile(new URL("../src/bridge/domains/runtime-reflection.js", import.meta.url), "utf8");
+  const bridge = await readFile(new URL("../src/bridge/domains/debug.js", import.meta.url), "utf8");
   assert.match(bridge, /parameterTypes: structured\.parameterTypes/);
   assert.match(bridge, /completionProbe: structured\.completionProbe/);
   assert.doesNotMatch(bridge, /security: structured\.security/);
@@ -107,30 +107,30 @@ test("reflection probe bake requires Unity output and a readable cubemap artifac
 });
 
 test("bridge specs resolve for runtime-reflection tools", () => {
-  const methodFind = bridgeCommandRegistry.lookup("runtime-reflection", "method.find");
+  const methodFind = bridgeCommandRegistry.lookup("debug", "method.find");
   assert.equal(methodFind?.bridgeCommand, "catalog.editor.run");
-  const methodCall = bridgeCommandRegistry.lookup("runtime-reflection", "method.invoke");
+  const methodCall = bridgeCommandRegistry.lookup("debug", "method.invoke");
   assert.equal(methodCall?.bridgeCommand, "catalog.editor.run");
-  const typeSchema = bridgeCommandRegistry.lookup("runtime-reflection", "type.schema");
+  const typeSchema = bridgeCommandRegistry.lookup("debug", "type.schema");
   assert.equal(typeSchema?.bridgeCommand, "catalog.editor.run");
 });
 
 test("contract entries exist for runtime-reflection tools with present C# handler", () => {
-  for (const name of ["runtime-reflection.method.find", "runtime-reflection.method.invoke", "runtime-reflection.type.schema"]) {
+  for (const name of ["debug.method.find", "debug.method.invoke", "debug.type.schema"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
     assert.equal(contract?.csharp_handler, "present", `${name} should have present C# handler`);
   }
 });
 
-test("runtime-reflection.method.invoke exposes destructive metadata", () => {
-  const command = bridgeCommandRegistry.lookup("runtime-reflection", "method.invoke");
+test("debug.method.invoke exposes destructive metadata", () => {
+  const command = bridgeCommandRegistry.lookup("debug", "method.invoke");
   assert.equal(command?.destructiveHint, true);
 });
 
 test("runtime-reflection commands are exposed by typed C# tools", async () => {
   const allSource = await readEditorCsSources();
-  for (const command of ["runtime-reflection.method.find", "runtime-reflection.method.invoke", "runtime-reflection.type.schema"]) {
+  for (const command of ["debug.method.find", "debug.method.invoke", "debug.type.schema"]) {
     assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose the public tool name through IUnityCliTool`);
   }
   assert.match(allSource, /ReflectionInvoker\.FindMethods\(/);

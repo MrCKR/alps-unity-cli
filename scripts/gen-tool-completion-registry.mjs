@@ -24,14 +24,14 @@ for (const tool of inventory) {
 }
 const csharpEntries = normalized.filter((entry) => entry.descriptorOwner === "built-in" || entry.descriptorOwner.startsWith("extension:"));
 const editorCompile = normalized.find((entry) => entry.toolName === "editor.compile" && entry.descriptorOwner === "ts-local");
-const codeExec = normalized.find((entry) => entry.toolName === "code.execute" && entry.descriptorOwner === "ts-local");
+const codeExec = normalized.find((entry) => entry.toolName === "debug.code.execute" && entry.descriptorOwner === "ts-local");
 const buildRun = normalized.find((entry) => entry.toolName === "build.run" && entry.descriptorOwner === "ts-local");
 const editorRefresh = normalized.find((entry) => entry.toolName === "editor.refresh" && entry.descriptorOwner === "ts-local");
 const testRun = normalized.find((entry) => entry.toolName === "test.run" && entry.descriptorOwner === "ts-local");
 const packageOperations = ["resolve", "install", "remove", "deploy", "restore"];
 const packageRoots = packageOperations.map((operation) => normalized.find((entry) => entry.toolName === `package.${operation}` && entry.descriptorOwner === "ts-local"));
 if (!editorCompile) failures.push("TS-owned editor.compile completion contract is required by the private C# coordinator");
-if (!codeExec) failures.push("TS-owned code.execute completion contract is required by the C# coordinator");
+if (!codeExec) failures.push("TS-owned debug.code.execute completion contract is required by the C# coordinator");
 if (!buildRun) failures.push("TS-owned build.run completion contract is required by the private C# coordinator");
 if (!editorRefresh) failures.push("TS-owned editor.refresh completion contract is required by the private C# coordinator");
 if (!testRun) failures.push("TS-owned test.run completion contract is required by the private C# coordinator");

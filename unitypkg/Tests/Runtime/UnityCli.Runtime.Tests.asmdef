@@ -2,7 +2,8 @@
   "name": "UnityCli.Runtime.Tests",
   "rootNamespace": "UnityCli.Tests",
   "references": [
-    "UnityCli.Runtime"
+    "UnityCli.Runtime",
+    "UnityCli.Shared"
   ],
   "includePlatforms": [
     "Editor"

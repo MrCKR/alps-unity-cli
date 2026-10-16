@@ -93,6 +93,41 @@ namespace UnityCli.Tests
             Assert.That(((IDictionary<string, object>)secondExamples[0])["description"], Is.Not.EqualTo("mutated test copy"));
         }
 
+        /// <summary>
+        /// 目录守卫：本模块声明的每个 IUnityCliTool 都必须真的进入已发布目录，且目录里每个 Tool 的两侧
+        /// schema 都必须能重新派生。schema 派生失败会让 catalog 在构造期隔离该 Tool，于是它在公开 CLI
+        /// 上既不可发现也不可调用（describe 只报 E_TOOL_REGISTRATION_FAILED）。
+        /// </summary>
+        [Test]
+        public void EveryToolInTheEditorAssemblyBuildsItsDescriptorAndBothSchemasInThePublishedCatalog()
+        {
+            var published = Field("publishedProjectToolCatalog").GetValue(null);
+            Assert.That(published, Is.Not.Null, "the Tool catalog must be published in the current domain");
+            var executableTools = (IDictionary)Property(published, "ExecutableTools").GetValue(published);
+            var publishedNames = new HashSet<string>(executableTools.Keys.Cast<object>().Select(key => (string)key), StringComparer.Ordinal);
+            var derive = Type.GetType("UnityCli.UnityCliSchemaDeriver, UnityCli.Editor", true)
+                .GetMethod("DeriveSchema", BindingFlags.Public | BindingFlags.Static);
+
+            // ① 被隔离的 Tool 根本不在目录里；每个声明的实现都必须能在已发布名称中找到自己的 descriptor。
+            foreach (var type in ToolDeclarations())
+            {
+                var descriptor = DescriptorOf(type);
+                Assert.That(publishedNames, Does.Contain(descriptor.Name), RejectionReason(published, descriptor.Name, type));
+            }
+
+            // ② 已发布目录里每个 Tool 的 Request/Result schema 都必须能重新派生，空 schema 视为派生失败。
+            foreach (DictionaryEntry entry in executableTools)
+            {
+                var name = (string)entry.Key;
+                foreach (var side in new[] { "RequestType", "ResultType" })
+                {
+                    var dto = (Type)Property(entry.Value, side).GetValue(entry.Value);
+                    Assert.That(dto, Is.Not.Null, name + "." + side + " must be declared");
+                    AssertSchemaDerives(derive, name, side, dto);
+                }
+            }
+        }
+
         [Test]
         public void CatalogFingerprintIsCachedStableAndBindsPublishedDescriptorContent()
         {
@@ -527,6 +562,62 @@ namespace UnityCli.Tests
         }
 
         private static void StaticOfficialMethod() { }
+
+        // UnityCli.Editor 里声明的具体 Tool 实现；抽象基类与接口不是注册候选。
+        private static List<Type> ToolDeclarations()
+        {
+            var toolInterface = typeof(IUnityCliTool<,>);
+            return toolInterface.Assembly.GetTypes()
+                .Where(type => !type.IsAbstract && !type.IsInterface
+                    && type.GetInterfaces().Any(item => item.IsGenericType && item.GetGenericTypeDefinition() == toolInterface))
+                .OrderBy(type => type.FullName, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static ToolDescriptor DescriptorOf(Type type)
+        {
+            var describe = type.GetMethod("Describe", Type.EmptyTypes);
+            Assert.That(describe, Is.Not.Null, type.FullName + " must expose Describe");
+            var descriptor = describe.Invoke(Activator.CreateInstance(type), null) as ToolDescriptor;
+            Assert.That(descriptor, Is.Not.Null, type.FullName + ".Describe must return a ToolDescriptor");
+            Assert.That(descriptor.Name, Is.Not.Null, type.FullName + " must declare a Tool name");
+            Assert.That(descriptor.Name, Is.Not.Empty, type.FullName + " must declare a Tool name");
+            return descriptor;
+        }
+
+        // 派生失败把真实原因写在断言消息里，而不是变成一个裸的 TargetInvocationException。
+        private static void AssertSchemaDerives(MethodInfo derive, string toolName, string side, Type dto)
+        {
+            string schema;
+            try
+            {
+                schema = (string)derive.Invoke(null, new object[] { dto });
+            }
+            catch (TargetInvocationException exception)
+            {
+                Exception root = exception;
+                while (root.InnerException != null) root = root.InnerException;
+                Assert.Fail(toolName + " " + side + " schema cannot be derived for " + dto.FullName + ": " + root.Message);
+                return;
+            }
+            Assert.That(schema, Is.Not.Null, toolName + " " + side + " schema must derive");
+            Assert.That(schema, Is.Not.Empty, toolName + " " + side + " schema must derive");
+        }
+
+        // 被隔离时给出该名称/该实现类型的真实拒绝原因与来源，便于直接定位 DTO 或 descriptor 缺陷。
+        private static string RejectionReason(object published, string name, Type type)
+        {
+            var snapshot = Property(published, "Snapshot").GetValue(published);
+            var diagnostics = ((IEnumerable)Property(snapshot, "Diagnostics").GetValue(snapshot)).Cast<object>();
+            var matches = diagnostics
+                .Where(item => string.Equals((string)Property(item, "Name").GetValue(item), name, StringComparison.Ordinal)
+                    || string.Equals((string)Property(item, "Name").GetValue(item), type.FullName, StringComparison.Ordinal)
+                    || ((IEnumerable)Property(item, "Sources").GetValue(item)).Cast<object>().Any(source => Convert.ToString(source).Contains(type.FullName)))
+                .Select(item => (string)Property(item, "Kind").GetValue(item) + " " + (string)Property(item, "Name").GetValue(item) + ": " + (string)Property(item, "Reason").GetValue(item))
+                .ToArray();
+            return "Tool " + name + " (" + type.FullName + ") is absent from the published catalog"
+                + (matches.Length == 0 ? "; the catalog reported no diagnostic for it." : "; catalog diagnostics: " + string.Join(" | ", matches));
+        }
 
         private object ReadPublishedSnapshot()
         {

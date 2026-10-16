@@ -72,7 +72,7 @@ namespace UnityCli
                         { "target", targetRef.Path },
                         { "instanceId", targetRef.Id }
                     },
-                    new[] { "Run tools run scene.gameobject for the target and inspect console.read before retrying." });
+                    new[] { "Run tools run scene.gameobject for the target and inspect debug.console.read before retrying." });
             }
             UnityCliSceneMutation.MarkSceneDirty(scene);
             return new System.Threading.Tasks.ValueTask<Result>(new Result

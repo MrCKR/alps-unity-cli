@@ -9,6 +9,8 @@ import { StructuredToolError } from "./tools/errors.js";
 
 export interface RuntimeCodeRuntime extends BridgeRuntime {
   dataDir: string;
+  /** dispatcher 注入的持久 effect barrier：首个业务 effect 即将发生时调用，失败归因据此声明 dispatch 可能已开始。 */
+  commitEffect?: () => Promise<void>;
 }
 
 export interface RuntimeCodeRequest {
@@ -74,12 +76,14 @@ export async function executeRuntimeCode(request: RuntimeCodeRequest, runtime: R
         timeoutMs,
         args: parsedArgs,
       },
-      plannedEffects: [{ type: "code.execute", sideEffects: "user-code-not-executed" }],
+      plannedEffects: [{ type: "debug.code.execute", sideEffects: "user-code-not-executed" }],
     };
   }
 
   requireRuntimeCodeDeadline(absoluteDeadlineMs);
-  const result = await executeBridgePayload(requestId, "code.execute", payload, {
+  // 代码源读取与引用校验都已通过，真正的 Runtime Code 执行是本 Tool 的首个业务 effect。
+  await runtime.commitEffect?.();
+  const result = await executeBridgePayload(requestId, "debug.code.execute", payload, {
     instance: request.instance ?? "",
     "timeout-ms": String(timeoutMs),
     __destructiveConfirmed: true,

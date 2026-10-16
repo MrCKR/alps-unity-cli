@@ -87,7 +87,7 @@ test("canonical Tools retain every approved duplicate successor", async () => {
 test("session-mutating read-shaped Tools retain explicit side effects in canonical descriptors", async () => {
   const expected: Record<string, string[]> = {
     "asset.preview": ["asset-preview-generation", "editor-cache-write"],
-    "console.clear": ["editor-console-state"],
+    "debug.console.clear": ["editor-console-state"],
     "editor.active-tool.set": ["editor-tool-state"],
     "editor.redo": ["undo-redo-replay", "undo-stack"],
     "editor.selection.set": ["editor-selection"],

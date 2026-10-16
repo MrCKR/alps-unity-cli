@@ -102,10 +102,64 @@ namespace UnityCli.Tests
 
             public string ReadHidden() { return hidden; }
 
+            /// <summary>业务递归：每次调用都是真实调用，必须各自建立帧与事件。</summary>
+            public string Recurse(string input, int depth)
+            {
+                hits++;
+                if (depth <= 0) return "leaf:" + input;
+                return Recurse(input, depth - 1) + "|" + input;
+            }
+
             public string Boom(string input)
             {
                 hits++;
                 throw new InvalidOperationException("original-boom");
+            }
+        }
+
+        /// <summary>
+        /// pause 断点是命中行为，不是有效行为：没有捕获字段也没有回调代码时 install 预检必须拒绝，
+        /// 只有与至少一个捕获行为一起声明时才越过该要求。
+        /// 预检在 effect barrier 之前判定，因此这里只验证判定顺序与错误码，不安装真实 patch。
+        /// </summary>
+        [Test]
+        public void PauseBreakpointAloneIsRefusedByTheInstallPreflight()
+        {
+            var request = new MethodHookInstallRequest
+            {
+                Label = "pause-only",
+                Activation = "editor-and-play",
+                Target = new MethodHookTargetSpec
+                {
+                    AssemblyName = typeof(HookFixture).Assembly.GetName().Name,
+                    TypeName = typeof(HookFixture).FullName,
+                    MethodName = "Add",
+                    ParameterTypes = new List<string> { "System.Int32", "System.Int32" },
+                    ReturnType = "System.Int32",
+                    IsStatic = false
+                },
+                Breakpoint = new MethodHookBreakpointSpec
+                {
+                    Kind = DebugPauseBreakpointKinds.Pause,
+                    Position = DebugPausePositions.Prefix,
+                    PauseTimeout = new MethodHookPauseTimeoutSpec { Kind = DebugPauseTimeoutKinds.Bounded, DurationMs = 120000L }
+                }
+            };
+            var refused = Assert.Throws<UnityCliBridge.BridgeCommandException>(() => MethodHookHost.PrepareInstall(request));
+            Assert.That(refused.Code, Is.EqualTo("E_SCHEMA_INVALID"));
+            Assert.That(refused.Message, Does.Contain("at least one effective capture or callback behaviour"));
+
+            // 同一声明加上一个捕获行为后，行为要求不再拒绝它；后续失败（控制通道或 backend）不属于该要求。
+            request.Capture = new MethodHookCaptureSpec { Arguments = true };
+            try
+            {
+                var plan = MethodHookHost.PrepareInstall(request);
+                DebugPauseHost.ReleaseUncommittedPlan(plan.BreakpointPlan);
+            }
+            catch (UnityCliBridge.BridgeCommandException error)
+            {
+                Assert.That(error.Code, Is.Not.EqualTo("E_SCHEMA_INVALID"),
+                    "one capture behaviour together with the pause breakpoint must satisfy the behaviour requirement");
             }
         }
 
@@ -123,7 +177,7 @@ namespace UnityCli.Tests
 
         private static void RemoveAllOwnDefinitions()
         {
-            var list = MethodHookHost.List(new MethodHookListRequest { Limit = MethodHookLimits.ListMaxLimit });
+            var list = MethodHookHost.List(new MethodHookListRequest { Limit = DebugLimits.ListMaxLimit });
             foreach (var item in list.Items)
                 MethodHookHost.ApplyRemove(new MethodHookMutationPlan { Action = "remove", Definition = FindDefinition(item.HookId) });
         }
@@ -303,7 +357,7 @@ namespace UnityCli.Tests
             var sequenceBefore = MethodHookHost.Info(new MethodHookInfoRequest { HookId = install.HookId }).EventSummary.LatestSequence;
 
             typeof(HookFixture).GetMethod("Add").Invoke(instance, new object[] { 4, 5 });
-            var page = MethodHookHost.ReadEvents(new MethodHookEventsRequest { HookId = install.HookId, Limit = 16 });
+            var page = DebugEventStore.ReadEvents(new DebugEventsRequest { HookId = install.HookId, Limit = 16 });
             var prefix = page.Events.FindAll(item => item.Kind == "prefix");
             Assert.That(prefix.Count, Is.GreaterThan(0));
             Assert.That(prefix[prefix.Count - 1].Fields, Is.Not.Null, "captured private field must be readable");
@@ -428,7 +482,7 @@ namespace UnityCli.Tests
             var instance = new HookFixture();
             Assert.That((int)typeof(HookFixture).GetMethod("Add").Invoke(instance, new object[] { 1, 2 }), Is.EqualTo(3), "the original call must be unaffected");
 
-            var page = MethodHookHost.ReadEvents(new MethodHookEventsRequest { HookId = install.HookId, Limit = MethodHookLimits.EventsMaxLimit });
+            var page = DebugEventStore.ReadEvents(new DebugEventsRequest { HookId = install.HookId, Limit = DebugLimits.EventsMaxLimit });
             Assert.That(page.Events.FindAll(item => item.Kind == "prefix" && item.CallbackPending).Count, Is.EqualTo(1), "a call in the restoring window must be readable as callbackPending");
             Assert.That(page.Events.FindAll(item => item.Kind == "custom").Count, Is.EqualTo(0), "no callback may run while it is pending");
             definition.State = MethodHookState.Dormant;
@@ -444,7 +498,7 @@ namespace UnityCli.Tests
             Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>(), "the original exception must propagate unchanged");
             Assert.That(failure.InnerException.Message, Is.EqualTo("original-boom"));
 
-            var page = MethodHookHost.ReadEvents(new MethodHookEventsRequest { HookId = install.HookId, Limit = MethodHookLimits.EventsMaxLimit });
+            var page = DebugEventStore.ReadEvents(new DebugEventsRequest { HookId = install.HookId, Limit = DebugLimits.EventsMaxLimit });
             Assert.That(page.Events.FindAll(item => item.Kind == "postfix").Count, Is.EqualTo(0), "a throwing original must not produce a successful postfix event");
             var ended = page.Events.FindAll(item => item.Kind == "lifecycle" && item.Name == "original-exception");
             Assert.That(ended.Count, Is.EqualTo(1), "the finalizer must record exactly one original-exception event");
@@ -491,32 +545,135 @@ namespace UnityCli.Tests
             Assert.That(info.BypassCount, Is.GreaterThan(0), "a callback self-call must be bypassed by the thread-local guard");
             Assert.That(info.State, Is.EqualTo("armed"), "a bypassed self-call is not a fault");
 
-            var page = MethodHookHost.ReadEvents(new MethodHookEventsRequest { HookId = install.HookId, Limit = MethodHookLimits.EventsMaxLimit });
+            var page = DebugEventStore.ReadEvents(new DebugEventsRequest { HookId = install.HookId, Limit = DebugLimits.EventsMaxLimit });
             Assert.That(page.Events.FindAll(item => item.Kind == "prefix").Count, Is.EqualTo(1), "the bypassed inner call must not emit another prefix event");
         }
 
         [Test]
-        public void WorkerThreadHitFaultsTheDefinitionWithoutChangingTheCall()
+        public void WorkerThreadHitDispatchesCallbacksOnTheCallingThread()
         {
-            var install = Install("it-thread", "Add", false, "System.Int32", new[] { "System.Int32", "System.Int32" }, "ctx.SetResult(4242);", null);
+            var install = Install("it-worker-dispatch", "Add", false, "System.Int32", new[] { "System.Int32", "System.Int32" },
+                "ctx.SetArgument(0, (int)ctx.Arguments[0] + 100);", "ctx.SetResult((int)ctx.Result * 2);");
             var instance = new HookFixture();
             var add = typeof(HookFixture).GetMethod("Add");
             object result = null;
             Exception error = null;
+            var workerThreadId = 0;
             var thread = new System.Threading.Thread(() =>
             {
+                workerThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
                 try { result = add.Invoke(instance, new object[] { 1, 2 }); }
                 catch (Exception exception) { error = exception; }
             });
             thread.Start();
             Assert.That(thread.Join(TimeSpan.FromSeconds(30)), Is.True, "a worker-thread hit must not deadlock the caller");
             Assert.That(error, Is.Null, "a worker-thread hit must not surface a framework exception to the game call");
-            Assert.That((int)result, Is.EqualTo(3), "a worker-thread hit must keep the original method semantics and skip user callbacks");
+            Assert.That((int)result, Is.EqualTo(206), "prefix argument mutation and postfix result mutation must both apply on a worker thread");
 
             var info = MethodHookHost.Info(new MethodHookInfoRequest { HookId = install.HookId });
+            Assert.That(info.State, Is.EqualTo("armed"), "a worker hit is not a fault");
+            Assert.That(info.LastFault, Is.Null);
+
+            var page = DebugEventStore.ReadEvents(new DebugEventsRequest { HookId = install.HookId, Limit = DebugLimits.EventsMaxLimit });
+            var prefix = page.Events.FindAll(item => item.Kind == "prefix");
+            var postfix = page.Events.FindAll(item => item.Kind == "postfix");
+            Assert.That(prefix.Count, Is.EqualTo(1));
+            Assert.That(postfix.Count, Is.EqualTo(1));
+            Assert.That(prefix[0].MainThread, Is.False, "a worker hit must be recorded as off-main");
+            Assert.That(prefix[0].ThreadId, Is.EqualTo(workerThreadId), "the recorded thread must be the thread that made the original call");
+            Assert.That(prefix[0].Frame, Is.EqualTo(0L), "an off-main event must not claim a Unity frame number");
+            Assert.That(postfix[0].InvocationId, Is.EqualTo(prefix[0].InvocationId), "prefix and postfix must share one pairing key");
+        }
+
+        [Test]
+        public void WorkerThreadCallbackFaultClosesOnlyThatDefinitionUntilTheMainThreadTick()
+        {
+            var failing = Install("it-worker-fault", "Add", false, "System.Int32", new[] { "System.Int32", "System.Int32" }, "throw new System.InvalidOperationException(\"worker-boom\");", null);
+            var healthy = Install("it-worker-healthy", "Describe", false, "System.String", new[] { "System.String" }, null, "ctx.SetResult(\"healthy\");");
+            var instance = new HookFixture();
+            var add = typeof(HookFixture).GetMethod("Add");
+
+            object result = null;
+            var first = new System.Threading.Thread(() => { result = add.Invoke(instance, new object[] { 1, 2 }); });
+            first.Start();
+            Assert.That(first.Join(TimeSpan.FromSeconds(30)), Is.True);
+            Assert.That((int)result, Is.EqualTo(3), "a worker callback fault must not change the original call");
+
+            // worker 只关闭派发；状态、持久化与 detach 由主线程在中央 tick 上提交。
+            MethodHookHost.Tick();
+            var info = MethodHookHost.Info(new MethodHookInfoRequest { HookId = failing.HookId });
             Assert.That(info.State, Is.EqualTo("faulted"));
-            Assert.That(info.LastFault.Code, Is.EqualTo("E_HOOK_THREAD_UNSUPPORTED"));
-            Assert.That(info.LastFault.Message, Does.Contain("non-main thread"));
+            Assert.That(info.LastFault.Code, Is.EqualTo("E_HOOK_CALLBACK_FAILED"));
+            Assert.That(info.LastFault.Message, Does.Contain("worker-boom"));
+            Assert.That(info.LastFault.Revision, Is.EqualTo(info.Revision), "the fault must carry the revision it happened under");
+
+            object second = null;
+            var again = new System.Threading.Thread(() => { second = add.Invoke(instance, new object[] { 2, 3 }); });
+            again.Start();
+            Assert.That(again.Join(TimeSpan.FromSeconds(30)), Is.True);
+            Assert.That((int)second, Is.EqualTo(5), "a faulted hook must leave later original calls unchanged");
+
+            Assert.That((string)typeof(HookFixture).GetMethod("Describe").Invoke(instance, new object[] { "x" }), Is.EqualTo("healthy"), "an unrelated definition must keep working");
+            Assert.That(MethodHookHost.Info(new MethodHookInfoRequest { HookId = healthy.HookId }).State, Is.EqualTo("armed"));
+        }
+
+        [Test]
+        public void RecursiveBusinessCallsGetTheirOwnFramesAndEvents()
+        {
+            var install = Install("it-recursion", "Recurse", false, "System.String", new[] { "System.String", "System.Int32" }, "ctx.Emit(\"enter\", ctx.Arguments[1]);", null);
+            var instance = new HookFixture();
+            var recurse = typeof(HookFixture).GetMethod("Recurse");
+            Assert.That((string)recurse.Invoke(instance, new object[] { "a", 2 }), Is.EqualTo("leaf:a|a|a"), "the original recursion must run unchanged");
+
+            var info = MethodHookHost.Info(new MethodHookInfoRequest { HookId = install.HookId });
+            Assert.That(info.HitCount, Is.EqualTo(3L), "every recursive business call is a real hit");
+            Assert.That(info.BypassCount, Is.EqualTo(0L), "a business recursion is not a suppressed callback self-call");
+
+            var page = DebugEventStore.ReadEvents(new DebugEventsRequest { HookId = install.HookId, Limit = DebugLimits.EventsMaxLimit });
+            var prefix = page.Events.FindAll(item => item.Kind == "prefix");
+            Assert.That(prefix.Count, Is.EqualTo(3), "every recursive business call must produce its own hit event");
+            Assert.That(new HashSet<long>(prefix.ConvertAll(item => item.InvocationId)).Count, Is.EqualTo(3), "each frame must carry its own invocation id");
+        }
+
+        [Test]
+        public void SecondInterventionIsRejectedBeforeEffectAndStoppingOneOwnerKeepsTheOtherObservation()
+        {
+            var owner = Install("it-owner", "Add", false, "System.Int32", new[] { "System.Int32", "System.Int32" }, "ctx.Emit(\"owner\", 1);", null);
+            var instance = new HookFixture();
+            var add = typeof(HookFixture).GetMethod("Add");
+            var definitionsBefore = MethodHookHost.List(new MethodHookListRequest { Limit = DebugLimits.ListMaxLimit }).Total;
+
+            var conflicting = new MethodHookInstallRequest
+            {
+                Label = "it-owner-two",
+                Activation = "editor-and-play",
+                Target = new MethodHookTargetSpec
+                {
+                    AssemblyName = typeof(HookFixture).Assembly.GetName().Name,
+                    TypeName = typeof(HookFixture).FullName,
+                    MethodName = "Add",
+                    ParameterTypes = new List<string> { "System.Int32", "System.Int32" },
+                    ReturnType = "System.Int32",
+                    IsStatic = false
+                },
+                Callbacks = new MethodHookCallbackSpec { PrefixCode = "ctx.Emit(\"second\", 2);" }
+            };
+            var conflict = Assert.Throws<UnityCliBridge.BridgeCommandException>(() => MethodHookHost.PrepareInstall(conflicting));
+            Assert.That(conflict.Code, Is.EqualTo("E_DEBUG_RESOURCE_CONFLICT"));
+            Assert.That(MethodHookHost.List(new MethodHookListRequest { Limit = DebugLimits.ListMaxLimit }).Total, Is.EqualTo(definitionsBefore), "a rejected install must not create a definition");
+            Assert.That((int)add.Invoke(instance, new object[] { 1, 1 }), Is.EqualTo(2), "the rejected request must not change behaviour");
+
+            // 纯结构化观察不写目标状态，可以与干预共存。
+            var observation = Install("it-observe", "Add", false, "System.Int32", new[] { "System.Int32", "System.Int32" }, null, null, new MethodHookCaptureSpec { Arguments = true });
+            Assert.That((int)add.Invoke(instance, new object[] { 4, 4 }), Is.EqualTo(8));
+            var observed = MethodHookHost.Info(new MethodHookInfoRequest { HookId = observation.HookId });
+            Assert.That(observed.HitCount, Is.EqualTo(1L), "the observation must receive its own hit while the intervention is active");
+
+            // 停用一个 owner 不得移除另一个 owner 对同一 target 的观察。
+            var ownerInfo = MethodHookHost.Info(new MethodHookInfoRequest { HookId = owner.HookId });
+            MethodHookHost.ApplyDisable(MethodHookHost.PrepareDisable(new MethodHookDisableRequest { HookId = owner.HookId, EditorSessionId = ownerInfo.EditorSessionId, ExpectedRevision = ownerInfo.Revision }));
+            Assert.That((int)add.Invoke(instance, new object[] { 5, 5 }), Is.EqualTo(10));
+            Assert.That(MethodHookHost.Info(new MethodHookInfoRequest { HookId = observation.HookId }).HitCount, Is.EqualTo(2L), "the surviving observation must keep dispatching on the shared target");
         }
 
         [Test]

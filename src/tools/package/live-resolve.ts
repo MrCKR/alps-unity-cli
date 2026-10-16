@@ -7,7 +7,7 @@ import { defaultDataDir } from "../../platform.js";
 import type { ToolContext } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
 import { rejectUnavailableEditorState } from "../editor/state.js";
-import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
+import { blockedEditorStateError, blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 
 export interface LiveResolvedPackage {
   name: string;
@@ -314,7 +314,7 @@ async function execute(context: ToolContext, binding: LivePackageBinding, reques
 export async function bindLivePackageProject(context: ToolContext, operation: string): Promise<LivePackageBinding> {
   const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
   const state = await waitForEditorTransitionEnd(context, childRequestId(context.requestId, "package-state"), deadline);
-  if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", `package.${operation} cannot start while the Editor is blocked.`, ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
+  if (state.status === "blocked") throw blockedEditorStateError(`package.${operation} cannot start while the Editor is blocked.`, state.blockers);
   rejectUnavailableEditorState(state, `package.${operation}`);
   if (state.state.playMode.known !== true || state.state.playMode.value !== "edit")
     throw new StructuredToolError("E_TOOL_PLAYMODE_UNAVAILABLE", `package.${operation} requires Edit Mode because Unity PackageManager Resolve cannot be dispatched safely in Play Mode.`, ["Exit Play Mode, wait for editor.state to report ready with playMode=edit, then submit a new request."], { toolName: `package.${operation}`, playModeSupport: "editor-only" });

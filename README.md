@@ -92,7 +92,7 @@ unitycli instances prune --instance C:\path\UnityProject
 unitycli doctor --project C:\path\UnityProject
 ```
 
-`instances list`默认隐藏offline记录；`instances list --all`仅用于展开审计。Unity启动、编译或重载时，live命令会在本次timeout内等待当前连接ready。旧格式、损坏或不可读记录会逐文件隔离，不阻断合法实例，并通过`invalidRecordCount`返回数量；当前项目由Unity自动恢复。需要清理历史记录时运行`instances prune --instance <id|projectPath|alias>`并检查`removed`、`remaining`和`deferred`，不要手工读取或删除内部文件。
+`instances list`默认隐藏offline记录；`instances list --all`仅用于展开审计。Unity启动、编译或重载时，live命令会在本次timeout内等待当前连接ready。旧格式、损坏或不可读记录会逐文件隔离，不阻断合法实例，并通过`invalidRecordCount`返回数量；当前项目由Unity自动恢复。需要清理历史记录时运行`instances prune --instance <name|alias|projectPath>`并检查`removed`、`remaining`和`deferred`，不要手工读取或删除内部文件。
 
 To create a stable selector:
 
@@ -126,8 +126,8 @@ unitycli extensions doctor --project C:\path\UnityProject
 Discovery lists default to 20 items, allow at most 100, and continue with `pageInfo.nextCursor`:
 
 ```powershell
-unitycli tools group list <group> --page-size 20 --cursor <nextCursor> --instance <id|projectPath|alias>
-unitycli tools search '<k1|k2|...>' --page-size 20 --cursor <nextCursor> --instance <id|projectPath|alias>
+unitycli tools group list <group> --page-size 20 --cursor <nextCursor> --instance <name|alias|projectPath>
+unitycli tools search '<k1|k2|...>' --page-size 20 --cursor <nextCursor> --instance <name|alias|projectPath>
 unitycli command --project-path C:\path\UnityProject --page-size 20 --cursor <nextCursor>
 ```
 
@@ -135,22 +135,22 @@ In PowerShell, quote pipe-separated search keywords with single quotes.
 
 ## Live Method Hooks
 
-The `method-hook` group installs live interceptors on an exact managed method of the current Editor domain before a Play run, observes calls, modifies behaviour, or executes bounded C# callbacks, and keeps those definitions across Play sessions and domain reloads within one Editor session:
+The `debug` group hosts the live interceptor tools: `debug.hook.*` installs interceptors on an exact managed method of the current Editor domain before a Play run, observes calls, modifies behaviour, or executes bounded C# callbacks, and keeps those definitions across Play sessions and domain reloads within one Editor session:
 
 ```powershell
-unitycli command method-hook.install --label ai-movement-order --target '{"assemblyName":"Assembly-CSharp","typeName":"Game.AiController","methodName":"BeginMovement","parameterTypes":[],"returnType":"System.Void","isStatic":false}' --capture '{"arguments":true}' --instance C:\path\UnityProject
-unitycli command method-hook.list --instance C:\path\UnityProject
-unitycli command method-hook.events --hook-id hook-0123456789abcdef --instance C:\path\UnityProject
+unitycli command debug.hook.install --label ai-movement-order --target '{"assemblyName":"Assembly-CSharp","typeName":"Game.AiController","methodName":"BeginMovement","parameterTypes":[],"returnType":"System.Void","isStatic":false}' --capture '{"arguments":true}' --instance C:\path\UnityProject
+unitycli command debug.hook.list --instance C:\path\UnityProject
+unitycli command debug.events.read --hook-id hook-0123456789abcdef --instance C:\path\UnityProject
 ```
 
 Boundaries worth knowing before using the group:
 
 - Definitions belong to one Editor session and are discarded on Editor restart; installing a hook is not persistent authorization for arbitrary code.
-- Call sites compiled before the patch keep the original behaviour, so an installed definition can legitimately produce no hits. Use `method-hook.events` or a real business readback to prove a hit.
+- Call sites compiled before the patch keep the original behaviour, so an installed definition can legitimately produce no hits. Use `debug.events.read` or a real business readback to prove a hit.
 - Callback source is compiled on demand through the editor-bundled C# compiler and loaded into the current domain; this is not a project compile, but it costs a compiler subprocess and cannot be unloaded individually.
 - `disable` and `remove` stop future dispatch and restore the original behaviour; they do not roll back effects that earlier invocations already produced.
 
-`unitycli tools describe method-hook.install` documents the exact target identity, capture options, callback context API, resource budgets and error recovery for the selected instance. Pure observation with capture options starts no compiler, because a definition without callback source does not need one.
+`unitycli tools describe debug.hook.install` documents the exact target identity, capture options, callback context API, resource budgets and error recovery for the selected instance. Pure observation with capture options starts no compiler, because a definition without callback source does not need one.
 
 ## Output
 

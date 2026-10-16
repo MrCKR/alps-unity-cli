@@ -24,7 +24,7 @@ test("request budget owns all six counters and injectable monotonic time", async
 
 test("console is bounded non-resumable while scene and GameObject discovery page raw positions", async () => {
   const [consoleGet, editorSupport, hierarchy, goFind] = await Promise.all([
-    source("Tools/console/read.cs"), source("Tools/editor/EditorToolSupport.cs"),
+    source("Tools/debug/console/read.cs"), source("Tools/editor/EditorToolSupport.cs"),
     source("Tools/scene/hierarchy.cs"), source("Tools/game-object/find.cs"),
   ]);
   assert.match(editorSupport, /rawIndex/);
@@ -92,7 +92,7 @@ test("profiler and snapshot paths remain raw-paged and governed", async () => {
 test("reflection pages bind assembly generation and budgeted member definitions", async () => {
   const [reflection, typeTool, methodTool] = await Promise.all([
     source("Infrastructure/UnityCliReflection.cs"),
-    source("Tools/runtime-reflection/type/schema.cs"), source("Tools/runtime-reflection/method/find.cs"),
+    source("Tools/debug/type/schema.cs"), source("Tools/debug/method/find.cs"),
   ]);
   assert.match(reflection, /ResolvedTypeCache/);
   assert.match(reflection, /UnityCliReadGeneration\.Reflection/);
@@ -177,7 +177,7 @@ test("memory and reflection integration fixtures exercise exact terminal and res
 
 test("command projections preserve opaque cursors and nested budgets", async () => {
   const roots = "src/bridge/domains";
-  const files = ["console.ts", "game-object.ts", "scene.ts", "profiler.ts", "runtime-reflection.ts", "screenshot.ts"];
+  const files = ["debug.ts", "game-object.ts", "scene.ts", "profiler.ts", "screenshot.ts"];
   const text = (await Promise.all(files.map((file) => readFile(`${roots}/${file}`, "utf8")))).join("\n");
   assert.ok((text.match(/cursor: stringFlag\(flags, "cursor"\)/g) ?? []).length >= 5);
   assert.match(text, /budget: structured\.budget/);

@@ -60,7 +60,9 @@ Tool必须满足：
 - Health v3必须同时返回严格transport identity与只读内存main-thread pulse；transport可达不能替代pulse，pulse不能证明具体业务effect。
 - 公开`editor.state.status`固定归约为`ready|transitioning|blocked|unresponsive|unverifiable|offline|conflict`。`conflict`只允许用于至少两个verified live project claim；观察失败或权限不足必须是`unverifiable`。
 - 实时观察失败时不得用 Registry 上一次 publication 的 PlayMode/compile/import、progress 或 lifecycle 回填当前状态：这些字段必须为 unknown，只保留本次独立观察到的 blocker。已验证进程但缺少实时响应证据时为`unresponsive`，不能断言主线程已经卡死；仅添加 `stale` 标记不代替该规则。
-- `blocked`由独立Windows modal观察证明；`editor.state`、`editor.dialogs`与`editor.dialog.click`使用exact frozen本地descriptor进入同一dispatcher，不得依赖Unity主线程或live catalog观察/恢复。其他Tool与catalog listing不得建立静态fallback。
+- `blocked`有两种精确 DTO，且都需要独立证据：独立Windows modal观察（`blocker.type="dialog"`，`source="windows-ui"`，`requiresUserAction=true`），或当前live pause publication证明的故意主线程暂停（`blocker.type="debug-pause"`，`source="unity-debug-pause"`，带`pauseId`/`threadId`/`mainThread`/`timeoutKind`/`remainingMs`/`resumeTool`/`infoTool`，`requiresUserAction=false`）。`editor.state`、`editor.dialogs`与`editor.dialog.click`使用exact frozen本地descriptor进入同一dispatcher，不得依赖Unity主线程或live catalog观察/恢复。其他Tool与catalog listing不得建立静态fallback。
+- 暂停证据与主线程pulse互相独立：pause publication不改写main-thread pulse，也不读任何文件。pulse停止且有当前live pause publication证明主线程暂停时为`blocked`；只有pulse停止而没有该证据时仍为`unresponsive`，并不得用worker现场或旧publication推断因果。health在`mainThread.debugPause`单独发布该证据。
+- 主线程暂停期间可用能力是冻结名单：`tools group/list/search`、`tools describe`、两个公开入口、`debug.pause.list/wait/inspect/evaluate/resume`、`debug.events.read`、`debug.thread.list`、`debug.hook.list/info`、`debug.session.list/info`、`debug.program.list/info`与命名了`pauseId`的`debug.value.read/write`在发起请求的线程上直接服务，并继续使用同一个live descriptor。命名了当前暂停现场所属`sessionId`的`debug.session.stop`是唯一的条件放宽：它复用同一session owner的stop入口与同一报告，关闭该owner的未来派发并发出resume/取消信号，需要主线程的清理条目先报告`cleanupPending`与精确原因、线程恢复后重复同一stop完成；未命名或命名其它session的stop仍在任何effect之前拒绝。没有发布catalog时如实报告不可用。其余业务mutation在任何effect之前返回`E_DEBUG_MAIN_THREAD_PAUSED`，携带实际`pauseId`与`debug.pause.list`/`debug.pause.resume`路由。解除路径必须在任何pause资源安装之前已发布，否则pause断点在effect之前被`E_DEBUG_CONTROL_PLANE_UNAVAILABLE`拒绝。
 - Domain Reload只使用Registry lifecycle、新listener generation与该generation首个main-thread pulse交接；禁止固定时长reload marker或双轨判定。
 - 同一次mutation只允许在`editorSessionId`不变时续接完全相同的request bytes；首次POST后session改变必须禁止第二次POST，并返回`E_EXECUTION_TIMEOUT`与outcome unknown。
 - 公开live root使用两份有界预算：参数解析、target选择、health/PID/start/modal观察与准入轮询共用admission absolute deadline；grant后只创建一次完整execution absolute deadline，业务POST、compile/import/reload、rebind、status和terminal recovery共用它。token重取或内部恢复不得创建第三份预算。
@@ -162,7 +164,7 @@ Describe 不得包含：
 - 对资产文件执行真实持久化创建、修改或删除，如 `.asset`、`.unity`、`.controller`、`.mat`、`.png`。
 - 修改 `Packages/manifest.json` 或 `ProjectSettings/`。
 - 写入持久化光照数据，如 lightmap、reflection probe bake。
-- 执行任意代码，如 `code.execute`、`editor.menu`、`runtime-reflection.method.invoke`。
+- 执行任意代码，如 `debug.code.execute`、`editor.menu`、`debug.method.invoke`。
 
 以下能力不标记为 destructive：
 
@@ -216,7 +218,7 @@ Describe 不得包含：
 - `error.nextActions`
 - 仅在需要机器分支时包含业务 `error.details`
 
-`error` 对象是闭集，不得重复 `requestId` 或附加日志、审计、endpoint、port、listener identity、native window handle、Windows command line。blocker 只能使用公开 DTO；弹窗 blocker 使用 `type="dialog"`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction`、`source` 与 `confidence`。
+`error` 对象是闭集，不得重复 `requestId` 或附加日志、审计、endpoint、port、listener identity、native window handle、Windows command line。blocker 只能使用公开 DTO，并且只有两种精确形态：弹窗 blocker 使用 `type="dialog"`、`dialogId`、`title`、`message`、`buttons`、`requiresUserAction=true`、`source="windows-ui"` 与 `confidence="exact"`；故意主线程暂停使用 `type="debug-pause"`、`pauseId`、`threadId`、`mainThread`、`methodIdentity`、`targetKey`、`position`、`sessionId`、`timeoutKind`、`remainingMs`、`pausedForMs`、`resumeTool="debug.pause.resume"`、`infoTool="debug.pause.list"`、`requiresUserAction=false`、`source="unity-debug-pause"` 与 `confidence="exact"`。
 
 超时或终态前断连统一使用`E_EXECUTION_TIMEOUT`。同一`editorSessionId`内可用完全相同的请求attach/recover durable terminal；首次mutation POST后session改变时必须禁止向新session重投。调用方先观察业务状态，再判断是否提交全新调用。审计只记录session级append日志。
 

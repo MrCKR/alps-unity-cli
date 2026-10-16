@@ -6,12 +6,12 @@ import test from "node:test";
 import { GROUP_SUMMARIES } from "../src/tools/tools/group-summaries.js";
 import { GENERATED_TOOL_COMPLETION_CONTRACTS } from "../src/tools/.generated-completion-registry.js";
 
-const HOOK_GROUP = "method-hook";
-const MUTATIONS = ["method-hook.install", "method-hook.replace", "method-hook.enable"];
-const SESSION_MUTATIONS = ["method-hook.disable", "method-hook.remove"];
-const READS = ["method-hook.list", "method-hook.info", "method-hook.events"];
+const HOOK_GROUP = "debug";
+const MUTATIONS = ["debug.hook.install", "debug.hook.replace", "debug.hook.enable"];
+const SESSION_MUTATIONS = ["debug.hook.disable", "debug.hook.remove"];
+const READS = ["debug.hook.list", "debug.hook.info", "debug.events.read"];
 const HOOK_TOOLS = [...MUTATIONS, ...SESSION_MUTATIONS, ...READS];
-const FROZEN_SUMMARY = "Live Editor method hooks: install/replace, enable/disable, remove, list/info, and bounded events for observing calls, modifying behavior, and executing C# callbacks.";
+const FROZEN_SUMMARY = "Live Editor runtime debugging: sessions, C# code, methods, hooks, threads, breakpoints, values, event stream, and evidence runs.";
 
 interface InventoryEntry {
   name: string;
@@ -31,16 +31,17 @@ async function source(path: string): Promise<string> {
   return readFile(path, "utf8");
 }
 
-test("method-hook group is discoverable through the frozen route summary and exact tool names", async () => {
+test("debug group is discoverable through the frozen route summary and exact hook tool names", async () => {
   assert.equal(GROUP_SUMMARIES[HOOK_GROUP], FROZEN_SUMMARY);
   assert.ok(FROZEN_SUMMARY.trim().split(/\s+/).length <= 32);
 
   const entries = await inventory();
-  const hookTools = entries.filter((entry) => entry.group === HOOK_GROUP);
+  const hookTools = entries.filter((entry) => HOOK_TOOLS.includes(entry.name));
   assert.deepEqual(hookTools.map((entry) => entry.name).sort(), [...HOOK_TOOLS].sort());
   for (const tool of hookTools) {
     assert.equal(tool.descriptorOwner, "built-in", tool.name);
-    assert.equal(tool.source.startsWith(`unitypkg/Editor/Tools/${HOOK_GROUP}/`), true, tool.source);
+    assert.equal(tool.group, HOOK_GROUP, tool.name);
+    assert.equal(tool.source, `unitypkg/Editor/Tools/${tool.name.split(".").join("/")}.cs`, tool.source);
   }
   for (const name of HOOK_TOOLS) {
     const found = entries.find((entry) => entry.name === name);
@@ -48,9 +49,9 @@ test("method-hook group is discoverable through the frozen route summary and exa
   }
 });
 
-test("method-hook tools declare their risk metadata exactly once per source file", async () => {
+test("debug hook tools declare their risk metadata exactly once per source file", async () => {
   for (const name of MUTATIONS) {
-    const text = await source(`unitypkg/Editor/Tools/${HOOK_GROUP}/${name.slice(HOOK_GROUP.length + 1)}.cs`);
+    const text = await source(`unitypkg/Editor/Tools/${name.split(".").join("/")}.cs`);
     assert.match(text, /DestructiveHint = true/, `${name} must declare destructiveHint`);
     assert.match(text, /SupportsDryRun = true/, `${name} must support dry-run`);
     assert.match(text, /Permissions = new\[\] \{ "execute-user-code" \}/, `${name} must declare the execute-user-code permission`);
@@ -59,7 +60,7 @@ test("method-hook tools declare their risk metadata exactly once per source file
     assert.match(text, /ctx\.CommitEffect\(\)/, `${name} must cross the single effect barrier`);
   }
   for (const name of SESSION_MUTATIONS) {
-    const text = await source(`unitypkg/Editor/Tools/${HOOK_GROUP}/${name.slice(HOOK_GROUP.length + 1)}.cs`);
+    const text = await source(`unitypkg/Editor/Tools/${name.split(".").join("/")}.cs`);
     assert.doesNotMatch(text, /DestructiveHint = true/, `${name} must not claim arbitrary-code destruction`);
     assert.match(text, /SupportsDryRun = true/, `${name} must support dry-run`);
     assert.match(text, /SideEffects = new\[\] \{ "method-patch", "session-definition" \}/, `${name} must declare its real side effects`);
@@ -67,14 +68,14 @@ test("method-hook tools declare their risk metadata exactly once per source file
     assert.match(text, /ctx\.CommitEffect\(\)/, `${name} must cross the single effect barrier`);
   }
   for (const name of READS) {
-    const text = await source(`unitypkg/Editor/Tools/${HOOK_GROUP}/${name.slice(HOOK_GROUP.length + 1)}.cs`);
+    const text = await source(`unitypkg/Editor/Tools/${name.split(".").join("/")}.cs`);
     assert.doesNotMatch(text, /DestructiveHint = true/, `${name} must stay read-only`);
     assert.doesNotMatch(text, /SideEffects = new\[\] \{/, `${name} must declare no side effects`);
     assert.doesNotMatch(text, /ctx\.CommitEffect\(\)/, `${name} must never cross a mutation barrier`);
   }
 });
 
-test("method-hook completion contracts match the observed-state and atomic execution classes", async () => {
+test("debug hook completion contracts match the observed-state and atomic execution classes", async () => {
   const byName = new Map(GENERATED_TOOL_COMPLETION_CONTRACTS.map((entry) => [entry.toolName, entry]));
   for (const name of [...MUTATIONS, ...SESSION_MUTATIONS]) {
     const entry = byName.get(name);
@@ -94,7 +95,7 @@ test("method-hook completion contracts match the observed-state and atomic execu
   }
 });
 
-test("method-hook command contract reuses the same live catalog entry", async () => {
+test("debug hook command contract reuses the same live catalog entry", async () => {
   const contract = JSON.parse(await readFile("contracts/command-contract.json", "utf8")) as {
     commands: Array<{ bridgeCommand: string; group: string; command: string; handler_type: string; csharp_handler: string }>;
   };

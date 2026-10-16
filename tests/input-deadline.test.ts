@@ -115,7 +115,7 @@ test("resolved live descriptor owns the default input and admission deadline", a
 
 test("dispatcher keeps the non-code input deadline before live descriptor resolution", async () => {
   const source = await readFile("src/tools/dispatcher.ts", "utf8");
-  assert.match(source, /const localMetadata = findToolByName\(name\);[\s\S]*const timeoutMetadata = resolvedTool \?\? localMetadata;[\s\S]*const defaultTimeoutMs = name === "code\.execute" \? 60_000 : 30_000;[\s\S]*beginToolInvocation\(flags, requestId, \{ timeoutMs: timeoutMetadata\?\.timeoutMs \?\? defaultTimeoutMs \}, dispatchStartedAtMs\);[\s\S]*const admissionAbsoluteDeadlineMs = started\.context\.admissionAbsoluteDeadlineMs;[\s\S]*parseTypedInput\(flags, requestId, name === "code\.execute" \? 1024 \* 1024 : undefined, admissionAbsoluteDeadlineMs\)/);
+  assert.match(source, /const localMetadata = findToolByName\(name\);[\s\S]*const timeoutMetadata = resolvedTool \?\? localMetadata;[\s\S]*const defaultTimeoutMs = name === "debug\.code\.execute" \? 60_000 : 30_000;[\s\S]*beginToolInvocation\(flags, requestId, \{ timeoutMs: timeoutMetadata\?\.timeoutMs \?\? defaultTimeoutMs \}, dispatchStartedAtMs\);[\s\S]*const admissionAbsoluteDeadlineMs = started\.context\.admissionAbsoluteDeadlineMs;[\s\S]*parseTypedInput\(flags, requestId, name === "debug\.code\.execute" \? 1024 \* 1024 : undefined, admissionAbsoluteDeadlineMs\)/);
   assert.match(source, /resolveCatalogToolForInvocation\(name, catalogFlags, runtime, requestId, started\.context\)/);
 });
 

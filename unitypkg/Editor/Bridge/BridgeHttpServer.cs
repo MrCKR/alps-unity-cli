@@ -106,13 +106,18 @@ namespace UnityCli
                 : cachedIsBuilding ? "building"
                 : cachedIsPlayModeChanging ? "playmode-changing"
                 : "ready";
+            // 故意暂停与 transport identity、主线程 pulse 三者互为独立证据：
+            // debugPause 只来自内存中的现场注册表，既不改写 pulse，也不回填旧 publication。
+            DebugMainThreadPauseView pause;
+            DebugPauseControl.TryGetMainThreadPause(out pause);
             return new Dictionary<string, object>
             {
                 { "observed", timestamp > 0 },
                 { "sequence", after },
                 { "ageMs", ageMs },
                 { "listenerGeneration", CurrentListenerGeneration() },
-                { "lifecycle", lifecycle }
+                { "lifecycle", lifecycle },
+                { "debugPause", pause == null ? null : pause.ToData() }
             };
         }
 
@@ -415,6 +420,27 @@ namespace UnityCli
             }
             WriteLog("bridge_request_body_read requestId=" + request.RequestId + " command=" + request.Command + " bytes=" + rawBody.Length.ToString(CultureInfo.InvariantCulture));
 
+            // 主线程暂停的闸门必须先于编译/导入/PlayMode 缓存闸门：
+            // 这些缓存来自主线程 tick，暂停期间已经停止推进，不得把故意暂停伪装成编译中或排队中。
+            DebugMainThreadPauseView mainThreadPause;
+            if (DebugPauseControl.TryGetMainThreadPause(out mainThreadPause))
+            {
+                // 内层 Tool 名与外层 input 由控制通道自己从真实请求推导，闸门不另行解析 payload。
+                string nestedTool, nestedInput;
+                if (DebugPauseControl.IsReachable(request, out nestedTool, out nestedInput))
+                {
+                    string served;
+                    if (DebugPauseControl.TryServe(request, nestedTool, mainThreadPause, out served))
+                    {
+                        WriteJson(context, served, 200);
+                        return;
+                    }
+                }
+                WriteLog("pause_control_rejected requestId=" + request.RequestId + " command=" + request.Command + " toolName=" + nestedTool + " pauseId=" + mainThreadPause.PauseId);
+                WriteJson(context, SerializeBridgeExceptionEnvelope(request.RequestId, DebugPauseControl.MainThreadPaused(request.Command, nestedTool, mainThreadPause)), 200);
+                return;
+            }
+
             // 所有瞬态Editor gate必须在token消费前完成，拒绝路径对active pool零影响。
             if (domainReloading)
             {
@@ -467,9 +493,15 @@ namespace UnityCli
             WriteLog((created ? "bridge_request_enqueued" : "bridge_request_attached") + " requestId=" + request.RequestId + " command=" + request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
 
             // queue 与 handler 共用 immutable absolute deadline；HTTP client 断开不得取消已接收的业务请求。
-            int queueRemainingMs;
-            if (!request.TryDeadlineRemainingMs(out queueRemainingMs)) queueRemainingMs = 0;
-            var queueSignal = WaitHandle.WaitAny(new[] { item.Started.WaitHandle, item.Completed.WaitHandle }, queueRemainingMs);
+            int queueSignal;
+            string pauseServed;
+            if (WaitForQueuedStart(item, out queueSignal, out pauseServed))
+            {
+                // 暂停发布之前已经入队的可达请求：本次已在发起请求的线程上服务，且队列项已被取消，主线程不会再执行它。
+                WriteLog("pause_control_served_queued requestId=" + request.RequestId + " command=" + request.Command);
+                WriteJson(context, pauseServed, 200);
+                return;
+            }
             if (queueSignal == WaitHandle.WaitTimeout)
             {
                 // HTTP deadline只结束当前响应；WorkItem identity继续留在map，由主线程统一裁决是否开始或收敛。
@@ -495,6 +527,35 @@ namespace UnityCli
             }
 
             WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request completed without a response.", "Inspect editor.state before deciding whether to submit a new request.", 1000), 200);
+        }
+
+        /// <summary>
+        /// 等待一个已入队的请求开始执行，并在等待期间重新判定主线程暂停闸门。
+        ///
+        /// 闸门只在请求进入 Bridge 的那一刻判定，而请求可能在声明命中之前就已入队；主线程随后停在自己的断点上，
+        /// 队列不再推进，该请求只能等现场释放后才被执行——有限暂停此时已经自动解除，调用方因此看不到任何暂停事实，
+        /// 也无法在窗口内 inspect 或 resume。因此等待期间必须按同一冻结名单重新判定：可达请求转入暂停控制通道
+        /// 服务（由该通道取消尚未开始的队列项），不可达请求保持既有排队语义。
+        ///
+        /// 轮询只使用 debug 域已声明的控制通道间隔；它也同时受本次请求自己的 immutable deadline 约束。
+        /// 返回 true 表示本次已在发起请求的线程上给出终态答复（pauseServed）；否则 queueSignal 是
+        /// Started/Completed/WaitTimeout 三个裁决之一。
+        /// </summary>
+        internal static bool WaitForQueuedStart(BridgeWorkItem item, out int queueSignal, out string pauseServed)
+        {
+            pauseServed = null;
+            var request = item.Request;
+            var handles = new[] { item.Started.WaitHandle, item.Completed.WaitHandle };
+            while (true)
+            {
+                int remainingMs;
+                if (!request.TryDeadlineRemainingMs(out remainingMs)) remainingMs = 0;
+                queueSignal = WaitHandle.WaitAny(handles, Math.Max(0, Math.Min(remainingMs, DebugLimits.PauseControlPollMs)));
+                if (queueSignal != WaitHandle.WaitTimeout) return false;
+                if (remainingMs <= 0) return false;
+                if (!DebugPauseControl.TryServeQueuedRequest(request, item, out pauseServed)) continue;
+                return true;
+            }
         }
 
         /// <summary>已开始请求的 timeout 由内存 response 与接受状态裁决，不创建请求级持久记录。</summary>

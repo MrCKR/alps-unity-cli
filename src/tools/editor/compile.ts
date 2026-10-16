@@ -4,7 +4,7 @@ import { withTransitionBinding } from "../../bridge/types.js";
 import { rejectUnavailableEditorState, type EditorStateResult } from "./state.js";
 import { defineTool, type ToolContext } from "../define.js";
 import { waitForEditorTransitionEnd } from "./readiness.js";
-import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
+import { blockedEditorStateError, blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 import type { ToolError } from "../../protocol/envelope.js";
 
 export interface EditorCompileRequest {
@@ -101,7 +101,7 @@ export default defineTool<EditorCompileRequest, EditorCompileResult>({
       throw error;
     }
     if (Date.now() >= absoluteDeadlineMs) throw compileTimeout();
-    if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot start compilation.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
+    if (state.status === "blocked") throw blockedEditorStateError("Unity Editor is blocked and cannot start compilation.", state.blockers);
     rejectUnavailableEditorState(state, "editor.compile");
     if (isPlaying(state)) throw new StructuredToolError("E_UNITY_COMPILE_REQUIRES_EDIT_MODE", "editor.compile requires Edit Mode.", ["Run unitycli tools run editor.play-mode.stop, then retry editor.compile."], { playMode: state.state.playMode.value }, false, 0);
     if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "editor.compile could not bind a verified Editor session.", ["Inspect editor.state and retry after the session identity is known."]);

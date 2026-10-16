@@ -95,10 +95,10 @@ namespace MyProject.UnityCLI
 AI 使用当前实例的统一公开目录自发现和执行：
 
 ```powershell
-unitycli tools group --instance <id|projectPath|alias>
-unitycli tools group list <group> --page-size 20 --instance <id|projectPath|alias>
-unitycli tools describe <custom-tool> --instance <id|projectPath|alias>
-unitycli tools run <custom-tool> --input '<json>' --instance <id|projectPath|alias>
+unitycli tools group --instance <name|alias|projectPath>
+unitycli tools group list <group> --page-size 20 --instance <name|alias|projectPath>
+unitycli tools describe <custom-tool> --instance <name|alias|projectPath>
+unitycli tools run <custom-tool> --input '<json>' --instance <name|alias|projectPath>
 ```
 
 `<group>` 必须来自当前实例 `tools group` 的真实输出；不要假设项目 Tool 位于 `custom` 组。存在`pageInfo.nextCursor`时必须继续读取所需页面。`source` 只作内部描述/审计，不改变发现或执行路径。
@@ -108,4 +108,4 @@ unitycli tools run <custom-tool> --input '<json>' --instance <id|projectPath|ali
 1. Unity 编译无错误。
 2. `tools group` 与 `tools group list <group>` 的分页结果能从同一实例完整目录发现 Tool。
 3. `tools describe <tool>` 的 schema、风险、target、Play Mode 语义足以让陌生 AI 一次调用成功。
-4. `tools run <tool> --input '<json>' --instance <id|projectPath|alias>` 覆盖默认正向、代表性可选参数和错误路径。
+4. `tools run <tool> --input '<json>' --instance <name|alias|projectPath>` 覆盖默认正向、代表性可选参数和错误路径。

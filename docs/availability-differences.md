@@ -16,13 +16,17 @@ catalog只包含必须由已打开Unity Editor或development Player提供的项�
 |------|------------------|
 | `ready` | 返回当前实例完整Tool catalog；session/listener与近期主线程pulse均已证明 |
 | `transitioning` | supervisor在同一deadline内等待lifecycle与listener generation交接 |
-| `blocked` | 普通catalog/Tool返回blocker error；exact `editor.state` / `editor.dialogs` / `editor.dialog.click`保留无业务准入的本地观察与恢复路径 |
+| `blocked` | 普通catalog/Tool返回blocker error；exact `editor.state` / `editor.dialogs` / `editor.dialog.click`保留无业务准入的本地观察与恢复路径。`editor.state` 在两种独立证据下返回该状态：独立观察到的 Windows modal（`blocker.type="dialog"`），或当前 live pause publication 证明的故意主线程暂停（`blocker.type="debug-pause"`） |
 | `unresponsive` | transport存在但主线程不可响应；返回`E_UNITY_UNRESPONSIVE` |
 | `unverifiable` | ownership证据不完整；返回`E_INSTANCE_UNVERIFIABLE`，不得误报duplicate |
 | `offline` | 不返回capability catalog；返回`E_INSTANCE_NOT_RUNNING` |
 | `conflict` | 至少两个verified live claim；返回`E_INSTANCE_CONFLICT` |
 
 没有 selector 且 CWD 不在 Unity 项目中时返回 `E_INSTANCE_REQUIRED`。静态 snapshot 不作为公开 fallback。只有三个exact Editor观察名称、六个域专用durable status名称及`tools describe`对它们的精确学习入口可使用冻结本地descriptor；status仍执行一次选定实例上的SafeStatus读取，相邻名称、alias、group、handler和其他offline Tool仍按Live catalog与普通准入失败。dialogs只在Windows可用。
+
+主线程暂停期间的可达能力是冻结名单，而不是回退清单：`tools group/list/search`、`tools describe`、两个公开入口、`debug.pause.list/wait`、`debug.pause.inspect/evaluate/resume`、`debug.events.read`、`debug.thread.list`、`debug.hook.list/info`、`debug.session.list/info`、`debug.program.list/info`、`internal.editor.state.snapshot` 与命名了 `pauseId` 的 `debug.value.read/write` 仍在发起请求的线程上直接服务，并继续使用同一个 live catalog descriptor；没有发布 catalog 时如实报告不可用，不回退到静态清单。其他业务 mutation 在任何 effect 之前返回 `E_DEBUG_MAIN_THREAD_PAUSED`。
+
+健康探针在 `mainThread.debugPause` 上单独发布当前主线程暂停；它不修改主线程 pulse。因此“transport 可达”“pulse 新鲜”和“主线程被故意暂停”不能互相替代：pulse 停止且有该 publication 时状态为 `blocked`，只有 pulse 停止而没有该 publication 时仍为 `unresponsive`，绝不用旧文件或 worker 现场推断因果。
 
 ## Package 与 Extension
 
@@ -84,7 +88,7 @@ Domain reload期间，Registry v3 lifecycle将实例归约为`transitioning`，l
 
 ## AI Agent 处理方式
 
-1. 显式传 `--instance <id|projectPath|alias>`，或从目标 Unity 项目 CWD 调用。
+1. 显式传 `--instance <name|alias|projectPath>`，或从目标 Unity 项目 CWD 调用。
 2. 先 discovery，再 describe；不要从 source 或工具名推断参数。
 3. 对 `available:false` 读取 `unavailableReason`、`requiresPackages` 和 `nextActions`。
 4. Package、Extension、项目代码、domain reload 或 PlayMode 变化后重新 discovery。

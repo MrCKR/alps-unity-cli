@@ -10,7 +10,7 @@ const COMMAND_SAMPLE_PATTERN = /\b(?:unitycli\s+)?tools\s+run\s+[\w.-]+\b/i;
 const LARGE_OUTPUT_PATTERN = /\b(pageInfo|cursor|nextCursor|plannedEffects|artifactDir|truncated)\b/i;
 
 const P0_EXAMPLE_TOOLS = new Set([
-  "code.execute",
+  "debug.code.execute",
   "package.install",
   "package.remove",
   "package.deploy",
@@ -24,7 +24,7 @@ const P0_EXAMPLE_TOOLS = new Set([
 ]);
 
 const P0_OUTPUT_SCHEMA_TOOLS = new Set([
-  "code.execute",
+  "debug.code.execute",
   "docs.search",
   "docs.get",
   "type-inspection.search",
@@ -38,7 +38,7 @@ const P0_OUTPUT_SCHEMA_TOOLS = new Set([
 const LARGE_OUTPUT_TOOLS = new Set([
   "docs.search",
   "type-inspection.search",
-  "code.execute"
+  "debug.code.execute"
 ]);
 
 function descriptorText(tool: ResolvedToolMetadata): string {
@@ -65,7 +65,7 @@ function assertNoInternalSourceText(subject: string, text: string): void {
 test("TS-local descriptor registry owns exactly the current package-local tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    "asset.refresh", "asset.refresh.status", "build.player.status", "build.run", "code.execute", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
+    "asset.refresh", "asset.refresh.status", "build.player.status", "build.run", "debug.code.execute", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
     "editor.dialogs", "editor.play-mode.status", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
     "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
     "occlusion.bake-status", "package.bridge-remove", "package.deploy",
@@ -110,17 +110,28 @@ test("descriptions are call guidance, not duplicated summaries or embedded comma
   }
 });
 
-test("code.execute discovery keeps critical execution boundaries within its description budget", () => {
-  const tool = findToolByName("code.execute");
+test("debug.code.execute discovery keeps critical execution boundaries within its description budget", () => {
+  const tool = findToolByName("debug.code.execute");
   assert.ok(tool);
   assert.match(tool.summary, /cannot be force-stopped by timeout/i);
   assert.match(tool.description, /synchronously compile and execute trusted C# 8/i);
+  // 包裹声明必须自足：确切声明、唯一的预声明标识符与 body 的作用域事实，否则调用方无法预防 CS0136 一类失败。
+  assert.match(tool.description, /the body of exactly `public static object Run\(string argsJson\)` inside `namespace UnityCli\.RuntimeCode \{ public static class Script \{ \} \}`/);
+  assert.match(tool.description, /the wrapper declares no locals, so argsJson is the only pre-declared identifier/);
+  assert.match(tool.description, /a name declared at its top level cannot be redeclared in a nested block, loop, lambda or local function \(CS0136\)/);
+  assert.match(tool.description, /A source whose text contains `public static object Run\(` is placed in the class as-is instead/);
+  assert.match(tool.description, /runtime\.returnValueTruncated plus runtime\.returnValueByteBudget state whether the returned value was cut/);
   assert.match(tool.description, /no capability reduction/i);
   assert.match(tool.description, /cannot interrupt Run/i);
   assert.match(tool.description, /outcome-unknown/i);
   assert.match(tool.description, /completionProbe is optional/i);
   assert.match(tool.description, /Dry-run reports source hash/i);
-  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 1024, "code.execute description must remain within 1024 UTF-8 bytes");
+  // 该描述必须同时公布 typed partial outcome 的信封形状、30000 ms off-main 控制等待边界、
+  // 确切包裹声明与返回值截断事实，因此预算从 1536 提升到 2304 UTF-8 字节；上限本身仍然被强制。
+  assert.ok(Buffer.byteLength(tool.description, "utf8") <= 2304, "debug.code.execute description must remain within 2304 UTF-8 bytes");
+  assert.match(tool.description, /error\.details\.outcome/i);
+  assert.match(tool.description, /30000 ms/);
+  assert.match(tool.description, /dispatch site whose creation result is answered before the pause starts/i);
 });
 
 test("large-output TS-local descriptors disclose output controls", () => {

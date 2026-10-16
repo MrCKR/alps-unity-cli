@@ -47,7 +47,7 @@
 | `UnityCliBridge.cs` 已有启动、重载、Play 与 quitting 入口 | 复用其生命周期入口，不由每个 Tool 订阅 Editor 回调 |
 | `UnityCliWaitScheduler` 集中处理框架等待和 coordinator tick | 恢复、编译等待与清理交给中央推进，不新增私有 update 循环 |
 | `contracts/package-assembly-closure.json` 当前 `bundledAssemblies` 为空 | 添加 Harmony 必须同步依赖闭包、hash、许可证、安装冲突与 package 文件清单 |
-| `runtime-reflection.method.find` 已提供分页方法发现 | 复用它学习目标签名，不重复实现通用反射浏览器 |
+| `debug.method.find` 已提供分页方法发现 | 复用它学习目标签名，不重复实现通用反射浏览器 |
 
 研究材料：
 
@@ -126,7 +126,7 @@ Harmony 类型只进入后端及其显式 precompiled references；核心 Tool �
 
 | group | 职责 | 本次处理 |
 | --- | --- | --- |
-| `code` | 一次性执行任意 C#；调用完成后不承担由专用 Tool 管理的长期 hook 生命周期 | 保留 `code.execute`，不迁移、不增加 hook action 路由 |
+| `code` | 一次性执行任意 C#；调用完成后不承担由专用 Tool 管理的长期 hook 生命周期 | 保留 `debug.code.execute`，不迁移、不增加 hook action 路由 |
 | `runtime-reflection` | 从 live 内存发现方法和类型 schema，或单次调用 exact 方法 | 保留现有 find/invoke/schema；用于学习 hook 目标签名 |
 | `type-inspection` | 查询离线类型/成员缓存 | 保持 offline 边界，不负责当前域 target 存在性或可拦截性 |
 | `console` | 读取/清空 Unity Console 日志 | 保留；hook 业务事件有独立 cursor，不冒充 Console 日志 |
@@ -145,7 +145,7 @@ Harmony 类型只进入后端及其显式 precompiled references；核心 Tool �
 - Group summary 的源码 owner：`src/tools/tools/group-summaries.ts` 的 `GROUP_SUMMARIES`。
 - 一句话 summary：`Live Editor method hooks: install/replace, enable/disable, remove, list/info, and bounded events for observing calls, modifying behavior, and executing C# callbacks.`
 - `tools group` 用该 summary 路由到方法拦截；`tools group list method-hook` 返回本组实际注册的八个 Tool；搜索和 describe 使用同一 live catalog。
-- `tools describe method-hook.install` 自足说明长期效果、编译/安装成本、授权与恢复边界，不让 AI 靠 group summary 猜接口。
+- `tools describe debug.hook.install` 自足说明长期效果、编译/安装成本、授权与恢复边界，不让 AI 靠 group summary 猜接口。
 - group 只在发现入口表达，不新增顶层 `method-hook` 命令、不增加独立 transport 或嵌套 group 协议。
 - 未实现或未验证的断点、单步、watchpoint、任意字段写入订阅不进入 summary/能力承诺。
 
@@ -155,14 +155,14 @@ Harmony 类型只进入后端及其显式 precompiled references；核心 Tool �
 
 | Tool | 单一职责 | 主要输入 | 主要业务结果 |
 | --- | --- | --- | --- |
-| `method-hook.install` | 创建并激活一个定义 | target、activation、capture、callbacks、label | hookId、revision、state、eventCursor、目标摘要 |
-| `method-hook.replace` | 替换同一 hook 的捕获和回调定义 | hookId、editorSessionId、expectedRevision、新 capture/callbacks | 新 revision 与实际生效定义摘要 |
-| `method-hook.enable` | 激活已保留定义 | hookId、editorSessionId、expectedRevision | 新 revision、实际 armed/dormant 状态 |
-| `method-hook.disable` | 关闭之后的 hook 效果 | 同上 | 新 revision、disabled 状态 |
-| `method-hook.remove` | 删除定义及自己的 Attachment | 同上 | removed、已删除 hookId |
-| `method-hook.list` | 分页只读摘要 | state/label 筛选、limit、cursor | items、nextCursor |
-| `method-hook.info` | 只读精查一个定义 | hookId、可选源码分页 | target、revision、state、捕获配置、回调 hash、事件摘要、失效原因 |
-| `method-hook.events` | 只读有界事件续读 | hookId/kind/playSessionId 筛选、limit、cursor | events、nextCursor、oldestAvailableCursor、hasMore、gaps |
+| `debug.hook.install` | 创建并激活一个定义 | target、activation、capture、callbacks、label | hookId、revision、state、eventCursor、目标摘要 |
+| `debug.hook.replace` | 替换同一 hook 的捕获和回调定义 | hookId、editorSessionId、expectedRevision、新 capture/callbacks | 新 revision 与实际生效定义摘要 |
+| `debug.hook.enable` | 激活已保留定义 | hookId、editorSessionId、expectedRevision | 新 revision、实际 armed/dormant 状态 |
+| `debug.hook.disable` | 关闭之后的 hook 效果 | 同上 | 新 revision、disabled 状态 |
+| `debug.hook.remove` | 删除定义及自己的 Attachment | 同上 | removed、已删除 hookId |
+| `debug.hook.list` | 分页只读摘要 | state/label 筛选、limit、cursor | items、nextCursor |
+| `debug.hook.info` | 只读精查一个定义 | hookId、可选源码分页 | target、revision、state、捕获配置、回调 hash、事件摘要、失效原因 |
+| `debug.events.read` | 只读有界事件续读 | hookId/kind/playSessionId 筛选、limit、cursor | events、nextCursor、oldestAvailableCursor、hasMore、gaps |
 
 不提供 `action`、通用 `manage`、隐式 upsert、全局 clear-all 或 broadcast。`replace` 不更换 target/activation：更换拦截对象或生效范围使用 remove 加 install，防止回调更新悄悄扩大原授权。
 
@@ -247,7 +247,7 @@ Callback 代码不需要 `using HarmonyLib`，也不要求 AI 编写 patch class
 
 ## 8. 编译与缓存边界
 
-抽取 `CodeExecSupport.cs` 的“参考程序集发现、固定临时文件、csc 子进程、诊断、assembly bytes”到共享编译 owner。`code.execute` 的 source wrapping、Run 入口、completion probe、stdout 收集和原执行语义不改变；hook 使用自己的 wrapper 和回调 ABI。
+抽取 `CodeExecSupport.cs` 的“参考程序集发现、固定临时文件、csc 子进程、诊断、assembly bytes”到共享编译 owner。`debug.code.execute` 的 source wrapping、Run 入口、completion probe、stdout 收集和原执行语义不改变；hook 使用自己的 wrapper 和回调 ABI。
 
 三个成本必须公开区分：
 
@@ -259,9 +259,9 @@ Callback 代码不需要 `using HarmonyLib`，也不要求 AI 编写 patch class
 
 compiler 先只产出 bytes/诊断，用户程序集加载和 patch 安装发生在唯一 effect barrier 之后。Patch 建立可能触发目标类型初始化；用户程序集加载也不能被视为纯读取。不得在 dry-run 或只读 Tool 中加载/执行这些程序集。
 
-共享 compiler owner 统一串行化普通 code.execute、公开 hook mutation 和生命周期恢复：最多一个 active compiler，pending 数量受当前 128 个定义与既有 admission 上限共同约束，同一 session/generation/hook/revision 不重复排队。等待队列与进程都携带不可续期的原 deadline，reload/quitting 统一取消。准备引用快照在主线程完成，耗时子进程等待通过框架推进，不占用私有 update；不能因恢复与公开调用竞争而并发写同一临时目录。
+共享 compiler owner 统一串行化普通 debug.code.execute、公开 hook mutation 和生命周期恢复：最多一个 active compiler，pending 数量受当前 128 个定义与既有 admission 上限共同约束，同一 session/generation/hook/revision 不重复排队。等待队列与进程都携带不可续期的原 deadline，reload/quitting 统一取消。准备引用快照在主线程完成，耗时子进程等待通过框架推进，不占用私有 update；不能因恢复与公开调用竞争而并发写同一临时目录。
 
-callback wrapper 的 namespace/type 和程序集简单名按完整编译 key 派生唯一身份，不能把所有 bytes 都生成为同名 `assembly` 后假设 Mono 绑定安全。编译器输出文件可用该稳定 key 命名，但同一时刻至多一套 source/rsp/output/pdb，读取 bytes 后 finally 删除，无按 hash 累积目录或文件。code.execute 保持当前命名和执行契约，隔离 hook 的类型身份。
+callback wrapper 的 namespace/type 和程序集简单名按完整编译 key 派生唯一身份，不能把所有 bytes 都生成为同名 `assembly` 后假设 Mono 绑定安全。编译器输出文件可用该稳定 key 命名，但同一时刻至多一套 source/rsp/output/pdb，读取 bytes 后 finally 删除，无按 hash 累积目录或文件。debug.code.execute 保持当前命名和执行契约，隔离 hook 的类型身份。
 
 cache key 包含源码 hash、wrapper ABI、compiler 参数及引用程序集身份/MVID。相同域相同 key 复用，跨域重新建立引用；不假设原 bytes 能适配新游戏程序集。恢复时自动编译属于同一 session 已授权定义的重新激活，不发起新的公开请求。
 
@@ -362,7 +362,7 @@ Adapter 使用 Harmony 支持的注入参数和按 exact signature 生成的 run
 
 错误事件包含稳定 code、有界原因、hookId/revision 和 Invocation 身份；info 保留最后一次原因。参数/结果暂存失败不提交，但已经写出的游戏字段、对象或文件保持真实状态，不能承诺恢复。
 
-默认 callback 超过 10 ms 且正常返回时记录 overrun 并 fault，后续命中不再派发。该数字只是事后保护阈值，不是抢占式超时；无限循环、长睡眠或死锁可能永久阻塞 Editor。沿用 `code.execute` 对不可强制终止代码的风险披露，不新增安全确认按钮或代码关键字过滤。
+默认 callback 超过 10 ms 且正常返回时记录 overrun 并 fault，后续命中不再派发。该数字只是事后保护阈值，不是抢占式超时；无限循环、长睡眠或死锁可能永久阻塞 Editor。沿用 `debug.code.execute` 对不可强制终止代码的风险披露，不新增安全确认按钮或代码关键字过滤。
 
 ### 11.3 重入与资源错误
 
@@ -480,11 +480,11 @@ CLI 审计沿用 session 级 append/轮转；hook hit 不灌入通用审计日�
 
 | owner | 预计改动 |
 | --- | --- |
-| `unitypkg/Editor/Tools/method-hook/` | install/replace/enable/disable/remove/list/info/events 八个独立 Tool、closed Request/Result DTO、descriptor 与 examples |
+| `unitypkg/Editor/Tools/debug/hook/` | install/replace/enable/disable/remove/list/info/events 八个独立 Tool、closed Request/Result DTO、descriptor 与 examples |
 | `unitypkg/Editor/Infrastructure/MethodHooks/` | Host、exact resolver、session store、event buffer、Invocation context、code wrapper、backend 接口 |
 | `unitypkg/Hooks/`（asmdef + 后端源码） | Editor-only Harmony Adapter（按 exact 签名 emit，含 by-ref 类型化回写）、exact owner 操作、异常保持 Finalizer |
 | `unitypkg/Editor/Plugins/`、第三方 notices | pinned 官方依赖及传递闭包、稳定 importer meta、许可证/来源/hash |
-| `unitypkg/Editor/Infrastructure/CodeExecSupport.cs` 与 `unitypkg/Editor/Infrastructure/DynamicCodeCompiler.cs` | 抽取编译层为唯一共享 owner（引用发现、固定临时文件、mono/csc 子进程、诊断、bytes、唯一 active compiler）；保留 code.execute 执行/输出/completion probe 语义 |
+| `unitypkg/Editor/Infrastructure/CodeExecSupport.cs` 与 `unitypkg/Editor/Infrastructure/DynamicCodeCompiler.cs` | 抽取编译层为唯一共享 owner（引用发现、固定临时文件、mono/csc 子进程、诊断、bytes、唯一 active compiler）；保留 debug.code.execute 执行/输出/completion probe 语义 |
 | `unitypkg/Editor/Infrastructure/MethodHooks/MethodHookLimits.cs` | 全部资源上限与预算的唯一可调配置点；describe 文本、schema 范围与测试都从它读取 |
 | `unitypkg/Editor/UnityCliBridge.cs` | 接入既有 startup、before/after reload、Play state 与 quitting，不重复订阅 |
 | `unitypkg/Editor/Infrastructure/UnityCliWaiter.cs` | 在中央 coordinator 推进中挂接恢复/cleanup；不增加第二个 update scheduler |
@@ -498,7 +498,7 @@ CLI 审计沿用 session 级 append/轮转；hook hit 不灌入通用审计日�
 | `README.md`、`docs/architecture.md` 和相关现有文档 | 只在实现完成后反映已验证的公开能力和安装边界，不写未来承诺 |
 | tests、Unity 测试、Dev 夹具、定向 runner | 与下面的影响面一同收敛，不靠 smoke 代替行为验证 |
 
-公开 Tool 主要由 C# owner 提供。不得为了八个 Tool 再复制一套 `src/tools/method-hook/*` TS-local descriptor；只有现有生成/bridge spec 必须投影的内容才更新。
+公开 Tool 主要由 C# owner 提供。不得为了八个 Tool 再复制一套 `src/tools/debug/*` TS-local descriptor；只有现有生成/bridge spec 必须投影的内容才更新。
 
 `skills/unitycli/` 是受保护内容。本轮未获任何单次修改授权，不修改或生成其中任何文件。实施结束要评估是否改变公开运行时路由/跨 Tool 规则：若仅增加一个可由 catalog 发现的 group，不复制完整 Tool 清单到 Skill；若确需修改，先列出具体文件和单次内容取得明确授权，未获授权的必需同步项记录为 blocker。
 
@@ -547,14 +547,14 @@ CLI 审计沿用 session 级 append/轮转；hook hit 不灌入通用审计日�
 - `tests/method-hook-contract.test.ts`：八个 Tool inventory、summary 路由与组归属、strict schema 与风险 metadata、唯一 effect barrier、completion 分类、command contract 复用、closure 与 `.meta`/运行核对一致性。
 - `tests/package-assembly-identity.test.ts`：assembly identity 解析与规范化、异名同 identity 冲突识别。
 - `tests/summary-routing.test.ts`：method-hook exact summary、八个 Tool 的组归属、相邻组不迁移与发现边界。
-- `tests/code-exec-contract.test.ts`与`tests/runtime-code.test.ts`：共享 compiler 抽取后的 code.execute 编译、deadline、临时文件、Run/stdout/exception 与 completion probe 回归。
+- `tests/code-exec-contract.test.ts`与`tests/runtime-code.test.ts`：共享 compiler 抽取后的 debug.code.execute 编译、deadline、临时文件、Run/stdout/exception 与 completion probe 回归。
 - `unitypkg/Tests/Editor/UnityCliMethodHookTests.cs`（12 项）：exact 方法解析、字段选择与投影边界、typed 参数/结果、State、事件环/采样、重入、事件页预算与实际 DTO member 数一致。
 - `unitypkg/Tests/Editor/UnityCliMethodHookIntegrationTests.cs`（14 项）：真实 Harmony patch 与自己的 Adapter readback、foreign owner 保留、callback fault 与启停删除、revision/CAS、callbackPending、事件 checkpoint 截断、插件导入后置核对。
 - 受影响的既有 catalog/completion 夹具（`UnityCliToolCatalogTests`、`tests/tool-completion-contract.test.ts`、`tests/tool-completion-commit-effect-audit.test.ts`、`tests/tool-schema-generator.test.ts`）只覆盖 built-in owner、新 Tool DTO/投影条目与 completion 分类，不把增量验证扩成全 Tool 测试。
 
 ### 17.2 既有回归切片
 
-共享 compiler 抽取影响 `tests/code-exec-contract.test.ts`、`tests/runtime-code.test.ts` 中的编译、deadline、临时文件、Run/stdout/exception 和 completionProbe 类别；Unity 的异常投影和实际 code.execute 夹具选择相应 test-name。不要重跑无关 Profiler、资产、Package 操作矩阵。
+共享 compiler 抽取影响 `tests/code-exec-contract.test.ts`、`tests/runtime-code.test.ts` 中的编译、deadline、临时文件、Run/stdout/exception 和 completionProbe 类别；Unity 的异常投影和实际 debug.code.execute 夹具选择相应 test-name。不要重跑无关 Profiler、资产、Package 操作矩阵。
 
 catalog/completion 改动选择 `tests/tool-completion-contract.test.ts`、`tests/tool-completion-commit-effect-audit.test.ts`、`tests/tool-schema-generator.test.ts` 及 `UnityCliToolCatalogTests` 中 built-in owner、新 Tool DTO/投影条目。`tests/summary-routing.test.ts` 补足 method-hook 的 exact summary、完整八个 Tool 的 group 归属、相邻组不迁移及发现边界断言，选择新增 case 与直接受影响的现有 case。Bridge/scheduler 只覆盖 hook 生命周期接入和既有 wait cleanup 同一入口的等价类，不自动宣布所有 coordinator 受影响。
 
@@ -589,7 +589,7 @@ package assembly closure 与文件 inventory 的 exact-set/hash 是新增二进�
 | dry-run | 五个 mutations 的正常/错误预览 | 无该动作引起的 compile/load/patch/callback/hook 文件/State/事件副作用 |
 | 分页事件 | 无 cursor、从 install cursor、filter、换 filter、多个 reader、溢出 | 进度单调、身份绑定、丢失范围明确、读取不消费共享状态 |
 | 大输出/边界 | 源码、字节产物、64 定义、8 同 target、32 编译 hash、事件/State | 上限前后稳定，达到上限仍可 disable/remove/info |
-| 编译回归 | code.execute 的正常/错误/超时/probe；hook 新/重复 source | 共享 compiler 不改变原语义；重复 key 不重复加载 |
+| 编译回归 | debug.code.execute 的正常/错误/超时/probe；hook 新/重复 source | 共享 compiler 不改变原语义；重复 key 不重复加载 |
 | 崩溃/重启 | normal quit 与专用 Dev 异常退出 | 新 session 不恢复旧定义/代码；旧 cursor/session 不能命中 |
 | 存储故障 | 有界夹具注入 publish/checkpoint failure、损坏/异格式 | gate fail closed；只处理本 owner 固定文件；读取仍纯只读 |
 | 断连/超时 | compiler 前、effect 前后、reload listener generation、CLI 提前退出 | 既有 deadline/outcome-unknown；无新 session 重投；CLI 退出 hook 不被误取消 |

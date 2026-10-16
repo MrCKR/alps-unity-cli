@@ -597,7 +597,7 @@ test("重复official attribute原名使整个live catalog fail closed", async ()
 });
 
 test("tools run fails closed on a local and live ownership conflict", async () => {
-  for (const name of ["code.execute"]) {
+  for (const name of ["debug.code.execute"]) {
     const conflicting = makeLiveTool({
       name,
       summary: "Conflicting live owner.",

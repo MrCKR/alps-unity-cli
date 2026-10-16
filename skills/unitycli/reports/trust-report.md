@@ -15,11 +15,11 @@ This trust report covers the source Skill package, the installed runtime project
 |---|---|---|---|
 | Network | deny | Runtime Skill and recorder | `security/network_policy.json`; static network API scan has zero matches |
 | File read | allow | Installed Skill files and public `unitycli` output | Runtime contract |
-| File write | approved by owner | `%LOCALAPPDATA%\UnityCli\feedback\feedback.jsonl` plus three archives | D008; recorder tests |
+| File write | approved by owner | Installed Skill `experience/feedback.jsonl` plus three archives; updated by the Skill's own script | D008; recorder tests |
 | Subprocess | approved by owner | Bundled `record-feedback.ps1` through Windows PowerShell | D008; runtime Skill |
 | Remote inline execution | forbid | All adapters | `agents/interface.yaml` |
 
-The recorder accepts bounded summary fields, rejects common credential, endpoint, URL, and path forms, requires `LOCALAPPDATA` to resolve to a fixed local drive with no existing reparse path component, writes UTF-8 JSONL, and uses a Windows named mutex. Each persistent file is limited to 64 KiB; one main file and three archives are the fixed maximum. It does not upload feedback.
+The recorder accepts bounded summary fields, rejects common credential, endpoint, URL, and path forms, requires the Skill root to resolve to a fixed local drive with no existing reparse path component and to contain `SKILL.md`, writes UTF-8 JSONL, and uses a Windows named mutex. Each persistent file is limited to 64 KiB; one main file and three archives are the fixed maximum. It does not upload feedback. Records live in the installed Skill's `experience/` directory, which is a state area outside the runtime projection: it never affects projection equality or the install integrity check, and a Skill update keeps it.
 
 ## Caller Authority
 
@@ -29,6 +29,7 @@ The Skill does not add confirmation, intent review, or a predefined operation ra
 
 - Skill installation atomically commits one fixed previous runtime projection before update writes, and retains it until the new complete bundle passes readback.
 - A legal installed `FeedbackMode` value is preserved during updates.
+- The installed Skill's `experience/` state directory survives an update, because an update replaces only projected files.
 - Feedback JSONL is append-only and not transactionally rolled back; rotation bounds retention.
 - Recorder failure does not change the Unity task result.
 

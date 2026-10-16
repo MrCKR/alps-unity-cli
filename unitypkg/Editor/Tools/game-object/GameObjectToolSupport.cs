@@ -425,7 +425,7 @@ namespace UnityCli
             {
                 return new ComponentPropertyChange(propertyName, ConvertComponentValue(value, field.FieldType), field.FieldType, null, field, value);
             }
-            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use component.get or runtime-reflection.type.schema to inspect writable public fields/properties.");
+            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use component.get or debug.type.schema to inspect writable public fields/properties.");
         }
 
         public static void ApplyComponentPropertyChanges(Component component, List<ComponentPropertyChange> changes)
@@ -456,7 +456,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_COMPONENT_VALUE_INVALID",
                     "Component value could not be converted to " + type.Name + ": " + exception.Message,
-                    "Pass a JSON value matching the writable member type shown by component.get or runtime-reflection.type.schema.");
+                    "Pass a JSON value matching the writable member type shown by component.get or debug.type.schema.");
             }
         }
 

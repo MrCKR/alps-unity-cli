@@ -29,6 +29,8 @@ test("Bridge main-thread scheduler advances every durable coordinator before que
     'TickCoordinator("test.run", UnityCliBridge.UnityCliTestRunCoordinator.Tick);',
     'TickCoordinator("navmesh.bake", UnityCliBridge.UnityCliNavMeshBakeCoordinator.Tick);',
     'TickCoordinator("occlusion.bake", UnityCliBridge.UnityCliOcclusionBakeCoordinator.Tick);',
+    'TickCoordinator("method-hook", MethodHookHost.Tick);',
+    'TickCoordinator("debug.program", DebugScheduler.Tick);',
   ];
   const productionCoordinatorTicks = [...durableScheduler.matchAll(/TickCoordinator\("[^"]+", [^;]+\);/g)]
     .map((match) => match[0])

@@ -2,8 +2,7 @@ import { animationBridgeSpecs } from "./domains/animation.js";
 import { assetBridgeSpecs } from "./domains/asset.js";
 import { buildBridgeSpecs } from "./domains/build.js";
 import { cameraBridgeSpecs } from "./domains/camera.js";
-import { codeBridgeSpecs } from "./domains/code.js";
-import { consoleBridgeSpecs } from "./domains/console.js";
+import { debugBridgeSpecs } from "./domains/debug.js";
 import { doctorBridgeSpecs } from "./domains/doctor.js";
 import { editorBridgeSpecs } from "./domains/editor.js";
 import { gameObjectBridgeSpecs } from "./domains/game-object.js";
@@ -15,7 +14,6 @@ import { physicsBridgeSpecs } from "./domains/physics.js";
 import { prefabBridgeSpecs } from "./domains/prefab.js";
 import { profilerBridgeSpecs } from "./domains/profiler.js";
 import { renderingBridgeSpecs } from "./domains/rendering.js";
-import { runtimeReflectionBridgeSpecs } from "./domains/runtime-reflection.js";
 import { sceneBridgeSpecs } from "./domains/scene.js";
 import { screenshotBridgeSpecs } from "./domains/screenshot.js";
 import { scriptableObjectBridgeSpecs } from "./domains/scriptable-object.js";
@@ -55,11 +53,9 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...uiBridgeSpecs,
   ...editorBridgeSpecs,
   ...doctorBridgeSpecs,
-  ...codeBridgeSpecs,
+  ...debugBridgeSpecs,
   ...serializedObjectBridgeSpecs,
-  ...runtimeReflectionBridgeSpecs,
   ...screenshotBridgeSpecs,
-  ...consoleBridgeSpecs,
   ...buildBridgeSpecs,
   ...catalogPlayerBridgeSpecs,
   ...catalogEditorBridgeSpecs

@@ -75,8 +75,8 @@ export async function handleCommand(
       },
       catalogDiscovery: {
         commandListing: "unitycli command --project-path <path> [--page-size <n>] [--cursor <nextCursor>]",
-        toolSearch: "unitycli tools search <k1|k2|...> --instance <id|projectPath|alias>",
-        toolDescribe: "unitycli tools describe <tool> --instance <id|projectPath|alias>",
+        toolSearch: "unitycli tools search <k1|k2|...> --instance <name|alias|projectPath>",
+        toolDescribe: "unitycli tools describe <tool> --instance <name|alias|projectPath>",
       },
       note: "Omit name without --help to read bounded command summaries; continue with pageInfo.nextCursor and use command <name> --help for parameters.",
     });

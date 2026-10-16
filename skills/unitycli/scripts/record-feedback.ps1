@@ -103,7 +103,7 @@ function Assert-NoReparsePath {
             throw
         }
         if (($attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw "LOCALAPPDATA and feedback paths must not contain reparse points."
+            throw "The Skill root and feedback paths must not contain reparse points."
         }
     }
 }
@@ -113,25 +113,29 @@ Assert-SafeFeedbackText -Name "Workaround" -Value $Workaround
 if ($Category -eq "workaround" -and [string]::IsNullOrWhiteSpace($Workaround)) {
     throw "Workaround is required when Category is workaround."
 }
-if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-    throw "LOCALAPPDATA is required to store local unitycli feedback."
+if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    throw "The Skill script directory is required to store unitycli feedback."
+}
+# 经验库固定位于 Skill 根目录下的 experience/：先证明脚本所在目录确为 Skill 根，再验证盘类型。
+$skillRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
+if (-not (Test-Path -LiteralPath (Join-Path $skillRoot "SKILL.md") -PathType Leaf)) {
+    throw "Feedback must be recorded from an installed Skill root that contains SKILL.md."
 }
 # UNC、映射盘和其他远端 provider 会绕过本机 mutex，因此仅接受固定本地盘。
 try {
-    $localAppDataRoot = [System.IO.Path]::GetFullPath($env:LOCALAPPDATA)
-    $driveRoot = [System.IO.Path]::GetPathRoot($localAppDataRoot)
+    $driveRoot = [System.IO.Path]::GetPathRoot($skillRoot)
     if ($driveRoot -notmatch '^[A-Za-z]:\\$') {
-        throw "LOCALAPPDATA must use a local drive path."
+        throw "The Skill root must use a local drive path."
     }
     $driveInfo = New-Object System.IO.DriveInfo($driveRoot)
     if ($driveInfo.DriveType -ne [System.IO.DriveType]::Fixed) {
-        throw "LOCALAPPDATA must use a fixed local drive."
+        throw "The Skill root must use a fixed local drive."
     }
 } catch {
-    throw "LOCALAPPDATA must resolve to a fixed local drive."
+    throw "The Skill root must resolve to a fixed local drive."
 }
 
-$feedbackRoot = Join-Path $localAppDataRoot "UnityCli\feedback"
+$feedbackRoot = Join-Path $skillRoot "experience"
 $mainPath = Join-Path $feedbackRoot "feedback.jsonl"
 $recordId = "fb_" + [Guid]::NewGuid().ToString("N")
 $capabilityValue = $null

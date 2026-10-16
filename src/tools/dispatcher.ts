@@ -14,8 +14,8 @@ import {
 } from "../bridge/index.js";
 import { failure, success } from "../output.js";
 import { PackageManagerError } from "../package-manager.js";
-import { instanceSelectionFailure, selectInstanceForFlags, selectObservationInstanceForFlags, type InstanceSelection, type InstanceTarget } from "../instances.js";
-import { EditorBlockerObserver, sanitizeEditorBlockers } from "../editor-blocker-observer.js";
+import { clearInstanceHealthCache, inspectInstanceHealth, instanceSelectionFailure, selectInstanceForFlags, selectObservationInstanceForFlags, type InstanceSelection, type InstanceTarget, type MainThreadDebugPause, type UnityInstance } from "../instances.js";
+import { EditorBlockerObserver, editorDialogBlockers, sanitizeEditorBlockers } from "../editor-blocker-observer.js";
 import { defaultDataDir } from "../platform.js";
 import { trackCliProcessOwner } from "../cli-process-owners.js";
 import type { ProjectToolRuntime } from "../project-tool-discovery.js";
@@ -26,7 +26,7 @@ import { ExtensionInstallerError } from "../extensions/installer.js";
 import { resolveCatalogIndependentInvocationTool, resolveCatalogIndependentOperabilityTool, resolveCatalogTool } from "./catalog.js";
 import { generatedToolCompletionContract, type GeneratedToolCompletionContract } from "./.generated-completion-registry.js";
 import { findDefineTool, type ToolContext } from "./define.js";
-import { StructuredToolError } from "./errors.js";
+import { StructuredToolError, debugPausePartialOutcome } from "./errors.js";
 import { EXTENSION_GROUPS, findToolByName, toolIsMutation, type ToolMetadata } from "./metadata/index.js";
 
 export type ToolsRuntime = ProjectToolRuntime & Partial<BridgeRuntime> & {
@@ -93,14 +93,14 @@ export async function dispatchTool(
 
   const localMetadata = findToolByName(name);
   const timeoutMetadata = resolvedTool ?? localMetadata;
-  const defaultTimeoutMs = name === "code.execute" ? 60_000 : 30_000;
+  const defaultTimeoutMs = name === "debug.code.execute" ? 60_000 : 30_000;
   const started = invocationContext
     ? { ok: true as const, context: invocationContext }
     : beginToolInvocation(flags, requestId, { timeoutMs: timeoutMetadata?.timeoutMs ?? defaultTimeoutMs }, dispatchStartedAtMs);
   if (!started.ok) return started.result;
   const admissionTimeoutMs = started.context.timeoutMs;
   const admissionAbsoluteDeadlineMs = started.context.admissionAbsoluteDeadlineMs;
-  const parsed = await parseTypedInput(flags, requestId, name === "code.execute" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
+  const parsed = await parseTypedInput(flags, requestId, name === "debug.code.execute" ? 1024 * 1024 : undefined, admissionAbsoluteDeadlineMs);
   if (!parsed.ok) return parsed.error;
   const dispatchFlags = withStructuredInput(flags, parsed.input);
   const dispatchResolved = (tool: ToolMetadata, input: Record<string, unknown>): Promise<CliResult> => dispatchResolvedTool(
@@ -148,7 +148,7 @@ export async function dispatchTool(
   }
 
   const resolved = await resolveCatalogToolForInvocation(name, catalogFlags, runtime, requestId, started.context);
-  if (resolved.ok === false) return enrichTargetFailureWithDialogBlocker(resolved, catalogFlags, runtime, admissionAbsoluteDeadlineMs);
+  if (resolved.ok === false) return enrichTargetFailureWithObservedBlocker(resolved, catalogFlags, runtime, admissionAbsoluteDeadlineMs);
   const tool = resolved.tool;
   if (!tool) return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${name}.`, ["Run unitycli tools group to see tool groups.", "Run unitycli tools search <k1|k2|...> to find related tools."]);
 
@@ -358,7 +358,7 @@ async function executeCoreBridgeSpec(
 ): Promise<CliResult> {
   let args = await spec.buildArgs({ command: name, flags: bridgeWrapperFlags(flags, input), positionalTarget });
   if (spec.toolName) args = { name: spec.toolName, input: args };
-  return enrichTargetFailureWithDialogBlocker(await executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, {
+  return enrichTargetFailureWithObservedBlocker(await executeBridgePayload(requestId, spec.bridgeCommand, args, flags, runtime, {
     mode: "execute",
     mutation: true,
     absoluteDeadlineMs,
@@ -481,10 +481,13 @@ async function executeLocalDefinition(
   };
 
   try {
-    return await settleToolExecutionAtDeadline(tool.name, requestId, completion.mutation, absoluteDeadlineMs, run, {
+    const settled = await settleToolExecutionAtDeadline(tool.name, requestId, completion.mutation, absoluteDeadlineMs, run, {
       closeEffectBarrier: barrier.close,
       cleanupAfterLateSettlement,
+      effectCommitted: () => barrier.effectCommitted,
     });
+    // 本地 definition 的失败不带 Bridge wrapper 的事实集合；这里补上同一次暂停归因，证据仍只来自当前 live publication。
+    return await enrichLocalFailureWithObservedPause(settled, flags, runtime);
   } catch (error) {
     if (error instanceof PackageManagerError) return failure(requestId, error.code, error.message, error.nextActions);
     if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
@@ -505,6 +508,11 @@ export class LocalEffectBarrier {
     private readonly now: () => number = Date.now,
   ) {}
 
+  /** 首个业务 effect 是否已经提交；失败信封据此如实声明 dispatch 可能已开始。 */
+  public get effectCommitted(): boolean {
+    return this.committed;
+  }
+
   public readonly commitEffect = async (): Promise<void> => {
     if (this.committed) return;
     if (this.closed || this.now() >= this.absoluteDeadlineMs) throw new StructuredToolError("E_EXECUTION_TIMEOUT", `Tool ${this.toolName} cannot start its first effect after the public deadline.`, [
@@ -519,6 +527,8 @@ export class LocalEffectBarrier {
 export interface LocalExecutionDeadlineHooks {
   closeEffectBarrier?: () => void;
   cleanupAfterLateSettlement?: () => Promise<void>;
+  /** 首个业务 effect 是否已经开始；提交过时才允许 deadline 失败声明 dispatch 可能已开始。 */
+  effectCommitted?: () => boolean;
   now?: () => number;
 }
 
@@ -543,7 +553,7 @@ export async function settleToolExecutionAtDeadline(
   if (remainingMs <= 0) {
     hooks.closeEffectBarrier?.();
     trackCliProcessOwner(cleanup());
-    return toolDeadlineFailure(toolName, requestId, mutation);
+    return toolDeadlineFailure(toolName, requestId, mutation, hooks.effectCommitted?.() === true);
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -574,13 +584,13 @@ export async function settleToolExecutionAtDeadline(
   });
   const winner = await Promise.race([settlement, timerPromise]);
   if (timer) clearTimeout(timer);
-  if (winner.kind === "deadline") return toolDeadlineFailure(toolName, requestId, mutation);
+  if (winner.kind === "deadline") return toolDeadlineFailure(toolName, requestId, mutation, hooks.effectCommitted?.() === true);
   if (winner.kind === "result") return winner.value;
   throw winner.reason;
 }
 
 /** mutation超时只能读取业务状态，不能建议直接重试或声称底层执行已取消。 */
-function toolDeadlineFailure(toolName: string, requestId: string, mutation: boolean): CliResult {
+function toolDeadlineFailure(toolName: string, requestId: string, mutation: boolean, effectCommitted = false): CliResult {
   return failure(
     requestId,
     "E_EXECUTION_TIMEOUT",
@@ -590,7 +600,8 @@ function toolDeadlineFailure(toolName: string, requestId: string, mutation: bool
     mutation
       ? ["Inspect editor.state and the affected business state before deciding whether to submit a new request."]
       : ["Inspect editor.state and submit a new read only after Unity is responsive."],
-    mutation ? { outcome: "unknown" } : undefined,
+    // dispatch 事实只在 effect barrier 提交后如实声明；未提交时保持 outcome unknown，绝不声称行动可能已开始。
+    mutation ? { outcome: "unknown", ...(effectCommitted ? { dispatch: "may-have-started", replay: "new-decision-required" } : {}) } : undefined,
     { transient: false, retryAfterMs: 0 },
   );
 }
@@ -687,15 +698,17 @@ function validateKnownLocalTerminal(
     if (record.action !== "bridge-remove" || !nonEmptyString(record.bridgePath) || !nonEmptyString(record.installMetadataPath)) throw invalidCompletionProof(toolName, completion, "did not prove the Bridge package removal target");
     return true;
   }
-  if (toolName === "code.execute") {
+  if (toolName === "debug.code.execute") {
     const compile = objectRecord(record.compile);
     const runtime = objectRecord(record.runtime);
     const probeRequested = Object.prototype.hasOwnProperty.call(input ?? {}, "completionProbe");
     if (!Array.isArray(compile?.diagnostics) || !runtime
       || !Object.prototype.hasOwnProperty.call(runtime, "returnValue")
       || typeof runtime.stdout !== "string" || typeof runtime.stderr !== "string"
-      || typeof runtime.stdoutTruncated !== "boolean" || typeof runtime.stderrTruncated !== "boolean") {
-      throw invalidCompletionProof(toolName, completion, "did not return compilation and runtime results");
+      || typeof runtime.stdoutTruncated !== "boolean" || typeof runtime.stderrTruncated !== "boolean"
+      || typeof runtime.returnValueTruncated !== "boolean"
+      || typeof runtime.returnValueByteBudget !== "number" || !Number.isFinite(runtime.returnValueByteBudget) || runtime.returnValueByteBudget <= 0) {
+      throw invalidCompletionProof(toolName, completion, "did not return compilation and runtime results with an explicit return-value truncation fact");
     }
     if (!probeRequested) return true;
     const readback = objectRecord(record.completion);
@@ -1030,7 +1043,7 @@ async function executeLiveTool(
 
   // live descriptor已完成schema校验，wrapper直接承载typed input并复用同一root admission。
   const mutation = toolIsMutation(tool);
-  const result = await enrichTargetFailureWithDialogBlocker(await executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, rootRuntime, {
+  const result = await enrichTargetFailureWithObservedBlocker(await executeBridgeCommand(requestId, wrapper, bridgeWrapperFlags(flags, input), tool.name, rootRuntime, {
     mode: "execute",
     mutation,
     defaultTimeoutMs: timeoutMs,
@@ -1040,8 +1053,14 @@ async function executeLiveTool(
   return result;
 }
 
-/** Bridge wrapper失败只在原absolute deadline内追加一次有界modal诊断。 */
-export async function enrichTargetFailureWithDialogBlocker(
+/**
+ * dispatch 已开始却拿不到终态时用于现场归因的有界只读预算。
+ * 它不刷新也不延长调用方的业务 deadline，只是失败说明本身的一次上界。
+ */
+export const DISPATCH_PAUSE_DIAGNOSIS_BUDGET_MS = 5_000;
+
+/** Bridge wrapper 失败时追加一次有界只读诊断：先归因故意主线程暂停，再归因 Windows modal。 */
+export async function enrichTargetFailureWithObservedBlocker(
   result: CliResult,
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
@@ -1049,8 +1068,16 @@ export async function enrichTargetFailureWithDialogBlocker(
   observer = new EditorBlockerObserver(),
   selectObservation = selectObservationInstanceForFlags,
   now = Date.now,
+  inspectHealth = inspectInstanceHealth,
 ): Promise<CliResult> {
-  if (result.ok || (result.error.details && typeof result.error.details === "object" && Array.isArray((result.error.details as Record<string, unknown>).blockers))) return result;
+  if (result.ok) return result;
+  const failureDetails = result.error.details && typeof result.error.details === "object" && !Array.isArray(result.error.details)
+    ? result.error.details as Record<string, unknown>
+    : undefined;
+  if (failureDetails && Array.isArray(failureDetails.blockers)) return result;
+  const paused = await attributeDispatchedFailureToLivePause(result, failureDetails, flags, runtime, selectObservation, inspectHealth);
+  if (paused) return paused;
+  // Bridge wrapper失败只在原absolute deadline内追加一次有界modal诊断。
   const deadlineMs = Math.min(absoluteDeadlineMs, now() + 10_000);
   if (deadlineMs - now() <= 0) return result;
   try {
@@ -1059,10 +1086,9 @@ export async function enrichTargetFailureWithDialogBlocker(
     const instance = selection.instance;
     const observation = await observer.observe({ instanceId: instance.instanceId, canonicalProjectPath: instance.canonicalProjectPath, displayProjectPath: instance.displayProjectPath }, deadlineMs, instance.activeSession);
     const blockers = observation.outcome === "observed-blocked" ? sanitizeEditorBlockers(observation.blockers) : [];
-    if (blockers.length === 0) return result;
-    const details = result.error.details && typeof result.error.details === "object" && !Array.isArray(result.error.details) ? result.error.details : {};
-    const title = blockers[0].title;
-    return { ...result, error: { ...result.error, message: `${result.error.message} Modal dialog '${title}' was observed.`, details: { ...details, blockers }, nextActions: [
+    const title = editorDialogBlockers(blockers)[0]?.title;
+    if (!title) return result;
+    return { ...result, error: { ...result.error, message: `${result.error.message} Modal dialog '${title}' was observed.`, details: { ...(result.error.details && typeof result.error.details === "object" && !Array.isArray(result.error.details) ? result.error.details : {}), blockers }, nextActions: [
       "Run unitycli tools run editor.dialogs to inspect the current modal dialog.",
       "Run unitycli tools run editor.dialog.click with a current dialogId and exact button label.",
     ] } };
@@ -1070,6 +1096,85 @@ export async function enrichTargetFailureWithDialogBlocker(
     // 未证明的诊断不能替换主错误。
     return result;
   }
+}
+
+/**
+ * dispatch 可能已经开始、请求却拿不到终态时的暂停归因。
+ *
+ * 这个组合里唯一能被当前 live publication 证明的原因是主线程被故意暂停：请求已经发出，
+ * 主线程停在自己的断点上，因此终态永远不会到达。
+ * 暂停证据只有一个真值：Bridge background 线程发布的 Health v3 `mainThread.debugPause`。
+ * 即时观察 selector 只归约 registry 文件（它的状态归约故意不发 health 请求），因此它永远不会带出该证据；
+ * 这里必须显式读一次同一个 health owner，并先失效它的短缓存，才能拿到当前 publication 而不是暂停之前的快照。
+ * 只读一次、只消费 DISPATCH_PAUSE_DIAGNOSIS_BUDGET_MS；拿不到证据时原失败保持不变，
+ * 绝不把暂停当成超时的通用解释，也不重投、不预占或解除现场。
+ */
+async function attributeDispatchedFailureToLivePause(
+  result: CliResult,
+  failureDetails: Record<string, unknown> | undefined,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  selectObservation: typeof selectObservationInstanceForFlags,
+  inspectHealth: (instance: UnityInstance, now?: number) => Promise<{ mainThread?: { debugPause: MainThreadDebugPause | null } }>,
+): Promise<CliResult | undefined> {
+  if (result.ok || result.error.code !== "E_EXECUTION_TIMEOUT" || failureDetails?.dispatch !== "may-have-started") return undefined;
+  try {
+    const selection = await selectObservation(flags, runtime.dataDir ?? defaultDataDir(), DISPATCH_PAUSE_DIAGNOSIS_BUDGET_MS);
+    const evidence = await readLivePauseEvidence(selection.instance, inspectHealth);
+    if (!evidence) return undefined;
+    return debugPausePartialOutcome(result.requestId, evidence.pause, failureDetails, evidence.boundaryFactsUnread);
+  } catch {
+    // 归因读取失败不能替换主错误；暂停事实只能来自当前 live publication。
+    return undefined;
+  }
+}
+
+/**
+ * 本地 definition 失败的暂停归因入口。
+ *
+ * 本地 definition 的失败信封由 dispatcher 自己的 deadline race 或 Tool 自身产生，不带 Bridge wrapper 的事实集合，
+ * 因此不能直接复用 wrapper 入口的 modal 诊断。这里只做同一件只读归因：失败已经如实声明
+ * `dispatch: "may-have-started"` 且没有 blocker 时，读一次当前 live pause publication，并把结果投影成同一个
+ * typed partial outcome；其余失败（含 effect 前的 deadline 拒绝）原样返回，绝不把暂停当成超时的通用解释。
+ */
+export async function enrichLocalFailureWithObservedPause(
+  result: CliResult,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  selectObservation = selectObservationInstanceForFlags,
+  inspectHealth = inspectInstanceHealth,
+): Promise<CliResult> {
+  if (result.ok) return result;
+  const failureDetails = result.error.details && typeof result.error.details === "object" && !Array.isArray(result.error.details)
+    ? result.error.details as Record<string, unknown>
+    : undefined;
+  if (failureDetails && Array.isArray(failureDetails.blockers)) return result;
+  return (await attributeDispatchedFailureToLivePause(result, failureDetails, flags, runtime, selectObservation, inspectHealth)) ?? result;
+}
+
+/**
+ * 当前 live pause publication 的唯一读取点。
+ *
+ * 先接受 selector 已经归约出的暂停（注入式 selector 与 health 已归因路径共用同一 DTO），
+ * 否则在同一 health owner 上重读一次当前 publication。boundaryFactsUnread 只在 publication
+ * 一个边界事实都没带出时为 true：此时仍返回 typed outcome，但绝不回填 timeoutKind/remainingMs。
+ */
+async function readLivePauseEvidence(
+  instance: UnityInstance,
+  inspectHealth: (instance: UnityInstance, now?: number) => Promise<{ mainThread?: { debugPause: MainThreadDebugPause | null } }>,
+): Promise<{ pause: MainThreadDebugPause; boundaryFactsUnread: boolean } | undefined> {
+  const reduction = instance.mainThreadDebugPause;
+  if (reduction) return { pause: reduction, boundaryFactsUnread: boundaryFactsUnread(reduction) };
+  if (!instance.activeSession) return undefined;
+  // 缓存命中的旧 publication 可能早于暂停安装；暂停证据必须是当前 publication。
+  clearInstanceHealthCache();
+  const health = await inspectHealth(instance);
+  const pause = health.mainThread?.debugPause ?? undefined;
+  return pause ? { pause, boundaryFactsUnread: boundaryFactsUnread(pause) } : undefined;
+}
+
+function boundaryFactsUnread(pause: MainThreadDebugPause): boolean {
+  return pause.timeoutKind === undefined && pause.remainingMs === undefined;
 }
 
 async function parseTypedInput(flags: Record<string, string | boolean>, requestId: string, maxBytes?: number, absoluteDeadlineMs?: number): Promise<ParsedInput> {
@@ -1197,9 +1302,9 @@ function requireInputDeadline(absoluteDeadlineMs?: number): void {
   if (absoluteDeadlineMs !== undefined && (!Number.isFinite(absoluteDeadlineMs) || Date.now() >= absoluteDeadlineMs)) throw new InputDeadlineExceeded();
 }
 
-/** 统一生成code.execute本地typed input超限错误。 */
+/** 统一生成debug.code.execute本地typed input超限错误。 */
 function inputTooLarge(requestId: string, source: string, maxBytes: number): ParsedInput {
-  return { ok: false, error: failure(requestId, "E_CODE_INPUT_TOO_LARGE", `${source} exceeds the ${maxBytes}-byte code.execute typed-input limit.`, ["Use a smaller JSON input and keep Runtime Code source below its documented local budget."]) };
+  return { ok: false, error: failure(requestId, "E_CODE_INPUT_TOO_LARGE", `${source} exceeds the ${maxBytes}-byte debug.code.execute typed-input limit.`, ["Use a smaller JSON input and keep Runtime Code source below its documented local budget."]) };
 }
 
 function inputDeadlineExceeded(requestId: string): ParsedInput {

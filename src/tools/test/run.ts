@@ -4,7 +4,8 @@ import { withTransitionBinding, type BridgeFlags } from "../../bridge/types.js";
 import { defineTool } from "../define.js";
 import { waitForEditorTransitionEnd } from "../editor/readiness.js";
 import { rejectUnavailableEditorState } from "../editor/state.js";
-import { blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
+import { ERROR_CODES } from "../../output.js";
+import { blockedEditorStateError, blockerNextActions, blockerTimeoutMessage, blockersFromDetails, StructuredToolError } from "../errors.js";
 
 export interface TestRunRequest { platform?: "EditMode" | "PlayMode"; testNames?: string[]; groupNames?: string[]; categoryNames?: string[]; assemblyNames?: string[]; xml?: boolean; }
 export interface TestFailure { fullName: string; message: string; stackTrace: string; duration: number; }
@@ -23,7 +24,7 @@ export default defineTool<TestRunRequest, TestRunResult>({
   async execute(request, context) {
     const deadline = context.absoluteDeadlineMs ?? Date.now() + (context.execution.timeoutMs ?? 30_000);
     const state = await waitForEditorTransitionEnd(context, childId(context.requestId, "_test_state"), deadline);
-    if (state.status === "blocked") throw new StructuredToolError("E_UNITY_BLOCKED", "Unity Editor is blocked and cannot start tests.", ["Resolve the Editor blocker, then retry."], { blockers: state.blockers });
+    if (state.status === "blocked") throw blockedEditorStateError("Unity Editor is blocked and cannot start tests.", state.blockers);
     rejectUnavailableEditorState(state, "test.run");
     if (!state.session.known || !state.session.editorSessionId) throw new StructuredToolError("E_EDITOR_SESSION_REPLACED", "test.run could not bind one verified Editor session.", ["Inspect editor.state and retry after the session is stable."]);
     const flags: BridgeFlags = { ...(context.flags ?? {}), instance: state.identity.instanceId };
@@ -31,6 +32,8 @@ export default defineTool<TestRunRequest, TestRunResult>({
     const observe = withTransitionBinding({ mode: "read", mutation: false, absoluteDeadlineMs: deadline });
     let accepted = false;
     let terminalReceived = false;
+    // 已接受的 run 在读取自身状态时命中的“故意主线程暂停”拒绝。它不是 run 的失败，而只是本次观察暂时不可用。
+    let pauseRefusal: StructuredToolError | undefined;
     try {
       let root = record((await call(context.requestId, "internal.test.run.start", { ...request, platform: request.platform ?? "EditMode", expectedEditorSessionId: state.session.editorSessionId }, flags, context, execute)).data);
       accepted = root.accepted === true || root.terminal === true;
@@ -38,13 +41,25 @@ export default defineTool<TestRunRequest, TestRunResult>({
       if (root.terminal !== true && !sha(rootRequestDigest)) throw invalid();
       while (root.terminal !== true) {
         if (root.terminal !== false || root.accepted !== true) throw invalid();
-        if (Date.now() >= deadline) throw executionTimeout("E_EXECUTION_TIMEOUT");
+        // 暂停事实仍在时 deadline 优先：把该次拒绝原样带出，而不是伪造一个没有原因的 deadline 超时。
+        if (Date.now() >= deadline) throw pauseRefusal ?? executionTimeout("E_EXECUTION_TIMEOUT");
         await delay(100);
-        root = record((await call(childId(context.requestId, "_test_status"), "internal.test.run.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe)).data);
+        try {
+          root = record((await call(childId(context.requestId, "_test_status"), "internal.test.run.status", { rootRequestId: context.requestId, rootRequestDigest }, flags, context, observe)).data);
+          pauseRefusal = undefined;
+        } catch (error) {
+          // 主线程被故意暂停时，连这次只读 status 也会在效果前被同一冻结闸门拒绝。
+          // 解除路径在任何 pause 资源安装之前就已发布，有限暂停还会按自己的声明边界自动解除，
+          // 而 run 本身仍由 Unity 侧的同一 owner 持有，因此不能因为一次暂停事实就判这个已接受的 run 失败。
+          if (!(error instanceof StructuredToolError) || error.code !== ERROR_CODES.E_DEBUG_MAIN_THREAD_PAUSED) throw error;
+          pauseRefusal = error;
+        }
       }
       terminalReceived = true;
       return terminal(root, context.requestId);
     } catch (error) {
+      // 暂停拒绝必须原样带出：pauseId、剩余窗口与解除路由都在其中，不得在这里退化成一个无法恢复的泛化超时。
+      if (error === pauseRefusal) throw error;
       if (terminalReceived || !accepted || (error instanceof StructuredToolError && error.code === "E_EXECUTION_TIMEOUT")) throw error;
       throw executionTimeoutFrom(error);
     }

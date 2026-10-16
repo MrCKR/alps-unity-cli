@@ -1,6 +1,8 @@
 # UnityCLI 问题反馈
 
-只在 `SKILL.md` 的 `FeedbackMode` 为 `on` 且本次实际出现摩擦时读取。正常成功、常规 discovery 或没有问题的调用不得记录。
+只在 `SKILL.md` 的 `FeedbackMode` 为 `on` 且本次实际出现摩擦，或用户在当前请求中明确要求记录时读取。正常成功、常规 discovery 或没有问题的调用不得记录。
+
+`FeedbackMode` 为 `off` 只取消第一种来源：用户在当前请求中明确要求记录时仍可写入；但不得把用户的可能意图推断为明确要求。
 
 ## 可记录事件
 
@@ -39,7 +41,7 @@ powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 
   -Phase describe
 ```
 
-脚本只接受解析到 fixed local drive 且路径中没有 reparse point 的 `%LOCALAPPDATA%`，并写 `%LOCALAPPDATA%\UnityCli\feedback\`：
+脚本只接受解析到 fixed local drive、无 reparse point 且根目录含 `SKILL.md` 的 Skill 根路径，并写 Skill 根目录下的 `experience\`：
 
 - `feedback.jsonl`
 - `feedback.1.jsonl`
@@ -48,12 +50,14 @@ powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 
 
 每个文件最多 64 KiB，使用 Windows named mutex 串行。脚本不联网。成功 stdout 返回 `ok`、`recordId`、`path`、`rotated`；失败为非零退出且不生成伪记录。
 
+`experience\` 是 Skill 安装目录内的**状态区**：它不进入 Skill 投影清单，不影响投影一致性与完整性判定；`init skill` 重装或升级只替换投影文件，因此经验库保留。
+
 ## 回复摘要
 
 脚本成功后，在正常任务回复末尾追加简短段落，例如：
 
 ```text
-Skill 反馈：ambiguity - descriptor 未区分两种目标形式；workaround：通过只读 readback 确认 canonical target。recordId=fb_xxx，path=%LOCALAPPDATA%\UnityCli\feedback\feedback.jsonl
+Skill 反馈：ambiguity - descriptor 未区分两种目标形式；workaround：通过只读 readback 确认 canonical target。recordId=fb_xxx，path=<installed skill>\experience\feedback.jsonl
 ```
 
 只总结实际写入的记录。没有记录时不加该段。脚本失败时仅说明“反馈未写入”及简短原因，不能把 Unity 任务改判为失败。

@@ -147,11 +147,11 @@ namespace UnityCli.Tests
         [Test]
         public void ContinuationBindsScopeGenerationAndRawPosition()
         {
-            var token = UnityCliContinuationToken.Create("console.read", "generation-a", "99999:99000:sentinel");
+            var token = UnityCliContinuationToken.Create("debug.console.read", "generation-a", "99999:99000:sentinel");
             string position;
-            Assert.That(UnityCliContinuationToken.TryParse(token, "console.read", "generation-a", out position), Is.True);
+            Assert.That(UnityCliContinuationToken.TryParse(token, "debug.console.read", "generation-a", out position), Is.True);
             Assert.That(position, Is.EqualTo("99999:99000:sentinel"));
-            Assert.That(UnityCliContinuationToken.TryParse(token, "console.read", "generation-b", out position), Is.False);
+            Assert.That(UnityCliContinuationToken.TryParse(token, "debug.console.read", "generation-b", out position), Is.False);
             Assert.That(UnityCliContinuationToken.TryParse(token, "scene.hierarchy", "generation-a", out position), Is.False);
         }
 
@@ -178,7 +178,7 @@ namespace UnityCli.Tests
             Assert.That(page.Truncated, Is.True);
             Assert.That(page.NextCursor, Is.Not.Null.And.Not.Empty);
             string position;
-            Assert.That(UnityCliContinuationToken.TryParse(page.NextCursor, "runtime-reflection.method.find", page.Generation, out position), Is.True);
+            Assert.That(UnityCliContinuationToken.TryParse(page.NextCursor, "debug.method.find", page.Generation, out position), Is.True);
         }
 
         [Test]

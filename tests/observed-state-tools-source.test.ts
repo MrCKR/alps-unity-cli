@@ -64,7 +64,7 @@ test("editor mutations prove terminal state before returning", async () => {
 
 test("console, profiler, build settings, and Prefab Stage mutations use readback", async () => {
   const [consoleClear, profilerClear, buildState, buildAdd, buildRemove, stageOpen, stageSave, stageClose] = await Promise.all([
-    source("../unitypkg/Editor/Tools/console/clear.cs"),
+    source("../unitypkg/Editor/Tools/debug/console/clear.cs"),
     source("../unitypkg/Editor/Tools/profiler/clear.cs"),
     source("../unitypkg/Editor/Tools/build/BuildSceneStateTool.cs"),
     source("../unitypkg/Editor/Tools/build/scene/add.cs"),

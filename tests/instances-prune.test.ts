@@ -276,21 +276,21 @@ test("instances list hides offline instances by default and reveals compact summ
   const list = await execute(["instances", "list"], { dataDir } as never);
   assert.ok(list.ok, JSON.stringify(list));
   const data = list.data as { instances: Array<Record<string, unknown>>; hiddenOfflineCount?: number };
-  assert.deepEqual(data.instances.map((instance) => instance.instanceId), [activeIdentity.instanceId]);
+  assert.deepEqual(data.instances.map((instance) => instance.canonicalProjectPath), [activeIdentity.canonicalProjectPath]);
   assert.equal(data.hiddenOfflineCount, 1);
-  assert.deepEqual(Object.keys(data.instances[0]).sort(), ["canonicalProjectPath", "displayProjectPath", "instanceId", "projectName", "status", "unityVersion"]);
+  assert.deepEqual(Object.keys(data.instances[0]).sort(), ["canonicalProjectPath", "displayProjectPath", "name", "status", "unityVersion"]);
 
   const all = await execute(["instances", "list", "--all"], { dataDir } as never);
   assert.ok(all.ok, JSON.stringify(all));
   const allData = all.data as { instances: Array<Record<string, unknown>> };
   assert.equal(allData.instances.length, 2);
   assert.deepEqual(
-    allData.instances.map((instance) => instance.instanceId).sort(),
-    [activeIdentity.instanceId, offlineIdentity.instanceId].sort(),
+    allData.instances.map((instance) => instance.canonicalProjectPath).sort(),
+    [activeIdentity.canonicalProjectPath, offlineIdentity.canonicalProjectPath].sort(),
   );
   assert.equal(Object.hasOwn(all.data as object, "hiddenOfflineCount"), false);
-  const offline = allData.instances.find((instance) => instance.instanceId === offlineIdentity.instanceId)!;
-  assert.deepEqual(Object.keys(offline).sort(), ["canonicalProjectPath", "displayProjectPath", "instanceId", "projectName", "status"]);
+  const offline = allData.instances.find((instance) => instance.canonicalProjectPath === offlineIdentity.canonicalProjectPath)!;
+  assert.deepEqual(Object.keys(offline).sort(), ["canonicalProjectPath", "displayProjectPath", "name", "status"]);
   assert.equal(offline.status, "offline");
 });
 
@@ -312,7 +312,7 @@ test("instances list returns an accurate hidden count when every instance is off
   const allData = all.data as { instances: Array<Record<string, unknown>> };
   assert.equal(allData.instances.length, identities.length);
   assert.equal(Object.hasOwn(all.data as object, "hiddenOfflineCount"), false);
-  assert.ok(allData.instances.every((instance) => Object.keys(instance).sort().join(",") === "canonicalProjectPath,displayProjectPath,instanceId,projectName,status"));
+  assert.ok(allData.instances.every((instance) => Object.keys(instance).sort().join(",") === "canonicalProjectPath,displayProjectPath,name,status"));
 });
 
 test("instances list omits hiddenOfflineCount when no offline instance is hidden", async () => {
@@ -396,8 +396,9 @@ test("full instance views isolate invalid records while exact selection still fa
 
   const all = await execute(["instances", "list", "--all"], { dataDir } as never);
   assert.ok(all.ok, JSON.stringify(all));
-  const allData = all.data as { instances: Array<{ instanceId: string }>; invalidRecordCount: number };
-  assert.deepEqual(allData.instances.map((instance) => instance.instanceId), [validIdentity.instanceId]);
+  const allData = all.data as { instances: Array<{ name: string; canonicalProjectPath: string }>; invalidRecordCount: number };
+  assert.deepEqual(allData.instances.map((instance) => instance.canonicalProjectPath), [validIdentity.canonicalProjectPath]);
+  assert.equal(allData.instances[0].name.length > 0, true);
   assert.equal(allData.invalidRecordCount, 1);
   assert.equal(Object.hasOwn(all.data as object, "hiddenOfflineCount"), false);
   assert.doesNotMatch(JSON.stringify(all), new RegExp(invalidPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
@@ -646,8 +647,8 @@ test("editor and runtime sessions share one project identity without cross-targe
     assert.equal(runtimeView.activeSession?.sessionId, runtimeSession);
     assert.equal(allView.status, "ready");
     assert.equal(allView.activeSession, undefined);
-    const summary = instanceListSummary(allView);
-    assert.equal(summary.instanceId, identity.instanceId);
+    const summary = instanceListSummary(allView, "SampleProject");
+    assert.equal(summary.name, "SampleProject");
     assert.equal(summary.status, "ready");
     assert.equal(summary.sessions, undefined);
     assert.equal(summary.lastUnitySnapshot, undefined);
@@ -740,11 +741,11 @@ test("public instance summary has one minimal field set and omits internal ident
   const projectPath = await project("unity-cli-instance-summary-");
   const identity = registryIdentity(projectPath);
   const session = await makeRegistrySession("http://127.0.0.1:47991");
-  const summary = instanceListSummary(reduceObservationRegistryRecord(makeRegistry(identity, [session])));
-  assert.deepEqual(Object.keys(summary).sort(), ["canonicalProjectPath", "displayProjectPath", "instanceId", "projectName", "status"]);
+  const summary = instanceListSummary(reduceObservationRegistryRecord(makeRegistry(identity, [session])), "SampleProject");
+  assert.deepEqual(Object.keys(summary).sort(), ["canonicalProjectPath", "displayProjectPath", "name", "status"]);
   assert.equal(summary.unityVersion, undefined);
   const serialized = JSON.stringify(summary);
-  assert.doesNotMatch(serialized, /sessions|lastUnitySnapshot|processClaimIds|progress|blockers|buildStamp|revision|updatedAt|claimVerification|canonicalizationVersion|endpoint|actualPort|preferredPort|listenerId|listenerGeneration|sourceListenerGeneration/);
+  assert.doesNotMatch(serialized, /sessions|lastUnitySnapshot|processClaimIds|progress|blockers|buildStamp|revision|updatedAt|claimVerification|canonicalizationVersion|endpoint|actualPort|preferredPort|listenerId|listenerGeneration|sourceListenerGeneration|instanceId|projectName/);
 });
 
 test("v3 registry accepts BOM, isolates full-view identity mismatches, and rejects exact bad targets", async () => {

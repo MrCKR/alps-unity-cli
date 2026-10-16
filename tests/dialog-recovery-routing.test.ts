@@ -10,7 +10,7 @@ import "../src/tools/.generated-registry.js";
 import "../src/tools/.generated-schemas.js";
 import { resolveCatalogIndependentInvocationTool, resolveCatalogIndependentOperabilityTool } from "../src/tools/catalog.js";
 import { handleToolsCommand } from "../src/tools/commands.js";
-import { dispatchTool, enrichTargetFailureWithDialogBlocker } from "../src/tools/dispatcher.js";
+import { dispatchTool, enrichTargetFailureWithObservedBlocker } from "../src/tools/dispatcher.js";
 import { findToolByName } from "../src/tools/metadata/index.js";
 
 const OPERABILITY_TOOLS = ["editor.state", "editor.dialogs", "editor.dialog.click"] as const;
@@ -155,14 +155,14 @@ test("dialog blocker enrichment consumes only the supplied root deadline", async
     now += 100;
     return selected;
   };
-  const enriched = await enrichTargetFailureWithDialogBlocker(original, {}, { dataDir: "test" }, 1_500, observer, selector as never, () => now);
+  const enriched = await enrichTargetFailureWithObservedBlocker(original, {}, { dataDir: "test" }, 1_500, observer, selector as never, () => now);
   assert.equal(enriched.ok, false);
   assert.equal(selectorCalls, 1);
   assert.equal(observerCalls, 1);
 
   selectorCalls = 0;
   observerCalls = 0;
-  const exhausted = await enrichTargetFailureWithDialogBlocker(original, {}, { dataDir: "test" }, now, observer, selector as never, () => now);
+  const exhausted = await enrichTargetFailureWithObservedBlocker(original, {}, { dataDir: "test" }, now, observer, selector as never, () => now);
   assert.deepEqual(exhausted, original);
   assert.equal(selectorCalls, 0);
   assert.equal(observerCalls, 0);
