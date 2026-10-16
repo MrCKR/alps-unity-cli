@@ -38,7 +38,7 @@ The Skill does not add confirmation, intent review, or a predefined operation ra
 - Full repository tests: 876/876 PASS; targeted Skill/installer/docs regression: 61/61 PASS.
 - Recorder concurrency, rotation, privacy negatives, PowerShell 5.1 BOM, and non-ASCII stdout: PASS.
 - Public exact-target and preset runtime install, drifted update, check, marker preservation, and installed-recorder smoke: PASS.
-- Resource boundary: 963 estimated initial-load tokens (691 Skill body tokens), limit 1300.
+- Resource boundary: limit 1300 estimated initial-load tokens. The recorded 963 (Skill body 691) is the 2026-08-05 governance-audit measurement (`.plan/Skill分发治理与反馈闭环/evidence/static/DIR-003/resource-boundary.json`, taken while `references` held four files); its estimator is not part of this repository, so it is not a live value. Current `SKILL.md`: 106 lines / 5,793 characters / 10,605 UTF-8 bytes.
 - Trigger fixture gate: 29/29 classifications.
 - Output assertion gate: 5/5 with-skill cases, 100% pass rate.
 - Dev Unity compile: 0 errors, 0 warnings; Editor returned live/ready/edit.
