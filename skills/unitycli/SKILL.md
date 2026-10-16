@@ -8,9 +8,17 @@ FeedbackMode: off
 
 `unitycli` 是 AI 操作已打开 Unity Editor 的运行时导航入口，不是固定工具手册。根据任务发现当前 catalog，读取所选 descriptor，再构造调用。
 
-用户明确要求安装、更新或管理扩展，或需要诊断扩展状态时，读取 [安装、更新与扩展管理](references/installation.md)。确认当前任务确实需要且 CLI 或 Bridge 未安装时，可以说明缺失组件与安装范围，询问是否安装；用户明确同意后按本次安装指令进入该流程。已有明确指令不重复询问，不因缺失自动安装、更新或联网检查版本。连接失败、Editor 未运行或暂时不可用不代表未安装。
+## 按需读取的 reference
 
-任务要求在已打开的 Editor 中定位或证明运行时行为时读取 [运行时调试闭环](references/debugging.md)：行为与预期不符、需要证明业务确实接收了某次输入、需要某个方法在调用边界的参数或结果、需要暂停现场，或需要按同一输入复测并比较证据。该 reference 给出九步闭环与各证据来源的证明范围；具体 Tool、参数与可用状态仍从当前 catalog 发现。调试能力族的执行域是 Editor 与其 Play 模式；Player 构建提供的是另一组运行期能力。
+- 运行时调试（行为与预期不符、要证明业务接收输入、要调用边界参数、要暂停现场、要同输入复测）→ [运行时调试闭环](references/debugging.md)
+- 用户明确要求安装、更新或管理扩展，或需要诊断扩展状态 → [安装、更新与扩展管理](references/installation.md)
+- 分页、artifact、大输出、弹窗与长操作 → [操作协议](references/operation-protocol.md)
+- 需要稳定发现、typed schema、结构化结果、明确副作用、重复使用或团队共享 → [自定义 Tool](references/custom-tools.md)
+- marker 为 `on` 且真实遇到摩擦，或用户在当前请求中明确要求记录 → [问题反馈](references/feedback.md)
+
+这些 reference 给出方法与判断；具体 Tool、参数与可用状态仍从当前 catalog 发现。调试能力族的执行域是 Editor 与其 Play 模式；Player 构建提供的是另一组运行期能力。
+
+安装路由的行为约束：确认当前任务确实需要且 CLI 或 Bridge 未安装时，可以说明缺失组件与安装范围，询问是否安装；用户明确同意后按本次安装指令进入该流程。已有明确指令不重复询问，不因缺失自动安装、更新或联网检查版本。连接失败、Editor 未运行或暂时不可用不代表未安装。
 
 ## 使用方法
 
@@ -64,7 +72,7 @@ unitycli command <name> --field <value> --instance <name|alias|projectPath>
 
 `tools run` 与 `command` 复用同一 descriptor 和 schema。`[CliCommand("name")]` 投影为 `UnityPipeline_name`，也可由 `command name` 选择；native exact name 优先。省略 name 的 `unitycli command --project-path <projectPath>` 可按需列出该目标的命令。
 
-PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。任务明确要求的业务值优先于 schema default 和 example；default/example只说明合法形状，不能把default/example当作连通性或probe调用，也不作为 smoke 调用。分页、artifact、大输出、弹窗和 host 等待按需读取 `references/operation-protocol.md`。
+PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。任务明确要求的业务值优先于 schema default 和 example；default/example只说明合法形状，不能把default/example当作连通性或probe调用，也不作为 smoke 调用。
 
 等待 CLI 进程退出，`ok:true` 后检查任务相关的关键业务字段；结果不足或任务明确要求验证时，再使用只读 Tool 或业务 readback。
 
@@ -89,7 +97,7 @@ PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。�
 
 有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `debug.code.execute`。同步 C# 开始后不能由 CLI timeout 中止，复杂等待或不确定终态先读 `references/operation-protocol.md`。
 
-当能力需要稳定发现、typed schema、结构化结果、明确副作用、重复使用或团队共享时，读取 `references/custom-tools.md` 并实现项目自定义 `IUnityCliTool<TReq,TRes>`。自定义 Tool 仍从当前 catalog 发现、describe 和调用，不假设名称、group 或输入。
+需要项目自定义能力时读取 `references/custom-tools.md` 并实现 `IUnityCliTool<TReq,TRes>`。自定义 Tool 仍从当前 catalog 发现、describe 和调用，不假设名称、group 或输入。
 
 ## 问题反馈
 
