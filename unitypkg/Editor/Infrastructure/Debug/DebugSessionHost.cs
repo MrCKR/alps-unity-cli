@@ -385,8 +385,20 @@ namespace UnityCli
             var session = Registry();
             var capacity = session.Capacity;
             var definitions = session.Sessions();
+            // state 过滤发生在分页之前：total、cursor 与 hasMore 只描述过滤后的集合。
+            var stateFilter = request == null ? null : request.State;
+            if (!string.IsNullOrEmpty(stateFilter))
+            {
+                var matching = new List<UnityCliDebugSessionDefinition>();
+                for (var index = 0; index < definitions.Count; index++)
+                {
+                    if (string.Equals(definitions[index].State, stateFilter, StringComparison.Ordinal)) matching.Add(definitions[index]);
+                }
+                definitions = matching;
+            }
             var editorSessionId = UnityCliBridge.EditorSessionId();
-            var scope = UnityCliContinuationToken.Fingerprint(editorSessionId + "\0debug.session.list");
+            // 过滤值进入 continuation scope：跨过滤复用游标返回 stale，而不是静默混读两个集合。
+            var scope = UnityCliContinuationToken.Fingerprint(editorSessionId + "\0debug.session.list\0" + (stateFilter ?? string.Empty));
             var offset = 0;
             if (request != null && !string.IsNullOrEmpty(request.Cursor))
             {
@@ -676,7 +688,7 @@ namespace UnityCli
                     },
                     new[]
                     {
-                        "Run tools run debug.session.remove for a stopped session you no longer need, then retry this create.",
+                        "Run tools run debug.session.list with state stopped to find definitions you no longer need, then run tools run debug.session.remove for each of them and retry this create.",
                         "Run tools run debug.session.list to read the current session definitions."
                     });
             }

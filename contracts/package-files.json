@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
   "packageVersion": "0.7.1",
-  "sourceHash": "2d79ca0cb9e50eed134880bc4522e75f9f372a0bf6ee53278572b72aa1c77938",
+  "sourceHash": "958b9dd5416b83185be0ccd2b41f841ffadf7489c7370bf1e28a1ee07f84aaa0",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -221,8 +221,8 @@
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugSessionHost.cs",
-      "size": 42196,
-      "sha256": "da09cd48c3ce6a9ca82066241efc29c9d5d8315ab06cdab8a0165f749f371e74"
+      "size": 43046,
+      "sha256": "e4364fab9b9584b4162043d1e838cc0fc4ce641976fe211702e47b6881ba6056"
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugSessionStore.cs",
@@ -1201,13 +1201,13 @@
     },
     {
       "path": "Editor/Tools/debug/session/DebugSessionDtos.cs",
-      "size": 18810,
-      "sha256": "80a4946245ab002012663f6bfb929d15df66095854e387a96a1514e9f12e59ec"
+      "size": 19331,
+      "sha256": "a647ff3de558684a6b7194d5a3557c3daa2084335d16a13824cc415868a24392"
     },
     {
       "path": "Editor/Tools/debug/session/create.cs",
-      "size": 5153,
-      "sha256": "a71a9be23c489419f4a756ec673da94094c374adb17d9db59fa26697a0e32308"
+      "size": 5522,
+      "sha256": "65bf9a4c960bce4d3a714b566122c51290c560d7824732a58f8203861bc029fd"
     },
     {
       "path": "Editor/Tools/debug/session/export.cs",
@@ -1226,13 +1226,13 @@
     },
     {
       "path": "Editor/Tools/debug/session/list.cs",
-      "size": 3466,
-      "sha256": "27e47e229c373a77c0a4cac3bab374fa679a2361f696ba48cf7678f81ed23d3a"
+      "size": 3871,
+      "sha256": "2b2bfd1638a7d6735003ee613e249380fec940d6a6e836ca8d67653252d7bd5f"
     },
     {
       "path": "Editor/Tools/debug/session/remove.cs",
-      "size": 2720,
-      "sha256": "c70b1abf828753ac31a0fdc6df3b189b2e2917c1af14c732c1b32e3f2967241e"
+      "size": 2918,
+      "sha256": "a2860a4ffbe1301d99334c8a78d4503fabafa71f3fb0c14c1d3908cae006997d"
     },
     {
       "path": "Editor/Tools/debug/session/stop.cs",
@@ -2558,6 +2558,11 @@
       "path": "Tests/Editor/DebugRunTests.cs",
       "size": 36021,
       "sha256": "d50a38f11f694eff71a71d99420a9ab4d055cde71f72309fc301f02ddf6e7199"
+    },
+    {
+      "path": "Tests/Editor/DebugSessionListTests.cs",
+      "size": 6653,
+      "sha256": "b69042b3de4eb1bf2cd3d615d9a727db2bc8b63c0f33ea5ebfea0df135eec9ec"
     },
     {
       "path": "Tests/Editor/DebugSessionTests.cs",

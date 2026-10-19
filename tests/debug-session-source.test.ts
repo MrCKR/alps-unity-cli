@@ -186,3 +186,39 @@ test("every session tool is covered by the completion contract", async () => {
     assert.equal(entry.deliveryMode, "direct-terminal");
   }
 });
+
+test("debug.session.list binds its state filter into the continuation scope and the tools state the slot semantics", async () => {
+  const dtos = await source(sessionToolsRoot, "DebugSessionDtos.cs");
+  assert.match(
+    dtos,
+    /\[UnityCliStringEnum\("open", "stopping", "stopped"\)\] public string State \{ get; set; \}/,
+    "the list request must declare the closed state filter",
+  );
+  const host = await source(debugRoot, "DebugSessionHost.cs");
+  assert.match(host, /var stateFilter = request == null \? null : request\.State;/, "list must read the state filter before paging");
+  assert.match(
+    host,
+    /editorSessionId \+ "\\0debug\.session\.list\\0" \+ \(stateFilter \?\? string\.Empty\)/,
+    "the filter must be part of the continuation scope so a cursor cannot be reused across filters",
+  );
+  assert.match(
+    host,
+    /state stopped to find definitions/,
+    "the session limit rejection must point at the reclaimable filter",
+  );
+  assert.match(
+    await source(sessionToolsRoot, "create.cs"),
+    /holds one session slot from this moment until debug\.session\.remove deletes it/,
+    "create must state that the slot is held until remove",
+  );
+  assert.match(
+    await source(sessionToolsRoot, "list.cs"),
+    /state stopped is the filter that finds reclaimable definitions/,
+    "list must state which filter finds reclaimable definitions",
+  );
+  assert.match(
+    await source(sessionToolsRoot, "remove.cs"),
+    /This is the only action that releases the session definition slot/,
+    "remove must state that it is the only action that releases the slot",
+  );
+});

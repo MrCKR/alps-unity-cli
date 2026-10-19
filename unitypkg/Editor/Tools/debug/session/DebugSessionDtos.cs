@@ -343,6 +343,14 @@ namespace UnityCli
     {
         [UnityCliRange(1, DebugLimits.SessionListMaxLimit)] public int? Limit { get; set; }
         public string Cursor { get; set; }
+
+        /// <summary>
+        /// 可选的状态过滤，取值与 UnityCliDebugSessionStates 的闭集一致。
+        /// 过滤发生在分页之前：total、cursor 与 hasMore 只描述过滤后的集合；
+        /// 过滤值同时进入 continuation scope，因此把游标用于不同过滤会返回 E_CONTINUATION_STALE，
+        /// 而不是静默把两个集合的偏移混在一起。
+        /// </summary>
+        [UnityCliStringEnum("open", "stopping", "stopped")] public string State { get; set; }
     }
 
     public sealed class DebugSessionListResult
