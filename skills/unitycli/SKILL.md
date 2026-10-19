@@ -10,7 +10,7 @@ FeedbackMode: off
 
 ## 按需读取的 reference
 
-- 运行时调试（行为与预期不符、要证明业务接收输入、要调用边界参数、要暂停现场、要同输入复测）→ [运行时调试闭环](references/debugging.md)
+- 运行时调试（行为与预期不符、要运行时验收或验证行为、要证明业务接收输入、要调用边界参数、要暂停现场、要同输入复测）→ [运行时调试闭环](references/debugging.md)
 - 用户明确要求安装、更新或管理扩展，或需要诊断扩展状态 → [安装、更新与扩展管理](references/installation.md)
 - 分页、artifact、大输出、弹窗与长操作 → [操作协议](references/operation-protocol.md)
 - 需要稳定发现、typed schema、结构化结果、明确副作用、重复使用或团队共享 → [自定义 Tool](references/custom-tools.md)
