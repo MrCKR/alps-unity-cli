@@ -11896,6 +11896,90 @@
         "description": "释放确认无法完成时不返回成功：以 ok:true 加 releaseState pending 与 pendingReasons 表达事实，调用方用 debug.input.info 读取同一记录，或再次调用本 Tool 重试确认，直到 released 为止。"
       },
       "asyncSignals": []
+    },
+    {
+      "toolName": "debug.code.flow.execute",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/debug/code-flow-execute.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "提交返回 status：completed/failed/timed-out/cancelled/aborted 为终态，running 表示流仍在推进且必须以同一 flowId 续等。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "终态由流自身结算：completed 附带 DebugFlow.Return 的值，failed 附带 failureTag 与错误，timed-out/cancelled/aborted 携带对应终态事实。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "Domain Reload、Editor 重启或 Play 段结束时流不再可观察；调用方负责重新提交新的流，禁止自动重放。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "请求等待到期只返回 status running 与当前已推进步数；流继续运行，调用方必须以同一 flowId 再观察，不得重新提交。"
+      },
+      "asyncSignals": [
+        "promise",
+        "async"
+      ]
+    },
+    {
+      "toolName": "debug.code.flow.wait",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/debug/code-flow-wait.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "只读观察一个 flowId 的当前事实；到达终态即返回该终态，等待到期返回 status running。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "终态重复读取返回同一结果，因为终态不可变；该 Tool 不编译、不执行、不取消。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "Domain Reload、Editor 重启或 Play 段结束时流不再可观察；调用方负责重新提交新的流，禁止自动重放。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "等待到期不是失败也不是未知：结果是 status running 的快照。"
+      },
+      "asyncSignals": [
+        "promise",
+        "async"
+      ]
+    },
+    {
+      "toolName": "debug.code.flow.cancel",
+      "descriptorOwner": "ts-local",
+      "source": "src/tools/debug/code-flow-cancel.ts",
+      "deliveryMode": "direct-terminal",
+      "executionClass": "atomic",
+      "completionPredicate": {
+        "kind": "typed-business-terminal",
+        "description": "取消是终态：返回 status cancelled；已终态的流保持原终态与原有事实。"
+      },
+      "proofSource": {
+        "kind": "typed-result-and-effect-readback",
+        "description": "返回的终态与已完成步数来自流记录本身；未知 flowId 以 E_DEBUG_FLOW_NOT_FOUND 拒绝而不是报成功。"
+      },
+      "reloadPolicy": {
+        "kind": "caller-responsibility",
+        "description": "Domain Reload、Editor 重启或 Play 段结束时流不再可观察；调用方负责重新提交新的流，禁止自动重放。"
+      },
+      "timeoutError": "E_EXECUTION_TIMEOUT",
+      "outcomeUnknownPolicy": {
+        "kind": "caller-responsibility",
+        "description": "取消调用本身没有未知结果：取消后流的终态可再次读取确认。"
+      },
+      "asyncSignals": [
+        "promise",
+        "async"
+      ]
     }
   ]
 }

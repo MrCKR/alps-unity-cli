@@ -195,6 +195,41 @@ namespace UnityCli
         /// <summary>整个 Unity 进程同时允许的活动 program 运行数量。</summary>
         internal const int MaxActiveProgramRunsGlobal = 16;
 
+        // ---- async flow（debug.code.executeAsync）----
+
+        /// <summary>单个 session 同时允许的活动流数量。</summary>
+        internal const int MaxFlowsPerSession = 2;
+
+        /// <summary>单个 Unity 实例（本进程 AppDomain）同时允许的活动流数量；两级限制同时生效。</summary>
+        internal const int MaxFlowsPerInstance = 4;
+
+        /// <summary>流生命周期的默认预算；从首次 tick 起算，不含编译时间。</summary>
+        internal const double FlowBudgetDefaultMs = 300000d;
+
+        /// <summary>流生命周期硬上限；与 program 运行时长上限对齐，不引入第三套量级。</summary>
+        internal const double FlowBudgetMaxMs = 3600000d;
+
+        /// <summary>提交调用默认等待时长；超过则返回句柄而不取消流。</summary>
+        internal const double FlowRequestWaitDefaultMs = 120000d;
+
+        /// <summary>提交与等待调用允许的最大等待时长。</summary>
+        internal const double FlowRequestWaitMaxMs = 900000d;
+
+        /// <summary>终态流记录的有界保留数量，供重复查询拿到同一结果。</summary>
+        internal const int MaxRetiredFlows = 32;
+
+        /// <summary>Play 模式下等帧的停滞上限：帧计数长期不动时以超时结算，避免流无意义地等到预算耗尽。</summary>
+        internal const double FlowFrameWaitStallMs = 4000d;
+
+        /// <summary>流返回值的 UTF-8 字节上限，与一次性执行的返回值预算同一量级。</summary>
+        internal const int MaxFlowResultBytes = 262144;
+
+        /// <summary>日志等待的环形采样上限；溢出的命中计数上报，不静默丢失。</summary>
+        internal const int MaxFlowLogSamples = 256;
+
+        /// <summary>单条日志在匹配前截断到的字节上限，避免一条巨大日志占满采样环。</summary>
+        internal const int MaxFlowLogMessageBytes = 512;
+
         /// <summary>单个 program 编译单元的源码字节上限（与 code.execute、pause evaluate 共用一个数值）。</summary>
         internal const int MaxProgramSourceBytes = 256 * 1024;
 

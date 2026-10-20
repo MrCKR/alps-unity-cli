@@ -186,7 +186,7 @@ export interface UnityCliPackageRemoval {
 }
 
 const bridgePackageName = "com.alpsckr.unitycli";
-const cliCompatibilityRange = ">=0.7.0 <0.8.0";
+const cliCompatibilityRange = ">=0.8.0 <0.9.0";
 const installMetadataFileName = "unitycli.install.json";
 const fileManifestFileName = "unitycli.files.json";
 const deploymentMetadataFileName = "unitycli.package-deployments.json";

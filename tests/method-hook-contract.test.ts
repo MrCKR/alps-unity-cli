@@ -11,7 +11,7 @@ const MUTATIONS = ["debug.hook.install", "debug.hook.replace", "debug.hook.enabl
 const SESSION_MUTATIONS = ["debug.hook.disable", "debug.hook.remove"];
 const READS = ["debug.hook.list", "debug.hook.info", "debug.events.read"];
 const HOOK_TOOLS = [...MUTATIONS, ...SESSION_MUTATIONS, ...READS];
-const FROZEN_SUMMARY = "Live Editor runtime debugging: sessions, C# code, methods, hooks, threads, breakpoints, values, event stream, and evidence runs.";
+const FROZEN_SUMMARY = "Live Editor runtime debugging: sessions, C# code, methods, hooks, threads, breakpoints, values, event stream, and evidence windows.";
 
 interface InventoryEntry {
   name: string;

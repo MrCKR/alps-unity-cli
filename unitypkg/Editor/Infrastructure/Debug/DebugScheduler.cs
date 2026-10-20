@@ -288,6 +288,8 @@ namespace UnityCli
                     driver.NextTickMonotonicMs = DebugEventClocks.MonotonicMilliseconds;
                 }
             }
+            // 同一份信号词汇同时唤醒命名等待的流：流不建第二条信号通道。
+            DebugFlowHost.NotifySignal(name);
         }
 
         /// <summary>
@@ -469,6 +471,8 @@ namespace UnityCli
             if (PendingDeliveryCount > 0) DebugProgramHost.DispatchFrameworkDeliveries(phase, Thread.CurrentThread.ManagedThreadId, DebugLimits.MaxDeliveriesPerTick);
             // 输入域的到期边界与等待主线程的释放请求在中央 editor tick 上推进：同一 scheduler，不新增 update 注册。
             if (string.Equals(phase, UnityCliDebugProgramExecutionSites.EditorTick, StringComparison.Ordinal)) DebugInputHost.Advance();
+            // 瞬态流只跑在中央 editor tick 上：流不注册任何私有 update，也不占用 PlayerLoop phase。
+            if (string.Equals(phase, UnityCliDebugProgramExecutionSites.EditorTick, StringComparison.Ordinal)) DebugFlowHost.Advance();
             RecordTickCost(watch.Elapsed.TotalMilliseconds);
         }
 
@@ -539,6 +543,8 @@ namespace UnityCli
                 TickCosts.Clear();
                 signalDepth = 0;
             }
+            // 流的机制状态与本 scheduler 同为“本次域内有效”，一起作废。
+            DebugFlowHost.Reset();
         }
 
         /// <summary>投递的结构化占用事实，供 descriptor 与拒绝路径使用。</summary>

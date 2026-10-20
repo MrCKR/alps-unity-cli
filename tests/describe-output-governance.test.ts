@@ -65,7 +65,7 @@ function assertNoInternalSourceText(subject: string, text: string): void {
 test("TS-local descriptor registry owns exactly the current package-local tools", () => {
   const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
   assert.deepEqual(names, [
-    "asset.refresh", "asset.refresh.status", "build.player.status", "build.run", "debug.code.execute", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
+    "asset.refresh", "asset.refresh.status", "build.player.status", "build.run", "debug.code.execute", "debug.code.flow.cancel", "debug.code.flow.execute", "debug.code.flow.wait", "docs.get", "docs.search", "editor.compile", "editor.dialog.click",
     "editor.dialogs", "editor.play-mode.status", "editor.refresh", "editor.state", "navmesh.bake", "navmesh.bake-cancel",
     "navmesh.bake-status", "navmesh.surface.bake", "occlusion.bake", "occlusion.bake-cancel",
     "occlusion.bake-status", "package.bridge-remove", "package.deploy",

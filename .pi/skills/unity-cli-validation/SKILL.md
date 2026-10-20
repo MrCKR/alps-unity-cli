@@ -69,6 +69,9 @@ compatibility: 适用于 alps-unity-cli；Unity 真实验证使用 ./Dev，子�
 - 修改 `unitypkg/`、Extension `unitypkg/`、Bridge C# handler、Unity 安装投影或 Dev 夹具后，先通过当前 CLI 的 init/install 流程同步。
 - 修改影响 init/install 的 TypeScript CLI 后，先完成必要 build，再同步到 Dev 项目。
 - 同步后等待 Unity import、compile、domain reload 完成，并通过 `editor.state` 或等价只读检查确认 Editor 非 busy。
+- Dev 迭代默认**不重启**：把改动文件直接写入 `./Dev/UnityProject/Packages/<pkg>/`，然后 `editor.refresh`（必要时一次 `editor.compile`），等编译结束后直接调用。Unity 会自行 import/compile，重启从来不是生效条件。
+- `init package` 是另一条路径：目标项目有运行中的 Editor 时直接拒绝（`E_INIT_EDITOR_RUNNING`），只有加 `--close-editor` 才会先正常关闭该项目再安装。关闭是 CLI 的写入保护前置条件，不是 Unity 的要求；安装后自行启动即可，不需要为“生效”而重启。只在首次安装或需要按官方安装器收敛时使用。
+- 无论用哪条路径，装进去的字节是否等于 canonical 都用 `npm run verify:installed -- --project <项目路径>` 逐文件 sha256 比对确认（读 `contracts/package-files.json`，输出 missing/mismatched），不靠重启确认。
 
 Dev 调用矩阵：
 

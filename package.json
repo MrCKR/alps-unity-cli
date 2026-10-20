@@ -1,6 +1,6 @@
 {
   "name": "@alpsckr/unitycli",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Windows-first CLI for UnityCLI automation.",
   "type": "module",
   "bin": {
@@ -37,7 +37,8 @@
     "completion:audit": "node scripts/audit-tool-completion-contract.mjs --strict",
     "matrix:live": "node scripts/run-final-live-matrix.mjs",
     "test:matrix-runner": "node --test scripts/run-final-live-matrix.test.mjs",
-    "matrix:live:dist": "node scripts/run-final-live-matrix.mjs --cli node --cli-arg dist/cli.js"
+    "matrix:live:dist": "node scripts/run-final-live-matrix.mjs --cli node --cli-arg dist/cli.js",
+    "verify:installed": "node scripts/verify-installed-package.mjs"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -97,6 +97,16 @@ PowerShell 中以单引号包住内联 JSON 和 `tools search '<k1|k2|...>'`。�
 
 有界的临时 Unity 内存或 Editor API 逻辑可以考虑 `debug.code.execute`。同步 C# 开始后不能由 CLI timeout 中止，复杂等待或不确定终态先读 `references/operation-protocol.md`。
 
+执行代码时先按“要不要等帧”选入口，三者不可互相代替：
+
+```text
+一次读写、不等帧            -> debug.code.execute
+要等帧 / 等条件 / 等信号   -> debug.code.flow.execute，再用 .wait 续等
+可复用套件 + 证据窗口        -> debug.program.*
+```
+
+跨帧流的等待原语、结果规则、并发额度与存活边界读 `references/debugging.md`。
+
 需要项目自定义能力时读取 `references/custom-tools.md` 并实现 `IUnityCliTool<TReq,TRes>`。自定义 Tool 仍从当前 catalog 发现、describe 和调用，不假设名称、group 或输入。
 
 ## 问题反馈

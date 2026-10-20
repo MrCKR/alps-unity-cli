@@ -27,7 +27,7 @@ export interface RuntimeCodeRequest {
   completionProbe?: CompletionProbe;
 }
 
-interface CodeSource {
+export interface CodeSource {
   kind: "file" | "stdin" | "inline";
   path?: string;
   text: string;
@@ -35,9 +35,9 @@ interface CodeSource {
   sizeBytes: number;
 }
 
-const liveDefaultTimeoutMs = 60_000;
+export const liveDefaultTimeoutMs = 60_000;
 const maxCodeSourceBytes = 768 * 1024;
-const maxBridgePayloadBytes = 900 * 1024;
+export const maxBridgePayloadBytes = 900 * 1024;
 
 /** 只通过已打开 Editor 执行 Runtime Code；提供 completionProbe 时返回业务完成证明。 */
 export async function executeRuntimeCode(request: RuntimeCodeRequest, runtime: RuntimeCodeRuntime, requestId: string): Promise<Record<string, unknown>> {
@@ -93,7 +93,7 @@ export async function executeRuntimeCode(request: RuntimeCodeRequest, runtime: R
 }
 
 /** 读取且哈希唯一代码源，所有文件错误均发生在 Unity effect 前。 */
-async function readCodeSource(request: RuntimeCodeRequest, absoluteDeadlineMs: number): Promise<CodeSource> {
+export async function readCodeSource(request: RuntimeCodeRequest, absoluteDeadlineMs: number): Promise<CodeSource> {
   const selected = [request.file !== undefined, request.code !== undefined, request.stdin === true].filter(Boolean).length;
   if (selected !== 1) throw new StructuredToolError("E_CODE_SOURCE_INVALID", "Pass exactly one code source: file, stdin, or inline code.");
   try {
@@ -184,18 +184,18 @@ async function readAllStdin(absoluteDeadlineMs: number): Promise<string> {
   });
 }
 
-function requireRuntimeCodeDeadline(absoluteDeadlineMs: number): void {
+export function requireRuntimeCodeDeadline(absoluteDeadlineMs: number): void {
   if (!Number.isFinite(absoluteDeadlineMs) || Date.now() >= absoluteDeadlineMs)
     throw new StructuredToolError("E_EXECUTION_TIMEOUT", "Runtime Code immutable deadline elapsed before Bridge dispatch.", ["Reduce local input size or submit a new request with a sufficient timeout."]);
 }
 
-function normalizeTimeout(value: number | undefined): number {
+export function normalizeTimeout(value: number | undefined): number {
   if (!value || value <= 0) return liveDefaultTimeoutMs;
   return Math.trunc(value);
 }
 
 /** 引用必须在 effect 前全部存在且可读。 */
-async function validateExtraReferences(refs: string[] | undefined, absoluteDeadlineMs: number): Promise<string> {
+export async function validateExtraReferences(refs: string[] | undefined, absoluteDeadlineMs: number): Promise<string> {
   if (!refs) return "";
   if (refs.length > 64) throw new StructuredToolError("E_REFERENCE_RESOLUTION_FAILED", "Runtime Code accepts at most 64 extra references.");
   const normalized = refs.map((part) => part.trim()).filter(Boolean);
@@ -238,7 +238,7 @@ async function accessReferenceBeforeDeadline(reference: string, absoluteDeadline
   } finally { if (timer) clearTimeout(timer); }
 }
 
-function throwCliFailure(result: { error?: { code?: string; message?: string; nextActions?: string[]; details?: unknown; transient?: boolean; retryAfterMs?: number } }): never {
+export function throwCliFailure(result: { error?: { code?: string; message?: string; nextActions?: string[]; details?: unknown; transient?: boolean; retryAfterMs?: number } }): never {
   const error = result.error ?? {};
   throw StructuredToolError.from({
     code: error.code ?? "CODE_EXEC_FAILED",

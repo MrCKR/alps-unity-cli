@@ -891,6 +891,33 @@
       "timeout": 60000
     },
     {
+      "bridgeCommand": "debug.code.flow.cancel",
+      "group": "debug",
+      "command": "code.flow.cancel",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "debug.code.flow.execute",
+      "group": "debug",
+      "command": "code.flow.execute",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 140000
+    },
+    {
+      "bridgeCommand": "debug.code.flow.wait",
+      "group": "debug",
+      "command": "code.flow.wait",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 140000
+    },
+    {
       "bridgeCommand": "debug.console.clear",
       "group": "debug",
       "command": "console.clear",

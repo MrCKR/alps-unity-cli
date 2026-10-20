@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "packageName": "com.alpsckr.unitycli",
-  "packageVersion": "0.7.2",
-  "sourceHash": "d42d26f237ae9990b162a036f04279e7a94b8feabc38d19949c9ab31737d611b",
+  "packageVersion": "0.8.0",
+  "sourceHash": "63454a06580545c7f3da7e6b583a2d54419dbb05d85e05b11101788c7575d692",
   "files": [
     {
       "path": "Editor/AssemblyInfo.cs",
@@ -21,8 +21,8 @@
     },
     {
       "path": "Editor/Bridge/BridgeCommandRegistry.cs",
-      "size": 10797,
-      "sha256": "a0f3a2a1bf023f8ae5e29a979f0eca585bbe9273e1a9d077b79ea64dc1165a65"
+      "size": 10845,
+      "sha256": "d3341b38366cd3b536dcb3d1018dfd3cc5cfdb9a79254f53fb4e1d81cc7cf555"
     },
     {
       "path": "Editor/Bridge/BridgeHttpServer.cs",
@@ -66,8 +66,13 @@
     },
     {
       "path": "Editor/Generated/UnityCliToolCompletionRegistry.g.cs",
-      "size": 188122,
-      "sha256": "73149033c5428c671d7d4988ed843c5cafac55a951d1be31b835beb18ea449f3"
+      "size": 189018,
+      "sha256": "16157517a7a542ee83dca2906dc7267c59808f9bf58552e4fc637f2c47ad9a7d"
+    },
+    {
+      "path": "Editor/Infrastructure/CodeExecFlowSupport.cs",
+      "size": 11695,
+      "sha256": "b2beb1fdfba212c2721c6f7e9e44e13e8f2919baa80deb4079af60924e15dc88"
     },
     {
       "path": "Editor/Infrastructure/CodeExecSupport.cs",
@@ -100,6 +105,16 @@
       "sha256": "f85aedddaeb2ba689476b44e2ff9199ee80b91e4be9239d25dc1458e42e24868"
     },
     {
+      "path": "Editor/Infrastructure/Debug/DebugFlow.cs",
+      "size": 8691,
+      "sha256": "7aad23fd6d732733d9f53fb45ffbe9cadce1f8cdec7c2a6e44c8552972c2feef"
+    },
+    {
+      "path": "Editor/Infrastructure/Debug/DebugFlowHost.cs",
+      "size": 26116,
+      "sha256": "5f36da5940f5af9ef0f8999f18a6239ad395d4ce8193936f688cdf1bc87d8a2c"
+    },
+    {
       "path": "Editor/Infrastructure/Debug/DebugHandleRegistry.cs",
       "size": 12242,
       "sha256": "5b39e295233d9c180b102da314a4bdd2f32795edac3ea7655a286db4de094298"
@@ -126,8 +141,8 @@
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugLimits.cs",
-      "size": 45584,
-      "sha256": "a567913f6c288985fa958d54d08f71cc75973e86eab23a99c3327a6b9e339ed1"
+      "size": 47540,
+      "sha256": "58aa72970d30b33f4a8e38a5c0f78b2194e8a4ee102435fa05576560b60c5981"
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugListenerHost.cs",
@@ -216,8 +231,8 @@
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugScheduler.cs",
-      "size": 33078,
-      "sha256": "bb7e5918534c468c76b85e533fa5ea1dffb5c77ba73292672b7abb2007750f5f"
+      "size": 33622,
+      "sha256": "d27ea8ca11371008caa96d7757b0f733e8635cf5f0202ed57102ac3e9cfc5192"
     },
     {
       "path": "Editor/Infrastructure/Debug/DebugSessionHost.cs",
@@ -993,6 +1008,11 @@
       "path": "Editor/Tools/component/set.cs",
       "size": 5498,
       "sha256": "a7362090f5e7826bb0ed0169af1f2dab7f7e36da4d30b18f051727b0294cad68"
+    },
+    {
+      "path": "Editor/Tools/debug/code/DebugCodeFlowDtos.cs",
+      "size": 15625,
+      "sha256": "f95d05e10d8c87a6fa852474e7e844aa6d75db8f1387f8f798bb1de0078f616e"
     },
     {
       "path": "Editor/Tools/debug/console/clear.cs",
@@ -2500,6 +2520,11 @@
       "sha256": "9b2ad7026efb5c71efe9db368ddeddfdd6cac356e3c1bfc8c7b6eb0dfec4d9f9"
     },
     {
+      "path": "Tests/Editor/DebugFlowTests.cs",
+      "size": 14370,
+      "sha256": "0acbb929e6b25afa4c31ebf2f10fee27006caffe7093e320433fdf3653574534"
+    },
+    {
       "path": "Tests/Editor/DebugInputTests.cs",
       "size": 36169,
       "sha256": "a21a507d94e0d6cced4cc0a5d48b0c844fd1223d285cf4af2c655ef1d3c69765"
@@ -2701,8 +2726,8 @@
     },
     {
       "path": "package.json",
-      "size": 268,
-      "sha256": "1807c52c423951e7cdbf1f0f033f65290605542bf8309c83bcb28b574d250296"
+      "size": 267,
+      "sha256": "798ba0f83abe94c04fba9b67d22e351a8ab8fccceb52741b719ed0fde1ab2ddc"
     }
   ]
 }

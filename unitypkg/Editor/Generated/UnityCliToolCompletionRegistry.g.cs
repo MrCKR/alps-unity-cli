@@ -868,6 +868,9 @@ namespace UnityCli
             Add(new UnityCliToolCompletionContract("vfx.trail.create", "extension:vfx-graph", "direct-terminal", "atomic", "typed-business-terminal", "typed-result-and-effect-readback", "caller-responsibility", "E_EXECUTION_TIMEOUT", "caller-responsibility", "atomic-typed-result-v1", "required", true));
             Add(new UnityCliToolCompletionContract("vfx.trail.set", "extension:vfx-graph", "direct-terminal", "atomic", "typed-business-terminal", "typed-result-and-effect-readback", "caller-responsibility", "E_EXECUTION_TIMEOUT", "caller-responsibility", "atomic-typed-result-v1", "required", true));
             Add(new UnityCliToolCompletionContract("volume.list", "built-in", "direct-terminal", "atomic", "typed-business-terminal", "typed-result-and-effect-readback", "caller-responsibility", "E_EXECUTION_TIMEOUT", "caller-responsibility", "atomic-typed-result-v1", "none", false));
+            Add(new UnityCliToolCompletionContract("debug.code.flow.cancel", "ts-local", "direct-terminal", "atomic", "typed-business-terminal", "typed-result-and-effect-readback", "caller-responsibility", "E_EXECUTION_TIMEOUT", "caller-responsibility", "atomic-typed-result-v1", "required", true));
+            Add(new UnityCliToolCompletionContract("debug.code.flow.execute", "ts-local", "direct-terminal", "atomic", "typed-business-terminal", "typed-result-and-effect-readback", "caller-responsibility", "E_EXECUTION_TIMEOUT", "caller-responsibility", "atomic-typed-result-v1", "required", true));
+            Add(new UnityCliToolCompletionContract("debug.code.flow.wait", "ts-local", "direct-terminal", "atomic", "typed-business-terminal", "typed-result-and-effect-readback", "caller-responsibility", "E_EXECUTION_TIMEOUT", "caller-responsibility", "atomic-typed-result-v1", "none", false));
             return result;
         }
     }
